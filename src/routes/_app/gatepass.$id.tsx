@@ -123,23 +123,24 @@ function GatepassView() {
 
       <style>{`
         @media print {
-          @page { size: A4 portrait; margin: 6mm; }
+          @page { size: A4 portrait; margin: 5mm; }
           body { background: white !important; }
           html, body { height: auto !important; }
           header, nav, .print\\:hidden { display: none !important; }
-          #challan { display: block; }
+          #challan { display: block; height: 287mm; overflow: hidden; }
+          #challan > * { margin: 0 !important; }
           .copy-block {
-            font-size: 9.5px; line-height: 1.25;
+            font-size: 9px; line-height: 1.2;
             page-break-inside: avoid; break-inside: avoid;
             max-width: 100% !important;
-            height: 138mm; box-sizing: border-box;
-            padding: 4mm !important; margin: 0 !important;
+            height: 141mm; box-sizing: border-box;
+            padding: 3mm !important; margin: 0 !important;
             border: 0 !important;
           }
-          .copy-block h1 { font-size: 19px; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .copy-block table td, .copy-block table th { padding: 2px 4px !important; }
-          .copy-block .mt-6 { margin-top: 5mm !important; }
-          .cut-line { margin: 1mm 0 !important; font-size: 8px; page-break-after: avoid; page-break-before: avoid; }
+          .copy-block h1 { font-size: 17px; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .copy-block table td, .copy-block table th { padding: 1.5px 3px !important; }
+          .copy-block .mt-6 { margin-top: 3mm !important; }
+          .cut-line { margin: 0 !important; font-size: 7px; line-height: 1; page-break-after: avoid; page-break-before: avoid; }
         }
       `}</style>
     </div>
