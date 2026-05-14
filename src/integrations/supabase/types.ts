@@ -14,6 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
+      amc_settings: {
+        Row: {
+          id: number
+          terms_template: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          terms_template?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          terms_template?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      amcs: {
+        Row: {
+          agreement_no: string
+          amc_value: number | null
+          client_address: string | null
+          client_company: string | null
+          client_gst: string | null
+          client_name: string
+          contact_no: string | null
+          created_at: string
+          created_by: string | null
+          duration_years: number
+          email: string | null
+          end_date: string
+          id: string
+          pm_dates: Json
+          prev_amc_id: string | null
+          remarks: string | null
+          start_date: string
+          terms: string | null
+          units: Json
+          updated_at: string
+        }
+        Insert: {
+          agreement_no: string
+          amc_value?: number | null
+          client_address?: string | null
+          client_company?: string | null
+          client_gst?: string | null
+          client_name: string
+          contact_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          duration_years?: number
+          email?: string | null
+          end_date: string
+          id?: string
+          pm_dates?: Json
+          prev_amc_id?: string | null
+          remarks?: string | null
+          start_date: string
+          terms?: string | null
+          units?: Json
+          updated_at?: string
+        }
+        Update: {
+          agreement_no?: string
+          amc_value?: number | null
+          client_address?: string | null
+          client_company?: string | null
+          client_gst?: string | null
+          client_name?: string
+          contact_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          duration_years?: number
+          email?: string | null
+          end_date?: string
+          id?: string
+          pm_dates?: Json
+          prev_amc_id?: string | null
+          remarks?: string | null
+          start_date?: string
+          terms?: string | null
+          units?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amcs_prev_amc_id_fkey"
+            columns: ["prev_amc_id"]
+            isOneToOne: false
+            referencedRelation: "amcs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gatepasses: {
         Row: {
           authorised_by: string | null
