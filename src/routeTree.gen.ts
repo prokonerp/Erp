@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRecordsRouteImport } from './routes/_app/records'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppNewRouteImport } from './routes/_app/new'
+import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -45,6 +46,11 @@ const AppNewRoute = AppNewRouteImport.update({
   path: '/new',
   getParentRoute: () => AppRoute,
 } as any)
+const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
+  id: '/gatepass/$id',
+  path: '/gatepass/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
+  '/gatepass/$id': typeof AppGatepassIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
+  '/gatepass/$id': typeof AppGatepassIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -68,12 +76,13 @@ export interface FileRoutesById {
   '/_app/new': typeof AppNewRoute
   '/_app/products': typeof AppProductsRoute
   '/_app/records': typeof AppRecordsRoute
+  '/_app/gatepass/$id': typeof AppGatepassIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/new' | '/products' | '/records'
+  fullPaths: '/' | '/auth' | '/new' | '/products' | '/records' | '/gatepass/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/new' | '/products' | '/records'
+  to: '/' | '/auth' | '/new' | '/products' | '/records' | '/gatepass/$id'
   id:
     | '__root__'
     | '/'
@@ -82,6 +91,7 @@ export interface FileRouteTypes {
     | '/_app/new'
     | '/_app/products'
     | '/_app/records'
+    | '/_app/gatepass/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -134,6 +144,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNewRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/gatepass/$id': {
+      id: '/_app/gatepass/$id'
+      path: '/gatepass/$id'
+      fullPath: '/gatepass/$id'
+      preLoaderRoute: typeof AppGatepassIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -141,12 +158,14 @@ interface AppRouteChildren {
   AppNewRoute: typeof AppNewRoute
   AppProductsRoute: typeof AppProductsRoute
   AppRecordsRoute: typeof AppRecordsRoute
+  AppGatepassIdRoute: typeof AppGatepassIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppNewRoute: AppNewRoute,
   AppProductsRoute: AppProductsRoute,
   AppRecordsRoute: AppRecordsRoute,
+  AppGatepassIdRoute: AppGatepassIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
