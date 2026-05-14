@@ -14,7 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      gatepasses: {
+        Row: {
+          authorised_by: string | null
+          challan_no: string
+          contact_no: string | null
+          created_at: string
+          created_by: string | null
+          destination: string | null
+          gatepass_date: string
+          gatepass_time: string
+          id: string
+          items: Json
+          person_company: string | null
+          person_name: string
+          prepared_by: string | null
+          purpose: string | null
+          remarks: string | null
+          return_type: string
+          vehicle_no: string | null
+        }
+        Insert: {
+          authorised_by?: string | null
+          challan_no: string
+          contact_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination?: string | null
+          gatepass_date?: string
+          gatepass_time?: string
+          id?: string
+          items?: Json
+          person_company?: string | null
+          person_name: string
+          prepared_by?: string | null
+          purpose?: string | null
+          remarks?: string | null
+          return_type?: string
+          vehicle_no?: string | null
+        }
+        Update: {
+          authorised_by?: string | null
+          challan_no?: string
+          contact_no?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination?: string | null
+          gatepass_date?: string
+          gatepass_time?: string
+          id?: string
+          items?: Json
+          person_company?: string | null
+          person_name?: string
+          prepared_by?: string | null
+          purpose?: string | null
+          remarks?: string | null
+          return_type?: string
+          vehicle_no?: string | null
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          unit: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          unit?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          unit?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
