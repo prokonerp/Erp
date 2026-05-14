@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppRecordsRouteImport } from './routes/_app/records'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppNewRouteImport } from './routes/_app/new'
 
@@ -29,6 +30,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRecordsRoute = AppRecordsRouteImport.update({
+  id: '/records',
+  path: '/records',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppProductsRoute = AppProductsRouteImport.update({
   id: '/products',
   path: '/products',
@@ -45,12 +51,14 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
+  '/records': typeof AppRecordsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
+  '/records': typeof AppRecordsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -59,13 +67,21 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_app/new': typeof AppNewRoute
   '/_app/products': typeof AppProductsRoute
+  '/_app/records': typeof AppRecordsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/new' | '/products'
+  fullPaths: '/' | '/auth' | '/new' | '/products' | '/records'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/new' | '/products'
-  id: '__root__' | '/' | '/_app' | '/auth' | '/_app/new' | '/_app/products'
+  to: '/' | '/auth' | '/new' | '/products' | '/records'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/auth'
+    | '/_app/new'
+    | '/_app/products'
+    | '/_app/records'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -97,6 +113,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/records': {
+      id: '/_app/records'
+      path: '/records'
+      fullPath: '/records'
+      preLoaderRoute: typeof AppRecordsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/products': {
       id: '/_app/products'
       path: '/products'
@@ -117,11 +140,13 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppNewRoute: typeof AppNewRoute
   AppProductsRoute: typeof AppProductsRoute
+  AppRecordsRoute: typeof AppRecordsRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppNewRoute: AppNewRoute,
   AppProductsRoute: AppProductsRoute,
+  AppRecordsRoute: AppRecordsRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
