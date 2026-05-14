@@ -123,12 +123,23 @@ function GatepassView() {
 
       <style>{`
         @media print {
-          @page { size: A4; margin: 8mm; }
+          @page { size: A4 portrait; margin: 6mm; }
           body { background: white !important; }
+          html, body { height: auto !important; }
           header, nav, .print\\:hidden { display: none !important; }
-          .copy-block { font-size: 10.5px; page-break-inside: avoid; max-width: 100% !important; }
-          .copy-block h1 { font-size: 17px; }
-          .copy-block table td, .copy-block table th { padding: 3px 5px !important; }
+          #challan { display: block; }
+          .copy-block {
+            font-size: 9.5px; line-height: 1.25;
+            page-break-inside: avoid; break-inside: avoid;
+            max-width: 100% !important;
+            height: 138mm; box-sizing: border-box;
+            padding: 4mm !important; margin: 0 !important;
+            border: 0 !important;
+          }
+          .copy-block h1 { font-size: 15px; margin: 0; }
+          .copy-block table td, .copy-block table th { padding: 2px 4px !important; }
+          .copy-block .mt-10 { margin-top: 10mm !important; }
+          .cut-line { margin: 1mm 0 !important; font-size: 8px; page-break-after: avoid; page-break-before: avoid; }
         }
       `}</style>
     </div>
