@@ -20,6 +20,7 @@ import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppAmcSettingsRouteImport } from './routes/_app/amc.settings'
 import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
+import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -75,6 +76,11 @@ const AppAmcNewRoute = AppAmcNewRouteImport.update({
   path: '/new',
   getParentRoute: () => AppAmcRoute,
 } as any)
+const AppAmcIdRoute = AppAmcIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppAmcRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -83,6 +89,7 @@ export interface FileRoutesByFullPath {
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
+  '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
   '/amc/settings': typeof AppAmcSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
+  '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
   '/amc/settings': typeof AppAmcSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/_app/new': typeof AppNewRoute
   '/_app/products': typeof AppProductsRoute
   '/_app/records': typeof AppRecordsRoute
+  '/_app/amc/$id': typeof AppAmcIdRoute
   '/_app/amc/new': typeof AppAmcNewRoute
   '/_app/amc/settings': typeof AppAmcSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
@@ -122,6 +131,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/products'
     | '/records'
+    | '/amc/$id'
     | '/amc/new'
     | '/amc/settings'
     | '/gatepass/$id'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/products'
     | '/records'
+    | '/amc/$id'
     | '/amc/new'
     | '/amc/settings'
     | '/gatepass/$id'
@@ -146,6 +157,7 @@ export interface FileRouteTypes {
     | '/_app/new'
     | '/_app/products'
     | '/_app/records'
+    | '/_app/amc/$id'
     | '/_app/amc/new'
     | '/_app/amc/settings'
     | '/_app/gatepass/$id'
@@ -237,16 +249,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAmcNewRouteImport
       parentRoute: typeof AppAmcRoute
     }
+    '/_app/amc/$id': {
+      id: '/_app/amc/$id'
+      path: '/$id'
+      fullPath: '/amc/$id'
+      preLoaderRoute: typeof AppAmcIdRouteImport
+      parentRoute: typeof AppAmcRoute
+    }
   }
 }
 
 interface AppAmcRouteChildren {
+  AppAmcIdRoute: typeof AppAmcIdRoute
   AppAmcNewRoute: typeof AppAmcNewRoute
   AppAmcSettingsRoute: typeof AppAmcSettingsRoute
   AppAmcIndexRoute: typeof AppAmcIndexRoute
 }
 
 const AppAmcRouteChildren: AppAmcRouteChildren = {
+  AppAmcIdRoute: AppAmcIdRoute,
   AppAmcNewRoute: AppAmcNewRoute,
   AppAmcSettingsRoute: AppAmcSettingsRoute,
   AppAmcIndexRoute: AppAmcIndexRoute,
