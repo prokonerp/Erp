@@ -22,14 +22,14 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
 
   if (loading) return <div className="p-8">Loading…</div>;
-  if (session) return <Navigate to="/app/new" />;
+  if (session) return <Navigate to="/new" />;
 
   const signIn = async () => {
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) return toast.error(error.message);
-    navigate({ to: "/app/new" });
+    navigate({ to: "/new" });
   };
   const signUp = async () => {
     setBusy(true);

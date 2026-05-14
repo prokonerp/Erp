@@ -108,7 +108,7 @@ function RecordsPage() {
                     <TableCell>{(r.items || []).length}</TableCell>
                     <TableCell>{r.return_type}</TableCell>
                     <TableCell>
-                      <Link to="/app/gatepass/$id" params={{ id: r.id }}>
+                      <Link to="/gatepass/$id" params={{ id: r.id }}>
                         <Button size="sm" variant="outline"><Printer className="h-4 w-4 mr-1" />View</Button>
                       </Link>
                     </TableCell>

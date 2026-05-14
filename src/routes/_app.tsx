@@ -17,9 +17,9 @@ function AppLayout() {
   if (!session) return <Navigate to="/auth" />;
 
   const navItems = [
-    { to: "/app/new", label: "New Gatepass", icon: FileText },
-    { to: "/app/records", label: "Records", icon: ListChecks },
-    { to: "/app/products", label: "Products", icon: Package },
+    { to: "/new", label: "New Gatepass", icon: FileText },
+    { to: "/records", label: "Records", icon: ListChecks },
+    { to: "/products", label: "Products", icon: Package },
   ];
 
   return (

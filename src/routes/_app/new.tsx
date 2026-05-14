@@ -59,7 +59,7 @@ function NewGatepass() {
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Gatepass created");
-    navigate({ to: "/app/gatepass/$id", params: { id: (data as { id: string }).id } });
+    navigate({ to: "/gatepass/$id", params: { id: (data as { id: string }).id } });
   };
 
   return (

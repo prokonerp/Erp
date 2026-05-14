@@ -32,7 +32,7 @@ function GatepassView() {
   return (
     <div>
       <div className="flex justify-between mb-4 print:hidden">
-        <Link to="/app/records"><Button variant="outline" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+        <Link to="/records"><Button variant="outline" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
         <Button onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print Challan</Button>
       </div>
 
