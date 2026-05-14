@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
+import { Route as AppNewRouteImport } from './routes/_app/new'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -33,15 +34,22 @@ const AppProductsRoute = AppProductsRouteImport.update({
   path: '/products',
   getParentRoute: () => AppRoute,
 } as any)
+const AppNewRoute = AppNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
 }
 export interface FileRoutesById {
@@ -49,14 +57,15 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_app/new': typeof AppNewRoute
   '/_app/products': typeof AppProductsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/products'
+  fullPaths: '/' | '/auth' | '/new' | '/products'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/products'
-  id: '__root__' | '/' | '/_app' | '/auth' | '/_app/products'
+  to: '/' | '/auth' | '/new' | '/products'
+  id: '__root__' | '/' | '/_app' | '/auth' | '/_app/new' | '/_app/products'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -95,14 +104,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProductsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/new': {
+      id: '/_app/new'
+      path: '/new'
+      fullPath: '/new'
+      preLoaderRoute: typeof AppNewRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppNewRoute: typeof AppNewRoute
   AppProductsRoute: typeof AppProductsRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppNewRoute: AppNewRoute,
   AppProductsRoute: AppProductsRoute,
 }
 
