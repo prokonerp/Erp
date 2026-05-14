@@ -86,13 +86,14 @@ function GatepassView() {
 
       {g.remarks && <div className="text-sm mb-3"><b>Remarks:</b> {g.remarks}</div>}
 
-      <div className="grid grid-cols-3 gap-4 mt-6 text-sm">
+      <div className="grid grid-cols-3 gap-4 mt-10 text-sm">
         {[
           { label: "Prepared By", val: g.prepared_by },
           { label: "Authorised By", val: g.authorised_by },
           { label: "Security / Gate", val: "" },
         ].map((s) => (
           <div key={s.label} className="text-center">
+            <div className="h-12 print:h-10"></div>
             <div className="border-t border-black pt-1">
               <div className="font-semibold">{s.label}</div>
               <div className="text-xs h-4">{s.val}</div>
