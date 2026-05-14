@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Download, Printer, Search } from "lucide-react";
-import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/_app/records")({
   component: RecordsPage,
@@ -40,7 +39,8 @@ function RecordsPage() {
       || JSON.stringify(r.items).toLowerCase().includes(s);
   });
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
+    const XLSX = await import("xlsx");
     const flat = filtered.flatMap((g) =>
       (g.items || []).map((it, idx) => ({
         "Challan No": g.challan_no,
