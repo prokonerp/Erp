@@ -31,10 +31,10 @@ function GatepassView() {
 
   const Copy = ({ label }: { label: string }) => (
     <div className="bg-white text-black mx-auto max-w-3xl p-6 border print:border-0 print:shadow-none print:p-2 shadow-sm copy-block">
-      <div className="text-center border-b-2 border-black pb-2 mb-3 relative">
+      <div className="text-center border-b-2 border-[#1e40af] pb-2 mb-3 relative">
         <div className="absolute right-0 top-0 text-[10px] font-bold border border-black px-2 py-0.5">{label}</div>
-        <h1 className="text-2xl font-bold tracking-tight">PROKON HI-TECH SYSTEMS</h1>
-        <div className="text-sm">Picasso Centre, Sector-61, Gurgaon</div>
+        <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent">PROKON HI-TECH SYSTEMS</h1>
+        <div className="text-sm">B-505, Picasso Centre, Sector-61, Gurgaon</div>
         <div className="mt-1 inline-block px-3 py-0.5 border-2 border-black font-bold tracking-widest text-sm">MATERIAL GATEPASS / CHALLAN</div>
       </div>
 
@@ -86,14 +86,14 @@ function GatepassView() {
 
       {g.remarks && <div className="text-sm mb-3"><b>Remarks:</b> {g.remarks}</div>}
 
-      <div className="grid grid-cols-3 gap-4 mt-10 text-sm">
+      <div className="grid grid-cols-3 gap-4 mt-6 text-sm">
         {[
           { label: "Prepared By", val: g.prepared_by },
           { label: "Authorised By", val: g.authorised_by },
           { label: "Security / Gate", val: "" },
         ].map((s) => (
           <div key={s.label} className="text-center">
-            <div className="h-12 print:h-10"></div>
+            <div className="h-7 print:h-6"></div>
             <div className="border-t border-black pt-1">
               <div className="font-semibold">{s.label}</div>
               <div className="text-xs h-4">{s.val}</div>
@@ -136,9 +136,9 @@ function GatepassView() {
             padding: 4mm !important; margin: 0 !important;
             border: 0 !important;
           }
-          .copy-block h1 { font-size: 15px; margin: 0; }
+          .copy-block h1 { font-size: 19px; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .copy-block table td, .copy-block table th { padding: 2px 4px !important; }
-          .copy-block .mt-10 { margin-top: 10mm !important; }
+          .copy-block .mt-6 { margin-top: 5mm !important; }
           .cut-line { margin: 1mm 0 !important; font-size: 8px; page-break-after: avoid; page-break-before: avoid; }
         }
       `}</style>
