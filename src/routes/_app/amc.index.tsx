@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye } from "lucide-react";
+import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck } from "lucide-react";
 import { type Amc, amcStatus, statusBadgeClass, statusLabel, statusRowClass } from "@/lib/amc";
 
 export const Route = createFileRoute("/_app/amc/")({
@@ -67,6 +67,7 @@ function AmcDashboard() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">AMC Management</h1>
         <div className="flex gap-2">
+          <Link to="/amc/pm"><Button variant="outline" size="sm"><CalendarCheck className="h-4 w-4 mr-1" />PM Schedule</Button></Link>
           <Link to="/amc/settings"><Button variant="outline" size="sm"><Settings className="h-4 w-4 mr-1" />Terms Template</Button></Link>
           <Link to="/amc/new"><Button size="sm"><Plus className="h-4 w-4 mr-1" />New AMC</Button></Link>
         </div>

@@ -169,6 +169,47 @@ export type Database = {
         }
         Relationships: []
       }
+      pm_visits: {
+        Row: {
+          amc_id: string
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          scheduled_date: string
+          updated_at: string
+        }
+        Insert: {
+          amc_id: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          scheduled_date: string
+          updated_at?: string
+        }
+        Update: {
+          amc_id?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          scheduled_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pm_visits_amc_id_fkey"
+            columns: ["amc_id"]
+            isOneToOne: false
+            referencedRelation: "amcs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           created_at: string
