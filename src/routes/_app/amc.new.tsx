@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { type AmcUnit, addYears, generatePMDates, nextAgreementNo } from "@/lib/amc";
+import { type AmcUnit, addYears, fmtDate, generatePMDates, nextAgreementNo } from "@/lib/amc";
 
 export const Route = createFileRoute("/_app/amc/new")({
   component: NewAmc,
@@ -37,16 +37,19 @@ function NewAmc() {
   });
   const [units, setUnits] = useState<AmcUnit[]>([emptyUnit()]);
   const [busy, setBusy] = useState(false);
+  const [productNames, setProductNames] = useState<string[]>([]);
 
   const end_date = addYears(form.start_date, form.duration_years);
 
   useEffect(() => {
     (async () => {
-      const [agree, settings] = await Promise.all([
+      const [agree, settings, prods] = await Promise.all([
         supabase.from("amcs").select("agreement_no"),
         supabase.from("amc_settings").select("terms_template").eq("id", 1).maybeSingle(),
+        supabase.from("products").select("name").order("name"),
       ]);
       const existing = (agree.data || []).map((x: { agreement_no: string }) => x.agreement_no);
+      setProductNames((prods.data || []).map((p: { name: string }) => p.name));
       setForm((f) => ({
         ...f,
         agreement_no: nextAgreementNo(existing),
@@ -100,8 +103,8 @@ function NewAmc() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /></div>
-          <div><Label>End Date (auto)</Label><Input value={end_date} readOnly className="bg-muted" /></div>
+          <div><Label>Start Date (DD-MM-YYYY)</Label><Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">{fmtDate(form.start_date)}</p></div>
+          <div><Label>End Date (auto)</Label><Input value={fmtDate(end_date)} readOnly className="bg-muted" /></div>
           <div><Label>Client / Contact Person *</Label><Input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} /></div>
           <div><Label>Company</Label><Input value={form.client_company} onChange={(e) => setForm({ ...form, client_company: e.target.value })} /></div>
           <div className="md:col-span-2"><Label>Billing Address</Label><Textarea rows={2} value={form.client_address} onChange={(e) => setForm({ ...form, client_address: e.target.value })} /></div>
@@ -118,9 +121,12 @@ function NewAmc() {
           <Button size="sm" variant="outline" onClick={() => setUnits([...units, emptyUnit()])}><Plus className="h-4 w-4 mr-1" />Add unit</Button>
         </CardHeader>
         <CardContent className="space-y-3">
+          <datalist id="ups-models-new">
+            {productNames.map((n) => <option key={n} value={n} />)}
+          </datalist>
           {units.map((u, i) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
-              <div className="col-span-12 md:col-span-6"><Label>UPS Model</Label><Input value={u.model} onChange={(e) => setUnits(units.map((x, idx) => idx === i ? { ...x, model: e.target.value } : x))} placeholder="e.g. APC SUA1500I / Numeric DSP-3KVA" /></div>
+              <div className="col-span-12 md:col-span-6"><Label>UPS Model</Label><Input list="ups-models-new" value={u.model} onChange={(e) => setUnits(units.map((x, idx) => idx === i ? { ...x, model: e.target.value } : x))} placeholder="Select from catalog or type" /></div>
               <div className="col-span-10 md:col-span-5"><Label>Serial No.</Label><Input value={u.serial_no} onChange={(e) => setUnits(units.map((x, idx) => idx === i ? { ...x, serial_no: e.target.value } : x))} /></div>
               <div className="col-span-2 md:col-span-1">
                 <Button size="icon" variant="ghost" onClick={() => setUnits(units.filter((_, idx) => idx !== i))} disabled={units.length === 1}>
