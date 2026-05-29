@@ -202,6 +202,41 @@ function AmcDetail() {
             <p className="text-xs text-muted-foreground mt-2">PM dates are auto-regenerated quarterly when you change start date or duration and Save.</p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Send Reminder to Client</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-xs text-muted-foreground">
+              WhatsApp uses contact <b>{a.contact_no || "—"}</b>. Email uses <b>{a.email || "—"}</b>. Edit them above & Save if missing.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="border rounded-md p-3 space-y-2">
+                <div className="font-semibold text-sm">AMC Renewal Reminder</div>
+                <pre className="whitespace-pre-wrap text-[11px] font-sans bg-muted/40 rounded p-2 max-h-40 overflow-auto">{renewalMsg}</pre>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => sendWhatsapp(renewalMsg)}>
+                    <MessageCircle className="h-4 w-4 mr-1" />WhatsApp
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => sendEmail(`AMC Renewal Reminder — ${a.agreement_no}`, renewalMsg)}>
+                    <Mail className="h-4 w-4 mr-1" />Email
+                  </Button>
+                </div>
+              </div>
+              <div className="border rounded-md p-3 space-y-2">
+                <div className="font-semibold text-sm">Quarterly PM Reminder {nextPm ? `(${nextPm})` : ""}</div>
+                <pre className="whitespace-pre-wrap text-[11px] font-sans bg-muted/40 rounded p-2 max-h-40 overflow-auto">{pmMsg}</pre>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => sendWhatsapp(pmMsg)}>
+                    <MessageCircle className="h-4 w-4 mr-1" />WhatsApp
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => sendEmail(`PM Visit Reminder — ${a.agreement_no}`, pmMsg)}>
+                    <Mail className="h-4 w-4 mr-1" />Email
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Print view */}
