@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Mail, MessageCircle, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Amc, type AmcUnit, addYears, amcStatus, generatePMDates, nextAgreementNo, statusBadgeClass, statusLabel } from "@/lib/amc";
 
@@ -32,6 +32,34 @@ function AmcDetail() {
   const status = amcStatus(a.end_date);
 
   const update = (patch: Partial<Amc>) => setA({ ...a, ...patch });
+
+  // ---- Reminder messages (WhatsApp + Email) ----
+  const nextPm = (a.pm_dates || []).find((d) => new Date(d + "T00:00:00") >= new Date(new Date().toDateString()));
+  const unitList = a.units.map((u, i) => `${i + 1}. ${u.model} (S/N: ${u.serial_no})`).join("\n");
+  const greeting = `Dear ${a.client_name}${a.client_company ? ` / ${a.client_company}` : ""},`;
+  const signOff = `\n\nRegards,\nProkon Hi-Tech Systems\nB-505, Picasso Centre, Sector-61, Gurgaon`;
+
+  const renewalMsg =
+    `${greeting}\n\nThis is a gentle reminder that your AMC (Agreement No: ${a.agreement_no}) with Prokon Hi-Tech Systems ` +
+    `is ${status === "expired" ? `expired on ${a.end_date}` : `due for renewal on ${a.end_date}`}.\n\n` +
+    `Equipment Covered:\n${unitList}\n\n` +
+    `Kindly confirm renewal at the earliest to ensure uninterrupted service coverage.${signOff}`;
+
+  const pmMsg =
+    `${greeting}\n\nAs per your AMC (Agreement No: ${a.agreement_no}), your next scheduled Preventive Maintenance visit is on ` +
+    `${nextPm || "the upcoming PM date"}.\n\nEquipment Covered:\n${unitList}\n\n` +
+    `Our engineer will reach out to confirm the slot. Please let us know if you'd like to reschedule.${signOff}`;
+
+  const sendWhatsapp = (body: string) => {
+    const raw = (a.contact_no || "").replace(/\D/g, "");
+    if (!raw) return toast.error("No contact number on file");
+    const phone = raw.length === 10 ? `91${raw}` : raw;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(body)}`, "_blank");
+  };
+  const sendEmail = (subject: string, body: string) => {
+    if (!a.email) return toast.error("No email on file");
+    window.location.href = `mailto:${a.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
 
   const save = async () => {
     setBusy(true);
