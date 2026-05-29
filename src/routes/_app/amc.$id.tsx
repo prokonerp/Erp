@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Mail, MessageCircle, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Amc, type AmcUnit, addYears, amcStatus, generatePMDates, nextAgreementNo, statusBadgeClass, statusLabel } from "@/lib/amc";
 
@@ -32,6 +32,34 @@ function AmcDetail() {
   const status = amcStatus(a.end_date);
 
   const update = (patch: Partial<Amc>) => setA({ ...a, ...patch });
+
+  // ---- Reminder messages (WhatsApp + Email) ----
+  const nextPm = (a.pm_dates || []).find((d) => new Date(d + "T00:00:00") >= new Date(new Date().toDateString()));
+  const unitList = a.units.map((u, i) => `${i + 1}. ${u.model} (S/N: ${u.serial_no})`).join("\n");
+  const greeting = `Dear ${a.client_name}${a.client_company ? ` / ${a.client_company}` : ""},`;
+  const signOff = `\n\nRegards,\nProkon Hi-Tech Systems\nB-505, Picasso Centre, Sector-61, Gurgaon`;
+
+  const renewalMsg =
+    `${greeting}\n\nThis is a gentle reminder that your AMC (Agreement No: ${a.agreement_no}) with Prokon Hi-Tech Systems ` +
+    `is ${status === "expired" ? `expired on ${a.end_date}` : `due for renewal on ${a.end_date}`}.\n\n` +
+    `Equipment Covered:\n${unitList}\n\n` +
+    `Kindly confirm renewal at the earliest to ensure uninterrupted service coverage.${signOff}`;
+
+  const pmMsg =
+    `${greeting}\n\nAs per your AMC (Agreement No: ${a.agreement_no}), your next scheduled Preventive Maintenance visit is on ` +
+    `${nextPm || "the upcoming PM date"}.\n\nEquipment Covered:\n${unitList}\n\n` +
+    `Our engineer will reach out to confirm the slot. Please let us know if you'd like to reschedule.${signOff}`;
+
+  const sendWhatsapp = (body: string) => {
+    const raw = (a.contact_no || "").replace(/\D/g, "");
+    if (!raw) return toast.error("No contact number on file");
+    const phone = raw.length === 10 ? `91${raw}` : raw;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(body)}`, "_blank");
+  };
+  const sendEmail = (subject: string, body: string) => {
+    if (!a.email) return toast.error("No email on file");
+    window.location.href = `mailto:${a.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
 
   const save = async () => {
     setBusy(true);
@@ -172,6 +200,41 @@ function AmcDetail() {
               {(a.pm_dates || []).length === 0 && <span className="text-muted-foreground">No PM dates scheduled</span>}
             </div>
             <p className="text-xs text-muted-foreground mt-2">PM dates are auto-regenerated quarterly when you change start date or duration and Save.</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Send Reminder to Client</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-xs text-muted-foreground">
+              WhatsApp uses contact <b>{a.contact_no || "—"}</b>. Email uses <b>{a.email || "—"}</b>. Edit them above & Save if missing.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="border rounded-md p-3 space-y-2">
+                <div className="font-semibold text-sm">AMC Renewal Reminder</div>
+                <pre className="whitespace-pre-wrap text-[11px] font-sans bg-muted/40 rounded p-2 max-h-40 overflow-auto">{renewalMsg}</pre>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => sendWhatsapp(renewalMsg)}>
+                    <MessageCircle className="h-4 w-4 mr-1" />WhatsApp
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => sendEmail(`AMC Renewal Reminder — ${a.agreement_no}`, renewalMsg)}>
+                    <Mail className="h-4 w-4 mr-1" />Email
+                  </Button>
+                </div>
+              </div>
+              <div className="border rounded-md p-3 space-y-2">
+                <div className="font-semibold text-sm">Quarterly PM Reminder {nextPm ? `(${nextPm})` : ""}</div>
+                <pre className="whitespace-pre-wrap text-[11px] font-sans bg-muted/40 rounded p-2 max-h-40 overflow-auto">{pmMsg}</pre>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => sendWhatsapp(pmMsg)}>
+                    <MessageCircle className="h-4 w-4 mr-1" />WhatsApp
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => sendEmail(`PM Visit Reminder — ${a.agreement_no}`, pmMsg)}>
+                    <Mail className="h-4 w-4 mr-1" />Email
+                  </Button>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
