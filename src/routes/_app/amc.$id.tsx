@@ -278,16 +278,16 @@ function PrintAgreement({ a }: { a: Amc }) {
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-3">
         <div><b>Agreement No:</b> {a.agreement_no}</div>
-        <div className="text-right"><b>Date:</b> {new Date().toISOString().slice(0, 10)}</div>
-        <div><b>Start:</b> {a.start_date}</div>
-        <div className="text-right"><b>End:</b> {a.end_date}</div>
+        <div className="text-right"><b>Date:</b> {fmtDate(new Date().toISOString().slice(0, 10))}</div>
+        <div><b>Start:</b> {fmtDate(a.start_date)}</div>
+        <div className="text-right"><b>End:</b> {fmtDate(a.end_date)}</div>
         <div><b>Duration:</b> {a.duration_years} Year(s)</div>
         <div className="text-right"><b>AMC Value:</b> ₹ {Number(a.amc_value || 0).toLocaleString("en-IN")}</div>
       </div>
 
       <table className="w-full border border-black mb-3">
         <tbody>
-          <tr><td className="border border-black px-2 py-1 w-32 font-bold">Client</td><td className="border border-black px-2 py-1">{a.client_name} {a.client_company ? `— ${a.client_company}` : ""}</td></tr>
+          <tr><td className="border border-black px-2 py-1 w-32 font-bold">Client</td><td className="border border-black px-2 py-1">{a.client_company || a.client_name}</td></tr>
           <tr><td className="border border-black px-2 py-1 font-bold">Billing Address</td><td className="border border-black px-2 py-1 whitespace-pre-wrap">{a.client_address || "-"}</td></tr>
           <tr><td className="border border-black px-2 py-1 font-bold">GSTIN</td><td className="border border-black px-2 py-1">{a.client_gst || "-"}</td></tr>
           <tr><td className="border border-black px-2 py-1 font-bold">Contact</td><td className="border border-black px-2 py-1">{[a.contact_no, a.email].filter(Boolean).join("  /  ") || "-"}</td></tr>
@@ -304,22 +304,12 @@ function PrintAgreement({ a }: { a: Amc }) {
         </tbody>
       </table>
 
-      <div className="font-bold mb-1">Scheduled Preventive Maintenance Visits</div>
-      <table className="w-full border border-black mb-3">
-        <thead className="bg-gray-100"><tr><th className="border border-black px-2 py-1 w-10">PM #</th><th className="border border-black px-2 py-1">Scheduled Date</th><th className="border border-black px-2 py-1">Engineer / Remarks</th></tr></thead>
-        <tbody>
-          {(a.pm_dates || []).map((d, i) => (
-            <tr key={i}><td className="border border-black px-2 py-1 text-center">{i + 1}</td><td className="border border-black px-2 py-1 font-mono">{d}</td><td className="border border-black px-2 py-1">&nbsp;</td></tr>
-          ))}
-        </tbody>
-      </table>
-
       <div className="font-bold mb-1">Terms & Conditions</div>
       <pre className="whitespace-pre-wrap font-sans text-[11px] mb-6">{a.terms || ""}</pre>
 
       <div className="grid grid-cols-2 gap-8 mt-12">
         <div>
-          <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For Client {a.client_company ? `(${a.client_company})` : ""}</b></div>
+          <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For {a.client_company || "Client"}</b></div>
         </div>
         <div>
           <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For Prokon Hi-Tech Systems</b></div>
