@@ -81,3 +81,12 @@ export const nextAgreementNo = (existing: string[]): string => {
   }
   return prefix + String(max + 1).padStart(4, "0");
 };
+
+// Display ISO date (YYYY-MM-DD) as DD-MM-YYYY
+export const fmtDate = (iso?: string | null): string => {
+  if (!iso) return "";
+  const s = iso.slice(0, 10);
+  const [y, m, d] = s.split("-");
+  if (!y || !m || !d) return s;
+  return `${d}-${m}-${y}`;
+};

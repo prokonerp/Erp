@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Mail, MessageCircle, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { type Amc, type AmcUnit, addYears, amcStatus, generatePMDates, nextAgreementNo, statusBadgeClass, statusLabel } from "@/lib/amc";
+import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, generatePMDates, nextAgreementNo, statusBadgeClass, statusLabel } from "@/lib/amc";
 
 export const Route = createFileRoute("/_app/amc/$id")({
   component: AmcDetail,
@@ -21,11 +21,18 @@ function AmcDetail() {
   const navigate = useNavigate();
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
+  const [productNames, setProductNames] = useState<string[]>([]);
 
   const load = () => supabase.from("amcs").select("*").eq("id", id).single()
     .then(({ data }) => setA(data as unknown as Amc));
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+  useEffect(() => {
+    load();
+    supabase.from("products").select("name").order("name").then(({ data }) => {
+      setProductNames((data || []).map((p: { name: string }) => p.name));
+    });
+    /* eslint-disable-next-line */
+  }, [id]);
 
   if (!a) return <div className="text-muted-foreground">Loading…</div>;
 
@@ -36,18 +43,20 @@ function AmcDetail() {
   // ---- Reminder messages (WhatsApp + Email) ----
   const nextPm = (a.pm_dates || []).find((d) => new Date(d + "T00:00:00") >= new Date(new Date().toDateString()));
   const unitList = a.units.map((u, i) => `${i + 1}. ${u.model} (S/N: ${u.serial_no})`).join("\n");
-  const greeting = `Dear ${a.client_name}${a.client_company ? ` / ${a.client_company}` : ""},`;
-  const signOff = `\n\nRegards,\nProkon Hi-Tech Systems\nB-505, Picasso Centre, Sector-61, Gurgaon`;
+  const greeting = `Dear ${a.client_name || "Customer"}${a.client_company ? ` / ${a.client_company} Team` : " Team"},`;
+  const signOff =
+    `\n\nRegards,\nProkon Hi-Tech Systems\nB-505, Picasso Centre, Sector-61, Gurgaon` +
+    `\nPhone: +91-9810000000   |   Email: info@prokonhitech.com`;
 
   const renewalMsg =
     `${greeting}\n\nThis is a gentle reminder that your AMC (Agreement No: ${a.agreement_no}) with Prokon Hi-Tech Systems ` +
-    `is ${status === "expired" ? `expired on ${a.end_date}` : `due for renewal on ${a.end_date}`}.\n\n` +
+    `is ${status === "expired" ? `expired on ${fmtDate(a.end_date)}` : `due for renewal on ${fmtDate(a.end_date)}`}.\n\n` +
     `Equipment Covered:\n${unitList}\n\n` +
     `Kindly confirm renewal at the earliest to ensure uninterrupted service coverage.${signOff}`;
 
   const pmMsg =
     `${greeting}\n\nAs per your AMC (Agreement No: ${a.agreement_no}), your next scheduled Preventive Maintenance visit is on ` +
-    `${nextPm || "the upcoming PM date"}.\n\nEquipment Covered:\n${unitList}\n\n` +
+    `${nextPm ? fmtDate(nextPm) : "the upcoming PM date"}.\n\nEquipment Covered:\n${unitList}\n\n` +
     `Our engineer will reach out to confirm the slot. Please let us know if you'd like to reschedule.${signOff}`;
 
   const sendWhatsapp = (body: string) => {
@@ -151,8 +160,8 @@ function AmcDetail() {
                 <SelectContent>{[1, 2, 3, 5].map((y) => <SelectItem key={y} value={String(y)}>{y} Year{y > 1 ? "s" : ""}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Start Date</Label><Input type="date" value={a.start_date} onChange={(e) => update({ start_date: e.target.value })} /></div>
-            <div><Label>End Date (auto on save)</Label><Input value={addYears(a.start_date, a.duration_years)} readOnly className="bg-muted" /></div>
+            <div><Label>Start Date (DD-MM-YYYY)</Label><Input type="date" value={a.start_date} onChange={(e) => update({ start_date: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">{fmtDate(a.start_date)}</p></div>
+            <div><Label>End Date (auto on save)</Label><Input value={fmtDate(addYears(a.start_date, a.duration_years))} readOnly className="bg-muted" /></div>
             <div><Label>Client Name</Label><Input value={a.client_name} onChange={(e) => update({ client_name: e.target.value })} /></div>
             <div><Label>Company</Label><Input value={a.client_company || ""} onChange={(e) => update({ client_company: e.target.value })} /></div>
             <div className="md:col-span-2"><Label>Billing Address</Label><Textarea rows={2} value={a.client_address || ""} onChange={(e) => update({ client_address: e.target.value })} /></div>
@@ -169,9 +178,12 @@ function AmcDetail() {
             <Button size="sm" variant="outline" onClick={() => update({ units: [...a.units, { model: "", serial_no: "" }] })}><Plus className="h-4 w-4 mr-1" />Add unit</Button>
           </CardHeader>
           <CardContent className="space-y-3">
+            <datalist id="ups-models">
+              {productNames.map((n) => <option key={n} value={n} />)}
+            </datalist>
             {a.units.map((u, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
-                <div className="col-span-12 md:col-span-6"><Label>UPS Model</Label><Input value={u.model} onChange={(e) => setUnit(i, { model: e.target.value })} /></div>
+                <div className="col-span-12 md:col-span-6"><Label>UPS Model</Label><Input list="ups-models" value={u.model} onChange={(e) => setUnit(i, { model: e.target.value })} placeholder="Select or type model" /></div>
                 <div className="col-span-10 md:col-span-5"><Label>Serial No.</Label><Input value={u.serial_no} onChange={(e) => setUnit(i, { serial_no: e.target.value })} /></div>
                 <div className="col-span-2 md:col-span-1">
                   <Button size="icon" variant="ghost" onClick={() => update({ units: a.units.filter((_, idx) => idx !== i) })} disabled={a.units.length === 1}>
@@ -195,7 +207,7 @@ function AmcDetail() {
           <CardContent>
             <div className="flex flex-wrap gap-2 text-xs">
               {(a.pm_dates || []).map((d, i) => (
-                <span key={i} className="font-mono px-2 py-1 rounded border bg-muted">{d}</span>
+                <span key={i} className="font-mono px-2 py-1 rounded border bg-muted">{fmtDate(d)}</span>
               ))}
               {(a.pm_dates || []).length === 0 && <span className="text-muted-foreground">No PM dates scheduled</span>}
             </div>
@@ -266,16 +278,16 @@ function PrintAgreement({ a }: { a: Amc }) {
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-3">
         <div><b>Agreement No:</b> {a.agreement_no}</div>
-        <div className="text-right"><b>Date:</b> {new Date().toISOString().slice(0, 10)}</div>
-        <div><b>Start:</b> {a.start_date}</div>
-        <div className="text-right"><b>End:</b> {a.end_date}</div>
+        <div className="text-right"><b>Date:</b> {fmtDate(new Date().toISOString().slice(0, 10))}</div>
+        <div><b>Start:</b> {fmtDate(a.start_date)}</div>
+        <div className="text-right"><b>End:</b> {fmtDate(a.end_date)}</div>
         <div><b>Duration:</b> {a.duration_years} Year(s)</div>
         <div className="text-right"><b>AMC Value:</b> ₹ {Number(a.amc_value || 0).toLocaleString("en-IN")}</div>
       </div>
 
       <table className="w-full border border-black mb-3">
         <tbody>
-          <tr><td className="border border-black px-2 py-1 w-32 font-bold">Client</td><td className="border border-black px-2 py-1">{a.client_name} {a.client_company ? `— ${a.client_company}` : ""}</td></tr>
+          <tr><td className="border border-black px-2 py-1 w-32 font-bold">Client</td><td className="border border-black px-2 py-1">{a.client_company || a.client_name}</td></tr>
           <tr><td className="border border-black px-2 py-1 font-bold">Billing Address</td><td className="border border-black px-2 py-1 whitespace-pre-wrap">{a.client_address || "-"}</td></tr>
           <tr><td className="border border-black px-2 py-1 font-bold">GSTIN</td><td className="border border-black px-2 py-1">{a.client_gst || "-"}</td></tr>
           <tr><td className="border border-black px-2 py-1 font-bold">Contact</td><td className="border border-black px-2 py-1">{[a.contact_no, a.email].filter(Boolean).join("  /  ") || "-"}</td></tr>
@@ -292,22 +304,12 @@ function PrintAgreement({ a }: { a: Amc }) {
         </tbody>
       </table>
 
-      <div className="font-bold mb-1">Scheduled Preventive Maintenance Visits</div>
-      <table className="w-full border border-black mb-3">
-        <thead className="bg-gray-100"><tr><th className="border border-black px-2 py-1 w-10">PM #</th><th className="border border-black px-2 py-1">Scheduled Date</th><th className="border border-black px-2 py-1">Engineer / Remarks</th></tr></thead>
-        <tbody>
-          {(a.pm_dates || []).map((d, i) => (
-            <tr key={i}><td className="border border-black px-2 py-1 text-center">{i + 1}</td><td className="border border-black px-2 py-1 font-mono">{d}</td><td className="border border-black px-2 py-1">&nbsp;</td></tr>
-          ))}
-        </tbody>
-      </table>
-
       <div className="font-bold mb-1">Terms & Conditions</div>
       <pre className="whitespace-pre-wrap font-sans text-[11px] mb-6">{a.terms || ""}</pre>
 
       <div className="grid grid-cols-2 gap-8 mt-12">
         <div>
-          <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For Client {a.client_company ? `(${a.client_company})` : ""}</b></div>
+          <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For {a.client_company || "Client"}</b></div>
         </div>
         <div>
           <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For Prokon Hi-Tech Systems</b></div>

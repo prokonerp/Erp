@@ -6,8 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
-import { ArrowLeft, CheckCircle2, Circle, Search } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Download, Printer, Search } from "lucide-react";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
+import { fmtDate } from "@/lib/amc";
 
 export const Route = createFileRoute("/_app/amc/pm")({
   component: PMSchedule,
@@ -38,6 +40,7 @@ function PMSchedule() {
   const [filter, setFilter] = useState<"all" | "pending" | "done" | "overdue">("all");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [busy, setBusy] = useState<string | null>(null);
+  const [dateInput, setDateInput] = useState<string>("");
 
   const load = async () => {
     const [{ data: pmData }, { data: amcData }] = await Promise.all([
@@ -81,6 +84,7 @@ function PMSchedule() {
       const sel = selectedDate.toISOString().slice(0, 10);
       if (p.scheduled_date !== sel) return false;
     }
+    if (dateInput && p.scheduled_date !== dateInput) return false;
     if (!q) return true;
     const s = q.toLowerCase();
     return (a?.agreement_no || "").toLowerCase().includes(s)
@@ -115,6 +119,27 @@ function PMSchedule() {
     overdue: pms.filter(isOverdue).length,
   };
 
+  const exportExcel = () => {
+    const rows = filtered.map((p) => {
+      const a = amcs[p.amc_id];
+      return {
+        "PM Date": fmtDate(p.scheduled_date),
+        "Status": p.completed_at ? "Done" : isOverdue(p) ? "Overdue" : "Pending",
+        "Completed On": p.completed_at ? fmtDate(p.completed_at.slice(0, 10)) : "",
+        "Agreement No": a?.agreement_no || "",
+        "Client": a?.client_name || "",
+        "Company": a?.client_company || "",
+        "Contact": a?.contact_no || "",
+        "Units": (a?.units || []).map((u) => `${u.model} (${u.serial_no})`).join("; "),
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 14 }, { wch: 40 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "PM Schedule");
+    XLSX.writeFile(wb, `PM_Schedule_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -122,14 +147,20 @@ function PMSchedule() {
           <Link to="/amc"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
           <h1 className="text-2xl font-bold">PM Schedule</h1>
         </div>
-        {selectedDate && (
-          <Button variant="outline" size="sm" onClick={() => setSelectedDate(undefined)}>
-            Clear date filter ({selectedDate.toISOString().slice(0, 10)})
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
+          <label className="text-xs text-muted-foreground">Filter date:</label>
+          <Input type="date" value={dateInput} onChange={(e) => setDateInput(e.target.value)} className="w-40 h-8" />
+          {(dateInput || selectedDate) && (
+            <Button variant="outline" size="sm" onClick={() => { setDateInput(""); setSelectedDate(undefined); }}>
+              Clear
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={exportExcel}><Download className="h-4 w-4 mr-1" />Excel</Button>
+          <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print A4</Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print:hidden">
         <button onClick={() => setFilter("all")} className={`text-left rounded-lg border-2 p-3 bg-muted ${filter === "all" ? "ring-2 ring-primary" : ""}`}>
           <div className="text-xs uppercase opacity-70">Total PMs</div><div className="text-2xl font-bold">{counts.total}</div>
         </button>
@@ -145,7 +176,7 @@ function PMSchedule() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-1">
+        <Card className="lg:col-span-1 print:hidden">
           <CardHeader className="pb-2"><CardTitle className="text-base">Calendar</CardTitle></CardHeader>
           <CardContent>
             <Calendar
@@ -201,8 +232,8 @@ function PMSchedule() {
                     return (
                       <TableRow key={p.id} className={rowCls}>
                         <TableCell className="font-mono text-xs whitespace-nowrap">
-                          {p.scheduled_date}
-                          {p.completed_at && <div className="text-[10px] text-green-700">Done {p.completed_at.slice(0, 10)}</div>}
+                          {fmtDate(p.scheduled_date)}
+                          {p.completed_at && <div className="text-[10px] text-green-700">Done {fmtDate(p.completed_at.slice(0, 10))}</div>}
                           {overdue && !p.completed_at && <div className="text-[10px] text-red-700 font-semibold">OVERDUE</div>}
                         </TableCell>
                         <TableCell>
@@ -241,6 +272,14 @@ function PMSchedule() {
           </CardContent>
         </Card>
       </div>
+
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 10mm; }
+          body { background: white !important; }
+          header, nav { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 }
