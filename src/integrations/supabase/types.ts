@@ -109,6 +109,48 @@ export type Database = {
           },
         ]
       }
+      customers: {
+        Row: {
+          address: string | null
+          company: string
+          contact_name: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          gst: string | null
+          id: string
+          phone: string | null
+          remarks: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          company: string
+          contact_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          gst?: string | null
+          id?: string
+          phone?: string | null
+          remarks?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          company?: string
+          contact_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          gst?: string | null
+          id?: string
+          phone?: string | null
+          remarks?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       gatepasses: {
         Row: {
           authorised_by: string | null
@@ -168,6 +210,186 @@ export type Database = {
           vehicle_no?: string | null
         }
         Relationships: []
+      }
+      incentive_rules: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          label: string
+          max_value: number | null
+          min_value: number
+          percent: number
+          sort_order: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label: string
+          max_value?: number | null
+          min_value?: number
+          percent?: number
+          sort_order?: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          label?: string
+          max_value?: number | null
+          min_value?: number
+          percent?: number
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      incentives: {
+        Row: {
+          applied_percent: number
+          closed_value: number
+          created_at: string
+          id: string
+          lead_id: string | null
+          notes: string | null
+          owner_id: string
+          paid_at: string | null
+          payout: number
+          period: string | null
+          status: string
+        }
+        Insert: {
+          applied_percent?: number
+          closed_value?: number
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          owner_id: string
+          paid_at?: string | null
+          payout?: number
+          period?: string | null
+          status?: string
+        }
+        Update: {
+          applied_percent?: number
+          closed_value?: number
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          owner_id?: string
+          paid_at?: string | null
+          payout?: number
+          period?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "incentives_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_activities: {
+        Row: {
+          activity_date: string
+          created_at: string
+          id: string
+          kind: string
+          lead_id: string
+          next_followup: string | null
+          notes: string | null
+          owner_id: string
+        }
+        Insert: {
+          activity_date?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          lead_id: string
+          next_followup?: string | null
+          notes?: string | null
+          owner_id: string
+        }
+        Update: {
+          activity_date?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          lead_id?: string
+          next_followup?: string | null
+          notes?: string | null
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          closed_at: string | null
+          closed_value: number | null
+          created_at: string
+          customer_id: string
+          expected_value: number | null
+          id: string
+          next_followup: string | null
+          owner_id: string
+          remarks: string | null
+          source: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_value?: number | null
+          created_at?: string
+          customer_id: string
+          expected_value?: number | null
+          id?: string
+          next_followup?: string | null
+          owner_id: string
+          remarks?: string | null
+          source?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_value?: number | null
+          created_at?: string
+          customer_id?: string
+          expected_value?: number | null
+          id?: string
+          next_followup?: string | null
+          owner_id?: string
+          remarks?: string | null
+          source?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pm_visits: {
         Row: {
@@ -230,6 +452,81 @@ export type Database = {
           unit?: string
         }
         Relationships: []
+      }
+      quotations: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          gst_amount: number
+          gst_percent: number
+          id: string
+          items: Json
+          lead_id: string | null
+          owner_id: string
+          quote_date: string
+          quote_no: string
+          remarks: string | null
+          status: string
+          subtotal: number
+          terms: string | null
+          total: number
+          updated_at: string
+          validity_days: number
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          gst_amount?: number
+          gst_percent?: number
+          id?: string
+          items?: Json
+          lead_id?: string | null
+          owner_id: string
+          quote_date?: string
+          quote_no: string
+          remarks?: string | null
+          status?: string
+          subtotal?: number
+          terms?: string | null
+          total?: number
+          updated_at?: string
+          validity_days?: number
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          gst_amount?: number
+          gst_percent?: number
+          id?: string
+          items?: Json
+          lead_id?: string | null
+          owner_id?: string
+          quote_date?: string
+          quote_no?: string
+          remarks?: string | null
+          status?: string
+          subtotal?: number
+          terms?: string | null
+          total?: number
+          updated_at?: string
+          validity_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotations_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

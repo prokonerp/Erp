@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, Link, Navigate, useNavigate, useLocation } fro
 import { useAuth } from "@/lib/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { FileText, Package, ListChecks, LogOut, Building2, ShieldCheck } from "lucide-react";
+import { FileText, Package, ListChecks, LogOut, Building2, ShieldCheck, Briefcase } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -21,6 +21,7 @@ function AppLayout() {
     { to: "/records", label: "Records", icon: ListChecks },
     { to: "/products", label: "Products", icon: Package },
     { to: "/amc", label: "AMC", icon: ShieldCheck },
+    { to: "/crm", label: "Sales CRM", icon: Briefcase },
   ];
 
   return (
