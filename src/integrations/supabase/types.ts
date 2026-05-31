@@ -109,9 +109,37 @@ export type Database = {
           },
         ]
       }
+      crm_settings: {
+        Row: {
+          business_gstin: string | null
+          business_state: string
+          default_customer_notes: string
+          default_terms: string
+          id: number
+          updated_at: string
+        }
+        Insert: {
+          business_gstin?: string | null
+          business_state?: string
+          default_customer_notes?: string
+          default_terms?: string
+          id?: number
+          updated_at?: string
+        }
+        Update: {
+          business_gstin?: string | null
+          business_state?: string
+          default_customer_notes?: string
+          default_terms?: string
+          id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           address: string | null
+          billing_address: string | null
           company: string
           contact_name: string | null
           created_at: string
@@ -121,10 +149,13 @@ export type Database = {
           id: string
           phone: string | null
           remarks: string | null
+          shipping_address: string | null
+          state: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
+          billing_address?: string | null
           company: string
           contact_name?: string | null
           created_at?: string
@@ -134,10 +165,13 @@ export type Database = {
           id?: string
           phone?: string | null
           remarks?: string | null
+          shipping_address?: string | null
+          state?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
+          billing_address?: string | null
           company?: string
           contact_name?: string | null
           created_at?: string
@@ -147,6 +181,8 @@ export type Database = {
           id?: string
           phone?: string | null
           remarks?: string | null
+          shipping_address?: string | null
+          state?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -455,57 +491,114 @@ export type Database = {
       }
       quotations: {
         Row: {
+          adjustment: number
+          attachments: Json
+          billing_address: string | null
+          cgst_amount: number
           created_at: string
           customer_id: string | null
+          customer_notes: string | null
+          discount_amount: number
+          expiry_date: string | null
           gst_amount: number
           gst_percent: number
           id: string
+          igst_amount: number
           items: Json
           lead_id: string | null
           owner_id: string
+          place_of_supply: string | null
+          project_name: string | null
           quote_date: string
           quote_no: string
+          reference_no: string | null
           remarks: string | null
+          round_off: number
+          salesperson: string | null
+          sgst_amount: number
+          shipping_address: string | null
+          shipping_charges: number
           status: string
+          subject: string | null
           subtotal: number
+          tcs_amount: number
+          tcs_percent: number
           terms: string | null
           total: number
           updated_at: string
           validity_days: number
         }
         Insert: {
+          adjustment?: number
+          attachments?: Json
+          billing_address?: string | null
+          cgst_amount?: number
           created_at?: string
           customer_id?: string | null
+          customer_notes?: string | null
+          discount_amount?: number
+          expiry_date?: string | null
           gst_amount?: number
           gst_percent?: number
           id?: string
+          igst_amount?: number
           items?: Json
           lead_id?: string | null
           owner_id: string
+          place_of_supply?: string | null
+          project_name?: string | null
           quote_date?: string
           quote_no: string
+          reference_no?: string | null
           remarks?: string | null
+          round_off?: number
+          salesperson?: string | null
+          sgst_amount?: number
+          shipping_address?: string | null
+          shipping_charges?: number
           status?: string
+          subject?: string | null
           subtotal?: number
+          tcs_amount?: number
+          tcs_percent?: number
           terms?: string | null
           total?: number
           updated_at?: string
           validity_days?: number
         }
         Update: {
+          adjustment?: number
+          attachments?: Json
+          billing_address?: string | null
+          cgst_amount?: number
           created_at?: string
           customer_id?: string | null
+          customer_notes?: string | null
+          discount_amount?: number
+          expiry_date?: string | null
           gst_amount?: number
           gst_percent?: number
           id?: string
+          igst_amount?: number
           items?: Json
           lead_id?: string | null
           owner_id?: string
+          place_of_supply?: string | null
+          project_name?: string | null
           quote_date?: string
           quote_no?: string
+          reference_no?: string | null
           remarks?: string | null
+          round_off?: number
+          salesperson?: string | null
+          sgst_amount?: number
+          shipping_address?: string | null
+          shipping_charges?: number
           status?: string
+          subject?: string | null
           subtotal?: number
+          tcs_amount?: number
+          tcs_percent?: number
           terms?: string | null
           total?: number
           updated_at?: string
@@ -527,6 +620,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      quote_terms_templates: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {
