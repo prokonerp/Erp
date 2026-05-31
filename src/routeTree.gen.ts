@@ -20,6 +20,7 @@ import { Route as AppAmcRouteImport } from './routes/_app/amc'
 import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
+import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
 import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
 import { Route as AppCrmIncentivesRouteImport } from './routes/_app/crm.incentives'
 import { Route as AppCrmCustomersRouteImport } from './routes/_app/crm.customers'
@@ -83,6 +84,11 @@ const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   path: '/gatepass/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCrmQuotationsRoute = AppCrmQuotationsRouteImport.update({
+  id: '/quotations',
+  path: '/quotations',
+  getParentRoute: () => AppCrmRoute,
+} as any)
 const AppCrmLeadsRoute = AppCrmLeadsRouteImport.update({
   id: '/leads',
   path: '/leads',
@@ -139,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
+  '/crm/quotations': typeof AppCrmQuotationsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/amc/': typeof AppAmcIndexRoute
   '/crm/': typeof AppCrmIndexRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
+  '/crm/quotations': typeof AppCrmQuotationsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/amc': typeof AppAmcIndexRoute
   '/crm': typeof AppCrmIndexRoute
@@ -179,6 +187,7 @@ export interface FileRoutesById {
   '/_app/crm/customers': typeof AppCrmCustomersRoute
   '/_app/crm/incentives': typeof AppCrmIncentivesRoute
   '/_app/crm/leads': typeof AppCrmLeadsRouteWithChildren
+  '/_app/crm/quotations': typeof AppCrmQuotationsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/amc/': typeof AppAmcIndexRoute
   '/_app/crm/': typeof AppCrmIndexRoute
@@ -201,6 +210,7 @@ export interface FileRouteTypes {
     | '/crm/customers'
     | '/crm/incentives'
     | '/crm/leads'
+    | '/crm/quotations'
     | '/gatepass/$id'
     | '/amc/'
     | '/crm/'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/crm/customers'
     | '/crm/incentives'
     | '/crm/leads'
+    | '/crm/quotations'
     | '/gatepass/$id'
     | '/amc'
     | '/crm'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/_app/crm/customers'
     | '/_app/crm/incentives'
     | '/_app/crm/leads'
+    | '/_app/crm/quotations'
     | '/_app/gatepass/$id'
     | '/_app/amc/'
     | '/_app/crm/'
@@ -330,6 +342,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/gatepass/$id'
       preLoaderRoute: typeof AppGatepassIdRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/crm/quotations': {
+      id: '/_app/crm/quotations'
+      path: '/quotations'
+      fullPath: '/crm/quotations'
+      preLoaderRoute: typeof AppCrmQuotationsRouteImport
+      parentRoute: typeof AppCrmRoute
     }
     '/_app/crm/leads': {
       id: '/_app/crm/leads'
@@ -425,6 +444,7 @@ interface AppCrmRouteChildren {
   AppCrmCustomersRoute: typeof AppCrmCustomersRoute
   AppCrmIncentivesRoute: typeof AppCrmIncentivesRoute
   AppCrmLeadsRoute: typeof AppCrmLeadsRouteWithChildren
+  AppCrmQuotationsRoute: typeof AppCrmQuotationsRoute
   AppCrmIndexRoute: typeof AppCrmIndexRoute
 }
 
@@ -432,6 +452,7 @@ const AppCrmRouteChildren: AppCrmRouteChildren = {
   AppCrmCustomersRoute: AppCrmCustomersRoute,
   AppCrmIncentivesRoute: AppCrmIncentivesRoute,
   AppCrmLeadsRoute: AppCrmLeadsRouteWithChildren,
+  AppCrmQuotationsRoute: AppCrmQuotationsRoute,
   AppCrmIndexRoute: AppCrmIndexRoute,
 }
 
