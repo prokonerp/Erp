@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Target, FileSpreadsheet, Trophy } from "lucide-react";
+import { LayoutDashboard, Users, Target, FileSpreadsheet, Trophy, Settings } from "lucide-react";
 
 export const Route = createFileRoute("/_app/crm")({
   component: CrmLayout,
@@ -15,6 +15,7 @@ function CrmLayout() {
     { to: "/crm/customers", label: "Customers", icon: Users },
     { to: "/crm/quotations", label: "Quotations", icon: FileSpreadsheet },
     { to: "/crm/incentives", label: "Incentives", icon: Trophy },
+    { to: "/crm/settings", label: "Settings", icon: Settings },
   ];
   return (
     <div>
