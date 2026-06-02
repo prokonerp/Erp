@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Eye, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass } from "@/lib/crm";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export const Route = createFileRoute("/_app/crm/quotations")({ component: Page });
 
@@ -92,6 +93,23 @@ function QuotesList() {
       <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
         <CardTitle className="text-base">Quotations</CardTitle>
         <div className="flex gap-2 flex-wrap">
+          <ExportButtons
+            name="Prokon_Quotations"
+            title="Quotations"
+            rows={filtered}
+            columns={[
+              { header: "Quote#", get: (r) => r.quote_no },
+              { header: "Ref#", get: (r) => r.reference_no || "" },
+              { header: "Date", get: (r) => r.quote_date },
+              { header: "Customer", get: (r) => cmap[r.customer_id || ""]?.company || "" },
+              { header: "Subject", get: (r) => r.subject || "" },
+              { header: "Expiry", get: (r) => r.expiry_date || "" },
+              { header: "Status", get: (r) => r.status },
+              { header: "Subtotal", get: (r) => Number(r.subtotal || 0) },
+              { header: "GST", get: (r) => Number(r.gst_amount || 0) },
+              { header: "Total", get: (r) => Number(r.total || 0) },
+            ]}
+          />
           <Select value={statusF} onValueChange={setStatusF}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>

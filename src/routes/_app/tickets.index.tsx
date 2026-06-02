@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR } from "@/lib/tickets";
 import { Plus, Eye } from "lucide-react";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export const Route = createFileRoute("/_app/tickets/")({
   component: TicketsList,
@@ -63,7 +64,26 @@ function TicketsList() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle>All Tickets</CardTitle>
-          <Link to="/tickets/new"><Button size="sm"><Plus className="h-4 w-4 mr-1" />New Ticket</Button></Link>
+          <div className="flex items-center gap-2">
+            <ExportButtons
+              name="Prokon_Tickets"
+              title="Service Tickets"
+              rows={filtered}
+              columns={[
+                { header: "Case ID", get: (r) => r.case_id },
+                { header: "Type", get: (r) => r.call_type },
+                { header: "Customer", get: (r) => r.customer_name },
+                { header: "Phone", get: (r) => r.customer_phone || "" },
+                { header: "Product", get: (r) => r.product || "" },
+                { header: "Serial", get: (r) => r.serial_no || "" },
+                { header: "Location", get: (r) => r.location || "" },
+                { header: "Engineer", get: (r) => r.assigned_engineer_name || "" },
+                { header: "Status", get: (r) => r.status },
+                { header: "Created", get: (r) => new Date(r.created_at).toLocaleString() },
+              ]}
+            />
+            <Link to="/tickets/new"><Button size="sm"><Plus className="h-4 w-4 mr-1" />New Ticket</Button></Link>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2">

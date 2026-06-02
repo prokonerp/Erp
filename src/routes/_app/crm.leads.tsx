@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { type Lead, type LeadStatus, type Customer, statusLabel, statusClass, fmtMoney, fmtDate } from "@/lib/crm";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export const Route = createFileRoute("/_app/crm/leads")({ component: LeadsPage });
 
@@ -81,6 +82,22 @@ function LeadsList() {
         <CardTitle className="text-base">Leads</CardTitle>
         <div className="flex gap-2 flex-wrap">
           <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} className="w-44" />
+          <ExportButtons
+            name="Prokon_Leads"
+            title="CRM Leads"
+            rows={filtered}
+            columns={[
+              { header: "Customer", get: (l) => cmap[l.customer_id]?.company || "" },
+              { header: "Title", get: (l) => l.title },
+              { header: "Source", get: (l) => l.source || "" },
+              { header: "Status", get: (l) => statusLabel[l.status] },
+              { header: "Next follow-up", get: (l) => l.next_followup || "" },
+              { header: "Expected", get: (l) => Number(l.expected_value || 0) },
+              { header: "Closed", get: (l) => Number(l.closed_value || 0) },
+              { header: "Closed on", get: (l) => l.closed_at || "" },
+              { header: "Remarks", get: (l) => l.remarks || "" },
+            ]}
+          />
           <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
