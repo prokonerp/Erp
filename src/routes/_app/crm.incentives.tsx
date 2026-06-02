@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, Save, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { type IncentiveRule, type Incentive, fmtMoney, fmtDate, computeIncentive } from "@/lib/crm";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export const Route = createFileRoute("/_app/crm/incentives")({ component: IncentivesPage });
 
@@ -102,7 +103,23 @@ function IncentivesPage() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Payout records</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base">Payout records</CardTitle>
+          <ExportButtons
+            name="Prokon_Incentives"
+            title="Incentive Payouts"
+            rows={payouts}
+            columns={[
+              { header: "Period", get: (p) => p.period || "" },
+              { header: "Closed Value", get: (p) => Number(p.closed_value || 0) },
+              { header: "Applied %", get: (p) => Number(p.applied_percent || 0) },
+              { header: "Payout", get: (p) => Number(p.payout || 0) },
+              { header: "Status", get: (p) => p.status },
+              { header: "Paid On", get: (p) => p.paid_at || "" },
+              { header: "Notes", get: (p) => p.notes || "" },
+            ]}
+          />
+        </CardHeader>
         <CardContent>
           <Table>
             <TableHeader><TableRow>
