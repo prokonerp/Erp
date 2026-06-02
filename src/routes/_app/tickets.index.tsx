@@ -85,7 +85,6 @@ function TicketsList() {
             <Link to="/tickets/new"><Button size="sm"><Plus className="h-4 w-4 mr-1" />New Ticket</Button></Link>
           </div>
         </CardHeader>
-        </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
             <Input placeholder="Search case / customer / serial…" value={q} onChange={(e) => setQ(e.target.value)} />
