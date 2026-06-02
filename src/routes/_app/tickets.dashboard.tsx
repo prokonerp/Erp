@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STATUS_COLOR, TICKET_STATUSES, CALL_TYPES } from "@/lib/tickets";
-import { Eye, ChevronDown, ChevronUp } from "lucide-react";
+import { Eye } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/dashboard")({
   component: TicketsDashboard,
@@ -42,15 +42,17 @@ function TicketsDashboard() {
   const [rows, setRows] = useState<Row[]>([]);
   const [range, setRange] = useState<Range>("month");
   const [loading, setLoading] = useState(true);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    kpis: true,
-    status: true,
-    types: true,
-    engineerLoad: true,
-    attended: true,
-    recent: true,
-  });
-  const toggleSection = (key: string) => setOpenSections((s) => ({ ...s, [key]: !s[key] }));
+  type Filter =
+    | { kind: "all" }
+    | { kind: "open" }
+    | { kind: "closed" }
+    | { kind: "unassigned" }
+    | { kind: "status"; value: string }
+    | { kind: "type"; value: string }
+    | { kind: "engineer"; value: string };
+  const [filter, setFilter] = useState<Filter>({ kind: "all" });
+  const isActive = (f: Filter) =>
+    JSON.stringify(f) === JSON.stringify(filter);
 
   useEffect(() => {
     (async () => {
@@ -116,92 +118,112 @@ function TicketsDashboard() {
     new Set(rows.map((r) => r.assigned_engineer_name).filter((n): n is string => !!n)),
   ).sort();
 
+  const isOpen = (r: Row) => r.status !== "Closed" && r.status !== "Cancelled";
+  const filtered = useMemo(() => {
+    return inRange.filter((r) => {
+      switch (filter.kind) {
+        case "all": return true;
+        case "open": return isOpen(r);
+        case "closed": return r.status === "Closed";
+        case "unassigned": return !r.assigned_engineer_name && isOpen(r);
+        case "status": return r.status === filter.value;
+        case "type": return r.call_type === filter.value;
+        case "engineer": return r.assigned_engineer_name === filter.value;
+      }
+    });
+  }, [inRange, filter]);
+
+  const filterLabel = (() => {
+    switch (filter.kind) {
+      case "all": return "All tickets";
+      case "open": return "Open tickets";
+      case "closed": return "Closed tickets";
+      case "unassigned": return "Unassigned tickets";
+      case "status": return `Status: ${filter.value}`;
+      case "type": return `Call type: ${filter.value}`;
+      case "engineer": return `Engineer: ${filter.value}`;
+    }
+  })();
+
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader
-          className="flex flex-row items-center justify-between flex-wrap gap-2 cursor-pointer select-none"
-          onClick={(e) => { if ((e.target as HTMLElement).closest('[data-radix-select]')) return; toggleSection("kpis"); }}
-        >
-          <div className="flex items-center gap-2">
-            {openSections.kpis ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            <CardTitle>Tickets Dashboard</CardTitle>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Range</span>
-            <Select value={range} onValueChange={(v) => setRange(v as Range)}>
-              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="day">Today</SelectItem>
-                <SelectItem value="week">Last 7 days</SelectItem>
-                <SelectItem value="month">Last 30 days</SelectItem>
-                <SelectItem value="year">Last 12 months</SelectItem>
-                <SelectItem value="all">All time</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        {openSections.kpis && (
-          <CardContent>
-            {loading ? (
-              <div className="text-muted-foreground">Loading…</div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Kpi label="Total Tickets" value={total} tone="bg-blue-50 text-blue-800" />
-                <Kpi label="Open" value={open} tone="bg-amber-50 text-amber-800" />
-                <Kpi label="Closed" value={closed} tone="bg-green-50 text-green-800" />
-                <Kpi label="Unassigned" value={unassigned} tone="bg-rose-50 text-rose-800" />
-              </div>
-            )}
-          </CardContent>
-        )}
-      </Card>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-2xl font-bold">Tickets Dashboard</h1>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Range</span>
+          <Select value={range} onValueChange={(v) => setRange(v as Range)}>
+            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="day">Today</SelectItem>
+              <SelectItem value="week">Last 7 days</SelectItem>
+              <SelectItem value="month">Last 30 days</SelectItem>
+              <SelectItem value="year">Last 12 months</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-muted-foreground">Loading…</div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Kpi label="Total" value={total} tone="bg-blue-50 text-blue-800 border-blue-200" onClick={() => setFilter({ kind: "all" })} active={isActive({ kind: "all" })} />
+          <Kpi label="Open" value={open} tone="bg-amber-50 text-amber-800 border-amber-200" onClick={() => setFilter({ kind: "open" })} active={isActive({ kind: "open" })} />
+          <Kpi label="Closed" value={closed} tone="bg-green-50 text-green-800 border-green-200" onClick={() => setFilter({ kind: "closed" })} active={isActive({ kind: "closed" })} />
+          <Kpi label="Unassigned" value={unassigned} tone="bg-rose-50 text-rose-800 border-rose-200" onClick={() => setFilter({ kind: "unassigned" })} active={isActive({ kind: "unassigned" })} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
-          <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("status")}>
-            {openSections.status ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            <CardTitle className="text-base">By Status</CardTitle>
-          </CardHeader>
-          {openSections.status && (
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {TICKET_STATUSES.map((s) => (
-                  <Badge key={s} variant="secondary" className={`${STATUS_COLOR[s]} text-xs`}>
-                    {s}: {statusCounts[s] || 0}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          )}
+          <CardHeader><CardTitle className="text-base">By Status (click to filter)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {TICKET_STATUSES.map((s) => {
+                const active = isActive({ kind: "status", value: s });
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setFilter({ kind: "status", value: s })}
+                    className={`rounded transition ${active ? "ring-2 ring-offset-1 ring-primary" : ""}`}
+                  >
+                    <Badge variant="secondary" className={`${STATUS_COLOR[s]} text-xs cursor-pointer`}>
+                      {s}: {statusCounts[s] || 0}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("types")}>
-            {openSections.types ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            <CardTitle className="text-base">By Call Type</CardTitle>
-          </CardHeader>
-          {openSections.types && (
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {CALL_TYPES.map((s) => (
-                  <Badge key={s} variant="secondary" className="bg-zinc-100 text-zinc-800 text-xs">
-                    {s}: {typeCounts[s] || 0}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          )}
+          <CardHeader><CardTitle className="text-base">By Call Type (click to filter)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {CALL_TYPES.map((s) => {
+                const active = isActive({ kind: "type", value: s });
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setFilter({ kind: "type", value: s })}
+                    className={`rounded transition ${active ? "ring-2 ring-offset-1 ring-primary" : ""}`}
+                  >
+                    <Badge variant="secondary" className="bg-zinc-100 text-zinc-800 text-xs cursor-pointer">
+                      {s}: {typeCounts[s] || 0}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("engineerLoad")}>
-          {openSections.engineerLoad ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-          <CardTitle className="text-base">Engineer-wise Load ({rangeLabel(range)})</CardTitle>
-        </CardHeader>
-        {openSections.engineerLoad && (
-          <CardContent>
+        <CardHeader><CardTitle className="text-base">Engineer-wise Load ({rangeLabel(range)}) — click row to filter</CardTitle></CardHeader>
+        <CardContent>
             <div className="overflow-x-auto border rounded-md">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 text-left">
@@ -217,7 +239,11 @@ function TicketsDashboard() {
                   {engineers.length === 0 ? (
                     <tr><td colSpan={5} className="p-4 text-muted-foreground">No assigned tickets in this range.</td></tr>
                   ) : engineers.map((e) => (
-                    <tr key={e.name} className="border-t">
+                    <tr
+                      key={e.name}
+                      onClick={() => setFilter({ kind: "engineer", value: e.name })}
+                      className={`border-t cursor-pointer hover:bg-muted/40 ${isActive({ kind: "engineer", value: e.name }) ? "bg-primary/10" : ""}`}
+                    >
                       <td className="p-2 font-medium">{e.name}</td>
                       <td className="p-2 text-right">{e.assigned}</td>
                       <td className="p-2 text-right">{e.inProgress}</td>
@@ -228,17 +254,12 @@ function TicketsDashboard() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        )}
+        </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("attended")}>
-          {openSections.attended ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-          <CardTitle className="text-base">Calls Attended (Closed) per Engineer</CardTitle>
-        </CardHeader>
-        {openSections.attended && (
-          <CardContent>
+        <CardHeader><CardTitle className="text-base">Calls Attended (Closed) per Engineer</CardTitle></CardHeader>
+        <CardContent>
             <div className="overflow-x-auto border rounded-md">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 text-left">
@@ -254,7 +275,11 @@ function TicketsDashboard() {
                   {allEngineerNames.length === 0 ? (
                     <tr><td colSpan={5} className="p-4 text-muted-foreground">No engineers assigned yet.</td></tr>
                   ) : allEngineerNames.map((n) => (
-                    <tr key={n} className="border-t">
+                    <tr
+                      key={n}
+                      onClick={() => setFilter({ kind: "engineer", value: n })}
+                      className={`border-t cursor-pointer hover:bg-muted/40 ${isActive({ kind: "engineer", value: n }) ? "bg-primary/10" : ""}`}
+                    >
                       <td className="p-2 font-medium">{n}</td>
                       <td className="p-2 text-right">{attendedSince(n, 1)}</td>
                       <td className="p-2 text-right">{attendedSince(n, 7)}</td>
@@ -265,23 +290,22 @@ function TicketsDashboard() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        )}
+        </CardContent>
       </Card>
 
       <Card>
-        <CardHeader
-          className="flex flex-row items-center justify-between cursor-pointer select-none"
-          onClick={(e) => { if ((e.target as HTMLElement).closest('a, button')) return; toggleSection("recent"); }}
-        >
+        <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-base">
+            {filterLabel} <span className="text-muted-foreground font-normal">({filtered.length})</span>
+          </CardTitle>
           <div className="flex items-center gap-2">
-            {openSections.recent ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            <CardTitle className="text-base">Recent Tickets</CardTitle>
+            {filter.kind !== "all" && (
+              <Button size="sm" variant="ghost" onClick={() => setFilter({ kind: "all" })}>Clear filter</Button>
+            )}
+            <Link to="/tickets"><Button variant="ghost" size="sm">View all</Button></Link>
           </div>
-          <Link to="/tickets"><Button variant="ghost" size="sm">View all</Button></Link>
         </CardHeader>
-        {openSections.recent && (
-          <CardContent>
+        <CardContent>
             <div className="overflow-x-auto border rounded-md">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 text-left">
@@ -295,7 +319,9 @@ function TicketsDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {inRange.slice(0, 10).map((r) => (
+                  {filtered.length === 0 ? (
+                    <tr><td colSpan={6} className="p-4 text-muted-foreground text-center">No tickets match this filter.</td></tr>
+                  ) : filtered.slice(0, 50).map((r) => (
                     <tr key={r.id} className="border-t hover:bg-muted/30">
                       <td className="p-2 font-mono">{r.case_id}</td>
                       <td className="p-2">{r.call_type}</td>
@@ -316,19 +342,21 @@ function TicketsDashboard() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        )}
+        </CardContent>
       </Card>
     </div>
   );
 }
 
-function Kpi({ label, value, tone }: { label: string; value: number; tone: string }) {
+function Kpi({ label, value, tone, onClick, active }: { label: string; value: number; tone: string; onClick: () => void; active: boolean }) {
   return (
-    <div className={`rounded-lg p-4 ${tone}`}>
+    <button
+      onClick={onClick}
+      className={`text-left rounded-lg border-2 p-4 transition ${tone} ${active ? "ring-2 ring-offset-2 ring-primary" : ""}`}
+    >
       <div className="text-xs uppercase tracking-wide opacity-80">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-    </div>
+      <div className="text-3xl font-bold mt-1">{value}</div>
+    </button>
   );
 }
 
