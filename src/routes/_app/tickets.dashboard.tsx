@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STATUS_COLOR, TICKET_STATUSES, CALL_TYPES } from "@/lib/tickets";
-import { Eye } from "lucide-react";
+import { Eye, ChevronDown, ChevronUp } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/dashboard")({
   component: TicketsDashboard,
