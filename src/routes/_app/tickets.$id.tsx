@@ -69,8 +69,11 @@ function TicketDetail() {
       supabase.from("ticket_activities").select("*").eq("ticket_id", id).order("created_at", { ascending: false }),
     ]);
     if (tk) {
-      const row = tk as Ticket;
-      setT({ ...row, parts_details: Array.isArray(row.parts_details) ? row.parts_details : [] });
+      const row = tk as unknown as Ticket;
+      const parts = Array.isArray((tk as { parts_details?: unknown }).parts_details)
+        ? ((tk as { parts_details: unknown[] }).parts_details as PartLine[])
+        : [];
+      setT({ ...row, parts_details: parts });
     }
     setProducts((pr || []) as { id: string; name: string }[]);
     setActivities((ac || []) as Activity[]);
