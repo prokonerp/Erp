@@ -72,6 +72,22 @@ function CustomersPage() {
         <CardTitle className="text-base">Customer master</CardTitle>
         <div className="flex gap-2">
           <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} className="w-48" />
+          <ExportButtons
+            name="Prokon_Customers"
+            title="Customer Master"
+            rows={filtered}
+            columns={[
+              { header: "Company", get: (c) => c.company },
+              { header: "Contact", get: (c) => c.contact_name || "" },
+              { header: "Phone", get: (c) => c.phone || "" },
+              { header: "Email", get: (c) => c.email || "" },
+              { header: "GSTIN", get: (c) => c.gst || "" },
+              { header: "State", get: (c) => c.state || "" },
+              { header: "Billing Address", get: (c) => c.billing_address || c.address || "" },
+              { header: "Shipping Address", get: (c) => c.shipping_address || "" },
+              { header: "Remarks", get: (c) => c.remarks || "" },
+            ]}
+          />
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(empty); setEditingId(null); } }}>
             <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New</Button></DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
