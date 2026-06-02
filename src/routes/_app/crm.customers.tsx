@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Customer, INDIAN_STATES } from "@/lib/crm";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export const Route = createFileRoute("/_app/crm/customers")({ component: CustomersPage });
 
