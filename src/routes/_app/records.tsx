@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, Printer, Search } from "lucide-react";
+import { Printer, Search } from "lucide-react";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export const Route = createFileRoute("/_app/records")({
   component: RecordsPage,
@@ -39,37 +40,29 @@ function RecordsPage() {
       || JSON.stringify(r.items).toLowerCase().includes(s);
   });
 
-  const exportExcel = async () => {
-    const XLSX = await import("xlsx");
-    const flat = filtered.flatMap((g) =>
-      (g.items || []).map((it, idx) => ({
-        "Challan No": g.challan_no,
-        Date: g.gatepass_date,
-        Time: g.gatepass_time,
-        "Person Name": g.person_name,
-        Company: g.person_company || "",
-        "Contact No": g.contact_no || "",
-        "Vehicle No": g.vehicle_no || "",
-        Destination: g.destination || "",
-        Purpose: g.purpose || "",
-        Type: g.return_type,
-        "Item #": idx + 1,
-        Product: it.product,
-        "Serial No": it.serial_no || "",
-        Qty: it.quantity || "",
-        Unit: it.unit || "",
-        "Item Remarks": it.remarks || "",
-        "Prepared By": g.prepared_by || "",
-        "Authorised By": g.authorised_by || "",
-        Remarks: g.remarks || "",
-        Created: new Date(g.created_at).toLocaleString(),
-      }))
-    );
-    const ws = XLSX.utils.json_to_sheet(flat);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Gatepasses");
-    XLSX.writeFile(wb, `Prokon_Gatepasses_${new Date().toISOString().slice(0,10)}.xlsx`);
-  };
+  const exportRows = filtered.flatMap((g) =>
+    (g.items && g.items.length > 0 ? g.items : [{ product: "", serial_no: "", quantity: "", unit: "", remarks: "" }]).map((it, idx) => ({
+      g, it, idx,
+    }))
+  );
+  const exportCols = [
+    { header: "Challan No", get: (r: any) => r.g.challan_no },
+    { header: "Date", get: (r: any) => r.g.gatepass_date },
+    { header: "Time", get: (r: any) => r.g.gatepass_time },
+    { header: "Person", get: (r: any) => r.g.person_name },
+    { header: "Company", get: (r: any) => r.g.person_company || "" },
+    { header: "Contact", get: (r: any) => r.g.contact_no || "" },
+    { header: "Vehicle", get: (r: any) => r.g.vehicle_no || "" },
+    { header: "Destination", get: (r: any) => r.g.destination || "" },
+    { header: "Purpose", get: (r: any) => r.g.purpose || "" },
+    { header: "Type", get: (r: any) => r.g.return_type },
+    { header: "Item#", get: (r: any) => r.idx + 1 },
+    { header: "Product", get: (r: any) => r.it.product || "" },
+    { header: "Serial", get: (r: any) => r.it.serial_no || "" },
+    { header: "Qty", get: (r: any) => r.it.quantity || "" },
+    { header: "Unit", get: (r: any) => r.it.unit || "" },
+    { header: "Remarks", get: (r: any) => r.g.remarks || "" },
+  ];
 
   return (
     <div className="space-y-4">
@@ -81,7 +74,7 @@ function RecordsPage() {
               <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
               <Input className="pl-8 w-64" placeholder="Search challan / person / item" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            <Button variant="outline" onClick={exportExcel}><Download className="h-4 w-4 mr-1" />Export Excel</Button>
+            <ExportButtons name="Prokon_Gatepasses" title="Gatepass Records" rows={exportRows} columns={exportCols} />
           </div>
         </CardHeader>
         <CardContent>
