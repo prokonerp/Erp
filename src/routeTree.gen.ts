@@ -12,11 +12,13 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppTicketsRouteImport } from './routes/_app/tickets'
 import { Route as AppRecordsRouteImport } from './routes/_app/records'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppNewRouteImport } from './routes/_app/new'
 import { Route as AppCrmRouteImport } from './routes/_app/crm'
 import { Route as AppAmcRouteImport } from './routes/_app/amc'
+import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index'
 import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
@@ -46,6 +48,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppTicketsRoute = AppTicketsRouteImport.update({
+  id: '/tickets',
+  path: '/tickets',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppRecordsRoute = AppRecordsRouteImport.update({
   id: '/records',
   path: '/records',
@@ -70,6 +77,11 @@ const AppAmcRoute = AppAmcRouteImport.update({
   id: '/amc',
   path: '/amc',
   getParentRoute: () => AppRoute,
+} as any)
+const AppTicketsIndexRoute = AppTicketsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppTicketsRoute,
 } as any)
 const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
   id: '/',
@@ -150,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
+  '/tickets': typeof AppTicketsRouteWithChildren
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
   '/amc/pm': typeof AppAmcPmRoute
@@ -162,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/amc/': typeof AppAmcIndexRoute
   '/crm/': typeof AppCrmIndexRoute
+  '/tickets/': typeof AppTicketsIndexRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
 }
@@ -183,6 +197,7 @@ export interface FileRoutesByTo {
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/amc': typeof AppAmcIndexRoute
   '/crm': typeof AppCrmIndexRoute
+  '/tickets': typeof AppTicketsIndexRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
 }
@@ -196,6 +211,7 @@ export interface FileRoutesById {
   '/_app/new': typeof AppNewRoute
   '/_app/products': typeof AppProductsRoute
   '/_app/records': typeof AppRecordsRoute
+  '/_app/tickets': typeof AppTicketsRouteWithChildren
   '/_app/amc/$id': typeof AppAmcIdRoute
   '/_app/amc/new': typeof AppAmcNewRoute
   '/_app/amc/pm': typeof AppAmcPmRoute
@@ -208,6 +224,7 @@ export interface FileRoutesById {
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/amc/': typeof AppAmcIndexRoute
   '/_app/crm/': typeof AppCrmIndexRoute
+  '/_app/tickets/': typeof AppTicketsIndexRoute
   '/_app/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/_app/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
 }
@@ -221,6 +238,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/products'
     | '/records'
+    | '/tickets'
     | '/amc/$id'
     | '/amc/new'
     | '/amc/pm'
@@ -233,6 +251,7 @@ export interface FileRouteTypes {
     | '/gatepass/$id'
     | '/amc/'
     | '/crm/'
+    | '/tickets/'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -254,6 +273,7 @@ export interface FileRouteTypes {
     | '/gatepass/$id'
     | '/amc'
     | '/crm'
+    | '/tickets'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
   id:
@@ -266,6 +286,7 @@ export interface FileRouteTypes {
     | '/_app/new'
     | '/_app/products'
     | '/_app/records'
+    | '/_app/tickets'
     | '/_app/amc/$id'
     | '/_app/amc/new'
     | '/_app/amc/pm'
@@ -278,6 +299,7 @@ export interface FileRouteTypes {
     | '/_app/gatepass/$id'
     | '/_app/amc/'
     | '/_app/crm/'
+    | '/_app/tickets/'
     | '/_app/crm/leads/$id'
     | '/_app/crm/quotations/$id'
   fileRoutesById: FileRoutesById
@@ -310,6 +332,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/tickets': {
+      id: '/_app/tickets'
+      path: '/tickets'
+      fullPath: '/tickets'
+      preLoaderRoute: typeof AppTicketsRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/records': {
       id: '/_app/records'
@@ -345,6 +374,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/amc'
       preLoaderRoute: typeof AppAmcRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/tickets/': {
+      id: '/_app/tickets/'
+      path: '/'
+      fullPath: '/tickets/'
+      preLoaderRoute: typeof AppTicketsIndexRouteImport
+      parentRoute: typeof AppTicketsRoute
     }
     '/_app/crm/': {
       id: '/_app/crm/'
@@ -510,12 +546,25 @@ const AppCrmRouteChildren: AppCrmRouteChildren = {
 const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
+interface AppTicketsRouteChildren {
+  AppTicketsIndexRoute: typeof AppTicketsIndexRoute
+}
+
+const AppTicketsRouteChildren: AppTicketsRouteChildren = {
+  AppTicketsIndexRoute: AppTicketsIndexRoute,
+}
+
+const AppTicketsRouteWithChildren = AppTicketsRoute._addFileChildren(
+  AppTicketsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAmcRoute: typeof AppAmcRouteWithChildren
   AppCrmRoute: typeof AppCrmRouteWithChildren
   AppNewRoute: typeof AppNewRoute
   AppProductsRoute: typeof AppProductsRoute
   AppRecordsRoute: typeof AppRecordsRoute
+  AppTicketsRoute: typeof AppTicketsRouteWithChildren
   AppGatepassIdRoute: typeof AppGatepassIdRoute
 }
 
@@ -525,6 +574,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppNewRoute: AppNewRoute,
   AppProductsRoute: AppProductsRoute,
   AppRecordsRoute: AppRecordsRoute,
+  AppTicketsRoute: AppTicketsRouteWithChildren,
   AppGatepassIdRoute: AppGatepassIdRoute,
 }
 
@@ -538,3 +588,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
