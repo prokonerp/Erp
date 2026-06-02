@@ -651,6 +651,120 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_activities: {
+        Row: {
+          actor: string | null
+          created_at: string
+          from_status: string | null
+          id: string
+          kind: string
+          notes: string | null
+          ticket_id: string
+          to_status: string | null
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          kind?: string
+          notes?: string | null
+          ticket_id: string
+          to_status?: string | null
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          kind?: string
+          notes?: string | null
+          ticket_id?: string
+          to_status?: string | null
+        }
+        Relationships: []
+      }
+      tickets: {
+        Row: {
+          assigned_at: string | null
+          assigned_engineer_name: string | null
+          assigned_engineer_phone: string | null
+          call_type: string
+          case_id: string
+          closed_at: string | null
+          complaint: string | null
+          created_at: string
+          created_by: string | null
+          customer_address: string | null
+          customer_email: string | null
+          customer_id: string | null
+          customer_name: string
+          customer_phone: string | null
+          id: string
+          location: string | null
+          parts_details: Json
+          parts_used: boolean
+          product: string | null
+          quotation_id: string | null
+          remarks: string | null
+          serial_no: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_engineer_name?: string | null
+          assigned_engineer_phone?: string | null
+          call_type?: string
+          case_id: string
+          closed_at?: string | null
+          complaint?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_address?: string | null
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          id?: string
+          location?: string | null
+          parts_details?: Json
+          parts_used?: boolean
+          product?: string | null
+          quotation_id?: string | null
+          remarks?: string | null
+          serial_no?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_engineer_name?: string | null
+          assigned_engineer_phone?: string | null
+          call_type?: string
+          case_id?: string
+          closed_at?: string | null
+          complaint?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_address?: string | null
+          customer_email?: string | null
+          customer_id?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          id?: string
+          location?: string | null
+          parts_details?: Json
+          parts_used?: boolean
+          product?: string | null
+          quotation_id?: string | null
+          remarks?: string | null
+          serial_no?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
