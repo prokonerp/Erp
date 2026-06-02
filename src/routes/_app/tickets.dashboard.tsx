@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STATUS_COLOR, TICKET_STATUSES, CALL_TYPES } from "@/lib/tickets";
-import { Eye } from "lucide-react";
+import { Eye, ChevronDown, ChevronUp } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/dashboard")({
   component: TicketsDashboard,
@@ -42,6 +42,15 @@ function TicketsDashboard() {
   const [rows, setRows] = useState<Row[]>([]);
   const [range, setRange] = useState<Range>("month");
   const [loading, setLoading] = useState(true);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    kpis: true,
+    status: true,
+    types: true,
+    engineerLoad: true,
+    attended: true,
+    recent: true,
+  });
+  const toggleSection = (key: string) => setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
   useEffect(() => {
     (async () => {
@@ -110,8 +119,14 @@ function TicketsDashboard() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
-          <CardTitle>Tickets Dashboard</CardTitle>
+        <CardHeader
+          className="flex flex-row items-center justify-between flex-wrap gap-2 cursor-pointer select-none"
+          onClick={(e) => { if ((e.target as HTMLElement).closest('[data-radix-select]')) return; toggleSection("kpis"); }}
+        >
+          <div className="flex items-center gap-2">
+            {openSections.kpis ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            <CardTitle>Tickets Dashboard</CardTitle>
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Range</span>
             <Select value={range} onValueChange={(v) => setRange(v as Range)}>
@@ -126,153 +141,183 @@ function TicketsDashboard() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-muted-foreground">Loading…</div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Kpi label="Total Tickets" value={total} tone="bg-blue-50 text-blue-800" />
-              <Kpi label="Open" value={open} tone="bg-amber-50 text-amber-800" />
-              <Kpi label="Closed" value={closed} tone="bg-green-50 text-green-800" />
-              <Kpi label="Unassigned" value={unassigned} tone="bg-rose-50 text-rose-800" />
-            </div>
-          )}
-        </CardContent>
+        {openSections.kpis && (
+          <CardContent>
+            {loading ? (
+              <div className="text-muted-foreground">Loading…</div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Kpi label="Total Tickets" value={total} tone="bg-blue-50 text-blue-800" />
+                <Kpi label="Open" value={open} tone="bg-amber-50 text-amber-800" />
+                <Kpi label="Closed" value={closed} tone="bg-green-50 text-green-800" />
+                <Kpi label="Unassigned" value={unassigned} tone="bg-rose-50 text-rose-800" />
+              </div>
+            )}
+          </CardContent>
+        )}
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle className="text-base">By Status</CardTitle></CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {TICKET_STATUSES.map((s) => (
-                <Badge key={s} variant="secondary" className={`${STATUS_COLOR[s]} text-xs`}>
-                  {s}: {statusCounts[s] || 0}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
+          <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("status")}>
+            {openSections.status ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            <CardTitle className="text-base">By Status</CardTitle>
+          </CardHeader>
+          {openSections.status && (
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {TICKET_STATUSES.map((s) => (
+                  <Badge key={s} variant="secondary" className={`${STATUS_COLOR[s]} text-xs`}>
+                    {s}: {statusCounts[s] || 0}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          )}
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">By Call Type</CardTitle></CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {CALL_TYPES.map((s) => (
-                <Badge key={s} variant="secondary" className="bg-zinc-100 text-zinc-800 text-xs">
-                  {s}: {typeCounts[s] || 0}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
+          <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("types")}>
+            {openSections.types ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            <CardTitle className="text-base">By Call Type</CardTitle>
+          </CardHeader>
+          {openSections.types && (
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {CALL_TYPES.map((s) => (
+                  <Badge key={s} variant="secondary" className="bg-zinc-100 text-zinc-800 text-xs">
+                    {s}: {typeCounts[s] || 0}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          )}
         </Card>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Engineer-wise Load ({rangeLabel(range)})</CardTitle></CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto border rounded-md">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
-                <tr>
-                  <th className="p-2">Engineer</th>
-                  <th className="p-2 text-right">Assigned / Pending</th>
-                  <th className="p-2 text-right">In Progress</th>
-                  <th className="p-2 text-right">Closed</th>
-                  <th className="p-2 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {engineers.length === 0 ? (
-                  <tr><td colSpan={5} className="p-4 text-muted-foreground">No assigned tickets in this range.</td></tr>
-                ) : engineers.map((e) => (
-                  <tr key={e.name} className="border-t">
-                    <td className="p-2 font-medium">{e.name}</td>
-                    <td className="p-2 text-right">{e.assigned}</td>
-                    <td className="p-2 text-right">{e.inProgress}</td>
-                    <td className="p-2 text-right">{e.closed}</td>
-                    <td className="p-2 text-right font-semibold">{e.total}</td>
+        <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("engineerLoad")}>
+          {openSections.engineerLoad ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          <CardTitle className="text-base">Engineer-wise Load ({rangeLabel(range)})</CardTitle>
+        </CardHeader>
+        {openSections.engineerLoad && (
+          <CardContent>
+            <div className="overflow-x-auto border rounded-md">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-left">
+                  <tr>
+                    <th className="p-2">Engineer</th>
+                    <th className="p-2 text-right">Assigned / Pending</th>
+                    <th className="p-2 text-right">In Progress</th>
+                    <th className="p-2 text-right">Closed</th>
+                    <th className="p-2 text-right">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
+                </thead>
+                <tbody>
+                  {engineers.length === 0 ? (
+                    <tr><td colSpan={5} className="p-4 text-muted-foreground">No assigned tickets in this range.</td></tr>
+                  ) : engineers.map((e) => (
+                    <tr key={e.name} className="border-t">
+                      <td className="p-2 font-medium">{e.name}</td>
+                      <td className="p-2 text-right">{e.assigned}</td>
+                      <td className="p-2 text-right">{e.inProgress}</td>
+                      <td className="p-2 text-right">{e.closed}</td>
+                      <td className="p-2 text-right font-semibold">{e.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Calls Attended (Closed) per Engineer</CardTitle></CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto border rounded-md">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
-                <tr>
-                  <th className="p-2">Engineer</th>
-                  <th className="p-2 text-right">Today</th>
-                  <th className="p-2 text-right">Last 7 days</th>
-                  <th className="p-2 text-right">Last 30 days</th>
-                  <th className="p-2 text-right">Last 365 days</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allEngineerNames.length === 0 ? (
-                  <tr><td colSpan={5} className="p-4 text-muted-foreground">No engineers assigned yet.</td></tr>
-                ) : allEngineerNames.map((n) => (
-                  <tr key={n} className="border-t">
-                    <td className="p-2 font-medium">{n}</td>
-                    <td className="p-2 text-right">{attendedSince(n, 1)}</td>
-                    <td className="p-2 text-right">{attendedSince(n, 7)}</td>
-                    <td className="p-2 text-right">{attendedSince(n, 30)}</td>
-                    <td className="p-2 text-right">{attendedSince(n, 365)}</td>
+        <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("attended")}>
+          {openSections.attended ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          <CardTitle className="text-base">Calls Attended (Closed) per Engineer</CardTitle>
+        </CardHeader>
+        {openSections.attended && (
+          <CardContent>
+            <div className="overflow-x-auto border rounded-md">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-left">
+                  <tr>
+                    <th className="p-2">Engineer</th>
+                    <th className="p-2 text-right">Today</th>
+                    <th className="p-2 text-right">Last 7 days</th>
+                    <th className="p-2 text-right">Last 30 days</th>
+                    <th className="p-2 text-right">Last 365 days</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
+                </thead>
+                <tbody>
+                  {allEngineerNames.length === 0 ? (
+                    <tr><td colSpan={5} className="p-4 text-muted-foreground">No engineers assigned yet.</td></tr>
+                  ) : allEngineerNames.map((n) => (
+                    <tr key={n} className="border-t">
+                      <td className="p-2 font-medium">{n}</td>
+                      <td className="p-2 text-right">{attendedSince(n, 1)}</td>
+                      <td className="p-2 text-right">{attendedSince(n, 7)}</td>
+                      <td className="p-2 text-right">{attendedSince(n, 30)}</td>
+                      <td className="p-2 text-right">{attendedSince(n, 365)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Recent Tickets</CardTitle>
+        <CardHeader
+          className="flex flex-row items-center justify-between cursor-pointer select-none"
+          onClick={(e) => { if ((e.target as HTMLElement).closest('a, button')) return; toggleSection("recent"); }}
+        >
+          <div className="flex items-center gap-2">
+            {openSections.recent ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            <CardTitle className="text-base">Recent Tickets</CardTitle>
+          </div>
           <Link to="/tickets"><Button variant="ghost" size="sm">View all</Button></Link>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto border rounded-md">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
-                <tr>
-                  <th className="p-2">Case ID</th>
-                  <th className="p-2">Type</th>
-                  <th className="p-2">Customer</th>
-                  <th className="p-2">Engineer</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2 w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {inRange.slice(0, 10).map((r) => (
-                  <tr key={r.id} className="border-t hover:bg-muted/30">
-                    <td className="p-2 font-mono">{r.case_id}</td>
-                    <td className="p-2">{r.call_type}</td>
-                    <td className="p-2">{r.customer_name}</td>
-                    <td className="p-2">{r.assigned_engineer_name || <span className="text-muted-foreground">—</span>}</td>
-                    <td className="p-2">
-                      <Badge variant="secondary" className={STATUS_COLOR[r.status] || "bg-zinc-100 text-zinc-700"}>
-                        {r.status}
-                      </Badge>
-                    </td>
-                    <td className="p-2">
-                      <Link to="/tickets/$id" params={{ id: r.id }}>
-                        <Button size="icon" variant="ghost"><Eye className="h-4 w-4" /></Button>
-                      </Link>
-                    </td>
+        {openSections.recent && (
+          <CardContent>
+            <div className="overflow-x-auto border rounded-md">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-left">
+                  <tr>
+                    <th className="p-2">Case ID</th>
+                    <th className="p-2">Type</th>
+                    <th className="p-2">Customer</th>
+                    <th className="p-2">Engineer</th>
+                    <th className="p-2">Status</th>
+                    <th className="p-2 w-10"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
+                </thead>
+                <tbody>
+                  {inRange.slice(0, 10).map((r) => (
+                    <tr key={r.id} className="border-t hover:bg-muted/30">
+                      <td className="p-2 font-mono">{r.case_id}</td>
+                      <td className="p-2">{r.call_type}</td>
+                      <td className="p-2">{r.customer_name}</td>
+                      <td className="p-2">{r.assigned_engineer_name || <span className="text-muted-foreground">—</span>}</td>
+                      <td className="p-2">
+                        <Badge variant="secondary" className={STATUS_COLOR[r.status] || "bg-zinc-100 text-zinc-700"}>
+                          {r.status}
+                        </Badge>
+                      </td>
+                      <td className="p-2">
+                        <Link to="/tickets/$id" params={{ id: r.id }}>
+                          <Button size="icon" variant="ghost"><Eye className="h-4 w-4" /></Button>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        )}
       </Card>
     </div>
   );
