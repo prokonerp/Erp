@@ -40,11 +40,13 @@ export const STATUS_COLOR: Record<string, string> = {
   Closed: "bg-green-100 text-green-800",
 };
 
-/** Build a wa.me click-to-send URL. phone must be digits, country code optional. */
+/** Build a WhatsApp click-to-send URL.
+ *  Uses web.whatsapp.com which opens WhatsApp Web reliably in the browser
+ *  (wa.me redirects to api.whatsapp.com/send which Chrome may block). */
 export function waLink(phone: string | null | undefined, text: string): string {
   const digits = (phone || "").replace(/\D/g, "");
   const num = digits.length === 10 ? `91${digits}` : digits;
-  return `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+  return `https://web.whatsapp.com/send?phone=${num}&text=${encodeURIComponent(text)}`;
 }
 
 export function engineerAssignMsg(t: {
