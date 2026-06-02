@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   CALL_TYPES, TICKET_STATUSES, STATUS_COLOR,
-  waLink, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
+  waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
 import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -162,9 +162,8 @@ function TicketDetail() {
     await logActivity("status", `Status changed: ${prev} → ${next}`, prev, next);
     await load();
     if (next === "Closed" && t.customer_phone) {
-      const url = waLink(t.customer_phone, renderMsg("ticket_closed", customerClosedMsg(t)));
-      window.open(url, "_blank");
-      toast.success("Customer closure message ready in WhatsApp");
+      await waOpen(t.customer_phone, renderMsg("ticket_closed", customerClosedMsg(t)));
+      toast.success("Message copied — opening WhatsApp");
     }
   };
 
@@ -184,9 +183,8 @@ function TicketDetail() {
       `Assigned to ${t.assigned_engineer_name} (${t.assigned_engineer_phone})`,
     );
     await load();
-    const url = waLink(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)));
-    window.open(url, "_blank");
-    toast.success("WhatsApp opened — send to engineer");
+    await waOpen(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)));
+    toast.success("Message copied — opening WhatsApp for engineer");
   };
 
   const addPart = () => update({ parts_details: [...t.parts_details, { name: "", qty: "1" }] });
@@ -376,11 +374,12 @@ function TicketDetail() {
                 <UserPlus className="h-4 w-4 mr-1" />Assign & Send WhatsApp
               </Button>
               {t.assigned_engineer_phone && (
-                <a href={waLink(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)))} target="_blank" rel="noreferrer">
-                  <Button variant="outline" size="sm" className="w-full">
-                    <MessageCircle className="h-4 w-4 mr-1" />Resend WhatsApp
-                  </Button>
-                </a>
+                <Button
+                  variant="outline" size="sm" className="w-full"
+                  onClick={() => { waOpen(t.assigned_engineer_phone!, renderMsg("engineer_assign", engineerAssignMsg(t))); toast.success("Message copied — opening WhatsApp"); }}
+                >
+                  <MessageCircle className="h-4 w-4 mr-1" />Resend WhatsApp
+                </Button>
               )}
             </CardContent>
           </Card>
@@ -395,11 +394,12 @@ function TicketDetail() {
                       <FileText className="h-4 w-4 mr-1" />Open Quotation {quoteNo && <span className="ml-1 font-mono text-xs">({quoteNo})</span>}
                     </Button>
                     {t.customer_phone && (
-                      <a href={waLink(t.customer_phone, renderMsg("oow_quotation", `Dear ${t.customer_name}, please find our OOW quotation ${quoteNo} for case ${t.case_id}.`))} target="_blank" rel="noreferrer">
-                        <Button size="sm" className="w-full">
-                          <MessageCircle className="h-4 w-4 mr-1" />Share Quotation on WhatsApp
-                        </Button>
-                      </a>
+                      <Button
+                        size="sm" className="w-full"
+                        onClick={() => { waOpen(t.customer_phone!, renderMsg("oow_quotation", `Dear ${t.customer_name}, please find our OOW quotation ${quoteNo} for case ${t.case_id}.`)); toast.success("Message copied — opening WhatsApp"); }}
+                      >
+                        <MessageCircle className="h-4 w-4 mr-1" />Share Quotation on WhatsApp
+                      </Button>
                     )}
                   </>
                 ) : (
@@ -416,11 +416,13 @@ function TicketDetail() {
             <Card>
               <CardHeader><CardTitle>Customer WhatsApp</CardTitle></CardHeader>
               <CardContent>
-                <a href={waLink(t.customer_phone, renderMsg("ticket_closed", customerClosedMsg(t)))} target="_blank" rel="noreferrer">
-                  <Button variant="outline" size="sm" className="w-full">
-                    <MessageCircle className="h-4 w-4 mr-1" />Send Closure Message
-                  </Button>
-                </a>
+                <Button
+                  variant="outline" size="sm" className="w-full"
+                  onClick={() => { waOpen(t.customer_phone!, renderMsg("ticket_closed", customerClosedMsg(t))); toast.success("Message copied — opening WhatsApp"); }}
+                >
+                  <MessageCircle className="h-4 w-4 mr-1" />Send Closure Message
+                </Button>
+                <p className="text-xs text-muted-foreground mt-2">Opens WhatsApp Desktop/app. Message is also copied to clipboard — paste if needed.</p>
               </CardContent>
             </Card>
           )}
