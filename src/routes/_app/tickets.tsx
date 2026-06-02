@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { ListChecks, Plus, MessageSquare } from "lucide-react";
+import { ListChecks, Plus, MessageSquare, LayoutDashboard } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets")({
   component: TicketsLayout,
@@ -10,6 +10,7 @@ export const Route = createFileRoute("/_app/tickets")({
 function TicketsLayout() {
   const loc = useLocation();
   const tabs = [
+    { to: "/tickets/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/tickets", label: "All Tickets", icon: ListChecks, exact: true },
     { to: "/tickets/new", label: "New Ticket", icon: Plus },
     { to: "/tickets/templates", label: "WhatsApp Templates", icon: MessageSquare },
