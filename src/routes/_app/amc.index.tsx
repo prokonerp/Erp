@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck } from "lucide-react";
 import { type Amc, amcStatus, statusBadgeClass, statusLabel, statusRowClass } from "@/lib/amc";
+import { ExportButtons } from "@/components/ExportButtons";
 
 export const Route = createFileRoute("/_app/amc/")({
   component: AmcDashboard,
@@ -111,9 +112,29 @@ function AmcDashboard() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
           <CardTitle>AMC Records ({filtered.length})</CardTitle>
-          <div className="relative">
-            <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-            <Input className="pl-8 w-64" placeholder="Search agreement / client / serial" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
+              <Input className="pl-8 w-64" placeholder="Search agreement / client / serial" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <ExportButtons
+              name="Prokon_AMC"
+              title="AMC Records"
+              rows={filtered}
+              columns={[
+                { header: "Agreement", get: (r) => r.agreement_no },
+                { header: "Client", get: (r) => r.client_name },
+                { header: "Company", get: (r) => r.client_company || "" },
+                { header: "Contact", get: (r) => r.contact_no || "" },
+                { header: "Email", get: (r) => r.email || "" },
+                { header: "GST", get: (r) => r.client_gst || "" },
+                { header: "Start", get: (r) => r.start_date },
+                { header: "End", get: (r) => r.end_date },
+                { header: "Status", get: (r) => statusLabel(r._status) },
+                { header: "Units", get: (r) => (r.units || []).length },
+                { header: "AMC Value", get: (r) => Number(r.amc_value || 0) },
+              ]}
+            />
           </div>
         </CardHeader>
         <CardContent>
