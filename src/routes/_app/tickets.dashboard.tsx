@@ -42,6 +42,15 @@ function TicketsDashboard() {
   const [rows, setRows] = useState<Row[]>([]);
   const [range, setRange] = useState<Range>("month");
   const [loading, setLoading] = useState(true);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    kpis: true,
+    status: true,
+    types: true,
+    engineerLoad: true,
+    attended: true,
+    recent: true,
+  });
+  const toggleSection = (key: string) => setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
   useEffect(() => {
     (async () => {
