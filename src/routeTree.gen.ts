@@ -23,6 +23,7 @@ import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
 import { Route as AppTicketsTemplatesRouteImport } from './routes/_app/tickets.templates'
 import { Route as AppTicketsNewRouteImport } from './routes/_app/tickets.new'
+import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.dashboard'
 import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
@@ -104,6 +105,11 @@ const AppTicketsTemplatesRoute = AppTicketsTemplatesRouteImport.update({
 const AppTicketsNewRoute = AppTicketsNewRouteImport.update({
   id: '/new',
   path: '/new',
+  getParentRoute: () => AppTicketsRoute,
+} as any)
+const AppTicketsDashboardRoute = AppTicketsDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => AppTicketsRoute,
 } as any)
 const AppTicketsIdRoute = AppTicketsIdRouteImport.update({
@@ -192,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/tickets/$id': typeof AppTicketsIdRoute
+  '/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/tickets/new': typeof AppTicketsNewRoute
   '/tickets/templates': typeof AppTicketsTemplatesRoute
   '/amc/': typeof AppAmcIndexRoute
@@ -217,6 +224,7 @@ export interface FileRoutesByTo {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/tickets/$id': typeof AppTicketsIdRoute
+  '/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/tickets/new': typeof AppTicketsNewRoute
   '/tickets/templates': typeof AppTicketsTemplatesRoute
   '/amc': typeof AppAmcIndexRoute
@@ -247,6 +255,7 @@ export interface FileRoutesById {
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/tickets/$id': typeof AppTicketsIdRoute
+  '/_app/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/_app/tickets/new': typeof AppTicketsNewRoute
   '/_app/tickets/templates': typeof AppTicketsTemplatesRoute
   '/_app/amc/': typeof AppAmcIndexRoute
@@ -277,6 +286,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/gatepass/$id'
     | '/tickets/$id'
+    | '/tickets/dashboard'
     | '/tickets/new'
     | '/tickets/templates'
     | '/amc/'
@@ -302,6 +312,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/gatepass/$id'
     | '/tickets/$id'
+    | '/tickets/dashboard'
     | '/tickets/new'
     | '/tickets/templates'
     | '/amc'
@@ -331,6 +342,7 @@ export interface FileRouteTypes {
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
     | '/_app/tickets/$id'
+    | '/_app/tickets/dashboard'
     | '/_app/tickets/new'
     | '/_app/tickets/templates'
     | '/_app/amc/'
@@ -444,6 +456,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/tickets/new'
       preLoaderRoute: typeof AppTicketsNewRouteImport
+      parentRoute: typeof AppTicketsRoute
+    }
+    '/_app/tickets/dashboard': {
+      id: '/_app/tickets/dashboard'
+      path: '/dashboard'
+      fullPath: '/tickets/dashboard'
+      preLoaderRoute: typeof AppTicketsDashboardRouteImport
       parentRoute: typeof AppTicketsRoute
     }
     '/_app/tickets/$id': {
@@ -605,6 +624,7 @@ const AppCrmRouteWithChildren =
 
 interface AppTicketsRouteChildren {
   AppTicketsIdRoute: typeof AppTicketsIdRoute
+  AppTicketsDashboardRoute: typeof AppTicketsDashboardRoute
   AppTicketsNewRoute: typeof AppTicketsNewRoute
   AppTicketsTemplatesRoute: typeof AppTicketsTemplatesRoute
   AppTicketsIndexRoute: typeof AppTicketsIndexRoute
@@ -612,6 +632,7 @@ interface AppTicketsRouteChildren {
 
 const AppTicketsRouteChildren: AppTicketsRouteChildren = {
   AppTicketsIdRoute: AppTicketsIdRoute,
+  AppTicketsDashboardRoute: AppTicketsDashboardRoute,
   AppTicketsNewRoute: AppTicketsNewRoute,
   AppTicketsTemplatesRoute: AppTicketsTemplatesRoute,
   AppTicketsIndexRoute: AppTicketsIndexRoute,
