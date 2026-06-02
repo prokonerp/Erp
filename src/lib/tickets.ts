@@ -40,13 +40,22 @@ export const STATUS_COLOR: Record<string, string> = {
   Closed: "bg-green-100 text-green-800",
 };
 
-/** Build a WhatsApp click-to-send URL.
- *  Uses web.whatsapp.com which opens WhatsApp Web reliably in the browser
- *  (wa.me redirects to api.whatsapp.com/send which Chrome may block). */
-export function waLink(phone: string | null | undefined, text: string): string {
+/** Normalise phone to international digits (defaults to India 91). */
+export function waPhone(phone: string | null | undefined): string {
   const digits = (phone || "").replace(/\D/g, "");
-  const num = digits.length === 10 ? `91${digits}` : digits;
-  return `https://web.whatsapp.com/send?phone=${num}&text=${encodeURIComponent(text)}`;
+  return digits.length === 10 ? `91${digits}` : digits;
+}
+
+/** WhatsApp deep link — opens WhatsApp Desktop / mobile app directly,
+ *  bypassing api.whatsapp.com / web.whatsapp.com which are often blocked. */
+export function waLink(phone: string | null | undefined, text: string): string {
+  return `whatsapp://send?phone=${waPhone(phone)}&text=${encodeURIComponent(text)}`;
+}
+
+/** Click handler: copy message to clipboard, then open WhatsApp app deep link. */
+export async function waOpen(phone: string | null | undefined, text: string): Promise<void> {
+  try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
+  window.location.href = waLink(phone, text);
 }
 
 export function engineerAssignMsg(t: {
