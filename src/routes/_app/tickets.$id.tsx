@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   CALL_TYPES, TICKET_STATUSES, STATUS_COLOR,
-  waLink, engineerAssignMsg, customerClosedMsg, type PartLine,
+  waLink, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
 import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -61,12 +61,15 @@ function TicketDetail() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [busy, setBusy] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [templates, setTemplates] = useState<Record<string, string>>({});
+  const [quoteNo, setQuoteNo] = useState<string>("");
 
   const load = async () => {
-    const [{ data: tk }, { data: pr }, { data: ac }] = await Promise.all([
+    const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }] = await Promise.all([
       supabase.from("tickets").select("*").eq("id", id).single(),
       supabase.from("products").select("id,name").order("name"),
       supabase.from("ticket_activities").select("*").eq("ticket_id", id).order("created_at", { ascending: false }),
+      supabase.from("wa_templates").select("id,body"),
     ]);
     if (tk) {
       const row = tk as unknown as Ticket;
@@ -74,9 +77,18 @@ function TicketDetail() {
         ? ((tk as { parts_details: unknown[] }).parts_details as PartLine[])
         : [];
       setT({ ...row, parts_details: parts });
+      if (row.quotation_id) {
+        const { data: q } = await supabase.from("quotations").select("quote_no").eq("id", row.quotation_id).single();
+        setQuoteNo((q as { quote_no?: string } | null)?.quote_no || "");
+      } else {
+        setQuoteNo("");
+      }
     }
     setProducts((pr || []) as { id: string; name: string }[]);
     setActivities((ac || []) as Activity[]);
+    const map: Record<string, string> = {};
+    for (const r of (tpl || []) as { id: string; body: string }[]) map[r.id] = r.body;
+    setTemplates(map);
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
@@ -84,6 +96,24 @@ function TicketDetail() {
   if (!t) return <div className="p-6 text-muted-foreground">Loading…</div>;
 
   const update = (patch: Partial<Ticket>) => setT({ ...t, ...patch });
+
+  const tplVars = (extra: Record<string, string> = {}) => ({
+    case_id: t.case_id,
+    call_type: t.call_type,
+    customer_name: t.customer_name,
+    customer_phone: t.customer_phone || "",
+    location: t.location || "",
+    customer_address: t.customer_address || "",
+    product: t.product || "",
+    serial_no: t.serial_no || "",
+    complaint: t.complaint || "",
+    product_line: t.product ? ` for ${t.product}` : "",
+    quote_no: quoteNo,
+    ...extra,
+  });
+
+  const renderMsg = (id: "engineer_assign" | "oow_quotation" | "ticket_closed", fallback: string) =>
+    templates[id] ? renderTemplate(templates[id], tplVars()) : fallback;
 
   const logActivity = async (kind: string, notes: string, from_status?: string, to_status?: string) => {
     const { data: u } = await supabase.auth.getUser();
@@ -132,7 +162,7 @@ function TicketDetail() {
     await logActivity("status", `Status changed: ${prev} → ${next}`, prev, next);
     await load();
     if (next === "Closed" && t.customer_phone) {
-      const url = waLink(t.customer_phone, customerClosedMsg(t));
+      const url = waLink(t.customer_phone, renderMsg("ticket_closed", customerClosedMsg(t)));
       window.open(url, "_blank");
       toast.success("Customer closure message ready in WhatsApp");
     }
@@ -154,7 +184,7 @@ function TicketDetail() {
       `Assigned to ${t.assigned_engineer_name} (${t.assigned_engineer_phone})`,
     );
     await load();
-    const url = waLink(t.assigned_engineer_phone, engineerAssignMsg(t));
+    const url = waLink(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)));
     window.open(url, "_blank");
     toast.success("WhatsApp opened — send to engineer");
   };
@@ -346,7 +376,7 @@ function TicketDetail() {
                 <UserPlus className="h-4 w-4 mr-1" />Assign & Send WhatsApp
               </Button>
               {t.assigned_engineer_phone && (
-                <a href={waLink(t.assigned_engineer_phone, engineerAssignMsg(t))} target="_blank" rel="noreferrer">
+                <a href={waLink(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)))} target="_blank" rel="noreferrer">
                   <Button variant="outline" size="sm" className="w-full">
                     <MessageCircle className="h-4 w-4 mr-1" />Resend WhatsApp
                   </Button>
@@ -360,9 +390,18 @@ function TicketDetail() {
               <CardHeader><CardTitle>OOW Quotation</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                 {t.quotation_id ? (
-                  <Button variant="outline" className="w-full" onClick={() => navigate({ to: "/crm/quotations/$id", params: { id: t.quotation_id! } })}>
-                    <FileText className="h-4 w-4 mr-1" />Open Quotation
-                  </Button>
+                  <>
+                    <Button variant="outline" className="w-full" onClick={() => navigate({ to: "/crm/quotations/$id", params: { id: t.quotation_id! } })}>
+                      <FileText className="h-4 w-4 mr-1" />Open Quotation {quoteNo && <span className="ml-1 font-mono text-xs">({quoteNo})</span>}
+                    </Button>
+                    {t.customer_phone && (
+                      <a href={waLink(t.customer_phone, renderMsg("oow_quotation", `Dear ${t.customer_name}, please find our OOW quotation ${quoteNo} for case ${t.case_id}.`))} target="_blank" rel="noreferrer">
+                        <Button size="sm" className="w-full">
+                          <MessageCircle className="h-4 w-4 mr-1" />Share Quotation on WhatsApp
+                        </Button>
+                      </a>
+                    )}
+                  </>
                 ) : (
                   <Button className="w-full" onClick={createOOWQuote}>
                     <FileText className="h-4 w-4 mr-1" />Create OOW Quotation
@@ -377,7 +416,7 @@ function TicketDetail() {
             <Card>
               <CardHeader><CardTitle>Customer WhatsApp</CardTitle></CardHeader>
               <CardContent>
-                <a href={waLink(t.customer_phone, customerClosedMsg(t))} target="_blank" rel="noreferrer">
+                <a href={waLink(t.customer_phone, renderMsg("ticket_closed", customerClosedMsg(t)))} target="_blank" rel="noreferrer">
                   <Button variant="outline" size="sm" className="w-full">
                     <MessageCircle className="h-4 w-4 mr-1" />Send Closure Message
                   </Button>
