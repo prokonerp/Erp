@@ -119,8 +119,14 @@ function TicketsDashboard() {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
-          <CardTitle>Tickets Dashboard</CardTitle>
+        <CardHeader
+          className="flex flex-row items-center justify-between flex-wrap gap-2 cursor-pointer select-none"
+          onClick={(e) => { if ((e.target as HTMLElement).closest('[data-radix-select]')) return; toggleSection("kpis"); }}
+        >
+          <div className="flex items-center gap-2">
+            {openSections.kpis ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            <CardTitle>Tickets Dashboard</CardTitle>
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Range</span>
             <Select value={range} onValueChange={(v) => setRange(v as Range)}>
@@ -135,18 +141,20 @@ function TicketsDashboard() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-muted-foreground">Loading…</div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Kpi label="Total Tickets" value={total} tone="bg-blue-50 text-blue-800" />
-              <Kpi label="Open" value={open} tone="bg-amber-50 text-amber-800" />
-              <Kpi label="Closed" value={closed} tone="bg-green-50 text-green-800" />
-              <Kpi label="Unassigned" value={unassigned} tone="bg-rose-50 text-rose-800" />
-            </div>
-          )}
-        </CardContent>
+        {openSections.kpis && (
+          <CardContent>
+            {loading ? (
+              <div className="text-muted-foreground">Loading…</div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Kpi label="Total Tickets" value={total} tone="bg-blue-50 text-blue-800" />
+                <Kpi label="Open" value={open} tone="bg-amber-50 text-amber-800" />
+                <Kpi label="Closed" value={closed} tone="bg-green-50 text-green-800" />
+                <Kpi label="Unassigned" value={unassigned} tone="bg-rose-50 text-rose-800" />
+              </div>
+            )}
+          </CardContent>
+        )}
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
