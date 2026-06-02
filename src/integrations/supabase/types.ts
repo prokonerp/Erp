@@ -765,6 +765,27 @@ export type Database = {
         }
         Relationships: []
       }
+      wa_templates: {
+        Row: {
+          body: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          id: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
