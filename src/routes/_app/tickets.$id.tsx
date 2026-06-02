@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   CALL_TYPES, TICKET_STATUSES, STATUS_COLOR,
-  waLink, waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
+  waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
 import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
