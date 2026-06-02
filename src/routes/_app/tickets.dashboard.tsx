@@ -159,29 +159,39 @@ function TicketsDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle className="text-base">By Status</CardTitle></CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {TICKET_STATUSES.map((s) => (
-                <Badge key={s} variant="secondary" className={`${STATUS_COLOR[s]} text-xs`}>
-                  {s}: {statusCounts[s] || 0}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
+          <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("status")}>
+            {openSections.status ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            <CardTitle className="text-base">By Status</CardTitle>
+          </CardHeader>
+          {openSections.status && (
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {TICKET_STATUSES.map((s) => (
+                  <Badge key={s} variant="secondary" className={`${STATUS_COLOR[s]} text-xs`}>
+                    {s}: {statusCounts[s] || 0}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          )}
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">By Call Type</CardTitle></CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {CALL_TYPES.map((s) => (
-                <Badge key={s} variant="secondary" className="bg-zinc-100 text-zinc-800 text-xs">
-                  {s}: {typeCounts[s] || 0}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
+          <CardHeader className="cursor-pointer select-none flex flex-row items-center gap-2" onClick={() => toggleSection("types")}>
+            {openSections.types ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            <CardTitle className="text-base">By Call Type</CardTitle>
+          </CardHeader>
+          {openSections.types && (
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {CALL_TYPES.map((s) => (
+                  <Badge key={s} variant="secondary" className="bg-zinc-100 text-zinc-800 text-xs">
+                    {s}: {typeCounts[s] || 0}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          )}
         </Card>
       </div>
 
