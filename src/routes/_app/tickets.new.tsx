@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CALL_TYPES } from "@/lib/tickets";
 import { toast } from "sonner";
+import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -43,7 +44,17 @@ function NewTicket() {
     if (!form.customer_name.trim()) return toast.error("Customer name is required");
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
-    const payload = { ...form, status: "New", created_by: u.user?.id ?? null };
+    const payload = {
+      ...form,
+      customer_name: toTitleCaseSmart(form.customer_name),
+      customer_address: titleCaseAddress(form.customer_address),
+      customer_email: (form.customer_email || "").trim().toLowerCase(),
+      location: toTitleCaseSmart(form.location),
+      product: toTitleCaseSmart(form.product),
+      serial_no: upperTrim(form.serial_no),
+      status: "New",
+      created_by: u.user?.id ?? null,
+    };
     if (!payload.case_id) delete (payload as Record<string, unknown>).case_id;
     const { data, error } = await supabase.from("tickets").insert(payload as never).select("id").single();
     setBusy(false);

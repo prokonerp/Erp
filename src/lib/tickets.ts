@@ -46,16 +46,23 @@ export function waPhone(phone: string | null | undefined): string {
   return digits.length === 10 ? `91${digits}` : digits;
 }
 
-/** WhatsApp deep link — opens WhatsApp Desktop / mobile app directly,
- *  bypassing api.whatsapp.com / web.whatsapp.com which are often blocked. */
+/** WhatsApp universal link — works on mobile (opens app), desktop (opens WhatsApp Desktop),
+ *  and falls back to WhatsApp Web in the browser if no app is installed. */
 export function waLink(phone: string | null | undefined, text: string): string {
-  return `whatsapp://send?phone=${waPhone(phone)}&text=${encodeURIComponent(text)}`;
+  const p = waPhone(phone);
+  const t = encodeURIComponent(text);
+  return p
+    ? `https://wa.me/${p}?text=${t}`
+    : `https://wa.me/?text=${t}`;
 }
 
-/** Click handler: copy message to clipboard, then open WhatsApp app deep link. */
+/** Click handler: copy message to clipboard, then open WhatsApp in a new tab.
+ *  Using window.open with _blank avoids losing the current page if WhatsApp can't open. */
 export async function waOpen(phone: string | null | undefined, text: string): Promise<void> {
   try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
-  window.location.href = waLink(phone, text);
+  const url = waLink(phone, text);
+  const w = window.open(url, "_blank", "noopener,noreferrer");
+  if (!w) window.location.href = url; // popup blocked → same-tab fallback
 }
 
 export function engineerAssignMsg(t: {
