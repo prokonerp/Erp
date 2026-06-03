@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { toTitleCaseSmart } from "@/lib/text";
 
 export const Route = createFileRoute("/_app/products")({
   component: ProductsPage,
@@ -31,7 +32,7 @@ function ProductsPage() {
 
   const add = async () => {
     if (!name.trim()) return toast.error("Enter product name");
-    const { error } = await supabase.from("products").insert({ name: name.trim(), unit });
+    const { error } = await supabase.from("products").insert({ name: toTitleCaseSmart(name), unit });
     if (error) return toast.error(error.message);
     toast.success("Product added");
     setName(""); load();
