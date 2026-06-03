@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type AmcUnit, addYears, fmtDate, generatePMDates, nextAgreementNo } from "@/lib/amc";
+import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 
 export const Route = createFileRoute("/_app/amc/new")({
   component: NewAmc,
@@ -66,13 +67,17 @@ function NewAmc() {
     const { data: userData } = await supabase.auth.getUser();
     const { data, error } = await supabase.from("amcs").insert({
       agreement_no: form.agreement_no,
-      client_name: form.client_name,
-      client_company: form.client_company || null,
-      client_address: form.client_address || null,
-      client_gst: form.client_gst || null,
+      client_name: toTitleCaseSmart(form.client_name),
+      client_company: form.client_company ? toTitleCaseSmart(form.client_company) : null,
+      client_address: form.client_address ? titleCaseAddress(form.client_address) : null,
+      client_gst: form.client_gst ? upperTrim(form.client_gst) : null,
       contact_no: form.contact_no || null,
-      email: form.email || null,
-      units: cleanUnits,
+      email: form.email ? form.email.trim().toLowerCase() : null,
+      units: cleanUnits.map((u) => ({
+        ...u,
+        model: toTitleCaseSmart(u.model),
+        serial_no: upperTrim(u.serial_no),
+      })),
       start_date: form.start_date,
       end_date,
       duration_years: form.duration_years,
