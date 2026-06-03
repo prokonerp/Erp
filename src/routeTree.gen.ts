@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RaiseTicketRouteImport } from './routes/raise-ticket'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
@@ -38,6 +39,11 @@ import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
 import { Route as AppCrmQuotationsIdRouteImport } from './routes/_app/crm.quotations.$id'
 import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
 
+const RaiseTicketRoute = RaiseTicketRouteImport.update({
+  id: '/raise-ticket',
+  path: '/raise-ticket',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -181,6 +187,7 @@ const AppCrmLeadsIdRoute = AppCrmLeadsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/raise-ticket': typeof RaiseTicketRoute
   '/amc': typeof AppAmcRouteWithChildren
   '/crm': typeof AppCrmRouteWithChildren
   '/new': typeof AppNewRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/raise-ticket': typeof RaiseTicketRoute
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
@@ -238,6 +246,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/raise-ticket': typeof RaiseTicketRoute
   '/_app/amc': typeof AppAmcRouteWithChildren
   '/_app/crm': typeof AppCrmRouteWithChildren
   '/_app/new': typeof AppNewRoute
@@ -269,6 +278,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/raise-ticket'
     | '/amc'
     | '/crm'
     | '/new'
@@ -298,6 +308,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/raise-ticket'
     | '/new'
     | '/products'
     | '/records'
@@ -325,6 +336,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_app'
     | '/auth'
+    | '/raise-ticket'
     | '/_app/amc'
     | '/_app/crm'
     | '/_app/new'
@@ -356,10 +368,18 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  RaiseTicketRoute: typeof RaiseTicketRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/raise-ticket': {
+      id: '/raise-ticket'
+      path: '/raise-ticket'
+      fullPath: '/raise-ticket'
+      preLoaderRoute: typeof RaiseTicketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -668,6 +688,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  RaiseTicketRoute: RaiseTicketRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
