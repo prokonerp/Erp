@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 
 export const Route = createFileRoute("/_app/new")({
   component: NewGatepass,
@@ -50,10 +51,26 @@ function NewGatepass() {
     if (cleanItems.length === 0) return toast.error("Add at least one item");
     setBusy(true);
     const { data: userData } = await supabase.auth.getUser();
-    const { data, error } = await supabase.from("gatepasses").insert({
+    const cased = {
       ...form,
+      person_name: toTitleCaseSmart(form.person_name),
+      person_company: toTitleCaseSmart(form.person_company),
+      destination: toTitleCaseSmart(form.destination),
+      purpose: toTitleCaseSmart(form.purpose),
+      prepared_by: toTitleCaseSmart(form.prepared_by),
+      authorised_by: toTitleCaseSmart(form.authorised_by),
+      vehicle_no: upperTrim(form.vehicle_no),
+      remarks: titleCaseAddress(form.remarks),
+    };
+    const { data, error } = await supabase.from("gatepasses").insert({
+      ...cased,
       challan_no: "", // trigger fills it
-      items: cleanItems,
+      items: cleanItems.map((it) => ({
+        ...it,
+        product: toTitleCaseSmart(it.product),
+        serial_no: upperTrim(it.serial_no),
+        remarks: toTitleCaseSmart(it.remarks),
+      })),
       created_by: userData.user?.id ?? null,
     } as never).select("id").single();
     setBusy(false);
