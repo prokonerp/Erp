@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { ListChecks, Plus, MessageSquare, LayoutDashboard } from "lucide-react";
+import { ListChecks, Plus, MessageSquare, LayoutDashboard, Link2 } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/tickets")({
   component: TicketsLayout,
@@ -15,6 +16,11 @@ function TicketsLayout() {
     { to: "/tickets/new", label: "New Ticket", icon: Plus },
     { to: "/tickets/templates", label: "WhatsApp Templates", icon: MessageSquare },
   ];
+  const copyPublicLink = async () => {
+    const url = `${window.location.origin}/raise-ticket`;
+    try { await navigator.clipboard.writeText(url); toast.success("Public form link copied"); }
+    catch { window.prompt("Copy this link:", url); }
+  };
   return (
     <div>
       <div className="flex flex-wrap gap-1 mb-4 border-b pb-2 print:hidden">
@@ -28,6 +34,9 @@ function TicketsLayout() {
             </Link>
           );
         })}
+        <Button variant="outline" size="sm" className="ml-auto" onClick={copyPublicLink}>
+          <Link2 className="h-4 w-4 mr-1" />Copy customer form link
+        </Button>
       </div>
       <Outlet />
     </div>
