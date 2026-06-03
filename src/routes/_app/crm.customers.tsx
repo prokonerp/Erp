@@ -13,6 +13,7 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Customer, INDIAN_STATES } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
+import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 
 export const Route = createFileRoute("/_app/crm/customers")({ component: CustomersPage });
 
@@ -37,7 +38,15 @@ function CustomersPage() {
 
   const save = async () => {
     if (!form.company?.trim()) { toast.error("Company is required"); return; }
-    const payload = { ...form };
+    const payload = {
+      ...form,
+      company: toTitleCaseSmart(form.company),
+      contact_name: toTitleCaseSmart(form.contact_name || ""),
+      email: (form.email || "").trim().toLowerCase(),
+      gst: upperTrim(form.gst),
+      billing_address: titleCaseAddress(form.billing_address || form.address || ""),
+      shipping_address: titleCaseAddress(form.shipping_address || ""),
+    };
     if (editingId) {
       const { error } = await supabase.from("customers").update(payload as any).eq("id", editingId);
       if (error) return toast.error(error.message);
