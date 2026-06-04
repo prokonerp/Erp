@@ -689,6 +689,7 @@ export type Database = {
           assigned_at: string | null
           assigned_engineer_name: string | null
           assigned_engineer_phone: string | null
+          attachments: Json
           call_type: string
           case_id: string
           closed_at: string | null
@@ -715,6 +716,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_engineer_name?: string | null
           assigned_engineer_phone?: string | null
+          attachments?: Json
           call_type?: string
           case_id: string
           closed_at?: string | null
@@ -741,6 +743,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_engineer_name?: string | null
           assigned_engineer_phone?: string | null
+          attachments?: Json
           call_type?: string
           case_id?: string
           closed_at?: string | null
