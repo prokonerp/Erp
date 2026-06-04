@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { submitPublicTicket } from "@/lib/public-tickets.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,10 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CALL_TYPES } from "@/lib/tickets";
-import { Building2, CheckCircle2, Camera, X, ChevronRight, ChevronLeft, Loader2, ImagePlus } from "lucide-react";
+import { Building2, CheckCircle2, Camera, X, Loader2, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/raise-ticket")({
@@ -27,14 +26,11 @@ export const Route = createFileRoute("/raise-ticket")({
 
 type Attachment = { path: string; kind: "serial_photo" | "issue_photo" | "other"; preview: string };
 
-const STEPS = ["Your details", "Equipment", "Describe the issue", "Verify & submit"] as const;
-
 function PublicTicketForm() {
   const submit = useServerFn(submitPublicTicket);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState<string | null>(null);
-  const [step, setStep] = useState(0);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const serialCamRef = useRef<HTMLInputElement>(null);
   const issueCamRef = useRef<HTMLInputElement>(null);
@@ -49,15 +45,7 @@ function PublicTicketForm() {
     serial_no: "",
     call_type: "OOW" as string,
     complaint: "",
-    captcha_answer: "",
   });
-
-  const captcha = useMemo(() => {
-    const a = Math.floor(Math.random() * 8) + 2;
-    const b = Math.floor(Math.random() * 8) + 2;
-    return { a, b, sum: a + b };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [done]);
 
   const set = (p: Partial<typeof form>) => setForm((f) => ({ ...f, ...p }));
 
@@ -92,27 +80,10 @@ function PublicTicketForm() {
     try { await supabase.storage.from("ticket-attachments").remove([a.path]); } catch { /* ignore */ }
   };
 
-  const validateStep = (s: number): string | null => {
-    if (s === 0) {
-      if (!form.customer_name.trim()) return "Please enter your name";
-      if (form.customer_phone.replace(/\D/g, "").length < 7) return "Please enter a valid phone number";
-    }
-    if (s === 2 && form.complaint.trim().length < 5) return "Please describe the issue (min 5 characters)";
-    return null;
-  };
-
-  const next = () => {
-    const err = validateStep(step);
-    if (err) return toast.error(err);
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-  const prev = () => { setStep((s) => Math.max(s - 1, 0)); window.scrollTo({ top: 0, behavior: "smooth" }); };
-
   const onSubmit = async () => {
-    for (let i = 0; i <= 2; i++) { const e = validateStep(i); if (e) { setStep(i); return toast.error(e); } }
-    const ans = Number(form.captcha_answer);
-    if (!Number.isInteger(ans)) return toast.error("Please solve the captcha");
+    if (!form.customer_name.trim()) return toast.error("Please enter your name");
+    if (form.customer_phone.replace(/\D/g, "").length < 7) return toast.error("Please enter a valid phone number");
+    if (form.complaint.trim().length < 5) return toast.error("Please describe the issue (min 5 characters)");
     setBusy(true);
     try {
       const res = await submit({
@@ -126,8 +97,8 @@ function PublicTicketForm() {
           serial_no: form.serial_no,
           call_type: form.call_type as never,
           complaint: form.complaint,
-          captcha_answer: ans,
-          captcha_expected: captcha.sum,
+          captcha_answer: 0,
+          captcha_expected: 0,
           attachments: attachments.map(({ path, kind }) => ({ path, kind })),
         },
       });
@@ -156,9 +127,8 @@ function PublicTicketForm() {
               variant="outline"
               onClick={() => {
                 setDone(null);
-                setStep(0);
                 setAttachments([]);
-                setForm({ ...form, complaint: "", captcha_answer: "", serial_no: "" });
+                setForm({ ...form, complaint: "", serial_no: "" });
               }}
             >
               Raise another ticket
