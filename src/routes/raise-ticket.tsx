@@ -157,21 +157,9 @@ function PublicTicketForm() {
       </div>
 
       <main className="max-w-2xl mx-auto p-4 md:p-6 -mt-4">
-        {/* Progress */}
-        <Card className="mb-4 shadow-sm">
-          <CardContent className="py-4 space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">Step {step + 1} of {STEPS.length}</span>
-              <span className="text-muted-foreground">{STEPS[step]}</span>
-            </div>
-            <Progress value={((step + 1) / STEPS.length) * 100} className="h-2" />
-          </CardContent>
-        </Card>
-
         <Card className="shadow-sm border-t-4 border-t-primary">
-          <CardContent className="pt-6 space-y-5">
-            {step === 0 && (
-              <section className="space-y-4">
+          <CardContent className="pt-6 space-y-8">
+            <section className="space-y-4">
                 <div>
                   <h2 className="text-lg font-semibold">Tell us about yourself</h2>
                   <p className="text-sm text-muted-foreground">So our engineer can reach you back.</p>
@@ -198,11 +186,9 @@ function PublicTicketForm() {
                   <Label>Address <span className="text-muted-foreground text-xs">(where service is needed)</span></Label>
                   <Textarea rows={2} value={form.customer_address} onChange={(e) => set({ customer_address: e.target.value })} />
                 </div>
-              </section>
-            )}
+            </section>
 
-            {step === 1 && (
-              <section className="space-y-4">
+            <section className="space-y-4 pt-2 border-t">
                 <div>
                   <h2 className="text-lg font-semibold">Equipment details</h2>
                   <p className="text-sm text-muted-foreground">Help us prepare before the visit.</p>
@@ -259,11 +245,9 @@ function PublicTicketForm() {
                     Take / upload serial number photo
                   </Button>
                 </div>
-              </section>
-            )}
+            </section>
 
-            {step === 2 && (
-              <section className="space-y-4">
+            <section className="space-y-4 pt-2 border-t">
                 <div>
                   <h2 className="text-lg font-semibold">Describe the issue</h2>
                   <p className="text-sm text-muted-foreground">More detail helps us send the right engineer.</p>
@@ -328,51 +312,13 @@ function PublicTicketForm() {
                     ))}
                   </div>
                 )}
-              </section>
-            )}
+            </section>
 
-            {step === 3 && (
-              <section className="space-y-4">
-                <div>
-                  <h2 className="text-lg font-semibold">Verify & submit</h2>
-                  <p className="text-sm text-muted-foreground">Quick check that you're a real person.</p>
-                </div>
-
-                <div className="rounded-lg bg-muted/40 p-4 text-sm space-y-2">
-                  <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{form.customer_name || "—"}</span></div>
-                  <div><span className="text-muted-foreground">Phone:</span> <span className="font-medium">{form.customer_phone || "—"}</span></div>
-                  <div><span className="text-muted-foreground">Service:</span> <span className="font-medium">{form.call_type}</span></div>
-                  {form.product && <div><span className="text-muted-foreground">Product:</span> <span className="font-medium">{form.product}</span></div>}
-                  {form.serial_no && <div><span className="text-muted-foreground">Serial:</span> <span className="font-mono font-medium">{form.serial_no}</span></div>}
-                  <div><span className="text-muted-foreground">Photos:</span> <span className="font-medium">{attachments.length}</span></div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>What is <span className="font-mono">{captcha.a} + {captcha.b}</span>? <span className="text-destructive">*</span></Label>
-                  <Input
-                    inputMode="numeric"
-                    className="w-32"
-                    value={form.captcha_answer}
-                    onChange={(e) => set({ captcha_answer: e.target.value.replace(/\D/g, "") })}
-                  />
-                </div>
-              </section>
-            )}
-
-            {/* Nav */}
-            <div className="flex justify-between pt-4 border-t">
-              <Button type="button" variant="ghost" onClick={prev} disabled={step === 0 || busy}>
-                <ChevronLeft className="h-4 w-4 mr-1" /> Back
+            {/* Submit */}
+            <div className="pt-4 border-t">
+              <Button type="button" onClick={onSubmit} disabled={busy} size="lg" className="w-full">
+                {busy ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Submitting…</> : "Submit ticket"}
               </Button>
-              {step < STEPS.length - 1 ? (
-                <Button type="button" onClick={next}>
-                  Next <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              ) : (
-                <Button type="button" onClick={onSubmit} disabled={busy} size="lg">
-                  {busy ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Submitting…</> : "Submit ticket"}
-                </Button>
-              )}
             </div>
           </CardContent>
         </Card>
