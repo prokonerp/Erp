@@ -13,6 +13,10 @@ const schema = z.object({
   complaint: z.string().trim().min(5).max(2000),
   captcha_answer: z.number().int(),
   captcha_expected: z.number().int(),
+  attachments: z.array(z.object({
+    path: z.string().min(1).max(500),
+    kind: z.enum(["serial_photo", "issue_photo", "other"]).default("other"),
+  })).max(5).optional().default([]),
 });
 
 function tc(s: string) {
@@ -39,6 +43,7 @@ export const submitPublicTicket = createServerFn({ method: "POST" })
       complaint: data.complaint.trim(),
       status: "New",
       remarks: "Submitted via public customer form",
+      attachments: data.attachments ?? [],
     };
     const { data: row, error } = await supabaseAdmin
       .from("tickets")
