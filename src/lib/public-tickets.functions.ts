@@ -11,8 +11,8 @@ const schema = z.object({
   serial_no: z.string().trim().max(80).optional().or(z.literal("")),
   call_type: z.enum(["OOW", "Installation", "Warranty", "AMC", "PM Call", "New Sale Delivery", "CCTV"]),
   complaint: z.string().trim().min(5).max(2000),
-  captcha_answer: z.number().int(),
-  captcha_expected: z.number().int(),
+  captcha_answer: z.number().int().optional().default(0),
+  captcha_expected: z.number().int().optional().default(0),
   attachments: z.array(z.object({
     path: z.string().min(1).max(500),
     kind: z.enum(["serial_photo", "issue_photo", "other"]).default("other"),
@@ -27,9 +27,6 @@ function tc(s: string) {
 export const submitPublicTicket = createServerFn({ method: "POST" })
   .inputValidator((input) => schema.parse(input))
   .handler(async ({ data }) => {
-    if (data.captcha_answer !== data.captcha_expected) {
-      throw new Error("Captcha verification failed. Please try again.");
-    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const payload = {
       customer_name: tc(data.customer_name),
