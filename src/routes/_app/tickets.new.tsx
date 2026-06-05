@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CALL_TYPES } from "@/lib/tickets";
 import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { CustomerPicker } from "@/components/CustomerPicker";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -65,7 +66,16 @@ function NewTicket() {
 
   return (
     <Card>
-      <CardHeader><CardTitle>New Ticket</CardTitle></CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>New Ticket</CardTitle>
+        <CustomerPicker onPick={(c) => set({
+          customer_name: c.company || c.contact_name || "",
+          customer_phone: c.phone || "",
+          customer_email: c.email || "",
+          customer_address: [c.street, c.billing_address || c.address].filter(Boolean).join(", "),
+          location: [c.city, c.state].filter(Boolean).join(", "),
+        })} />
+      </CardHeader>
       <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label>Case ID <span className="text-muted-foreground text-xs">(blank = auto TKT-0001)</span></Label>

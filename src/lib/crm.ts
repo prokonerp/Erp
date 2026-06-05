@@ -11,6 +11,21 @@ export type Customer = {
   gst: string | null;
   remarks: string | null;
   created_at: string;
+  street: string | null;
+  city: string | null;
+  country: string | null;
+  gst_status: GstStatus;
+  contacts: CustomerContact[];
+};
+
+export type GstStatus = "Unregistered" | "Consumer" | "Registered";
+export const GST_STATUSES: GstStatus[] = ["Unregistered", "Consumer", "Registered"];
+
+export type CustomerContact = {
+  name: string;
+  designation?: string;
+  phone?: string;
+  email?: string;
 };
 
 export type LeadStatus = "new" | "follow_up" | "quoted" | "won" | "lost";
