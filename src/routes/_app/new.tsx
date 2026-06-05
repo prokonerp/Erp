@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { CustomerPicker } from "@/components/CustomerPicker";
 
 export const Route = createFileRoute("/_app/new")({
   component: NewGatepass,
@@ -82,7 +83,16 @@ function NewGatepass() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle>New Gatepass</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>New Gatepass</CardTitle>
+          <CustomerPicker onPick={(c) => setForm((f) => ({
+            ...f,
+            person_name: c.contact_name || c.company || "",
+            person_company: c.company || "",
+            contact_no: c.phone || "",
+            destination: [c.city, c.state].filter(Boolean).join(", "),
+          }))} />
+        </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><Label>Date</Label><Input type="date" value={form.gatepass_date} onChange={(e) => setForm({ ...form, gatepass_date: e.target.value })} /></div>
           <div><Label>Time</Label><Input type="time" value={form.gatepass_time} onChange={(e) => setForm({ ...form, gatepass_time: e.target.value })} /></div>
