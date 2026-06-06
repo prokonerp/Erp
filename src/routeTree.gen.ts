@@ -17,6 +17,7 @@ import { Route as AppTicketsRouteImport } from './routes/_app/tickets'
 import { Route as AppRecordsRouteImport } from './routes/_app/records'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppNewRouteImport } from './routes/_app/new'
+import { Route as AppMastersRouteImport } from './routes/_app/masters'
 import { Route as AppImportRouteImport } from './routes/_app/import'
 import { Route as AppCrmRouteImport } from './routes/_app/crm'
 import { Route as AppAmcRouteImport } from './routes/_app/amc'
@@ -77,6 +78,11 @@ const AppProductsRoute = AppProductsRouteImport.update({
 const AppNewRoute = AppNewRouteImport.update({
   id: '/new',
   path: '/new',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMastersRoute = AppMastersRouteImport.update({
+  id: '/masters',
+  path: '/masters',
   getParentRoute: () => AppRoute,
 } as any)
 const AppImportRoute = AppImportRouteImport.update({
@@ -197,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/amc': typeof AppAmcRouteWithChildren
   '/crm': typeof AppCrmRouteWithChildren
   '/import': typeof AppImportRoute
+  '/masters': typeof AppMastersRoute
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
@@ -226,6 +233,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/raise-ticket': typeof RaiseTicketRoute
   '/import': typeof AppImportRoute
+  '/masters': typeof AppMastersRoute
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
@@ -258,6 +266,7 @@ export interface FileRoutesById {
   '/_app/amc': typeof AppAmcRouteWithChildren
   '/_app/crm': typeof AppCrmRouteWithChildren
   '/_app/import': typeof AppImportRoute
+  '/_app/masters': typeof AppMastersRoute
   '/_app/new': typeof AppNewRoute
   '/_app/products': typeof AppProductsRoute
   '/_app/records': typeof AppRecordsRoute
@@ -291,6 +300,7 @@ export interface FileRouteTypes {
     | '/amc'
     | '/crm'
     | '/import'
+    | '/masters'
     | '/new'
     | '/products'
     | '/records'
@@ -320,6 +330,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/raise-ticket'
     | '/import'
+    | '/masters'
     | '/new'
     | '/products'
     | '/records'
@@ -351,6 +362,7 @@ export interface FileRouteTypes {
     | '/_app/amc'
     | '/_app/crm'
     | '/_app/import'
+    | '/_app/masters'
     | '/_app/new'
     | '/_app/products'
     | '/_app/records'
@@ -439,6 +451,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/new'
       preLoaderRoute: typeof AppNewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/masters': {
+      id: '/_app/masters'
+      path: '/masters'
+      fullPath: '/masters'
+      preLoaderRoute: typeof AppMastersRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/import': {
@@ -685,6 +704,7 @@ interface AppRouteChildren {
   AppAmcRoute: typeof AppAmcRouteWithChildren
   AppCrmRoute: typeof AppCrmRouteWithChildren
   AppImportRoute: typeof AppImportRoute
+  AppMastersRoute: typeof AppMastersRoute
   AppNewRoute: typeof AppNewRoute
   AppProductsRoute: typeof AppProductsRoute
   AppRecordsRoute: typeof AppRecordsRoute
@@ -696,6 +716,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAmcRoute: AppAmcRouteWithChildren,
   AppCrmRoute: AppCrmRouteWithChildren,
   AppImportRoute: AppImportRoute,
+  AppMastersRoute: AppMastersRoute,
   AppNewRoute: AppNewRoute,
   AppProductsRoute: AppProductsRoute,
   AppRecordsRoute: AppRecordsRoute,
@@ -714,3 +735,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
