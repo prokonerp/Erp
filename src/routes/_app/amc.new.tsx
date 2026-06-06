@@ -11,7 +11,6 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type AmcUnit, addYears, fmtDate, generatePMDates, nextAgreementNo } from "@/lib/amc";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
-import { CustomerPicker } from "@/components/CustomerPicker";
 
 export const Route = createFileRoute("/_app/amc/new")({
   component: NewAmc,
@@ -97,18 +96,7 @@ function NewAmc() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>New AMC Agreement</CardTitle>
-          <CustomerPicker onPick={(c) => setForm((f) => ({
-            ...f,
-            client_name: c.contact_name || c.company || "",
-            client_company: c.company || "",
-            client_address: [c.street, c.billing_address || c.address, c.city, c.state, c.country].filter(Boolean).join(", "),
-            client_gst: c.gst || "",
-            contact_no: c.phone || "",
-            email: c.email || "",
-          }))} />
-        </CardHeader>
+        <CardHeader><CardTitle>New AMC Agreement</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><Label>Agreement No.</Label><Input value={form.agreement_no} onChange={(e) => setForm({ ...form, agreement_no: e.target.value })} /></div>
           <div>

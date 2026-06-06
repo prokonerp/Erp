@@ -19,8 +19,8 @@ type ModuleKey = "customers" | "products" | "amcs" | "tickets";
 
 const TEMPLATES: Record<ModuleKey, { headers: string[]; sample: Record<string, string> }> = {
   customers: {
-    headers: ["company", "contact_name", "phone", "email", "gst_status", "gst", "street", "city", "state", "country", "billing_address", "shipping_address", "remarks"],
-    sample: { company: "Acme Pvt Ltd", contact_name: "Ramesh Kumar", phone: "9876543210", email: "ramesh@acme.in", gst_status: "Registered", gst: "06ABCDE1234F1Z5", street: "12, Sector 18", city: "Gurgaon", state: "Haryana", country: "India", billing_address: "12, Sector 18, Gurgaon", shipping_address: "12, Sector 18, Gurgaon", remarks: "" },
+    headers: ["company", "contact_name", "phone", "email", "gst", "state", "billing_address", "shipping_address", "remarks"],
+    sample: { company: "Acme Pvt Ltd", contact_name: "Ramesh Kumar", phone: "9876543210", email: "ramesh@acme.in", gst: "06ABCDE1234F1Z5", state: "Haryana", billing_address: "12, Sector 18, Gurgaon", shipping_address: "12, Sector 18, Gurgaon", remarks: "" },
   },
   products: {
     headers: ["name", "unit"],
@@ -73,21 +73,13 @@ function ImportPage() {
       try {
         if (mod === "customers") {
           if (!r.company) throw new Error("company required");
-          const status = (r.gst_status || "Unregistered").trim();
-          if (status === "Registered" && (!r.gst || r.gst.trim().length < 10)) {
-            throw new Error("gst is required when gst_status is Registered");
-          }
           const { error } = await supabase.from("customers").insert({
             company: toTitleCaseSmart(r.company),
             contact_name: toTitleCaseSmart(r.contact_name) || null,
             phone: r.phone || null,
             email: (r.email || "").toLowerCase() || null,
             gst: upperTrim(r.gst) || null,
-            gst_status: status,
-            street: toTitleCaseSmart(r.street) || null,
-            city: toTitleCaseSmart(r.city) || null,
             state: r.state || null,
-            country: toTitleCaseSmart(r.country) || "India",
             billing_address: titleCaseAddress(r.billing_address) || null,
             shipping_address: titleCaseAddress(r.shipping_address) || null,
             remarks: r.remarks || null,
