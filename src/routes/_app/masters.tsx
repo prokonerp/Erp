@@ -88,7 +88,7 @@ function MastersPage() {
         </TabsContent>
 
         <TabsContent value="customers" className="mt-4">
-          <LinkOut to="/crm/customers" label="Customer Master is managed in Sales CRM → Customers." />
+          <LinkOut to="/masters/customers" label="Open the dedicated Customer Master screen for full create / edit / import." />
         </TabsContent>
 
         <TabsContent value="vendors" className="mt-4">
