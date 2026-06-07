@@ -1,21 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { type Customer, INDIAN_STATES } from "@/lib/crm";
-import { ExportButtons } from "@/components/ExportButtons";
-import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/_app/crm/customers")({ component: CustomersPage });
+export const Route = createFileRoute("/_app/crm/customers")({
+  component: () => <Navigate to="/masters/customers" replace />,
+});
 
 const empty: Partial<Customer> = {
   company: "", contact_name: "", phone: "", email: "",
