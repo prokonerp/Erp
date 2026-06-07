@@ -307,10 +307,7 @@ function CustomerMasterPage() {
                   <h3 className="font-medium text-sm">Billing Address</h3>
                   <Textarea rows={3} placeholder="Street / Building" value={form.billing_address} onChange={(e) => setForm({ ...form, billing_address: e.target.value })} />
                   <Input placeholder="Landmark / Street 2" value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-                    <Input placeholder="Pincode" value={(form as any).pincode || ""} onChange={(e) => setForm({ ...form, remarks: form.remarks } as any)} disabled />
-                  </div>
+                  <Input placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
                   <StateCombobox value={form.state} onChange={(v) => setForm({ ...form, state: v })} />
                 </div>
                 <div className="space-y-3">
