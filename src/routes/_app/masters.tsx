@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MasterCrud } from "@/components/MasterCrud";
 import { useIsAdmin } from "@/lib/useRole";
@@ -14,6 +14,7 @@ export const Route = createFileRoute("/_app/masters")({
 
 function MastersPage() {
   const { isAdmin, loading, hasAnyAdmin, claimAdmin } = useIsAdmin();
+  const navigate = useNavigate();
 
   return (
     <div className="space-y-4">
@@ -41,7 +42,13 @@ function MastersPage() {
         </Alert>
       )}
 
-      <Tabs defaultValue="company" className="w-full">
+      <Tabs
+        defaultValue="company"
+        className="w-full"
+        onValueChange={(v) => {
+          if (v === "customers") navigate({ to: "/masters/customers" });
+        }}
+      >
         <TabsList className="flex flex-wrap h-auto">
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="branches">Branches</TabsTrigger>
@@ -88,7 +95,7 @@ function MastersPage() {
         </TabsContent>
 
         <TabsContent value="customers" className="mt-4">
-          <Navigate to="/masters/customers" replace />
+          <LinkOut to="/masters/customers" label="Customer Master opens on its own page." />
         </TabsContent>
 
         <TabsContent value="vendors" className="mt-4">
