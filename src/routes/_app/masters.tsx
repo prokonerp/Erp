@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MasterCrud } from "@/components/MasterCrud";
 import { useIsAdmin } from "@/lib/useRole";
@@ -88,7 +88,7 @@ function MastersPage() {
         </TabsContent>
 
         <TabsContent value="customers" className="mt-4">
-          <LinkOut to="/masters/customers" label="Open the dedicated Customer Master screen for full create / edit / import." />
+          <Navigate to="/masters/customers" replace />
         </TabsContent>
 
         <TabsContent value="vendors" className="mt-4">
