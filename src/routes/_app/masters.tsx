@@ -1,6 +1,7 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MasterCrud } from "@/components/MasterCrud";
+import { CustomerMasterPage } from "./masters.customers";
 import { useIsAdmin } from "@/lib/useRole";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,8 @@ export const Route = createFileRoute("/_app/masters")({
 function MastersPage() {
   const { isAdmin, loading, hasAnyAdmin, claimAdmin } = useIsAdmin();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isCustomerRoute = location.pathname === "/masters/customers";
 
   return (
     <div className="space-y-4">
@@ -43,10 +46,11 @@ function MastersPage() {
       )}
 
       <Tabs
-        defaultValue="company"
+        defaultValue={isCustomerRoute ? "customers" : "company"}
         className="w-full"
         onValueChange={(v) => {
           if (v === "customers") navigate({ to: "/masters/customers" });
+          else if (isCustomerRoute) navigate({ to: "/masters" });
         }}
       >
         <TabsList className="flex flex-wrap h-auto">
@@ -95,7 +99,7 @@ function MastersPage() {
         </TabsContent>
 
         <TabsContent value="customers" className="mt-4">
-          <LinkOut to="/masters/customers" label="Customer Master opens on its own page." />
+          <CustomerMasterPage />
         </TabsContent>
 
         <TabsContent value="vendors" className="mt-4">
