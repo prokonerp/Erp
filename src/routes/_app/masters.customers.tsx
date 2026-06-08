@@ -55,7 +55,7 @@ const empty: FormState = {
   country: "India", same_as_billing: true, remarks: "",
 };
 
-function CustomerMasterPage() {
+export function CustomerMasterPage() {
   const [rows, setRows] = useState<Customer[]>([]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
