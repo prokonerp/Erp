@@ -2,6 +2,7 @@ import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MasterCrud } from "@/components/MasterCrud";
 import { CustomerMasterPage } from "./masters.customers";
+import { ProductMasterPage } from "./masters.products";
 import { useIsAdmin } from "@/lib/useRole";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ function MastersPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const isCustomerRoute = location.pathname === "/masters/customers";
+  const isProductRoute = location.pathname === "/masters/products";
+  const currentTab = isCustomerRoute ? "customers" : isProductRoute ? "products" : "company";
 
   return (
     <div className="space-y-4">
@@ -46,11 +49,12 @@ function MastersPage() {
       )}
 
       <Tabs
-        defaultValue={isCustomerRoute ? "customers" : "company"}
+        value={currentTab}
         className="w-full"
         onValueChange={(v) => {
           if (v === "customers") navigate({ to: "/masters/customers" });
-          else if (isCustomerRoute) navigate({ to: "/masters" });
+          else if (v === "products") navigate({ to: "/masters/products" });
+          else if (isCustomerRoute || isProductRoute) navigate({ to: "/masters" });
         }}
       >
         <TabsList className="flex flex-wrap h-auto">
@@ -121,7 +125,7 @@ function MastersPage() {
         </TabsContent>
 
         <TabsContent value="products" className="mt-4">
-          <LinkOut to="/products" label="Product / Item Master is managed in Products." />
+          <ProductMasterPage />
         </TabsContent>
 
         <TabsContent value="service" className="mt-4">
