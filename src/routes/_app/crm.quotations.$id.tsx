@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { ProductPicker } from "@/components/ProductPicker";
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
@@ -21,7 +22,6 @@ function QuoteEditor() {
   const { id } = Route.useParams();
   const [q, setQ] = useState<Quotation | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [productNames, setProductNames] = useState<string[]>([]);
   const [templates, setTemplates] = useState<QuoteTermsTemplate[]>([]);
   const [settings, setSettings] = useState<CrmSettings | null>(null);
 
@@ -38,7 +38,6 @@ function QuoteEditor() {
   };
   useEffect(() => {
     load();
-    supabase.from("products").select("name").then(({ data }) => setProductNames((data || []).map((p: any) => p.name)));
     supabase.from("quote_terms_templates").select("*").order("sort_order").then(({ data }) => setTemplates((data || []) as any));
     supabase.from("crm_settings").select("*").eq("id", 1).single().then(({ data }) => setSettings((data as any) || { id: 1, business_state: "Haryana", business_gstin: null, default_terms: "", default_customer_notes: "Thanks for your business." }));
   }, [id]);
@@ -185,12 +184,23 @@ function QuoteEditor() {
           <Button size="sm" variant="outline" onClick={addItem}><Plus className="h-4 w-4 mr-1" />Add row</Button>
         </CardHeader>
         <CardContent>
-          <datalist id="qprods">{productNames.map((n) => <option key={n} value={n} />)}</datalist>
           {q.items.length === 0 && <div className="text-sm text-muted-foreground">No items. Click "Add row".</div>}
           {q.items.map((it, i) => (
             <div key={i} className="border rounded-md p-3 mb-2 space-y-2">
               <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-12 md:col-span-5"><Label className="text-xs">Item / Description</Label><Input list="qprods" value={it.description} onChange={(e) => setItem(i, { description: e.target.value })} /></div>
+                <div className="col-span-12 md:col-span-5">
+                  <Label className="text-xs">Item / Description <span className="text-muted-foreground font-normal">(from Product Master)</span></Label>
+                  <ProductPicker
+                    value={(it as any).product_id || ""}
+                    onChange={(id, p) => setItem(i, {
+                      product_id: id || "",
+                      description: p?.name || it.description,
+                      hsn: p?.hsn || it.hsn,
+                      unit: p?.unit || it.unit,
+                      rate: p?.default_price != null ? Number(p.default_price) : it.rate,
+                    } as Partial<QuoteItem>)}
+                  />
+                </div>
                 <div className="col-span-3 md:col-span-1"><Label className="text-xs">HSN</Label><Input value={it.hsn || ""} onChange={(e) => setItem(i, { hsn: e.target.value })} /></div>
                 <div className="col-span-3 md:col-span-1"><Label className="text-xs">Qty</Label><Input type="number" value={it.qty} onChange={(e) => setItem(i, { qty: Number(e.target.value) })} /></div>
                 <div className="col-span-3 md:col-span-1"><Label className="text-xs">Unit</Label><Input value={it.unit || ""} onChange={(e) => setItem(i, { unit: e.target.value })} /></div>

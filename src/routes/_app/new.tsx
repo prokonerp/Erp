@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,20 +10,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { ProductPicker } from "@/components/ProductPicker";
 
 export const Route = createFileRoute("/_app/new")({
   component: NewGatepass,
   head: () => ({ meta: [{ title: "New Gatepass — Prokon" }] }),
 });
 
-type Product = { id: string; name: string; unit: string };
-type Item = { product: string; serial_no: string; quantity: string; unit: string; remarks: string };
+type Item = { product_id: string; product: string; serial_no: string; quantity: string; unit: string; remarks: string };
 
-const empty = (): Item => ({ product: "", serial_no: "", quantity: "1", unit: "Nos", remarks: "" });
+const empty = (): Item => ({ product_id: "", product: "", serial_no: "", quantity: "1", unit: "Nos", remarks: "" });
 
 function NewGatepass() {
   const navigate = useNavigate();
-  const [products, setProducts] = useState<Product[]>([]);
   const [items, setItems] = useState<Item[]>([empty()]);
   const [form, setForm] = useState({
     person_name: "", person_company: "", contact_no: "", vehicle_no: "",
@@ -34,21 +33,14 @@ function NewGatepass() {
   });
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    supabase.from("products").select("*").order("name").then(({ data }) => setProducts((data || []) as Product[]));
-  }, []);
-
   const updateItem = (i: number, patch: Partial<Item>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
-  const onProductPick = (i: number, name: string) => {
-    const p = products.find((x) => x.name === name);
-    updateItem(i, { product: name, unit: p?.unit || "Nos" });
-  };
 
   const submit = async () => {
     if (!form.person_name.trim()) return toast.error("Person name is required");
     const cleanItems = items.filter((it) => it.product.trim());
-    if (cleanItems.length === 0) return toast.error("Add at least one item");
+    if (cleanItems.length === 0) return toast.error("Select at least one product from Product Master");
+    if (cleanItems.some((it) => !it.product_id)) return toast.error("Each item must be picked from Product Master");
     setBusy(true);
     const { data: userData } = await supabase.auth.getUser();
     const cased = {
@@ -115,14 +107,15 @@ function NewGatepass() {
             <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
               <div className="col-span-12 md:col-span-4">
                 <Label>Product</Label>
-                {products.length > 0 ? (
-                  <Select value={it.product} onValueChange={(v) => onProductPick(i, v)}>
-                    <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                    <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                ) : (
-                  <Input value={it.product} onChange={(e) => updateItem(i, { product: e.target.value })} placeholder="Add products in Products tab" />
-                )}
+                <ProductPicker
+                  value={it.product_id}
+                  required
+                  onChange={(id, p) => updateItem(i, {
+                    product_id: id || "",
+                    product: p?.name || "",
+                    unit: p?.unit || it.unit || "Nos",
+                  })}
+                />
               </div>
               <div className="col-span-6 md:col-span-3"><Label>Serial No.</Label><Input value={it.serial_no} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></div>
               <div className="col-span-3 md:col-span-1"><Label>Qty</Label><Input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })} /></div>

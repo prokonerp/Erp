@@ -697,22 +697,46 @@ export type Database = {
       }
       products: {
         Row: {
+          active: boolean
+          brand: string | null
+          category: string | null
           created_at: string
+          default_price: number | null
+          description: string | null
+          hsn: string | null
           id: string
+          model: string | null
           name: string
           unit: string
+          updated_at: string
         }
         Insert: {
+          active?: boolean
+          brand?: string | null
+          category?: string | null
           created_at?: string
+          default_price?: number | null
+          description?: string | null
+          hsn?: string | null
           id?: string
+          model?: string | null
           name: string
           unit?: string
+          updated_at?: string
         }
         Update: {
+          active?: boolean
+          brand?: string | null
+          category?: string | null
           created_at?: string
+          default_price?: number | null
+          description?: string | null
+          hsn?: string | null
           id?: string
+          model?: string | null
           name?: string
           unit?: string
+          updated_at?: string
         }
         Relationships: []
       }

@@ -28,6 +28,7 @@ import { Route as AppTicketsTemplatesRouteImport } from './routes/_app/tickets.t
 import { Route as AppTicketsNewRouteImport } from './routes/_app/tickets.new'
 import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.dashboard'
 import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
+import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.products'
 import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
@@ -136,6 +137,11 @@ const AppTicketsIdRoute = AppTicketsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppTicketsRoute,
 } as any)
+const AppMastersProductsRoute = AppMastersProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => AppMastersRoute,
+} as any)
 const AppMastersCustomersRoute = AppMastersCustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/masters/customers': typeof AppMastersCustomersRoute
+  '/masters/products': typeof AppMastersProductsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
   '/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/tickets/new': typeof AppTicketsNewRoute
@@ -255,6 +262,7 @@ export interface FileRoutesByTo {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/masters/customers': typeof AppMastersCustomersRoute
+  '/masters/products': typeof AppMastersProductsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
   '/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/tickets/new': typeof AppTicketsNewRoute
@@ -290,6 +298,7 @@ export interface FileRoutesById {
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/masters/customers': typeof AppMastersCustomersRoute
+  '/_app/masters/products': typeof AppMastersProductsRoute
   '/_app/tickets/$id': typeof AppTicketsIdRoute
   '/_app/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/_app/tickets/new': typeof AppTicketsNewRoute
@@ -325,6 +334,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/gatepass/$id'
     | '/masters/customers'
+    | '/masters/products'
     | '/tickets/$id'
     | '/tickets/dashboard'
     | '/tickets/new'
@@ -355,6 +365,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/gatepass/$id'
     | '/masters/customers'
+    | '/masters/products'
     | '/tickets/$id'
     | '/tickets/dashboard'
     | '/tickets/new'
@@ -389,6 +400,7 @@ export interface FileRouteTypes {
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
     | '/_app/masters/customers'
+    | '/_app/masters/products'
     | '/_app/tickets/$id'
     | '/_app/tickets/dashboard'
     | '/_app/tickets/new'
@@ -541,6 +553,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/tickets/$id'
       preLoaderRoute: typeof AppTicketsIdRouteImport
       parentRoute: typeof AppTicketsRoute
+    }
+    '/_app/masters/products': {
+      id: '/_app/masters/products'
+      path: '/products'
+      fullPath: '/masters/products'
+      preLoaderRoute: typeof AppMastersProductsRouteImport
+      parentRoute: typeof AppMastersRoute
     }
     '/_app/masters/customers': {
       id: '/_app/masters/customers'
@@ -701,10 +720,12 @@ const AppCrmRouteWithChildren =
 
 interface AppMastersRouteChildren {
   AppMastersCustomersRoute: typeof AppMastersCustomersRoute
+  AppMastersProductsRoute: typeof AppMastersProductsRoute
 }
 
 const AppMastersRouteChildren: AppMastersRouteChildren = {
   AppMastersCustomersRoute: AppMastersCustomersRoute,
+  AppMastersProductsRoute: AppMastersProductsRoute,
 }
 
 const AppMastersRouteWithChildren = AppMastersRoute._addFileChildren(
