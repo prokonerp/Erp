@@ -14,6 +14,7 @@ import { Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { type Lead, type LeadStatus, type Customer, statusLabel, statusClass, fmtMoney, fmtDate } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
+import { CustomerPicker } from "@/components/CustomerPicker";
 
 export const Route = createFileRoute("/_app/crm/leads")({ component: LeadsPage });
 
@@ -116,13 +117,11 @@ function LeadsList() {
               <div className="grid gap-3">
                 <div>
                   <Label>Customer *</Label>
-                  <Select value={form.customer_id} onValueChange={(v) => setForm({ ...form, customer_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select a customer" /></SelectTrigger>
-                    <SelectContent>
-                      {customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.company}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {customers.length === 0 && <div className="text-xs text-muted-foreground mt-1">Add a customer first in <Link to="/crm/customers" className="underline">Customers</Link>.</div>}
+                  <CustomerPicker
+                    value={form.customer_id}
+                    required
+                    onChange={(id) => setForm({ ...form, customer_id: id || "" })}
+                  />
                 </div>
                 <div><Label>Title *</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. 5 KVA UPS for Server Room" /></div>
                 <div className="grid grid-cols-2 gap-3">

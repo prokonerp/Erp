@@ -76,6 +76,7 @@ export type Database = {
           contact_no: string | null
           created_at: string
           created_by: string | null
+          customer_id: string | null
           duration_years: number
           email: string | null
           end_date: string
@@ -98,6 +99,7 @@ export type Database = {
           contact_no?: string | null
           created_at?: string
           created_by?: string | null
+          customer_id?: string | null
           duration_years?: number
           email?: string | null
           end_date: string
@@ -120,6 +122,7 @@ export type Database = {
           contact_no?: string | null
           created_at?: string
           created_by?: string | null
+          customer_id?: string | null
           duration_years?: number
           email?: string | null
           end_date?: string
@@ -133,6 +136,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "amcs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "amcs_prev_amc_id_fkey"
             columns: ["prev_amc_id"]
@@ -983,7 +993,15 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tickets_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

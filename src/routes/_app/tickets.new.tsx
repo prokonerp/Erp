@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CALL_TYPES } from "@/lib/tickets";
 import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { CustomerPicker } from "@/components/CustomerPicker";
+import { Label as L } from "@/components/ui/label";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -26,6 +28,7 @@ function NewTicket() {
     call_type: "OOW" as string,
     product: "",
     serial_no: "",
+    customer_id: "" as string,
     customer_name: "",
     customer_address: "",
     customer_email: "",
@@ -41,11 +44,13 @@ function NewTicket() {
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
 
   const submit = async () => {
+    if (!form.customer_id) return toast.error("Please select a customer from Customer Master");
     if (!form.customer_name.trim()) return toast.error("Customer name is required");
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
     const payload = {
       ...form,
+      customer_id: form.customer_id || null,
       customer_name: toTitleCaseSmart(form.customer_name),
       customer_address: titleCaseAddress(form.customer_address),
       customer_email: (form.customer_email || "").trim().toLowerCase(),
@@ -98,11 +103,25 @@ function NewTicket() {
         </div>
 
         <div className="md:col-span-2 pt-2 border-t" />
-        <div><Label>Customer Name *</Label><Input value={form.customer_name} onChange={(e) => set({ customer_name: e.target.value })} /></div>
-        <div><Label>Contact Number</Label><Input value={form.customer_phone} onChange={(e) => set({ customer_phone: e.target.value })} /></div>
-        <div><Label>Email</Label><Input type="email" value={form.customer_email} onChange={(e) => set({ customer_email: e.target.value })} /></div>
+        <div className="md:col-span-2">
+          <L>Customer * <span className="text-xs text-muted-foreground font-normal">(from Customer Master)</span></L>
+          <CustomerPicker
+            value={form.customer_id}
+            required
+            onChange={(id, c) => set({
+              customer_id: id || "",
+              customer_name: c?.company || "",
+              customer_phone: c?.phone || "",
+              customer_email: c?.email || "",
+              customer_address: c?.billing_address || c?.address || "",
+              location: (c as { city?: string } | null)?.city || c?.state || "",
+            })}
+          />
+        </div>
+        <div><Label>Contact Number</Label><Input value={form.customer_phone} readOnly className="bg-muted" /></div>
+        <div><Label>Email</Label><Input type="email" value={form.customer_email} readOnly className="bg-muted" /></div>
         <div><Label>Location</Label><Input value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="City / area" /></div>
-        <div className="md:col-span-2"><Label>Address</Label><Textarea rows={2} value={form.customer_address} onChange={(e) => set({ customer_address: e.target.value })} /></div>
+        <div className="md:col-span-2"><Label>Address</Label><Textarea rows={2} value={form.customer_address} readOnly className="bg-muted" /></div>
         <div className="md:col-span-2"><Label>Complaint / Issue Description</Label><Textarea rows={3} value={form.complaint} onChange={(e) => set({ complaint: e.target.value })} /></div>
 
         <div className="md:col-span-2 flex justify-end gap-2">
