@@ -193,12 +193,12 @@ function QuoteEditor() {
                   <ProductPicker
                     value={(it as any).product_id || ""}
                     onChange={(id, p) => setItem(i, {
-                      ...(({ product_id: id || "" }) as any),
+                      product_id: id || "",
                       description: p?.name || it.description,
                       hsn: p?.hsn || it.hsn,
                       unit: p?.unit || it.unit,
                       rate: p?.default_price != null ? Number(p.default_price) : it.rate,
-                    })}
+                    } as Partial<QuoteItem>)}
                   />
                 </div>
                 <div className="col-span-3 md:col-span-1"><Label className="text-xs">HSN</Label><Input value={it.hsn || ""} onChange={(e) => setItem(i, { hsn: e.target.value })} /></div>
