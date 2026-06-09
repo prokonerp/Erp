@@ -11,6 +11,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type AmcUnit, addYears, fmtDate, generatePMDates, nextAgreementNo } from "@/lib/amc";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { CustomerPicker } from "@/components/CustomerPicker";
 
 export const Route = createFileRoute("/_app/amc/new")({
   component: NewAmc,
@@ -24,6 +25,7 @@ function NewAmc() {
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     agreement_no: "",
+    customer_id: "" as string,
     client_name: "",
     client_company: "",
     client_address: "",
@@ -60,6 +62,7 @@ function NewAmc() {
   }, []);
 
   const submit = async () => {
+    if (!form.customer_id) return toast.error("Please select a customer from Customer Master");
     if (!form.client_name.trim()) return toast.error("Client name is required");
     const cleanUnits = units.filter((u) => u.model.trim() || u.serial_no.trim());
     if (cleanUnits.length === 0) return toast.error("Add at least one UPS unit");
@@ -67,6 +70,7 @@ function NewAmc() {
     const { data: userData } = await supabase.auth.getUser();
     const { data, error } = await supabase.from("amcs").insert({
       agreement_no: form.agreement_no,
+      customer_id: form.customer_id,
       client_name: toTitleCaseSmart(form.client_name),
       client_company: form.client_company ? toTitleCaseSmart(form.client_company) : null,
       client_address: form.client_address ? titleCaseAddress(form.client_address) : null,
@@ -110,12 +114,29 @@ function NewAmc() {
           </div>
           <div><Label>Start Date (DD-MM-YYYY)</Label><Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">{fmtDate(form.start_date)}</p></div>
           <div><Label>End Date (auto)</Label><Input value={fmtDate(end_date)} readOnly className="bg-muted" /></div>
-          <div><Label>Client / Contact Person *</Label><Input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} /></div>
-          <div><Label>Company</Label><Input value={form.client_company} onChange={(e) => setForm({ ...form, client_company: e.target.value })} /></div>
-          <div className="md:col-span-2"><Label>Billing Address</Label><Textarea rows={2} value={form.client_address} onChange={(e) => setForm({ ...form, client_address: e.target.value })} /></div>
-          <div><Label>GSTIN</Label><Input value={form.client_gst} onChange={(e) => setForm({ ...form, client_gst: e.target.value })} /></div>
-          <div><Label>Contact No.</Label><Input value={form.contact_no} onChange={(e) => setForm({ ...form, contact_no: e.target.value })} /></div>
-          <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+          <div className="md:col-span-2">
+            <Label>Customer * <span className="text-xs text-muted-foreground font-normal">(from Customer Master)</span></Label>
+            <CustomerPicker
+              value={form.customer_id}
+              required
+              onChange={(id, c) => setForm({
+                ...form,
+                customer_id: id || "",
+                client_name: c?.contact_name || c?.company || "",
+                client_company: c?.company || "",
+                client_address: c?.billing_address || c?.address || "",
+                client_gst: c?.gst || "",
+                contact_no: c?.phone || "",
+                email: c?.email || "",
+              })}
+            />
+          </div>
+          <div><Label>Client / Contact Person</Label><Input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} placeholder="Auto-filled — editable" /></div>
+          <div><Label>Company</Label><Input value={form.client_company} readOnly className="bg-muted" /></div>
+          <div className="md:col-span-2"><Label>Billing Address</Label><Textarea rows={2} value={form.client_address} readOnly className="bg-muted" /></div>
+          <div><Label>GSTIN</Label><Input value={form.client_gst} readOnly className="bg-muted font-mono" /></div>
+          <div><Label>Contact No.</Label><Input value={form.contact_no} readOnly className="bg-muted" /></div>
+          <div><Label>Email</Label><Input type="email" value={form.email} readOnly className="bg-muted" /></div>
           <div><Label>AMC Value (₹)</Label><Input type="number" min="0" value={form.amc_value} onChange={(e) => setForm({ ...form, amc_value: e.target.value })} /></div>
         </CardContent>
       </Card>
