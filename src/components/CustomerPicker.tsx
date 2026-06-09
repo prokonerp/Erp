@@ -78,7 +78,8 @@ export function CustomerPicker({ value, onChange, required, placeholder = "Searc
             </CommandEmpty>
             <CommandGroup heading={`${rows.length} customers`}>
               {rows.map((c) => {
-                const searchBlob = [c.company, c.contact_name, c.phone, c.gst, c.city, c.state].filter(Boolean).join(" ").toLowerCase();
+                const cAny = c as Customer & { city?: string };
+                const searchBlob = [c.company, c.contact_name, c.phone, c.gst, cAny.city, c.state].filter(Boolean).join(" ").toLowerCase();
                 return (
                   <CommandItem
                     key={c.id}
