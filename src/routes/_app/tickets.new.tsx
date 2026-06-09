@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,21 +11,20 @@ import { CALL_TYPES } from "@/lib/tickets";
 import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
+import { ProductPicker } from "@/components/ProductPicker";
 import { Label as L } from "@/components/ui/label";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
 });
 
-type Product = { id: string; name: string };
-
 function NewTicket() {
   const navigate = useNavigate();
-  const [products, setProducts] = useState<Product[]>([]);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     case_id: "",
     call_type: "OOW" as string,
+    product_id: "",
     product: "",
     serial_no: "",
     customer_id: "" as string,
@@ -37,10 +36,6 @@ function NewTicket() {
     complaint: "",
   });
 
-  useEffect(() => {
-    supabase.from("products").select("id,name").order("name").then(({ data }) => setProducts((data || []) as Product[]));
-  }, []);
-
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
 
   const submit = async () => {
@@ -48,8 +43,10 @@ function NewTicket() {
     if (!form.customer_name.trim()) return toast.error("Customer name is required");
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
+    const { product_id: _pid, ...rest } = form;
+    void _pid;
     const payload = {
-      ...form,
+      ...rest,
       customer_id: form.customer_id || null,
       customer_name: toTitleCaseSmart(form.customer_name),
       customer_address: titleCaseAddress(form.customer_address),
@@ -88,14 +85,10 @@ function NewTicket() {
 
         <div>
           <Label>Product</Label>
-          {products.length > 0 ? (
-            <Select value={form.product} onValueChange={(v) => set({ product: v })}>
-              <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-              <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
-            </Select>
-          ) : (
-            <Input value={form.product} onChange={(e) => set({ product: e.target.value })} placeholder="Add products in Products tab" />
-          )}
+          <ProductPicker
+            value={form.product_id}
+            onChange={(id, p) => set({ product_id: id || "", product: p?.name || "" })}
+          />
         </div>
         <div>
           <Label>Serial Number</Label>

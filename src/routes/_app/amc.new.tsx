@@ -12,13 +12,14 @@ import { toast } from "sonner";
 import { type AmcUnit, addYears, fmtDate, generatePMDates, nextAgreementNo } from "@/lib/amc";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
+import { ProductPicker } from "@/components/ProductPicker";
 
 export const Route = createFileRoute("/_app/amc/new")({
   component: NewAmc,
   head: () => ({ meta: [{ title: "New AMC — Prokon" }] }),
 });
 
-const emptyUnit = (): AmcUnit => ({ model: "", serial_no: "" });
+const emptyUnit = (): AmcUnit & { product_id?: string } => ({ model: "", serial_no: "", product_id: "" } as AmcUnit & { product_id?: string });
 
 function NewAmc() {
   const navigate = useNavigate();
@@ -38,21 +39,18 @@ function NewAmc() {
     remarks: "",
     terms: "",
   });
-  const [units, setUnits] = useState<AmcUnit[]>([emptyUnit()]);
+  const [units, setUnits] = useState<(AmcUnit & { product_id?: string })[]>([emptyUnit()]);
   const [busy, setBusy] = useState(false);
-  const [productNames, setProductNames] = useState<string[]>([]);
 
   const end_date = addYears(form.start_date, form.duration_years);
 
   useEffect(() => {
     (async () => {
-      const [agree, settings, prods] = await Promise.all([
+      const [agree, settings] = await Promise.all([
         supabase.from("amcs").select("agreement_no"),
         supabase.from("amc_settings").select("terms_template").eq("id", 1).maybeSingle(),
-        supabase.from("products").select("name").order("name"),
       ]);
       const existing = (agree.data || []).map((x: { agreement_no: string }) => x.agreement_no);
-      setProductNames((prods.data || []).map((p: { name: string }) => p.name));
       setForm((f) => ({
         ...f,
         agreement_no: nextAgreementNo(existing),
@@ -147,12 +145,16 @@ function NewAmc() {
           <Button size="sm" variant="outline" onClick={() => setUnits([...units, emptyUnit()])}><Plus className="h-4 w-4 mr-1" />Add unit</Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          <datalist id="ups-models-new">
-            {productNames.map((n) => <option key={n} value={n} />)}
-          </datalist>
           {units.map((u, i) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
-              <div className="col-span-12 md:col-span-6"><Label>UPS Model</Label><Input list="ups-models-new" value={u.model} onChange={(e) => setUnits(units.map((x, idx) => idx === i ? { ...x, model: e.target.value } : x))} placeholder="Select from catalog or type" /></div>
+              <div className="col-span-12 md:col-span-6">
+                <Label>UPS Model <span className="text-xs text-muted-foreground font-normal">(from Product Master)</span></Label>
+                <ProductPicker
+                  value={u.product_id || ""}
+                  required
+                  onChange={(id, p) => setUnits(units.map((x, idx) => idx === i ? { ...x, product_id: id || "", model: p?.model || p?.name || "" } : x))}
+                />
+              </div>
               <div className="col-span-10 md:col-span-5"><Label>Serial No.</Label><Input value={u.serial_no} onChange={(e) => setUnits(units.map((x, idx) => idx === i ? { ...x, serial_no: e.target.value } : x))} /></div>
               <div className="col-span-2 md:col-span-1">
                 <Button size="icon" variant="ghost" onClick={() => setUnits(units.filter((_, idx) => idx !== i))} disabled={units.length === 1}>
