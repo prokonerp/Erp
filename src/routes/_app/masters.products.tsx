@@ -10,13 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Pencil, Trash2, Save, X, Upload } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Plus, Pencil, Trash2, Save, X, Upload, ListOrdered, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { ExportButtons } from "@/components/ExportButtons";
 import { toTitleCaseSmart, upperTrim } from "@/lib/text";
 import { parseCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import type { ProductMaster } from "@/components/ProductPicker";
+import { SerialsManager } from "@/components/SerialsManager";
 
 export const Route = createFileRoute("/_app/masters/products")({
   component: ProductMasterPage,
@@ -24,56 +28,107 @@ export const Route = createFileRoute("/_app/masters/products")({
 });
 
 const UNITS = ["Nos", "Pcs", "Set", "Box", "Mtr", "Kg", "Ltr", "Pkt"] as const;
+const WARRANTY_TYPES = ["Manufacturer", "Seller", "AMC Covered"] as const;
+const WARRANTY_UNITS = ["Months", "Years"] as const;
+const WARRANTY_START = ["Invoice Date", "Installation Date", "Manual"] as const;
+const SERIAL_MODES = ["Manual", "Auto Generate"] as const;
 
 type FormState = {
   name: string;
+  sku: string;
   category: string;
   brand: string;
   model: string;
   unit: string;
   hsn: string;
+  tax_rate: string;
   default_price: string;
   description: string;
   active: boolean;
+  serial_tracking: boolean;
+  serial_mode: string;
+  warranty_applicable: boolean;
+  warranty_type: string;
+  warranty_duration: string;
+  warranty_unit: string;
+  warranty_start_from: string;
+  warranty_manual_override: boolean;
 };
 
 const empty: FormState = {
-  name: "", category: "", brand: "", model: "", unit: "Nos",
-  hsn: "", default_price: "", description: "", active: true,
+  name: "", sku: "", category: "", brand: "", model: "", unit: "Nos",
+  hsn: "", tax_rate: "", default_price: "", description: "", active: true,
+  serial_tracking: false, serial_mode: "Manual",
+  warranty_applicable: false, warranty_type: "Manufacturer",
+  warranty_duration: "12", warranty_unit: "Months",
+  warranty_start_from: "Invoice Date", warranty_manual_override: true,
+};
+
+type ProductFull = ProductMaster & {
+  sku?: string | null;
+  tax_rate?: number | null;
+  serial_tracking?: boolean;
+  serial_mode?: string;
+  warranty_applicable?: boolean;
+  warranty_type?: string | null;
+  warranty_duration?: number | null;
+  warranty_unit?: string | null;
+  warranty_start_from?: string | null;
+  warranty_manual_override?: boolean;
 };
 
 export function ProductMasterPage() {
-  const [rows, setRows] = useState<ProductMaster[]>([]);
+  const [rows, setRows] = useState<ProductFull[]>([]);
   const [q, setQ] = useState("");
+  const [filterCategory, setFilterCategory] = useState("__all");
+  const [filterBrand, setFilterBrand] = useState("__all");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
+  const [tab, setTab] = useState<"details" | "serials">("details");
+  const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
-    setRows((data || []) as unknown as ProductMaster[]);
+    setRows((data || []) as unknown as ProductFull[]);
   };
   useEffect(() => { load(); }, []);
 
+  const categories = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[], [rows]);
+  const brands = useMemo(() => Array.from(new Set(rows.map((r) => r.brand).filter(Boolean))) as string[], [rows]);
+
   const filtered = useMemo(() => rows.filter((p) => {
     const s = q.toLowerCase();
-    return !s || [p.name, p.brand, p.model, p.category, p.hsn].some((v) => (v || "").toLowerCase().includes(s));
-  }), [rows, q]);
+    const matchQ = !s || [p.name, p.brand, p.model, p.category, p.hsn, p.sku].some((v) => (v || "").toLowerCase().includes(s));
+    const matchCat = filterCategory === "__all" || (p.category || "") === filterCategory;
+    const matchBrand = filterBrand === "__all" || (p.brand || "") === filterBrand;
+    return matchQ && matchCat && matchBrand;
+  }), [rows, q, filterCategory, filterBrand]);
 
-  function resetForm() { setForm(empty); setEditingId(null); }
+  function resetForm() { setForm(empty); setEditingId(null); setTab("details"); }
   function startNew() { resetForm(); setOpen(true); }
-  function startEdit(p: ProductMaster) {
+  function startEdit(p: ProductFull) {
     setForm({
       name: p.name || "",
+      sku: p.sku || "",
       category: p.category || "",
       brand: p.brand || "",
       model: p.model || "",
       unit: p.unit || "Nos",
       hsn: p.hsn || "",
+      tax_rate: p.tax_rate != null ? String(p.tax_rate) : "",
       default_price: p.default_price != null ? String(p.default_price) : "",
       description: p.description || "",
       active: p.active !== false,
+      serial_tracking: !!p.serial_tracking,
+      serial_mode: p.serial_mode || "Manual",
+      warranty_applicable: !!p.warranty_applicable,
+      warranty_type: p.warranty_type || "Manufacturer",
+      warranty_duration: p.warranty_duration != null ? String(p.warranty_duration) : "12",
+      warranty_unit: p.warranty_unit || "Months",
+      warranty_start_from: p.warranty_start_from || "Invoice Date",
+      warranty_manual_override: p.warranty_manual_override !== false,
     });
     setEditingId(p.id);
     setOpen(true);
@@ -81,24 +136,37 @@ export function ProductMasterPage() {
 
   async function save(addAnother = false) {
     if (!form.name.trim()) { toast.error("Product name is required"); return; }
+    if (form.warranty_applicable && (!form.warranty_duration || Number(form.warranty_duration) <= 0)) {
+      toast.error("Warranty duration is required when warranty is applicable"); return;
+    }
     const payload = {
       name: toTitleCaseSmart(form.name),
+      sku: form.sku ? upperTrim(form.sku) : null,
       category: form.category ? toTitleCaseSmart(form.category) : null,
       brand: form.brand ? toTitleCaseSmart(form.brand) : null,
       model: form.model ? upperTrim(form.model) : null,
       unit: form.unit || "Nos",
       hsn: form.hsn ? upperTrim(form.hsn) : null,
+      tax_rate: form.tax_rate ? Number(form.tax_rate) : null,
       default_price: form.default_price ? Number(form.default_price) : null,
       description: form.description || null,
       active: form.active,
+      serial_tracking: form.serial_tracking,
+      serial_mode: form.serial_mode,
+      warranty_applicable: form.warranty_applicable,
+      warranty_type: form.warranty_applicable ? form.warranty_type : null,
+      warranty_duration: form.warranty_applicable && form.warranty_duration ? Number(form.warranty_duration) : null,
+      warranty_unit: form.warranty_applicable ? form.warranty_unit : null,
+      warranty_start_from: form.warranty_applicable ? form.warranty_start_from : null,
+      warranty_manual_override: form.warranty_manual_override,
     };
     if (editingId) {
       const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(error.message.includes("products_sku_unique") ? "SKU already in use" : error.message);
       toast.success("Product updated");
     } else {
       const { error } = await supabase.from("products").insert(payload as any);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(error.message.includes("products_sku_unique") ? "SKU already in use" : error.message);
       toast.success("Product added");
     }
     await load();
@@ -171,35 +239,54 @@ export function ProductMasterPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base">All Products ({rows.length})</CardTitle>
-          <Input placeholder="Search by name, brand, model, HSN…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Category" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">All Categories</SelectItem>
+                {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterBrand} onValueChange={setFilterBrand}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Brand" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">All Brands</SelectItem>
+                {brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Input placeholder="Search name / model / brand / SKU…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
+          </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader><TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>SKU</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Brand / Model</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead>HSN</TableHead>
+              <TableHead>Serial</TableHead>
+              <TableHead>Warranty</TableHead>
               <TableHead className="text-right">Price</TableHead>
-              <TableHead className="w-24 text-right">Actions</TableHead>
+              <TableHead className="w-32 text-right">Actions</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.map((p) => (
                 <TableRow key={p.id} className={cn(p.active === false && "opacity-50")}>
                   <TableCell className="font-medium">{p.name}</TableCell>
+                  <TableCell className="text-xs font-mono">{p.sku || "—"}</TableCell>
                   <TableCell>{p.category || "—"}</TableCell>
                   <TableCell className="text-xs">{[p.brand, p.model].filter(Boolean).join(" / ") || "—"}</TableCell>
-                  <TableCell>{p.unit}</TableCell>
-                  <TableCell className="text-xs">{p.hsn || "—"}</TableCell>
+                  <TableCell>{p.serial_tracking ? <Badge variant="secondary"><ListOrdered className="h-3 w-3 mr-1" />Yes</Badge> : <span className="text-xs text-muted-foreground">No</span>}</TableCell>
+                  <TableCell>{p.warranty_applicable ? <Badge variant="secondary"><ShieldCheck className="h-3 w-3 mr-1" />{p.warranty_duration}{p.warranty_unit === "Years" ? "y" : "m"}</Badge> : <span className="text-xs text-muted-foreground">No</span>}</TableCell>
                   <TableCell className="text-right">{p.default_price != null ? `₹${Number(p.default_price).toLocaleString("en-IN")}` : "—"}</TableCell>
                   <TableCell className="text-right">
+                    {p.serial_tracking && <Button size="icon" variant="ghost" title="Manage Serials" onClick={() => setSerialsFor(p)}><ListOrdered className="h-4 w-4" /></Button>}
                     <Button size="icon" variant="ghost" onClick={() => startEdit(p)}><Pencil className="h-4 w-4" /></Button>
                     <Button size="icon" variant="ghost" onClick={() => del(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No products. Click <b>New Product</b> or <b>Import CSV</b>.</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No products. Click <b>New Product</b> or <b>Import CSV</b>.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -211,11 +298,20 @@ export function ProductMasterPage() {
             <DialogTitle className="text-xl">{editingId ? "Edit Product" : "New Product"}</DialogTitle>
           </DialogHeader>
 
-          <div className="px-6 py-4 space-y-4">
+          <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="px-6 py-4">
+            <TabsList>
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="serials" disabled={!form.serial_tracking && !form.warranty_applicable}>Serial &amp; Warranty</TabsTrigger>
+            </TabsList>
+            <TabsContent value="details" className="space-y-4 mt-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <Label>Product Name *</Label>
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. APC Smart-UPS 1500VA" />
+              </div>
+              <div>
+                <Label>Product Code / SKU</Label>
+                <Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="UPS-1500-APC" className="font-mono" />
               </div>
               <div>
                 <Label>Category</Label>
@@ -241,6 +337,10 @@ export function ProductMasterPage() {
                 <Input value={form.hsn} onChange={(e) => setForm({ ...form, hsn: e.target.value })} placeholder="8504" className="font-mono" />
               </div>
               <div>
+                <Label>Tax Rate (%)</Label>
+                <Input type="number" min="0" step="0.01" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} placeholder="18" />
+              </div>
+              <div>
                 <Label>Default Price (₹)</Label>
                 <Input type="number" min="0" step="0.01" value={form.default_price} onChange={(e) => setForm({ ...form, default_price: e.target.value })} placeholder="Optional" />
               </div>
@@ -253,7 +353,79 @@ export function ProductMasterPage() {
                 <Label htmlFor="active" className="text-sm font-normal cursor-pointer">Active (available in transaction dropdowns)</Label>
               </div>
             </div>
-          </div>
+            </TabsContent>
+
+            <TabsContent value="serials" className="space-y-6 mt-4">
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium flex items-center gap-2"><ListOrdered className="h-4 w-4" />Serial Number Tracking</h3>
+                    <p className="text-xs text-muted-foreground">Track each unit individually by serial number.</p>
+                  </div>
+                  <Switch checked={form.serial_tracking} onCheckedChange={(v) => setForm({ ...form, serial_tracking: v })} />
+                </div>
+                {form.serial_tracking && (
+                  <div className="grid md:grid-cols-2 gap-4 pl-1 border-l-2 border-primary/30 pl-4">
+                    <div>
+                      <Label>Serial Mode</Label>
+                      <Select value={form.serial_mode} onValueChange={(v) => setForm({ ...form, serial_mode: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{SERIAL_MODES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="md:col-span-2 text-xs text-muted-foreground bg-muted/40 rounded p-2">
+                      Serial will be <b>mandatory</b> in Purchase, Sales, Gatepass and Service for this product. Duplicate serials are blocked.
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Warranty</h3>
+                    <p className="text-xs text-muted-foreground">Auto-calculate warranty start &amp; end dates per unit.</p>
+                  </div>
+                  <Switch checked={form.warranty_applicable} onCheckedChange={(v) => setForm({ ...form, warranty_applicable: v })} />
+                </div>
+                {form.warranty_applicable && (
+                  <div className="grid md:grid-cols-2 gap-4 border-l-2 border-primary/30 pl-4">
+                    <div>
+                      <Label>Warranty Type</Label>
+                      <Select value={form.warranty_type} onValueChange={(v) => setForm({ ...form, warranty_type: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{WARRANTY_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label>Duration *</Label>
+                        <Input type="number" min="1" value={form.warranty_duration} onChange={(e) => setForm({ ...form, warranty_duration: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label>Unit</Label>
+                        <Select value={form.warranty_unit} onValueChange={(v) => setForm({ ...form, warranty_unit: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>{WARRANTY_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Warranty Starts From</Label>
+                      <Select value={form.warranty_start_from} onValueChange={(v) => setForm({ ...form, warranty_start_from: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{WARRANTY_START.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <Checkbox id="wmo" checked={form.warranty_manual_override} onCheckedChange={(v) => setForm({ ...form, warranty_manual_override: !!v })} />
+                      <Label htmlFor="wmo" className="text-sm font-normal cursor-pointer">Allow manual override of dates</Label>
+                    </div>
+                  </div>
+                )}
+              </section>
+            </TabsContent>
+          </Tabs>
 
           <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30 sticky bottom-0">
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
@@ -262,6 +434,15 @@ export function ProductMasterPage() {
               <Button onClick={() => save(false)}><Save className="h-4 w-4 mr-1" />{editingId ? "Update" : "Save"}</Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!serialsFor} onOpenChange={(o) => { if (!o) setSerialsFor(null); }}>
+        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Serials — {serialsFor?.name}</DialogTitle>
+          </DialogHeader>
+          {serialsFor && <SerialsManager product={serialsFor} />}
         </DialogContent>
       </Dialog>
     </div>
