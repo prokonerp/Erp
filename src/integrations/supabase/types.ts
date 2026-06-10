@@ -707,8 +707,18 @@ export type Database = {
           id: string
           model: string | null
           name: string
+          serial_mode: string
+          serial_tracking: boolean
+          sku: string | null
+          tax_rate: number | null
           unit: string
           updated_at: string
+          warranty_applicable: boolean
+          warranty_duration: number | null
+          warranty_manual_override: boolean
+          warranty_start_from: string | null
+          warranty_type: string | null
+          warranty_unit: string | null
         }
         Insert: {
           active?: boolean
@@ -721,8 +731,18 @@ export type Database = {
           id?: string
           model?: string | null
           name: string
+          serial_mode?: string
+          serial_tracking?: boolean
+          sku?: string | null
+          tax_rate?: number | null
           unit?: string
           updated_at?: string
+          warranty_applicable?: boolean
+          warranty_duration?: number | null
+          warranty_manual_override?: boolean
+          warranty_start_from?: string | null
+          warranty_type?: string | null
+          warranty_unit?: string | null
         }
         Update: {
           active?: boolean
@@ -735,8 +755,18 @@ export type Database = {
           id?: string
           model?: string | null
           name?: string
+          serial_mode?: string
+          serial_tracking?: boolean
+          sku?: string | null
+          tax_rate?: number | null
           unit?: string
           updated_at?: string
+          warranty_applicable?: boolean
+          warranty_duration?: number | null
+          warranty_manual_override?: boolean
+          warranty_start_from?: string | null
+          warranty_type?: string | null
+          warranty_unit?: string | null
         }
         Relationships: []
       }
@@ -901,6 +931,82 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      serials: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          id: string
+          installation_date: string | null
+          notes: string | null
+          product_id: string
+          purchase_date: string | null
+          purchase_invoice_no: string | null
+          sale_invoice_no: string | null
+          serial_number: string
+          status: string
+          supplier_id: string | null
+          updated_at: string
+          warranty_end_date: string | null
+          warranty_start_date: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          installation_date?: string | null
+          notes?: string | null
+          product_id: string
+          purchase_date?: string | null
+          purchase_invoice_no?: string | null
+          sale_invoice_no?: string | null
+          serial_number: string
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+          warranty_end_date?: string | null
+          warranty_start_date?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          installation_date?: string | null
+          notes?: string | null
+          product_id?: string
+          purchase_date?: string | null
+          purchase_invoice_no?: string | null
+          sale_invoice_no?: string | null
+          serial_number?: string
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+          warranty_end_date?: string | null
+          warranty_start_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "serials_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "serials_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "serials_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ticket_activities: {
         Row: {
