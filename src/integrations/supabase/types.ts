@@ -522,6 +522,7 @@ export type Database = {
           serial_no: string | null
           updated_at: string
           warehouse: string | null
+          warehouse_id: string | null
         }
         Insert: {
           created_at?: string
@@ -534,6 +535,7 @@ export type Database = {
           serial_no?: string | null
           updated_at?: string
           warehouse?: string | null
+          warehouse_id?: string | null
         }
         Update: {
           created_at?: string
@@ -546,6 +548,7 @@ export type Database = {
           serial_no?: string | null
           updated_at?: string
           warehouse?: string | null
+          warehouse_id?: string | null
         }
         Relationships: [
           {
@@ -553,6 +556,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
@@ -707,6 +717,7 @@ export type Database = {
           id: string
           model: string | null
           name: string
+          serial_format: string | null
           serial_mode: string
           serial_tracking: boolean
           sku: string | null
@@ -731,6 +742,7 @@ export type Database = {
           id?: string
           model?: string | null
           name: string
+          serial_format?: string | null
           serial_mode?: string
           serial_tracking?: boolean
           sku?: string | null
@@ -755,6 +767,7 @@ export type Database = {
           id?: string
           model?: string | null
           name?: string
+          serial_format?: string | null
           serial_mode?: string
           serial_tracking?: boolean
           sku?: string | null
@@ -947,6 +960,7 @@ export type Database = {
           status: string
           supplier_id: string | null
           updated_at: string
+          warehouse_id: string | null
           warranty_end_date: string | null
           warranty_start_date: string | null
         }
@@ -964,6 +978,7 @@ export type Database = {
           status?: string
           supplier_id?: string | null
           updated_at?: string
+          warehouse_id?: string | null
           warranty_end_date?: string | null
           warranty_start_date?: string | null
         }
@@ -981,6 +996,7 @@ export type Database = {
           status?: string
           supplier_id?: string | null
           updated_at?: string
+          warehouse_id?: string | null
           warranty_end_date?: string | null
           warranty_start_date?: string | null
         }
@@ -1004,6 +1020,13 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "serials_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
@@ -1213,6 +1236,60 @@ export type Database = {
           body?: string
           id?: string
           name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      warehouses: {
+        Row: {
+          address: string | null
+          city: string | null
+          code: string
+          contact_number: string | null
+          contact_person: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          pincode: string | null
+          remarks: string | null
+          state: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          code: string
+          contact_number?: string | null
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          pincode?: string | null
+          remarks?: string | null
+          state?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          code?: string
+          contact_number?: string | null
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          pincode?: string | null
+          remarks?: string | null
+          state?: string | null
+          status?: string
+          type?: string
           updated_at?: string
         }
         Relationships: []
