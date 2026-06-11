@@ -301,7 +301,7 @@ export function ProductMasterPage() {
           <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="px-6 py-4">
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="serials" disabled={!form.serial_tracking && !form.warranty_applicable}>Serial &amp; Warranty</TabsTrigger>
+              <TabsTrigger value="serials">Serial &amp; Warranty</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-4">
             <div className="grid md:grid-cols-2 gap-4">
