@@ -60,6 +60,7 @@ function MastersPage() {
         <TabsList className="flex flex-wrap h-auto">
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="branches">Branches</TabsTrigger>
+          <TabsTrigger value="warehouses">Warehouses</TabsTrigger>
           <TabsTrigger value="customers">Customers</TabsTrigger>
           <TabsTrigger value="vendors">Vendors</TabsTrigger>
           <TabsTrigger value="products">Products</TabsTrigger>
@@ -98,6 +99,28 @@ function MastersPage() {
               { key: "gstin", label: "GSTIN", type: "upper" },
               { key: "phone", label: "Phone", type: "phone" },
               { key: "address", label: "Address", type: "textarea" },
+            ]}
+          />
+        </TabsContent>
+
+        <TabsContent value="warehouses" className="mt-4">
+          <MasterCrud
+            table="warehouses"
+            title="Warehouse Master"
+            canEdit={isAdmin}
+            fields={[
+              { key: "code", label: "Warehouse Code", type: "upper", required: true },
+              { key: "name", label: "Warehouse Name", type: "title", required: true },
+              { key: "type", label: "Type (Godown / Store / Service Center / Transit)", type: "title" },
+              { key: "status", label: "Status (Active / Inactive)", type: "title" },
+              { key: "contact_person", label: "Contact Person", type: "title" },
+              { key: "contact_number", label: "Contact Number", type: "phone" },
+              { key: "email", label: "Email", type: "email" },
+              { key: "city", label: "City", type: "title" },
+              { key: "state", label: "State", type: "title" },
+              { key: "pincode", label: "Pincode", type: "text" },
+              { key: "address", label: "Address", type: "textarea" },
+              { key: "remarks", label: "Remarks", type: "textarea", showInList: false },
             ]}
           />
         </TabsContent>

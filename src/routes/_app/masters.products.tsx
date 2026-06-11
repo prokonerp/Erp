@@ -47,6 +47,7 @@ type FormState = {
   active: boolean;
   serial_tracking: boolean;
   serial_mode: string;
+  serial_format: string;
   warranty_applicable: boolean;
   warranty_type: string;
   warranty_duration: string;
@@ -58,7 +59,7 @@ type FormState = {
 const empty: FormState = {
   name: "", sku: "", category: "", brand: "", model: "", unit: "Nos",
   hsn: "", tax_rate: "", default_price: "", description: "", active: true,
-  serial_tracking: false, serial_mode: "Manual",
+  serial_tracking: false, serial_mode: "Manual", serial_format: "",
   warranty_applicable: false, warranty_type: "Manufacturer",
   warranty_duration: "12", warranty_unit: "Months",
   warranty_start_from: "Invoice Date", warranty_manual_override: true,
@@ -69,6 +70,7 @@ type ProductFull = ProductMaster & {
   tax_rate?: number | null;
   serial_tracking?: boolean;
   serial_mode?: string;
+  serial_format?: string | null;
   warranty_applicable?: boolean;
   warranty_type?: string | null;
   warranty_duration?: number | null;
@@ -123,6 +125,7 @@ export function ProductMasterPage() {
       active: p.active !== false,
       serial_tracking: !!p.serial_tracking,
       serial_mode: p.serial_mode || "Manual",
+      serial_format: p.serial_format || "",
       warranty_applicable: !!p.warranty_applicable,
       warranty_type: p.warranty_type || "Manufacturer",
       warranty_duration: p.warranty_duration != null ? String(p.warranty_duration) : "12",
@@ -153,6 +156,7 @@ export function ProductMasterPage() {
       active: form.active,
       serial_tracking: form.serial_tracking,
       serial_mode: form.serial_mode,
+      serial_format: form.serial_tracking && form.serial_format ? form.serial_format : null,
       warranty_applicable: form.warranty_applicable,
       warranty_type: form.warranty_applicable ? form.warranty_type : null,
       warranty_duration: form.warranty_applicable && form.warranty_duration ? Number(form.warranty_duration) : null,
@@ -372,6 +376,10 @@ export function ProductMasterPage() {
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>{SERIAL_MODES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                       </Select>
+                    </div>
+                    <div>
+                      <Label>Serial Number Format (hint)</Label>
+                      <Input value={form.serial_format} onChange={(e) => setForm({ ...form, serial_format: e.target.value })} placeholder="e.g. UPS-2025-####" className="font-mono" />
                     </div>
                     <div className="md:col-span-2 text-xs text-muted-foreground bg-muted/40 rounded p-2">
                       Serial will be <b>mandatory</b> in Purchase, Sales, Gatepass and Service for this product. Duplicate serials are blocked.
