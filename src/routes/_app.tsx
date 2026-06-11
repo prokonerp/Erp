@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, Link, Navigate, useNavigate, useLocation } fro
 import { useAuth } from "@/lib/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { FileText, ListChecks, LogOut, Building2, ShieldCheck, Briefcase, Ticket, Upload, Database } from "lucide-react";
+import { FileText, ListChecks, LogOut, Building2, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -23,6 +23,7 @@ function AppLayout() {
     { to: "/amc", label: "AMC", icon: ShieldCheck },
     { to: "/crm", label: "Sales CRM", icon: Briefcase },
     { to: "/tickets", label: "Tickets", icon: Ticket },
+    { to: "/reports", label: "Reports", icon: BarChart3 },
     { to: "/import", label: "Import CSV", icon: Upload },
   ];
 
