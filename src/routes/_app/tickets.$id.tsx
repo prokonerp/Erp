@@ -430,8 +430,45 @@ function TicketDetail() {
           <Card>
             <CardHeader><CardTitle>Assign Engineer</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              <div><Label>Name</Label><Input value={t.assigned_engineer_name || ""} onChange={(e) => update({ assigned_engineer_name: e.target.value })} /></div>
-              <div><Label>WhatsApp Number</Label><Input value={t.assigned_engineer_phone || ""} onChange={(e) => update({ assigned_engineer_phone: e.target.value })} placeholder="10-digit" /></div>
+              <div>
+                <Label>Department filter</Label>
+                <Select value={deptFilter} onValueChange={setDeptFilter}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All departments</SelectItem>
+                    {Array.from(new Set(employees.map((e) => e.department).filter(Boolean) as string[])).map((d) => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Engineer <span className="text-xs text-muted-foreground">(from Employee Master)</span></Label>
+                <Select
+                  value={employees.find((e) => e.name === t.assigned_engineer_name)?.id || ""}
+                  onValueChange={(empId) => {
+                    const emp = employees.find((e) => e.id === empId);
+                    if (emp) update({ assigned_engineer_name: emp.name, assigned_engineer_phone: emp.phone || "" });
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder={employees.length ? "Select engineer" : "No active employees"} /></SelectTrigger>
+                  <SelectContent>
+                    {employees
+                      .filter((e) => deptFilter === "all" || e.department === deptFilter)
+                      .map((e) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.name}{e.department ? ` · ${e.department}` : ""}{e.phone ? ` · ${e.phone}` : ""}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {employees.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">Add employees in Masters → Employees.</p>
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {t.assigned_engineer_name ? <>Selected: <b>{t.assigned_engineer_name}</b>{t.assigned_engineer_phone ? ` (${t.assigned_engineer_phone})` : ""}</> : "No engineer selected"}
+              </div>
               {t.assigned_at && <p className="text-xs text-muted-foreground">Assigned: {new Date(t.assigned_at).toLocaleString()}</p>}
               <Button className="w-full" onClick={assignEngineer}>
                 <UserPlus className="h-4 w-4 mr-1" />Assign & Send WhatsApp
