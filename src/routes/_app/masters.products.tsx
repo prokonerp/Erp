@@ -403,12 +403,13 @@ export function ProductMasterPage() {
                 <div className="grid md:grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Central Tax Rate *</Label>
-                    <Select value={form.central_tax} onValueChange={(v) => setForm({ ...form, central_tax: v })}>
+                    <Select value={form.central_tax} onValueChange={(v) => setForm({ ...form, central_tax: v, local_tax: v })}>
                       <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                       <SelectContent>
                         {TAX_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    <p className="text-[10px] text-muted-foreground mt-1">Local tax auto-syncs; override allowed.</p>
                   </div>
                   <div>
                     <Label className="text-xs">Local Tax Rate *</Label>
