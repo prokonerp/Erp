@@ -192,7 +192,7 @@ export function ProductMasterPage() {
     const payload = {
       name: toTitleCaseSmart(derivedName),
       category: form.category ? toTitleCaseSmart(form.category) : null,
-      brand: form.brand ? toTitleCaseSmart(form.brand) : null,
+      brand: form.brand ? upperTrim(form.brand) : null,
       model: form.model ? upperTrim(form.model) : null,
       unit: form.unit || "Nos",
       hsn: form.hsn ? upperTrim(form.hsn) : null,
@@ -246,7 +246,7 @@ export function ProductMasterPage() {
       const payload = rowsCsv.map((r) => ({
         name: toTitleCaseSmart(r["Name"] || r["Product"] || r["Product Name"] || ""),
         category: toTitleCaseSmart(r["Category"] || "") || null,
-        brand: toTitleCaseSmart(r["Brand"] || "") || null,
+        brand: upperTrim(r["Brand"] || "") || null,
         model: upperTrim(r["Model"] || "") || null,
         unit: r["Unit"] || "Nos",
         hsn: upperTrim(r["HSN"] || "") || null,
@@ -377,7 +377,12 @@ export function ProductMasterPage() {
               </div>
               <div>
                 <Label>Brand</Label>
-                <Input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="APC / Schneider / Luminous" />
+                <Input
+                  value={form.brand}
+                  onChange={(e) => setForm({ ...form, brand: e.target.value.toUpperCase() })}
+                  placeholder="APC / SCHNEIDER / LUMINOUS"
+                  className="uppercase"
+                />
               </div>
               <div>
                 <Label>Model</Label>

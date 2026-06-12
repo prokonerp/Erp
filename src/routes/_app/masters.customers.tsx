@@ -13,7 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Pencil, Trash2, Check, ChevronsUpDown, Upload, Save, X, ArrowLeft } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Plus, Pencil, Trash2, Check, ChevronsUpDown, Upload, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { type Customer } from "@/lib/crm";
 import { INDIAN_STATES, isValidGSTIN, stateFromGSTIN } from "@/lib/india";
@@ -30,30 +31,81 @@ export const Route = createFileRoute("/_app/masters/customers")({
 const GST_TREATMENTS = ["Regular", "Composition", "Unregistered", "Consumer"] as const;
 type GstTreatment = typeof GST_TREATMENTS[number];
 
-type FormState = {
-  company: string;
-  contact_name: string;
-  phone: string;
+const SALUTATIONS = ["Mr.", "Ms.", "Mrs.", "Dr.", "Mx."] as const;
+const COUNTRIES = ["India", "United States", "United Kingdom", "United Arab Emirates", "Singapore", "Australia", "Canada", "Germany", "France", "Nepal", "Bangladesh", "Sri Lanka", "Other"];
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type CustomerType = "Business" | "Individual";
+
+type AddressBlock = {
+  line1: string;
+  line2: string;
+  landmark: string;
+  city: string;
+  state: string;
+  country: string;
+  pincode: string;
+};
+const emptyAddr: AddressBlock = { line1: "", line2: "", landmark: "", city: "", state: "", country: "India", pincode: "" };
+
+type ContactRow = {
+  first_name: string;
+  last_name: string;
+  designation: string;
+  department: string;
   email: string;
+  area_code: string;
+  phone: string;
+};
+const emptyContact: ContactRow = { first_name: "", last_name: "", designation: "", department: "", email: "", area_code: "+91", phone: "" };
+
+type FormState = {
+  customer_type: CustomerType;
+  salutation: string;
+  first_name: string;
+  last_name: string;
+  company: string;
+  email: string;
+  area_code: string;
+  phone: string;
   gst: string;
   gst_status: GstTreatment;
-  state: string;
-  // address
-  billing_address: string;
-  shipping_address: string;
-  city: string;
-  street: string;       // landmark / street 2
-  country: string;
+  pan: string;
+  billing: AddressBlock;
+  shipping: AddressBlock;
   same_as_billing: boolean;
+  contacts: ContactRow[];
   remarks: string;
 };
 
 const empty: FormState = {
-  company: "", contact_name: "", phone: "", email: "",
-  gst: "", gst_status: "Unregistered", state: "",
-  billing_address: "", shipping_address: "", city: "", street: "",
-  country: "India", same_as_billing: true, remarks: "",
+  customer_type: "Business",
+  salutation: "Mr.",
+  first_name: "", last_name: "",
+  company: "", email: "", area_code: "+91", phone: "",
+  gst: "", gst_status: "Unregistered", pan: "",
+  billing: { ...emptyAddr },
+  shipping: { ...emptyAddr },
+  same_as_billing: true,
+  contacts: [],
+  remarks: "",
 };
+
+function panFromGstin(gst: string): string {
+  const up = (gst || "").toUpperCase().trim();
+  if (up.length < 12) return "";
+  return up.slice(2, 12);
+}
+
+function joinAddress(a: AddressBlock): string {
+  return [a.line1, a.line2, a.landmark, a.city, a.state, a.pincode, a.country]
+    .map((s) => (s || "").trim()).filter(Boolean).join(", ");
+}
+
+function isValidPhone(p: string): boolean {
+  return /^\d{10}$/.test((p || "").trim());
+}
 
 export function CustomerMasterPage() {
   const [rows, setRows] = useState<Customer[]>([]);
@@ -78,20 +130,42 @@ export function CustomerMasterPage() {
   function resetForm() { setForm(empty); setEditingId(null); setTab("basic"); }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(c: Customer) {
+    const any = c as any;
+    const billing: AddressBlock = {
+      line1: any.billing_line1 || c.billing_address || c.address || "",
+      line2: any.billing_line2 || "",
+      landmark: any.billing_landmark || any.street || "",
+      city: any.billing_city || any.city || "",
+      state: any.billing_state || c.state || "",
+      country: any.billing_country || any.country || "India",
+      pincode: any.billing_pincode || "",
+    };
+    const shipping: AddressBlock = {
+      line1: any.shipping_line1 || c.shipping_address || "",
+      line2: any.shipping_line2 || "",
+      landmark: any.shipping_landmark || "",
+      city: any.shipping_city || "",
+      state: any.shipping_state || "",
+      country: any.shipping_country || "India",
+      pincode: any.shipping_pincode || "",
+    };
+    const sameAsBilling = !any.shipping_line1 && (!c.shipping_address || c.shipping_address === (c.billing_address || c.address || ""));
     setForm({
+      customer_type: (any.customer_type as CustomerType) || "Business",
+      salutation: any.salutation || "Mr.",
+      first_name: any.first_name || "",
+      last_name: any.last_name || "",
       company: c.company || "",
-      contact_name: c.contact_name || "",
-      phone: c.phone || "",
       email: c.email || "",
+      area_code: any.phone_area_code || "+91",
+      phone: c.phone || "",
       gst: c.gst || "",
-      gst_status: ((c as any).gst_status as GstTreatment) || (c.gst ? "Regular" : "Unregistered"),
-      state: c.state || "",
-      billing_address: c.billing_address || c.address || "",
-      shipping_address: c.shipping_address || "",
-      city: (c as any).city || "",
-      street: (c as any).street || "",
-      country: (c as any).country || "India",
-      same_as_billing: !c.shipping_address || c.shipping_address === (c.billing_address || c.address || ""),
+      gst_status: (any.gst_status as GstTreatment) || (c.gst ? "Regular" : "Unregistered"),
+      pan: any.pan || panFromGstin(c.gst || ""),
+      billing,
+      shipping: sameAsBilling ? billing : shipping,
+      same_as_billing: sameAsBilling,
+      contacts: Array.isArray(any.contacts) ? (any.contacts as ContactRow[]).map((x) => ({ ...emptyContact, ...x })) : [],
       remarks: c.remarks || "",
     });
     setEditingId(c.id);
@@ -105,35 +179,83 @@ export function CustomerMasterPage() {
     setForm((f) => ({
       ...f,
       gst: up,
-      state: auto || f.state,
+      pan: f.customer_type === "Business" && up.length >= 12 ? panFromGstin(up) : f.pan,
+      billing: { ...f.billing, state: auto || f.billing.state },
       gst_status: up.length >= 2 && auto ? "Regular" : f.gst_status,
     }));
   }
 
+  function addContact() { setForm((f) => ({ ...f, contacts: [...f.contacts, { ...emptyContact }] })); }
+  function updateContact(i: number, patch: Partial<ContactRow>) {
+    setForm((f) => ({ ...f, contacts: f.contacts.map((c, idx) => (idx === i ? { ...c, ...patch } : c)) }));
+  }
+  function removeContact(i: number) { setForm((f) => ({ ...f, contacts: f.contacts.filter((_, idx) => idx !== i) })); }
+
   async function save(addAnother = false) {
-    if (!form.company.trim()) { toast.error("Customer name is required"); setTab("basic"); return; }
-    if (!form.phone.trim()) { toast.error("Mobile number is required"); setTab("basic"); return; }
-    if (!form.gst_status) { toast.error("GST Treatment is required"); setTab("other"); return; }
-    if (!form.state) { toast.error("Place of Supply is required"); setTab("other"); return; }
-    if (form.gst_status === "Regular" && !isValidGSTIN(form.gst)) {
-      toast.error("Enter a valid 15-character GSTIN"); setTab("other"); return;
+    // Validation
+    if (form.customer_type === "Business" && !form.company.trim()) { toast.error("Company Name is required for Business"); setTab("basic"); return; }
+    if (!form.first_name.trim()) { toast.error("First name is required"); setTab("basic"); return; }
+    if (!isValidPhone(form.phone)) { toast.error("Enter a valid 10-digit mobile number"); setTab("basic"); return; }
+    if (form.email && !EMAIL_REGEX.test(form.email.trim())) { toast.error("Enter a valid email address"); setTab("basic"); return; }
+    if (form.gst_status === "Regular" && !isValidGSTIN(form.gst)) { toast.error("Enter a valid 15-character GSTIN"); setTab("gst"); return; }
+    if (form.pan && !PAN_REGEX.test(form.pan.toUpperCase().trim())) { toast.error("PAN must be 10 chars (AAAAA9999A)"); setTab("gst"); return; }
+    for (let i = 0; i < form.contacts.length; i++) {
+      const c = form.contacts[i];
+      if (!c.first_name.trim()) { toast.error(`Contact #${i + 1}: first name required`); setTab("contacts"); return; }
+      if (c.email && !EMAIL_REGEX.test(c.email.trim())) { toast.error(`Contact #${i + 1}: invalid email`); setTab("contacts"); return; }
+      if (c.phone && !isValidPhone(c.phone)) { toast.error(`Contact #${i + 1}: phone must be 10 digits`); setTab("contacts"); return; }
     }
-    const billing = titleCaseAddress(form.billing_address);
-    const shipping = form.same_as_billing ? billing : titleCaseAddress(form.shipping_address);
+
+    const billing = { ...form.billing };
+    const shipping = form.same_as_billing ? { ...billing } : { ...form.shipping };
+    const companyName = form.customer_type === "Business" ? toTitleCaseSmart(form.company) : toTitleCaseSmart([form.salutation, form.first_name, form.last_name].filter(Boolean).join(" "));
+    const contactDisplay = toTitleCaseSmart([form.salutation, form.first_name, form.last_name].filter(Boolean).join(" "));
+
     const payload = {
-      company: toTitleCaseSmart(form.company),
-      contact_name: toTitleCaseSmart(form.contact_name),
+      customer_type: form.customer_type,
+      salutation: form.salutation || null,
+      first_name: toTitleCaseSmart(form.first_name) || null,
+      last_name: toTitleCaseSmart(form.last_name) || null,
+      company: companyName,
+      contact_name: contactDisplay,
       phone: form.phone.trim(),
+      phone_area_code: form.area_code || "+91",
       email: form.email.trim().toLowerCase() || null,
-      gst: upperTrim(form.gst) || null,
+      gst: form.customer_type === "Business" ? (upperTrim(form.gst) || null) : null,
       gst_status: form.gst_status,
-      state: form.state,
-      country: form.country || "India",
-      city: toTitleCaseSmart(form.city) || null,
-      street: form.street || null,
-      billing_address: billing || null,
-      shipping_address: shipping || null,
-      address: billing || null,
+      pan: form.pan ? upperTrim(form.pan) : null,
+      state: billing.state || null,
+      country: billing.country || "India",
+      city: toTitleCaseSmart(billing.city) || null,
+      street: billing.landmark || null,
+      // structured
+      billing_line1: titleCaseAddress(billing.line1) || null,
+      billing_line2: titleCaseAddress(billing.line2) || null,
+      billing_landmark: toTitleCaseSmart(billing.landmark) || null,
+      billing_city: toTitleCaseSmart(billing.city) || null,
+      billing_state: billing.state || null,
+      billing_country: billing.country || "India",
+      billing_pincode: billing.pincode || null,
+      shipping_line1: titleCaseAddress(shipping.line1) || null,
+      shipping_line2: titleCaseAddress(shipping.line2) || null,
+      shipping_landmark: toTitleCaseSmart(shipping.landmark) || null,
+      shipping_city: toTitleCaseSmart(shipping.city) || null,
+      shipping_state: shipping.state || null,
+      shipping_country: shipping.country || "India",
+      shipping_pincode: shipping.pincode || null,
+      // legacy combined
+      billing_address: joinAddress(billing) || null,
+      shipping_address: joinAddress(shipping) || null,
+      address: joinAddress(billing) || null,
+      contacts: form.contacts.map((c) => ({
+        first_name: toTitleCaseSmart(c.first_name),
+        last_name: toTitleCaseSmart(c.last_name),
+        designation: toTitleCaseSmart(c.designation),
+        department: toTitleCaseSmart(c.department),
+        email: c.email.trim().toLowerCase(),
+        area_code: c.area_code || "+91",
+        phone: c.phone.trim(),
+      })),
       remarks: form.remarks || null,
     };
     if (editingId) {
@@ -208,6 +330,7 @@ export function CustomerMasterPage() {
               { header: "Phone", get: (c) => c.phone || "" },
               { header: "Email", get: (c) => c.email || "" },
               { header: "GSTIN", get: (c) => c.gst || "" },
+              { header: "PAN", get: (c) => (c as any).pan || "" },
               { header: "GST Treatment", get: (c) => (c as any).gst_status || "" },
               { header: "State", get: (c) => c.state || "" },
               { header: "City", get: (c) => (c as any).city || "" },
@@ -228,13 +351,14 @@ export function CustomerMasterPage() {
         <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Customer</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead>
+              <TableHead>Customer</TableHead><TableHead>Type</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead>
               <TableHead>GSTIN</TableHead><TableHead>State</TableHead><TableHead className="w-24 text-right">Actions</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">{c.company}</TableCell>
+                  <TableCell className="text-xs">{(c as any).customer_type || "—"}</TableCell>
                   <TableCell>{c.contact_name || "—"}</TableCell>
                   <TableCell>{c.phone || "—"}</TableCell>
                   <TableCell className="text-xs">{c.gst || "—"}</TableCell>
@@ -245,7 +369,7 @@ export function CustomerMasterPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No customers. Click <b>New Customer</b> or <b>Import CSV</b>.</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No customers. Click <b>New Customer</b> or <b>Import CSV</b>.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -260,41 +384,82 @@ export function CustomerMasterPage() {
           <Tabs value={tab} onValueChange={setTab} className="px-6 pt-3">
             <TabsList className="w-full justify-start">
               <TabsTrigger value="basic">Basic Details</TabsTrigger>
-              <TabsTrigger value="other">GST / Other</TabsTrigger>
+              <TabsTrigger value="gst">GST / PAN</TabsTrigger>
               <TabsTrigger value="address">Address</TabsTrigger>
-              <TabsTrigger value="contacts">Contacts</TabsTrigger>
+              <TabsTrigger value="contacts">Contacts ({form.contacts.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="mt-4 space-y-4">
-              <FieldRow label="Customer Name" required>
-                <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Display name on invoices / tickets" />
+              <FieldRow label="Customer Type" required>
+                <RadioGroup
+                  value={form.customer_type}
+                  onValueChange={(v) => setForm({ ...form, customer_type: v as CustomerType })}
+                  className="flex gap-6"
+                >
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <RadioGroupItem value="Business" /> Business
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <RadioGroupItem value="Individual" /> Individual
+                  </label>
+                </RadioGroup>
               </FieldRow>
-              <FieldRow label="Mobile Number" required>
-                <Input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="10-digit mobile" />
+
+              <FieldRow label="Primary Contact" required>
+                <div className="grid grid-cols-12 gap-2">
+                  <Select value={form.salutation} onValueChange={(v) => setForm({ ...form, salutation: v })}>
+                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Salutation" /></SelectTrigger>
+                    <SelectContent>{SALUTATIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Input className="col-span-4" placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+                  <Input className="col-span-5" placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+                </div>
               </FieldRow>
-              <FieldRow label="Email ID">
+
+              {form.customer_type === "Business" && (
+                <FieldRow label="Company Name" required>
+                  <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Legal / billing entity" />
+                </FieldRow>
+              )}
+
+              <FieldRow label="Email">
                 <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@company.com" />
               </FieldRow>
-              <FieldRow label="Primary Contact">
-                <Input value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} placeholder="Person of contact" />
-              </FieldRow>
-              <FieldRow label="Company Name">
-                <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Legal / billing entity" />
-              </FieldRow>
-              <FieldRow label="GST Number">
-                <Input value={form.gst} onChange={(e) => onGstChange(e.target.value)} placeholder="15-char GSTIN — auto-fills state" maxLength={15} className="font-mono uppercase" />
+
+              <FieldRow label="Phone" required>
+                <div className="grid grid-cols-12 gap-2">
+                  <Input className="col-span-3 font-mono" value={form.area_code} onChange={(e) => setForm({ ...form, area_code: e.target.value })} placeholder="+91" />
+                  <Input
+                    className="col-span-9"
+                    inputMode="numeric"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                    placeholder="10-digit mobile"
+                  />
+                </div>
               </FieldRow>
             </TabsContent>
 
-            <TabsContent value="other" className="mt-4 space-y-4">
+            <TabsContent value="gst" className="mt-4 space-y-4">
               <FieldRow label="GST Treatment" required>
                 <Select value={form.gst_status} onValueChange={(v) => setForm({ ...form, gst_status: v as GstTreatment })}>
                   <SelectTrigger><SelectValue placeholder="Select a GST treatment" /></SelectTrigger>
                   <SelectContent>{GST_TREATMENTS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                 </Select>
               </FieldRow>
-              <FieldRow label="Place of Supply" required>
-                <StateCombobox value={form.state} onChange={(v) => setForm({ ...form, state: v })} />
+              {form.customer_type === "Business" && (
+                <FieldRow label="GST Number">
+                  <Input value={form.gst} onChange={(e) => onGstChange(e.target.value)} placeholder="15-char GSTIN — auto-fills state & PAN" maxLength={15} className="font-mono uppercase" />
+                </FieldRow>
+              )}
+              <FieldRow label="PAN">
+                <Input
+                  value={form.pan}
+                  onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase().slice(0, 10) })}
+                  placeholder="AAAAA9999A"
+                  maxLength={10}
+                  className="font-mono uppercase"
+                />
               </FieldRow>
               <FieldRow label="Remarks">
                 <Textarea rows={3} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} />
@@ -303,28 +468,73 @@ export function CustomerMasterPage() {
 
             <TabsContent value="address" className="mt-4 space-y-4">
               <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <h3 className="font-medium text-sm">Billing Address</h3>
-                  <Textarea rows={3} placeholder="Street / Building" value={form.billing_address} onChange={(e) => setForm({ ...form, billing_address: e.target.value })} />
-                  <Input placeholder="Landmark / Street 2" value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} />
-                  <Input placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-                  <StateCombobox value={form.state} onChange={(v) => setForm({ ...form, state: v })} />
-                </div>
+                <AddressEditor
+                  title="Billing Address"
+                  value={form.billing}
+                  onChange={(b) => setForm({ ...form, billing: b, shipping: form.same_as_billing ? b : form.shipping })}
+                />
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium text-sm">Shipping Address</h3>
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Checkbox checked={form.same_as_billing} onCheckedChange={(v) => setForm({ ...form, same_as_billing: !!v, shipping_address: v ? form.billing_address : form.shipping_address })} />
+                      <Checkbox
+                        checked={form.same_as_billing}
+                        onCheckedChange={(v) => setForm({ ...form, same_as_billing: !!v, shipping: v ? form.billing : form.shipping })}
+                      />
                       Same as Billing
                     </label>
                   </div>
-                  <Textarea rows={3} placeholder="Street / Building" disabled={form.same_as_billing} value={form.same_as_billing ? form.billing_address : form.shipping_address} onChange={(e) => setForm({ ...form, shipping_address: e.target.value })} />
+                  {!form.same_as_billing && (
+                    <AddressEditor
+                      title=""
+                      value={form.shipping}
+                      onChange={(s) => setForm({ ...form, shipping: s })}
+                    />
+                  )}
+                  {form.same_as_billing && (
+                    <div className="text-xs text-muted-foreground p-3 rounded border bg-muted/30">
+                      Shipping address will be copied from billing on save.
+                    </div>
+                  )}
                 </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="contacts" className="mt-4">
-              <p className="text-sm text-muted-foreground">Add additional contact persons after saving the customer.</p>
+            <TabsContent value="contacts" className="mt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Add multiple persons of contact. Each must include a first name.</p>
+                <Button variant="outline" size="sm" onClick={addContact}><Plus className="h-4 w-4 mr-1" />Add Contact</Button>
+              </div>
+              {form.contacts.length === 0 && (
+                <div className="text-center text-sm text-muted-foreground py-8 border rounded bg-muted/20">
+                  No additional contacts yet. The Primary Contact (Basic Details) acts as the default.
+                </div>
+              )}
+              {form.contacts.map((c, i) => (
+                <div key={i} className="border rounded p-3 space-y-2 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-medium text-muted-foreground">Contact #{i + 1}</div>
+                    <Button size="icon" variant="ghost" onClick={() => removeContact(i)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-2">
+                    <Input placeholder="First name *" value={c.first_name} onChange={(e) => updateContact(i, { first_name: e.target.value })} />
+                    <Input placeholder="Last name" value={c.last_name} onChange={(e) => updateContact(i, { last_name: e.target.value })} />
+                    <Input placeholder="Designation" value={c.designation} onChange={(e) => updateContact(i, { designation: e.target.value })} />
+                    <Input placeholder="Department" value={c.department} onChange={(e) => updateContact(i, { department: e.target.value })} />
+                    <Input type="email" placeholder="Email" value={c.email} onChange={(e) => updateContact(i, { email: e.target.value })} />
+                    <div className="grid grid-cols-12 gap-2">
+                      <Input className="col-span-4 font-mono" placeholder="+91" value={c.area_code} onChange={(e) => updateContact(i, { area_code: e.target.value })} />
+                      <Input
+                        className="col-span-8"
+                        inputMode="numeric"
+                        placeholder="10-digit phone"
+                        value={c.phone}
+                        onChange={(e) => updateContact(i, { phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </TabsContent>
           </Tabs>
 
@@ -346,6 +556,26 @@ function FieldRow({ label, required, children }: { label: string; required?: boo
     <div className="grid md:grid-cols-[180px_1fr] items-start gap-2 md:gap-4">
       <Label className={cn("text-sm pt-2", required && "text-destructive")}>{label}{required && " *"}</Label>
       <div>{children}</div>
+    </div>
+  );
+}
+
+function AddressEditor({ title, value, onChange }: { title: string; value: AddressBlock; onChange: (v: AddressBlock) => void }) {
+  return (
+    <div className="space-y-3">
+      {title && <h3 className="font-medium text-sm">{title}</h3>}
+      <Input placeholder="Address Line 1" value={value.line1} onChange={(e) => onChange({ ...value, line1: e.target.value })} />
+      <Input placeholder="Address Line 2" value={value.line2} onChange={(e) => onChange({ ...value, line2: e.target.value })} />
+      <Input placeholder="Landmark" value={value.landmark} onChange={(e) => onChange({ ...value, landmark: e.target.value })} />
+      <div className="grid grid-cols-2 gap-2">
+        <Input placeholder="City" value={value.city} onChange={(e) => onChange({ ...value, city: e.target.value })} />
+        <Input placeholder="Pincode" inputMode="numeric" value={value.pincode} onChange={(e) => onChange({ ...value, pincode: e.target.value.replace(/\D/g, "").slice(0, 10) })} />
+      </div>
+      <StateCombobox value={value.state} onChange={(s) => onChange({ ...value, state: s })} />
+      <Select value={value.country} onValueChange={(c) => onChange({ ...value, country: c })}>
+        <SelectTrigger><SelectValue placeholder="Country" /></SelectTrigger>
+        <SelectContent>{COUNTRIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+      </Select>
     </div>
   );
 }
