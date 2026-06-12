@@ -32,6 +32,14 @@ const WARRANTY_TYPES = ["Manufacturer", "Seller", "AMC Covered"] as const;
 const WARRANTY_UNITS = ["Months", "Years"] as const;
 const WARRANTY_START = ["Invoice Date", "Installation Date", "Manual"] as const;
 const SERIAL_MODES = ["Manual", "Auto Generate"] as const;
+const DEFAULT_CATEGORIES = ["Accessories", "CCTV", "General", "Inverter/Battery", "Offline UPS", "Online UPS", "Solar Panel", "UPS Battery"];
+const TAX_OPTIONS = [
+  { value: "EXEMPT", label: "Exempted" },
+  { value: "0", label: "0%" },
+  { value: "5", label: "5%" },
+  { value: "18", label: "18%" },
+  { value: "28", label: "28%" },
+];
 
 type FormState = {
   name: string;
@@ -41,7 +49,8 @@ type FormState = {
   model: string;
   unit: string;
   hsn: string;
-  tax_rate: string;
+  central_tax: string; // "EXEMPT" | "0" | "5" | ...
+  local_tax: string;
   default_price: string;
   description: string;
   active: boolean;
@@ -58,7 +67,7 @@ type FormState = {
 
 const empty: FormState = {
   name: "", sku: "", category: "", brand: "", model: "", unit: "Nos",
-  hsn: "", tax_rate: "", default_price: "", description: "", active: true,
+  hsn: "", central_tax: "", local_tax: "", default_price: "", description: "", active: true,
   serial_tracking: false, serial_mode: "Manual", serial_format: "",
   warranty_applicable: false, warranty_type: "Manufacturer",
   warranty_duration: "12", warranty_unit: "Months",
@@ -68,6 +77,10 @@ const empty: FormState = {
 type ProductFull = ProductMaster & {
   sku?: string | null;
   tax_rate?: number | null;
+  central_tax_rate?: number | null;
+  local_tax_rate?: number | null;
+  central_tax_exempt?: boolean | null;
+  local_tax_exempt?: boolean | null;
   serial_tracking?: boolean;
   serial_mode?: string;
   serial_format?: string | null;
