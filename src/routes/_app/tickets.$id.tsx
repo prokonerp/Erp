@@ -13,7 +13,7 @@ import {
   CALL_TYPES, TICKET_STATUSES, STATUS_COLOR,
   waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
-import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
@@ -42,6 +42,31 @@ type Ticket = {
   closed_at: string | null;
   remarks: string | null;
   created_at: string;
+  customer_id: string | null;
+};
+
+type CustomerBilling = {
+  id: string;
+  company: string;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  billing_address: string | null;
+  address: string | null;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  gst: string | null;
+};
+
+type Employee = {
+  id: string;
+  name: string;
+  phone: string | null;
+  department: string | null;
+  role: string | null;
+  active: boolean;
 };
 
 type Activity = {
@@ -63,13 +88,17 @@ function TicketDetail() {
   const [noteText, setNoteText] = useState("");
   const [templates, setTemplates] = useState<Record<string, string>>({});
   const [quoteNo, setQuoteNo] = useState<string>("");
+  const [customer, setCustomer] = useState<CustomerBilling | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [deptFilter, setDeptFilter] = useState<string>("all");
 
   const load = async () => {
-    const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }] = await Promise.all([
+    const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
       supabase.from("tickets").select("*").eq("id", id).single(),
       supabase.from("products").select("id,name").order("name"),
       supabase.from("ticket_activities").select("*").eq("ticket_id", id).order("created_at", { ascending: false }),
       supabase.from("wa_templates").select("id,body"),
+      supabase.from("employees").select("id,name,phone,department,role,active").eq("active", true).order("name"),
     ]);
     if (tk) {
       const row = tk as unknown as Ticket;
@@ -83,9 +112,20 @@ function TicketDetail() {
       } else {
         setQuoteNo("");
       }
+      if (row.customer_id) {
+        const { data: c } = await supabase
+          .from("customers")
+          .select("id,company,contact_name,phone,email,billing_address,address,street,city,state,country,gst")
+          .eq("id", row.customer_id)
+          .single();
+        setCustomer((c as CustomerBilling | null) ?? null);
+      } else {
+        setCustomer(null);
+      }
     }
     setProducts((pr || []) as { id: string; name: string }[]);
     setActivities((ac || []) as Activity[]);
+    setEmployees((emps || []) as Employee[]);
     const map: Record<string, string> = {};
     for (const r of (tpl || []) as { id: string; body: string }[]) map[r.id] = r.body;
     setTemplates(map);
