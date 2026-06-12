@@ -459,10 +459,13 @@ export function CustomerMasterPage() {
                 </Select>
               </FieldRow>
               {form.customer_type === "Business" && (
-                <FieldRow label="GST Number">
+                <FieldRow label="GST Number" required>
                   <Input value={form.gst} onChange={(e) => onGstChange(e.target.value)} placeholder="15-char GSTIN — auto-fills state & PAN" maxLength={15} className="font-mono uppercase" />
                 </FieldRow>
               )}
+              <FieldRow label="Place of Supply">
+                <StateCombobox value={form.place_of_supply} onChange={(s) => setForm({ ...form, place_of_supply: s })} />
+              </FieldRow>
               <FieldRow label="PAN">
                 <Input
                   value={form.pan}
