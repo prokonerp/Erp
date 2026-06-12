@@ -1,0 +1,22 @@
+
+ALTER TABLE public.customers
+  ADD COLUMN IF NOT EXISTS customer_type TEXT NOT NULL DEFAULT 'Business',
+  ADD COLUMN IF NOT EXISTS salutation TEXT,
+  ADD COLUMN IF NOT EXISTS first_name TEXT,
+  ADD COLUMN IF NOT EXISTS last_name TEXT,
+  ADD COLUMN IF NOT EXISTS pan TEXT,
+  ADD COLUMN IF NOT EXISTS phone_area_code TEXT DEFAULT '+91',
+  ADD COLUMN IF NOT EXISTS billing_line1 TEXT,
+  ADD COLUMN IF NOT EXISTS billing_line2 TEXT,
+  ADD COLUMN IF NOT EXISTS billing_landmark TEXT,
+  ADD COLUMN IF NOT EXISTS billing_city TEXT,
+  ADD COLUMN IF NOT EXISTS billing_state TEXT,
+  ADD COLUMN IF NOT EXISTS billing_country TEXT DEFAULT 'India',
+  ADD COLUMN IF NOT EXISTS billing_pincode TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_line1 TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_line2 TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_landmark TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_city TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_state TEXT,
+  ADD COLUMN IF NOT EXISTS shipping_country TEXT DEFAULT 'India',
+  ADD COLUMN IF NOT EXISTS shipping_pincode TEXT;

@@ -263,6 +263,13 @@ export type Database = {
         Row: {
           address: string | null
           billing_address: string | null
+          billing_city: string | null
+          billing_country: string | null
+          billing_landmark: string | null
+          billing_line1: string | null
+          billing_line2: string | null
+          billing_pincode: string | null
+          billing_state: string | null
           city: string | null
           company: string
           contact_name: string | null
@@ -270,13 +277,26 @@ export type Database = {
           country: string | null
           created_at: string
           created_by: string | null
+          customer_type: string
           email: string | null
+          first_name: string | null
           gst: string | null
           gst_status: string
           id: string
+          last_name: string | null
+          pan: string | null
           phone: string | null
+          phone_area_code: string | null
           remarks: string | null
+          salutation: string | null
           shipping_address: string | null
+          shipping_city: string | null
+          shipping_country: string | null
+          shipping_landmark: string | null
+          shipping_line1: string | null
+          shipping_line2: string | null
+          shipping_pincode: string | null
+          shipping_state: string | null
           state: string | null
           street: string | null
           updated_at: string
@@ -284,6 +304,13 @@ export type Database = {
         Insert: {
           address?: string | null
           billing_address?: string | null
+          billing_city?: string | null
+          billing_country?: string | null
+          billing_landmark?: string | null
+          billing_line1?: string | null
+          billing_line2?: string | null
+          billing_pincode?: string | null
+          billing_state?: string | null
           city?: string | null
           company: string
           contact_name?: string | null
@@ -291,13 +318,26 @@ export type Database = {
           country?: string | null
           created_at?: string
           created_by?: string | null
+          customer_type?: string
           email?: string | null
+          first_name?: string | null
           gst?: string | null
           gst_status?: string
           id?: string
+          last_name?: string | null
+          pan?: string | null
           phone?: string | null
+          phone_area_code?: string | null
           remarks?: string | null
+          salutation?: string | null
           shipping_address?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_landmark?: string | null
+          shipping_line1?: string | null
+          shipping_line2?: string | null
+          shipping_pincode?: string | null
+          shipping_state?: string | null
           state?: string | null
           street?: string | null
           updated_at?: string
@@ -305,6 +345,13 @@ export type Database = {
         Update: {
           address?: string | null
           billing_address?: string | null
+          billing_city?: string | null
+          billing_country?: string | null
+          billing_landmark?: string | null
+          billing_line1?: string | null
+          billing_line2?: string | null
+          billing_pincode?: string | null
+          billing_state?: string | null
           city?: string | null
           company?: string
           contact_name?: string | null
@@ -312,13 +359,26 @@ export type Database = {
           country?: string | null
           created_at?: string
           created_by?: string | null
+          customer_type?: string
           email?: string | null
+          first_name?: string | null
           gst?: string | null
           gst_status?: string
           id?: string
+          last_name?: string | null
+          pan?: string | null
           phone?: string | null
+          phone_area_code?: string | null
           remarks?: string | null
+          salutation?: string | null
           shipping_address?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_landmark?: string | null
+          shipping_line1?: string | null
+          shipping_line2?: string | null
+          shipping_pincode?: string | null
+          shipping_state?: string | null
           state?: string | null
           street?: string | null
           updated_at?: string
