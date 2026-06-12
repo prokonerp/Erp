@@ -50,6 +50,7 @@ type AddressBlock = {
 const emptyAddr: AddressBlock = { line1: "", line2: "", landmark: "", city: "", state: "", country: "India", pincode: "" };
 
 type ContactRow = {
+  salutation: string;
   first_name: string;
   last_name: string;
   designation: string;
@@ -58,7 +59,7 @@ type ContactRow = {
   area_code: string;
   phone: string;
 };
-const emptyContact: ContactRow = { first_name: "", last_name: "", designation: "", department: "", email: "", area_code: "+91", phone: "" };
+const emptyContact: ContactRow = { salutation: "Mr.", first_name: "", last_name: "", designation: "", department: "", email: "", area_code: "+91", phone: "" };
 
 type FormState = {
   customer_type: CustomerType;
