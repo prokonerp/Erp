@@ -103,12 +103,36 @@ export function ProductMasterPage() {
   const [tab, setTab] = useState<"details" | "serials">("details");
   const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [dbCategories, setDbCategories] = useState<string[]>([]);
+  const [addCatOpen, setAddCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
 
   const load = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
     setRows((data || []) as unknown as ProductFull[]);
   };
-  useEffect(() => { load(); }, []);
+  const loadCategories = async () => {
+    const { data } = await supabase.from("product_categories" as any).select("name").order("name");
+    setDbCategories(((data || []) as { name: string }[]).map((c) => c.name));
+  };
+  useEffect(() => { load(); loadCategories(); }, []);
+
+  const categoryOptions = useMemo(() => {
+    const merged = Array.from(new Set([...DEFAULT_CATEGORIES, ...dbCategories]));
+    return merged.sort((a, b) => a.localeCompare(b));
+  }, [dbCategories]);
+
+  async function saveNewCategory() {
+    const name = newCatName.trim();
+    if (!name) return;
+    const { error } = await supabase.from("product_categories" as any).insert({ name } as any);
+    if (error) return toast.error(error.message.includes("duplicate") ? "Category already exists" : error.message);
+    toast.success("Category added");
+    setNewCatName("");
+    setAddCatOpen(false);
+    await loadCategories();
+    setForm((f) => ({ ...f, category: name }));
+  }
 
   const categories = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[], [rows]);
   const brands = useMemo(() => Array.from(new Set(rows.map((r) => r.brand).filter(Boolean))) as string[], [rows]);
@@ -152,19 +176,32 @@ export function ProductMasterPage() {
   }
 
   async function save(addAnother = false) {
-    if (!form.name.trim()) { toast.error("Product name is required"); return; }
+    if (!form.brand.trim() && !form.model.trim() && !form.name.trim()) {
+      toast.error("Enter Brand and Model (used to identify product)"); return;
+    }
+    if (!form.category) { toast.error("Category is required"); return; }
+    if (!form.central_tax) { toast.error("Central Tax Rate is required"); return; }
+    if (!form.local_tax) { toast.error("Local Tax Rate is required"); return; }
     if (form.warranty_applicable && (!form.warranty_duration || Number(form.warranty_duration) <= 0)) {
       toast.error("Warranty duration is required when warranty is applicable"); return;
     }
+    const derivedName = form.name.trim() || [form.brand, form.model].filter(Boolean).join(" ").trim() || form.category;
     const payload = {
-      name: toTitleCaseSmart(form.name),
+      name: toTitleCaseSmart(derivedName),
       sku: form.sku ? upperTrim(form.sku) : null,
       category: form.category ? toTitleCaseSmart(form.category) : null,
       brand: form.brand ? toTitleCaseSmart(form.brand) : null,
       model: form.model ? upperTrim(form.model) : null,
       unit: form.unit || "Nos",
       hsn: form.hsn ? upperTrim(form.hsn) : null,
-      tax_rate: form.tax_rate ? Number(form.tax_rate) : null,
+      central_tax_rate: form.central_tax === "EXEMPT" ? null : Number(form.central_tax),
+      central_tax_exempt: form.central_tax === "EXEMPT",
+      local_tax_rate: form.local_tax === "EXEMPT" ? null : Number(form.local_tax),
+      local_tax_exempt: form.local_tax === "EXEMPT",
+      tax_rate:
+        form.central_tax === "EXEMPT" || form.local_tax === "EXEMPT"
+          ? null
+          : Number(form.central_tax) + Number(form.local_tax),
       default_price: form.default_price ? Number(form.default_price) : null,
       description: form.description || null,
       active: form.active,
