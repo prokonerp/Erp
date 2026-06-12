@@ -113,7 +113,7 @@ export function ProductMasterPage() {
   };
   const loadCategories = async () => {
     const { data } = await supabase.from("product_categories" as any).select("name").order("name");
-    setDbCategories(((data || []) as { name: string }[]).map((c) => c.name));
+    setDbCategories(((data || []) as unknown as { name: string }[]).map((c) => c.name));
   };
   useEffect(() => { load(); loadCategories(); }, []);
 
