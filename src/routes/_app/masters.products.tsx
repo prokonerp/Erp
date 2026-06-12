@@ -361,16 +361,20 @@ export function ProductMasterPage() {
             <TabsContent value="details" className="space-y-4 mt-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <Label>Product Name *</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. APC Smart-UPS 1500VA" />
-              </div>
-              <div>
-                <Label>Product Code / SKU</Label>
-                <Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="UPS-1500-APC" className="font-mono" />
-              </div>
-              <div>
-                <Label>Category</Label>
-                <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="UPS / Battery / Accessory" />
+                <Label>Category *</Label>
+                <Select
+                  value={form.category}
+                  onValueChange={(v) => {
+                    if (v === "__add_new__") { setAddCatOpen(true); return; }
+                    setForm({ ...form, category: v });
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    <SelectItem value="__add_new__" className="text-primary font-medium">+ Add New Category</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Brand</Label>
@@ -392,12 +396,31 @@ export function ProductMasterPage() {
                 <Input value={form.hsn} onChange={(e) => setForm({ ...form, hsn: e.target.value })} placeholder="8504" className="font-mono" />
               </div>
               <div>
-                <Label>Tax Rate (%)</Label>
-                <Input type="number" min="0" step="0.01" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} placeholder="18" />
-              </div>
-              <div>
                 <Label>Default Price (₹)</Label>
                 <Input type="number" min="0" step="0.01" value={form.default_price} onChange={(e) => setForm({ ...form, default_price: e.target.value })} placeholder="Optional" />
+              </div>
+              <div className="md:col-span-2 rounded-md border p-3 bg-muted/30">
+                <div className="text-sm font-medium mb-2">Default Tax Rates</div>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Central Tax Rate *</Label>
+                    <Select value={form.central_tax} onValueChange={(v) => setForm({ ...form, central_tax: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        {TAX_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Local Tax Rate *</Label>
+                    <Select value={form.local_tax} onValueChange={(v) => setForm({ ...form, local_tax: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        {TAX_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
               <div className="md:col-span-2">
                 <Label>Description</Label>
