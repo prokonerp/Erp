@@ -383,6 +383,21 @@ export function ProductMasterPage() {
                 <Label>Model</Label>
                 <Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="SMT1500I" className="font-mono" />
               </div>
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label>Description</Label>
+                  <span className={cn("text-[10px]", (form.description?.length || 0) >= 200 ? "text-destructive" : "text-muted-foreground")}>
+                    {form.description?.length || 0}/200
+                  </span>
+                </div>
+                <Textarea
+                  rows={3}
+                  maxLength={200}
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value.slice(0, 200) })}
+                  placeholder="Specs / line-item description used on quotations"
+                />
+              </div>
               <div>
                 <Label>Unit</Label>
                 <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
@@ -421,10 +436,6 @@ export function ProductMasterPage() {
                     </Select>
                   </div>
                 </div>
-              </div>
-              <div className="md:col-span-2">
-                <Label>Description</Label>
-                <Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Specs / line-item description used on quotations" />
               </div>
               <div className="md:col-span-2 flex items-center gap-2">
                 <Checkbox id="active" checked={form.active} onCheckedChange={(v) => setForm({ ...form, active: !!v })} />
