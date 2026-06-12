@@ -527,6 +527,28 @@ export function ProductMasterPage() {
           {serialsFor && <SerialsManager product={serialsFor} />}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={addCatOpen} onOpenChange={setAddCatOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Add New Category</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Category Name</Label>
+              <Input
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveNewCategory()}
+                autoFocus
+                placeholder="e.g. Stabilizer"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => { setAddCatOpen(false); setNewCatName(""); }}>Cancel</Button>
+              <Button size="sm" onClick={saveNewCategory}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
