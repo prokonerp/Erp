@@ -531,6 +531,10 @@ export function CustomerMasterPage() {
                     <Button size="icon" variant="ghost" onClick={() => removeContact(i)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </div>
                   <div className="grid md:grid-cols-2 gap-2">
+                    <Select value={c.salutation} onValueChange={(v) => updateContact(i, { salutation: v })}>
+                      <SelectTrigger><SelectValue placeholder="Salutation" /></SelectTrigger>
+                      <SelectContent>{SALUTATIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
                     <Input placeholder="First name *" value={c.first_name} onChange={(e) => updateContact(i, { first_name: e.target.value })} />
                     <Input placeholder="Last name" value={c.last_name} onChange={(e) => updateContact(i, { last_name: e.target.value })} />
                     <Input placeholder="Designation" value={c.designation} onChange={(e) => updateContact(i, { designation: e.target.value })} />
