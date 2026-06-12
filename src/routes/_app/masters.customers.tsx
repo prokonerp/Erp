@@ -76,6 +76,7 @@ type FormState = {
   billing: AddressBlock;
   shipping: AddressBlock;
   same_as_billing: boolean;
+  place_of_supply: string;
   contacts: ContactRow[];
   remarks: string;
 };
@@ -89,6 +90,7 @@ const empty: FormState = {
   billing: { ...emptyAddr },
   shipping: { ...emptyAddr },
   same_as_billing: true,
+  place_of_supply: "",
   contacts: [],
   remarks: "",
 };
