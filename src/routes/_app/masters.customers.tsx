@@ -168,6 +168,7 @@ export function CustomerMasterPage() {
       billing,
       shipping: sameAsBilling ? billing : shipping,
       same_as_billing: sameAsBilling,
+      place_of_supply: any.place_of_supply || "",
       contacts: Array.isArray(any.contacts) ? (any.contacts as ContactRow[]).map((x) => ({ ...emptyContact, ...x })) : [],
       remarks: c.remarks || "",
     });
