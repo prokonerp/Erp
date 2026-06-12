@@ -331,6 +331,28 @@ function TicketDetail() {
             </CardContent>
           </Card>
 
+          {customer && (
+            <Card>
+              <CardHeader><CardTitle>Billing Address <span className="text-xs font-normal text-muted-foreground">(from Customer Master)</span></CardTitle></CardHeader>
+              <CardContent className="text-sm space-y-1">
+                <div className="font-semibold">{customer.company}</div>
+                {(customer.billing_address || customer.address || customer.street) && (
+                  <div className="whitespace-pre-wrap text-muted-foreground">
+                    {customer.billing_address || [customer.street, customer.address].filter(Boolean).join("\n")}
+                  </div>
+                )}
+                <div className="text-muted-foreground">
+                  {[customer.city, customer.state].filter(Boolean).join(", ")}
+                  {customer.country ? `, ${customer.country}` : ""}
+                </div>
+                {customer.contact_name && <div><span className="text-muted-foreground">Contact: </span>{customer.contact_name}</div>}
+                {customer.phone && <div><span className="text-muted-foreground">Phone: </span>{customer.phone}</div>}
+                {customer.email && <div><span className="text-muted-foreground">Email: </span>{customer.email}</div>}
+                {customer.gst && <div><span className="text-muted-foreground">GSTIN: </span><span className="font-mono">{customer.gst}</span></div>}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Parts</CardTitle>
