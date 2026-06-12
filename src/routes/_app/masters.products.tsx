@@ -139,7 +139,7 @@ export function ProductMasterPage() {
 
   const filtered = useMemo(() => rows.filter((p) => {
     const s = q.toLowerCase();
-    const matchQ = !s || [p.name, p.brand, p.model, p.category, p.hsn, p.sku].some((v) => (v || "").toLowerCase().includes(s));
+    const matchQ = !s || [p.name, p.brand, p.model, p.category, p.hsn].some((v) => (v || "").toLowerCase().includes(s));
     const matchCat = filterCategory === "__all" || (p.category || "") === filterCategory;
     const matchBrand = filterBrand === "__all" || (p.brand || "") === filterBrand;
     return matchQ && matchCat && matchBrand;
@@ -150,7 +150,7 @@ export function ProductMasterPage() {
   function startEdit(p: ProductFull) {
     setForm({
       name: p.name || "",
-      sku: p.sku || "",
+      sku: "",
       category: p.category || "",
       brand: p.brand || "",
       model: p.model || "",
@@ -185,10 +185,12 @@ export function ProductMasterPage() {
     if (form.warranty_applicable && (!form.warranty_duration || Number(form.warranty_duration) <= 0)) {
       toast.error("Warranty duration is required when warranty is applicable"); return;
     }
-    const derivedName = form.name.trim() || [form.brand, form.model].filter(Boolean).join(" ").trim() || form.category;
+    if (form.description && form.description.length > 200) {
+      toast.error("Description must be 200 characters or less"); return;
+    }
+    const derivedName = [form.brand, form.model].filter(Boolean).join(" ").trim() || form.name.trim() || form.category;
     const payload = {
       name: toTitleCaseSmart(derivedName),
-      sku: form.sku ? upperTrim(form.sku) : null,
       category: form.category ? toTitleCaseSmart(form.category) : null,
       brand: form.brand ? toTitleCaseSmart(form.brand) : null,
       model: form.model ? upperTrim(form.model) : null,
@@ -217,11 +219,11 @@ export function ProductMasterPage() {
     };
     if (editingId) {
       const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
-      if (error) return toast.error(error.message.includes("products_sku_unique") ? "SKU already in use" : error.message);
+      if (error) return toast.error(error.message);
       toast.success("Product updated");
     } else {
       const { error } = await supabase.from("products").insert(payload as any);
-      if (error) return toast.error(error.message.includes("products_sku_unique") ? "SKU already in use" : error.message);
+      if (error) return toast.error(error.message);
       toast.success("Product added");
     }
     await load();
@@ -276,10 +278,9 @@ export function ProductMasterPage() {
             title="Product Master"
             rows={filtered}
             columns={[
-              { header: "Name", get: (p) => p.name },
+              { header: "Model", get: (p) => p.model || p.name },
               { header: "Category", get: (p) => p.category || "" },
               { header: "Brand", get: (p) => p.brand || "" },
-              { header: "Model", get: (p) => p.model || "" },
               { header: "Unit", get: (p) => p.unit },
               { header: "HSN", get: (p) => p.hsn || "" },
               { header: "Price", get: (p) => p.default_price ?? "" },
@@ -309,16 +310,15 @@ export function ProductMasterPage() {
                 {brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Input placeholder="Search name / model / brand / SKU…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
+            <Input placeholder="Search model / brand / category…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>SKU</TableHead>
+              <TableHead>Model</TableHead>
               <TableHead>Category</TableHead>
-              <TableHead>Brand / Model</TableHead>
+              <TableHead>Brand</TableHead>
               <TableHead>Serial</TableHead>
               <TableHead>Warranty</TableHead>
               <TableHead className="text-right">Price</TableHead>
@@ -327,10 +327,9 @@ export function ProductMasterPage() {
             <TableBody>
               {filtered.map((p) => (
                 <TableRow key={p.id} className={cn(p.active === false && "opacity-50")}>
-                  <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell className="text-xs font-mono">{p.sku || "—"}</TableCell>
+                  <TableCell className="font-medium font-mono">{p.model || p.name || "—"}</TableCell>
                   <TableCell>{p.category || "—"}</TableCell>
-                  <TableCell className="text-xs">{[p.brand, p.model].filter(Boolean).join(" / ") || "—"}</TableCell>
+                  <TableCell className="text-xs">{p.brand || "—"}</TableCell>
                   <TableCell>{p.serial_tracking ? <Badge variant="secondary"><ListOrdered className="h-3 w-3 mr-1" />Yes</Badge> : <span className="text-xs text-muted-foreground">No</span>}</TableCell>
                   <TableCell>{p.warranty_applicable ? <Badge variant="secondary"><ShieldCheck className="h-3 w-3 mr-1" />{p.warranty_duration}{p.warranty_unit === "Years" ? "y" : "m"}</Badge> : <span className="text-xs text-muted-foreground">No</span>}</TableCell>
                   <TableCell className="text-right">{p.default_price != null ? `₹${Number(p.default_price).toLocaleString("en-IN")}` : "—"}</TableCell>
@@ -341,7 +340,7 @@ export function ProductMasterPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No products. Click <b>New Product</b> or <b>Import CSV</b>.</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No products. Click <b>New Product</b> or <b>Import CSV</b>.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
