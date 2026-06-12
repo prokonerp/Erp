@@ -557,10 +557,10 @@ export function CustomerMasterPage() {
   );
 }
 
-function FieldRow({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function FieldRow({ label, required, labelClassName, children }: { label: string; required?: boolean; labelClassName?: string; children: React.ReactNode }) {
   return (
     <div className="grid md:grid-cols-[180px_1fr] items-start gap-2 md:gap-4">
-      <Label className={cn("text-sm pt-2", required && "text-destructive")}>{label}{required && " *"}</Label>
+      <Label className={cn("text-sm pt-2", required && "text-destructive", labelClassName)}>{label}{required && " *"}</Label>
       <div>{children}</div>
     </div>
   );
