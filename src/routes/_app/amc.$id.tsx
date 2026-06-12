@@ -22,6 +22,7 @@ function AmcDetail() {
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
   const [productNames, setProductNames] = useState<string[]>([]);
+  const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null>(null);
 
   const load = () => supabase.from("amcs").select("*").eq("id", id).single()
     .then(({ data }) => setA(data as unknown as Amc));
@@ -30,6 +31,9 @@ function AmcDetail() {
     load();
     supabase.from("products").select("name").order("name").then(({ data }) => {
       setProductNames((data || []).map((p: { name: string }) => p.name));
+    });
+    supabase.from("companies").select("name,address,phone,email,website,gstin").order("created_at").limit(1).maybeSingle().then(({ data }) => {
+      setCompany((data as typeof company) ?? null);
     });
     /* eslint-disable-next-line */
   }, [id]);
