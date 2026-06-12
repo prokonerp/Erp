@@ -287,6 +287,7 @@ export type Database = {
           pan: string | null
           phone: string | null
           phone_area_code: string | null
+          place_of_supply: string | null
           remarks: string | null
           salutation: string | null
           shipping_address: string | null
@@ -328,6 +329,7 @@ export type Database = {
           pan?: string | null
           phone?: string | null
           phone_area_code?: string | null
+          place_of_supply?: string | null
           remarks?: string | null
           salutation?: string | null
           shipping_address?: string | null
@@ -369,6 +371,7 @@ export type Database = {
           pan?: string | null
           phone?: string | null
           phone_area_code?: string | null
+          place_of_supply?: string | null
           remarks?: string | null
           salutation?: string | null
           shipping_address?: string | null

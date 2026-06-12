@@ -50,6 +50,7 @@ type AddressBlock = {
 const emptyAddr: AddressBlock = { line1: "", line2: "", landmark: "", city: "", state: "", country: "India", pincode: "" };
 
 type ContactRow = {
+  salutation: string;
   first_name: string;
   last_name: string;
   designation: string;
@@ -58,7 +59,7 @@ type ContactRow = {
   area_code: string;
   phone: string;
 };
-const emptyContact: ContactRow = { first_name: "", last_name: "", designation: "", department: "", email: "", area_code: "+91", phone: "" };
+const emptyContact: ContactRow = { salutation: "Mr.", first_name: "", last_name: "", designation: "", department: "", email: "", area_code: "+91", phone: "" };
 
 type FormState = {
   customer_type: CustomerType;
@@ -75,6 +76,7 @@ type FormState = {
   billing: AddressBlock;
   shipping: AddressBlock;
   same_as_billing: boolean;
+  place_of_supply: string;
   contacts: ContactRow[];
   remarks: string;
 };
@@ -88,6 +90,7 @@ const empty: FormState = {
   billing: { ...emptyAddr },
   shipping: { ...emptyAddr },
   same_as_billing: true,
+  place_of_supply: "",
   contacts: [],
   remarks: "",
 };
@@ -114,6 +117,7 @@ export function CustomerMasterPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
   const [tab, setTab] = useState("basic");
+  const [emailError, setEmailError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -127,7 +131,7 @@ export function CustomerMasterPage() {
     return !s || [c.company, c.contact_name, c.phone, c.email, c.gst, c.state].some((v) => (v || "").toLowerCase().includes(s));
   }), [rows, q]);
 
-  function resetForm() { setForm(empty); setEditingId(null); setTab("basic"); }
+  function resetForm() { setForm(empty); setEditingId(null); setTab("basic"); setEmailError(""); }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(c: Customer) {
     const any = c as any;
@@ -165,6 +169,7 @@ export function CustomerMasterPage() {
       billing,
       shipping: sameAsBilling ? billing : shipping,
       same_as_billing: sameAsBilling,
+      place_of_supply: any.place_of_supply || "",
       contacts: Array.isArray(any.contacts) ? (any.contacts as ContactRow[]).map((x) => ({ ...emptyContact, ...x })) : [],
       remarks: c.remarks || "",
     });
@@ -181,6 +186,7 @@ export function CustomerMasterPage() {
       gst: up,
       pan: f.customer_type === "Business" && up.length >= 12 ? panFromGstin(up) : f.pan,
       billing: { ...f.billing, state: auto || f.billing.state },
+      place_of_supply: auto || f.place_of_supply,
       gst_status: up.length >= 2 && auto ? "Regular" : f.gst_status,
     }));
   }
@@ -196,7 +202,9 @@ export function CustomerMasterPage() {
     if (form.customer_type === "Business" && !form.company.trim()) { toast.error("Company Name is required for Business"); setTab("basic"); return; }
     if (!form.first_name.trim()) { toast.error("First name is required"); setTab("basic"); return; }
     if (!isValidPhone(form.phone)) { toast.error("Enter a valid 10-digit mobile number"); setTab("basic"); return; }
-    if (form.email && !EMAIL_REGEX.test(form.email.trim())) { toast.error("Enter a valid email address"); setTab("basic"); return; }
+    if (!form.email.trim()) { toast.error("Email is required"); setTab("basic"); return; }
+    if (!EMAIL_REGEX.test(form.email.trim())) { toast.error("Enter a valid email address"); setTab("basic"); return; }
+    if (form.customer_type === "Business" && !form.gst.trim()) { toast.error("GST Number is required for Business"); setTab("gst"); return; }
     if (form.gst_status === "Regular" && !isValidGSTIN(form.gst)) { toast.error("Enter a valid 15-character GSTIN"); setTab("gst"); return; }
     if (form.pan && !PAN_REGEX.test(form.pan.toUpperCase().trim())) { toast.error("PAN must be 10 chars (AAAAA9999A)"); setTab("gst"); return; }
     for (let i = 0; i < form.contacts.length; i++) {
@@ -224,6 +232,7 @@ export function CustomerMasterPage() {
       gst: form.customer_type === "Business" ? (upperTrim(form.gst) || null) : null,
       gst_status: form.gst_status,
       pan: form.pan ? upperTrim(form.pan) : null,
+      place_of_supply: form.place_of_supply || null,
       state: billing.state || null,
       country: billing.country || "India",
       city: toTitleCaseSmart(billing.city) || null,
@@ -248,6 +257,7 @@ export function CustomerMasterPage() {
       shipping_address: joinAddress(shipping) || null,
       address: joinAddress(billing) || null,
       contacts: form.contacts.map((c) => ({
+        salutation: c.salutation || null,
         first_name: toTitleCaseSmart(c.first_name),
         last_name: toTitleCaseSmart(c.last_name),
         designation: toTitleCaseSmart(c.designation),
@@ -390,47 +400,48 @@ export function CustomerMasterPage() {
             </TabsList>
 
             <TabsContent value="basic" className="mt-4 space-y-4">
-              <FieldRow label="Customer Type" required>
+              <FieldRow label="Customer Type" required labelClassName="text-[#000000]">
                 <RadioGroup
                   value={form.customer_type}
                   onValueChange={(v) => setForm({ ...form, customer_type: v as CustomerType })}
                   className="flex gap-6"
                 >
-                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-[#000000]">
                     <RadioGroupItem value="Business" /> Business
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-[#000000]">
                     <RadioGroupItem value="Individual" /> Individual
                   </label>
                 </RadioGroup>
               </FieldRow>
 
-              <FieldRow label="Primary Contact" required>
+              <FieldRow label="Primary Contact" required labelClassName="text-[#000000]">
                 <div className="grid grid-cols-12 gap-2">
                   <Select value={form.salutation} onValueChange={(v) => setForm({ ...form, salutation: v })}>
-                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Salutation" /></SelectTrigger>
+                    <SelectTrigger className="col-span-3 text-[#000000]"><SelectValue placeholder="Salutation" /></SelectTrigger>
                     <SelectContent>{SALUTATIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Input className="col-span-4" placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
-                  <Input className="col-span-5" placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+                  <Input className="col-span-4 text-[#000000]" placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+                  <Input className="col-span-5 text-[#000000]" placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
                 </div>
               </FieldRow>
 
               {form.customer_type === "Business" && (
-                <FieldRow label="Company Name" required>
-                  <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Legal / billing entity" />
+                <FieldRow label="Company Name" required labelClassName="text-[#000000]">
+                  <Input className="text-[#000000]" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Legal / billing entity" />
                 </FieldRow>
               )}
 
-              <FieldRow label="Email">
-                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@company.com" />
+              <FieldRow label="Email" required labelClassName="text-[#000000]">
+                <Input type="email" className="text-[#000000]" value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); setEmailError(""); }} placeholder="name@company.com" onBlur={() => { if (!form.email.trim()) setEmailError("Email is required"); else if (!EMAIL_REGEX.test(form.email.trim())) setEmailError("Enter a valid email address"); else setEmailError(""); }} />
+                {emailError && <p className="text-[0.8rem] font-medium text-destructive mt-1">{emailError}</p>}
               </FieldRow>
 
-              <FieldRow label="Phone" required>
+              <FieldRow label="Phone" required labelClassName="text-[#000000]">
                 <div className="grid grid-cols-12 gap-2">
-                  <Input className="col-span-3 font-mono" value={form.area_code} onChange={(e) => setForm({ ...form, area_code: e.target.value })} placeholder="+91" />
+                  <Input className="col-span-3 font-mono text-[#000000]" value={form.area_code} onChange={(e) => setForm({ ...form, area_code: e.target.value })} placeholder="+91" />
                   <Input
-                    className="col-span-9"
+                    className="col-span-9 text-[#000000]"
                     inputMode="numeric"
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
@@ -448,10 +459,13 @@ export function CustomerMasterPage() {
                 </Select>
               </FieldRow>
               {form.customer_type === "Business" && (
-                <FieldRow label="GST Number">
+                <FieldRow label="GST Number" required>
                   <Input value={form.gst} onChange={(e) => onGstChange(e.target.value)} placeholder="15-char GSTIN — auto-fills state & PAN" maxLength={15} className="font-mono uppercase" />
                 </FieldRow>
               )}
+              <FieldRow label="Place of Supply">
+                <StateCombobox value={form.place_of_supply} onChange={(s) => setForm({ ...form, place_of_supply: s })} />
+              </FieldRow>
               <FieldRow label="PAN">
                 <Input
                   value={form.pan}
@@ -517,6 +531,10 @@ export function CustomerMasterPage() {
                     <Button size="icon" variant="ghost" onClick={() => removeContact(i)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </div>
                   <div className="grid md:grid-cols-2 gap-2">
+                    <Select value={c.salutation} onValueChange={(v) => updateContact(i, { salutation: v })}>
+                      <SelectTrigger><SelectValue placeholder="Salutation" /></SelectTrigger>
+                      <SelectContent>{SALUTATIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
                     <Input placeholder="First name *" value={c.first_name} onChange={(e) => updateContact(i, { first_name: e.target.value })} />
                     <Input placeholder="Last name" value={c.last_name} onChange={(e) => updateContact(i, { last_name: e.target.value })} />
                     <Input placeholder="Designation" value={c.designation} onChange={(e) => updateContact(i, { designation: e.target.value })} />
@@ -551,10 +569,10 @@ export function CustomerMasterPage() {
   );
 }
 
-function FieldRow({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function FieldRow({ label, required, labelClassName, children }: { label: string; required?: boolean; labelClassName?: string; children: React.ReactNode }) {
   return (
     <div className="grid md:grid-cols-[180px_1fr] items-start gap-2 md:gap-4">
-      <Label className={cn("text-sm pt-2", required && "text-destructive")}>{label}{required && " *"}</Label>
+      <Label className={cn("text-sm pt-2", required && "text-destructive", labelClassName)}>{label}{required && " *"}</Label>
       <div>{children}</div>
     </div>
   );
