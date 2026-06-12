@@ -400,47 +400,48 @@ export function CustomerMasterPage() {
             </TabsList>
 
             <TabsContent value="basic" className="mt-4 space-y-4">
-              <FieldRow label="Customer Type" required>
+              <FieldRow label="Customer Type" required labelClassName="text-[#000000]">
                 <RadioGroup
                   value={form.customer_type}
                   onValueChange={(v) => setForm({ ...form, customer_type: v as CustomerType })}
                   className="flex gap-6"
                 >
-                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-[#000000]">
                     <RadioGroupItem value="Business" /> Business
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-[#000000]">
                     <RadioGroupItem value="Individual" /> Individual
                   </label>
                 </RadioGroup>
               </FieldRow>
 
-              <FieldRow label="Primary Contact" required>
+              <FieldRow label="Primary Contact" required labelClassName="text-[#000000]">
                 <div className="grid grid-cols-12 gap-2">
                   <Select value={form.salutation} onValueChange={(v) => setForm({ ...form, salutation: v })}>
-                    <SelectTrigger className="col-span-3"><SelectValue placeholder="Salutation" /></SelectTrigger>
+                    <SelectTrigger className="col-span-3 text-[#000000]"><SelectValue placeholder="Salutation" /></SelectTrigger>
                     <SelectContent>{SALUTATIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Input className="col-span-4" placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
-                  <Input className="col-span-5" placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+                  <Input className="col-span-4 text-[#000000]" placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+                  <Input className="col-span-5 text-[#000000]" placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
                 </div>
               </FieldRow>
 
               {form.customer_type === "Business" && (
-                <FieldRow label="Company Name" required>
-                  <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Legal / billing entity" />
+                <FieldRow label="Company Name" required labelClassName="text-[#000000]">
+                  <Input className="text-[#000000]" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Legal / billing entity" />
                 </FieldRow>
               )}
 
-              <FieldRow label="Email">
-                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@company.com" />
+              <FieldRow label="Email" required labelClassName="text-[#000000]">
+                <Input type="email" className="text-[#000000]" value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); setEmailError(""); }} placeholder="name@company.com" onBlur={() => { if (!form.email.trim()) setEmailError("Email is required"); else if (!EMAIL_REGEX.test(form.email.trim())) setEmailError("Enter a valid email address"); else setEmailError(""); }} />
+                {emailError && <p className="text-[0.8rem] font-medium text-destructive mt-1">{emailError}</p>}
               </FieldRow>
 
-              <FieldRow label="Phone" required>
+              <FieldRow label="Phone" required labelClassName="text-[#000000]">
                 <div className="grid grid-cols-12 gap-2">
-                  <Input className="col-span-3 font-mono" value={form.area_code} onChange={(e) => setForm({ ...form, area_code: e.target.value })} placeholder="+91" />
+                  <Input className="col-span-3 font-mono text-[#000000]" value={form.area_code} onChange={(e) => setForm({ ...form, area_code: e.target.value })} placeholder="+91" />
                   <Input
-                    className="col-span-9"
+                    className="col-span-9 text-[#000000]"
                     inputMode="numeric"
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
