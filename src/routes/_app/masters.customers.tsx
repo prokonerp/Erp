@@ -117,6 +117,7 @@ export function CustomerMasterPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
   const [tab, setTab] = useState("basic");
+  const [emailError, setEmailError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
