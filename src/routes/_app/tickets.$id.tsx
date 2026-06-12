@@ -528,6 +528,108 @@ function TicketDetail() {
           )}
         </div>
       </div>
+
+      <TicketPrint t={t} customer={customer} />
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 14mm; }
+          body { background: white !important; }
+          .no-print, header, nav { display: none !important; }
+        }
+        .ticket-print { display: none; }
+        @media print { .ticket-print { display: block !important; } }
+      `}</style>
+    </div>
+  );
+}
+
+function TicketPrint({ t, customer }: { t: Ticket; customer: CustomerBilling | null }) {
+  const billLines = customer
+    ? [
+        customer.company,
+        customer.billing_address || [customer.street, customer.address].filter(Boolean).join("\n"),
+        [customer.city, customer.state, customer.country].filter(Boolean).join(", "),
+        customer.contact_name ? `Attn: ${customer.contact_name}` : null,
+        customer.phone ? `Phone: ${customer.phone}` : null,
+        customer.email ? `Email: ${customer.email}` : null,
+        customer.gst ? `GSTIN: ${customer.gst}` : null,
+      ].filter(Boolean) as string[]
+    : [
+        t.customer_name,
+        t.customer_address || "",
+        t.location || "",
+        t.customer_phone ? `Phone: ${t.customer_phone}` : "",
+        t.customer_email ? `Email: ${t.customer_email}` : "",
+      ].filter(Boolean);
+  return (
+    <div className="ticket-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
+      <div className="text-center border-b-2 border-[#1e40af] pb-3 mb-4">
+        <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent">PROKON HI-TECH SYSTEMS</h1>
+        <div className="text-sm">B-505, Picasso Centre, Sector-61, Gurgaon</div>
+        <div className="mt-2 inline-block px-3 py-0.5 border-2 border-black font-bold tracking-widest text-sm">SERVICE TICKET</div>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-3">
+        <div><b>Case ID:</b> <span className="font-mono">{t.case_id}</span></div>
+        <div className="text-right"><b>Date:</b> {new Date(t.created_at).toLocaleDateString()}</div>
+        <div><b>Call Type:</b> {t.call_type}</div>
+        <div className="text-right"><b>Status:</b> {t.status}</div>
+      </div>
+      <table className="w-full border border-black mb-3">
+        <tbody>
+          <tr>
+            <td className="border border-black px-2 py-1 w-32 font-bold align-top">Billing Address</td>
+            <td className="border border-black px-2 py-1 whitespace-pre-wrap">{billLines.join("\n")}</td>
+          </tr>
+          <tr>
+            <td className="border border-black px-2 py-1 font-bold">Product</td>
+            <td className="border border-black px-2 py-1">{t.product || "-"}</td>
+          </tr>
+          <tr>
+            <td className="border border-black px-2 py-1 font-bold">Serial No.</td>
+            <td className="border border-black px-2 py-1 font-mono">{t.serial_no || "-"}</td>
+          </tr>
+          <tr>
+            <td className="border border-black px-2 py-1 font-bold align-top">Complaint</td>
+            <td className="border border-black px-2 py-1 whitespace-pre-wrap">{t.complaint || "-"}</td>
+          </tr>
+          <tr>
+            <td className="border border-black px-2 py-1 font-bold">Assigned Engineer</td>
+            <td className="border border-black px-2 py-1">
+              {t.assigned_engineer_name || "-"}
+              {t.assigned_engineer_phone ? ` (${t.assigned_engineer_phone})` : ""}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {t.parts_used && t.parts_details.length > 0 && (
+        <>
+          <div className="font-bold mb-1">Parts Used</div>
+          <table className="w-full border border-black mb-3">
+            <thead className="bg-gray-100"><tr>
+              <th className="border border-black px-2 py-1 w-8">#</th>
+              <th className="border border-black px-2 py-1">Part / Item</th>
+              <th className="border border-black px-2 py-1 w-16">Qty</th>
+              <th className="border border-black px-2 py-1">Serial</th>
+              <th className="border border-black px-2 py-1">Remarks</th>
+            </tr></thead>
+            <tbody>
+              {t.parts_details.map((p, i) => (
+                <tr key={i}>
+                  <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
+                  <td className="border border-black px-2 py-1">{p.name}</td>
+                  <td className="border border-black px-2 py-1 text-center">{p.qty}</td>
+                  <td className="border border-black px-2 py-1 font-mono">{p.serial || "-"}</td>
+                  <td className="border border-black px-2 py-1">{p.remarks || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+      <div className="grid grid-cols-2 gap-8 mt-12">
+        <div><div className="border-t border-black pt-1 text-center">Customer Signature</div></div>
+        <div><div className="border-t border-black pt-1 text-center">For Prokon Hi-Tech Systems</div></div>
+      </div>
     </div>
   );
 }
