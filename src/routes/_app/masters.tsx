@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MasterCrud } from "@/components/MasterCrud";
 import { CustomerMasterPage } from "./masters.customers";
@@ -20,7 +21,12 @@ function MastersPage() {
   const location = useLocation();
   const isCustomerRoute = location.pathname === "/masters/customers";
   const isProductRoute = location.pathname === "/masters/products";
-  const currentTab = isCustomerRoute ? "customers" : isProductRoute ? "products" : "company";
+  const routedTab = isCustomerRoute ? "customers" : isProductRoute ? "products" : null;
+  const [tab, setTab] = useState<string>(routedTab ?? "company");
+  useEffect(() => {
+    if (routedTab) setTab(routedTab);
+  }, [routedTab]);
+  const currentTab = routedTab ?? tab;
 
   return (
     <div className="space-y-4">
@@ -52,6 +58,7 @@ function MastersPage() {
         value={currentTab}
         className="w-full"
         onValueChange={(v) => {
+          setTab(v);
           if (v === "customers") navigate({ to: "/masters/customers" });
           else if (v === "products") navigate({ to: "/masters/products" });
           else if (isCustomerRoute || isProductRoute) navigate({ to: "/masters" });

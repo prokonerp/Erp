@@ -22,6 +22,7 @@ function AmcDetail() {
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
   const [productNames, setProductNames] = useState<string[]>([]);
+  const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null>(null);
 
   const load = () => supabase.from("amcs").select("*").eq("id", id).single()
     .then(({ data }) => setA(data as unknown as Amc));
@@ -30,6 +31,9 @@ function AmcDetail() {
     load();
     supabase.from("products").select("name").order("name").then(({ data }) => {
       setProductNames((data || []).map((p: { name: string }) => p.name));
+    });
+    supabase.from("companies").select("name,address,phone,email,website,gstin").order("created_at").limit(1).maybeSingle().then(({ data }) => {
+      setCompany((data as typeof company) ?? null);
     });
     /* eslint-disable-next-line */
   }, [id]);
@@ -252,7 +256,7 @@ function AmcDetail() {
       </div>
 
       {/* Print view */}
-      <PrintAgreement a={a} />
+      <PrintAgreement a={a} company={company} />
 
       <style>{`
         @media print {
@@ -267,13 +271,27 @@ function AmcDetail() {
   );
 }
 
-function PrintAgreement({ a }: { a: Amc }) {
+function PrintAgreement({ a, company }: { a: Amc; company: { name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null }) {
+  const co = company ?? { name: "PROKON HI-TECH SYSTEMS", address: "B-505, Picasso Centre, Sector-61, Gurgaon", phone: "+91-98100 00000", email: "info@prokonhitech.com", website: "www.prokonhitech.com", gstin: null };
   return (
     <div className="agreement-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
-      <div className="text-center border-b-2 border-[#1e40af] pb-3 mb-4">
-        <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent">PROKON HI-TECH SYSTEMS</h1>
-        <div className="text-sm">B-505, Picasso Centre, Sector-61, Gurgaon</div>
-        <div className="mt-2 inline-block px-3 py-0.5 border-2 border-black font-bold tracking-widest text-sm">ANNUAL MAINTENANCE CONTRACT</div>
+      {/* Letterhead */}
+      <div className="flex items-center gap-4 border-b-4 border-[#1e40af] pb-3 mb-2">
+        <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[#1e3a8a] to-[#dc2626] text-white flex items-center justify-center font-extrabold text-xl shrink-0">
+          PHS
+        </div>
+        <div className="flex-1">
+          <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent uppercase">{co.name}</h1>
+          <div className="text-[11px] text-gray-700 whitespace-pre-wrap">{co.address || ""}</div>
+          <div className="text-[11px] text-gray-700">
+            {co.phone ? `Phone: ${co.phone}` : ""}{co.phone && co.email ? "  •  " : ""}{co.email ? `Email: ${co.email}` : ""}
+            {co.website ? `  •  ${co.website}` : ""}
+          </div>
+          {co.gstin && <div className="text-[11px] text-gray-700">GSTIN: <span className="font-mono">{co.gstin}</span></div>}
+        </div>
+      </div>
+      <div className="text-center mb-3">
+        <div className="inline-block px-4 py-1 border-2 border-black font-bold tracking-widest text-sm">ANNUAL MAINTENANCE CONTRACT</div>
       </div>
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-3">
@@ -303,6 +321,37 @@ function PrintAgreement({ a }: { a: Amc }) {
           ))}
         </tbody>
       </table>
+
+      <div className="font-bold mb-1">Scope of Work</div>
+      <p className="mb-3">
+        Comprehensive preventive and breakdown maintenance for the equipment listed above for the contract period
+        <b> {fmtDate(a.start_date)}</b> to <b>{fmtDate(a.end_date)}</b>. Coverage includes scheduled quarterly preventive maintenance visits,
+        on-call breakdown attendance within 24 hours on working days, diagnostic checks, firmware updates and minor
+        adjustments. Consumable / faulty replacement parts are billed separately unless specifically included in the AMC value.
+      </p>
+
+      <div className="font-bold mb-1">Service Schedule (Preventive Maintenance Visits)</div>
+      {(a.pm_dates || []).length > 0 ? (
+        <table className="w-full border border-black mb-3">
+          <thead className="bg-gray-100"><tr>
+            <th className="border border-black px-2 py-1 w-10">#</th>
+            <th className="border border-black px-2 py-1">Scheduled Visit Date</th>
+          </tr></thead>
+          <tbody>
+            {(a.pm_dates || []).map((d, i) => (
+              <tr key={i}><td className="border border-black px-2 py-1 text-center">{i + 1}</td><td className="border border-black px-2 py-1">{fmtDate(d)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className="mb-3 text-gray-600">No PM visits scheduled.</p>
+      )}
+
+      <div className="font-bold mb-1">Payment Terms</div>
+      <p className="mb-3">
+        AMC value of <b>₹ {Number(a.amc_value || 0).toLocaleString("en-IN")}</b> is payable in advance against our invoice for the full contract period.
+        GST as applicable shall be charged extra. The agreement is activated only on receipt of full payment.
+      </p>
 
       <div className="font-bold mb-1">Terms & Conditions</div>
       <pre className="whitespace-pre-wrap font-sans text-[11px] mb-6">{a.terms || ""}</pre>

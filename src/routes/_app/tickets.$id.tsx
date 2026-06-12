@@ -13,7 +13,7 @@ import {
   CALL_TYPES, TICKET_STATUSES, STATUS_COLOR,
   waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
-import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
@@ -42,6 +42,31 @@ type Ticket = {
   closed_at: string | null;
   remarks: string | null;
   created_at: string;
+  customer_id: string | null;
+};
+
+type CustomerBilling = {
+  id: string;
+  company: string;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  billing_address: string | null;
+  address: string | null;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  gst: string | null;
+};
+
+type Employee = {
+  id: string;
+  name: string;
+  phone: string | null;
+  department: string | null;
+  role: string | null;
+  active: boolean;
 };
 
 type Activity = {
@@ -63,13 +88,17 @@ function TicketDetail() {
   const [noteText, setNoteText] = useState("");
   const [templates, setTemplates] = useState<Record<string, string>>({});
   const [quoteNo, setQuoteNo] = useState<string>("");
+  const [customer, setCustomer] = useState<CustomerBilling | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [deptFilter, setDeptFilter] = useState<string>("all");
 
   const load = async () => {
-    const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }] = await Promise.all([
+    const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
       supabase.from("tickets").select("*").eq("id", id).single(),
       supabase.from("products").select("id,name").order("name"),
       supabase.from("ticket_activities").select("*").eq("ticket_id", id).order("created_at", { ascending: false }),
       supabase.from("wa_templates").select("id,body"),
+      supabase.from("employees").select("id,name,phone,department,role,active").eq("active", true).order("name"),
     ]);
     if (tk) {
       const row = tk as unknown as Ticket;
@@ -83,9 +112,20 @@ function TicketDetail() {
       } else {
         setQuoteNo("");
       }
+      if (row.customer_id) {
+        const { data: c } = await supabase
+          .from("customers")
+          .select("id,company,contact_name,phone,email,billing_address,address,street,city,state,country,gst")
+          .eq("id", row.customer_id)
+          .single();
+        setCustomer((c as CustomerBilling | null) ?? null);
+      } else {
+        setCustomer(null);
+      }
     }
     setProducts((pr || []) as { id: string; name: string }[]);
     setActivities((ac || []) as Activity[]);
+    setEmployees((emps || []) as Employee[]);
     const map: Record<string, string> = {};
     for (const r of (tpl || []) as { id: string; body: string }[]) map[r.id] = r.body;
     setTemplates(map);
@@ -248,12 +288,13 @@ function TicketDetail() {
           <Badge className={STATUS_COLOR[t.status] || ""} variant="secondary">{t.status}</Badge>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
           <Button onClick={() => save()} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 print:hidden">
         {/* Left: ticket details */}
         <div className="lg:col-span-2 space-y-4">
           <Card>
@@ -289,6 +330,28 @@ function TicketDetail() {
               <div className="md:col-span-2"><Label>Address</Label><Textarea rows={2} value={t.customer_address || ""} onChange={(e) => update({ customer_address: e.target.value })} /></div>
             </CardContent>
           </Card>
+
+          {customer && (
+            <Card>
+              <CardHeader><CardTitle>Billing Address <span className="text-xs font-normal text-muted-foreground">(from Customer Master)</span></CardTitle></CardHeader>
+              <CardContent className="text-sm space-y-1">
+                <div className="font-semibold">{customer.company}</div>
+                {(customer.billing_address || customer.address || customer.street) && (
+                  <div className="whitespace-pre-wrap text-muted-foreground">
+                    {customer.billing_address || [customer.street, customer.address].filter(Boolean).join("\n")}
+                  </div>
+                )}
+                <div className="text-muted-foreground">
+                  {[customer.city, customer.state].filter(Boolean).join(", ")}
+                  {customer.country ? `, ${customer.country}` : ""}
+                </div>
+                {customer.contact_name && <div><span className="text-muted-foreground">Contact: </span>{customer.contact_name}</div>}
+                {customer.phone && <div><span className="text-muted-foreground">Phone: </span>{customer.phone}</div>}
+                {customer.email && <div><span className="text-muted-foreground">Email: </span>{customer.email}</div>}
+                {customer.gst && <div><span className="text-muted-foreground">GSTIN: </span><span className="font-mono">{customer.gst}</span></div>}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -367,8 +430,45 @@ function TicketDetail() {
           <Card>
             <CardHeader><CardTitle>Assign Engineer</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              <div><Label>Name</Label><Input value={t.assigned_engineer_name || ""} onChange={(e) => update({ assigned_engineer_name: e.target.value })} /></div>
-              <div><Label>WhatsApp Number</Label><Input value={t.assigned_engineer_phone || ""} onChange={(e) => update({ assigned_engineer_phone: e.target.value })} placeholder="10-digit" /></div>
+              <div>
+                <Label>Department filter</Label>
+                <Select value={deptFilter} onValueChange={setDeptFilter}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All departments</SelectItem>
+                    {Array.from(new Set(employees.map((e) => e.department).filter(Boolean) as string[])).map((d) => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Engineer <span className="text-xs text-muted-foreground">(from Employee Master)</span></Label>
+                <Select
+                  value={employees.find((e) => e.name === t.assigned_engineer_name)?.id || ""}
+                  onValueChange={(empId) => {
+                    const emp = employees.find((e) => e.id === empId);
+                    if (emp) update({ assigned_engineer_name: emp.name, assigned_engineer_phone: emp.phone || "" });
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder={employees.length ? "Select engineer" : "No active employees"} /></SelectTrigger>
+                  <SelectContent>
+                    {employees
+                      .filter((e) => deptFilter === "all" || e.department === deptFilter)
+                      .map((e) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.name}{e.department ? ` · ${e.department}` : ""}{e.phone ? ` · ${e.phone}` : ""}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {employees.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">Add employees in Masters → Employees.</p>
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {t.assigned_engineer_name ? <>Selected: <b>{t.assigned_engineer_name}</b>{t.assigned_engineer_phone ? ` (${t.assigned_engineer_phone})` : ""}</> : "No engineer selected"}
+              </div>
               {t.assigned_at && <p className="text-xs text-muted-foreground">Assigned: {new Date(t.assigned_at).toLocaleString()}</p>}
               <Button className="w-full" onClick={assignEngineer}>
                 <UserPlus className="h-4 w-4 mr-1" />Assign & Send WhatsApp
@@ -427,6 +527,108 @@ function TicketDetail() {
             </Card>
           )}
         </div>
+      </div>
+
+      <TicketPrint t={t} customer={customer} />
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 14mm; }
+          body { background: white !important; }
+          .no-print, header, nav { display: none !important; }
+        }
+        .ticket-print { display: none; }
+        @media print { .ticket-print { display: block !important; } }
+      `}</style>
+    </div>
+  );
+}
+
+function TicketPrint({ t, customer }: { t: Ticket; customer: CustomerBilling | null }) {
+  const billLines = customer
+    ? [
+        customer.company,
+        customer.billing_address || [customer.street, customer.address].filter(Boolean).join("\n"),
+        [customer.city, customer.state, customer.country].filter(Boolean).join(", "),
+        customer.contact_name ? `Attn: ${customer.contact_name}` : null,
+        customer.phone ? `Phone: ${customer.phone}` : null,
+        customer.email ? `Email: ${customer.email}` : null,
+        customer.gst ? `GSTIN: ${customer.gst}` : null,
+      ].filter(Boolean) as string[]
+    : [
+        t.customer_name,
+        t.customer_address || "",
+        t.location || "",
+        t.customer_phone ? `Phone: ${t.customer_phone}` : "",
+        t.customer_email ? `Email: ${t.customer_email}` : "",
+      ].filter(Boolean);
+  return (
+    <div className="ticket-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
+      <div className="text-center border-b-2 border-[#1e40af] pb-3 mb-4">
+        <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent">PROKON HI-TECH SYSTEMS</h1>
+        <div className="text-sm">B-505, Picasso Centre, Sector-61, Gurgaon</div>
+        <div className="mt-2 inline-block px-3 py-0.5 border-2 border-black font-bold tracking-widest text-sm">SERVICE TICKET</div>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-3">
+        <div><b>Case ID:</b> <span className="font-mono">{t.case_id}</span></div>
+        <div className="text-right"><b>Date:</b> {new Date(t.created_at).toLocaleDateString()}</div>
+        <div><b>Call Type:</b> {t.call_type}</div>
+        <div className="text-right"><b>Status:</b> {t.status}</div>
+      </div>
+      <table className="w-full border border-black mb-3">
+        <tbody>
+          <tr>
+            <td className="border border-black px-2 py-1 w-32 font-bold align-top">Billing Address</td>
+            <td className="border border-black px-2 py-1 whitespace-pre-wrap">{billLines.join("\n")}</td>
+          </tr>
+          <tr>
+            <td className="border border-black px-2 py-1 font-bold">Product</td>
+            <td className="border border-black px-2 py-1">{t.product || "-"}</td>
+          </tr>
+          <tr>
+            <td className="border border-black px-2 py-1 font-bold">Serial No.</td>
+            <td className="border border-black px-2 py-1 font-mono">{t.serial_no || "-"}</td>
+          </tr>
+          <tr>
+            <td className="border border-black px-2 py-1 font-bold align-top">Complaint</td>
+            <td className="border border-black px-2 py-1 whitespace-pre-wrap">{t.complaint || "-"}</td>
+          </tr>
+          <tr>
+            <td className="border border-black px-2 py-1 font-bold">Assigned Engineer</td>
+            <td className="border border-black px-2 py-1">
+              {t.assigned_engineer_name || "-"}
+              {t.assigned_engineer_phone ? ` (${t.assigned_engineer_phone})` : ""}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {t.parts_used && t.parts_details.length > 0 && (
+        <>
+          <div className="font-bold mb-1">Parts Used</div>
+          <table className="w-full border border-black mb-3">
+            <thead className="bg-gray-100"><tr>
+              <th className="border border-black px-2 py-1 w-8">#</th>
+              <th className="border border-black px-2 py-1">Part / Item</th>
+              <th className="border border-black px-2 py-1 w-16">Qty</th>
+              <th className="border border-black px-2 py-1">Serial</th>
+              <th className="border border-black px-2 py-1">Remarks</th>
+            </tr></thead>
+            <tbody>
+              {t.parts_details.map((p, i) => (
+                <tr key={i}>
+                  <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
+                  <td className="border border-black px-2 py-1">{p.name}</td>
+                  <td className="border border-black px-2 py-1 text-center">{p.qty}</td>
+                  <td className="border border-black px-2 py-1 font-mono">{p.serial || "-"}</td>
+                  <td className="border border-black px-2 py-1">{p.remarks || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+      <div className="grid grid-cols-2 gap-8 mt-12">
+        <div><div className="border-t border-black pt-1 text-center">Customer Signature</div></div>
+        <div><div className="border-t border-black pt-1 text-center">For Prokon Hi-Tech Systems</div></div>
       </div>
     </div>
   );
