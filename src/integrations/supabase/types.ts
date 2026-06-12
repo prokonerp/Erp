@@ -705,18 +705,40 @@ export type Database = {
           },
         ]
       }
+      product_categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           active: boolean
           brand: string | null
           category: string | null
+          central_tax_exempt: boolean
+          central_tax_rate: number | null
           created_at: string
           default_price: number | null
           description: string | null
           hsn: string | null
           id: string
+          local_tax_exempt: boolean
+          local_tax_rate: number | null
           model: string | null
-          name: string
+          name: string | null
           serial_format: string | null
           serial_mode: string
           serial_tracking: boolean
@@ -735,13 +757,17 @@ export type Database = {
           active?: boolean
           brand?: string | null
           category?: string | null
+          central_tax_exempt?: boolean
+          central_tax_rate?: number | null
           created_at?: string
           default_price?: number | null
           description?: string | null
           hsn?: string | null
           id?: string
+          local_tax_exempt?: boolean
+          local_tax_rate?: number | null
           model?: string | null
-          name: string
+          name?: string | null
           serial_format?: string | null
           serial_mode?: string
           serial_tracking?: boolean
@@ -760,13 +786,17 @@ export type Database = {
           active?: boolean
           brand?: string | null
           category?: string | null
+          central_tax_exempt?: boolean
+          central_tax_rate?: number | null
           created_at?: string
           default_price?: number | null
           description?: string | null
           hsn?: string | null
           id?: string
+          local_tax_exempt?: boolean
+          local_tax_rate?: number | null
           model?: string | null
-          name?: string
+          name?: string | null
           serial_format?: string | null
           serial_mode?: string
           serial_tracking?: boolean

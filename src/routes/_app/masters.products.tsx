@@ -32,6 +32,14 @@ const WARRANTY_TYPES = ["Manufacturer", "Seller", "AMC Covered"] as const;
 const WARRANTY_UNITS = ["Months", "Years"] as const;
 const WARRANTY_START = ["Invoice Date", "Installation Date", "Manual"] as const;
 const SERIAL_MODES = ["Manual", "Auto Generate"] as const;
+const DEFAULT_CATEGORIES = ["Accessories", "CCTV", "General", "Inverter/Battery", "Offline UPS", "Online UPS", "Solar Panel", "UPS Battery"];
+const TAX_OPTIONS = [
+  { value: "EXEMPT", label: "Exempted" },
+  { value: "0", label: "0%" },
+  { value: "5", label: "5%" },
+  { value: "18", label: "18%" },
+  { value: "28", label: "28%" },
+];
 
 type FormState = {
   name: string;
@@ -41,7 +49,8 @@ type FormState = {
   model: string;
   unit: string;
   hsn: string;
-  tax_rate: string;
+  central_tax: string; // "EXEMPT" | "0" | "5" | ...
+  local_tax: string;
   default_price: string;
   description: string;
   active: boolean;
@@ -58,7 +67,7 @@ type FormState = {
 
 const empty: FormState = {
   name: "", sku: "", category: "", brand: "", model: "", unit: "Nos",
-  hsn: "", tax_rate: "", default_price: "", description: "", active: true,
+  hsn: "", central_tax: "", local_tax: "", default_price: "", description: "", active: true,
   serial_tracking: false, serial_mode: "Manual", serial_format: "",
   warranty_applicable: false, warranty_type: "Manufacturer",
   warranty_duration: "12", warranty_unit: "Months",
@@ -68,6 +77,10 @@ const empty: FormState = {
 type ProductFull = ProductMaster & {
   sku?: string | null;
   tax_rate?: number | null;
+  central_tax_rate?: number | null;
+  local_tax_rate?: number | null;
+  central_tax_exempt?: boolean | null;
+  local_tax_exempt?: boolean | null;
   serial_tracking?: boolean;
   serial_mode?: string;
   serial_format?: string | null;
@@ -90,12 +103,36 @@ export function ProductMasterPage() {
   const [tab, setTab] = useState<"details" | "serials">("details");
   const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [dbCategories, setDbCategories] = useState<string[]>([]);
+  const [addCatOpen, setAddCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
 
   const load = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
     setRows((data || []) as unknown as ProductFull[]);
   };
-  useEffect(() => { load(); }, []);
+  const loadCategories = async () => {
+    const { data } = await supabase.from("product_categories" as any).select("name").order("name");
+    setDbCategories(((data || []) as unknown as { name: string }[]).map((c) => c.name));
+  };
+  useEffect(() => { load(); loadCategories(); }, []);
+
+  const categoryOptions = useMemo(() => {
+    const merged = Array.from(new Set([...DEFAULT_CATEGORIES, ...dbCategories]));
+    return merged.sort((a, b) => a.localeCompare(b));
+  }, [dbCategories]);
+
+  async function saveNewCategory() {
+    const name = newCatName.trim();
+    if (!name) return;
+    const { error } = await supabase.from("product_categories" as any).insert({ name } as any);
+    if (error) return toast.error(error.message.includes("duplicate") ? "Category already exists" : error.message);
+    toast.success("Category added");
+    setNewCatName("");
+    setAddCatOpen(false);
+    await loadCategories();
+    setForm((f) => ({ ...f, category: name }));
+  }
 
   const categories = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[], [rows]);
   const brands = useMemo(() => Array.from(new Set(rows.map((r) => r.brand).filter(Boolean))) as string[], [rows]);
@@ -119,7 +156,8 @@ export function ProductMasterPage() {
       model: p.model || "",
       unit: p.unit || "Nos",
       hsn: p.hsn || "",
-      tax_rate: p.tax_rate != null ? String(p.tax_rate) : "",
+      central_tax: p.central_tax_exempt ? "EXEMPT" : (p.central_tax_rate != null ? String(p.central_tax_rate) : ""),
+      local_tax: p.local_tax_exempt ? "EXEMPT" : (p.local_tax_rate != null ? String(p.local_tax_rate) : ""),
       default_price: p.default_price != null ? String(p.default_price) : "",
       description: p.description || "",
       active: p.active !== false,
@@ -138,19 +176,32 @@ export function ProductMasterPage() {
   }
 
   async function save(addAnother = false) {
-    if (!form.name.trim()) { toast.error("Product name is required"); return; }
+    if (!form.brand.trim() && !form.model.trim() && !form.name.trim()) {
+      toast.error("Enter Brand and Model (used to identify product)"); return;
+    }
+    if (!form.category) { toast.error("Category is required"); return; }
+    if (!form.central_tax) { toast.error("Central Tax Rate is required"); return; }
+    if (!form.local_tax) { toast.error("Local Tax Rate is required"); return; }
     if (form.warranty_applicable && (!form.warranty_duration || Number(form.warranty_duration) <= 0)) {
       toast.error("Warranty duration is required when warranty is applicable"); return;
     }
+    const derivedName = form.name.trim() || [form.brand, form.model].filter(Boolean).join(" ").trim() || form.category;
     const payload = {
-      name: toTitleCaseSmart(form.name),
+      name: toTitleCaseSmart(derivedName),
       sku: form.sku ? upperTrim(form.sku) : null,
       category: form.category ? toTitleCaseSmart(form.category) : null,
       brand: form.brand ? toTitleCaseSmart(form.brand) : null,
       model: form.model ? upperTrim(form.model) : null,
       unit: form.unit || "Nos",
       hsn: form.hsn ? upperTrim(form.hsn) : null,
-      tax_rate: form.tax_rate ? Number(form.tax_rate) : null,
+      central_tax_rate: form.central_tax === "EXEMPT" ? null : Number(form.central_tax),
+      central_tax_exempt: form.central_tax === "EXEMPT",
+      local_tax_rate: form.local_tax === "EXEMPT" ? null : Number(form.local_tax),
+      local_tax_exempt: form.local_tax === "EXEMPT",
+      tax_rate:
+        form.central_tax === "EXEMPT" || form.local_tax === "EXEMPT"
+          ? null
+          : Number(form.central_tax) + Number(form.local_tax),
       default_price: form.default_price ? Number(form.default_price) : null,
       description: form.description || null,
       active: form.active,
@@ -310,16 +361,20 @@ export function ProductMasterPage() {
             <TabsContent value="details" className="space-y-4 mt-4">
             <div className="grid md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <Label>Product Name *</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. APC Smart-UPS 1500VA" />
-              </div>
-              <div>
-                <Label>Product Code / SKU</Label>
-                <Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="UPS-1500-APC" className="font-mono" />
-              </div>
-              <div>
-                <Label>Category</Label>
-                <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="UPS / Battery / Accessory" />
+                <Label>Category *</Label>
+                <Select
+                  value={form.category}
+                  onValueChange={(v) => {
+                    if (v === "__add_new__") { setAddCatOpen(true); return; }
+                    setForm({ ...form, category: v });
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    <SelectItem value="__add_new__" className="text-primary font-medium">+ Add New Category</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Brand</Label>
@@ -341,12 +396,31 @@ export function ProductMasterPage() {
                 <Input value={form.hsn} onChange={(e) => setForm({ ...form, hsn: e.target.value })} placeholder="8504" className="font-mono" />
               </div>
               <div>
-                <Label>Tax Rate (%)</Label>
-                <Input type="number" min="0" step="0.01" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} placeholder="18" />
-              </div>
-              <div>
                 <Label>Default Price (₹)</Label>
                 <Input type="number" min="0" step="0.01" value={form.default_price} onChange={(e) => setForm({ ...form, default_price: e.target.value })} placeholder="Optional" />
+              </div>
+              <div className="md:col-span-2 rounded-md border p-3 bg-muted/30">
+                <div className="text-sm font-medium mb-2">Default Tax Rates</div>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Central Tax Rate *</Label>
+                    <Select value={form.central_tax} onValueChange={(v) => setForm({ ...form, central_tax: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        {TAX_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Local Tax Rate *</Label>
+                    <Select value={form.local_tax} onValueChange={(v) => setForm({ ...form, local_tax: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        {TAX_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
               <div className="md:col-span-2">
                 <Label>Description</Label>
@@ -451,6 +525,28 @@ export function ProductMasterPage() {
             <DialogTitle>Serials — {serialsFor?.name}</DialogTitle>
           </DialogHeader>
           {serialsFor && <SerialsManager product={serialsFor} />}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addCatOpen} onOpenChange={setAddCatOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Add New Category</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Category Name</Label>
+              <Input
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveNewCategory()}
+                autoFocus
+                placeholder="e.g. Stabilizer"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => { setAddCatOpen(false); setNewCatName(""); }}>Cancel</Button>
+              <Button size="sm" onClick={saveNewCategory}>Save</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

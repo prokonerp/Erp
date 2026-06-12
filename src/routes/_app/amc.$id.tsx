@@ -30,7 +30,7 @@ function AmcDetail() {
   useEffect(() => {
     load();
     supabase.from("products").select("name").order("name").then(({ data }) => {
-      setProductNames((data || []).map((p: { name: string }) => p.name));
+      setProductNames((data || []).map((p: { name: string | null }) => p.name || "").filter(Boolean));
     });
     supabase.from("companies").select("name,address,phone,email,website,gstin").order("created_at").limit(1).maybeSingle().then(({ data }) => {
       setCompany((data as typeof company) ?? null);
