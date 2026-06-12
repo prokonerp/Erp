@@ -257,6 +257,7 @@ export function CustomerMasterPage() {
       shipping_address: joinAddress(shipping) || null,
       address: joinAddress(billing) || null,
       contacts: form.contacts.map((c) => ({
+        salutation: c.salutation || null,
         first_name: toTitleCaseSmart(c.first_name),
         last_name: toTitleCaseSmart(c.last_name),
         designation: toTitleCaseSmart(c.designation),
