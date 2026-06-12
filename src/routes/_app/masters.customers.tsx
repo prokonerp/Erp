@@ -202,7 +202,9 @@ export function CustomerMasterPage() {
     if (form.customer_type === "Business" && !form.company.trim()) { toast.error("Company Name is required for Business"); setTab("basic"); return; }
     if (!form.first_name.trim()) { toast.error("First name is required"); setTab("basic"); return; }
     if (!isValidPhone(form.phone)) { toast.error("Enter a valid 10-digit mobile number"); setTab("basic"); return; }
-    if (form.email && !EMAIL_REGEX.test(form.email.trim())) { toast.error("Enter a valid email address"); setTab("basic"); return; }
+    if (!form.email.trim()) { toast.error("Email is required"); setTab("basic"); return; }
+    if (!EMAIL_REGEX.test(form.email.trim())) { toast.error("Enter a valid email address"); setTab("basic"); return; }
+    if (form.customer_type === "Business" && !form.gst.trim()) { toast.error("GST Number is required for Business"); setTab("gst"); return; }
     if (form.gst_status === "Regular" && !isValidGSTIN(form.gst)) { toast.error("Enter a valid 15-character GSTIN"); setTab("gst"); return; }
     if (form.pan && !PAN_REGEX.test(form.pan.toUpperCase().trim())) { toast.error("PAN must be 10 chars (AAAAA9999A)"); setTab("gst"); return; }
     for (let i = 0; i < form.contacts.length; i++) {
