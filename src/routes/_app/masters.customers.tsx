@@ -186,6 +186,7 @@ export function CustomerMasterPage() {
       gst: up,
       pan: f.customer_type === "Business" && up.length >= 12 ? panFromGstin(up) : f.pan,
       billing: { ...f.billing, state: auto || f.billing.state },
+      place_of_supply: auto || f.place_of_supply,
       gst_status: up.length >= 2 && auto ? "Regular" : f.gst_status,
     }));
   }
