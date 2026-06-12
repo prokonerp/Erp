@@ -288,12 +288,13 @@ function TicketDetail() {
           <Badge className={STATUS_COLOR[t.status] || ""} variant="secondary">{t.status}</Badge>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
           <Button onClick={() => save()} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 print:hidden">
         {/* Left: ticket details */}
         <div className="lg:col-span-2 space-y-4">
           <Card>
