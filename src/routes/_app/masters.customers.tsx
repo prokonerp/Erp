@@ -232,6 +232,7 @@ export function CustomerMasterPage() {
       gst: form.customer_type === "Business" ? (upperTrim(form.gst) || null) : null,
       gst_status: form.gst_status,
       pan: form.pan ? upperTrim(form.pan) : null,
+      place_of_supply: form.place_of_supply || null,
       state: billing.state || null,
       country: billing.country || "India",
       city: toTitleCaseSmart(billing.city) || null,
