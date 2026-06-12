@@ -30,7 +30,6 @@ import { Route as AppTicketsNewRouteImport } from './routes/_app/tickets.new'
 import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.dashboard'
 import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
 import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.products'
-import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
@@ -148,11 +147,6 @@ const AppMastersProductsRoute = AppMastersProductsRouteImport.update({
   path: '/products',
   getParentRoute: () => AppMastersRoute,
 } as any)
-const AppMastersCustomersRoute = AppMastersCustomersRouteImport.update({
-  id: '/customers',
-  path: '/customers',
-  getParentRoute: () => AppMastersRoute,
-} as any)
 const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   id: '/gatepass/$id',
   path: '/gatepass/$id',
@@ -237,7 +231,6 @@ export interface FileRoutesByFullPath {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
-  '/masters/customers': typeof AppMastersCustomersRoute
   '/masters/products': typeof AppMastersProductsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
   '/tickets/dashboard': typeof AppTicketsDashboardRoute
@@ -269,7 +262,6 @@ export interface FileRoutesByTo {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
-  '/masters/customers': typeof AppMastersCustomersRoute
   '/masters/products': typeof AppMastersProductsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
   '/tickets/dashboard': typeof AppTicketsDashboardRoute
@@ -306,7 +298,6 @@ export interface FileRoutesById {
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
-  '/_app/masters/customers': typeof AppMastersCustomersRoute
   '/_app/masters/products': typeof AppMastersProductsRoute
   '/_app/tickets/$id': typeof AppTicketsIdRoute
   '/_app/tickets/dashboard': typeof AppTicketsDashboardRoute
@@ -343,7 +334,6 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
-    | '/masters/customers'
     | '/masters/products'
     | '/tickets/$id'
     | '/tickets/dashboard'
@@ -375,7 +365,6 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
-    | '/masters/customers'
     | '/masters/products'
     | '/tickets/$id'
     | '/tickets/dashboard'
@@ -411,7 +400,6 @@ export interface FileRouteTypes {
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
-    | '/_app/masters/customers'
     | '/_app/masters/products'
     | '/_app/tickets/$id'
     | '/_app/tickets/dashboard'
@@ -580,13 +568,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMastersProductsRouteImport
       parentRoute: typeof AppMastersRoute
     }
-    '/_app/masters/customers': {
-      id: '/_app/masters/customers'
-      path: '/customers'
-      fullPath: '/masters/customers'
-      preLoaderRoute: typeof AppMastersCustomersRouteImport
-      parentRoute: typeof AppMastersRoute
-    }
     '/_app/gatepass/$id': {
       id: '/_app/gatepass/$id'
       path: '/gatepass/$id'
@@ -738,12 +719,10 @@ const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
 interface AppMastersRouteChildren {
-  AppMastersCustomersRoute: typeof AppMastersCustomersRoute
   AppMastersProductsRoute: typeof AppMastersProductsRoute
 }
 
 const AppMastersRouteChildren: AppMastersRouteChildren = {
-  AppMastersCustomersRoute: AppMastersCustomersRoute,
   AppMastersProductsRoute: AppMastersProductsRoute,
 }
 
@@ -808,3 +787,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
