@@ -131,7 +131,7 @@ export function CustomerMasterPage() {
     return !s || [c.company, c.contact_name, c.phone, c.email, c.gst, c.state].some((v) => (v || "").toLowerCase().includes(s));
   }), [rows, q]);
 
-  function resetForm() { setForm(empty); setEditingId(null); setTab("basic"); }
+  function resetForm() { setForm(empty); setEditingId(null); setTab("basic"); setEmailError(""); }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(c: Customer) {
     const any = c as any;
