@@ -180,6 +180,13 @@ function TicketDetail() {
   const save = async (extra: Partial<Ticket> = {}) => {
     setBusy(true);
     const payload = { ...t, ...extra };
+    if (payload.oem_call) {
+      if (!payload.oem_brand || !payload.oem_ref_id || !payload.oem_purchase_date) {
+        setBusy(false);
+        toast.error("OEM Call is enabled — Brand, Ref ID and Purchase Date are required.");
+        return false;
+      }
+    }
     const { error } = await supabase.from("tickets").update({
       case_id: payload.case_id,
       call_type: payload.call_type,
@@ -208,9 +215,6 @@ function TicketDetail() {
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
-    if (payload.oem_call && (!payload.oem_brand || !payload.oem_ref_id || !payload.oem_purchase_date)) {
-      toast.warning("OEM Call is enabled — please fill Brand, Ref ID and Purchase Date.");
-    }
     toast.success("Saved");
     return true;
   };
