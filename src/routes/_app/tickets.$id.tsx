@@ -356,9 +356,14 @@ function TicketDetail() {
           </Button>
           <div className="flex flex-col gap-1">
             {showSpecialRibbon && (
-              <div className="inline-flex items-center gap-2 self-start rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-red-700 animate-pulse">
+              <div className={`inline-flex items-center gap-2 self-start rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${acknowledged ? "border-green-400 bg-green-100 text-green-800" : "border-red-300 bg-red-50 text-red-700 animate-pulse"}`}>
                 <AlertTriangle className="h-3 w-3" />
-                Special Instruction
+                Special Instruction{acknowledged ? " · Acknowledged" : ""}
+                {acknowledged ? (
+                  <button type="button" onClick={reopenSpecial} className="ml-2 underline decoration-dotted normal-case font-medium tracking-normal">Reopen</button>
+                ) : (
+                  <button type="button" onClick={acknowledgeSpecial} className="ml-2 rounded bg-red-700 px-2 py-0.5 text-white normal-case font-semibold tracking-normal hover:bg-red-800">Mark as Acknowledged</button>
+                )}
               </div>
             )}
             <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
