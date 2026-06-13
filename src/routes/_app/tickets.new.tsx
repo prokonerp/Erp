@@ -200,7 +200,15 @@ function NewTicket() {
 
   return (
     <Card>
-      <CardHeader><CardTitle>New Ticket</CardTitle></CardHeader>
+      <CardHeader>
+        {form.special_instruction.trim() && (
+          <div className="mb-2 inline-flex items-center gap-2 self-start rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-red-700 animate-pulse">
+            <span className="h-2 w-2 rounded-full bg-red-600" />
+            Special Instruction
+          </div>
+        )}
+        <CardTitle>New Ticket</CardTitle>
+      </CardHeader>
       <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {sourceMeta?.label && (
           <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
