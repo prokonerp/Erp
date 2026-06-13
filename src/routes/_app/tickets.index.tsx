@@ -232,7 +232,8 @@ function TicketsList() {
                 <tr>
                   <th className="p-2">Case ID</th>
                   <th className="p-2">Type</th>
-                  <th className="p-2">Priority</th>
+                  <th className="p-2 w-16">Pr.</th>
+                  <th className="p-2 w-20">Timer</th>
                   <th className="p-2">Customer</th>
                   <th className="p-2">Product / Serial</th>
                   <th className="p-2">Sector / Colony</th>
@@ -240,23 +241,33 @@ function TicketsList() {
                   <th className="p-2">Engineer</th>
                   <th className="p-2">Raised By</th>
                   <th className="p-2">Status</th>
-                  <th className="p-2 w-32">Actions</th>
+                  <th className="p-2 w-12 text-center">·</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={11} className="p-4 text-muted-foreground">Loading…</td></tr>
+                  <tr><td colSpan={12} className="p-4 text-muted-foreground">Loading…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={11} className="p-4 text-muted-foreground">No tickets.</td></tr>
+                  <tr><td colSpan={12} className="p-4 text-muted-foreground">No tickets.</td></tr>
                 ) : filtered.map((r) => (
                   <tr key={r.id} className="border-t hover:bg-muted/30">
                     <td className="p-2 font-mono">{r.case_id}</td>
                     <td className="p-2">{r.call_type}</td>
                     <td className="p-2">
                       <Select value={r.priority || "P3"} onValueChange={(v) => setPriority(r.id, v)}>
-                        <SelectTrigger className={`h-7 w-20 ${PRIORITY_COLOR[r.priority || "P3"] || ""}`}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className={`h-7 w-14 px-2 ${PRIORITY_COLOR[r.priority || "P3"] || ""}`}><SelectValue /></SelectTrigger>
                         <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
                       </Select>
+                    </td>
+                    <td className="p-2">
+                      {(() => {
+                        const h = hoursExcludingSundays(r.created_at, new Date());
+                        return (
+                          <span className={`inline-block px-2 py-0.5 rounded border text-xs font-medium ${timerBadgeColor(h)}`} title={`${h.toFixed(2)}h since creation (excl. Sundays)`}>
+                            {formatHours(h)}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="p-2">
                       <div>{r.customer_name}</div>
@@ -279,60 +290,17 @@ function TicketsList() {
                     <td className="p-2">
                       <Badge className={STATUS_COLOR[r.status] || "bg-zinc-100 text-zinc-700"} variant="secondary">{r.status}</Badge>
                     </td>
-                    <td className="p-2">
-                      <div className="flex items-center gap-1">
-                        <Link to="/tickets/$id" params={{ id: r.id }}>
-                          <Button size="icon" variant="ghost" title="View"><Eye className="h-4 w-4" /></Button>
-                        </Link>
-
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button size="icon" variant="ghost" title="Change Engineer"><UserCog className="h-4 w-4" /></Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64 p-2" align="end">
-                            <div className="text-xs font-medium mb-1 text-muted-foreground">Reassign Engineer</div>
-                            <div className="max-h-60 overflow-auto">
-                              {employees.length === 0 && <div className="p-2 text-sm text-muted-foreground">No employees</div>}
-                              {employees.map((e) => (
-                                <button
-                                  key={e.id}
-                                  className="w-full text-left p-2 text-sm rounded hover:bg-muted"
-                                  onClick={() => reassign(r, e)}
-                                >
-                                  <div className="font-medium">{e.name}</div>
-                                  <div className="text-xs text-muted-foreground">{[e.department, e.phone].filter(Boolean).join(" · ")}</div>
-                                </button>
-                              ))}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-
-                        {r.status === "Closed" && (
-                          <Button size="icon" variant="ghost" title="Notify Customer" onClick={() => notifyCustomer(r)}>
-                            <MessageCircle className="h-4 w-4" />
-                          </Button>
-                        )}
-
-                        {isAdmin && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="ghost" title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete ticket {r.case_id}?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will hide the ticket from listings (soft delete). It can be restored from the database if needed.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => softDelete(r)} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </div>
+                    <td className="p-2 text-center">
+                      <RowActions
+                        r={r}
+                        employees={employees}
+                        isAdmin={isAdmin}
+                        onReassign={reassign}
+                        onStatusChange={updateStatus}
+                        onNotifyCustomer={notifyCustomer}
+                        onNotifyEngineer={notifyEngineer}
+                        onSoftDelete={softDelete}
+                      />
                     </td>
                   </tr>
                 ))}
