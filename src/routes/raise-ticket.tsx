@@ -2,7 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { submitPublicTicket } from "@/lib/public-tickets.functions";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  uploadPublicTicketAttachment,
+  deletePublicTicketAttachment,
+} from "@/lib/public-ticket-uploads.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +31,8 @@ type Attachment = { path: string; kind: "serial_photo" | "issue_photo" | "other"
 
 function PublicTicketForm() {
   const submit = useServerFn(submitPublicTicket);
+  const uploadFn = useServerFn(uploadPublicTicketAttachment);
+  const deleteFn = useServerFn(deletePublicTicketAttachment);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState<string | null>(null);
@@ -55,15 +60,19 @@ function PublicTicketForm() {
     if (attachments.length >= 5) return toast.error("Max 5 photos");
     setUploading(true);
     try {
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-      const name = `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const path = `public/${new Date().toISOString().slice(0, 10)}/${name}`;
-      const { error } = await supabase.storage.from("ticket-attachments").upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type || "image/jpeg",
+      const buf = await file.arrayBuffer();
+      let bin = "";
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const data_base64 = btoa(bin);
+      const { path } = await uploadFn({
+        data: {
+          filename: file.name || "upload.jpg",
+          content_type: file.type || "image/jpeg",
+          kind,
+          data_base64,
+        },
       });
-      if (error) throw error;
       const preview = URL.createObjectURL(file);
       setAttachments((a) => [...a, { path, kind, preview }]);
       toast.success("Photo uploaded");
@@ -77,7 +86,7 @@ function PublicTicketForm() {
   const removePhoto = async (idx: number) => {
     const a = attachments[idx];
     setAttachments((arr) => arr.filter((_, i) => i !== idx));
-    try { await supabase.storage.from("ticket-attachments").remove([a.path]); } catch { /* ignore */ }
+    try { await deleteFn({ data: { path: a.path } }); } catch { /* ignore */ }
   };
 
   const onSubmit = async () => {
