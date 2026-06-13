@@ -157,6 +157,12 @@ function NewTicket() {
       if (!form.oem_ref_id.trim()) return toast.error("OEM Ref ID is required for OEM calls");
       if (!form.oem_purchase_date) return toast.error("OEM Customer Purchase Date is required");
     }
+    if (form.preferred_visit_datetime) {
+      const pv = new Date(form.preferred_visit_datetime).getTime();
+      if (pv < Date.now() - 60000) {
+        return toast.error("Preferred visit date & time cannot be in the past");
+      }
+    }
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
     let raisedByName: string | null = null;
