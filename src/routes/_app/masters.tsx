@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MasterCrud } from "@/components/MasterCrud";
@@ -53,7 +53,7 @@ function MastersPage() {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">Masters</h1>
-          <p className="text-sm text-muted-foreground">Central data: company, customers, vendors, products, employees, inventory, accounts, AMC and tickets.</p>
+          <p className="text-sm text-muted-foreground">Central data: company, branches, warehouses, customers, vendors, products, employees, inventory, accounts and users.</p>
         </div>
         <div className="text-xs text-muted-foreground flex items-center gap-1">
           <ShieldCheck className="h-4 w-4" />
@@ -201,9 +201,6 @@ function MastersPage() {
           <ProductMasterPage />
         </TabsContent>
 
-        <TabsContent value="service" className="mt-4">
-          <LinkOut to="/tickets" label="Service / Complaint Master is managed in Tickets." />
-        </TabsContent>
 
         <TabsContent value="employees" className="mt-4">
           <MasterCrud
@@ -254,9 +251,6 @@ function MastersPage() {
           />
         </TabsContent>
 
-        <TabsContent value="amc" className="mt-4">
-          <LinkOut to="/amc" label="AMC / Contract Master is managed in AMC." />
-        </TabsContent>
 
         <TabsContent value="users" className="mt-4">
           <RolesAndUsersPanel isAdmin={isAdmin} />
@@ -265,18 +259,5 @@ function MastersPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-function LinkOut({ to, label }: { to: string; label: string }) {
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">{label}</CardTitle></CardHeader>
-      <CardContent>
-        <Link to={to}>
-          <Button><ExternalLink className="h-4 w-4 mr-1" />Open module</Button>
-        </Link>
-      </CardContent>
-    </Card>
   );
 }
