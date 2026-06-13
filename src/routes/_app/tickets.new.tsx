@@ -14,7 +14,7 @@ import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import { Label as L } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus } from "lucide-react";
+import { Plus, CalendarClock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/_app/tickets/new")({
