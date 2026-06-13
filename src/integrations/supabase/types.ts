@@ -193,6 +193,24 @@ export type Database = {
           },
         ]
       }
+      call_type_master: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           address: string | null
@@ -290,6 +308,7 @@ export type Database = {
           place_of_supply: string | null
           remarks: string | null
           salutation: string | null
+          sector: string | null
           shipping_address: string | null
           shipping_city: string | null
           shipping_country: string | null
@@ -332,6 +351,7 @@ export type Database = {
           place_of_supply?: string | null
           remarks?: string | null
           salutation?: string | null
+          sector?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
           shipping_country?: string | null
@@ -374,6 +394,7 @@ export type Database = {
           place_of_supply?: string | null
           remarks?: string | null
           salutation?: string | null
+          sector?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
           shipping_country?: string | null
@@ -1157,6 +1178,39 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_sequence: {
+        Row: {
+          id: number
+          last_seq: number
+        }
+        Insert: {
+          id?: number
+          last_seq?: number
+        }
+        Update: {
+          id?: number
+          last_seq?: number
+        }
+        Relationships: []
+      }
+      ticket_settings: {
+        Row: {
+          id: number
+          prefix: string
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          prefix?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          prefix?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tickets: {
         Row: {
           assigned_at: string | null
@@ -1174,13 +1228,18 @@ export type Database = {
           customer_id: string | null
           customer_name: string
           customer_phone: string | null
+          deleted_at: string | null
           id: string
           location: string | null
           parts_details: Json
           parts_used: boolean
+          priority: string | null
           product: string | null
           quotation_id: string | null
+          raised_by_name: string | null
+          raised_by_type: string | null
           remarks: string | null
+          sector: string | null
           serial_no: string | null
           status: string
           updated_at: string
@@ -1201,13 +1260,18 @@ export type Database = {
           customer_id?: string | null
           customer_name: string
           customer_phone?: string | null
+          deleted_at?: string | null
           id?: string
           location?: string | null
           parts_details?: Json
           parts_used?: boolean
+          priority?: string | null
           product?: string | null
           quotation_id?: string | null
+          raised_by_name?: string | null
+          raised_by_type?: string | null
           remarks?: string | null
+          sector?: string | null
           serial_no?: string | null
           status?: string
           updated_at?: string
@@ -1228,13 +1292,18 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string
           customer_phone?: string | null
+          deleted_at?: string | null
           id?: string
           location?: string | null
           parts_details?: Json
           parts_used?: boolean
+          priority?: string | null
           product?: string | null
           quotation_id?: string | null
+          raised_by_name?: string | null
+          raised_by_type?: string | null
           remarks?: string | null
+          sector?: string | null
           serial_no?: string | null
           status?: string
           updated_at?: string
@@ -1399,6 +1468,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      next_ticket_seq: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "user"
