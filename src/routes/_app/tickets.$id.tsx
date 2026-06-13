@@ -195,6 +195,14 @@ function TicketDetail() {
         return false;
       }
     }
+    if (payload.preferred_visit_datetime) {
+      const pv = new Date(payload.preferred_visit_datetime).getTime();
+      if (pv < Date.now() - 60000) {
+        setBusy(false);
+        toast.error("Preferred visit date & time cannot be in the past");
+        return false;
+      }
+    }
     const { error } = await supabase.from("tickets").update({
       case_id: payload.case_id,
       call_type: payload.call_type,
