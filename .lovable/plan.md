@@ -1,69 +1,77 @@
-# Ticket Module Overhaul
+# AMC & PM Schedule Enhancements
 
-## A. Configurable Ticket ID
+## 1. AMC Agreement Number (auto-generated)
 
-**DB migration:**
-- Create `ticket_settings` (singleton row, id=1): `prefix text default 'TKT'`, `updated_at`.
-- Create `ticket_sequence` (singleton, id=1): `last_seq bigint default 0`. Function `next_ticket_seq()` does `UPDATE ... RETURNING last_seq+1` atomically.
-- Create `call_type_master(id, name unique, created_at)` seeded with existing `CALL_TYPES`.
-- Add columns to `customers`: `sector text`, `city text` (already exists? check — if so reuse). Add `sector` only if missing.
-- Add columns to `tickets`: `sector text`, `priority text default 'P3'`, `deleted_at timestamptz`, `raised_by_type text` (`internal`/`external`), `raised_by_name text`.
-- Replace trigger `set_ticket_case_id`:
-  ```
-  prefix := (SELECT prefix FROM ticket_settings WHERE id=1);
-  ts := to_char(now() AT TIME ZONE 'Asia/Kolkata', 'YYMMDDHH24MISS');
-  seq := next_ticket_seq();
-  NEW.case_id := prefix || ts || lpad(seq::text,3,'0');
-  ```
-- GRANTs + RLS on new tables (admin write via `has_role`, authenticated read).
+**Format:** `{PREFIX}{ddMMyyHHmm}{SEQ}` (e.g. `PHS/AMC/1306261430/0001`)
 
-## B. New Ticket Form (`tickets.new.tsx`)
+- Add `amc_settings.prefix` text column (admin-editable, default `PHS/AMC/`).
+- Add `amc_sequence` table (single row, `last_seq bigint`) + `next_amc_seq()` SECURITY DEFINER.
+- DB trigger `set_amc_agreement_no` on `amcs` BEFORE INSERT: if `agreement_no` empty, build from prefix + IST timestamp + seq (padded 4).
+- Update `src/routes/_app/amc.new.tsx`: remove client-side `nextAgreementNo`, display field as read-only/disabled placeholder ("Auto-generated on save").
+- Update `src/routes/_app/amc.settings.tsx`: add "AMC Prefix" input (admin only) saved into `amc_settings`.
+- Backward compatibility: existing agreements untouched; trigger only fires when value is empty.
 
-- Reorder: Customer section first, then Product/Serial.
-- Make phone/email/address inputs editable (remove `readOnly`).
-- Rename "Location" → "City/Area"; add "Sector/Colony Name" above it.
-- CustomerPicker prefills sector + city; both editable.
-- Call type Select: load from `call_type_master`; "+ Add new" opens dialog to insert.
+## 2. Date filters (AMC + PM Schedule)
 
-## C. Customer Master (`masters.customers.tsx`)
+Add a small filter bar with chips: **Current Week | Current Month (default) | Custom Range** (Popover with two date pickers).
 
-- Add `sector` and ensure `city` field in address editor / basic details.
-- Persist to new columns; map back to ticket prefill.
+- `src/routes/_app/amc.index.tsx`: filter `end_date` within range (configurable: filter applies to `start_date`/`end_date` overlap with selected range so active AMCs in window show up).
+- `src/routes/_app/amc.pm.tsx`: filter `scheduled_date` within range.
+- Default = current month. Range computed via small helper `src/lib/dateRange.ts`.
 
-## D. All Tickets Listing (`tickets.index.tsx`)
+## 3. Product structure update on AMC
 
-- Columns: replace Location with City/Area; add Sector/Colony, Priority (inline dropdown P1–P5), Raised By.
-- Filter dropdown on City/Area (distinct values).
-- Sort: closed tickets to bottom — order by `(status='Closed') asc, created_at desc`.
-- Admin-only Delete (soft delete via `deleted_at`), confirmation `AlertDialog`. Filter out `deleted_at is not null` from list.
-- Quick actions: Reassign Engineer popover (writes engineer + sends WhatsApp); when status=Closed show "Notify Customer" button.
+Replace free-text "UPS Units (Model + Serial)" with structured **Product Details** rows:
 
-## E. WhatsApp (`lib/tickets.ts`)
+- **Category** (Select, from `product_categories`)
+- **Model** (Select, from `products` filtered by chosen category)
+- **Serial Number** (Combobox: serials from `serials` for chosen product + free-text fallback)
 
-- Fix `waPhone`: strip all non-digits; if 10 digits prepend `91`; require non-empty.
-- `waLink` uses `https://wa.me/<digits>?text=<encoded>`; refuse if no digits (toast).
-- Ensure `encodeURIComponent` on message (already done).
+Repeatable rows. Stored shape (backward compatible) — extend `amcs.units` JSON entries to include `category`, `product_id`, `model`, `serial_no`. Old rows continue to render via existing `model`/`serial_no` keys.
 
-## F. Ticket Detail (`tickets.$id.tsx`)
+Update `amc.new.tsx` and `amc.$id.tsx` (edit) to use the new picker. Add a small `<ProductRow>` inline component.
 
-- Surface sector + city/area; allow priority change; engineer reassign notification.
+## 4. New tab: **AMC OEM Data**
 
-## Files Touched
+New route `src/routes/_app/amc.oem.tsx`, linked from AMC dashboard header.
 
-- New migration `supabase/migrations/<ts>_ticket_overhaul.sql`
-- `src/lib/tickets.ts` (waPhone fix, helper for call types loader)
-- `src/routes/_app/tickets.new.tsx` (reorder, editable, sector/city, dynamic call types)
-- `src/routes/_app/tickets.index.tsx` (columns, filter, sort, priority inline, delete, quick actions)
-- `src/routes/_app/tickets.$id.tsx` (sector/city fields + priority)
-- `src/routes/_app/masters.customers.tsx` (sector field)
-- `src/routes/_app/masters.tsx` or new `tickets.settings.tsx` route for admin prefix + call-type management
-- `src/integrations/supabase/types.ts` regen after migration
+**Source:** union of `tickets` + `amcs` + `pm_visits` where `oem_call = true` (we already have `oem_brand`, `oem_ref_id`, `oem_purchase_date` on `tickets`; add the same columns to `amcs` + `pm_visits` for parity — null-safe, optional).
 
-## Technical Notes
+**Product-level exclusion:**
+- Build set of `(customer_id, product_id|serial_no)` covered under an **active** AMC (today between `start_date` and `end_date`).
+- Exclude only matching products. Same customer's other products still appear.
 
-- Sequence continuity preserved across prefix changes (single `ticket_sequence` row never reset).
-- Soft delete: add `.is('deleted_at', null)` to all ticket queries.
-- Backward compat: existing tickets keep old `TKT-####` case_ids; trigger only fires when case_id null/blank.
-- Priority default `P3` for legacy rows via column default.
+**Display columns:**
+OEM Brand · Ref ID · Purchase Date · **OEM Expiry Date** (purchase + 1y if no explicit field — derivable rule, configurable later) · **Status** (Expiring ≤30d / Expired / Active) · Customer (name, phone, city, sector) · Product (category, model, serial).
 
-Proceeding to implement after approval.
+**Action:** `Create AMC` button → navigates to `/amc/new?oem_ref={ref_id}&customer={id}&product={id}&serial=...` with prefill logic added to `amc.new.tsx`.
+
+## 5. Validation & perf
+
+- Frontend: required category+model for each product row.
+- Backend: trigger uniqueness on `agreement_no` (already unique via index — confirm).
+- Add indexes: `tickets(oem_call) WHERE oem_call`, `amcs(end_date)`, `pm_visits(scheduled_date)`.
+
+## Technical changes
+
+**Migrations:**
+1. `amc_settings.prefix text default 'PHS/AMC/'`
+2. `amc_sequence` table + `next_amc_seq()` + `set_amc_agreement_no()` trigger
+3. `amcs.oem_call/oem_brand/oem_ref_id/oem_purchase_date` (nullable)
+4. `pm_visits.oem_call/oem_brand/oem_ref_id/oem_purchase_date` (nullable)
+5. Supporting indexes
+
+**Files edited/created:**
+- `src/lib/dateRange.ts` (new)
+- `src/lib/amc.ts` (extend `AmcUnit` type, remove `nextAgreementNo` usage; keep export for back-compat)
+- `src/routes/_app/amc.index.tsx` (date filter bar)
+- `src/routes/_app/amc.pm.tsx` (date filter bar)
+- `src/routes/_app/amc.new.tsx` (read-only agreement no, new product rows, OEM prefill from query)
+- `src/routes/_app/amc.$id.tsx` (new product rows in edit)
+- `src/routes/_app/amc.settings.tsx` (prefix input, admin only)
+- `src/routes/_app/amc.oem.tsx` (new tab)
+- `src/routeTree.gen.ts` (register new route)
+
+## Out of scope (confirm if needed)
+- Migrating existing `amcs.units` rows to the new shape — left as-is; UI tolerates both.
+- OEM expiry rule beyond `purchase_date + 1y` — current heuristic; configurable later.
