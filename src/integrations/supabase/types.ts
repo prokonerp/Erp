@@ -1331,6 +1331,7 @@ export type Database = {
           id: string
           kind: string
           notes: string | null
+          special_instruction: boolean
           ticket_id: string
           to_status: string | null
         }
@@ -1341,6 +1342,7 @@ export type Database = {
           id?: string
           kind?: string
           notes?: string | null
+          special_instruction?: boolean
           ticket_id: string
           to_status?: string | null
         }
@@ -1351,6 +1353,7 @@ export type Database = {
           id?: string
           kind?: string
           notes?: string | null
+          special_instruction?: boolean
           ticket_id?: string
           to_status?: string | null
         }
@@ -1426,6 +1429,7 @@ export type Database = {
           sector: string | null
           serial_no: string | null
           source: string | null
+          special_instruction: string | null
           status: string
           updated_at: string
         }
@@ -1465,6 +1469,7 @@ export type Database = {
           sector?: string | null
           serial_no?: string | null
           source?: string | null
+          special_instruction?: string | null
           status?: string
           updated_at?: string
         }
@@ -1504,6 +1509,7 @@ export type Database = {
           sector?: string | null
           serial_no?: string | null
           source?: string | null
+          special_instruction?: string | null
           status?: string
           updated_at?: string
         }
