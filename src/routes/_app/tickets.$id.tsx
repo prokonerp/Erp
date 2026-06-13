@@ -316,6 +316,36 @@ function TicketDetail() {
 
   const hasSpecialActivity = activities.some((a) => a.special_instruction);
   const showSpecialRibbon = !!(t.special_instruction && t.special_instruction.trim()) || hasSpecialActivity;
+  const acknowledged = !!t.special_instruction_acknowledged;
+
+  const acknowledgeSpecial = async () => {
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id ?? null;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("tickets").update({
+      special_instruction_acknowledged: true,
+      acknowledged_by: uid,
+      acknowledged_at: now,
+    } as never).eq("id", t.id);
+    if (error) { toast.error(error.message); return; }
+    setT({ ...t, special_instruction_acknowledged: true, acknowledged_by: uid, acknowledged_at: now });
+    await logActivity("ack", "Special instruction acknowledged");
+    load();
+    toast.success("Acknowledged");
+  };
+
+  const reopenSpecial = async () => {
+    const { error } = await supabase.from("tickets").update({
+      special_instruction_acknowledged: false,
+      acknowledged_by: null,
+      acknowledged_at: null,
+    } as never).eq("id", t.id);
+    if (error) { toast.error(error.message); return; }
+    setT({ ...t, special_instruction_acknowledged: false, acknowledged_by: null, acknowledged_at: null });
+    await logActivity("ack", "Special instruction reopened");
+    load();
+    toast.success("Reopened");
+  };
 
   return (
     <div className="space-y-4">
