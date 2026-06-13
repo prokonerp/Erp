@@ -89,12 +89,13 @@ function NewTicket() {
         client_name: string; client_company: string | null; contact_no: string | null; email: string | null;
         client_address: string | null; units: { model: string; serial_no: string }[];
       };
-      let cust: { city?: string; billing_city?: string; sector?: string; phone?: string; email?: string; company?: string; billing_address?: string; address?: string } | null = null;
+      type CustLite = { city?: string | null; billing_city?: string | null; sector?: string | null; phone?: string | null; email?: string | null; company?: string | null; billing_address?: string | null; address?: string | null };
+      let cust: CustLite | null = null;
       if (a.customer_id) {
         const { data: c } = await supabase.from("customers")
           .select("id,company,phone,email,billing_address,address,city,billing_city,sector,state")
           .eq("id", a.customer_id).maybeSingle();
-        cust = c as typeof cust;
+        cust = (c as CustLite | null) ?? null;
       }
       const firstUnit = (a.units || [])[0] || { model: "", serial_no: "" };
       setForm((f) => ({
