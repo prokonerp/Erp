@@ -36,11 +36,9 @@ function MastersPage() {
     { value: "customers", label: "Customers" },
     { value: "vendors", label: "Vendors" },
     { value: "products", label: "Products" },
-    { value: "service", label: "Service / Tickets" },
     { value: "employees", label: "Employees" },
     { value: "inventory", label: "Inventory" },
     { value: "accounts", label: "Accounts" },
-    { value: "amc", label: "AMC" },
     { value: "users", label: "Users & Roles" },
   ];
   const handleTabChange = (v: string) => {
