@@ -62,7 +62,7 @@ function AmcOemData() {
 
     // 1. OEM sources
     const [tk, am, pm] = await Promise.all([
-      supabase.from("tickets").select("id,customer_id,product_id,serial_no,oem_brand,oem_ref_id,oem_purchase_date,customer_name").eq("oem_call", true),
+      supabase.from("tickets").select("id,customer_id,serial_no,product,oem_brand,oem_ref_id,oem_purchase_date").eq("oem_call", true),
       supabase.from("amcs").select("id,customer_id,units,oem_brand,oem_ref_id,oem_purchase_date").eq("oem_call", true),
       supabase.from("pm_visits").select("id,amc_id,oem_brand,oem_ref_id,oem_purchase_date").eq("oem_call", true),
     ]);
@@ -83,11 +83,11 @@ function AmcOemData() {
 
     const out: OemRow[] = [];
 
-    for (const t of (tk.data || []) as Array<{ id: string; customer_id: string | null; product_id: string | null; serial_no: string | null; oem_brand: string | null; oem_ref_id: string | null; oem_purchase_date: string | null }>) {
+    for (const t of (tk.data || []) as Array<{ id: string; customer_id: string | null; serial_no: string | null; product: string | null; oem_brand: string | null; oem_ref_id: string | null; oem_purchase_date: string | null }>) {
       out.push({
         source: "Ticket", source_id: t.id,
         oem_brand: t.oem_brand, oem_ref_id: t.oem_ref_id, oem_purchase_date: t.oem_purchase_date,
-        customer_id: t.customer_id, product_id: t.product_id, serial_no: t.serial_no,
+        customer_id: t.customer_id, product_id: null, serial_no: t.serial_no,
       });
     }
     for (const a of (am.data || []) as Array<{ id: string; customer_id: string | null; units: AmcUnitLite[]; oem_brand: string | null; oem_ref_id: string | null; oem_purchase_date: string | null }>) {
