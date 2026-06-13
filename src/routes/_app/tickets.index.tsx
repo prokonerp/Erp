@@ -44,6 +44,7 @@ type Row = {
   created_at: string;
   oem_call?: boolean | null;
   special_instruction?: string | null;
+  special_instruction_acknowledged?: boolean | null;
   has_special_activity?: boolean;
 };
 
