@@ -6,14 +6,19 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg } from "@/lib/tickets";
-import { Plus, Eye, Trash2, UserCog, MessageCircle } from "lucide-react";
+import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
+import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger,
+  DropdownMenuSubContent, DropdownMenuPortal,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 
@@ -54,6 +59,13 @@ function TicketsList() {
   const [type, setType] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [, setNowTick] = useState(0);
+
+  // Tick once per minute so the timer column stays fresh.
+  useEffect(() => {
+    const t = setInterval(() => setNowTick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -100,6 +112,22 @@ function TicketsList() {
     if (error) toast.error(error.message);
   };
 
+  const updateStatus = async (r: Row, next: string, opts: { notify?: boolean } = {}) => {
+    const patch: Record<string, unknown> = { status: next };
+    if (next === "Closed") patch.closed_at = new Date().toISOString();
+    const { error } = await supabase.from("tickets").update(patch as never).eq("id", r.id);
+    if (error) return toast.error(error.message);
+    await supabase.from("ticket_activities").insert({
+      ticket_id: r.id, kind: "status", from_status: r.status, to_status: next,
+      notes: `Status changed: ${r.status} → ${next}`,
+    } as never);
+    toast.success(`Status updated to ${next}`);
+    if (opts.notify && r.customer_phone) {
+      await waOpen(r.customer_phone, customerClosedMsg({ case_id: r.case_id, customer_name: r.customer_name, product: r.product }));
+    }
+    load();
+  };
+
   const softDelete = async (r: Row) => {
     const { error } = await supabase.from("tickets").update({ deleted_at: new Date().toISOString() } as never).eq("id", r.id);
     if (error) return toast.error(error.message);
@@ -129,6 +157,17 @@ function TicketsList() {
   const notifyCustomer = async (r: Row) => {
     const ok = await waOpen(r.customer_phone, customerClosedMsg({ case_id: r.case_id, customer_name: r.customer_name, product: r.product }));
     if (!ok) return toast.error("Customer phone invalid");
+    toast.success("Opening WhatsApp…");
+  };
+
+  const notifyEngineer = async (r: Row) => {
+    if (!r.assigned_engineer_phone) return toast.error("No engineer assigned");
+    const ok = await waOpen(r.assigned_engineer_phone, engineerAssignMsg({
+      case_id: r.case_id, call_type: r.call_type, customer_name: r.customer_name,
+      customer_phone: r.customer_phone, location: r.location, customer_address: r.customer_address,
+      product: r.product, serial_no: r.serial_no, complaint: r.complaint,
+    }));
+    if (!ok) return toast.error("Engineer phone invalid");
     toast.success("Opening WhatsApp…");
   };
 
