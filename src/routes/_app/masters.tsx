@@ -8,8 +8,9 @@ import { useIsAdmin } from "@/lib/useRole";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ShieldCheck, ExternalLink } from "lucide-react";
+import { ShieldCheck, ExternalLink, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { RolesAndUsersPanel } from "@/components/RolesAndUsersPanel";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/masters")({
   component: MastersPage,
@@ -27,6 +28,28 @@ function MastersPage() {
     if (routedTab) setTab(routedTab);
   }, [routedTab]);
   const currentTab = routedTab ?? tab;
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const tabItems: { value: string; label: string }[] = [
+    { value: "company", label: "Company" },
+    { value: "branches", label: "Branches" },
+    { value: "warehouses", label: "Warehouses" },
+    { value: "customers", label: "Customers" },
+    { value: "vendors", label: "Vendors" },
+    { value: "products", label: "Products" },
+    { value: "service", label: "Service / Tickets" },
+    { value: "employees", label: "Employees" },
+    { value: "inventory", label: "Inventory" },
+    { value: "accounts", label: "Accounts" },
+    { value: "amc", label: "AMC" },
+    { value: "users", label: "Users & Roles" },
+  ];
+  const handleTabChange = (v: string) => {
+    setTab(v);
+    if (v === "customers") navigate({ to: "/masters/customers" });
+    else if (v === "products") navigate({ to: "/masters/products" });
+    else if (isCustomerRoute || isProductRoute) navigate({ to: "/masters" });
+  };
 
   return (
     <div className="space-y-4">
@@ -54,30 +77,53 @@ function MastersPage() {
         </Alert>
       )}
 
-      <Tabs
-        value={currentTab}
-        className="w-full"
-        onValueChange={(v) => {
-          setTab(v);
-          if (v === "customers") navigate({ to: "/masters/customers" });
-          else if (v === "products") navigate({ to: "/masters/products" });
-          else if (isCustomerRoute || isProductRoute) navigate({ to: "/masters" });
-        }}
-      >
-        <TabsList className="flex flex-wrap h-auto">
-          <TabsTrigger value="company">Company</TabsTrigger>
-          <TabsTrigger value="branches">Branches</TabsTrigger>
-          <TabsTrigger value="warehouses">Warehouses</TabsTrigger>
-          <TabsTrigger value="customers">Customers</TabsTrigger>
-          <TabsTrigger value="vendors">Vendors</TabsTrigger>
-          <TabsTrigger value="products">Products</TabsTrigger>
-          <TabsTrigger value="service">Service / Tickets</TabsTrigger>
-          <TabsTrigger value="employees">Employees</TabsTrigger>
-          <TabsTrigger value="inventory">Inventory</TabsTrigger>
-          <TabsTrigger value="accounts">Accounts</TabsTrigger>
-          <TabsTrigger value="amc">AMC</TabsTrigger>
-          <TabsTrigger value="users">Users &amp; Roles</TabsTrigger>
-        </TabsList>
+      <div className="flex gap-4 items-start">
+        <aside
+          className={cn(
+            "shrink-0 transition-all duration-200 rounded-md border bg-card",
+            sidebarOpen ? "w-56" : "w-12"
+          )}
+        >
+          <div className="flex items-center justify-between p-2 border-b">
+            {sidebarOpen && <span className="text-xs font-medium text-muted-foreground px-2">Categories</span>}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-7 w-7 p-0"
+              onClick={() => setSidebarOpen((s) => !s)}
+              title={sidebarOpen ? "Hide categories" : "Show categories"}
+              aria-label={sidebarOpen ? "Hide categories" : "Show categories"}
+            >
+              {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+            </Button>
+          </div>
+          {sidebarOpen && (
+            <nav className="p-2 flex flex-col gap-0.5">
+              {tabItems.map((item) => (
+                <button
+                  key={item.value}
+                  onClick={() => handleTabChange(item.value)}
+                  className={cn(
+                    "text-left text-sm px-3 py-2 rounded-md transition-colors",
+                    currentTab === item.value
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          )}
+        </aside>
+
+        <div className="flex-1 min-w-0">
+        <Tabs value={currentTab} className="w-full" onValueChange={handleTabChange}>
+          <TabsList className="hidden">
+            {tabItems.map((t) => (
+              <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>
+            ))}
+          </TabsList>
 
         <TabsContent value="company" className="mt-4">
           <MasterCrud
@@ -219,6 +265,8 @@ function MastersPage() {
           <RolesAndUsersPanel isAdmin={isAdmin} />
         </TabsContent>
       </Tabs>
+        </div>
+      </div>
     </div>
   );
 }
