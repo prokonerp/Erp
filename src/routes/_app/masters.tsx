@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck, ExternalLink } from "lucide-react";
-import { UserRolesPanel } from "@/components/UserRolesPanel";
+import { RolesAndUsersPanel } from "@/components/RolesAndUsersPanel";
 
 export const Route = createFileRoute("/_app/masters")({
   component: MastersPage,
@@ -216,7 +216,7 @@ function MastersPage() {
         </TabsContent>
 
         <TabsContent value="users" className="mt-4">
-          <UserRolesPanel isAdmin={isAdmin} />
+          <RolesAndUsersPanel isAdmin={isAdmin} />
         </TabsContent>
       </Tabs>
     </div>

@@ -9,6 +9,7 @@ import { Upload, Download, FileCheck2 } from "lucide-react";
 import { toast } from "sonner";
 import { parseCSV, buildCSV, downloadCSV } from "@/lib/csv";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { useIsAdmin } from "@/lib/useRole";
 
 export const Route = createFileRoute("/_app/import")({
   component: ImportPage,
@@ -37,6 +38,7 @@ const TEMPLATES: Record<ModuleKey, { headers: string[]; sample: Record<string, s
 };
 
 function ImportPage() {
+  const { isAdmin, loading: roleLoading } = useIsAdmin();
   const [mod, setMod] = useState<ModuleKey>("customers");
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [fileName, setFileName] = useState("");
@@ -44,6 +46,18 @@ function ImportPage() {
   const [result, setResult] = useState<{ ok: number; failed: { row: number; reason: string }[] } | null>(null);
 
   const tpl = TEMPLATES[mod];
+
+  if (roleLoading) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  if (!isAdmin) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Restricted</CardTitle></CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          Bulk Import / Export is available to admins only.
+        </CardContent>
+      </Card>
+    );
+  }
 
   const onFile = async (file: File) => {
     setFileName(file.name);
