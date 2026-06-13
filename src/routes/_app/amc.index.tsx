@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck, Ticket as TicketIcon } from "lucide-react";
+import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck, Ticket as TicketIcon, Briefcase } from "lucide-react";
 import { type Amc, amcStatus, statusBadgeClass, statusLabel, statusRowClass } from "@/lib/amc";
 import { ExportButtons } from "@/components/ExportButtons";
 import { usePermissions } from "@/lib/usePermissions";
+import { type DateRange, type RangeMode, currentMonth, resolveRange, overlaps } from "@/lib/dateRange";
 
 export const Route = createFileRoute("/_app/amc/")({
   component: AmcDashboard,
@@ -19,6 +20,8 @@ function AmcDashboard() {
   const [rows, setRows] = useState<Amc[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "expiring" | "expired">("all");
+  const [rangeMode, setRangeMode] = useState<RangeMode>("month");
+  const [customRange, setCustomRange] = useState<DateRange>(currentMonth());
   const { can } = usePermissions();
   const canCreateTicket = can("tickets", "create");
 
@@ -27,6 +30,7 @@ function AmcDashboard() {
       .then(({ data }) => setRows((data || []) as unknown as Amc[]));
   }, []);
 
+  const range = useMemo(() => resolveRange(rangeMode, customRange), [rangeMode, customRange]);
   const decorated = useMemo(() => rows.map((r) => ({ ...r, _status: amcStatus(r.end_date) })), [rows]);
 
   const counts = useMemo(() => ({
@@ -51,6 +55,7 @@ function AmcDashboard() {
 
   const filtered = decorated.filter((r) => {
     if (filter !== "all" && r._status !== filter) return false;
+    if (!overlaps(r.start_date, r.end_date, range.from, range.to)) return false;
     const s = q.toLowerCase();
     if (!s) return true;
     return r.agreement_no.toLowerCase().includes(s)
@@ -71,11 +76,14 @@ function AmcDashboard() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">AMC Management</h1>
         <div className="flex gap-2">
+          <Link to="/amc/oem"><Button variant="outline" size="sm"><Briefcase className="h-4 w-4 mr-1" />AMC OEM Data</Button></Link>
           <Link to="/amc/pm"><Button variant="outline" size="sm"><CalendarCheck className="h-4 w-4 mr-1" />PM Schedule</Button></Link>
           <Link to="/amc/settings"><Button variant="outline" size="sm"><Settings className="h-4 w-4 mr-1" />Terms Template</Button></Link>
           <Link to="/amc/new"><Button size="sm"><Plus className="h-4 w-4 mr-1" />New AMC</Button></Link>
         </div>
       </div>
+
+      <DateFilterBar mode={rangeMode} setMode={setRangeMode} range={customRange} setRange={setCustomRange} />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Total" value={decorated.length} color="bg-muted border-border text-foreground" onClick={() => setFilter("all")} active={filter === "all"} />
