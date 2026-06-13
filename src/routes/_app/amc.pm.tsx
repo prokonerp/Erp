@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { fmtDate } from "@/lib/amc";
 import { usePermissions } from "@/lib/usePermissions";
+import { DateFilterBar } from "@/components/DateFilterBar";
+import { type DateRange, type RangeMode, currentMonth, resolveRange, inRange } from "@/lib/dateRange";
 
 export const Route = createFileRoute("/_app/amc/pm")({
   component: PMSchedule,
@@ -42,6 +44,8 @@ function PMSchedule() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [busy, setBusy] = useState<string | null>(null);
   const [dateInput, setDateInput] = useState<string>("");
+  const [rangeMode, setRangeMode] = useState<RangeMode>("month");
+  const [customRange, setCustomRange] = useState<DateRange>(currentMonth());
   const { can } = usePermissions();
   const canCreateTicket = can("tickets", "create");
 
@@ -79,6 +83,8 @@ function PMSchedule() {
   };
 
   const filtered = pms.filter((p) => {
+    const r = resolveRange(rangeMode, customRange);
+    if (!inRange(p.scheduled_date, r)) return false;
     const a = amcs[p.amc_id];
     if (filter === "pending" && p.completed_at) return false;
     if (filter === "done" && !p.completed_at) return false;
