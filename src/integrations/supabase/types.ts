@@ -1349,6 +1349,7 @@ export type Database = {
       }
       tickets: {
         Row: {
+          amc_id: string | null
           assigned_at: string | null
           assigned_engineer_name: string | null
           assigned_engineer_phone: string | null
@@ -1373,6 +1374,7 @@ export type Database = {
           oem_ref_id: string | null
           parts_details: Json
           parts_used: boolean
+          pm_visit_id: string | null
           priority: string | null
           product: string | null
           quotation_id: string | null
@@ -1381,10 +1383,12 @@ export type Database = {
           remarks: string | null
           sector: string | null
           serial_no: string | null
+          source: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          amc_id?: string | null
           assigned_at?: string | null
           assigned_engineer_name?: string | null
           assigned_engineer_phone?: string | null
@@ -1409,6 +1413,7 @@ export type Database = {
           oem_ref_id?: string | null
           parts_details?: Json
           parts_used?: boolean
+          pm_visit_id?: string | null
           priority?: string | null
           product?: string | null
           quotation_id?: string | null
@@ -1417,10 +1422,12 @@ export type Database = {
           remarks?: string | null
           sector?: string | null
           serial_no?: string | null
+          source?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          amc_id?: string | null
           assigned_at?: string | null
           assigned_engineer_name?: string | null
           assigned_engineer_phone?: string | null
@@ -1445,6 +1452,7 @@ export type Database = {
           oem_ref_id?: string | null
           parts_details?: Json
           parts_used?: boolean
+          pm_visit_id?: string | null
           priority?: string | null
           product?: string | null
           quotation_id?: string | null
@@ -1453,15 +1461,30 @@ export type Database = {
           remarks?: string | null
           sector?: string | null
           serial_no?: string | null
+          source?: string | null
           status?: string
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "tickets_amc_id_fkey"
+            columns: ["amc_id"]
+            isOneToOne: false
+            referencedRelation: "amcs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "tickets_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_pm_visit_id_fkey"
+            columns: ["pm_visit_id"]
+            isOneToOne: false
+            referencedRelation: "pm_visits"
             referencedColumns: ["id"]
           },
         ]
