@@ -464,6 +464,10 @@ function TicketDetail() {
                   </div>
                 )}
               </div>
+              <div className="md:col-span-2">
+                <Label>Preferred Visit Date & Time <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                <Input type="datetime-local" value={toDatetimeLocal(t.preferred_visit_datetime)} onChange={(e) => { update({ preferred_visit_datetime: e.target.value || null }); save({ preferred_visit_datetime: e.target.value || null }); }} />
+              </div>
             </CardContent>
           </Card>
 
