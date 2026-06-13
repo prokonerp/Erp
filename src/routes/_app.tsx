@@ -2,9 +2,10 @@ import { createFileRoute, Outlet, Link, Navigate, useNavigate, useLocation } fro
 import { useAuth } from "@/lib/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { FileText, ListChecks, LogOut, Building2, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3 } from "lucide-react";
+import { FileText, ListChecks, LogOut, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
+import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -41,13 +42,13 @@ function AppLayout() {
     <div className="min-h-screen bg-muted/20">
       <header className="bg-background border-b print:hidden">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" />
-            <div>
-              <div className="font-semibold leading-tight">Prokon Hi-Tech Systems</div>
-              <div className="text-xs text-muted-foreground leading-tight">Gatepass · Picasso Centre, Sec-61 Gurgaon</div>
-            </div>
-          </div>
+          <Link to="/" className="flex items-center gap-2">
+            <img
+              src={prokonLogo.url}
+              alt="Prokon Hi-Tech Systems — IT and Power Solution Providers"
+              className="h-10 w-auto object-contain"
+            />
+          </Link>
           <nav className="flex items-center gap-1">
             {navItems.map((n) => {
               const active = location.pathname.startsWith(n.to);
