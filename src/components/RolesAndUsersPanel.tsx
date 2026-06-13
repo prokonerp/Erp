@@ -319,7 +319,9 @@ function PermissionMatrix({
 /* ---------------- Users section ---------------- */
 function UsersSection() {
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
-  const [authUsers, setAuthUsers] = useState<{ id: string; email: string | null; last_sign_in_at: string | null }[]>([]);
+  const [authUsers, setAuthUsers] = useState<
+    { id: string; email: string | null; last_sign_in_at: string | null | undefined }[]
+  >([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
