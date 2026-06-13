@@ -169,6 +169,8 @@ function PMSchedule() {
         </div>
       </div>
 
+      <DateFilterBar mode={rangeMode} setMode={setRangeMode} range={customRange} setRange={setCustomRange} />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print:hidden">
         <button onClick={() => setFilter("all")} className={`text-left rounded-lg border-2 p-3 bg-muted ${filter === "all" ? "ring-2 ring-primary" : ""}`}>
           <div className="text-xs uppercase opacity-70">Total PMs</div><div className="text-2xl font-bold">{counts.total}</div>
