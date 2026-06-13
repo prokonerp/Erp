@@ -50,6 +50,7 @@ function NewTicket() {
     oem_brand: "",
     oem_ref_id: "",
     oem_purchase_date: "",
+    special_instruction: "",
   });
 
   useEffect(() => {
@@ -183,6 +184,7 @@ function NewTicket() {
       oem_brand: form.oem_call ? form.oem_brand : null,
       oem_ref_id: form.oem_call ? form.oem_ref_id.trim() : null,
       oem_purchase_date: form.oem_call ? form.oem_purchase_date : null,
+      special_instruction: form.special_instruction.trim() || null,
       source: sourceMeta?.source ?? null,
       amc_id: sourceMeta?.amc_id ?? null,
       pm_visit_id: sourceMeta?.pm_visit_id ?? null,
@@ -198,7 +200,15 @@ function NewTicket() {
 
   return (
     <Card>
-      <CardHeader><CardTitle>New Ticket</CardTitle></CardHeader>
+      <CardHeader>
+        {form.special_instruction.trim() && (
+          <div className="mb-2 inline-flex items-center gap-2 self-start rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-red-700 animate-pulse">
+            <span className="h-2 w-2 rounded-full bg-red-600" />
+            Special Instruction
+          </div>
+        )}
+        <CardTitle>New Ticket</CardTitle>
+      </CardHeader>
       <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {sourceMeta?.label && (
           <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
@@ -306,6 +316,10 @@ function NewTicket() {
           </Select>
         </div>
         <div className="md:col-span-2"><Label>Complaint / Issue Description</Label><Textarea rows={3} value={form.complaint} onChange={(e) => set({ complaint: e.target.value })} /></div>
+        <div className="md:col-span-2">
+          <Label>Special Instruction <span className="text-xs text-muted-foreground">(visible as blinking ribbon)</span></Label>
+          <Textarea rows={2} value={form.special_instruction} onChange={(e) => set({ special_instruction: e.target.value })} placeholder="Critical handling notes for the engineer (optional)" />
+        </div>
 
         <div className="md:col-span-2 flex justify-end gap-2">
           <Button onClick={submit} disabled={busy} size="lg">Create Ticket</Button>

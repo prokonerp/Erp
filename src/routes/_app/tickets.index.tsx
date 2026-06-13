@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
 import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -42,6 +43,8 @@ type Row = {
   raised_by_name: string | null;
   created_at: string;
   oem_call?: boolean | null;
+  special_instruction?: string | null;
+  has_special_activity?: boolean;
 };
 
 type Employee = { id: string; name: string; phone: string | null; department: string | null; active: boolean };
@@ -69,7 +72,18 @@ function TicketsList() {
     if (status !== "all") query = query.eq("status", status);
     if (type !== "all") query = query.eq("call_type", type);
     const { data } = await query;
-    setRows((data || []) as Row[]);
+    const baseRows = (data || []) as Row[];
+    const ids = baseRows.map((r) => r.id);
+    let flagged = new Set<string>();
+    if (ids.length) {
+      const { data: acts } = await supabase
+        .from("ticket_activities")
+        .select("ticket_id")
+        .eq("special_instruction", true)
+        .in("ticket_id", ids);
+      flagged = new Set(((acts as { ticket_id: string }[] | null) || []).map((a) => a.ticket_id));
+    }
+    setRows(baseRows.map((r) => ({ ...r, has_special_activity: flagged.has(r.id) })));
     const { data: emps } = await supabase.from("employees").select("id,name,phone,department,active").eq("active", true).order("name");
     setEmployees((emps || []) as Employee[]);
     setLoading(false);
@@ -249,7 +263,14 @@ function TicketsList() {
                   <tr><td colSpan={13} className="p-4 text-muted-foreground">No tickets.</td></tr>
                 ) : filtered.map((r) => (
                   <tr key={r.id} className="border-t hover:bg-muted/30">
-                    <td className="p-2 font-mono">{r.case_id}</td>
+                    <td className="p-2 font-mono">
+                      {(r.has_special_activity || (r.special_instruction && r.special_instruction.trim())) && (
+                        <div className="mb-1 inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700 animate-pulse" title={r.special_instruction || "Special instruction tagged in activity log"}>
+                          <AlertTriangle className="h-2.5 w-2.5" />Special
+                        </div>
+                      )}
+                      <div>{r.case_id}</div>
+                    </td>
                     <td className="p-2">{r.call_type}</td>
                     <td className="p-2">
                       {r.oem_call ? (

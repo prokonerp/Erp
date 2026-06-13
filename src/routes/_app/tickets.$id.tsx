@@ -16,6 +16,8 @@ import {
 } from "@/lib/tickets";
 import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer } from "lucide-react";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -53,6 +55,7 @@ type Ticket = {
   source: string | null;
   amc_id: string | null;
   pm_visit_id: string | null;
+  special_instruction: string | null;
 };
 
 type CustomerBilling = {
@@ -86,6 +89,7 @@ type Activity = {
   to_status: string | null;
   notes: string | null;
   created_at: string;
+  special_instruction?: boolean | null;
 };
 
 function TicketDetail() {
@@ -96,6 +100,7 @@ function TicketDetail() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [busy, setBusy] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [noteSpecial, setNoteSpecial] = useState(false);
   const [templates, setTemplates] = useState<Record<string, string>>({});
   const [quoteNo, setQuoteNo] = useState<string>("");
   const [customer, setCustomer] = useState<CustomerBilling | null>(null);
@@ -169,11 +174,11 @@ function TicketDetail() {
   const renderMsg = (id: "engineer_assign" | "oow_quotation" | "ticket_closed", fallback: string) =>
     templates[id] ? renderTemplate(templates[id], tplVars()) : fallback;
 
-  const logActivity = async (kind: string, notes: string, from_status?: string, to_status?: string) => {
+  const logActivity = async (kind: string, notes: string, from_status?: string, to_status?: string, special?: boolean) => {
     const { data: u } = await supabase.auth.getUser();
     await supabase.from("ticket_activities").insert({
       ticket_id: t.id, kind, notes, from_status: from_status ?? null, to_status: to_status ?? null,
-      actor: u.user?.id ?? null,
+      actor: u.user?.id ?? null, special_instruction: !!special,
     } as never);
   };
 
@@ -212,6 +217,7 @@ function TicketDetail() {
       oem_brand: payload.oem_call ? payload.oem_brand : null,
       oem_ref_id: payload.oem_call ? payload.oem_ref_id : null,
       oem_purchase_date: payload.oem_call ? payload.oem_purchase_date : null,
+      special_instruction: (payload.special_instruction ?? "").toString().trim() || null,
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
@@ -262,10 +268,11 @@ function TicketDetail() {
 
   const addNote = async () => {
     if (!noteText.trim()) return;
-    await logActivity("note", noteText);
+    await logActivity("note", noteText, undefined, undefined, noteSpecial);
     setNoteText("");
+    setNoteSpecial(false);
     await load();
-    toast.success("Note added");
+    toast.success(noteSpecial ? "Special instruction added" : "Note added");
   };
 
   const createOOWQuote = async () => {
@@ -304,6 +311,9 @@ function TicketDetail() {
     navigate({ to: "/tickets" });
   };
 
+  const hasSpecialActivity = activities.some((a) => a.special_instruction);
+  const showSpecialRibbon = !!(t.special_instruction && t.special_instruction.trim()) || hasSpecialActivity;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -311,7 +321,15 @@ function TicketDetail() {
           <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/tickets" })}>
             <ArrowLeft className="h-4 w-4 mr-1" />Back
           </Button>
-          <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
+          <div className="flex flex-col gap-1">
+            {showSpecialRibbon && (
+              <div className="inline-flex items-center gap-2 self-start rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-red-700 animate-pulse">
+                <AlertTriangle className="h-3 w-3" />
+                Special Instruction
+              </div>
+            )}
+            <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
+          </div>
           <Badge className={STATUS_COLOR[t.status] || ""} variant="secondary">{t.status}</Badge>
           <Badge variant={t.oem_call ? "default" : "outline"} className={t.oem_call ? "bg-purple-600 text-white hover:bg-purple-700" : ""}>
             {t.oem_call ? "OEM" : "PHS"}
@@ -354,6 +372,10 @@ function TicketDetail() {
               </div>
               <div><Label>Serial Number</Label><Input value={t.serial_no || ""} onChange={(e) => update({ serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
               <div className="md:col-span-2"><Label>Complaint</Label><Textarea rows={2} value={t.complaint || ""} onChange={(e) => update({ complaint: e.target.value })} /></div>
+              <div className="md:col-span-2">
+                <Label>Special Instruction <span className="text-xs text-muted-foreground">(shows blinking ribbon when filled)</span></Label>
+                <Textarea rows={2} value={t.special_instruction || ""} onChange={(e) => update({ special_instruction: e.target.value })} placeholder="Critical handling notes for engineer (optional)" />
+              </div>
             </CardContent>
           </Card>
 
@@ -450,16 +472,29 @@ function TicketDetail() {
           <Card>
             <CardHeader><CardTitle>Activity Log</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input placeholder="Add a note…" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
-                <Button onClick={addNote}>Add</Button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input placeholder="Add a note…" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+                  <Button onClick={addNote}>Add</Button>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox checked={noteSpecial} onCheckedChange={(v) => setNoteSpecial(v === true)} />
+                  <span>Tag as <b className="text-red-700">Special Instruction</b> (flags this ticket as critical)</span>
+                </label>
               </div>
               <div className="space-y-2 max-h-72 overflow-auto">
                 {activities.length === 0 && <p className="text-sm text-muted-foreground">No activity yet.</p>}
                 {activities.map((a) => (
-                  <div key={a.id} className="border rounded-md p-2 text-sm">
+                  <div key={a.id} className={`border rounded-md p-2 text-sm ${a.special_instruction ? "border-red-300 bg-red-50/60" : ""}`}>
                     <div className="flex items-center justify-between">
-                      <span className="font-medium capitalize">{a.kind}</span>
+                      <span className="font-medium capitalize flex items-center gap-2">
+                        {a.kind}
+                        {a.special_instruction && (
+                          <span className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
+                            <AlertTriangle className="h-3 w-3" />Special
+                          </span>
+                        )}
+                      </span>
                       <span className="text-xs text-muted-foreground">{new Date(a.created_at).toLocaleString()}</span>
                     </div>
                     {a.notes && <div className="text-muted-foreground mt-1">{a.notes}</div>}
