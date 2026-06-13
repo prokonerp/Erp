@@ -51,6 +51,7 @@ function NewTicket() {
     oem_ref_id: "",
     oem_purchase_date: "",
     special_instruction: "",
+    preferred_visit_datetime: "",
   });
 
   useEffect(() => {
