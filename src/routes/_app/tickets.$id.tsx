@@ -95,6 +95,36 @@ type Activity = {
   special_instruction?: boolean | null;
 };
 
+function toDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function preferredRibbonStyle(dt: string | null) {
+  if (!dt) return "";
+  const pv = new Date(dt).getTime();
+  const now = Date.now();
+  const diffHours = (pv - now) / 3600000;
+  if (diffHours >= 0 && diffHours <= 2) {
+    return "border-amber-300 bg-amber-50 text-amber-700 animate-pulse";
+  }
+  if (diffHours < 0) {
+    return "border-red-300 bg-red-50 text-red-700";
+  }
+  return "border-blue-300 bg-blue-50 text-blue-700 animate-pulse";
+}
+
+function formatPreferred(dt: string | null): string {
+  if (!dt) return "";
+  const d = new Date(dt);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear().toString().slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function TicketDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
