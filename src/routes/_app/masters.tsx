@@ -1,14 +1,13 @@
-import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MasterCrud } from "@/components/MasterCrud";
 import { CustomerMasterPage } from "./masters.customers";
 import { ProductMasterPage } from "./masters.products";
 import { useIsAdmin } from "@/lib/useRole";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ShieldCheck, ExternalLink, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ShieldCheck, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { RolesAndUsersPanel } from "@/components/RolesAndUsersPanel";
 import { cn } from "@/lib/utils";
 
@@ -37,11 +36,9 @@ function MastersPage() {
     { value: "customers", label: "Customers" },
     { value: "vendors", label: "Vendors" },
     { value: "products", label: "Products" },
-    { value: "service", label: "Service / Tickets" },
     { value: "employees", label: "Employees" },
     { value: "inventory", label: "Inventory" },
     { value: "accounts", label: "Accounts" },
-    { value: "amc", label: "AMC" },
     { value: "users", label: "Users & Roles" },
   ];
   const handleTabChange = (v: string) => {
@@ -56,7 +53,7 @@ function MastersPage() {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">Masters</h1>
-          <p className="text-sm text-muted-foreground">Central data: company, customers, vendors, products, employees, inventory, accounts, AMC and tickets.</p>
+          <p className="text-sm text-muted-foreground">Central data: company, branches, warehouses, customers, vendors, products, employees, inventory, accounts and users.</p>
         </div>
         <div className="text-xs text-muted-foreground flex items-center gap-1">
           <ShieldCheck className="h-4 w-4" />
@@ -204,9 +201,6 @@ function MastersPage() {
           <ProductMasterPage />
         </TabsContent>
 
-        <TabsContent value="service" className="mt-4">
-          <LinkOut to="/tickets" label="Service / Complaint Master is managed in Tickets." />
-        </TabsContent>
 
         <TabsContent value="employees" className="mt-4">
           <MasterCrud
@@ -257,9 +251,6 @@ function MastersPage() {
           />
         </TabsContent>
 
-        <TabsContent value="amc" className="mt-4">
-          <LinkOut to="/amc" label="AMC / Contract Master is managed in AMC." />
-        </TabsContent>
 
         <TabsContent value="users" className="mt-4">
           <RolesAndUsersPanel isAdmin={isAdmin} />
@@ -268,18 +259,5 @@ function MastersPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-function LinkOut({ to, label }: { to: string; label: string }) {
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">{label}</CardTitle></CardHeader>
-      <CardContent>
-        <Link to={to}>
-          <Button><ExternalLink className="h-4 w-4 mr-1" />Open module</Button>
-        </Link>
-      </CardContent>
-    </Card>
   );
 }
