@@ -372,6 +372,10 @@ function TicketDetail() {
               </div>
               <div><Label>Serial Number</Label><Input value={t.serial_no || ""} onChange={(e) => update({ serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
               <div className="md:col-span-2"><Label>Complaint</Label><Textarea rows={2} value={t.complaint || ""} onChange={(e) => update({ complaint: e.target.value })} /></div>
+              <div className="md:col-span-2">
+                <Label>Special Instruction <span className="text-xs text-muted-foreground">(shows blinking ribbon when filled)</span></Label>
+                <Textarea rows={2} value={t.special_instruction || ""} onChange={(e) => update({ special_instruction: e.target.value })} placeholder="Critical handling notes for engineer (optional)" />
+              </div>
             </CardContent>
           </Card>
 
