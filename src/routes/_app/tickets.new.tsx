@@ -209,6 +209,12 @@ function NewTicket() {
             Special Instruction
           </div>
         )}
+        {form.preferred_visit_datetime && (
+          <div className="mb-2 inline-flex items-center gap-2 self-start rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-700 animate-pulse">
+            <CalendarClock className="h-3 w-3" />
+            Preferred Visit: {new Date(form.preferred_visit_datetime).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+          </div>
+        )}
         <CardTitle>New Ticket</CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
