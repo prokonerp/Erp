@@ -1394,6 +1394,8 @@ export type Database = {
       }
       tickets: {
         Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
           amc_id: string | null
           assigned_at: string | null
           assigned_engineer_name: string | null
@@ -1430,10 +1432,13 @@ export type Database = {
           serial_no: string | null
           source: string | null
           special_instruction: string | null
+          special_instruction_acknowledged: boolean
           status: string
           updated_at: string
         }
         Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           amc_id?: string | null
           assigned_at?: string | null
           assigned_engineer_name?: string | null
@@ -1470,10 +1475,13 @@ export type Database = {
           serial_no?: string | null
           source?: string | null
           special_instruction?: string | null
+          special_instruction_acknowledged?: boolean
           status?: string
           updated_at?: string
         }
         Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           amc_id?: string | null
           assigned_at?: string | null
           assigned_engineer_name?: string | null
@@ -1510,6 +1518,7 @@ export type Database = {
           serial_no?: string | null
           source?: string | null
           special_instruction?: string | null
+          special_instruction_acknowledged?: boolean
           status?: string
           updated_at?: string
         }
