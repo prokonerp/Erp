@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import { ListChecks, Plus, MessageSquare, LayoutDashboard, Link2 } from "lucide-react";
+import { ListChecks, Plus, MessageSquare, LayoutDashboard, Link2, Settings } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/tickets")({
@@ -15,6 +15,7 @@ function TicketsLayout() {
     { to: "/tickets", label: "All Tickets", icon: ListChecks, exact: true },
     { to: "/tickets/new", label: "New Ticket", icon: Plus },
     { to: "/tickets/templates", label: "WhatsApp Templates", icon: MessageSquare },
+    { to: "/tickets/settings", label: "Settings", icon: Settings },
   ];
   const copyPublicLink = async () => {
     const url = `${window.location.origin}/raise-ticket`;

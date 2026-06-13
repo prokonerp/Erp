@@ -78,6 +78,7 @@ type FormState = {
   same_as_billing: boolean;
   place_of_supply: string;
   contacts: ContactRow[];
+  sector: string;
   remarks: string;
 };
 
@@ -92,6 +93,7 @@ const empty: FormState = {
   same_as_billing: true,
   place_of_supply: "",
   contacts: [],
+  sector: "",
   remarks: "",
 };
 
@@ -171,6 +173,7 @@ export function CustomerMasterPage() {
       same_as_billing: sameAsBilling,
       place_of_supply: any.place_of_supply || "",
       contacts: Array.isArray(any.contacts) ? (any.contacts as ContactRow[]).map((x) => ({ ...emptyContact, ...x })) : [],
+      sector: any.sector || "",
       remarks: c.remarks || "",
     });
     setEditingId(c.id);
@@ -233,6 +236,7 @@ export function CustomerMasterPage() {
       gst_status: form.gst_status,
       pan: form.pan ? upperTrim(form.pan) : null,
       place_of_supply: form.place_of_supply || null,
+      sector: form.sector ? toTitleCaseSmart(form.sector) : null,
       state: billing.state || null,
       country: billing.country || "India",
       city: toTitleCaseSmart(billing.city) || null,
