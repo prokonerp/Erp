@@ -1,4 +1,10 @@
-export type AmcUnit = { model: string; serial_no: string };
+export type AmcUnit = {
+  model: string;
+  serial_no: string;
+  // New optional fields (Product Master driven). Older records may lack these.
+  category?: string | null;
+  product_id?: string | null;
+};
 
 export type Amc = {
   id: string;

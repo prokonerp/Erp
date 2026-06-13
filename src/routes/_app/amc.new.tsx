@@ -9,23 +9,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { type AmcUnit, addYears, fmtDate, generatePMDates, nextAgreementNo } from "@/lib/amc";
+import { type AmcUnit, addYears, fmtDate, generatePMDates } from "@/lib/amc";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
-import { ProductPicker } from "@/components/ProductPicker";
 
 export const Route = createFileRoute("/_app/amc/new")({
   component: NewAmc,
   head: () => ({ meta: [{ title: "New AMC — Prokon" }] }),
 });
 
-const emptyUnit = (): AmcUnit & { product_id?: string } => ({ model: "", serial_no: "", product_id: "" } as AmcUnit & { product_id?: string });
+const emptyUnit = (): AmcUnit => ({ model: "", serial_no: "", category: "", product_id: "" });
+
+type ProductLite = { id: string; name: string | null; model: string | null; category: string | null; brand: string | null };
+type SerialLite = { id: string; serial_number: string; product_id: string };
 
 function NewAmc() {
   const navigate = useNavigate();
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
-    agreement_no: "",
     customer_id: "" as string,
     client_name: "",
     client_company: "",
@@ -39,35 +40,77 @@ function NewAmc() {
     remarks: "",
     terms: "",
   });
-  const [units, setUnits] = useState<(AmcUnit & { product_id?: string })[]>([emptyUnit()]);
+  const [units, setUnits] = useState<AmcUnit[]>([emptyUnit()]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [products, setProducts] = useState<ProductLite[]>([]);
+  const [serials, setSerials] = useState<SerialLite[]>([]);
+  const [prefixPreview, setPrefixPreview] = useState<string>("PHS/AMC/");
   const [busy, setBusy] = useState(false);
 
   const end_date = addYears(form.start_date, form.duration_years);
 
   useEffect(() => {
     (async () => {
-      const [agree, settings] = await Promise.all([
-        supabase.from("amcs").select("agreement_no"),
-        supabase.from("amc_settings").select("terms_template").eq("id", 1).maybeSingle(),
+      const [settings, cats, prods, sers] = await Promise.all([
+        supabase.from("amc_settings").select("terms_template,prefix").eq("id", 1).maybeSingle(),
+        supabase.from("product_categories").select("name").order("name"),
+        supabase.from("products").select("id,name,model,category,brand").eq("active", true).order("name"),
+        supabase.from("serials").select("id,serial_number,product_id").order("serial_number"),
       ]);
-      const existing = (agree.data || []).map((x: { agreement_no: string }) => x.agreement_no);
-      setForm((f) => ({
-        ...f,
-        agreement_no: nextAgreementNo(existing),
-        terms: (settings.data?.terms_template as string) || "",
-      }));
+      const s = settings.data as { terms_template?: string; prefix?: string } | null;
+      setForm((f) => ({ ...f, terms: s?.terms_template || "" }));
+      setPrefixPreview(s?.prefix || "PHS/AMC/");
+      setCategories(((cats.data || []) as { name: string }[]).map((c) => c.name));
+      setProducts((prods.data || []) as ProductLite[]);
+      setSerials((sers.data || []) as SerialLite[]);
+
+      // Prefill from OEM tab: ?customer=<id>&product=<id>&serial=<sn>&oem_ref=<ref>
+      if (typeof window !== "undefined") {
+        const sp = new URLSearchParams(window.location.search);
+        const customerId = sp.get("customer");
+        const productId = sp.get("product");
+        const serial = sp.get("serial") || "";
+        if (customerId) {
+          const { data: c } = await supabase.from("customers")
+            .select("id,company,contact_name,phone,email,billing_address,address,gst")
+            .eq("id", customerId).maybeSingle();
+          const cust = c as { company?: string; contact_name?: string; phone?: string; email?: string; billing_address?: string; address?: string; gst?: string } | null;
+          if (cust) {
+            setForm((f) => ({
+              ...f,
+              customer_id: customerId,
+              client_name: cust.contact_name || cust.company || "",
+              client_company: cust.company || "",
+              client_address: cust.billing_address || cust.address || "",
+              client_gst: cust.gst || "",
+              contact_no: cust.phone || "",
+              email: cust.email || "",
+            }));
+          }
+        }
+        if (productId) {
+          const p = ((prods.data || []) as ProductLite[]).find((x) => x.id === productId);
+          if (p) {
+            setUnits([{ category: p.category || "", product_id: p.id, model: p.model || p.name || "", serial_no: serial }]);
+          }
+        }
+      }
     })();
   }, []);
 
   const submit = async () => {
     if (!form.customer_id) return toast.error("Please select a customer from Customer Master");
     if (!form.client_name.trim()) return toast.error("Client name is required");
-    const cleanUnits = units.filter((u) => u.model.trim() || u.serial_no.trim());
+    const cleanUnits = units.filter((u) => (u.model || "").trim() || (u.product_id || "").trim());
     if (cleanUnits.length === 0) return toast.error("Add at least one UPS unit");
+    for (const u of cleanUnits) {
+      if (!u.category) return toast.error("Each product needs a Category");
+      if (!u.product_id) return toast.error("Each product needs a Model selected from Product Master");
+    }
     setBusy(true);
     const { data: userData } = await supabase.auth.getUser();
     const { data, error } = await supabase.from("amcs").insert({
-      agreement_no: form.agreement_no,
+      // agreement_no auto-generated server-side
       customer_id: form.customer_id,
       client_name: toTitleCaseSmart(form.client_name),
       client_company: form.client_company ? toTitleCaseSmart(form.client_company) : null,
@@ -76,9 +119,10 @@ function NewAmc() {
       contact_no: form.contact_no || null,
       email: form.email ? form.email.trim().toLowerCase() : null,
       units: cleanUnits.map((u) => ({
-        ...u,
-        model: toTitleCaseSmart(u.model),
-        serial_no: upperTrim(u.serial_no),
+        category: u.category || null,
+        product_id: u.product_id || null,
+        model: toTitleCaseSmart(u.model || ""),
+        serial_no: upperTrim(u.serial_no || ""),
       })),
       start_date: form.start_date,
       end_date,
@@ -100,7 +144,11 @@ function NewAmc() {
       <Card>
         <CardHeader><CardTitle>New AMC Agreement</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>Agreement No.</Label><Input value={form.agreement_no} onChange={(e) => setForm({ ...form, agreement_no: e.target.value })} /></div>
+          <div>
+            <Label>AMC Agreement Number <span className="text-xs text-muted-foreground">(auto-generated)</span></Label>
+            <Input value="Auto-generated on save" readOnly disabled className="bg-muted font-mono" />
+            <p className="text-[11px] text-muted-foreground mt-1">Format: <span className="font-mono">{prefixPreview}{`{ddMMyyHHmm}{SEQ}`}</span></p>
+          </div>
           <div>
             <Label>Duration</Label>
             <Select value={String(form.duration_years)} onValueChange={(v) => setForm({ ...form, duration_years: Number(v) })}>
@@ -141,27 +189,21 @@ function NewAmc() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>UPS Units under contract</CardTitle>
+          <CardTitle>Product Details</CardTitle>
           <Button size="sm" variant="outline" onClick={() => setUnits([...units, emptyUnit()])}><Plus className="h-4 w-4 mr-1" />Add unit</Button>
         </CardHeader>
         <CardContent className="space-y-3">
           {units.map((u, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
-              <div className="col-span-12 md:col-span-6">
-                <Label>UPS Model <span className="text-xs text-muted-foreground font-normal">(from Product Master)</span></Label>
-                <ProductPicker
-                  value={u.product_id || ""}
-                  required
-                  onChange={(id, p) => setUnits(units.map((x, idx) => idx === i ? { ...x, product_id: id || "", model: p?.model || p?.name || "" } : x))}
-                />
-              </div>
-              <div className="col-span-10 md:col-span-5"><Label>Serial No.</Label><Input value={u.serial_no} onChange={(e) => setUnits(units.map((x, idx) => idx === i ? { ...x, serial_no: e.target.value } : x))} /></div>
-              <div className="col-span-2 md:col-span-1">
-                <Button size="icon" variant="ghost" onClick={() => setUnits(units.filter((_, idx) => idx !== i))} disabled={units.length === 1}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            </div>
+            <ProductRow
+              key={i}
+              unit={u}
+              categories={categories}
+              products={products}
+              serials={serials}
+              onChange={(patch) => setUnits(units.map((x, idx) => idx === i ? { ...x, ...patch } : x))}
+              onRemove={() => setUnits(units.filter((_, idx) => idx !== i))}
+              canRemove={units.length > 1}
+            />
           ))}
         </CardContent>
       </Card>
@@ -182,6 +224,65 @@ function NewAmc() {
 
       <div className="flex justify-end gap-2">
         <Button size="lg" onClick={submit} disabled={busy}>Save AMC</Button>
+      </div>
+    </div>
+  );
+}
+
+function ProductRow({ unit, categories, products, serials, onChange, onRemove, canRemove }: {
+  unit: AmcUnit;
+  categories: string[];
+  products: ProductLite[];
+  serials: SerialLite[];
+  onChange: (patch: Partial<AmcUnit>) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}) {
+  const filteredProducts = products.filter((p) => !unit.category || p.category === unit.category);
+  const filteredSerials = serials.filter((s) => s.product_id === unit.product_id);
+  return (
+    <div className="grid grid-cols-12 gap-2 items-end border-b pb-3">
+      <div className="col-span-12 md:col-span-3">
+        <Label>Category *</Label>
+        <Select value={unit.category || ""} onValueChange={(v) => onChange({ category: v, product_id: "", model: "", serial_no: "" })}>
+          <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="col-span-12 md:col-span-4">
+        <Label>Model *</Label>
+        <Select value={unit.product_id || ""} onValueChange={(v) => {
+          const p = products.find((x) => x.id === v);
+          onChange({ product_id: v, model: p?.model || p?.name || "", serial_no: "" });
+        }} disabled={!unit.category}>
+          <SelectTrigger><SelectValue placeholder={unit.category ? "Select model" : "Pick category first"} /></SelectTrigger>
+          <SelectContent>
+            {filteredProducts.map((p) => (
+              <SelectItem key={p.id} value={p.id}>{p.model || p.name} {p.brand ? `· ${p.brand}` : ""}</SelectItem>
+            ))}
+            {filteredProducts.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No products in this category</div>}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="col-span-10 md:col-span-4">
+        <Label>Serial Number</Label>
+        {filteredSerials.length > 0 ? (
+          <Select value={unit.serial_no || ""} onValueChange={(v) => onChange({ serial_no: v })}>
+            <SelectTrigger><SelectValue placeholder="Select serial" /></SelectTrigger>
+            <SelectContent>
+              {filteredSerials.map((s) => <SelectItem key={s.id} value={s.serial_number}>{s.serial_number}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input value={unit.serial_no || ""} onChange={(e) => onChange({ serial_no: e.target.value.toUpperCase() })} placeholder="Enter serial" className="font-mono" />
+        )}
+      </div>
+      <div className="col-span-2 md:col-span-1 flex justify-end">
+        <Button size="icon" variant="ghost" onClick={onRemove} disabled={!canRemove}>
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
       </div>
     </div>
   );

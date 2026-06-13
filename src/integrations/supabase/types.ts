@@ -47,19 +47,37 @@ export type Database = {
         }
         Relationships: []
       }
+      amc_sequence: {
+        Row: {
+          id: number
+          last_seq: number
+        }
+        Insert: {
+          id?: number
+          last_seq?: number
+        }
+        Update: {
+          id?: number
+          last_seq?: number
+        }
+        Relationships: []
+      }
       amc_settings: {
         Row: {
           id: number
+          prefix: string
           terms_template: string
           updated_at: string
         }
         Insert: {
           id?: number
+          prefix?: string
           terms_template?: string
           updated_at?: string
         }
         Update: {
           id?: number
+          prefix?: string
           terms_template?: string
           updated_at?: string
         }
@@ -81,6 +99,10 @@ export type Database = {
           email: string | null
           end_date: string
           id: string
+          oem_brand: string | null
+          oem_call: boolean
+          oem_purchase_date: string | null
+          oem_ref_id: string | null
           pm_dates: Json
           prev_amc_id: string | null
           remarks: string | null
@@ -104,6 +126,10 @@ export type Database = {
           email?: string | null
           end_date: string
           id?: string
+          oem_brand?: string | null
+          oem_call?: boolean
+          oem_purchase_date?: string | null
+          oem_ref_id?: string | null
           pm_dates?: Json
           prev_amc_id?: string | null
           remarks?: string | null
@@ -127,6 +153,10 @@ export type Database = {
           email?: string | null
           end_date?: string
           id?: string
+          oem_brand?: string | null
+          oem_call?: boolean
+          oem_purchase_date?: string | null
+          oem_ref_id?: string | null
           pm_dates?: Json
           prev_amc_id?: string | null
           remarks?: string | null
@@ -845,6 +875,10 @@ export type Database = {
           created_at: string
           id: string
           notes: string | null
+          oem_brand: string | null
+          oem_call: boolean
+          oem_purchase_date: string | null
+          oem_ref_id: string | null
           scheduled_date: string
           updated_at: string
         }
@@ -855,6 +889,10 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          oem_brand?: string | null
+          oem_call?: boolean
+          oem_purchase_date?: string | null
+          oem_ref_id?: string | null
           scheduled_date: string
           updated_at?: string
         }
@@ -865,6 +903,10 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          oem_brand?: string | null
+          oem_call?: boolean
+          oem_purchase_date?: string | null
+          oem_ref_id?: string | null
           scheduled_date?: string
           updated_at?: string
         }
@@ -1643,6 +1685,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      next_amc_seq: { Args: never; Returns: number }
       next_ticket_seq: { Args: never; Returns: number }
     }
     Enums: {

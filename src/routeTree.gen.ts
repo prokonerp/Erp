@@ -40,6 +40,7 @@ import { Route as AppCrmIncentivesRouteImport } from './routes/_app/crm.incentiv
 import { Route as AppCrmCustomersRouteImport } from './routes/_app/crm.customers'
 import { Route as AppAmcSettingsRouteImport } from './routes/_app/amc.settings'
 import { Route as AppAmcPmRouteImport } from './routes/_app/amc.pm'
+import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
 import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
 import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
 import { Route as AppCrmQuotationsIdRouteImport } from './routes/_app/crm.quotations.$id'
@@ -199,6 +200,11 @@ const AppAmcPmRoute = AppAmcPmRouteImport.update({
   path: '/pm',
   getParentRoute: () => AppAmcRoute,
 } as any)
+const AppAmcOemRoute = AppAmcOemRouteImport.update({
+  id: '/oem',
+  path: '/oem',
+  getParentRoute: () => AppAmcRoute,
+} as any)
 const AppAmcNewRoute = AppAmcNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/tickets': typeof AppTicketsRouteWithChildren
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
+  '/amc/oem': typeof AppAmcOemRoute
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
   '/crm/customers': typeof AppCrmCustomersRoute
@@ -268,6 +275,7 @@ export interface FileRoutesByTo {
   '/reports': typeof AppReportsRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
+  '/amc/oem': typeof AppAmcOemRoute
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
   '/crm/customers': typeof AppCrmCustomersRoute
@@ -306,6 +314,7 @@ export interface FileRoutesById {
   '/_app/tickets': typeof AppTicketsRouteWithChildren
   '/_app/amc/$id': typeof AppAmcIdRoute
   '/_app/amc/new': typeof AppAmcNewRoute
+  '/_app/amc/oem': typeof AppAmcOemRoute
   '/_app/amc/pm': typeof AppAmcPmRoute
   '/_app/amc/settings': typeof AppAmcSettingsRoute
   '/_app/crm/customers': typeof AppCrmCustomersRoute
@@ -344,6 +353,7 @@ export interface FileRouteTypes {
     | '/tickets'
     | '/amc/$id'
     | '/amc/new'
+    | '/amc/oem'
     | '/amc/pm'
     | '/amc/settings'
     | '/crm/customers'
@@ -377,6 +387,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/amc/$id'
     | '/amc/new'
+    | '/amc/oem'
     | '/amc/pm'
     | '/amc/settings'
     | '/crm/customers'
@@ -414,6 +425,7 @@ export interface FileRouteTypes {
     | '/_app/tickets'
     | '/_app/amc/$id'
     | '/_app/amc/new'
+    | '/_app/amc/oem'
     | '/_app/amc/pm'
     | '/_app/amc/settings'
     | '/_app/crm/customers'
@@ -662,6 +674,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAmcPmRouteImport
       parentRoute: typeof AppAmcRoute
     }
+    '/_app/amc/oem': {
+      id: '/_app/amc/oem'
+      path: '/oem'
+      fullPath: '/amc/oem'
+      preLoaderRoute: typeof AppAmcOemRouteImport
+      parentRoute: typeof AppAmcRoute
+    }
     '/_app/amc/new': {
       id: '/_app/amc/new'
       path: '/new'
@@ -696,6 +715,7 @@ declare module '@tanstack/react-router' {
 interface AppAmcRouteChildren {
   AppAmcIdRoute: typeof AppAmcIdRoute
   AppAmcNewRoute: typeof AppAmcNewRoute
+  AppAmcOemRoute: typeof AppAmcOemRoute
   AppAmcPmRoute: typeof AppAmcPmRoute
   AppAmcSettingsRoute: typeof AppAmcSettingsRoute
   AppAmcIndexRoute: typeof AppAmcIndexRoute
@@ -704,6 +724,7 @@ interface AppAmcRouteChildren {
 const AppAmcRouteChildren: AppAmcRouteChildren = {
   AppAmcIdRoute: AppAmcIdRoute,
   AppAmcNewRoute: AppAmcNewRoute,
+  AppAmcOemRoute: AppAmcOemRoute,
   AppAmcPmRoute: AppAmcPmRoute,
   AppAmcSettingsRoute: AppAmcSettingsRoute,
   AppAmcIndexRoute: AppAmcIndexRoute,
