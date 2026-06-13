@@ -41,6 +41,7 @@ type Row = {
   raised_by_type: string | null;
   raised_by_name: string | null;
   created_at: string;
+  oem_call?: boolean | null;
 };
 
 type Employee = { id: string; name: string; phone: string | null; department: string | null; active: boolean };
@@ -179,6 +180,7 @@ function TicketsList() {
               columns={[
                 { header: "Case ID", get: (r) => r.case_id },
                 { header: "Type", get: (r) => r.call_type },
+                { header: "Tag", get: (r) => (r.oem_call ? "OEM" : "PHS") },
                 { header: "Priority", get: (r) => r.priority || "" },
                 { header: "Customer", get: (r) => r.customer_name },
                 { header: "Phone", get: (r) => r.customer_phone || "" },
@@ -227,6 +229,7 @@ function TicketsList() {
                 <tr>
                   <th className="p-2">Case ID</th>
                   <th className="p-2">Type</th>
+                  <th className="p-2 w-16">Tag</th>
                   <th className="p-2 w-16">Pr.</th>
                   <th className="p-2 w-20">Timer</th>
                   <th className="p-2">Customer</th>
@@ -241,13 +244,20 @@ function TicketsList() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={12} className="p-4 text-muted-foreground">Loading…</td></tr>
+                  <tr><td colSpan={13} className="p-4 text-muted-foreground">Loading…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={12} className="p-4 text-muted-foreground">No tickets.</td></tr>
+                  <tr><td colSpan={13} className="p-4 text-muted-foreground">No tickets.</td></tr>
                 ) : filtered.map((r) => (
                   <tr key={r.id} className="border-t hover:bg-muted/30">
                     <td className="p-2 font-mono">{r.case_id}</td>
                     <td className="p-2">{r.call_type}</td>
+                    <td className="p-2">
+                      {r.oem_call ? (
+                        <Badge className="bg-purple-100 text-purple-800" variant="secondary">OEM</Badge>
+                      ) : (
+                        <Badge variant="outline">PHS</Badge>
+                      )}
+                    </td>
                     <td className="p-2">
                       <Select value={r.priority || "P3"} onValueChange={(v) => setPriority(r.id, v)}>
                         <SelectTrigger className={`h-7 w-14 px-2 ${PRIORITY_COLOR[r.priority || "P3"] || ""}`}><SelectValue /></SelectTrigger>
