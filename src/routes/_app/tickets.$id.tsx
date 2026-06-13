@@ -405,6 +405,12 @@ function TicketDetail() {
                 )}
               </div>
             )}
+            {t.preferred_visit_datetime && (
+              <div className={`inline-flex items-center gap-2 self-start rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${preferredRibbonStyle(t.preferred_visit_datetime)}`}>
+                <CalendarClock className="h-3 w-3" />
+                Preferred Visit: {formatPreferred(t.preferred_visit_datetime)}
+              </div>
+            )}
             <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
           </div>
           <Badge className={STATUS_COLOR[t.status] || ""} variant="secondary">{t.status}</Badge>
