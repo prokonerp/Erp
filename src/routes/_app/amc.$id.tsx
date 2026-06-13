@@ -218,6 +218,56 @@ function AmcDetail() {
         </Card>
 
         <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>OEM Registration</span>
+              <div className="flex items-center gap-2 text-sm font-normal">
+                <Label htmlFor="oem-toggle-edit">Registered with OEM</Label>
+                <Switch id="oem-toggle-edit" checked={!!a.oem_call} onCheckedChange={(v) => update({ oem_call: v })} />
+                <span className="text-xs text-muted-foreground">{a.oem_call ? "Yes" : "No"}</span>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          {a.oem_call && (
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label>OEM Brand *</Label>
+                <Select
+                  value={a.oem_brand || ""}
+                  onValueChange={async (v) => {
+                    if (v === "__add__") {
+                      const name = window.prompt("New OEM brand name")?.trim();
+                      if (!name) return;
+                      const { error } = await supabase.from("oem_brand_master").insert({ name } as never);
+                      if (error) { toast.error(error.message); return; }
+                      setOemBrands((arr) => Array.from(new Set([...arr, name])).sort());
+                      update({ oem_brand: name });
+                      toast.success("OEM brand added");
+                    } else {
+                      update({ oem_brand: v });
+                    }
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select OEM brand" /></SelectTrigger>
+                  <SelectContent>
+                    {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    <SelectItem value="__add__">+ Add New OEM Brand</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>OEM Agreement Number *</Label>
+                <Input value={a.oem_ref_id || ""} onChange={(e) => update({ oem_ref_id: e.target.value.toUpperCase() })} placeholder="e.g. APC-2026-AB12345" className="font-mono" />
+              </div>
+              <div>
+                <Label>OEM Purchase Date</Label>
+                <Input type="date" value={a.oem_purchase_date || ""} onChange={(e) => update({ oem_purchase_date: e.target.value })} />
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
+        <Card>
           <CardHeader><CardTitle>Scheduled PM Visits</CardTitle></CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2 text-xs">
