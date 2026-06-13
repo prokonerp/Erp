@@ -46,6 +46,13 @@ type Ticket = {
   remarks: string | null;
   created_at: string;
   customer_id: string | null;
+  oem_call: boolean;
+  oem_brand: string | null;
+  oem_ref_id: string | null;
+  oem_purchase_date: string | null;
+  source: string | null;
+  amc_id: string | null;
+  pm_visit_id: string | null;
 };
 
 type CustomerBilling = {
@@ -94,6 +101,7 @@ function TicketDetail() {
   const [customer, setCustomer] = useState<CustomerBilling | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
 
   const load = async () => {
     const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
@@ -132,6 +140,9 @@ function TicketDetail() {
     const map: Record<string, string> = {};
     for (const r of (tpl || []) as { id: string; body: string }[]) map[r.id] = r.body;
     setTemplates(map);
+    const { data: brands } = await supabase.from("oem_brand_master" as never).select("name").order("name");
+    const bnames = ((brands as { name: string }[] | null) || []).map((b) => b.name);
+    if (bnames.length) setOemBrands(Array.from(new Set(bnames)));
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
@@ -169,6 +180,13 @@ function TicketDetail() {
   const save = async (extra: Partial<Ticket> = {}) => {
     setBusy(true);
     const payload = { ...t, ...extra };
+    if (payload.oem_call) {
+      if (!payload.oem_brand || !payload.oem_ref_id || !payload.oem_purchase_date) {
+        setBusy(false);
+        toast.error("OEM Call is enabled — Brand, Ref ID and Purchase Date are required.");
+        return false;
+      }
+    }
     const { error } = await supabase.from("tickets").update({
       case_id: payload.case_id,
       call_type: payload.call_type,
@@ -190,6 +208,10 @@ function TicketDetail() {
       parts_details: payload.parts_details,
       remarks: payload.remarks,
       closed_at: payload.closed_at,
+      oem_call: payload.oem_call,
+      oem_brand: payload.oem_call ? payload.oem_brand : null,
+      oem_ref_id: payload.oem_call ? payload.oem_ref_id : null,
+      oem_purchase_date: payload.oem_call ? payload.oem_purchase_date : null,
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
@@ -291,6 +313,16 @@ function TicketDetail() {
           </Button>
           <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
           <Badge className={STATUS_COLOR[t.status] || ""} variant="secondary">{t.status}</Badge>
+          <Badge variant={t.oem_call ? "default" : "outline"} className={t.oem_call ? "bg-purple-600 text-white hover:bg-purple-700" : ""}>
+            {t.oem_call ? "OEM" : "PHS"}
+          </Badge>
+          <div className="flex items-center gap-2 ml-2 text-sm">
+            <span className="text-muted-foreground">OEM Call</span>
+            <Switch
+              checked={t.oem_call}
+              onCheckedChange={(v) => update({ oem_call: v, oem_brand: v ? (t.oem_brand || "") : null, oem_ref_id: v ? (t.oem_ref_id || "") : null, oem_purchase_date: v ? (t.oem_purchase_date || "") : null })}
+            />
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
@@ -324,6 +356,31 @@ function TicketDetail() {
               <div className="md:col-span-2"><Label>Complaint</Label><Textarea rows={2} value={t.complaint || ""} onChange={(e) => update({ complaint: e.target.value })} /></div>
             </CardContent>
           </Card>
+
+          {t.oem_call && (
+            <Card className="border-purple-300">
+              <CardHeader><CardTitle className="text-base">OEM Details</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label>OEM Brand *</Label>
+                  <Select value={t.oem_brand || ""} onValueChange={(v) => update({ oem_brand: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
+                    <SelectContent>
+                      {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>OEM Ref ID *</Label>
+                  <Input value={t.oem_ref_id || ""} onChange={(e) => update({ oem_ref_id: e.target.value })} placeholder="OEM reference / ticket id" />
+                </div>
+                <div>
+                  <Label>OEM Customer Purchase Date *</Label>
+                  <Input type="date" value={t.oem_purchase_date || ""} onChange={(e) => update({ oem_purchase_date: e.target.value })} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader><CardTitle>Customer</CardTitle></CardHeader>

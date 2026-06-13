@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck } from "lucide-react";
+import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck, Ticket as TicketIcon } from "lucide-react";
 import { type Amc, amcStatus, statusBadgeClass, statusLabel, statusRowClass } from "@/lib/amc";
 import { ExportButtons } from "@/components/ExportButtons";
+import { usePermissions } from "@/lib/usePermissions";
 
 export const Route = createFileRoute("/_app/amc/")({
   component: AmcDashboard,
@@ -18,6 +19,8 @@ function AmcDashboard() {
   const [rows, setRows] = useState<Amc[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "expiring" | "expired">("all");
+  const { can } = usePermissions();
+  const canCreateTicket = can("tickets", "create");
 
   useEffect(() => {
     supabase.from("amcs").select("*").order("end_date", { ascending: true })
@@ -164,9 +167,16 @@ function AmcDashboard() {
                     <TableCell className="font-mono text-xs">{r.end_date}</TableCell>
                     <TableCell><span className={`text-xs border rounded px-2 py-0.5 ${statusBadgeClass(r._status)}`}>{statusLabel(r._status)}</span></TableCell>
                     <TableCell>
-                      <Link to="/amc/$id" params={{ id: r.id }}>
-                        <Button size="sm" variant="outline"><Eye className="h-4 w-4 mr-1" />Open</Button>
-                      </Link>
+                      <div className="flex justify-end gap-1">
+                        {canCreateTicket && (
+                          <a href={`/tickets/new?amc=${r.id}`} title="Create ticket from this AMC">
+                            <Button size="sm" variant="outline"><TicketIcon className="h-4 w-4" /></Button>
+                          </a>
+                        )}
+                        <Link to="/amc/$id" params={{ id: r.id }}>
+                          <Button size="sm" variant="outline"><Eye className="h-4 w-4 mr-1" />Open</Button>
+                        </Link>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

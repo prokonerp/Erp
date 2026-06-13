@@ -6,10 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
-import { ArrowLeft, CheckCircle2, Circle, Download, Printer, Search } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Download, Printer, Search, Ticket as TicketIcon } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { fmtDate } from "@/lib/amc";
+import { usePermissions } from "@/lib/usePermissions";
 
 export const Route = createFileRoute("/_app/amc/pm")({
   component: PMSchedule,
@@ -41,6 +42,8 @@ function PMSchedule() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [busy, setBusy] = useState<string | null>(null);
   const [dateInput, setDateInput] = useState<string>("");
+  const { can } = usePermissions();
+  const canCreateTicket = can("tickets", "create");
 
   const load = async () => {
     const [{ data: pmData }, { data: amcData }] = await Promise.all([
@@ -247,6 +250,12 @@ function PMSchedule() {
                         </TableCell>
                         <TableCell className="text-xs">{(a?.units || []).length}</TableCell>
                         <TableCell className="text-right">
+                          <div className="inline-flex gap-1">
+                          {canCreateTicket && (
+                            <a href={`/tickets/new?pm=${p.id}`} title="Create ticket from this PM visit">
+                              <Button size="sm" variant="outline"><TicketIcon className="h-4 w-4" /></Button>
+                            </a>
+                          )}
                           <Button
                             size="sm"
                             disabled={busy === p.id}
@@ -259,6 +268,7 @@ function PMSchedule() {
                               ? (<><CheckCircle2 className="h-4 w-4 mr-1" />Done</>)
                               : (<><Circle className="h-4 w-4 mr-1" />Mark Done</>)}
                           </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
