@@ -16,6 +16,8 @@ import {
 } from "@/lib/tickets";
 import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer } from "lucide-react";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -53,6 +55,7 @@ type Ticket = {
   source: string | null;
   amc_id: string | null;
   pm_visit_id: string | null;
+  special_instruction: string | null;
 };
 
 type CustomerBilling = {
@@ -86,6 +89,7 @@ type Activity = {
   to_status: string | null;
   notes: string | null;
   created_at: string;
+  special_instruction?: boolean | null;
 };
 
 function TicketDetail() {
@@ -96,6 +100,7 @@ function TicketDetail() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [busy, setBusy] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [noteSpecial, setNoteSpecial] = useState(false);
   const [templates, setTemplates] = useState<Record<string, string>>({});
   const [quoteNo, setQuoteNo] = useState<string>("");
   const [customer, setCustomer] = useState<CustomerBilling | null>(null);
@@ -169,11 +174,11 @@ function TicketDetail() {
   const renderMsg = (id: "engineer_assign" | "oow_quotation" | "ticket_closed", fallback: string) =>
     templates[id] ? renderTemplate(templates[id], tplVars()) : fallback;
 
-  const logActivity = async (kind: string, notes: string, from_status?: string, to_status?: string) => {
+  const logActivity = async (kind: string, notes: string, from_status?: string, to_status?: string, special?: boolean) => {
     const { data: u } = await supabase.auth.getUser();
     await supabase.from("ticket_activities").insert({
       ticket_id: t.id, kind, notes, from_status: from_status ?? null, to_status: to_status ?? null,
-      actor: u.user?.id ?? null,
+      actor: u.user?.id ?? null, special_instruction: !!special,
     } as never);
   };
 
@@ -212,6 +217,7 @@ function TicketDetail() {
       oem_brand: payload.oem_call ? payload.oem_brand : null,
       oem_ref_id: payload.oem_call ? payload.oem_ref_id : null,
       oem_purchase_date: payload.oem_call ? payload.oem_purchase_date : null,
+      special_instruction: (payload.special_instruction ?? "").toString().trim() || null,
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
@@ -262,10 +268,11 @@ function TicketDetail() {
 
   const addNote = async () => {
     if (!noteText.trim()) return;
-    await logActivity("note", noteText);
+    await logActivity("note", noteText, undefined, undefined, noteSpecial);
     setNoteText("");
+    setNoteSpecial(false);
     await load();
-    toast.success("Note added");
+    toast.success(noteSpecial ? "Special instruction added" : "Note added");
   };
 
   const createOOWQuote = async () => {
