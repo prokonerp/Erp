@@ -819,6 +819,24 @@ export type Database = {
           },
         ]
       }
+      oem_brand_master: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       pm_visits: {
         Row: {
           amc_id: string
@@ -1349,6 +1367,10 @@ export type Database = {
           deleted_at: string | null
           id: string
           location: string | null
+          oem_brand: string | null
+          oem_call: boolean
+          oem_purchase_date: string | null
+          oem_ref_id: string | null
           parts_details: Json
           parts_used: boolean
           priority: string | null
@@ -1381,6 +1403,10 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           location?: string | null
+          oem_brand?: string | null
+          oem_call?: boolean
+          oem_purchase_date?: string | null
+          oem_ref_id?: string | null
           parts_details?: Json
           parts_used?: boolean
           priority?: string | null
@@ -1413,6 +1439,10 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           location?: string | null
+          oem_brand?: string | null
+          oem_call?: boolean
+          oem_purchase_date?: string | null
+          oem_ref_id?: string | null
           parts_details?: Json
           parts_used?: boolean
           priority?: string | null
