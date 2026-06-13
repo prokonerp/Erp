@@ -3,6 +3,8 @@ import { useAuth } from "@/lib/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { FileText, ListChecks, LogOut, Building2, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3 } from "lucide-react";
+import { usePermissions } from "@/lib/usePermissions";
+import type { ModuleKey } from "@/lib/permissions";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -12,20 +14,28 @@ function AppLayout() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { can, isAdmin, loading: permLoading } = usePermissions();
 
   if (loading) return <div className="p-8 text-muted-foreground">Loading…</div>;
   if (!session) return <Navigate to="/auth" />;
 
-  const navItems = [
-    { to: "/masters", label: "Masters", icon: Database },
-    { to: "/new", label: "New Gatepass", icon: FileText },
-    { to: "/records", label: "Records", icon: ListChecks },
-    { to: "/amc", label: "AMC", icon: ShieldCheck },
-    { to: "/crm", label: "Sales CRM", icon: Briefcase },
-    { to: "/tickets", label: "Tickets", icon: Ticket },
-    { to: "/reports", label: "Reports", icon: BarChart3 },
-    { to: "/import", label: "Import CSV", icon: Upload },
+  const allNav: { to: string; label: string; icon: any; module?: ModuleKey; adminOnly?: boolean }[] = [
+    { to: "/masters", label: "Masters", icon: Database, module: "customers" },
+    { to: "/new", label: "New Gatepass", icon: FileText, module: "gatepass" },
+    { to: "/records", label: "Records", icon: ListChecks, module: "gatepass" },
+    { to: "/amc", label: "AMC", icon: ShieldCheck, module: "amc" },
+    { to: "/crm", label: "Sales CRM", icon: Briefcase, module: "quotations" },
+    { to: "/tickets", label: "Tickets", icon: Ticket, module: "tickets" },
+    { to: "/reports", label: "Reports", icon: BarChart3, module: "reports" },
+    { to: "/import", label: "Import CSV", icon: Upload, adminOnly: true },
   ];
+  const navItems = permLoading
+    ? allNav
+    : allNav.filter((n) => {
+        if (n.adminOnly) return isAdmin;
+        if (n.module) return can(n.module, "read");
+        return true;
+      });
 
   return (
     <div className="min-h-screen bg-muted/20">
