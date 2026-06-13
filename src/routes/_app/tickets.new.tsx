@@ -70,6 +70,11 @@ function NewTicket() {
     if (!form.customer_name.trim()) return toast.error("Customer name is required");
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
+    let raisedByName: string | null = null;
+    if (u.user?.id) {
+      const { data: au } = await supabase.from("app_users").select("name").eq("user_id", u.user.id).maybeSingle();
+      raisedByName = (au as { name?: string } | null)?.name?.trim() || null;
+    }
     const { product_id: _pid, ...rest } = form;
     void _pid;
     const payload = {
@@ -85,7 +90,7 @@ function NewTicket() {
       serial_no: upperTrim(form.serial_no),
       status: "New",
       raised_by_type: "internal",
-      raised_by_name: u.user?.email || null,
+      raised_by_name: raisedByName,
       created_by: u.user?.id ?? null,
     };
     if (!payload.case_id) delete (payload as Record<string, unknown>).case_id;
