@@ -422,6 +422,13 @@ function TicketDetail() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{TICKET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
+              <div>
+                <Label>Priority</Label>
+                <Select value={t.priority || "P3"} onValueChange={(v) => { update({ priority: v }); save({ priority: v }); }}>
+                  <SelectTrigger className={PRIORITY_COLOR[t.priority || "P3"]}><SelectValue /></SelectTrigger>
+                  <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
               {t.closed_at && (
                 <p className="text-xs text-muted-foreground">Closed: {new Date(t.closed_at).toLocaleString()}</p>
               )}
