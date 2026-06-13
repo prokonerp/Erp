@@ -186,6 +186,7 @@ function NewTicket() {
       oem_ref_id: form.oem_call ? form.oem_ref_id.trim() : null,
       oem_purchase_date: form.oem_call ? form.oem_purchase_date : null,
       special_instruction: form.special_instruction.trim() || null,
+      preferred_visit_datetime: form.preferred_visit_datetime || null,
       source: sourceMeta?.source ?? null,
       amc_id: sourceMeta?.amc_id ?? null,
       pm_visit_id: sourceMeta?.pm_visit_id ?? null,
