@@ -138,8 +138,12 @@
   }
 
   body {
-    background-color: var(--color-background);
+    background-color: transparent;
     color: var(--color-foreground);
+  }
+
+  html {
+    background-color: var(--color-background);
   }
 }
 
@@ -154,7 +158,7 @@ body::before {
   background-size: min(60vw, 640px) auto;
   opacity: 0.05;
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
 
 @media print {
