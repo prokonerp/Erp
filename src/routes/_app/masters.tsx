@@ -8,7 +8,7 @@ import { useIsAdmin } from "@/lib/useRole";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ShieldCheck, ExternalLink, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ShieldCheck, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { RolesAndUsersPanel } from "@/components/RolesAndUsersPanel";
 import { cn } from "@/lib/utils";
 
