@@ -44,43 +44,49 @@ function AppLayout() {
         className="border-b print:hidden sticky top-0 z-40"
         style={{ backgroundColor: "var(--header)", color: "var(--header-foreground)" }}
       >
-        <div className="max-w-7xl mx-auto px-4 py-2 flex items-stretch justify-between gap-4">
-          <nav
-            className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto whitespace-nowrap"
-            aria-label="Primary"
-          >
-            {navItems.map((n) => {
-              const active = location.pathname.startsWith(n.to);
-              return (
-                <Link key={n.to} to={n.to} className="shrink-0">
-                  <Button
-                    variant={active ? "default" : "ghost"}
-                    size="sm"
-                    className={
-                      active
-                        ? "shrink-0"
-                        : "shrink-0 text-white/85 hover:bg-white/10 hover:text-white"
-                    }
-                  >
-                    <n.icon className="h-4 w-4 mr-1" />
-                    {n.label}
-                  </Button>
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="flex flex-col items-end justify-center gap-1 shrink-0">
+        {/* Row 1: Logo */}
+        <div className="bg-background text-foreground">
+          <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-end">
             <Link to="/" className="leading-none">
               <img
                 src={prokonLogo.url}
                 alt="Prokon Hi-Tech Systems — IT and Power Solution Providers"
-                className="h-8 w-auto object-contain"
+                className="h-10 w-auto object-contain"
               />
             </Link>
+          </div>
+        </div>
+        {/* Row 2: Navigation ribbon */}
+        <div style={{ backgroundColor: "var(--header)", color: "var(--header-foreground)" }}>
+          <div className="max-w-7xl mx-auto px-4 flex items-center gap-4">
+            <nav
+              className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto whitespace-nowrap py-1"
+              aria-label="Primary"
+            >
+              {navItems.map((n) => {
+                const active = location.pathname.startsWith(n.to);
+                return (
+                  <Link key={n.to} to={n.to} className="shrink-0">
+                    <Button
+                      variant={active ? "default" : "ghost"}
+                      size="sm"
+                      className={
+                        active
+                          ? "shrink-0"
+                          : "shrink-0 text-white/85 hover:bg-white/10 hover:text-white"
+                      }
+                    >
+                      <n.icon className="h-4 w-4 mr-1" />
+                      {n.label}
+                    </Button>
+                  </Link>
+                );
+              })}
+            </nav>
             <Button
               variant="ghost"
               size="sm"
-              className="text-white/85 hover:bg-white/10 hover:text-white"
+              className="shrink-0 text-white/85 hover:bg-white/10 hover:text-white"
               onClick={async () => {
                 await supabase.auth.signOut();
                 navigate({ to: "/auth" });
