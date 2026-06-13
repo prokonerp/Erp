@@ -266,9 +266,15 @@ function TicketsList() {
                   <tr key={r.id} className="border-t hover:bg-muted/30">
                     <td className="p-2 font-mono">
                       {(r.has_special_activity || (r.special_instruction && r.special_instruction.trim())) && (
-                        <div className="mb-1 inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700 animate-pulse" title={r.special_instruction || "Special instruction tagged in activity log"}>
-                          <AlertTriangle className="h-2.5 w-2.5" />Special
-                        </div>
+                        r.special_instruction_acknowledged ? (
+                          <div className="mb-1 inline-flex items-center gap-1 rounded border border-green-400 bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-green-800" title="Special instruction acknowledged">
+                            <AlertTriangle className="h-2.5 w-2.5" />Special · Ack
+                          </div>
+                        ) : (
+                          <div className="mb-1 inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700 animate-pulse" title={r.special_instruction || "Special instruction tagged in activity log"}>
+                            <AlertTriangle className="h-2.5 w-2.5" />Special
+                          </div>
+                        )
                       )}
                       <div>{r.case_id}</div>
                     </td>
