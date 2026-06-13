@@ -40,7 +40,7 @@ function AppLayout() {
 
   return (
     <div className="min-h-screen bg-muted/20">
-      <header className="bg-background border-b print:hidden">
+      <header className="border-b print:hidden" style={{ backgroundColor: "var(--header)", color: "var(--header-foreground)" }}>
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
           <Link to="/" className="flex items-center gap-2">
             <img
