@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   CALL_TYPES, TICKET_STATUSES, STATUS_COLOR,
+  PRIORITIES, PRIORITY_COLOR,
   waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
 import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer } from "lucide-react";
@@ -31,6 +32,8 @@ type Ticket = {
   customer_email: string | null;
   customer_phone: string | null;
   location: string | null;
+  sector: string | null;
+  priority: string | null;
   complaint: string | null;
   status: string;
   assigned_engineer_name: string | null;

@@ -39,6 +39,8 @@ export const submitPublicTicket = createServerFn({ method: "POST" })
       call_type: data.call_type,
       complaint: data.complaint.trim(),
       status: "New",
+      raised_by_type: "external",
+      raised_by_name: tc(data.customer_name),
       remarks: "Submitted via public customer form",
       attachments: data.attachments ?? [],
     };
