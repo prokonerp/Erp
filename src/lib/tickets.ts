@@ -19,7 +19,18 @@ export const TICKET_STATUSES = [
   "Closed",
 ] as const;
 
-export type CallType = (typeof CALL_TYPES)[number];
+export type CallType = string;
+
+export const PRIORITIES = ["P1", "P2", "P3", "P4", "P5"] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+export const PRIORITY_COLOR: Record<string, string> = {
+  P1: "bg-red-100 text-red-800",
+  P2: "bg-orange-100 text-orange-800",
+  P3: "bg-amber-100 text-amber-800",
+  P4: "bg-blue-100 text-blue-800",
+  P5: "bg-zinc-100 text-zinc-700",
+};
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
 export type PartLine = {
@@ -40,10 +51,13 @@ export const STATUS_COLOR: Record<string, string> = {
   Closed: "bg-green-100 text-green-800",
 };
 
-/** Normalise phone to international digits (defaults to India 91). */
+/** Normalise phone to international digits (defaults to India 91). Returns "" if invalid. */
 export function waPhone(phone: string | null | undefined): string {
   const digits = (phone || "").replace(/\D/g, "");
-  return digits.length === 10 ? `91${digits}` : digits;
+  if (!digits) return "";
+  if (digits.length === 10) return `91${digits}`;
+  // assume already includes country code if >=11 digits
+  return digits.length >= 11 ? digits : "";
 }
 
 /** WhatsApp universal link — works on mobile (opens app), desktop (opens WhatsApp Desktop),
@@ -58,11 +72,14 @@ export function waLink(phone: string | null | undefined, text: string): string {
 
 /** Click handler: copy message to clipboard, then open WhatsApp in a new tab.
  *  Using window.open with _blank avoids losing the current page if WhatsApp can't open. */
-export async function waOpen(phone: string | null | undefined, text: string): Promise<void> {
+export async function waOpen(phone: string | null | undefined, text: string): Promise<boolean> {
+  const p = waPhone(phone);
+  if (!p) return false;
   try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
-  const url = waLink(phone, text);
+  const url = `https://wa.me/${p}?text=${encodeURIComponent(text)}`;
   const w = window.open(url, "_blank", "noopener,noreferrer");
-  if (!w) window.location.href = url; // popup blocked → same-tab fallback
+  if (!w) window.location.href = url;
+  return true;
 }
 
 export function engineerAssignMsg(t: {

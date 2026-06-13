@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   CALL_TYPES, TICKET_STATUSES, STATUS_COLOR,
+  PRIORITIES, PRIORITY_COLOR,
   waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
 import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer } from "lucide-react";
@@ -31,6 +32,8 @@ type Ticket = {
   customer_email: string | null;
   customer_phone: string | null;
   location: string | null;
+  sector: string | null;
+  priority: string | null;
   complaint: string | null;
   status: string;
   assigned_engineer_name: string | null;
@@ -176,6 +179,8 @@ function TicketDetail() {
       customer_email: payload.customer_email,
       customer_phone: payload.customer_phone,
       location: payload.location,
+      sector: payload.sector,
+      priority: payload.priority,
       complaint: payload.complaint,
       status: payload.status,
       assigned_engineer_name: payload.assigned_engineer_name,
@@ -326,7 +331,8 @@ function TicketDetail() {
               <div><Label>Name *</Label><Input value={t.customer_name} onChange={(e) => update({ customer_name: e.target.value })} /></div>
               <div><Label>Contact Number</Label><Input value={t.customer_phone || ""} onChange={(e) => update({ customer_phone: e.target.value })} /></div>
               <div><Label>Email</Label><Input type="email" value={t.customer_email || ""} onChange={(e) => update({ customer_email: e.target.value })} /></div>
-              <div><Label>Location</Label><Input value={t.location || ""} onChange={(e) => update({ location: e.target.value })} /></div>
+              <div><Label>Sector / Colony Name</Label><Input value={t.sector || ""} onChange={(e) => update({ sector: e.target.value })} /></div>
+              <div><Label>City / Area</Label><Input value={t.location || ""} onChange={(e) => update({ location: e.target.value })} /></div>
               <div className="md:col-span-2"><Label>Address</Label><Textarea rows={2} value={t.customer_address || ""} onChange={(e) => update({ customer_address: e.target.value })} /></div>
             </CardContent>
           </Card>
@@ -416,6 +422,13 @@ function TicketDetail() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{TICKET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
+              <div>
+                <Label>Priority</Label>
+                <Select value={t.priority || "P3"} onValueChange={(v) => { update({ priority: v }); save({ priority: v }); }}>
+                  <SelectTrigger className={PRIORITY_COLOR[t.priority || "P3"]}><SelectValue /></SelectTrigger>
+                  <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
               {t.closed_at && (
                 <p className="text-xs text-muted-foreground">Closed: {new Date(t.closed_at).toLocaleString()}</p>
               )}
