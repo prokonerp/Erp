@@ -5,7 +5,6 @@ import { MasterCrud } from "@/components/MasterCrud";
 import { CustomerMasterPage } from "./masters.customers";
 import { ProductMasterPage } from "./masters.products";
 import { useIsAdmin } from "@/lib/useRole";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck, PanelLeftClose, PanelLeftOpen } from "lucide-react";
