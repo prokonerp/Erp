@@ -453,6 +453,13 @@ export function CustomerMasterPage() {
                   />
                 </div>
               </FieldRow>
+
+              <FieldRow label="Sector / Colony" labelClassName="text-[#000000]">
+                <Input className="text-[#000000]" value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })} placeholder="e.g. Sector 61 / DLF Phase 3" />
+              </FieldRow>
+              <FieldRow label="City / Area" labelClassName="text-[#000000]">
+                <Input className="text-[#000000]" value={form.billing.city} onChange={(e) => setForm({ ...form, billing: { ...form.billing, city: e.target.value } })} placeholder="City or area" />
+              </FieldRow>
             </TabsContent>
 
             <TabsContent value="gst" className="mt-4 space-y-4">
