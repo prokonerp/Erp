@@ -357,7 +357,7 @@ function UsersSection() {
   const roleName = (id: string | null) => roles.find((r) => r.id === id)?.name ?? "—";
   const authMap = useMemo(() => {
     const m = new Map<string, { email: string | null; last_sign_in_at: string | null }>();
-    authUsers.forEach((u) => m.set(u.id, u));
+    authUsers.forEach((u) => m.set(u.id, { email: u.email, last_sign_in_at: u.last_sign_in_at ?? null }));
     return m;
   }, [authUsers]);
 
