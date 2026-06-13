@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_app/import")({
   head: () => ({ meta: [{ title: "Bulk Import — Prokon" }] }),
 });
 
-type ModuleKey = "customers" | "products" | "amcs" | "tickets";
+type ModuleKey = "customers" | "products" | "amcs" | "tickets" | "employees" | "pm_visits";
 
 const TEMPLATES: Record<ModuleKey, { headers: string[]; sample: Record<string, string> }> = {
   customers: {
@@ -34,6 +34,14 @@ const TEMPLATES: Record<ModuleKey, { headers: string[]; sample: Record<string, s
   tickets: {
     headers: ["case_id", "call_type", "customer_name", "customer_phone", "customer_email", "location", "customer_address", "product", "serial_no", "complaint", "status"],
     sample: { case_id: "", call_type: "OOW", customer_name: "Ramesh Kumar", customer_phone: "9876543210", customer_email: "ramesh@acme.in", location: "Gurgaon", customer_address: "12, Sec 18", product: "APC 1000VA", serial_no: "APC2024XYZ", complaint: "Not powering on", status: "New" },
+  },
+  employees: {
+    headers: ["name", "role", "department", "phone", "email", "joining_date", "active", "notes"],
+    sample: { name: "Suresh Verma", role: "Service Engineer", department: "Operations", phone: "9811112222", email: "suresh@phs.in", joining_date: "2024-04-01", active: "true", notes: "" },
+  },
+  pm_visits: {
+    headers: ["amc_agreement_no", "scheduled_date", "notes"],
+    sample: { amc_agreement_no: "PHS/AMC/13062614300001", scheduled_date: "2026-07-15", notes: "Quarterly PM" },
   },
 };
 
@@ -72,6 +80,24 @@ function ImportPage() {
   const downloadTemplate = () => {
     const csv = buildCSV(tpl.headers, [tpl.sample]);
     downloadCSV(`Prokon_${mod}_template.csv`, csv);
+  };
+
+  const downloadTemplateXlsx = async () => {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet([tpl.sample], { header: tpl.headers });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, mod.slice(0, 31));
+    XLSX.writeFile(wb, `Prokon_${mod}_template.xlsx`);
+  };
+
+  const downloadErrorReport = () => {
+    if (!result || result.failed.length === 0) return;
+    const rowsOut = result.failed.map((f) => {
+      const src = rows[f.row - 2] || {};
+      return { row_number: f.row, error_reason: f.reason, ...src };
+    });
+    const headers = ["row_number", "error_reason", ...tpl.headers];
+    downloadCSV(`Prokon_${mod}_import_errors.csv`, buildCSV(headers, rowsOut as never));
   };
 
   const importRows = async () => {
@@ -154,6 +180,30 @@ function ImportPage() {
           if (r.case_id) payload.case_id = r.case_id;
           const { error } = await supabase.from("tickets").insert(payload as never);
           if (error) throw new Error(error.message);
+        } else if (mod === "employees") {
+          if (!r.name) throw new Error("name required");
+          const { error } = await supabase.from("employees").insert({
+            name: toTitleCaseSmart(r.name),
+            role: r.role || null,
+            department: r.department || null,
+            phone: r.phone || null,
+            email: (r.email || "").toLowerCase() || null,
+            joining_date: r.joining_date || null,
+            active: r.active ? !/^(false|0|no)$/i.test(r.active) : true,
+            notes: r.notes || null,
+          } as never);
+          if (error) throw new Error(error.message);
+        } else if (mod === "pm_visits") {
+          if (!r.amc_agreement_no || !r.scheduled_date) throw new Error("amc_agreement_no and scheduled_date required");
+          const { data: amc, error: aErr } = await supabase.from("amcs").select("id").eq("agreement_no", r.amc_agreement_no).maybeSingle();
+          if (aErr) throw new Error(aErr.message);
+          if (!amc) throw new Error(`AMC not found: ${r.amc_agreement_no}`);
+          const { error } = await supabase.from("pm_visits").insert({
+            amc_id: (amc as { id: string }).id,
+            scheduled_date: r.scheduled_date,
+            notes: r.notes || null,
+          } as never);
+          if (error) throw new Error(error.message);
         }
         ok++;
       } catch (e) {
@@ -182,11 +232,16 @@ function ImportPage() {
                 <SelectItem value="products">Products</SelectItem>
                 <SelectItem value="amcs">AMCs</SelectItem>
                 <SelectItem value="tickets">Tickets</SelectItem>
+                <SelectItem value="employees">Employees</SelectItem>
+                <SelectItem value="pm_visits">PM Schedule</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <Button variant="outline" onClick={downloadTemplate}>
             <Download className="h-4 w-4 mr-1" />Download CSV template
+          </Button>
+          <Button variant="outline" onClick={downloadTemplateXlsx}>
+            <Download className="h-4 w-4 mr-1" />Download Excel template
           </Button>
           <div className="text-xs text-muted-foreground">
             Required headers: <span className="font-mono">{tpl.headers.join(", ")}</span>
@@ -244,11 +299,16 @@ function ImportPage() {
             <div className="text-sm">
               <div className="font-medium">Imported: {result.ok}, Failed: {result.failed.length}</div>
               {result.failed.length > 0 && (
-                <div className="mt-2 max-h-60 overflow-y-auto border rounded-md p-2 bg-red-50 text-red-900">
-                  {result.failed.map((f, i) => (
-                    <div key={i} className="text-xs">Row {f.row}: {f.reason}</div>
-                  ))}
-                </div>
+                <>
+                  <div className="mt-2 max-h-60 overflow-y-auto border rounded-md p-2 bg-red-50 text-red-900">
+                    {result.failed.map((f, i) => (
+                      <div key={i} className="text-xs">Row {f.row}: {f.reason}</div>
+                    ))}
+                  </div>
+                  <Button size="sm" variant="outline" className="mt-2" onClick={downloadErrorReport}>
+                    <Download className="h-4 w-4 mr-1" />Download error report (CSV)
+                  </Button>
+                </>
               )}
             </div>
           )}

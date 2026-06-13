@@ -25,6 +25,10 @@ export type Amc = {
   remarks: string | null;
   prev_amc_id: string | null;
   created_at: string;
+  oem_call?: boolean;
+  oem_brand?: string | null;
+  oem_ref_id?: string | null;
+  oem_purchase_date?: string | null;
 };
 
 export const amcStatus = (end_date: string): "active" | "expiring" | "expired" => {
