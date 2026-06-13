@@ -46,6 +46,13 @@ type Ticket = {
   remarks: string | null;
   created_at: string;
   customer_id: string | null;
+  oem_call: boolean;
+  oem_brand: string | null;
+  oem_ref_id: string | null;
+  oem_purchase_date: string | null;
+  source: string | null;
+  amc_id: string | null;
+  pm_visit_id: string | null;
 };
 
 type CustomerBilling = {
@@ -94,6 +101,7 @@ function TicketDetail() {
   const [customer, setCustomer] = useState<CustomerBilling | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [deptFilter, setDeptFilter] = useState<string>("all");
+  const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
 
   const load = async () => {
     const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
@@ -132,6 +140,9 @@ function TicketDetail() {
     const map: Record<string, string> = {};
     for (const r of (tpl || []) as { id: string; body: string }[]) map[r.id] = r.body;
     setTemplates(map);
+    const { data: brands } = await supabase.from("oem_brand_master" as never).select("name").order("name");
+    const bnames = ((brands as { name: string }[] | null) || []).map((b) => b.name);
+    if (bnames.length) setOemBrands(Array.from(new Set(bnames)));
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
@@ -190,9 +201,16 @@ function TicketDetail() {
       parts_details: payload.parts_details,
       remarks: payload.remarks,
       closed_at: payload.closed_at,
+      oem_call: payload.oem_call,
+      oem_brand: payload.oem_call ? payload.oem_brand : null,
+      oem_ref_id: payload.oem_call ? payload.oem_ref_id : null,
+      oem_purchase_date: payload.oem_call ? payload.oem_purchase_date : null,
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
+    if (payload.oem_call && (!payload.oem_brand || !payload.oem_ref_id || !payload.oem_purchase_date)) {
+      toast.warning("OEM Call is enabled — please fill Brand, Ref ID and Purchase Date.");
+    }
     toast.success("Saved");
     return true;
   };
