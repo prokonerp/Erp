@@ -15,6 +15,7 @@ import { ProductPicker } from "@/components/ProductPicker";
 import { Label as L } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -26,6 +27,9 @@ function NewTicket() {
   const [callTypes, setCallTypes] = useState<string[]>([...CALL_TYPES]);
   const [addingType, setAddingType] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
+  const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
+  const [addingBrand, setAddingBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
   const [form, setForm] = useState({
     case_id: "",
     call_type: "OOW" as string,
@@ -41,6 +45,10 @@ function NewTicket() {
     location: "",
     priority: "P3" as string,
     complaint: "",
+    oem_call: false,
+    oem_brand: "",
+    oem_ref_id: "",
+    oem_purchase_date: "",
   });
 
   useEffect(() => {
@@ -48,6 +56,12 @@ function NewTicket() {
       if (data && data.length) {
         const names = (data as { name: string }[]).map((r) => r.name);
         setCallTypes(Array.from(new Set([...names, ...CALL_TYPES])));
+      }
+    });
+    supabase.from("oem_brand_master" as never).select("name").order("name").then(({ data }) => {
+      if (data && (data as { name: string }[]).length) {
+        const names = (data as { name: string }[]).map((r) => r.name);
+        setOemBrands(Array.from(new Set(names)));
       }
     });
   }, []);
@@ -63,11 +77,27 @@ function NewTicket() {
     toast.success("Call type added");
   };
 
+  const addOemBrand = async () => {
+    const n = newBrandName.trim();
+    if (!n) return;
+    const { error } = await supabase.from("oem_brand_master" as never).insert({ name: n } as never);
+    if (error) return toast.error(error.message);
+    setOemBrands((prev) => Array.from(new Set([...prev, n])));
+    setForm((f) => ({ ...f, oem_brand: n }));
+    setNewBrandName(""); setAddingBrand(false);
+    toast.success("OEM brand added");
+  };
+
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
 
   const submit = async () => {
     if (!form.customer_id) return toast.error("Please select a customer from Customer Master");
     if (!form.customer_name.trim()) return toast.error("Customer name is required");
+    if (form.oem_call) {
+      if (!form.oem_brand) return toast.error("OEM Brand is required for OEM calls");
+      if (!form.oem_ref_id.trim()) return toast.error("OEM Ref ID is required for OEM calls");
+      if (!form.oem_purchase_date) return toast.error("OEM Customer Purchase Date is required");
+    }
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
     let raisedByName: string | null = null;
@@ -92,8 +122,13 @@ function NewTicket() {
       raised_by_type: "internal",
       raised_by_name: raisedByName,
       created_by: u.user?.id ?? null,
+      oem_call: form.oem_call,
+      oem_brand: form.oem_call ? form.oem_brand : null,
+      oem_ref_id: form.oem_call ? form.oem_ref_id.trim() : null,
+      oem_purchase_date: form.oem_call ? form.oem_purchase_date : null,
     };
-    if (!payload.case_id) delete (payload as Record<string, unknown>).case_id;
+    // CASE ID is always auto-generated server-side
+    delete (payload as Record<string, unknown>).case_id;
     const { data, error } = await supabase.from("tickets").insert(payload as never).select("id").single();
     setBusy(false);
     if (error) return toast.error(error.message);
@@ -106,9 +141,44 @@ function NewTicket() {
       <CardHeader><CardTitle>New Ticket</CardTitle></CardHeader>
       <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label>Case ID <span className="text-muted-foreground text-xs">(blank = auto)</span></Label>
-          <Input value={form.case_id} onChange={(e) => set({ case_id: e.target.value })} placeholder="Auto: PREFIX + yyMMddHHmmss + ###" />
+          <Label>Case ID <span className="text-muted-foreground text-xs">(auto-generated)</span></Label>
+          <Input value={form.case_id} readOnly disabled placeholder="Auto-generated on save" className="bg-muted" />
         </div>
+        <div>
+          <Label>OEM Call</Label>
+          <div className="flex items-center gap-3 h-9">
+            <Switch
+              checked={form.oem_call}
+              onCheckedChange={(v) => set({ oem_call: v, oem_brand: v ? form.oem_brand : "", oem_ref_id: v ? form.oem_ref_id : "", oem_purchase_date: v ? form.oem_purchase_date : "" })}
+            />
+            <span className="text-sm text-muted-foreground">{form.oem_call ? "Yes — OEM tagged" : "No"}</span>
+          </div>
+        </div>
+
+        {form.oem_call && (
+          <>
+            <div>
+              <Label>OEM Brand *</Label>
+              <Select value={form.oem_brand} onValueChange={(v) => { if (v === "__add__") { setAddingBrand(true); return; } set({ oem_brand: v }); }}>
+                <SelectTrigger><SelectValue placeholder="Select OEM brand" /></SelectTrigger>
+                <SelectContent>
+                  {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  <SelectItem value="__add__"><span className="text-primary">+ Add New Brand</span></SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>OEM Ref ID *</Label>
+              <Input value={form.oem_ref_id} onChange={(e) => set({ oem_ref_id: e.target.value })} placeholder="OEM reference / ticket id" />
+            </div>
+            <div>
+              <Label>OEM Customer Purchase Date *</Label>
+              <Input type="date" value={form.oem_purchase_date} onChange={(e) => set({ oem_purchase_date: e.target.value })} />
+            </div>
+            <div />
+          </>
+        )}
+
         <div>
           <Label>Call Type *</Label>
           <Select value={form.call_type} onValueChange={(v) => { if (v === "__add__") { setAddingType(true); return; } set({ call_type: v }); }}>
@@ -182,6 +252,17 @@ function NewTicket() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setAddingType(false)}>Cancel</Button>
               <Button onClick={addCallType}><Plus className="h-4 w-4 mr-1" />Add</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={addingBrand} onOpenChange={setAddingBrand}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Add New OEM Brand</DialogTitle></DialogHeader>
+            <Input autoFocus value={newBrandName} onChange={(e) => setNewBrandName(e.target.value)} placeholder="Brand name" onKeyDown={(e) => e.key === "Enter" && addOemBrand()} />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAddingBrand(false)}>Cancel</Button>
+              <Button onClick={addOemBrand}><Plus className="h-4 w-4 mr-1" />Add</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
