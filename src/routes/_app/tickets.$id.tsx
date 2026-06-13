@@ -311,6 +311,9 @@ function TicketDetail() {
     navigate({ to: "/tickets" });
   };
 
+  const hasSpecialActivity = activities.some((a) => a.special_instruction);
+  const showSpecialRibbon = !!(t.special_instruction && t.special_instruction.trim()) || hasSpecialActivity;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -318,7 +321,15 @@ function TicketDetail() {
           <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/tickets" })}>
             <ArrowLeft className="h-4 w-4 mr-1" />Back
           </Button>
-          <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
+          <div className="flex flex-col gap-1">
+            {showSpecialRibbon && (
+              <div className="inline-flex items-center gap-2 self-start rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-red-700 animate-pulse">
+                <AlertTriangle className="h-3 w-3" />
+                Special Instruction
+              </div>
+            )}
+            <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
+          </div>
           <Badge className={STATUS_COLOR[t.status] || ""} variant="secondary">{t.status}</Badge>
           <Badge variant={t.oem_call ? "default" : "outline"} className={t.oem_call ? "bg-purple-600 text-white hover:bg-purple-700" : ""}>
             {t.oem_call ? "OEM" : "PHS"}
