@@ -58,6 +58,7 @@ type Ticket = {
   special_instruction_acknowledged: boolean;
   acknowledged_by: string | null;
   acknowledged_at: string | null;
+  preferred_visit_datetime: string | null;
 };
 
 type CustomerBilling = {
