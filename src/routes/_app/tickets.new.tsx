@@ -316,6 +316,10 @@ function NewTicket() {
           </Select>
         </div>
         <div className="md:col-span-2"><Label>Complaint / Issue Description</Label><Textarea rows={3} value={form.complaint} onChange={(e) => set({ complaint: e.target.value })} /></div>
+        <div className="md:col-span-2">
+          <Label>Special Instruction <span className="text-xs text-muted-foreground">(visible as blinking ribbon)</span></Label>
+          <Textarea rows={2} value={form.special_instruction} onChange={(e) => set({ special_instruction: e.target.value })} placeholder="Critical handling notes for the engineer (optional)" />
+        </div>
 
         <div className="md:col-span-2 flex justify-end gap-2">
           <Button onClick={submit} disabled={busy} size="lg">Create Ticket</Button>
