@@ -472,16 +472,29 @@ function TicketDetail() {
           <Card>
             <CardHeader><CardTitle>Activity Log</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input placeholder="Add a note…" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
-                <Button onClick={addNote}>Add</Button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input placeholder="Add a note…" value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+                  <Button onClick={addNote}>Add</Button>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox checked={noteSpecial} onCheckedChange={(v) => setNoteSpecial(v === true)} />
+                  <span>Tag as <b className="text-red-700">Special Instruction</b> (flags this ticket as critical)</span>
+                </label>
               </div>
               <div className="space-y-2 max-h-72 overflow-auto">
                 {activities.length === 0 && <p className="text-sm text-muted-foreground">No activity yet.</p>}
                 {activities.map((a) => (
-                  <div key={a.id} className="border rounded-md p-2 text-sm">
+                  <div key={a.id} className={`border rounded-md p-2 text-sm ${a.special_instruction ? "border-red-300 bg-red-50/60" : ""}`}>
                     <div className="flex items-center justify-between">
-                      <span className="font-medium capitalize">{a.kind}</span>
+                      <span className="font-medium capitalize flex items-center gap-2">
+                        {a.kind}
+                        {a.special_instruction && (
+                          <span className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
+                            <AlertTriangle className="h-3 w-3" />Special
+                          </span>
+                        )}
+                      </span>
                       <span className="text-xs text-muted-foreground">{new Date(a.created_at).toLocaleString()}</span>
                     </div>
                     {a.notes && <div className="text-muted-foreground mt-1">{a.notes}</div>}
