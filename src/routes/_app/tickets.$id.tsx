@@ -179,6 +179,8 @@ function TicketDetail() {
       customer_email: payload.customer_email,
       customer_phone: payload.customer_phone,
       location: payload.location,
+      sector: payload.sector,
+      priority: payload.priority,
       complaint: payload.complaint,
       status: payload.status,
       assigned_engineer_name: payload.assigned_engineer_name,
@@ -329,7 +331,8 @@ function TicketDetail() {
               <div><Label>Name *</Label><Input value={t.customer_name} onChange={(e) => update({ customer_name: e.target.value })} /></div>
               <div><Label>Contact Number</Label><Input value={t.customer_phone || ""} onChange={(e) => update({ customer_phone: e.target.value })} /></div>
               <div><Label>Email</Label><Input type="email" value={t.customer_email || ""} onChange={(e) => update({ customer_email: e.target.value })} /></div>
-              <div><Label>Location</Label><Input value={t.location || ""} onChange={(e) => update({ location: e.target.value })} /></div>
+              <div><Label>Sector / Colony Name</Label><Input value={t.sector || ""} onChange={(e) => update({ sector: e.target.value })} /></div>
+              <div><Label>City / Area</Label><Input value={t.location || ""} onChange={(e) => update({ location: e.target.value })} /></div>
               <div className="md:col-span-2"><Label>Address</Label><Textarea rows={2} value={t.customer_address || ""} onChange={(e) => update({ customer_address: e.target.value })} /></div>
             </CardContent>
           </Card>
