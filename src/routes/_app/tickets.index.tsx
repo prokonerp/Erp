@@ -307,3 +307,98 @@ function TicketsList() {
     </div>
   );
 }
+
+function RowActions({
+  r, employees, isAdmin,
+  onReassign, onStatusChange, onNotifyCustomer, onNotifyEngineer, onSoftDelete,
+}: {
+  r: Row;
+  employees: Employee[];
+  isAdmin: boolean;
+  onReassign: (r: Row, e: Employee) => void;
+  onStatusChange: (r: Row, next: string, opts?: { notify?: boolean }) => void;
+  onNotifyCustomer: (r: Row) => void;
+  onNotifyEngineer: (r: Row) => void;
+  onSoftDelete: (r: Row) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="icon" variant="ghost" className="h-8 w-8" title="Actions">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="text-xs">Ticket actions</DropdownMenuLabel>
+        <DropdownMenuItem asChild>
+          <Link to="/tickets/$id" params={{ id: r.id }}>
+            <Eye className="h-4 w-4 mr-2" />View / Edit
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger><UserCog className="h-4 w-4 mr-2" />Reassign Engineer</DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent className="max-h-72 overflow-auto w-56">
+              {employees.length === 0 && (
+                <DropdownMenuItem disabled>No employees</DropdownMenuItem>
+              )}
+              {employees.map((e) => (
+                <DropdownMenuItem key={e.id} onClick={() => onReassign(r, e)}>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{e.name}</span>
+                    <span className="text-xs text-muted-foreground">{[e.department, e.phone].filter(Boolean).join(" · ")}</span>
+                  </div>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger><RefreshCw className="h-4 w-4 mr-2" />Update Status</DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent className="w-48">
+              {TICKET_STATUSES.map((s) => (
+                <DropdownMenuItem key={s} disabled={s === r.status} onClick={() => onStatusChange(r, s)}>
+                  {s}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          disabled={!r.assigned_engineer_phone}
+          onClick={() => onNotifyEngineer(r)}
+        >
+          <MessageCircle className="h-4 w-4 mr-2" />Notify Engineer
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!r.customer_phone}
+          onClick={() => onNotifyCustomer(r)}
+        >
+          <MessageCircle className="h-4 w-4 mr-2" />Notify Customer
+        </DropdownMenuItem>
+
+        {isAdmin && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => {
+                if (confirm(`Delete ticket ${r.case_id}? This will hide it from listings (soft delete).`)) onSoftDelete(r);
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />Delete
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
