@@ -169,13 +169,9 @@ function AmcDashboard() {
                     <TableCell>
                       <div className="flex justify-end gap-1">
                         {canCreateTicket && (
-                          <Link
-                            to="/tickets/new"
-                            search={{ amc: r.id } as never}
-                            title="Create ticket from this AMC"
-                          >
+                          <a href={`/tickets/new?amc=${r.id}`} title="Create ticket from this AMC">
                             <Button size="sm" variant="outline"><TicketIcon className="h-4 w-4" /></Button>
-                          </Link>
+                          </a>
                         )}
                         <Link to="/amc/$id" params={{ id: r.id }}>
                           <Button size="sm" variant="outline"><Eye className="h-4 w-4 mr-1" />Open</Button>
