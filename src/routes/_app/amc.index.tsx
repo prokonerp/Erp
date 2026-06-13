@@ -10,6 +10,7 @@ import { type Amc, amcStatus, statusBadgeClass, statusLabel, statusRowClass } fr
 import { ExportButtons } from "@/components/ExportButtons";
 import { usePermissions } from "@/lib/usePermissions";
 import { type DateRange, type RangeMode, currentMonth, resolveRange, overlaps } from "@/lib/dateRange";
+import { DateFilterBar } from "@/components/DateFilterBar";
 
 export const Route = createFileRoute("/_app/amc/")({
   component: AmcDashboard,
