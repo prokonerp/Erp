@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -31,41 +31,23 @@ function AuthPage() {
     if (error) return toast.error(error.message);
     navigate({ to: "/new" });
   };
-  const signUp = async () => {
-    setBusy(true);
-    const { error } = await supabase.auth.signUp({
-      email, password,
-      options: { emailRedirectTo: `${window.location.origin}/` },
-    });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Account created. You can sign in now.");
-  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+    <div className="min-h-screen flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Prokon Hi-Tech Systems</CardTitle>
-          <CardDescription>Gatepass Management — Picasso Centre, Sector-61, Gurgaon</CardDescription>
+        <CardHeader className="text-center items-center">
+          <img
+            src={prokonLogo.url}
+            alt="Prokon Hi-Tech Systems"
+            className="h-16 w-auto object-contain mx-auto mb-2"
+          />
+          <CardTitle className="sr-only">Prokon Hi-Tech Systems</CardTitle>
+          <CardDescription>Sign in to continue</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="signin">
-            <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="signin">Sign in</TabsTrigger>
-              <TabsTrigger value="signup">Sign up</TabsTrigger>
-            </TabsList>
-            <TabsContent value="signin" className="space-y-3 pt-4">
-              <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-              <div><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-              <Button className="w-full" onClick={signIn} disabled={busy}>Sign in</Button>
-            </TabsContent>
-            <TabsContent value="signup" className="space-y-3 pt-4">
-              <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-              <div><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-              <Button className="w-full" onClick={signUp} disabled={busy}>Create account</Button>
-            </TabsContent>
-          </Tabs>
+        <CardContent className="space-y-3 pt-2">
+          <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+          <div><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+          <Button className="w-full" onClick={signIn} disabled={busy}>Sign in</Button>
         </CardContent>
       </Card>
     </div>

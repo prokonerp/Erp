@@ -40,7 +40,7 @@ function AppLayout() {
 
   return (
     <div className="min-h-screen bg-muted/20">
-      <header className="bg-background border-b print:hidden">
+      <header className="border-b print:hidden" style={{ backgroundColor: "var(--header)", color: "var(--header-foreground)" }}>
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
           <Link to="/" className="flex items-center gap-2">
             <img
@@ -54,13 +54,17 @@ function AppLayout() {
               const active = location.pathname.startsWith(n.to);
               return (
                 <Link key={n.to} to={n.to}>
-                  <Button variant={active ? "default" : "ghost"} size="sm">
+                  <Button
+                    variant={active ? "default" : "ghost"}
+                    size="sm"
+                    className={active ? "" : "text-white/85 hover:bg-white/10 hover:text-white"}
+                  >
                     <n.icon className="h-4 w-4 mr-1" />{n.label}
                   </Button>
                 </Link>
               );
             })}
-            <Button variant="ghost" size="sm" onClick={async () => {
+            <Button variant="ghost" size="sm" className="text-white/85 hover:bg-white/10 hover:text-white" onClick={async () => {
               await supabase.auth.signOut();
               navigate({ to: "/auth" });
             }}>
