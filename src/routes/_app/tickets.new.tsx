@@ -50,6 +50,7 @@ function NewTicket() {
     oem_brand: "",
     oem_ref_id: "",
     oem_purchase_date: "",
+    special_instruction: "",
   });
 
   useEffect(() => {
@@ -183,6 +184,7 @@ function NewTicket() {
       oem_brand: form.oem_call ? form.oem_brand : null,
       oem_ref_id: form.oem_call ? form.oem_ref_id.trim() : null,
       oem_purchase_date: form.oem_call ? form.oem_purchase_date : null,
+      special_instruction: form.special_instruction.trim() || null,
       source: sourceMeta?.source ?? null,
       amc_id: sourceMeta?.amc_id ?? null,
       pm_visit_id: sourceMeta?.pm_visit_id ?? null,
