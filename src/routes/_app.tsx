@@ -54,13 +54,17 @@ function AppLayout() {
               const active = location.pathname.startsWith(n.to);
               return (
                 <Link key={n.to} to={n.to}>
-                  <Button variant={active ? "default" : "ghost"} size="sm">
+                  <Button
+                    variant={active ? "default" : "ghost"}
+                    size="sm"
+                    className={active ? "" : "text-white/85 hover:bg-white/10 hover:text-white"}
+                  >
                     <n.icon className="h-4 w-4 mr-1" />{n.label}
                   </Button>
                 </Link>
               );
             })}
-            <Button variant="ghost" size="sm" onClick={async () => {
+            <Button variant="ghost" size="sm" className="text-white/85 hover:bg-white/10 hover:text-white" onClick={async () => {
               await supabase.auth.signOut();
               navigate({ to: "/auth" });
             }}>
