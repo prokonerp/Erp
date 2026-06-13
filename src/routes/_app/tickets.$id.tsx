@@ -413,6 +413,11 @@ function TicketDetail() {
               <div className="md:col-span-2">
                 <Label>Special Instruction <span className="text-xs text-muted-foreground">(shows blinking ribbon when filled)</span></Label>
                 <Textarea rows={2} value={t.special_instruction || ""} onChange={(e) => update({ special_instruction: e.target.value })} placeholder="Critical handling notes for engineer (optional)" />
+                {acknowledged && (
+                  <div className="mt-1 text-xs text-green-700">
+                    Acknowledged{t.acknowledged_at ? ` at ${new Date(t.acknowledged_at).toLocaleString()}` : ""}{t.acknowledged_by ? ` by ${t.acknowledged_by.slice(0, 8)}` : ""}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
