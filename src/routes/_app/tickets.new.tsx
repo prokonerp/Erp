@@ -30,6 +30,7 @@ function NewTicket() {
   const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
   const [addingBrand, setAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState("");
+  const [sourceMeta, setSourceMeta] = useState<{ source?: "amc" | "pm"; amc_id?: string; pm_visit_id?: string; label?: string } | null>(null);
   const [form, setForm] = useState({
     case_id: "",
     call_type: "OOW" as string,
@@ -64,6 +65,61 @@ function NewTicket() {
         setOemBrands(Array.from(new Set(names)));
       }
     });
+    // Prefill from AMC/PM via URL params: ?amc=<id> or ?pm=<id>
+    (async () => {
+      if (typeof window === "undefined") return;
+      const sp = new URLSearchParams(window.location.search);
+      const amcId = sp.get("amc");
+      const pmId = sp.get("pm");
+      if (!amcId && !pmId) return;
+      let resolvedAmcId = amcId || "";
+      let pmDate = "";
+      if (pmId) {
+        const { data: pm } = await supabase.from("pm_visits").select("id,amc_id,scheduled_date").eq("id", pmId).maybeSingle();
+        const pmRow = pm as { id: string; amc_id: string; scheduled_date: string } | null;
+        if (pmRow) { resolvedAmcId = pmRow.amc_id; pmDate = pmRow.scheduled_date; }
+      }
+      if (!resolvedAmcId) return;
+      const { data: amc } = await supabase.from("amcs")
+        .select("id,agreement_no,customer_id,client_name,client_company,contact_no,email,client_address,units")
+        .eq("id", resolvedAmcId).maybeSingle();
+      if (!amc) return;
+      const a = amc as {
+        id: string; agreement_no: string; customer_id: string | null;
+        client_name: string; client_company: string | null; contact_no: string | null; email: string | null;
+        client_address: string | null; units: { model: string; serial_no: string }[];
+      };
+      let cust: { city?: string; billing_city?: string; sector?: string; phone?: string; email?: string; company?: string; billing_address?: string; address?: string } | null = null;
+      if (a.customer_id) {
+        const { data: c } = await supabase.from("customers")
+          .select("id,company,phone,email,billing_address,address,city,billing_city,sector,state")
+          .eq("id", a.customer_id).maybeSingle();
+        cust = c as typeof cust;
+      }
+      const firstUnit = (a.units || [])[0] || { model: "", serial_no: "" };
+      setForm((f) => ({
+        ...f,
+        call_type: pmId ? "AMC" : (f.call_type || "AMC"),
+        customer_id: a.customer_id || "",
+        customer_name: cust?.company || a.client_company || a.client_name || "",
+        customer_phone: cust?.phone || a.contact_no || "",
+        customer_email: cust?.email || a.email || "",
+        customer_address: cust?.billing_address || cust?.address || a.client_address || "",
+        sector: cust?.sector || "",
+        location: cust?.billing_city || cust?.city || "",
+        product: firstUnit.model || "",
+        serial_no: (firstUnit.serial_no || "").toUpperCase(),
+        complaint: pmId
+          ? `Preventive Maintenance visit${pmDate ? ` scheduled for ${pmDate}` : ""} — AMC ${a.agreement_no}`
+          : `Service request under AMC ${a.agreement_no}`,
+      }));
+      setSourceMeta({
+        source: pmId ? "pm" : "amc",
+        amc_id: a.id,
+        pm_visit_id: pmId || undefined,
+        label: pmId ? `PM Visit (${pmDate}) — AMC ${a.agreement_no}` : `AMC ${a.agreement_no}`,
+      });
+    })();
   }, []);
 
   const addCallType = async () => {
@@ -126,6 +182,9 @@ function NewTicket() {
       oem_brand: form.oem_call ? form.oem_brand : null,
       oem_ref_id: form.oem_call ? form.oem_ref_id.trim() : null,
       oem_purchase_date: form.oem_call ? form.oem_purchase_date : null,
+      source: sourceMeta?.source ?? null,
+      amc_id: sourceMeta?.amc_id ?? null,
+      pm_visit_id: sourceMeta?.pm_visit_id ?? null,
     };
     // CASE ID is always auto-generated server-side
     delete (payload as Record<string, unknown>).case_id;
@@ -140,6 +199,12 @@ function NewTicket() {
     <Card>
       <CardHeader><CardTitle>New Ticket</CardTitle></CardHeader>
       <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {sourceMeta?.label && (
+          <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+            <span className="font-medium">Source:</span> {sourceMeta.label}
+            <span className="ml-2 text-xs text-muted-foreground">— fields pre-filled, review and submit.</span>
+          </div>
+        )}
         <div>
           <Label>Case ID <span className="text-muted-foreground text-xs">(auto-generated)</span></Label>
           <Input value={form.case_id} readOnly disabled placeholder="Auto-generated on save" className="bg-muted" />
