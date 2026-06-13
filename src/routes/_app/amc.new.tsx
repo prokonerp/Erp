@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_app/amc/new")({
 
 const emptyUnit = (): AmcUnit => ({ model: "", serial_no: "", category: "", product_id: "" });
 
-type ProductLite = { id: string; name: string | null; model: string | null; category: string | null };
+type ProductLite = { id: string; name: string | null; model: string | null; category: string | null; brand: string | null };
 type SerialLite = { id: string; serial_number: string; product_id: string };
 
 function NewAmc() {
@@ -54,7 +54,7 @@ function NewAmc() {
       const [settings, cats, prods, sers] = await Promise.all([
         supabase.from("amc_settings").select("terms_template,prefix").eq("id", 1).maybeSingle(),
         supabase.from("product_categories").select("name").order("name"),
-        supabase.from("products").select("id,name,model,category").eq("active", true).order("name"),
+        supabase.from("products").select("id,name,model,category,brand").eq("active", true).order("name"),
         supabase.from("serials").select("id,serial_number,product_id").order("serial_number"),
       ]);
       const s = settings.data as { terms_template?: string; prefix?: string } | null;
