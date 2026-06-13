@@ -142,3 +142,21 @@
     color: var(--color-foreground);
   }
 }
+
+/* App-wide watermark — fixed, centered, behind all UI. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("/__l5e/assets-v1/13531d01-f038-4584-8023-5ab21c3f1f48/prokon-logo.jpeg");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: min(60vw, 640px) auto;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@media print {
+  body::before { display: none; }
+}
