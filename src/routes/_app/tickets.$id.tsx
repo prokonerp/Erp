@@ -56,6 +56,9 @@ type Ticket = {
   amc_id: string | null;
   pm_visit_id: string | null;
   special_instruction: string | null;
+  special_instruction_acknowledged: boolean;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
 };
 
 type CustomerBilling = {
