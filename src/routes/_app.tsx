@@ -42,13 +42,6 @@ function AppLayout() {
     <div className="min-h-screen bg-muted/20">
       <header className="border-b print:hidden" style={{ backgroundColor: "var(--header)", color: "var(--header-foreground)" }}>
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
-          <Link to="/" className="flex items-center gap-2">
-            <img
-              src={prokonLogo.url}
-              alt="Prokon Hi-Tech Systems — IT and Power Solution Providers"
-              className="h-10 w-auto object-contain"
-            />
-          </Link>
           <nav className="flex items-center gap-1">
             {navItems.map((n) => {
               const active = location.pathname.startsWith(n.to);
