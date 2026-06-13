@@ -14,7 +14,7 @@ import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import { Label as L } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus } from "lucide-react";
+import { Plus, CalendarClock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/_app/tickets/new")({
@@ -51,6 +51,7 @@ function NewTicket() {
     oem_ref_id: "",
     oem_purchase_date: "",
     special_instruction: "",
+    preferred_visit_datetime: "",
   });
 
   useEffect(() => {
@@ -156,6 +157,12 @@ function NewTicket() {
       if (!form.oem_ref_id.trim()) return toast.error("OEM Ref ID is required for OEM calls");
       if (!form.oem_purchase_date) return toast.error("OEM Customer Purchase Date is required");
     }
+    if (form.preferred_visit_datetime) {
+      const pv = new Date(form.preferred_visit_datetime).getTime();
+      if (pv < Date.now() - 60000) {
+        return toast.error("Preferred visit date & time cannot be in the past");
+      }
+    }
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
     let raisedByName: string | null = null;
@@ -185,6 +192,7 @@ function NewTicket() {
       oem_ref_id: form.oem_call ? form.oem_ref_id.trim() : null,
       oem_purchase_date: form.oem_call ? form.oem_purchase_date : null,
       special_instruction: form.special_instruction.trim() || null,
+      preferred_visit_datetime: form.preferred_visit_datetime || null,
       source: sourceMeta?.source ?? null,
       amc_id: sourceMeta?.amc_id ?? null,
       pm_visit_id: sourceMeta?.pm_visit_id ?? null,
@@ -205,6 +213,12 @@ function NewTicket() {
           <div className="mb-2 inline-flex items-center gap-2 self-start rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-red-700 animate-pulse">
             <span className="h-2 w-2 rounded-full bg-red-600" />
             Special Instruction
+          </div>
+        )}
+        {form.preferred_visit_datetime && (
+          <div className="mb-2 inline-flex items-center gap-2 self-start rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-700 animate-pulse">
+            <CalendarClock className="h-3 w-3" />
+            Preferred Visit: {new Date(form.preferred_visit_datetime).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
           </div>
         )}
         <CardTitle>New Ticket</CardTitle>
@@ -319,6 +333,10 @@ function NewTicket() {
         <div className="md:col-span-2">
           <Label>Special Instruction <span className="text-xs text-muted-foreground">(visible as blinking ribbon)</span></Label>
           <Textarea rows={2} value={form.special_instruction} onChange={(e) => set({ special_instruction: e.target.value })} placeholder="Critical handling notes for the engineer (optional)" />
+        </div>
+        <div className="md:col-span-2">
+          <Label>Preferred Visit Date & Time <span className="text-xs text-muted-foreground">(optional)</span></Label>
+          <Input type="datetime-local" value={form.preferred_visit_datetime} onChange={(e) => set({ preferred_visit_datetime: e.target.value })} />
         </div>
 
         <div className="md:col-span-2 flex justify-end gap-2">

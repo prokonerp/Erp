@@ -1422,6 +1422,7 @@ export type Database = {
           parts_details: Json
           parts_used: boolean
           pm_visit_id: string | null
+          preferred_visit_datetime: string | null
           priority: string | null
           product: string | null
           quotation_id: string | null
@@ -1465,6 +1466,7 @@ export type Database = {
           parts_details?: Json
           parts_used?: boolean
           pm_visit_id?: string | null
+          preferred_visit_datetime?: string | null
           priority?: string | null
           product?: string | null
           quotation_id?: string | null
@@ -1508,6 +1510,7 @@ export type Database = {
           parts_details?: Json
           parts_used?: boolean
           pm_visit_id?: string | null
+          preferred_visit_datetime?: string | null
           priority?: string | null
           product?: string | null
           quotation_id?: string | null

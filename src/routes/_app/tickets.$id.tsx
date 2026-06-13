@@ -14,10 +14,9 @@ import {
   PRIORITIES, PRIORITY_COLOR,
   waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
-import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer } from "lucide-react";
+import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer, CalendarClock, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -59,6 +58,7 @@ type Ticket = {
   special_instruction_acknowledged: boolean;
   acknowledged_by: string | null;
   acknowledged_at: string | null;
+  preferred_visit_datetime: string | null;
 };
 
 type CustomerBilling = {
@@ -94,6 +94,36 @@ type Activity = {
   created_at: string;
   special_instruction?: boolean | null;
 };
+
+function toDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function preferredRibbonStyle(dt: string | null) {
+  if (!dt) return "";
+  const pv = new Date(dt).getTime();
+  const now = Date.now();
+  const diffHours = (pv - now) / 3600000;
+  if (diffHours >= 0 && diffHours <= 2) {
+    return "border-amber-300 bg-amber-50 text-amber-700 animate-pulse";
+  }
+  if (diffHours < 0) {
+    return "border-red-300 bg-red-50 text-red-700";
+  }
+  return "border-blue-300 bg-blue-50 text-blue-700 animate-pulse";
+}
+
+function formatPreferred(dt: string | null): string {
+  if (!dt) return "";
+  const d = new Date(dt);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear().toString().slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function TicketDetail() {
   const { id } = Route.useParams();
@@ -195,6 +225,14 @@ function TicketDetail() {
         return false;
       }
     }
+    if (payload.preferred_visit_datetime) {
+      const pv = new Date(payload.preferred_visit_datetime).getTime();
+      if (pv < Date.now() - 60000) {
+        setBusy(false);
+        toast.error("Preferred visit date & time cannot be in the past");
+        return false;
+      }
+    }
     const { error } = await supabase.from("tickets").update({
       case_id: payload.case_id,
       call_type: payload.call_type,
@@ -221,6 +259,7 @@ function TicketDetail() {
       oem_ref_id: payload.oem_call ? payload.oem_ref_id : null,
       oem_purchase_date: payload.oem_call ? payload.oem_purchase_date : null,
       special_instruction: (payload.special_instruction ?? "").toString().trim() || null,
+      preferred_visit_datetime: payload.preferred_visit_datetime || null,
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
@@ -366,6 +405,12 @@ function TicketDetail() {
                 )}
               </div>
             )}
+            {t.preferred_visit_datetime && (
+              <div className={`inline-flex items-center gap-2 self-start rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${preferredRibbonStyle(t.preferred_visit_datetime)}`}>
+                <CalendarClock className="h-3 w-3" />
+                Preferred Visit: {formatPreferred(t.preferred_visit_datetime)}
+              </div>
+            )}
             <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
           </div>
           <Badge className={STATUS_COLOR[t.status] || ""} variant="secondary">{t.status}</Badge>
@@ -418,6 +463,10 @@ function TicketDetail() {
                     Acknowledged{t.acknowledged_at ? ` at ${new Date(t.acknowledged_at).toLocaleString()}` : ""}{t.acknowledged_by ? ` by ${t.acknowledged_by.slice(0, 8)}` : ""}
                   </div>
                 )}
+              </div>
+              <div className="md:col-span-2">
+                <Label>Preferred Visit Date & Time <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                <Input type="datetime-local" value={toDatetimeLocal(t.preferred_visit_datetime)} onChange={(e) => { update({ preferred_visit_datetime: e.target.value || null }); save({ preferred_visit_datetime: e.target.value || null }); }} />
               </div>
             </CardContent>
           </Card>
