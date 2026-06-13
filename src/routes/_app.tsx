@@ -40,37 +40,54 @@ function AppLayout() {
 
   return (
     <div className="min-h-screen bg-muted/20">
-      <header className="border-b print:hidden" style={{ backgroundColor: "var(--header)", color: "var(--header-foreground)" }}>
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
-          <nav className="flex items-center gap-1">
+      <header
+        className="border-b print:hidden sticky top-0 z-40"
+        style={{ backgroundColor: "var(--header)", color: "var(--header-foreground)" }}
+      >
+        <div className="max-w-7xl mx-auto px-4 py-2 flex items-stretch justify-between gap-4">
+          <nav
+            className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto whitespace-nowrap"
+            aria-label="Primary"
+          >
             {navItems.map((n) => {
               const active = location.pathname.startsWith(n.to);
               return (
-                <Link key={n.to} to={n.to}>
+                <Link key={n.to} to={n.to} className="shrink-0">
                   <Button
                     variant={active ? "default" : "ghost"}
                     size="sm"
-                    className={active ? "" : "text-white/85 hover:bg-white/10 hover:text-white"}
+                    className={
+                      active
+                        ? "shrink-0"
+                        : "shrink-0 text-white/85 hover:bg-white/10 hover:text-white"
+                    }
                   >
-                    <n.icon className="h-4 w-4 mr-1" />{n.label}
+                    <n.icon className="h-4 w-4 mr-1" />
+                    {n.label}
                   </Button>
                 </Link>
               );
             })}
           </nav>
-          <div className="flex flex-col items-center gap-1">
-            <Link to="/">
+          <div className="flex flex-col items-end justify-center gap-1 shrink-0">
+            <Link to="/" className="leading-none">
               <img
                 src={prokonLogo.url}
                 alt="Prokon Hi-Tech Systems — IT and Power Solution Providers"
-                className="h-10 w-auto object-contain"
+                className="h-8 w-auto object-contain"
               />
             </Link>
-            <Button variant="ghost" size="sm" className="text-white/85 hover:bg-white/10 hover:text-white" onClick={async () => {
-              await supabase.auth.signOut();
-              navigate({ to: "/auth" });
-            }}>
-              <LogOut className="h-4 w-4 mr-1" />Sign out
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white/85 hover:bg-white/10 hover:text-white"
+              onClick={async () => {
+                await supabase.auth.signOut();
+                navigate({ to: "/auth" });
+              }}
+            >
+              <LogOut className="h-4 w-4 mr-1" />
+              Sign out
             </Button>
           </div>
         </div>
