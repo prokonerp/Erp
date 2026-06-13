@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Mail, MessageCircle, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, generatePMDates, statusBadgeClass, statusLabel } from "@/lib/amc";
@@ -22,6 +23,7 @@ function AmcDetail() {
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
   const [productNames, setProductNames] = useState<string[]>([]);
+  const [oemBrands, setOemBrands] = useState<string[]>([]);
   const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null>(null);
 
   const load = () => supabase.from("amcs").select("*").eq("id", id).single()
@@ -31,6 +33,9 @@ function AmcDetail() {
     load();
     supabase.from("products").select("name").order("name").then(({ data }) => {
       setProductNames((data || []).map((p: { name: string | null }) => p.name || "").filter(Boolean));
+    });
+    supabase.from("oem_brand_master").select("name").order("name").then(({ data }) => {
+      setOemBrands(((data || []) as { name: string }[]).map((b) => b.name));
     });
     supabase.from("companies").select("name,address,phone,email,website,gstin").order("created_at").limit(1).maybeSingle().then(({ data }) => {
       setCompany((data as typeof company) ?? null);
@@ -76,6 +81,10 @@ function AmcDetail() {
 
   const save = async () => {
     setBusy(true);
+    if (a.oem_call) {
+      if (!a.oem_brand || !a.oem_brand.trim()) { setBusy(false); return toast.error("OEM Brand is required when Registered with OEM"); }
+      if (!a.oem_ref_id || !a.oem_ref_id.trim()) { setBusy(false); return toast.error("OEM Agreement Number is required when Registered with OEM"); }
+    }
     // recompute end_date and pm_dates if start_date or duration changed (kept editable below)
     const end_date = addYears(a.start_date, a.duration_years);
     const payload = {
@@ -94,6 +103,10 @@ function AmcDetail() {
       terms: a.terms,
       pm_dates: generatePMDates(a.start_date, end_date),
       remarks: a.remarks,
+      oem_call: a.oem_call ?? false,
+      oem_brand: a.oem_call ? (a.oem_brand || null) : null,
+      oem_ref_id: a.oem_call ? (a.oem_ref_id || null) : null,
+      oem_purchase_date: a.oem_call ? (a.oem_purchase_date || null) : null,
     };
     const { error } = await supabase.from("amcs").update(payload as never).eq("id", id);
     setBusy(false);
