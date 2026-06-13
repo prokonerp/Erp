@@ -56,6 +56,9 @@ type Ticket = {
   amc_id: string | null;
   pm_visit_id: string | null;
   special_instruction: string | null;
+  special_instruction_acknowledged: boolean;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
 };
 
 type CustomerBilling = {
@@ -313,6 +316,36 @@ function TicketDetail() {
 
   const hasSpecialActivity = activities.some((a) => a.special_instruction);
   const showSpecialRibbon = !!(t.special_instruction && t.special_instruction.trim()) || hasSpecialActivity;
+  const acknowledged = !!t.special_instruction_acknowledged;
+
+  const acknowledgeSpecial = async () => {
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id ?? null;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("tickets").update({
+      special_instruction_acknowledged: true,
+      acknowledged_by: uid,
+      acknowledged_at: now,
+    } as never).eq("id", t.id);
+    if (error) { toast.error(error.message); return; }
+    setT({ ...t, special_instruction_acknowledged: true, acknowledged_by: uid, acknowledged_at: now });
+    await logActivity("ack", "Special instruction acknowledged");
+    load();
+    toast.success("Acknowledged");
+  };
+
+  const reopenSpecial = async () => {
+    const { error } = await supabase.from("tickets").update({
+      special_instruction_acknowledged: false,
+      acknowledged_by: null,
+      acknowledged_at: null,
+    } as never).eq("id", t.id);
+    if (error) { toast.error(error.message); return; }
+    setT({ ...t, special_instruction_acknowledged: false, acknowledged_by: null, acknowledged_at: null });
+    await logActivity("ack", "Special instruction reopened");
+    load();
+    toast.success("Reopened");
+  };
 
   return (
     <div className="space-y-4">
@@ -323,9 +356,14 @@ function TicketDetail() {
           </Button>
           <div className="flex flex-col gap-1">
             {showSpecialRibbon && (
-              <div className="inline-flex items-center gap-2 self-start rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-red-700 animate-pulse">
+              <div className={`inline-flex items-center gap-2 self-start rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${acknowledged ? "border-green-400 bg-green-100 text-green-800" : "border-red-300 bg-red-50 text-red-700 animate-pulse"}`}>
                 <AlertTriangle className="h-3 w-3" />
-                Special Instruction
+                Special Instruction{acknowledged ? " · Acknowledged" : ""}
+                {acknowledged ? (
+                  <button type="button" onClick={reopenSpecial} className="ml-2 underline decoration-dotted normal-case font-medium tracking-normal">Reopen</button>
+                ) : (
+                  <button type="button" onClick={acknowledgeSpecial} className="ml-2 rounded bg-red-700 px-2 py-0.5 text-white normal-case font-semibold tracking-normal hover:bg-red-800">Mark as Acknowledged</button>
+                )}
               </div>
             )}
             <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
@@ -375,6 +413,11 @@ function TicketDetail() {
               <div className="md:col-span-2">
                 <Label>Special Instruction <span className="text-xs text-muted-foreground">(shows blinking ribbon when filled)</span></Label>
                 <Textarea rows={2} value={t.special_instruction || ""} onChange={(e) => update({ special_instruction: e.target.value })} placeholder="Critical handling notes for engineer (optional)" />
+                {acknowledged && (
+                  <div className="mt-1 text-xs text-green-700">
+                    Acknowledged{t.acknowledged_at ? ` at ${new Date(t.acknowledged_at).toLocaleString()}` : ""}{t.acknowledged_by ? ` by ${t.acknowledged_by.slice(0, 8)}` : ""}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
