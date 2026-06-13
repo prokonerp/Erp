@@ -1,0 +1,1 @@
+ALTER TABLE public.tickets ADD COLUMN preferred_visit_datetime timestamptz NULL;
