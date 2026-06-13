@@ -57,20 +57,22 @@ function AppLayout() {
                 </Link>
               );
             })}
+          </nav>
+          <div className="flex flex-col items-center gap-1">
+            <Link to="/">
+              <img
+                src={prokonLogo.url}
+                alt="Prokon Hi-Tech Systems — IT and Power Solution Providers"
+                className="h-10 w-auto object-contain"
+              />
+            </Link>
             <Button variant="ghost" size="sm" className="text-white/85 hover:bg-white/10 hover:text-white" onClick={async () => {
               await supabase.auth.signOut();
               navigate({ to: "/auth" });
             }}>
               <LogOut className="h-4 w-4 mr-1" />Sign out
             </Button>
-          </nav>
-          <Link to="/" className="flex items-center gap-2">
-            <img
-              src={prokonLogo.url}
-              alt="Prokon Hi-Tech Systems — IT and Power Solution Providers"
-              className="h-10 w-auto object-contain"
-            />
-          </Link>
+          </div>
         </div>
       </header>
       <main className="max-w-6xl mx-auto p-4 md:p-6">
