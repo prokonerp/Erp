@@ -31,6 +31,38 @@ export const PRIORITY_COLOR: Record<string, string> = {
   P4: "bg-blue-100 text-blue-800",
   P5: "bg-zinc-100 text-zinc-700",
 };
+
+/** Hours elapsed between two dates, EXCLUDING any time that falls on Sunday (local). */
+export function hoursExcludingSundays(fromISO: string, to: Date = new Date()): number {
+  const from = new Date(fromISO);
+  if (isNaN(from.getTime()) || to <= from) return 0;
+  let total = 0;
+  // Walk segment-by-segment between day boundaries so we can skip Sundays entirely.
+  let cursor = new Date(from);
+  while (cursor < to) {
+    const next = new Date(cursor);
+    next.setHours(24, 0, 0, 0); // start of next day (local)
+    const segEnd = next < to ? next : to;
+    if (cursor.getDay() !== 0) {
+      total += (segEnd.getTime() - cursor.getTime()) / 3_600_000;
+    }
+    cursor = segEnd;
+  }
+  return total;
+}
+
+export function timerBadgeColor(hours: number): string {
+  if (hours > 24) return "bg-red-100 text-red-800 border-red-200";
+  if (hours > 8) return "bg-amber-100 text-amber-800 border-amber-200";
+  return "bg-green-100 text-green-800 border-green-200";
+}
+
+export function formatHours(hours: number): string {
+  if (hours < 1) return `${Math.max(0, Math.round(hours * 60))}m`;
+  if (hours < 100) return `${hours.toFixed(1)}h`;
+  return `${Math.round(hours)}h`;
+}
+
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
 export type PartLine = {
