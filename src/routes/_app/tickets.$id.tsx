@@ -221,6 +221,7 @@ function TicketDetail() {
       oem_ref_id: payload.oem_call ? payload.oem_ref_id : null,
       oem_purchase_date: payload.oem_call ? payload.oem_purchase_date : null,
       special_instruction: (payload.special_instruction ?? "").toString().trim() || null,
+      preferred_visit_datetime: payload.preferred_visit_datetime || null,
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
