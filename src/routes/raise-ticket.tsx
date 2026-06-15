@@ -211,7 +211,7 @@ function PublicTicketForm() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Product / model</Label>
+                    <Label>Model</Label>
                     <Input value={form.product} onChange={(e) => set({ product: e.target.value })} placeholder="e.g. APC 1.5kVA UPS" />
                   </div>
                 </div>

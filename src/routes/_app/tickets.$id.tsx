@@ -335,7 +335,7 @@ function TicketDetail() {
       owner_id: u.user.id,
       subject: `OOW Service — ${t.case_id}`,
       reference_no: t.case_id,
-      customer_notes: `Case: ${t.case_id}\nProduct: ${t.product || "—"}\nSerial: ${t.serial_no || "—"}\nIssue: ${t.complaint || "—"}`,
+      customer_notes: `Case: ${t.case_id}\nModel: ${t.product || "—"}\nSerial: ${t.serial_no || "—"}\nIssue: ${t.complaint || "—"}`,
       items: [item],
     } as never).select("id").single();
     if (error) return toast.error(error.message);
@@ -447,7 +447,7 @@ function TicketDetail() {
                 </Select>
               </div>
               <div>
-                <Label>Product</Label>
+                <Label>Model</Label>
                 <Select value={t.product || ""} onValueChange={(v) => update({ product: v })}>
                   <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
                   <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
@@ -778,7 +778,7 @@ function TicketPrint({ t, customer }: { t: Ticket; customer: CustomerBilling | n
             <td className="border border-black px-2 py-1 whitespace-pre-wrap">{billLines.join("\n")}</td>
           </tr>
           <tr>
-            <td className="border border-black px-2 py-1 font-bold">Product</td>
+            <td className="border border-black px-2 py-1 font-bold">Model</td>
             <td className="border border-black px-2 py-1">{t.product || "-"}</td>
           </tr>
           <tr>

@@ -199,7 +199,7 @@ function TicketsList() {
                 { header: "Priority", get: (r) => r.priority || "" },
                 { header: "Customer", get: (r) => r.customer_name },
                 { header: "Phone", get: (r) => r.customer_phone || "" },
-                { header: "Product", get: (r) => r.product || "" },
+                { header: "Model", get: (r) => r.product || "" },
                 { header: "Serial", get: (r) => r.serial_no || "" },
                 { header: "Sector/Colony", get: (r) => r.sector || "" },
                 { header: "City/Area", get: (r) => r.location || "" },
@@ -248,7 +248,7 @@ function TicketsList() {
                   <th className="p-2 w-16">Pr.</th>
                   <th className="p-2 w-20">Timer</th>
                   <th className="p-2">Customer</th>
-                  <th className="p-2">Product / Serial</th>
+                  <th className="p-2">Model / Serial</th>
                   <th className="p-2">Sector / Colony</th>
                   <th className="p-2">City / Area</th>
                   <th className="p-2">Engineer</th>

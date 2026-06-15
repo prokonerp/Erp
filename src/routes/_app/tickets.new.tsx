@@ -280,7 +280,7 @@ function NewTicket() {
           </Select>
         </div>
 
-        {/* Customer Section (moved above Product) */}
+        {/* Customer Section (moved above Model) */}
         <div className="md:col-span-2 pt-2 border-t" />
         <div className="md:col-span-2">
           <L>Customer * <span className="text-xs text-muted-foreground font-normal">(from Customer Master)</span></L>
@@ -307,10 +307,10 @@ function NewTicket() {
         <div><Label>City / Area</Label><Input value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="City or area" /></div>
         <div className="md:col-span-2"><Label>Address</Label><Textarea rows={2} value={form.customer_address} onChange={(e) => set({ customer_address: e.target.value })} /></div>
 
-        {/* Product Section (now below Customer) */}
+        {/* Model Section (now below Customer) */}
         <div className="md:col-span-2 pt-2 border-t" />
         <div>
-          <Label>Product</Label>
+          <Label>Model</Label>
           <ProductPicker
             value={form.product_id}
             onChange={(id, p) => set({ product_id: id || "", product: p?.name || "" })}
