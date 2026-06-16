@@ -282,6 +282,7 @@ function PermissionMatrix({
   onChange: (mod: ModuleKey, patch: Partial<ModulePerm>) => void;
   readOnly: boolean;
 }) {
+  const { modules } = useModules();
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -289,14 +290,22 @@ function PermissionMatrix({
           <TableRow>
             <TableHead>Module</TableHead>
             <TableHead className="text-center">Access</TableHead>
-            <TableHead className="text-center">Read</TableHead>
+            <TableHead className="text-center">View</TableHead>
             <TableHead className="text-center">Create</TableHead>
             <TableHead className="text-center">Edit</TableHead>
             <TableHead className="text-center">Delete</TableHead>
+            <TableHead className="text-center">Export</TableHead>
+            <TableHead className="text-center">Import</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {MODULES.map((m) => {
+          {modules.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={8} className="text-sm text-muted-foreground">
+                No modules defined yet. Add one from the Modules tab.
+              </TableCell>
+            </TableRow>
+          ) : modules.map((m) => {
             const p = getPerm(m.key);
             const disabled = readOnly || !p.enable_access;
             return (
@@ -309,15 +318,26 @@ function PermissionMatrix({
                     onCheckedChange={(v) => onChange(m.key, { enable_access: v })}
                   />
                 </TableCell>
-                {(["can_read", "can_create", "can_edit", "can_delete"] as const).map((c) => (
+                {(["can_read", "can_create", "can_edit", "can_delete", "can_export"] as const).map((c) => (
                   <TableCell key={c} className="text-center">
                     <Checkbox
-                      checked={p[c]}
+                      checked={!!p[c]}
                       disabled={disabled}
                       onCheckedChange={(v) => onChange(m.key, { [c]: !!v } as any)}
                     />
                   </TableCell>
                 ))}
+                <TableCell className="text-center">
+                  {m.supports_import ? (
+                    <Checkbox
+                      checked={!!p.can_import}
+                      disabled={disabled}
+                      onCheckedChange={(v) => onChange(m.key, { can_import: !!v })}
+                    />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
               </TableRow>
             );
           })}
