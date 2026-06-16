@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { parseCSV, buildCSV, downloadCSV } from "@/lib/csv";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { useIsAdmin } from "@/lib/useRole";
+import { FormPageHeader } from "@/components/FormPageHeader";
 
 export const Route = createFileRoute("/_app/import")({
   component: ImportPage,
@@ -218,7 +219,10 @@ function ImportPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Bulk Import (CSV)</h1>
+      <FormPageHeader
+        title="Bulk Import"
+        subtitle="Import master and transactional records via CSV or Excel templates"
+      />
 
       <Card>
         <CardHeader><CardTitle className="text-base">1. Choose module & download template</CardTitle></CardHeader>

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
+import { FormPageHeader } from "@/components/FormPageHeader";
 
 export const Route = createFileRoute("/_app/tickets/")({
   component: TicketsList,
@@ -184,6 +185,10 @@ function TicketsList() {
 
   return (
     <div className="space-y-4">
+      <FormPageHeader
+        title="Service Tickets"
+        subtitle="OEM-tagged tickets are highlighted; create INDENT from OEM tickets"
+      />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle>All Tickets</CardTitle>
