@@ -131,7 +131,7 @@ function TicketDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const [t, setT] = useState<Ticket | null>(null);
-  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string; model?: string | null; brand?: string | null }[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [busy, setBusy] = useState(false);
   const [noteText, setNoteText] = useState("");
@@ -146,7 +146,7 @@ function TicketDetail() {
   const load = async () => {
     const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
       supabase.from("tickets").select("*").eq("id", id).single(),
-      supabase.from("products").select("id,name").order("name"),
+      supabase.from("products").select("id,name,model,brand").order("name"),
       supabase.from("ticket_activities").select("*").eq("ticket_id", id).order("created_at", { ascending: false }),
       supabase.from("wa_templates").select("id,body"),
       supabase.from("employees").select("id,name,phone,department,role,active").eq("active", true).order("name"),
@@ -174,7 +174,7 @@ function TicketDetail() {
         setCustomer(null);
       }
     }
-    setProducts((pr || []) as { id: string; name: string }[]);
+    setProducts((pr || []) as { id: string; name: string; model?: string | null; brand?: string | null }[]);
     setActivities((ac || []) as Activity[]);
     setEmployees((emps || []) as Employee[]);
     const map: Record<string, string> = {};
@@ -482,7 +482,7 @@ function TicketDetail() {
                 <Label>Model</Label>
                 <Select value={t.product || ""} onValueChange={(v) => update({ product: v })}>
                   <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                  <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.name}>{p.model || p.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label>Serial Number</Label><Input value={t.serial_no || ""} onChange={(e) => update({ serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
@@ -758,7 +758,7 @@ function TicketDetail() {
         </div>
       </div>
 
-      <TicketPrint t={t} customer={customer} />
+      <TicketPrint t={t} customer={customer} productModel={products.find((p) => p.name === t.product)?.model || t.product} />
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 14mm; }
@@ -772,7 +772,7 @@ function TicketDetail() {
   );
 }
 
-function TicketPrint({ t, customer }: { t: Ticket; customer: CustomerBilling | null }) {
+function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: CustomerBilling | null; productModel?: string | null }) {
   const billLines = customer
     ? [
         customer.company,
@@ -811,7 +811,7 @@ function TicketPrint({ t, customer }: { t: Ticket; customer: CustomerBilling | n
           </tr>
           <tr>
             <td className="border border-black px-2 py-1 font-bold">Model</td>
-            <td className="border border-black px-2 py-1">{t.product || "-"}</td>
+            <td className="border border-black px-2 py-1">{productModel || t.product || "-"}</td>
           </tr>
           <tr>
             <td className="border border-black px-2 py-1 font-bold">Serial No.</td>
