@@ -55,10 +55,6 @@ export function usePermissions() {
         if (au.role_id) {
           const { data: rp } = await supabase
             .from("role_module_permissions")
-            .select("module,enable_access,can_read,can_create,can_edit,can_delete")
-            .eq("role_id", au.role_id);
-          const { data: rp } = await supabase
-            .from("role_module_permissions")
             .select(
               "module,enable_access,can_read,can_create,can_edit,can_delete,can_export,can_import",
             )
