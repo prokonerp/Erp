@@ -275,8 +275,8 @@ ${body}
             </div>
             <div><Label>Start Date (DD-MM-YYYY)</Label><Input type="date" value={a.start_date} onChange={(e) => update({ start_date: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">{fmtDate(a.start_date)}</p></div>
             <div><Label>End Date (auto on save)</Label><Input value={fmtDate(addYears(a.start_date, a.duration_years))} readOnly className="bg-muted" /></div>
-            <div><Label>Client Name</Label><Input value={a.client_name} onChange={(e) => update({ client_name: e.target.value })} /></div>
-            <div><Label>Company</Label><Input value={a.client_company || ""} onChange={(e) => update({ client_company: e.target.value })} /></div>
+            <div><Label>Client (Company)</Label><Input value={a.client_company || ""} onChange={(e) => update({ client_company: e.target.value })} /></div>
+            <div><Label>Contact Person</Label><Input value={a.client_name} onChange={(e) => update({ client_name: e.target.value })} /></div>
             <div className="md:col-span-2"><Label>Billing Address</Label><Textarea rows={2} value={a.client_address || ""} onChange={(e) => update({ client_address: e.target.value })} /></div>
             <div><Label>GSTIN</Label><Input value={a.client_gst || ""} onChange={(e) => update({ client_gst: e.target.value })} /></div>
             <div><Label>Contact No.</Label><Input value={a.contact_no || ""} onChange={(e) => update({ contact_no: e.target.value })} /></div>

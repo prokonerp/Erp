@@ -164,8 +164,8 @@ function PMSchedule() {
         "Status": p.completed_at ? "Done" : isOverdue(p) ? "Overdue" : "Pending",
         "Completed On": p.completed_at ? fmtDate(p.completed_at.slice(0, 10)) : "",
         "Agreement No": a?.agreement_no || "",
-        "Client": a?.client_name || "",
-        "Company": a?.client_company || "",
+        "Client": a?.client_company || a?.client_name || "",
+        "Contact Person": a?.client_name || "",
         "Contact": a?.contact_no || "",
         "Units": (a?.units || []).map((u) => `${u.model} (${u.serial_no})`).join("; "),
       };
@@ -276,8 +276,8 @@ function PMSchedule() {
                           {overdue && !p.completed_at && <div className="text-[10px] text-red-700 font-semibold">OVERDUE</div>}
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium">{a?.client_name || "—"}</div>
-                          {a?.client_company && <div className="text-xs text-muted-foreground">{a.client_company}</div>}
+                          <div className="font-medium">{a?.client_company || a?.client_name || "—"}</div>
+                          {a?.client_company && a?.client_name && <div className="text-xs text-muted-foreground">{a.client_name}</div>}
                         </TableCell>
                         <TableCell className="text-xs">
                           {a ? (
@@ -345,11 +345,11 @@ function PMSchedule() {
                   className="w-full text-left rounded-lg border p-3 hover:bg-muted"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-medium">{a?.client_name || "—"}</div>
+                    <div className="font-medium">{a?.client_company || a?.client_name || "—"}</div>
                     <Badge variant={st === "Completed" ? "default" : st === "Overdue" ? "destructive" : "secondary"}>{st}</Badge>
                   </div>
                   <div className="text-xs text-muted-foreground font-mono">{a?.agreement_no || "—"}</div>
-                  {a?.client_company && <div className="text-xs text-muted-foreground">{a.client_company}</div>}
+                  {a?.client_company && a?.client_name && <div className="text-xs text-muted-foreground">{a.client_name}</div>}
                 </button>
               );
             })}
@@ -378,8 +378,8 @@ function PMSchedule() {
                   <div><div className="text-xs text-muted-foreground">AMC Agreement</div>
                     <div>{a ? <Link to="/amc/$id" params={{ id: a.id }} className="font-mono underline" onClick={() => setOpenPmId(null)}>{a.agreement_no}</Link> : "—"}</div>
                   </div>
-                  <div><div className="text-xs text-muted-foreground">Customer</div><div>{a?.client_name || "—"}</div></div>
-                  <div><div className="text-xs text-muted-foreground">Company / Site</div><div>{a?.client_company || "—"}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Client</div><div>{a?.client_company || a?.client_name || "—"}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Contact Person</div><div>{a?.client_name || "—"}</div></div>
                   <div><div className="text-xs text-muted-foreground">Contact</div><div>{a?.contact_no || "—"}</div></div>
                   <div className="col-span-2">
                     <div className="text-xs text-muted-foreground">Equipment / Assets</div>

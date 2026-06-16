@@ -99,7 +99,7 @@ function AmcDashboard() {
           <CardContent className="text-sm space-y-1">
             {pmReminders.slice(0, 8).map((p, i) => (
               <div key={i} className="flex justify-between border-b border-blue-200/50 py-1">
-                <span><span className="font-mono">{p.date}</span> — {p.amc.client_name} {p.amc.client_company ? `(${p.amc.client_company})` : ""}</span>
+                <span><span className="font-mono">{p.date}</span> — {p.amc.client_company || p.amc.client_name}{p.amc.client_company && p.amc.client_name ? ` (${p.amc.client_name})` : ""}</span>
                 <Link to="/amc/$id" params={{ id: p.amc.id }} className="text-blue-700 underline">{p.amc.agreement_no}</Link>
               </div>
             ))}
@@ -113,7 +113,7 @@ function AmcDashboard() {
           <CardContent className="text-sm">
             {decorated.filter((r) => r._status === "expiring").slice(0, 6).map((r) => (
               <div key={r.id} className="flex justify-between border-b border-orange-200/50 py-1">
-                <span>{r.client_name} {r.client_company ? `(${r.client_company})` : ""} — ends <span className="font-mono">{r.end_date}</span></span>
+                <span>{r.client_company || r.client_name}{r.client_company && r.client_name ? ` (${r.client_name})` : ""} — ends <span className="font-mono">{r.end_date}</span></span>
                 <Link to="/amc/$id" params={{ id: r.id }} className="text-orange-700 underline">{r.agreement_no}</Link>
               </div>
             ))}
@@ -135,8 +135,8 @@ function AmcDashboard() {
               rows={filtered}
               columns={[
                 { header: "Agreement", get: (r) => r.agreement_no },
-                { header: "Client", get: (r) => r.client_name },
-                { header: "Company", get: (r) => r.client_company || "" },
+                { header: "Client", get: (r) => r.client_company || r.client_name },
+                { header: "Contact Person", get: (r) => r.client_name || "" },
                 { header: "Contact", get: (r) => r.contact_no || "" },
                 { header: "Email", get: (r) => r.email || "" },
                 { header: "GST", get: (r) => r.client_gst || "" },
@@ -168,8 +168,8 @@ function AmcDashboard() {
                   <TableRow key={r.id} className={statusRowClass(r._status)}>
                     <TableCell className="font-mono text-xs">{r.agreement_no}</TableCell>
                     <TableCell>
-                      <div className="font-medium">{r.client_name}</div>
-                      {r.client_company && <div className="text-xs text-muted-foreground">{r.client_company}</div>}
+                      <div className="font-medium">{r.client_company || r.client_name}</div>
+                      {r.client_company && r.client_name && <div className="text-xs text-muted-foreground">{r.client_name}</div>}
                     </TableCell>
                     <TableCell className="text-xs">{(r.units || []).length} unit(s)</TableCell>
                     <TableCell className="font-mono text-xs">{r.start_date}</TableCell>
