@@ -29,6 +29,7 @@ export type Amc = {
   oem_brand?: string | null;
   oem_ref_id?: string | null;
   oem_purchase_date?: string | null;
+  agreement_doc_path?: string | null;
 };
 
 export const amcStatus = (end_date: string): "active" | "expiring" | "expired" => {
