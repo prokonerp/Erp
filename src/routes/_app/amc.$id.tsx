@@ -112,7 +112,7 @@ function AmcDetail() {
       duration_years: a.duration_years,
       amc_value: a.amc_value,
       terms: a.terms,
-      pm_dates: generatePMDates(a.start_date, end_date),
+      pm_dates: generatePMDates(a.start_date, a.duration_years),
       remarks: a.remarks,
       oem_call: a.oem_call ?? false,
       oem_brand: a.oem_call ? (a.oem_brand || null) : null,
@@ -150,7 +150,7 @@ function AmcDetail() {
       duration_years: a.duration_years,
       amc_value: a.amc_value,
       terms: a.terms,
-      pm_dates: generatePMDates(startStr, endStr),
+      pm_dates: generatePMDates(startStr, a.duration_years),
       prev_amc_id: a.id,
       created_by: userData.user?.id ?? null,
     } as never).select("id").single();
