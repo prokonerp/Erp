@@ -12,7 +12,7 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "customers", label: "Customers" },
   { key: "products", label: "Products" },
   { key: "tickets", label: "Tickets" },
-  { key: "indent", label: "INDENT" },
+  { key: "indent", label: "Indent" },
   { key: "amc", label: "AMC" },
   { key: "gatepass", label: "Gatepass" },
   { key: "quotations", label: "Quotations" },
