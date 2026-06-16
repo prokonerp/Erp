@@ -55,10 +55,41 @@ export function AgreementDocUpload({
 
   const openSigned = async (download: boolean) => {
     if (!path) return;
-    const { data, error } = await supabase.storage.from(BUCKET)
-      .createSignedUrl(path, 300, download ? { download: true } : undefined);
-    if (error || !data?.signedUrl) return toast.error(error?.message || "Unable to open file");
-    window.open(data.signedUrl, "_blank");
+    // Fetch the file as a blob through the SDK so that ad-blockers / DNS
+    // filters that block direct *.supabase.co navigations (ERR_BLOCKED_BY_CLIENT)
+    // don't break preview/download. We then open a blob: URL locally.
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.storage.from(BUCKET).download(path);
+      if (error || !data) throw error || new Error("Unable to fetch file");
+      const blob = data.type ? data : new Blob([data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const filename = path.split("/").pop()?.replace(/^\d+-/, "") || "agreement.pdf";
+      if (download) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else {
+        const w = window.open(url, "_blank");
+        if (!w) {
+          // popup blocked — force download instead
+          const a = document.createElement("a");
+          a.href = url;
+          a.target = "_blank";
+          a.rel = "noopener";
+          a.click();
+        }
+      }
+      // Revoke later so the new tab has time to load it.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: any) {
+      toast.error(e?.message || "Unable to open file");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const remove = async () => {
