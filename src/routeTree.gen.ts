@@ -19,10 +19,12 @@ import { Route as AppRecordsRouteImport } from './routes/_app/records'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppNewRouteImport } from './routes/_app/new'
 import { Route as AppMastersRouteImport } from './routes/_app/masters'
+import { Route as AppIndentRouteImport } from './routes/_app/indent'
 import { Route as AppImportRouteImport } from './routes/_app/import'
 import { Route as AppCrmRouteImport } from './routes/_app/crm'
 import { Route as AppAmcRouteImport } from './routes/_app/amc'
 import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index'
+import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
 import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
 import { Route as AppTicketsTemplatesRouteImport } from './routes/_app/tickets.templates'
@@ -95,6 +97,11 @@ const AppMastersRoute = AppMastersRouteImport.update({
   path: '/masters',
   getParentRoute: () => AppRoute,
 } as any)
+const AppIndentRoute = AppIndentRouteImport.update({
+  id: '/indent',
+  path: '/indent',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppImportRoute = AppImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -114,6 +121,11 @@ const AppTicketsIndexRoute = AppTicketsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppTicketsRoute,
+} as any)
+const AppIndentIndexRoute = AppIndentIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppIndentRoute,
 } as any)
 const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
   id: '/',
@@ -233,6 +245,7 @@ export interface FileRoutesByFullPath {
   '/amc': typeof AppAmcRouteWithChildren
   '/crm': typeof AppCrmRouteWithChildren
   '/import': typeof AppImportRoute
+  '/indent': typeof AppIndentRouteWithChildren
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
@@ -259,6 +272,7 @@ export interface FileRoutesByFullPath {
   '/tickets/templates': typeof AppTicketsTemplatesRoute
   '/amc/': typeof AppAmcIndexRoute
   '/crm/': typeof AppCrmIndexRoute
+  '/indent/': typeof AppIndentIndexRoute
   '/tickets/': typeof AppTicketsIndexRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
@@ -293,6 +307,7 @@ export interface FileRoutesByTo {
   '/tickets/templates': typeof AppTicketsTemplatesRoute
   '/amc': typeof AppAmcIndexRoute
   '/crm': typeof AppCrmIndexRoute
+  '/indent': typeof AppIndentIndexRoute
   '/tickets': typeof AppTicketsIndexRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
@@ -306,6 +321,7 @@ export interface FileRoutesById {
   '/_app/amc': typeof AppAmcRouteWithChildren
   '/_app/crm': typeof AppCrmRouteWithChildren
   '/_app/import': typeof AppImportRoute
+  '/_app/indent': typeof AppIndentRouteWithChildren
   '/_app/masters': typeof AppMastersRouteWithChildren
   '/_app/new': typeof AppNewRoute
   '/_app/products': typeof AppProductsRoute
@@ -332,6 +348,7 @@ export interface FileRoutesById {
   '/_app/tickets/templates': typeof AppTicketsTemplatesRoute
   '/_app/amc/': typeof AppAmcIndexRoute
   '/_app/crm/': typeof AppCrmIndexRoute
+  '/_app/indent/': typeof AppIndentIndexRoute
   '/_app/tickets/': typeof AppTicketsIndexRoute
   '/_app/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/_app/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
@@ -345,6 +362,7 @@ export interface FileRouteTypes {
     | '/amc'
     | '/crm'
     | '/import'
+    | '/indent'
     | '/masters'
     | '/new'
     | '/products'
@@ -371,6 +389,7 @@ export interface FileRouteTypes {
     | '/tickets/templates'
     | '/amc/'
     | '/crm/'
+    | '/indent/'
     | '/tickets/'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
@@ -405,6 +424,7 @@ export interface FileRouteTypes {
     | '/tickets/templates'
     | '/amc'
     | '/crm'
+    | '/indent'
     | '/tickets'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
@@ -417,6 +437,7 @@ export interface FileRouteTypes {
     | '/_app/amc'
     | '/_app/crm'
     | '/_app/import'
+    | '/_app/indent'
     | '/_app/masters'
     | '/_app/new'
     | '/_app/products'
@@ -443,6 +464,7 @@ export interface FileRouteTypes {
     | '/_app/tickets/templates'
     | '/_app/amc/'
     | '/_app/crm/'
+    | '/_app/indent/'
     | '/_app/tickets/'
     | '/_app/crm/leads/$id'
     | '/_app/crm/quotations/$id'
@@ -527,6 +549,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMastersRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/indent': {
+      id: '/_app/indent'
+      path: '/indent'
+      fullPath: '/indent'
+      preLoaderRoute: typeof AppIndentRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/import': {
       id: '/_app/import'
       path: '/import'
@@ -554,6 +583,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/tickets/'
       preLoaderRoute: typeof AppTicketsIndexRouteImport
       parentRoute: typeof AppTicketsRoute
+    }
+    '/_app/indent/': {
+      id: '/_app/indent/'
+      path: '/'
+      fullPath: '/indent/'
+      preLoaderRoute: typeof AppIndentIndexRouteImport
+      parentRoute: typeof AppIndentRoute
     }
     '/_app/crm/': {
       id: '/_app/crm/'
@@ -777,6 +813,18 @@ const AppCrmRouteChildren: AppCrmRouteChildren = {
 const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
+interface AppIndentRouteChildren {
+  AppIndentIndexRoute: typeof AppIndentIndexRoute
+}
+
+const AppIndentRouteChildren: AppIndentRouteChildren = {
+  AppIndentIndexRoute: AppIndentIndexRoute,
+}
+
+const AppIndentRouteWithChildren = AppIndentRoute._addFileChildren(
+  AppIndentRouteChildren,
+)
+
 interface AppMastersRouteChildren {
   AppMastersCustomersRoute: typeof AppMastersCustomersRoute
   AppMastersProductsRoute: typeof AppMastersProductsRoute
@@ -817,6 +865,7 @@ interface AppRouteChildren {
   AppAmcRoute: typeof AppAmcRouteWithChildren
   AppCrmRoute: typeof AppCrmRouteWithChildren
   AppImportRoute: typeof AppImportRoute
+  AppIndentRoute: typeof AppIndentRouteWithChildren
   AppMastersRoute: typeof AppMastersRouteWithChildren
   AppNewRoute: typeof AppNewRoute
   AppProductsRoute: typeof AppProductsRoute
@@ -830,6 +879,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAmcRoute: AppAmcRouteWithChildren,
   AppCrmRoute: AppCrmRouteWithChildren,
   AppImportRoute: AppImportRoute,
+  AppIndentRoute: AppIndentRouteWithChildren,
   AppMastersRoute: AppMastersRouteWithChildren,
   AppNewRoute: AppNewRoute,
   AppProductsRoute: AppProductsRoute,
