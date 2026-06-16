@@ -480,9 +480,18 @@ function TicketDetail() {
               </div>
               <div>
                 <Label>Model</Label>
-                <Select value={t.product || ""} onValueChange={(v) => update({ product: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                  <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.name}>{p.model || p.name}</SelectItem>)}</SelectContent>
+                <Select
+                  value={t.product || ""}
+                  onValueChange={(v) => {
+                    const p = products.find((x) => (x.model || x.name) === v);
+                    update({ product: v, ...(p?.brand ? { oem_brand: p.brand } : {}) });
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
+                  <SelectContent>{products.map((p) => {
+                    const label = p.model || p.name;
+                    return <SelectItem key={p.id} value={label}>{label}</SelectItem>;
+                  })}</SelectContent>
                 </Select>
               </div>
               <div><Label>Serial Number</Label><Input value={t.serial_no || ""} onChange={(e) => update({ serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
