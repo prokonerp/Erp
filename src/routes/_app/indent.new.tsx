@@ -81,7 +81,7 @@ function NewIndent() {
       if (error) { toast.error(error.message); setLoading(false); return; }
       if (!data) { toast.error("Ticket not found"); setLoading(false); return; }
       if (!data.oem_call) {
-        toast.error("INDENT can only be created from OEM-tagged tickets");
+        toast.error("Indent can only be created from OEM-tagged tickets");
         navigate({ to: "/tickets/$id", params: { id: ticket_id } });
         return;
       }
@@ -131,8 +131,8 @@ function NewIndent() {
     const { data, error } = await supabase.from("indents" as never).insert(payload as never).select("id").maybeSingle() as unknown as { data: { id: string } | null; error: { message: string } | null };
     setBusy(false);
     if (error) return toast.error(error.message);
-    if (!data) return toast.error("Failed to create INDENT");
-    toast.success("INDENT created");
+    if (!data) return toast.error("Failed to create Indent");
+    toast.success("Indent created");
     navigate({ to: "/indent/$id", params: { id: data.id } });
   };
 
@@ -149,7 +149,7 @@ function NewIndent() {
             <img src={prokonLogo.url} alt="Prokon" className="h-10 w-auto object-contain" />
             <div>
               <div className="font-semibold leading-tight">Prokon Hi-Tech Systems</div>
-              <div className="text-xs text-muted-foreground">New INDENT</div>
+              <div className="text-xs text-muted-foreground">New Indent</div>
             </div>
           </div>
           {oem && <img src={oem.url} alt={oem.alt} className="h-9 w-auto object-contain" />}
@@ -163,7 +163,7 @@ function NewIndent() {
           </Button>
         </Link>
         <Button onClick={save} disabled={busy}>
-          <Save className="h-4 w-4 mr-1" />{busy ? "Saving…" : "Save INDENT"}
+          <Save className="h-4 w-4 mr-1" />{busy ? "Saving…" : "Save Indent"}
         </Button>
       </div>
 
@@ -181,7 +181,7 @@ function NewIndent() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">INDENT</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Indent</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div><Label>Indent City</Label><Input value={form.indent_city} onChange={(e) => set({ indent_city: e.target.value })} /></div>
           <div><Label>Indent Date</Label><Input type="date" value={form.indent_date} onChange={(e) => set({ indent_date: e.target.value })} /></div>

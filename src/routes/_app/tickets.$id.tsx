@@ -454,10 +454,10 @@ function TicketDetail() {
           <Button
             variant="outline"
             disabled={!t.oem_call}
-            title={t.oem_call ? "Create INDENT from this OEM ticket" : "Enable OEM Call to create an INDENT"}
+            title={t.oem_call ? "Create Indent from this OEM ticket" : "Enable OEM Call to create an Indent"}
             onClick={() => navigate({ to: "/indent/new", search: { ticket_id: t.id } })}
           >
-            <ClipboardList className="h-4 w-4 mr-1" />Create INDENT
+            <ClipboardList className="h-4 w-4 mr-1" />Create Indent
           </Button>
           <Button onClick={() => save()} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>

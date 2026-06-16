@@ -27,7 +27,7 @@ function AppLayout() {
     { to: "/amc", label: "AMC", icon: ShieldCheck, module: "amc" },
     { to: "/crm", label: "Sales CRM", icon: Briefcase, module: "quotations" },
     { to: "/tickets", label: "Tickets", icon: Ticket, module: "tickets" },
-    { to: "/indent", label: "INDENT", icon: ClipboardList, module: "indent" },
+    { to: "/indent", label: "Indent", icon: ClipboardList, module: "indent" },
     { to: "/reports", label: "Reports", icon: BarChart3, module: "reports" },
     { to: "/import", label: "Import CSV", icon: Upload, adminOnly: true },
   ];

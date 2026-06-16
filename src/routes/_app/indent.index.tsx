@@ -40,9 +40,9 @@ function IndentList() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold">INDENT</h1>
+        <h1 className="text-2xl font-bold">Indent</h1>
         <div className="text-sm text-muted-foreground">
-          INDENTs are created from OEM-tagged Tickets only.
+          Indents are created from OEM-tagged Tickets only.
         </div>
       </div>
 
@@ -78,7 +78,7 @@ function IndentList() {
               {loading ? (
                 <tr><td className="p-4 text-muted-foreground" colSpan={10}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>No INDENTs yet. Create one from an OEM ticket.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={10}>No Indents yet. Create one from an OEM ticket.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2 font-mono">{r.indent_no}</td>

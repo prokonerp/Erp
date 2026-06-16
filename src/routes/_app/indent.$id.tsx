@@ -61,7 +61,7 @@ function IndentDetail() {
   };
 
   const del = async () => {
-    if (!i || !confirm("Delete this INDENT?")) return;
+    if (!i || !confirm("Delete this Indent?")) return;
     const { error } = await supabase.from("indents" as never).delete().eq("id", i.id);
     if (error) return toast.error(error.message);
     toast.success("Deleted");
@@ -79,7 +79,7 @@ function IndentDetail() {
             <img src={prokonLogo.url} alt="Prokon" className="h-10 w-auto object-contain" />
             <div>
               <div className="font-semibold leading-tight">Prokon Hi-Tech Systems</div>
-              <div className="text-xs text-muted-foreground">INDENT · <span className="font-mono">{i.indent_no}</span></div>
+              <div className="text-xs text-muted-foreground">Indent · <span className="font-mono">{i.indent_no}</span></div>
             </div>
           </div>
           {oem && <img src={oem.url} alt={oem.alt} className="h-9 w-auto object-contain" />}
@@ -113,7 +113,7 @@ function IndentDetail() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">INDENT</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Indent</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div><Label>Indent City</Label><Input value={i.indent_city || ""} onChange={(e) => update({ indent_city: e.target.value })} /></div>
           <div><Label>Indent Date</Label><Input type="date" value={i.indent_date} onChange={(e) => update({ indent_date: e.target.value })} /></div>

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
-import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw } from "lucide-react";
+import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
@@ -187,7 +187,7 @@ function TicketsList() {
     <div className="space-y-4">
       <FormPageHeader
         title="Service Tickets"
-        subtitle="OEM-tagged tickets are highlighted; create INDENT from OEM tickets"
+        subtitle="OEM-tagged tickets are highlighted; create Indent from OEM tickets"
       />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
@@ -376,6 +376,18 @@ function RowActions({
         <DropdownMenuItem asChild>
           <Link to="/tickets/$id" params={{ id: r.id }}>
             <Eye className="h-4 w-4 mr-2" />View / Edit
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem asChild disabled={!r.oem_call}>
+          <Link
+            to="/indent/new"
+            search={{ ticket_id: r.id }}
+            title={r.oem_call ? "Create Indent from this OEM ticket" : "Enable OEM Call on the ticket to create an Indent"}
+          >
+            <ClipboardList className="h-4 w-4 mr-2" />Create Indent
           </Link>
         </DropdownMenuItem>
 
