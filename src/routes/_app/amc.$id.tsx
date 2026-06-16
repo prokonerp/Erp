@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Mail, MessageCircle, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Eye, Mail, MessageCircle, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, generatePMDates, statusBadgeClass, statusLabel } from "@/lib/amc";
 import { AgreementDocUpload } from "@/components/AgreementDocUpload";
@@ -163,6 +163,41 @@ function AmcDetail() {
   const setUnit = (i: number, patch: Partial<AmcUnit>) =>
     update({ units: a.units.map((u, idx) => idx === i ? { ...u, ...patch } : u) });
 
+  const openPreview = () => {
+    const node = document.querySelector(".agreement-print");
+    if (!node) {
+      toast.error("Preview content not ready yet");
+      return;
+    }
+    const w = window.open("", "_blank");
+    if (!w) {
+      toast.error("Popup blocked — please allow popups for this site");
+      return;
+    }
+    const headHtml = Array.from(document.head.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((el) => el.outerHTML)
+      .join("\n");
+    const body = (node as HTMLElement).outerHTML;
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"/>
+<title>AMC Preview — ${a.agreement_no}</title>
+${headHtml}
+<style>
+  html,body{background:#f4f4f5;margin:0;padding:24px;}
+  .agreement-print{display:block !important;background:white;box-shadow:0 4px 24px rgba(0,0,0,.08);}
+  @page{size:A4 portrait;margin:12mm;}
+  @media print{html,body{background:white;padding:0;} .agreement-print{box-shadow:none;}}
+  .preview-bar{position:sticky;top:0;background:#1e40af;color:white;padding:8px 16px;display:flex;gap:8px;justify-content:flex-end;margin:-24px -24px 16px;}
+  .preview-bar button{background:white;color:#1e40af;border:0;border-radius:4px;padding:6px 14px;font-weight:600;cursor:pointer;font-size:13px;}
+  @media print{.preview-bar{display:none;}}
+</style>
+</head><body>
+<div class="preview-bar"><button onclick="window.print()">Print / Save as PDF</button><button onclick="window.close()">Close</button></div>
+${body}
+</body></html>`);
+    w.document.close();
+  };
+
   return (
     <>
       <div className="space-y-4 print:hidden">
@@ -170,6 +205,7 @@ function AmcDetail() {
           <Link to="/amc"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
           <div className="flex items-center gap-2">
             <span className={`text-xs border rounded px-2 py-0.5 ${statusBadgeClass(status)}`}>{statusLabel(status)}</span>
+            <Button variant="outline" size="sm" onClick={openPreview}><Eye className="h-4 w-4 mr-1" />Review Preview</Button>
             <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print Agreement</Button>
             <Button variant="outline" size="sm" onClick={renew} disabled={busy}><RefreshCw className="h-4 w-4 mr-1" />Renew AMC</Button>
             <Button size="sm" onClick={save} disabled={busy}><Save className="h-4 w-4 mr-1" />Save changes</Button>
