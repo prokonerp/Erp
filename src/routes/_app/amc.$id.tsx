@@ -410,7 +410,7 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
             <img
               src={oemLogo.url}
               alt={oemLogo.alt}
-              className="h-16 max-w-[160px] object-contain"
+              className="h-16 max-w-[192px] object-contain"
             />
           )}
         </div>
