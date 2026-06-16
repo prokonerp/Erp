@@ -27,7 +27,7 @@ type Props = {
   className?: string;
 };
 
-export function ProductPicker({ value, onChange, required, placeholder = "Search by name, brand or model…", className }: Props) {
+export function ProductPicker({ value, onChange, required, placeholder = "Search by model name…", className }: Props) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<ProductMaster[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,11 +56,8 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
         >
           <span className="truncate">
             {selected ? (
-              <>
-                <span className="font-medium">{selected.name}</span>
-                {selected.brand || selected.model ? <span className="text-muted-foreground ml-2">· {[selected.brand, selected.model].filter(Boolean).join(" ")}</span> : null}
-              </>
-            ) : (loading ? "Loading products…" : placeholder)}
+              <span className="font-medium">{selected.name}</span>
+            ) : (loading ? "Loading models…" : placeholder)}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -69,7 +66,7 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
         <Command
           filter={(val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}
         >
-          <CommandInput placeholder="Search by name, brand, model, HSN…" />
+          <CommandInput placeholder="Search model name…" />
           <CommandList>
             <CommandEmpty>
               <div className="py-4 px-3 text-sm space-y-2">
@@ -85,9 +82,9 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
                 </a>
               </div>
             </CommandEmpty>
-            <CommandGroup heading={`${rows.length} products`}>
+            <CommandGroup heading={`${rows.length} models`}>
               {rows.map((p) => {
-                const blob = [p.name, p.brand, p.model, p.category, p.hsn].filter(Boolean).join(" ").toLowerCase();
+                const blob = p.name.toLowerCase();
                 return (
                   <CommandItem
                     key={p.id}
@@ -97,9 +94,6 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
                     <Check className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{p.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {[p.brand, p.model, p.category, p.hsn ? `HSN ${p.hsn}` : null].filter(Boolean).join(" · ") || p.unit}
-                      </div>
                     </div>
                   </CommandItem>
                 );
