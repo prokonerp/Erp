@@ -351,13 +351,6 @@ function ImportPage() {
     downloadCSV(`Prokon_${mod}_template.csv`, csv);
   };
 
-  const downloadTemplateXlsx = async () => {
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet([sample], { header: headers });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, mod.slice(0, 31));
-    XLSX.writeFile(wb, `Prokon_${mod}_template.xlsx`);
-  };
 
   const downloadErrorReport = () => {
     const failedList = result ? result.failed : previewIssues.errors;
