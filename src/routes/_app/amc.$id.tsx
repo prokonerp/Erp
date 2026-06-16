@@ -11,6 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Mail, MessageCircle, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, generatePMDates, statusBadgeClass, statusLabel } from "@/lib/amc";
+import { AgreementDocUpload } from "@/components/AgreementDocUpload";
+import { getOemLogo } from "@/lib/oemLogos";
+import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/_app/amc/$id")({
   component: AmcDetail,
@@ -22,7 +25,9 @@ function AmcDetail() {
   const navigate = useNavigate();
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
-  const [productNames, setProductNames] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [products, setProducts] = useState<Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>>([]);
+  const [serials, setSerials] = useState<Array<{ id: string; serial_number: string; product_id: string }>>([]);
   const [oemBrands, setOemBrands] = useState<string[]>([]);
   const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null>(null);
 
@@ -31,8 +36,14 @@ function AmcDetail() {
 
   useEffect(() => {
     load();
-    supabase.from("products").select("name").order("name").then(({ data }) => {
-      setProductNames((data || []).map((p: { name: string | null }) => p.name || "").filter(Boolean));
+    supabase.from("product_categories").select("name").order("name").then(({ data }) => {
+      setCategories(((data || []) as { name: string }[]).map((c) => c.name));
+    });
+    supabase.from("products").select("id,name,model,category,brand").eq("active", true).order("name").then(({ data }) => {
+      setProducts((data || []) as Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>);
+    });
+    supabase.from("serials").select("id,serial_number,product_id").order("serial_number").then(({ data }) => {
+      setSerials((data || []) as Array<{ id: string; serial_number: string; product_id: string }>);
     });
     supabase.from("oem_brand_master").select("name").order("name").then(({ data }) => {
       setOemBrands(((data || []) as { name: string }[]).map((b) => b.name));
@@ -107,6 +118,7 @@ function AmcDetail() {
       oem_brand: a.oem_call ? (a.oem_brand || null) : null,
       oem_ref_id: a.oem_call ? (a.oem_ref_id || null) : null,
       oem_purchase_date: a.oem_call ? (a.oem_purchase_date || null) : null,
+      agreement_doc_path: a.agreement_doc_path ?? null,
     };
     const { error } = await supabase.from("amcs").update(payload as never).eq("id", id);
     setBusy(false);
@@ -165,59 +177,6 @@ function AmcDetail() {
         </div>
 
         <Card>
-          <CardHeader><CardTitle>Agreement Details</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><Label>Agreement No.</Label><Input value={a.agreement_no} onChange={(e) => update({ agreement_no: e.target.value })} /></div>
-            <div>
-              <Label>Duration</Label>
-              <Select value={String(a.duration_years)} onValueChange={(v) => update({ duration_years: Number(v) })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{[1, 2, 3, 5].map((y) => <SelectItem key={y} value={String(y)}>{y} Year{y > 1 ? "s" : ""}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><Label>Start Date (DD-MM-YYYY)</Label><Input type="date" value={a.start_date} onChange={(e) => update({ start_date: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">{fmtDate(a.start_date)}</p></div>
-            <div><Label>End Date (auto on save)</Label><Input value={fmtDate(addYears(a.start_date, a.duration_years))} readOnly className="bg-muted" /></div>
-            <div><Label>Client Name</Label><Input value={a.client_name} onChange={(e) => update({ client_name: e.target.value })} /></div>
-            <div><Label>Company</Label><Input value={a.client_company || ""} onChange={(e) => update({ client_company: e.target.value })} /></div>
-            <div className="md:col-span-2"><Label>Billing Address</Label><Textarea rows={2} value={a.client_address || ""} onChange={(e) => update({ client_address: e.target.value })} /></div>
-            <div><Label>GSTIN</Label><Input value={a.client_gst || ""} onChange={(e) => update({ client_gst: e.target.value })} /></div>
-            <div><Label>Contact No.</Label><Input value={a.contact_no || ""} onChange={(e) => update({ contact_no: e.target.value })} /></div>
-            <div><Label>Email</Label><Input value={a.email || ""} onChange={(e) => update({ email: e.target.value })} /></div>
-            <div><Label>AMC Value (₹)</Label><Input type="number" value={a.amc_value ?? 0} onChange={(e) => update({ amc_value: Number(e.target.value) })} /></div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>UPS Units (model & serial editable)</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => update({ units: [...a.units, { model: "", serial_no: "" }] })}><Plus className="h-4 w-4 mr-1" />Add unit</Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <datalist id="ups-models">
-              {productNames.map((n) => <option key={n} value={n} />)}
-            </datalist>
-            {a.units.map((u, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
-                <div className="col-span-12 md:col-span-6"><Label>UPS Model</Label><Input list="ups-models" value={u.model} onChange={(e) => setUnit(i, { model: e.target.value })} placeholder="Select or type model" /></div>
-                <div className="col-span-10 md:col-span-5"><Label>Serial No.</Label><Input value={u.serial_no} onChange={(e) => setUnit(i, { serial_no: e.target.value })} /></div>
-                <div className="col-span-2 md:col-span-1">
-                  <Button size="icon" variant="ghost" onClick={() => update({ units: a.units.filter((_, idx) => idx !== i) })} disabled={a.units.length === 1}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Terms & Conditions (editable for this agreement)</CardTitle></CardHeader>
-          <CardContent>
-            <Textarea rows={12} value={a.terms || ""} onChange={(e) => update({ terms: e.target.value })} className="font-mono text-xs" />
-          </CardContent>
-        </Card>
-
-        <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>OEM Registration</span>
@@ -265,6 +224,72 @@ function AmcDetail() {
               </div>
             </CardContent>
           )}
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Agreement Details</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><Label>Agreement No.</Label><Input value={a.agreement_no} onChange={(e) => update({ agreement_no: e.target.value })} /></div>
+            <div>
+              <Label>Duration</Label>
+              <Select value={String(a.duration_years)} onValueChange={(v) => update({ duration_years: Number(v) })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{[1, 2, 3, 5].map((y) => <SelectItem key={y} value={String(y)}>{y} Year{y > 1 ? "s" : ""}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><Label>Start Date (DD-MM-YYYY)</Label><Input type="date" value={a.start_date} onChange={(e) => update({ start_date: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">{fmtDate(a.start_date)}</p></div>
+            <div><Label>End Date (auto on save)</Label><Input value={fmtDate(addYears(a.start_date, a.duration_years))} readOnly className="bg-muted" /></div>
+            <div><Label>Client Name</Label><Input value={a.client_name} onChange={(e) => update({ client_name: e.target.value })} /></div>
+            <div><Label>Company</Label><Input value={a.client_company || ""} onChange={(e) => update({ client_company: e.target.value })} /></div>
+            <div className="md:col-span-2"><Label>Billing Address</Label><Textarea rows={2} value={a.client_address || ""} onChange={(e) => update({ client_address: e.target.value })} /></div>
+            <div><Label>GSTIN</Label><Input value={a.client_gst || ""} onChange={(e) => update({ client_gst: e.target.value })} /></div>
+            <div><Label>Contact No.</Label><Input value={a.contact_no || ""} onChange={(e) => update({ contact_no: e.target.value })} /></div>
+            <div><Label>Email</Label><Input value={a.email || ""} onChange={(e) => update({ email: e.target.value })} /></div>
+            <div><Label>AMC Value (₹)</Label><Input type="number" value={a.amc_value ?? 0} onChange={(e) => update({ amc_value: Number(e.target.value) })} /></div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Product Details</CardTitle>
+            <Button size="sm" variant="outline" onClick={() => update({ units: [...a.units, { model: "", serial_no: "", category: "", product_id: "" }] })}><Plus className="h-4 w-4 mr-1" />Add unit</Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {a.units.map((u, i) => (
+              <EditProductRow
+                key={i}
+                unit={u}
+                categories={categories}
+                products={products}
+                serials={serials}
+                onChange={(patch) => setUnit(i, patch)}
+                onRemove={() => update({ units: a.units.filter((_, idx) => idx !== i) })}
+                canRemove={a.units.length > 1}
+              />
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Terms & Conditions (editable for this agreement)</CardTitle></CardHeader>
+          <CardContent>
+            <Textarea rows={12} value={a.terms || ""} onChange={(e) => update({ terms: e.target.value })} className="font-mono text-xs" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Agreement Attachment</CardTitle></CardHeader>
+          <CardContent>
+            <AgreementDocUpload
+              amcId={a.id}
+              path={a.agreement_doc_path ?? null}
+              onChange={async (p) => {
+                update({ agreement_doc_path: p });
+                // persist immediately so refresh keeps the link
+                await supabase.from("amcs").update({ agreement_doc_path: p } as never).eq("id", a.id);
+              }}
+            />
+          </CardContent>
         </Card>
 
         <Card>
@@ -334,13 +359,12 @@ function AmcDetail() {
 
 function PrintAgreement({ a, company }: { a: Amc; company: { name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null }) {
   const co = company ?? { name: "PROKON HI-TECH SYSTEMS", address: "B-505, Picasso Centre, Sector-61, Gurgaon", phone: "+91-98100 00000", email: "info@prokonhitech.com", website: "www.prokonhitech.com", gstin: null };
+  const oemLogo = getOemLogo(a.oem_brand);
   return (
     <div className="agreement-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
       {/* Letterhead */}
       <div className="flex items-center gap-4 border-b-4 border-[#1e40af] pb-3 mb-2">
-        <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[#1e3a8a] to-[#dc2626] text-white flex items-center justify-center font-extrabold text-xl shrink-0">
-          PHS
-        </div>
+        <img src={prokonLogo.url} alt="Prokon Hi-Tech Systems" className="h-16 w-auto object-contain shrink-0" />
         <div className="flex-1">
           <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent uppercase">{co.name}</h1>
           <div className="text-[11px] text-gray-700 whitespace-pre-wrap">{co.address || ""}</div>
@@ -350,6 +374,12 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
           </div>
           {co.gstin && <div className="text-[11px] text-gray-700">GSTIN: <span className="font-mono">{co.gstin}</span></div>}
         </div>
+        {oemLogo && (
+          <div className="shrink-0 text-right">
+            <img src={oemLogo.url} alt={oemLogo.alt} className="h-14 w-auto object-contain ml-auto" />
+            <div className="text-[10px] text-gray-600 mt-1">OEM Partner</div>
+          </div>
+        )}
       </div>
       <div className="text-center mb-3">
         <div className="inline-block px-4 py-1 border-2 border-black font-bold tracking-widest text-sm">ANNUAL MAINTENANCE CONTRACT</div>
@@ -424,6 +454,72 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
         <div>
           <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For Prokon Hi-Tech Systems</b></div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EditProductRow({ unit, categories, products, serials, onChange, onRemove, canRemove }: {
+  unit: AmcUnit;
+  categories: string[];
+  products: Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>;
+  serials: Array<{ id: string; serial_number: string; product_id: string }>;
+  onChange: (patch: Partial<AmcUnit>) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}) {
+  const filteredProducts = products.filter((p) => !unit.category || p.category === unit.category);
+  const filteredSerials = serials.filter((s) => s.product_id === unit.product_id);
+  return (
+    <div className="grid grid-cols-12 gap-2 items-end border-b pb-3">
+      <div className="col-span-12 md:col-span-3">
+        <Label>Category *</Label>
+        <Select value={unit.category || ""} onValueChange={(v) => onChange({ category: v, product_id: "", model: "", serial_no: "" })}>
+          <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="col-span-12 md:col-span-4">
+        <Label>Model *</Label>
+        <Select
+          value={unit.product_id || ""}
+          onValueChange={(v) => {
+            const p = products.find((x) => x.id === v);
+            onChange({ product_id: v, model: p?.model || p?.name || "", serial_no: "" });
+          }}
+          disabled={!unit.category}
+        >
+          <SelectTrigger><SelectValue placeholder={unit.category ? "Select model" : "Pick category first"} /></SelectTrigger>
+          <SelectContent>
+            {filteredProducts.map((p) => (
+              <SelectItem key={p.id} value={p.id}>{p.model || p.name} {p.brand ? `· ${p.brand}` : ""}</SelectItem>
+            ))}
+            {filteredProducts.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No products in this category</div>}
+          </SelectContent>
+        </Select>
+        {unit.model && !unit.product_id && (
+          <p className="text-[11px] text-muted-foreground mt-1">Legacy model: <span className="font-mono">{unit.model}</span> — pick a master product to standardise.</p>
+        )}
+      </div>
+      <div className="col-span-10 md:col-span-4">
+        <Label>Serial Number</Label>
+        {filteredSerials.length > 0 ? (
+          <Select value={unit.serial_no || ""} onValueChange={(v) => onChange({ serial_no: v })}>
+            <SelectTrigger><SelectValue placeholder="Select serial" /></SelectTrigger>
+            <SelectContent>
+              {filteredSerials.map((s) => <SelectItem key={s.id} value={s.serial_number}>{s.serial_number}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input value={unit.serial_no || ""} onChange={(e) => onChange({ serial_no: e.target.value.toUpperCase() })} placeholder="Enter serial" className="font-mono" />
+        )}
+      </div>
+      <div className="col-span-2 md:col-span-1 flex justify-end">
+        <Button size="icon" variant="ghost" onClick={onRemove} disabled={!canRemove}>
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
       </div>
     </div>
   );
