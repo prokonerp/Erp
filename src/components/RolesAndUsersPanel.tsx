@@ -727,3 +727,128 @@ function PasswordDialog({
     </Dialog>
   );
 }
+/* ---------------- Modules registry ---------------- */
+function ModulesSection() {
+  const { modules, loading, reload } = useModules({ includeInactive: true });
+  const [busy, setBusy] = useState(false);
+  const [k, setK] = useState("");
+  const [lbl, setLbl] = useState("");
+  const [imp, setImp] = useState(false);
+
+  async function add() {
+    if (!k.trim() || !lbl.trim()) return toast.error("Key and label required");
+    setBusy(true);
+    const sort_order = (modules[modules.length - 1]?.sort_order ?? 0) + 10;
+    const { error } = await supabase.from("app_modules").insert({
+      key: k.trim().toLowerCase(),
+      label: lbl.trim(),
+      supports_import: imp,
+      sort_order,
+    });
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    setK(""); setLbl(""); setImp(false);
+    toast.success("Module added");
+    reload();
+  }
+
+  async function toggle(m: AppModule, patch: Partial<AppModule>) {
+    const { error } = await supabase.from("app_modules").update(patch).eq("key", m.key);
+    if (error) return toast.error(error.message);
+    reload();
+  }
+
+  async function remove(m: AppModule) {
+    if (!confirm(`Delete module "${m.label}"? This will remove all role permissions for it.`)) return;
+    const { error } = await supabase.from("app_modules").delete().eq("key", m.key);
+    if (error) return toast.error(error.message);
+    await supabase.from("role_module_permissions").delete().eq("module", m.key);
+    toast.success("Deleted");
+    reload();
+  }
+
+  return (
+    <div className="grid md:grid-cols-[1fr_320px] gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Modules</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading…</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Label</TableHead>
+                  <TableHead className="text-center">Supports Import</TableHead>
+                  <TableHead className="text-center">Active</TableHead>
+                  <TableHead className="w-16"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {modules.map((m) => (
+                  <TableRow key={m.key}>
+                    <TableCell className="font-mono text-xs">{m.key}</TableCell>
+                    <TableCell>
+                      <Input
+                        defaultValue={m.label}
+                        onBlur={(e) => e.target.value !== m.label && toggle(m, { label: e.target.value })}
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Switch
+                        checked={m.supports_import}
+                        onCheckedChange={(v) => toggle(m, { supports_import: v })}
+                      />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Switch
+                        checked={m.is_active}
+                        onCheckedChange={(v) => toggle(m, { is_active: v })}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button size="icon" variant="ghost" onClick={() => remove(m)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Boxes className="h-4 w-4" /> Add module
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div>
+            <Label className="text-xs">Key (lowercase, no spaces)</Label>
+            <Input value={k} onChange={(e) => setK(e.target.value)} placeholder="e.g. inventory" />
+          </div>
+          <div>
+            <Label className="text-xs">Label</Label>
+            <Input value={lbl} onChange={(e) => setLbl(e.target.value)} placeholder="e.g. Inventory" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={imp} onCheckedChange={setImp} id="imp" />
+            <Label htmlFor="imp" className="text-sm">Supports CSV import</Label>
+          </div>
+          <Button size="sm" className="w-full" onClick={add} disabled={busy}>
+            <Plus className="h-4 w-4 mr-1" /> Add module
+          </Button>
+          <div className="text-xs text-muted-foreground pt-2">
+            New modules appear automatically in Roles &amp; Permissions and on the per-user
+            override grid. Removing a module also drops its role permissions.
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
