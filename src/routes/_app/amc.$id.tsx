@@ -11,6 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Mail, MessageCircle, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, generatePMDates, statusBadgeClass, statusLabel } from "@/lib/amc";
+import { AgreementDocUpload } from "@/components/AgreementDocUpload";
+import { getOemLogo } from "@/lib/oemLogos";
+import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/_app/amc/$id")({
   component: AmcDetail,
@@ -22,7 +25,9 @@ function AmcDetail() {
   const navigate = useNavigate();
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
-  const [productNames, setProductNames] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [products, setProducts] = useState<Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>>([]);
+  const [serials, setSerials] = useState<Array<{ id: string; serial_number: string; product_id: string }>>([]);
   const [oemBrands, setOemBrands] = useState<string[]>([]);
   const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null>(null);
 
@@ -31,8 +36,14 @@ function AmcDetail() {
 
   useEffect(() => {
     load();
-    supabase.from("products").select("name").order("name").then(({ data }) => {
-      setProductNames((data || []).map((p: { name: string | null }) => p.name || "").filter(Boolean));
+    supabase.from("product_categories").select("name").order("name").then(({ data }) => {
+      setCategories(((data || []) as { name: string }[]).map((c) => c.name));
+    });
+    supabase.from("products").select("id,name,model,category,brand").eq("active", true).order("name").then(({ data }) => {
+      setProducts((data || []) as Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>);
+    });
+    supabase.from("serials").select("id,serial_number,product_id").order("serial_number").then(({ data }) => {
+      setSerials((data || []) as Array<{ id: string; serial_number: string; product_id: string }>);
     });
     supabase.from("oem_brand_master").select("name").order("name").then(({ data }) => {
       setOemBrands(((data || []) as { name: string }[]).map((b) => b.name));
@@ -107,6 +118,7 @@ function AmcDetail() {
       oem_brand: a.oem_call ? (a.oem_brand || null) : null,
       oem_ref_id: a.oem_call ? (a.oem_ref_id || null) : null,
       oem_purchase_date: a.oem_call ? (a.oem_purchase_date || null) : null,
+      agreement_doc_path: a.agreement_doc_path ?? null,
     };
     const { error } = await supabase.from("amcs").update(payload as never).eq("id", id);
     setBusy(false);
@@ -189,23 +201,21 @@ function AmcDetail() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>UPS Units (model & serial editable)</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => update({ units: [...a.units, { model: "", serial_no: "" }] })}><Plus className="h-4 w-4 mr-1" />Add unit</Button>
+            <CardTitle>Product Details</CardTitle>
+            <Button size="sm" variant="outline" onClick={() => update({ units: [...a.units, { model: "", serial_no: "", category: "", product_id: "" }] })}><Plus className="h-4 w-4 mr-1" />Add unit</Button>
           </CardHeader>
           <CardContent className="space-y-3">
-            <datalist id="ups-models">
-              {productNames.map((n) => <option key={n} value={n} />)}
-            </datalist>
             {a.units.map((u, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
-                <div className="col-span-12 md:col-span-6"><Label>UPS Model</Label><Input list="ups-models" value={u.model} onChange={(e) => setUnit(i, { model: e.target.value })} placeholder="Select or type model" /></div>
-                <div className="col-span-10 md:col-span-5"><Label>Serial No.</Label><Input value={u.serial_no} onChange={(e) => setUnit(i, { serial_no: e.target.value })} /></div>
-                <div className="col-span-2 md:col-span-1">
-                  <Button size="icon" variant="ghost" onClick={() => update({ units: a.units.filter((_, idx) => idx !== i) })} disabled={a.units.length === 1}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </div>
+              <EditProductRow
+                key={i}
+                unit={u}
+                categories={categories}
+                products={products}
+                serials={serials}
+                onChange={(patch) => setUnit(i, patch)}
+                onRemove={() => update({ units: a.units.filter((_, idx) => idx !== i) })}
+                canRemove={a.units.length > 1}
+              />
             ))}
           </CardContent>
         </Card>
@@ -214,6 +224,21 @@ function AmcDetail() {
           <CardHeader><CardTitle>Terms & Conditions (editable for this agreement)</CardTitle></CardHeader>
           <CardContent>
             <Textarea rows={12} value={a.terms || ""} onChange={(e) => update({ terms: e.target.value })} className="font-mono text-xs" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Agreement Attachment</CardTitle></CardHeader>
+          <CardContent>
+            <AgreementDocUpload
+              amcId={a.id}
+              path={a.agreement_doc_path ?? null}
+              onChange={async (p) => {
+                update({ agreement_doc_path: p });
+                // persist immediately so refresh keeps the link
+                await supabase.from("amcs").update({ agreement_doc_path: p } as never).eq("id", a.id);
+              }}
+            />
           </CardContent>
         </Card>
 
