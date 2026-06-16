@@ -122,7 +122,7 @@ function AppLayout() {
           </div>
         </div>
       </header>
-      <main className="max-w-6xl mx-auto p-4 md:p-6">
+      <main className="max-w-[93.6rem] mx-auto p-4 md:p-6">
         <Outlet />
       </main>
       <ChangePasswordDialog
