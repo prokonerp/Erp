@@ -313,7 +313,15 @@ function NewTicket() {
           <Label>Model</Label>
           <ProductPicker
             value={form.product_id}
-            onChange={(id, p) => set({ product_id: id || "", product: p?.name || "" })}
+            onChange={(id, p) => {
+              const modelName = p?.model || p?.name || "";
+              const brand = p?.brand || "";
+              set({
+                product_id: id || "",
+                product: modelName,
+                ...(brand ? { oem_brand: brand } : {}),
+              });
+            }}
           />
         </div>
         <div>
