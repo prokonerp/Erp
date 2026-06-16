@@ -495,9 +495,6 @@ function ImportPage() {
           <Button variant="outline" onClick={downloadTemplate}>
             <Download className="h-4 w-4 mr-1" />Download CSV template
           </Button>
-          <Button variant="outline" onClick={downloadTemplateXlsx}>
-            <Download className="h-4 w-4 mr-1" />Download Excel template
-          </Button>
           <div className="text-xs text-muted-foreground basis-full">
             Fields ({def.fields.length}) — required marked with <span className="text-red-600">*</span>:
             <div className="mt-1 flex flex-wrap gap-1">
