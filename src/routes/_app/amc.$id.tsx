@@ -362,23 +362,23 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
   const oemLogo = getOemLogo(a.oem_brand);
   return (
     <div className="agreement-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
-      {/* Letterhead: stacked logos on left, company info on right */}
-      <div className="flex items-stretch gap-4 border-b-4 border-[#1e40af] pb-3 mb-2">
-        <div className="shrink-0 flex flex-col items-center justify-center gap-2 w-[120px]">
+      {/* Letterhead: 50/50 split — logos left, company info right-aligned */}
+      <div className="grid grid-cols-2 gap-4 border-b-4 border-[#1e40af] pb-3 mb-2 items-center">
+        <div className="flex flex-col items-start justify-center gap-2">
           <img
             src={prokonLogo.url}
             alt="Prokon Hi-Tech Systems"
-            className="h-16 w-[120px] object-contain"
+            className="h-20 w-auto max-w-full object-contain"
           />
           {oemLogo && (
             <img
               src={oemLogo.url}
               alt={oemLogo.alt}
-              className="h-16 w-[120px] object-contain"
+              className="h-20 w-auto max-w-full object-contain"
             />
           )}
         </div>
-        <div className="flex-1 flex flex-col justify-center">
+        <div className="flex flex-col justify-center text-right">
           <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent uppercase">{co.name}</h1>
           {co.address && <div className="text-[11px] text-gray-700 whitespace-pre-wrap">{co.address}</div>}
           {co.phone && <div className="text-[11px] text-gray-700">Phone: {co.phone}</div>}
