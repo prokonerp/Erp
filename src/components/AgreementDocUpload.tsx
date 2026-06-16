@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Download, Eye, FileText, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,6 +22,7 @@ export function AgreementDocUpload({
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const upload = async (file: File) => {
     if (file.type !== "application/pdf") {
@@ -55,36 +57,26 @@ export function AgreementDocUpload({
 
   const openPreview = async () => {
     if (!path) return;
-    // Open the tab SYNCHRONOUSLY so Chrome doesn't treat it as a popup.
-    const tab = window.open("about:blank", "_blank");
-    if (!tab) {
-      toast.error("Please allow pop-ups for this site to preview the PDF");
-      return;
-    }
-    // Show a loading screen immediately so the tab isn't blank while fetching.
-    try {
-      tab.document.open();
-      tab.document.write(`<!doctype html><title>Loading agreement…</title><style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#475569;background:#f1f5f9}</style><div>Loading agreement preview…</div>`);
-      tab.document.close();
-    } catch { /* cross-origin safety */ }
-
     setBusy(true);
     try {
       // Download as blob → blob: URL is rendered by browser's native PDF viewer
-      // and is immune to ad-blocker rules that target storage URLs (ERR_BLOCKED_BY_CLIENT).
+      // in an in-page iframe, immune to ad-blocker rules (ERR_BLOCKED_BY_CLIENT)
+      // and to pop-up blockers since no new window is opened.
       const { data, error } = await supabase.storage.from(BUCKET).download(path);
       if (error || !data) throw error || new Error("Unable to fetch file");
       const blob = data.type === "application/pdf" ? data : new Blob([data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
-      tab.location.replace(url);
-      // Revoke after the viewer has had time to load.
-      setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
+      setPreviewUrl(url);
     } catch (e: any) {
-      try { tab.close(); } catch { /* noop */ }
       toast.error(e?.message || "Unable to open file");
     } finally {
       setBusy(false);
     }
+  };
+
+  const closePreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
   };
 
   const downloadFile = async () => {
@@ -162,6 +154,16 @@ export function AgreementDocUpload({
           <Upload className="h-4 w-4 mr-1" />{busy ? "Uploading…" : "Upload PDF Agreement"}
         </Button>
       )}
+      <Dialog open={!!previewUrl} onOpenChange={(o) => { if (!o) closePreview(); }}>
+        <DialogContent className="max-w-5xl w-[95vw] h-[90vh] p-0 flex flex-col">
+          <DialogHeader className="px-4 py-2 border-b">
+            <DialogTitle className="text-sm font-medium truncate">{filename || "Agreement"}</DialogTitle>
+          </DialogHeader>
+          {previewUrl && (
+            <iframe src={previewUrl} title="Agreement preview" className="flex-1 w-full border-0" />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
