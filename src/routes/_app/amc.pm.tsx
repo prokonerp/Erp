@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
 import { ArrowLeft, CheckCircle2, Circle, Download, Printer, Search, Ticket as TicketIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { fmtDate } from "@/lib/amc";
@@ -43,6 +45,8 @@ function PMSchedule() {
   const [filter, setFilter] = useState<"all" | "pending" | "done" | "overdue">("all");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [busy, setBusy] = useState<string | null>(null);
+  const [openDate, setOpenDate] = useState<string | null>(null);
+  const [openPmId, setOpenPmId] = useState<string | null>(null);
   const [dateInput, setDateInput] = useState<string>("");
   const [rangeMode, setRangeMode] = useState<RangeMode>("month");
   const [customRange, setCustomRange] = useState<DateRange>(currentMonth());
@@ -121,6 +125,30 @@ function PMSchedule() {
     return { doneDays: done, pendingDays: pending, overdueDays: overdue };
   }, [pms, today]);
 
+  const pmsForOpenDate = useMemo(
+    () => (openDate ? pms.filter((p) => p.scheduled_date === openDate) : []),
+    [pms, openDate],
+  );
+  const openPm = useMemo(
+    () => pms.find((p) => p.id === openPmId) || null,
+    [pms, openPmId],
+  );
+
+  const handleCalendarSelect = (d: Date | undefined) => {
+    setSelectedDate(d);
+    if (!d) return;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const list = pms.filter((p) => p.scheduled_date === key);
+    if (list.length === 0) return;
+    if (list.length === 1) {
+      setOpenPmId(list[0].id);
+    } else {
+      setOpenDate(key);
+    }
+  };
+
+  const statusOf = (p: PMRow) => p.completed_at ? "Completed" : isOverdue(p) ? "Overdue" : "Pending";
+
   const counts = {
     total: pms.length,
     pending: pms.filter((p) => !p.completed_at).length,
@@ -193,12 +221,12 @@ function PMSchedule() {
             <Calendar
               mode="single"
               selected={selectedDate}
-              onSelect={setSelectedDate}
+              onSelect={handleCalendarSelect}
               modifiers={{ done: doneDays, pending: pendingDays, overdue: overdueDays }}
               modifiersClassNames={{
-                done: "bg-green-200 text-green-900 font-bold rounded",
-                pending: "bg-orange-200 text-orange-900 font-bold rounded",
-                overdue: "bg-red-200 text-red-900 font-bold rounded",
+                done: "bg-green-200 text-green-900 font-bold rounded cursor-pointer hover:ring-2 hover:ring-green-500",
+                pending: "bg-orange-200 text-orange-900 font-bold rounded cursor-pointer hover:ring-2 hover:ring-orange-500",
+                overdue: "bg-red-200 text-red-900 font-bold rounded cursor-pointer hover:ring-2 hover:ring-red-500",
               }}
               className="pointer-events-auto"
             />
@@ -207,7 +235,7 @@ function PMSchedule() {
               <span className="px-2 py-0.5 rounded bg-red-200 text-red-900">Overdue</span>
               <span className="px-2 py-0.5 rounded bg-green-200 text-green-900">Done</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">Click a date to filter the table below.</p>
+            <p className="text-xs text-muted-foreground mt-2">Click a highlighted date to open the PM Schedule.</p>
           </CardContent>
         </Card>
 
@@ -298,6 +326,96 @@ function PMSchedule() {
           header, nav { display: none !important; }
         }
       `}</style>
+
+      {/* Multiple PMs on same date — picker */}
+      <Dialog open={!!openDate} onOpenChange={(o) => !o && setOpenDate(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>PM Schedules on {openDate ? fmtDate(openDate) : ""}</DialogTitle>
+            <DialogDescription>Select a record to view details.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {pmsForOpenDate.map((p) => {
+              const a = amcs[p.amc_id];
+              const st = statusOf(p);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => { setOpenPmId(p.id); setOpenDate(null); }}
+                  className="w-full text-left rounded-lg border p-3 hover:bg-muted"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-medium">{a?.client_name || "—"}</div>
+                    <Badge variant={st === "Completed" ? "default" : st === "Overdue" ? "destructive" : "secondary"}>{st}</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground font-mono">{a?.agreement_no || "—"}</div>
+                  {a?.client_company && <div className="text-xs text-muted-foreground">{a.client_company}</div>}
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Single PM detail */}
+      <Dialog open={!!openPm} onOpenChange={(o) => !o && setOpenPmId(null)}>
+        <DialogContent className="max-w-2xl">
+          {openPm && (() => {
+            const a = amcs[openPm.amc_id];
+            const st = statusOf(openPm);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    PM Visit — {fmtDate(openPm.scheduled_date)}
+                    <Badge variant={st === "Completed" ? "default" : st === "Overdue" ? "destructive" : "secondary"}>{st}</Badge>
+                  </DialogTitle>
+                  <DialogDescription>PM Schedule Details</DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><div className="text-xs text-muted-foreground">PM Schedule ID</div><div className="font-mono">{openPm.id.slice(0, 8)}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Scheduled Date</div><div>{fmtDate(openPm.scheduled_date)}</div></div>
+                  <div><div className="text-xs text-muted-foreground">AMC Agreement</div>
+                    <div>{a ? <Link to="/amc/$id" params={{ id: a.id }} className="font-mono underline" onClick={() => setOpenPmId(null)}>{a.agreement_no}</Link> : "—"}</div>
+                  </div>
+                  <div><div className="text-xs text-muted-foreground">Customer</div><div>{a?.client_name || "—"}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Company / Site</div><div>{a?.client_company || "—"}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Contact</div><div>{a?.contact_no || "—"}</div></div>
+                  <div className="col-span-2">
+                    <div className="text-xs text-muted-foreground">Equipment / Assets</div>
+                    <div className="text-xs">
+                      {(a?.units || []).length
+                        ? (a!.units.map((u, i) => <div key={i} className="font-mono">{u.model} ({u.serial_no})</div>))
+                        : "—"}
+                    </div>
+                  </div>
+                  <div><div className="text-xs text-muted-foreground">Completed On</div><div>{openPm.completed_at ? fmtDate(openPm.completed_at.slice(0, 10)) : "—"}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Status</div><div>{st}</div></div>
+                  <div className="col-span-2">
+                    <div className="text-xs text-muted-foreground">Remarks</div>
+                    <div className="whitespace-pre-wrap">{openPm.notes || "—"}</div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap justify-end gap-2 pt-2">
+                  {canCreateTicket && (
+                    <a href={`/tickets/new?pm=${openPm.id}`}>
+                      <Button size="sm" variant="outline"><TicketIcon className="h-4 w-4 mr-1" />Create Ticket</Button>
+                    </a>
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={busy === openPm.id}
+                    onClick={() => toggleDone(openPm)}
+                    className={openPm.completed_at ? "bg-green-600 hover:bg-green-700 text-white" : "bg-red-600 hover:bg-red-700 text-white"}
+                  >
+                    {openPm.completed_at ? (<><CheckCircle2 className="h-4 w-4 mr-1" />Mark Pending</>) : (<><Circle className="h-4 w-4 mr-1" />Mark Done</>)}
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
