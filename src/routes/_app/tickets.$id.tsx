@@ -772,7 +772,7 @@ function TicketDetail() {
   );
 }
 
-function TicketPrint({ t, customer }: { t: Ticket; customer: CustomerBilling | null }) {
+function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: CustomerBilling | null; productModel?: string | null }) {
   const billLines = customer
     ? [
         customer.company,
