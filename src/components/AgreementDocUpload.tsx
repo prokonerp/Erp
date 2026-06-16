@@ -53,36 +53,28 @@ export function AgreementDocUpload({
     toast.success("Agreement uploaded");
   };
 
-  const openPreview = () => {
+  const openPreview = async () => {
     if (!path) return;
-    // Open the tab SYNCHRONOUSLY inside the click handler so Chrome doesn't
-    // treat it as a popup, then navigate it once we have a blob URL.
+    // Open the tab SYNCHRONOUSLY so Chrome doesn't treat it as a popup.
     const tab = window.open("about:blank", "_blank");
     if (!tab) {
       toast.error("Please allow pop-ups for this site to preview the PDF");
       return;
     }
-    tab.document.write(
-      `<!doctype html><title>Loading agreement…</title>
-       <body style="margin:0;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;color:#555">
-       Loading agreement…</body>`
-    );
     setBusy(true);
-    (async () => {
-      try {
-        const { data, error } = await supabase.storage.from(BUCKET).download(path);
-        if (error || !data) throw error || new Error("Unable to fetch file");
-        const blob = data.type === "application/pdf" ? data : new Blob([data], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        tab.location.replace(url);
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      } catch (e: any) {
-        tab.close();
-        toast.error(e?.message || "Unable to open file");
-      } finally {
-        setBusy(false);
-      }
-    })();
+    try {
+      // Prefer signed URL → native browser PDF viewer handles scroll/zoom/print/download.
+      const { data, error } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(path, 60 * 10, { download: false });
+      if (error || !data?.signedUrl) throw error || new Error("Unable to create preview URL");
+      tab.location.replace(data.signedUrl);
+    } catch (e: any) {
+      tab.close();
+      toast.error(e?.message || "Unable to open file");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const downloadFile = async () => {
