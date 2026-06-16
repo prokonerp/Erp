@@ -467,6 +467,31 @@ function TicketDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 print:hidden">
         {/* Left: ticket details */}
         <div className="lg:col-span-2 space-y-4">
+          {t.oem_call && (
+            <Card className="border-purple-300">
+              <CardHeader><CardTitle className="text-base">OEM Details</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label>OEM Brand *</Label>
+                  <Select value={t.oem_brand || ""} onValueChange={(v) => update({ oem_brand: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
+                    <SelectContent>
+                      {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>OEM Ref ID *</Label>
+                  <Input value={t.oem_ref_id || ""} onChange={(e) => update({ oem_ref_id: e.target.value })} placeholder="OEM reference / ticket id" />
+                </div>
+                <div>
+                  <Label>OEM Customer Purchase Date *</Label>
+                  <Input type="date" value={t.oem_purchase_date || ""} onChange={(e) => update({ oem_purchase_date: e.target.value })} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader><CardTitle>Ticket Details</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -511,31 +536,6 @@ function TicketDetail() {
               </div>
             </CardContent>
           </Card>
-
-          {t.oem_call && (
-            <Card className="border-purple-300">
-              <CardHeader><CardTitle className="text-base">OEM Details</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <Label>OEM Brand *</Label>
-                  <Select value={t.oem_brand || ""} onValueChange={(v) => update({ oem_brand: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
-                    <SelectContent>
-                      {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>OEM Ref ID *</Label>
-                  <Input value={t.oem_ref_id || ""} onChange={(e) => update({ oem_ref_id: e.target.value })} placeholder="OEM reference / ticket id" />
-                </div>
-                <div>
-                  <Label>OEM Customer Purchase Date *</Label>
-                  <Input type="date" value={t.oem_purchase_date || ""} onChange={(e) => update({ oem_purchase_date: e.target.value })} />
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           <Card>
             <CardHeader><CardTitle>Customer</CardTitle></CardHeader>
