@@ -34,6 +34,8 @@ import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.d
 import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
 import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.products'
 import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
+import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
+import { Route as AppIndentIdRouteImport } from './routes/_app/indent.$id'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
@@ -172,6 +174,16 @@ const AppMastersCustomersRoute = AppMastersCustomersRouteImport.update({
   path: '/customers',
   getParentRoute: () => AppMastersRoute,
 } as any)
+const AppIndentNewRoute = AppIndentNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppIndentRoute,
+} as any)
+const AppIndentIdRoute = AppIndentIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppIndentRoute,
+} as any)
 const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   id: '/gatepass/$id',
   path: '/gatepass/$id',
@@ -263,6 +275,8 @@ export interface FileRoutesByFullPath {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/indent/$id': typeof AppIndentIdRoute
+  '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
   '/masters/products': typeof AppMastersProductsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
@@ -298,6 +312,8 @@ export interface FileRoutesByTo {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/indent/$id': typeof AppIndentIdRoute
+  '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
   '/masters/products': typeof AppMastersProductsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
@@ -339,6 +355,8 @@ export interface FileRoutesById {
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
+  '/_app/indent/$id': typeof AppIndentIdRoute
+  '/_app/indent/new': typeof AppIndentNewRoute
   '/_app/masters/customers': typeof AppMastersCustomersRoute
   '/_app/masters/products': typeof AppMastersProductsRoute
   '/_app/tickets/$id': typeof AppTicketsIdRoute
@@ -380,6 +398,8 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/indent/$id'
+    | '/indent/new'
     | '/masters/customers'
     | '/masters/products'
     | '/tickets/$id'
@@ -415,6 +435,8 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/indent/$id'
+    | '/indent/new'
     | '/masters/customers'
     | '/masters/products'
     | '/tickets/$id'
@@ -455,6 +477,8 @@ export interface FileRouteTypes {
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
+    | '/_app/indent/$id'
+    | '/_app/indent/new'
     | '/_app/masters/customers'
     | '/_app/masters/products'
     | '/_app/tickets/$id'
@@ -654,6 +678,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMastersCustomersRouteImport
       parentRoute: typeof AppMastersRoute
     }
+    '/_app/indent/new': {
+      id: '/_app/indent/new'
+      path: '/new'
+      fullPath: '/indent/new'
+      preLoaderRoute: typeof AppIndentNewRouteImport
+      parentRoute: typeof AppIndentRoute
+    }
+    '/_app/indent/$id': {
+      id: '/_app/indent/$id'
+      path: '/$id'
+      fullPath: '/indent/$id'
+      preLoaderRoute: typeof AppIndentIdRouteImport
+      parentRoute: typeof AppIndentRoute
+    }
     '/_app/gatepass/$id': {
       id: '/_app/gatepass/$id'
       path: '/gatepass/$id'
@@ -814,10 +852,14 @@ const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
 interface AppIndentRouteChildren {
+  AppIndentIdRoute: typeof AppIndentIdRoute
+  AppIndentNewRoute: typeof AppIndentNewRoute
   AppIndentIndexRoute: typeof AppIndentIndexRoute
 }
 
 const AppIndentRouteChildren: AppIndentRouteChildren = {
+  AppIndentIdRoute: AppIndentIdRoute,
+  AppIndentNewRoute: AppIndentNewRoute,
   AppIndentIndexRoute: AppIndentIndexRoute,
 }
 

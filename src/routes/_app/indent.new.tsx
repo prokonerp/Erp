@@ -128,11 +128,12 @@ function NewIndent() {
       remarks: form.remarks || null,
       created_by: u.user?.id ?? null,
     };
-    const { data, error } = await supabase.from("indents" as never).insert(payload as never).select("id").maybeSingle();
+    const { data, error } = await supabase.from("indents" as never).insert(payload as never).select("id").maybeSingle() as unknown as { data: { id: string } | null; error: { message: string } | null };
     setBusy(false);
     if (error) return toast.error(error.message);
+    if (!data) return toast.error("Failed to create INDENT");
     toast.success("INDENT created");
-    navigate({ to: "/indent/$id", params: { id: (data as { id: string }).id } });
+    navigate({ to: "/indent/$id", params: { id: data.id } });
   };
 
   if (loading) return <div className="text-sm text-muted-foreground">Loading ticket…</div>;
