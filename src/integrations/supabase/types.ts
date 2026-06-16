@@ -85,6 +85,7 @@ export type Database = {
       }
       amcs: {
         Row: {
+          agreement_doc_path: string | null
           agreement_no: string
           amc_value: number | null
           client_address: string | null
@@ -112,6 +113,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agreement_doc_path?: string | null
           agreement_no: string
           amc_value?: number | null
           client_address?: string | null
@@ -139,6 +141,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agreement_doc_path?: string | null
           agreement_no?: string
           amc_value?: number | null
           client_address?: string | null
