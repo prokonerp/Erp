@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -22,7 +22,7 @@ export function AgreementDocUpload({
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewData, setPreviewData] = useState<ArrayBuffer | null>(null);
 
   const upload = async (file: File) => {
     if (file.type !== "application/pdf") {
@@ -59,14 +59,11 @@ export function AgreementDocUpload({
     if (!path) return;
     setBusy(true);
     try {
-      // Download as blob → blob: URL is rendered by browser's native PDF viewer
-      // in an in-page iframe, immune to ad-blocker rules (ERR_BLOCKED_BY_CLIENT)
-      // and to pop-up blockers since no new window is opened.
       const { data, error } = await supabase.storage.from(BUCKET).download(path);
       if (error || !data) throw error || new Error("Unable to fetch file");
-      const blob = data.type === "application/pdf" ? data : new Blob([data], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      setPreviewUrl(url);
+      // Buffer in memory; we render with pdf.js (no Chrome PDF viewer dependency).
+      const buf = await data.arrayBuffer();
+      setPreviewData(buf);
     } catch (e: any) {
       toast.error(e?.message || "Unable to open file");
     } finally {
@@ -75,8 +72,7 @@ export function AgreementDocUpload({
   };
 
   const closePreview = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
+    setPreviewData(null);
   };
 
   const downloadFile = async () => {
@@ -154,16 +150,73 @@ export function AgreementDocUpload({
           <Upload className="h-4 w-4 mr-1" />{busy ? "Uploading…" : "Upload PDF Agreement"}
         </Button>
       )}
-      <Dialog open={!!previewUrl} onOpenChange={(o) => { if (!o) closePreview(); }}>
+      <Dialog open={!!previewData} onOpenChange={(o) => { if (!o) closePreview(); }}>
         <DialogContent className="max-w-5xl w-[95vw] h-[90vh] p-0 flex flex-col">
           <DialogHeader className="px-4 py-2 border-b">
             <DialogTitle className="text-sm font-medium truncate">{filename || "Agreement"}</DialogTitle>
           </DialogHeader>
-          {previewUrl && (
-            <iframe src={previewUrl} title="Agreement preview" className="flex-1 w-full border-0" />
-          )}
+          {previewData && <PdfCanvasViewer data={previewData} />}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function PdfCanvasViewer({ data }: { data: ArrayBuffer }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let pdfDoc: any = null;
+    (async () => {
+      try {
+        const pdfjs: any = await import("pdfjs-dist");
+        // Use the bundled worker (Vite ?url import) — no CDN, no network blocks.
+        const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+        // Clone the buffer — pdf.js transfers ownership of the underlying ArrayBuffer.
+        const copy = data.slice(0);
+        const loadingTask = pdfjs.getDocument({ data: copy });
+        pdfDoc = await loadingTask.promise;
+        const container = containerRef.current;
+        if (!container || cancelled) return;
+        container.innerHTML = "";
+        const containerWidth = container.clientWidth - 32; // padding
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          if (cancelled) return;
+          const page = await pdfDoc.getPage(i);
+          const viewport = page.getViewport({ scale: 1 });
+          const scale = Math.min(2, Math.max(1, containerWidth / viewport.width));
+          const scaled = page.getViewport({ scale });
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d")!;
+          const dpr = window.devicePixelRatio || 1;
+          canvas.width = scaled.width * dpr;
+          canvas.height = scaled.height * dpr;
+          canvas.style.width = `${scaled.width}px`;
+          canvas.style.height = `${scaled.height}px`;
+          canvas.style.display = "block";
+          canvas.style.margin = "0 auto 12px";
+          canvas.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
+          ctx.scale(dpr, dpr);
+          await page.render({ canvasContext: ctx, viewport: scaled }).promise;
+          if (cancelled) return;
+          container.appendChild(canvas);
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || "Failed to render PDF");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (pdfDoc) { try { pdfDoc.destroy(); } catch { /* noop */ } }
+    };
+  }, [data]);
+
+  return (
+    <div ref={containerRef} className="flex-1 w-full overflow-auto bg-muted p-4">
+      {error && <div className="text-sm text-destructive">{error}</div>}
     </div>
   );
 }
