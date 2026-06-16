@@ -458,3 +458,69 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
     </div>
   );
 }
+
+function EditProductRow({ unit, categories, products, serials, onChange, onRemove, canRemove }: {
+  unit: AmcUnit;
+  categories: string[];
+  products: Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>;
+  serials: Array<{ id: string; serial_number: string; product_id: string }>;
+  onChange: (patch: Partial<AmcUnit>) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}) {
+  const filteredProducts = products.filter((p) => !unit.category || p.category === unit.category);
+  const filteredSerials = serials.filter((s) => s.product_id === unit.product_id);
+  return (
+    <div className="grid grid-cols-12 gap-2 items-end border-b pb-3">
+      <div className="col-span-12 md:col-span-3">
+        <Label>Category *</Label>
+        <Select value={unit.category || ""} onValueChange={(v) => onChange({ category: v, product_id: "", model: "", serial_no: "" })}>
+          <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="col-span-12 md:col-span-4">
+        <Label>Model *</Label>
+        <Select
+          value={unit.product_id || ""}
+          onValueChange={(v) => {
+            const p = products.find((x) => x.id === v);
+            onChange({ product_id: v, model: p?.model || p?.name || "", serial_no: "" });
+          }}
+          disabled={!unit.category}
+        >
+          <SelectTrigger><SelectValue placeholder={unit.category ? "Select model" : "Pick category first"} /></SelectTrigger>
+          <SelectContent>
+            {filteredProducts.map((p) => (
+              <SelectItem key={p.id} value={p.id}>{p.model || p.name} {p.brand ? `· ${p.brand}` : ""}</SelectItem>
+            ))}
+            {filteredProducts.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No products in this category</div>}
+          </SelectContent>
+        </Select>
+        {unit.model && !unit.product_id && (
+          <p className="text-[11px] text-muted-foreground mt-1">Legacy model: <span className="font-mono">{unit.model}</span> — pick a master product to standardise.</p>
+        )}
+      </div>
+      <div className="col-span-10 md:col-span-4">
+        <Label>Serial Number</Label>
+        {filteredSerials.length > 0 ? (
+          <Select value={unit.serial_no || ""} onValueChange={(v) => onChange({ serial_no: v })}>
+            <SelectTrigger><SelectValue placeholder="Select serial" /></SelectTrigger>
+            <SelectContent>
+              {filteredSerials.map((s) => <SelectItem key={s.id} value={s.serial_number}>{s.serial_number}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input value={unit.serial_no || ""} onChange={(e) => onChange({ serial_no: e.target.value.toUpperCase() })} placeholder="Enter serial" className="font-mono" />
+        )}
+      </div>
+      <div className="col-span-2 md:col-span-1 flex justify-end">
+        <Button size="icon" variant="ghost" onClick={onRemove} disabled={!canRemove}>
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      </div>
+    </div>
+  );
+}
