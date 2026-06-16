@@ -61,16 +61,26 @@ export function AgreementDocUpload({
       toast.error("Please allow pop-ups for this site to preview the PDF");
       return;
     }
+    // Show a loading screen immediately so the tab isn't blank while fetching.
+    try {
+      tab.document.open();
+      tab.document.write(`<!doctype html><title>Loading agreement…</title><style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#475569;background:#f1f5f9}</style><div>Loading agreement preview…</div>`);
+      tab.document.close();
+    } catch { /* cross-origin safety */ }
+
     setBusy(true);
     try {
-      // Prefer signed URL → native browser PDF viewer handles scroll/zoom/print/download.
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(path, 60 * 10, { download: false });
-      if (error || !data?.signedUrl) throw error || new Error("Unable to create preview URL");
-      tab.location.replace(data.signedUrl);
+      // Download as blob → blob: URL is rendered by browser's native PDF viewer
+      // and is immune to ad-blocker rules that target storage URLs (ERR_BLOCKED_BY_CLIENT).
+      const { data, error } = await supabase.storage.from(BUCKET).download(path);
+      if (error || !data) throw error || new Error("Unable to fetch file");
+      const blob = data.type === "application/pdf" ? data : new Blob([data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      tab.location.replace(url);
+      // Revoke after the viewer has had time to load.
+      setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
     } catch (e: any) {
-      tab.close();
+      try { tab.close(); } catch { /* noop */ }
       toast.error(e?.message || "Unable to open file");
     } finally {
       setBusy(false);
