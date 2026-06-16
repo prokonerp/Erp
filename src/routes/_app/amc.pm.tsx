@@ -277,7 +277,6 @@ function PMSchedule() {
                         </TableCell>
                         <TableCell>
                           <div className="font-medium">{a?.client_company || a?.client_name || "—"}</div>
-                          {a?.client_company && a?.client_name && <div className="text-xs text-muted-foreground">{a.client_name}</div>}
                         </TableCell>
                         <TableCell className="text-xs">
                           {a ? (
@@ -349,7 +348,6 @@ function PMSchedule() {
                     <Badge variant={st === "Completed" ? "default" : st === "Overdue" ? "destructive" : "secondary"}>{st}</Badge>
                   </div>
                   <div className="text-xs text-muted-foreground font-mono">{a?.agreement_no || "—"}</div>
-                  {a?.client_company && a?.client_name && <div className="text-xs text-muted-foreground">{a.client_name}</div>}
                 </button>
               );
             })}
