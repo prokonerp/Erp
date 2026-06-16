@@ -400,7 +400,7 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
     <div className="agreement-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
       {/* Letterhead: strict 50/50 split — logos left, company info centered */}
       <div className="grid grid-cols-2 gap-0 border-b-4 border-[#1e40af] pb-3 mb-2 items-center w-full">
-        <div className="flex items-center justify-start gap-4 pr-2">
+        <div className="flex flex-col items-start justify-center gap-2 pr-2">
           <img
             src={prokonLogo.url}
             alt="Prokon Hi-Tech Systems"
