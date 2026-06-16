@@ -187,7 +187,7 @@ function TicketsList() {
     <div className="space-y-4">
       <FormPageHeader
         title="Service Tickets"
-        subtitle="OEM-tagged tickets are highlighted; create INDENT from OEM tickets"
+        subtitle="OEM-tagged tickets are highlighted; create Indent from OEM tickets"
       />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
