@@ -414,7 +414,7 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
             />
           )}
         </div>
-        <div className="flex flex-col items-center justify-center text-center pl-2">
+        <div className="flex flex-col items-center justify-center text-center pl-2 pr-[20%]">
           <h1 className="text-2xl font-extrabold tracking-tight uppercase text-black leading-tight">Prokon Hi-Tech Systems</h1>
           {co.address && <div className="text-[11px] text-gray-800 whitespace-pre-wrap">{co.address}</div>}
           {co.phone && <div className="text-[11px] text-gray-800">Phone: {co.phone}</div>}
