@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { type AmcUnit, addYears, fmtDate, generatePMDates } from "@/lib/amc";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
+import { AgreementDocUpload } from "@/components/AgreementDocUpload";
 
 export const Route = createFileRoute("/_app/amc/new")({
   component: NewAmc,
@@ -51,6 +52,7 @@ function NewAmc() {
   const [serials, setSerials] = useState<SerialLite[]>([]);
   const [oemBrands, setOemBrands] = useState<string[]>([]);
   const [prefixPreview, setPrefixPreview] = useState<string>("PHS/AMC/");
+  const [agreementDocPath, setAgreementDocPath] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const end_date = addYears(form.start_date, form.duration_years);
@@ -151,6 +153,7 @@ function NewAmc() {
       oem_brand: form.oem_call ? form.oem_brand.trim() : null,
       oem_ref_id: form.oem_call ? form.oem_ref_id.trim() : null,
       oem_purchase_date: form.oem_call && form.oem_purchase_date ? form.oem_purchase_date : null,
+      agreement_doc_path: agreementDocPath,
       created_by: userData.user?.id ?? null,
     } as never).select("id").single();
     setBusy(false);
@@ -161,6 +164,56 @@ function NewAmc() {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>OEM Registration</span>
+            <div className="flex items-center gap-2 text-sm font-normal">
+              <Label htmlFor="oem-toggle-new">Registered with OEM</Label>
+              <Switch id="oem-toggle-new" checked={form.oem_call} onCheckedChange={(v) => setForm({ ...form, oem_call: v })} />
+              <span className="text-xs text-muted-foreground">{form.oem_call ? "Yes" : "No"}</span>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        {form.oem_call && (
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label>OEM Brand *</Label>
+              <Select
+                value={form.oem_brand}
+                onValueChange={async (v) => {
+                  if (v === "__add__") {
+                    const name = window.prompt("New OEM brand name")?.trim();
+                    if (!name) return;
+                    const { error } = await supabase.from("oem_brand_master").insert({ name } as never);
+                    if (error) { toast.error(error.message); return; }
+                    setOemBrands((arr) => Array.from(new Set([...arr, name])).sort());
+                    setForm((f) => ({ ...f, oem_brand: name }));
+                    toast.success("OEM brand added");
+                  } else {
+                    setForm({ ...form, oem_brand: v });
+                  }
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select OEM brand" /></SelectTrigger>
+                <SelectContent>
+                  {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  <SelectItem value="__add__">+ Add New OEM Brand</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>OEM Agreement Number *</Label>
+              <Input value={form.oem_ref_id} onChange={(e) => setForm({ ...form, oem_ref_id: e.target.value.toUpperCase() })} placeholder="e.g. APC-2026-AB12345" className="font-mono" />
+            </div>
+            <div>
+              <Label>OEM Purchase Date</Label>
+              <Input type="date" value={form.oem_purchase_date} onChange={(e) => setForm({ ...form, oem_purchase_date: e.target.value })} />
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
       <Card>
         <CardHeader><CardTitle>New AMC Agreement</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -229,59 +282,16 @@ function NewAmc() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>OEM Registration</span>
-            <div className="flex items-center gap-2 text-sm font-normal">
-              <Label htmlFor="oem-toggle-new">Registered with OEM</Label>
-              <Switch id="oem-toggle-new" checked={form.oem_call} onCheckedChange={(v) => setForm({ ...form, oem_call: v })} />
-              <span className="text-xs text-muted-foreground">{form.oem_call ? "Yes" : "No"}</span>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        {form.oem_call && (
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>OEM Brand *</Label>
-              <Select
-                value={form.oem_brand}
-                onValueChange={async (v) => {
-                  if (v === "__add__") {
-                    const name = window.prompt("New OEM brand name")?.trim();
-                    if (!name) return;
-                    const { error } = await supabase.from("oem_brand_master").insert({ name } as never);
-                    if (error) { toast.error(error.message); return; }
-                    setOemBrands((arr) => Array.from(new Set([...arr, name])).sort());
-                    setForm((f) => ({ ...f, oem_brand: name }));
-                    toast.success("OEM brand added");
-                  } else {
-                    setForm({ ...form, oem_brand: v });
-                  }
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Select OEM brand" /></SelectTrigger>
-                <SelectContent>
-                  {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                  <SelectItem value="__add__">+ Add New OEM Brand</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>OEM Agreement Number *</Label>
-              <Input value={form.oem_ref_id} onChange={(e) => setForm({ ...form, oem_ref_id: e.target.value.toUpperCase() })} placeholder="e.g. APC-2026-AB12345" className="font-mono" />
-            </div>
-            <div>
-              <Label>OEM Purchase Date</Label>
-              <Input type="date" value={form.oem_purchase_date} onChange={(e) => setForm({ ...form, oem_purchase_date: e.target.value })} />
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      <Card>
         <CardHeader><CardTitle>Terms & Conditions (editable)</CardTitle></CardHeader>
         <CardContent>
           <Textarea rows={12} value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} className="font-mono text-xs" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Agreement Attachment</CardTitle></CardHeader>
+        <CardContent>
+          <AgreementDocUpload path={agreementDocPath} onChange={setAgreementDocPath} />
         </CardContent>
       </Card>
 
