@@ -482,7 +482,7 @@ function TicketDetail() {
                 <Label>Model</Label>
                 <Select value={t.product || ""} onValueChange={(v) => update({ product: v })}>
                   <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                  <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.name}>{p.model || p.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label>Serial Number</Label><Input value={t.serial_no || ""} onChange={(e) => update({ serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
@@ -811,7 +811,7 @@ function TicketPrint({ t, customer }: { t: Ticket; customer: CustomerBilling | n
           </tr>
           <tr>
             <td className="border border-black px-2 py-1 font-bold">Model</td>
-            <td className="border border-black px-2 py-1">{t.product || "-"}</td>
+            <td className="border border-black px-2 py-1">{products.find(p => p.name === t.product)?.model || t.product || "-"}</td>
           </tr>
           <tr>
             <td className="border border-black px-2 py-1 font-bold">Serial No.</td>
