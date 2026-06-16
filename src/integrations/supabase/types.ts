@@ -698,6 +698,107 @@ export type Database = {
           },
         ]
       }
+      indent_sequence: {
+        Row: {
+          id: number
+          last_seq: number
+        }
+        Insert: {
+          id?: number
+          last_seq?: number
+        }
+        Update: {
+          id?: number
+          last_seq?: number
+        }
+        Relationships: []
+      }
+      indents: {
+        Row: {
+          case_id: string | null
+          company: string | null
+          created_at: string
+          created_by: string | null
+          def_model_no: string | null
+          def_serial_no: string | null
+          engineer_name: string | null
+          id: string
+          indent_city: string | null
+          indent_date: string
+          indent_no: string | null
+          indent_type: Database["public"]["Enums"]["indent_type"] | null
+          material_exchange_model: string | null
+          material_exchange_serial_no: string | null
+          material_rec_date: string | null
+          material_rec_model_no: string | null
+          material_rec_serial_no: string | null
+          oem_case_id: string | null
+          oracles: string | null
+          problem_reported: string | null
+          remarks: string | null
+          ticket_id: string
+          updated_at: string
+        }
+        Insert: {
+          case_id?: string | null
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          def_model_no?: string | null
+          def_serial_no?: string | null
+          engineer_name?: string | null
+          id?: string
+          indent_city?: string | null
+          indent_date?: string
+          indent_no?: string | null
+          indent_type?: Database["public"]["Enums"]["indent_type"] | null
+          material_exchange_model?: string | null
+          material_exchange_serial_no?: string | null
+          material_rec_date?: string | null
+          material_rec_model_no?: string | null
+          material_rec_serial_no?: string | null
+          oem_case_id?: string | null
+          oracles?: string | null
+          problem_reported?: string | null
+          remarks?: string | null
+          ticket_id: string
+          updated_at?: string
+        }
+        Update: {
+          case_id?: string | null
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          def_model_no?: string | null
+          def_serial_no?: string | null
+          engineer_name?: string | null
+          id?: string
+          indent_city?: string | null
+          indent_date?: string
+          indent_no?: string | null
+          indent_type?: Database["public"]["Enums"]["indent_type"] | null
+          material_exchange_model?: string | null
+          material_exchange_serial_no?: string | null
+          material_rec_date?: string | null
+          material_rec_model_no?: string | null
+          material_rec_serial_no?: string | null
+          oem_case_id?: string | null
+          oracles?: string | null
+          problem_reported?: string | null
+          remarks?: string | null
+          ticket_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indents_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory: {
         Row: {
           created_at: string
@@ -1707,10 +1808,12 @@ export type Database = {
         Returns: boolean
       }
       next_amc_seq: { Args: never; Returns: number }
+      next_indent_seq: { Args: never; Returns: number }
       next_ticket_seq: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "user"
+      indent_type: "rma_advance_exchange" | "rma_exchange" | "rma_service_ship"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1839,6 +1942,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      indent_type: ["rma_advance_exchange", "rma_exchange", "rma_service_ship"],
     },
   },
 } as const
