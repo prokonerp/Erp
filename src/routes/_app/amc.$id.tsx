@@ -362,29 +362,29 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
   const oemLogo = getOemLogo(a.oem_brand);
   return (
     <div className="agreement-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
-      {/* Letterhead: 50/50 split — logos left, company info right-aligned */}
-      <div className="grid grid-cols-2 gap-4 border-b-4 border-[#1e40af] pb-3 mb-2 items-center">
-        <div className="flex flex-col items-center justify-center gap-3">
+      {/* Letterhead: strict 50/50 split — logos left, company info right-aligned */}
+      <div className="grid grid-cols-2 gap-0 border-b-4 border-[#1e40af] pb-3 mb-2 items-start w-full">
+        <div className="flex flex-col items-center justify-start gap-3 pr-2">
           <img
             src={prokonLogo.url}
             alt="Prokon Hi-Tech Systems"
-            className="h-20 w-[200px] object-contain"
+            className="h-16 w-[180px] object-contain"
           />
           {oemLogo && (
             <img
               src={oemLogo.url}
               alt={oemLogo.alt}
-              className="h-20 w-[200px] object-contain"
+              className="h-16 w-[180px] object-contain"
             />
           )}
         </div>
-        <div className="flex flex-col justify-center text-right">
-          <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent uppercase">{co.name || "Prokon Hi-Tech Systems"}</h1>
-          {co.address && <div className="text-[11px] text-gray-700 whitespace-pre-wrap">{co.address}</div>}
-          {co.phone && <div className="text-[11px] text-gray-700">Phone: {co.phone}</div>}
-          {co.email && <div className="text-[11px] text-gray-700">Email: {co.email}</div>}
-          {co.website && <div className="text-[11px] text-gray-700">Website: {co.website}</div>}
-          {co.gstin && <div className="text-[11px] text-gray-700">GSTIN: <span className="font-mono">{co.gstin}</span></div>}
+        <div className="flex flex-col items-end text-right pl-2">
+          <h1 className="text-2xl font-extrabold tracking-tight uppercase text-black leading-tight">Prokon Hi-Tech Systems</h1>
+          {co.address && <div className="text-[11px] text-gray-800 whitespace-pre-wrap">{co.address}</div>}
+          {co.phone && <div className="text-[11px] text-gray-800">Phone: {co.phone}</div>}
+          {co.email && <div className="text-[11px] text-gray-800">Email: {co.email}</div>}
+          {co.website && <div className="text-[11px] text-gray-800">Website: {co.website}</div>}
+          {co.gstin && <div className="text-[11px] text-gray-800">GSTIN: <span className="font-mono">{co.gstin}</span></div>}
         </div>
       </div>
       <div className="text-center mb-3">
