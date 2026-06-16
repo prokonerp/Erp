@@ -37,9 +37,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trash2, Plus, KeyRound, Pencil, ShieldAlert } from "lucide-react";
+import { Trash2, Plus, KeyRound, Pencil, ShieldAlert, Boxes } from "lucide-react";
 import { toast } from "sonner";
-import { MODULES, ModuleKey, ModulePerm, EMPTY_PERM, FULL_PERM } from "@/lib/permissions";
+import { ModuleKey, ModulePerm, EMPTY_PERM } from "@/lib/permissions";
+import { useModules, type AppModule } from "@/lib/useModules";
 
 type Role = { id: string; name: string; description: string | null; is_system: boolean };
 type Perm = {
@@ -51,6 +52,8 @@ type Perm = {
   can_create: boolean;
   can_edit: boolean;
   can_delete: boolean;
+  can_export: boolean;
+  can_import: boolean;
 };
 type AppUser = {
   user_id: string;
@@ -82,12 +85,16 @@ export function RolesAndUsersPanel({ isAdmin }: { isAdmin: boolean }) {
       <TabsList>
         <TabsTrigger value="users">Users</TabsTrigger>
         <TabsTrigger value="roles">Roles &amp; Permissions</TabsTrigger>
+        <TabsTrigger value="modules">Modules</TabsTrigger>
       </TabsList>
       <TabsContent value="users" className="mt-4">
         <UsersSection />
       </TabsContent>
       <TabsContent value="roles" className="mt-4">
         <RolesSection />
+      </TabsContent>
+      <TabsContent value="modules" className="mt-4">
+        <ModulesSection />
       </TabsContent>
     </Tabs>
   );
