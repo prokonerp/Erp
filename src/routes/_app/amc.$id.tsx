@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, Eye, Mail, MessageCircle, Plus, Printer, RefreshCw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, generatePMDates, statusBadgeClass, statusLabel } from "@/lib/amc";
+import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, fmtMonthYear, generatePMDates, statusBadgeClass, statusLabel } from "@/lib/amc";
 import { AgreementDocUpload } from "@/components/AgreementDocUpload";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -472,7 +472,7 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
           </tr></thead>
           <tbody>
             {(a.pm_dates || []).map((d, i) => (
-              <tr key={i}><td className="border border-black px-2 py-1 text-center">{i + 1}</td><td className="border border-black px-2 py-1">{fmtDate(d)}</td></tr>
+              <tr key={i}><td className="border border-black px-2 py-1 text-center">{i + 1}</td><td className="border border-black px-2 py-1">{fmtMonthYear(d)}</td></tr>
             ))}
           </tbody>
         </table>

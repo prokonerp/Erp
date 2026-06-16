@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck, Ticket as TicketIcon, Briefcase } from "lucide-react";
-import { type Amc, amcStatus, statusBadgeClass, statusLabel, statusRowClass } from "@/lib/amc";
+import { type Amc, amcStatus, fmtDate, statusBadgeClass, statusLabel, statusRowClass } from "@/lib/amc";
 import { ExportButtons } from "@/components/ExportButtons";
 import { usePermissions } from "@/lib/usePermissions";
 import { type DateRange, type RangeMode, currentMonth, resolveRange, overlaps } from "@/lib/dateRange";
@@ -59,10 +59,14 @@ function AmcDashboard() {
     if (!overlaps(r.start_date, r.end_date, range.from, range.to)) return false;
     const s = q.toLowerCase();
     if (!s) return true;
-    return r.agreement_no.toLowerCase().includes(s)
+      return r.agreement_no.toLowerCase().includes(s)
       || r.client_name.toLowerCase().includes(s)
       || (r.client_company || "").toLowerCase().includes(s)
-      || JSON.stringify(r.units).toLowerCase().includes(s);
+      || (r.units || []).some((u) =>
+        (u.category || "").toLowerCase().includes(s) ||
+        (u.model || "").toLowerCase().includes(s) ||
+        (u.serial_no || "").toLowerCase().includes(s),
+      );
   });
 
   const StatCard = ({ label, value, color, onClick, active }: { label: string; value: number; color: string; onClick: () => void; active: boolean }) => (
@@ -99,7 +103,7 @@ function AmcDashboard() {
           <CardContent className="text-sm space-y-1">
             {pmReminders.slice(0, 8).map((p, i) => (
               <div key={i} className="flex justify-between border-b border-blue-200/50 py-1">
-                <span><span className="font-mono">{p.date}</span> — {p.amc.client_company || p.amc.client_name}{p.amc.client_company && p.amc.client_name ? ` (${p.amc.client_name})` : ""}</span>
+                <span><span className="font-mono">{fmtDate(p.date)}</span> — {p.amc.client_company || p.amc.client_name}{p.amc.client_company && p.amc.client_name ? ` (${p.amc.client_name})` : ""}</span>
                 <Link to="/amc/$id" params={{ id: p.amc.id }} className="text-blue-700 underline">{p.amc.agreement_no}</Link>
               </div>
             ))}
@@ -113,7 +117,7 @@ function AmcDashboard() {
           <CardContent className="text-sm">
             {decorated.filter((r) => r._status === "expiring").slice(0, 6).map((r) => (
               <div key={r.id} className="flex justify-between border-b border-orange-200/50 py-1">
-                <span>{r.client_company || r.client_name}{r.client_company && r.client_name ? ` (${r.client_name})` : ""} — ends <span className="font-mono">{r.end_date}</span></span>
+                <span>{r.client_company || r.client_name}{r.client_company && r.client_name ? ` (${r.client_name})` : ""} — ends <span className="font-mono">{fmtDate(r.end_date)}</span></span>
                 <Link to="/amc/$id" params={{ id: r.id }} className="text-orange-700 underline">{r.agreement_no}</Link>
               </div>
             ))}
@@ -140,10 +144,13 @@ function AmcDashboard() {
                 { header: "Contact", get: (r) => r.contact_no || "" },
                 { header: "Email", get: (r) => r.email || "" },
                 { header: "GST", get: (r) => r.client_gst || "" },
-                { header: "Start", get: (r) => r.start_date },
-                { header: "End", get: (r) => r.end_date },
+                { header: "Start", get: (r) => fmtDate(r.start_date) },
+                { header: "End", get: (r) => fmtDate(r.end_date) },
                 { header: "Status", get: (r) => statusLabel(r._status) },
                 { header: "Units", get: (r) => (r.units || []).length },
+                { header: "Category", get: (r) => (r.units || []).map((u) => u.category || "").filter(Boolean).join(" | ") },
+                { header: "Model", get: (r) => (r.units || []).map((u) => u.model || "").filter(Boolean).join(" | ") },
+                { header: "Serial No.", get: (r) => (r.units || []).map((u) => u.serial_no || "").filter(Boolean).join(" | ") },
                 { header: "AMC Value", get: (r) => Number(r.amc_value || 0) },
               ]}
             />
@@ -156,7 +163,9 @@ function AmcDashboard() {
                 <TableRow>
                   <TableHead>Agreement</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Units</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Serial No.</TableHead>
                   <TableHead>Start</TableHead>
                   <TableHead>End</TableHead>
                   <TableHead>Status</TableHead>
@@ -171,9 +180,17 @@ function AmcDashboard() {
                       <div className="font-medium">{r.client_company || r.client_name}</div>
                       {r.client_company && r.client_name && <div className="text-xs text-muted-foreground">{r.client_name}</div>}
                     </TableCell>
-                    <TableCell className="text-xs">{(r.units || []).length} unit(s)</TableCell>
-                    <TableCell className="font-mono text-xs">{r.start_date}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.end_date}</TableCell>
+                    <TableCell className="text-xs">
+                      {(r.units || []).map((u, i) => <div key={i}>{u.category || "—"}</div>)}
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      {(r.units || []).map((u, i) => <div key={i}>{u.model || "—"}</div>)}
+                    </TableCell>
+                    <TableCell className="text-xs font-mono">
+                      {(r.units || []).map((u, i) => <div key={i}>{u.serial_no || "—"}</div>)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs whitespace-nowrap">{fmtDate(r.start_date)}</TableCell>
+                    <TableCell className="font-mono text-xs whitespace-nowrap">{fmtDate(r.end_date)}</TableCell>
                     <TableCell><span className={`text-xs border rounded px-2 py-0.5 ${statusBadgeClass(r._status)}`}>{statusLabel(r._status)}</span></TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
@@ -189,7 +206,7 @@ function AmcDashboard() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No AMC records</TableCell></TableRow>}
+                {filtered.length === 0 && <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No AMC records</TableCell></TableRow>}
               </TableBody>
             </Table>
           </div>
