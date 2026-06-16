@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, ArrowLeft, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
-import { Indent_TYPES, type Indent, type IndentType } from "@/lib/indent";
+import { INDENT_TYPES, type Indent, type IndentType } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
@@ -121,7 +121,7 @@ function IndentDetail() {
             <Label>Indent Type</Label>
             <Select value={i.indent_type || ""} onValueChange={(v) => update({ indent_type: v as IndentType })}>
               <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-              <SelectContent>{Indent_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+              <SelectContent>{INDENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="md:col-span-3"><Label>Oracles</Label><Input value={i.oracles || ""} onChange={(e) => update({ oracles: e.target.value })} /></div>

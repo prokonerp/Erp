@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { Indent_TYPES, type IndentType } from "@/lib/indent";
+import { INDENT_TYPES, type IndentType } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
@@ -190,7 +190,7 @@ function NewIndent() {
             <Select value={form.indent_type} onValueChange={(v) => set({ indent_type: v as IndentType })}>
               <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
               <SelectContent>
-                {Indent_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                {INDENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
