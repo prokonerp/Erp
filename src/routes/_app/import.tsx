@@ -351,13 +351,6 @@ function ImportPage() {
     downloadCSV(`Prokon_${mod}_template.csv`, csv);
   };
 
-  const downloadTemplateXlsx = async () => {
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet([sample], { header: headers });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, mod.slice(0, 31));
-    XLSX.writeFile(wb, `Prokon_${mod}_template.xlsx`);
-  };
 
   const downloadErrorReport = () => {
     const failedList = result ? result.failed : previewIssues.errors;
@@ -501,9 +494,6 @@ function ImportPage() {
           </div>
           <Button variant="outline" onClick={downloadTemplate}>
             <Download className="h-4 w-4 mr-1" />Download CSV template
-          </Button>
-          <Button variant="outline" onClick={downloadTemplateXlsx}>
-            <Download className="h-4 w-4 mr-1" />Download Excel template
           </Button>
           <div className="text-xs text-muted-foreground basis-full">
             Fields ({def.fields.length}) — required marked with <span className="text-red-600">*</span>:
