@@ -364,22 +364,22 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
     <div className="agreement-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
       {/* Letterhead: 50/50 split — logos left, company info right-aligned */}
       <div className="grid grid-cols-2 gap-4 border-b-4 border-[#1e40af] pb-3 mb-2 items-center">
-        <div className="flex flex-col items-start justify-center gap-2">
+        <div className="flex flex-col items-center justify-center gap-3">
           <img
             src={prokonLogo.url}
             alt="Prokon Hi-Tech Systems"
-            className="h-20 w-auto max-w-full object-contain"
+            className="h-20 w-[200px] object-contain"
           />
           {oemLogo && (
             <img
               src={oemLogo.url}
               alt={oemLogo.alt}
-              className="h-20 w-auto max-w-full object-contain"
+              className="h-20 w-[200px] object-contain"
             />
           )}
         </div>
         <div className="flex flex-col justify-center text-right">
-          <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent uppercase">{co.name}</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent uppercase">{co.name || "Prokon Hi-Tech Systems"}</h1>
           {co.address && <div className="text-[11px] text-gray-700 whitespace-pre-wrap">{co.address}</div>}
           {co.phone && <div className="text-[11px] text-gray-700">Phone: {co.phone}</div>}
           {co.email && <div className="text-[11px] text-gray-700">Email: {co.email}</div>}
@@ -427,12 +427,12 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
         adjustments. Consumable / faulty replacement parts are billed separately unless specifically included in the AMC value.
       </p>
 
-      <div className="font-bold mb-1">Service Schedule (Preventive Maintenance Visits)</div>
+      <div className="font-bold mb-1">Tentative Service Schedule (Preventive Maintenance Visits)</div>
       {(a.pm_dates || []).length > 0 ? (
         <table className="w-full border border-black mb-3">
           <thead className="bg-gray-100"><tr>
             <th className="border border-black px-2 py-1 w-10">#</th>
-            <th className="border border-black px-2 py-1">Scheduled Visit Date</th>
+            <th className="border border-black px-2 py-1">Tentative Scheduled Visit Date</th>
           </tr></thead>
           <tbody>
             {(a.pm_dates || []).map((d, i) => (
