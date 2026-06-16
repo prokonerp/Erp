@@ -164,8 +164,8 @@ function PMSchedule() {
         "Status": p.completed_at ? "Done" : isOverdue(p) ? "Overdue" : "Pending",
         "Completed On": p.completed_at ? fmtDate(p.completed_at.slice(0, 10)) : "",
         "Agreement No": a?.agreement_no || "",
-        "Client": a?.client_name || "",
-        "Company": a?.client_company || "",
+        "Client": a?.client_company || a?.client_name || "",
+        "Contact Person": a?.client_name || "",
         "Contact": a?.contact_no || "",
         "Units": (a?.units || []).map((u) => `${u.model} (${u.serial_no})`).join("; "),
       };
