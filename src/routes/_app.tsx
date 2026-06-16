@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, Link, Navigate, useNavigate, useLocation } fro
 import { useAuth } from "@/lib/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { FileText, ListChecks, LogOut, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3 } from "lucide-react";
+import { FileText, ListChecks, LogOut, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -27,6 +27,7 @@ function AppLayout() {
     { to: "/amc", label: "AMC", icon: ShieldCheck, module: "amc" },
     { to: "/crm", label: "Sales CRM", icon: Briefcase, module: "quotations" },
     { to: "/tickets", label: "Tickets", icon: Ticket, module: "tickets" },
+    { to: "/indent", label: "INDENT", icon: ClipboardList, module: "indent" },
     { to: "/reports", label: "Reports", icon: BarChart3, module: "reports" },
     { to: "/import", label: "Import CSV", icon: Upload, adminOnly: true },
   ];
