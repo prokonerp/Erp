@@ -14,9 +14,11 @@ import {
   PRIORITIES, PRIORITY_COLOR,
   waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
-import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer, CalendarClock, AlertTriangle } from "lucide-react";
+import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer, CalendarClock, AlertTriangle, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
+import { getOemLogo } from "@/lib/oemLogos";
+import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -388,6 +390,28 @@ function TicketDetail() {
 
   return (
     <div className="space-y-4">
+      {/* Branded header with OEM at top */}
+      <Card className="print:hidden">
+        <CardContent className="py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <img src={prokonLogo.url} alt="Prokon" className="h-10 w-auto object-contain" />
+            <div>
+              <div className="font-semibold leading-tight">Prokon Hi-Tech Systems</div>
+              <div className="text-xs text-muted-foreground">Ticket · <span className="font-mono">{t.case_id}</span></div>
+            </div>
+          </div>
+          {t.oem_call && (() => {
+            const oem = getOemLogo(t.oem_brand);
+            return (
+              <div className="flex items-center gap-3">
+                <Badge className="bg-purple-600 text-white hover:bg-purple-700">OEM{t.oem_brand ? ` · ${t.oem_brand}` : ""}</Badge>
+                {oem && <img src={oem.url} alt={oem.alt} className="h-9 w-auto object-contain" />}
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/tickets" })}>
@@ -427,6 +451,14 @@ function TicketDetail() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button
+            variant="outline"
+            disabled={!t.oem_call}
+            title={t.oem_call ? "Create INDENT from this OEM ticket" : "Enable OEM Call to create an INDENT"}
+            onClick={() => navigate({ to: "/indent/new", search: { ticket_id: t.id } })}
+          >
+            <ClipboardList className="h-4 w-4 mr-1" />Create INDENT
+          </Button>
           <Button onClick={() => save()} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
         </div>
