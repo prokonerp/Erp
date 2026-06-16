@@ -359,13 +359,12 @@ function AmcDetail() {
 
 function PrintAgreement({ a, company }: { a: Amc; company: { name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null }) {
   const co = company ?? { name: "PROKON HI-TECH SYSTEMS", address: "B-505, Picasso Centre, Sector-61, Gurgaon", phone: "+91-98100 00000", email: "info@prokonhitech.com", website: "www.prokonhitech.com", gstin: null };
+  const oemLogo = getOemLogo(a.oem_brand);
   return (
     <div className="agreement-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
       {/* Letterhead */}
       <div className="flex items-center gap-4 border-b-4 border-[#1e40af] pb-3 mb-2">
-        <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[#1e3a8a] to-[#dc2626] text-white flex items-center justify-center font-extrabold text-xl shrink-0">
-          PHS
-        </div>
+        <img src={prokonLogo.url} alt="Prokon Hi-Tech Systems" className="h-16 w-auto object-contain shrink-0" />
         <div className="flex-1">
           <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent uppercase">{co.name}</h1>
           <div className="text-[11px] text-gray-700 whitespace-pre-wrap">{co.address || ""}</div>
@@ -375,6 +374,12 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
           </div>
           {co.gstin && <div className="text-[11px] text-gray-700">GSTIN: <span className="font-mono">{co.gstin}</span></div>}
         </div>
+        {oemLogo && (
+          <div className="shrink-0 text-right">
+            <img src={oemLogo.url} alt={oemLogo.alt} className="h-14 w-auto object-contain ml-auto" />
+            <div className="text-[10px] text-gray-600 mt-1">OEM Partner</div>
+          </div>
+        )}
       </div>
       <div className="text-center mb-3">
         <div className="inline-block px-4 py-1 border-2 border-black font-bold tracking-widest text-sm">ANNUAL MAINTENANCE CONTRACT</div>
