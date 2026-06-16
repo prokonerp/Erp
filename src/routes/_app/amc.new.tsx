@@ -147,7 +147,7 @@ function NewAmc() {
       duration_years: form.duration_years,
       amc_value: form.amc_value ? Number(form.amc_value) : 0,
       terms: form.terms,
-      pm_dates: generatePMDates(form.start_date, end_date),
+      pm_dates: generatePMDates(form.start_date, form.duration_years),
       remarks: form.remarks || null,
       oem_call: form.oem_call,
       oem_brand: form.oem_call ? form.oem_brand.trim() : null,

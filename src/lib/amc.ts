@@ -59,34 +59,31 @@ export const statusRowClass = (s: ReturnType<typeof amcStatus>) =>
     ? "bg-orange-50 hover:bg-orange-100/70"
     : "bg-red-50 hover:bg-red-100/70";
 
-export const generatePMDates = (start: string, end: string): string[] => {
-  const s = new Date(start + "T00:00:00");
-  const e = new Date(end + "T00:00:00");
-  if (!(e > s)) return [];
-  // Approximate AMC duration in months (rounded).
-  const months = Math.round(
-    (e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24 * 30.4375),
-  );
-  // Quarterly cadence: 4 PM visits per 12 months of AMC.
-  const visits = Math.max(0, Math.round(months / 3));
-  if (visits === 0) return [];
-  // Distribute visits evenly STRICTLY between start and end (exclusive of both).
-  // Split the AMC duration into (visits + 1) equal segments and place a visit
-  // at the boundary of each interior segment.
-  const totalMs = e.getTime() - s.getTime();
-  const step = totalMs / (visits + 1);
-  const seen = new Set<string>();
+// Add N months to a YYYY-MM-DD date, returning YYYY-MM-DD. Preserves day-of-month
+// where possible (clamps to month end for shorter months).
+const addMonths = (iso: string, months: number): string => {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  const targetMonthIdx = (m - 1) + months;
+  const targetYear = y + Math.floor(targetMonthIdx / 12);
+  const targetMonth = ((targetMonthIdx % 12) + 12) % 12;
+  const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const day = Math.min(d, lastDayOfTargetMonth);
+  const mm = String(targetMonth + 1).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${targetYear}-${mm}-${dd}`;
+};
+
+// PM schedule: 4 visits per year with 2-3-3-3 month interval pattern from start.
+// Year 1: +2, +3, +3, +3 months. Each additional year adds 4 more visits at +3 months each.
+export const generatePMDates = (start: string, durationYears: number): string[] => {
+  if (!start || !durationYears || durationYears <= 0) return [];
+  const totalVisits = 4 * durationYears;
   const out: string[] = [];
-  for (let i = 1; i <= visits; i++) {
-    const d = new Date(s.getTime() + step * i);
-    d.setHours(0, 0, 0, 0);
-    // Safety: keep strictly inside (start, end).
-    if (d <= s || d >= e) continue;
-    const iso = d.toISOString().slice(0, 10);
-    if (!seen.has(iso)) {
-      seen.add(iso);
-      out.push(iso);
-    }
+  let cur = start.slice(0, 10);
+  for (let i = 0; i < totalVisits; i++) {
+    const inc = i === 0 ? 2 : 3;
+    cur = addMonths(cur, inc);
+    out.push(cur);
   }
   return out;
 };
@@ -112,11 +109,27 @@ export const nextAgreementNo = (existing: string[]): string => {
   return prefix + String(max + 1).padStart(4, "0");
 };
 
-// Display ISO date (YYYY-MM-DD) as DD-MM-YYYY
+// Display ISO date (YYYY-MM-DD) as DD-MMM-YYYY (e.g. 29-May-2026)
 export const fmtDate = (iso?: string | null): string => {
   if (!iso) return "";
   const s = iso.slice(0, 10);
   const [y, m, d] = s.split("-");
   if (!y || !m || !d) return s;
-  return `${d}-${m}-${y}`;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const mi = parseInt(m, 10) - 1;
+  if (mi < 0 || mi > 11) return s;
+  return `${d}-${months[mi]}-${y}`;
+};
+
+// Display ISO date as MMM-YYYY (e.g. Jul-2026). Used in AMC Agreement
+// tentative service schedule.
+export const fmtMonthYear = (iso?: string | null): string => {
+  if (!iso) return "";
+  const s = iso.slice(0, 10);
+  const [y, m] = s.split("-");
+  if (!y || !m) return s;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const mi = parseInt(m, 10) - 1;
+  if (mi < 0 || mi > 11) return s;
+  return `${months[mi]}-${y}`;
 };
