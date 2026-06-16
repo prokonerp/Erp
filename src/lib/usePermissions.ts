@@ -57,7 +57,13 @@ export function usePermissions() {
             .from("role_module_permissions")
             .select("module,enable_access,can_read,can_create,can_edit,can_delete")
             .eq("role_id", au.role_id);
-          (rp ?? []).forEach((row) => {
+          const { data: rp } = await supabase
+            .from("role_module_permissions")
+            .select(
+              "module,enable_access,can_read,can_create,can_edit,can_delete,can_export,can_import",
+            )
+            .eq("role_id", au.role_id);
+          (rp ?? []).forEach((row: any) => {
             const k = row.module as ModuleKey;
             if (!map[k]) {
               map[k] = {
@@ -66,6 +72,8 @@ export function usePermissions() {
                 can_create: row.can_create,
                 can_edit: row.can_edit,
                 can_delete: row.can_delete,
+                can_export: !!row.can_export,
+                can_import: !!row.can_import,
               };
             }
           });
