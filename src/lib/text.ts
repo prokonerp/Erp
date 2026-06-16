@@ -1,43 +1,20 @@
-/** Convert "john  DOE" -> "John Doe". Skips numbers/serials. Safe on empty input. */
+/**
+ * Preserve the user's original input. We intentionally do NOT change case
+ * for company / person / address / email / remark fields — only collapse
+ * surrounding whitespace so blank submissions still normalise.
+ */
 export function toTitleCase(input: string | null | undefined): string {
-  if (!input) return "";
-  return input
-    .toString()
-    .trim()
-    .replace(/\s+/g, " ")
-    .toLowerCase()
-    .replace(/\b([a-z])([a-z0-9'’-]*)/g, (_, a, rest) => a.toUpperCase() + rest);
+  return (input ?? "").toString().trim();
 }
 
-/** Title-case but preserve common all-caps tokens like UPS, AMC, GST, INR, LLP, PVT, LTD. */
-const KEEP_UPPER = new Set([
-  "UPS", "AMC", "GST", "GSTIN", "INR", "LLP", "PVT", "LTD", "PLC",
-  "CCTV", "OOW", "PM", "AC", "DC", "USB", "LED", "TV", "HQ", "IT",
-]);
+/** Preserve original casing — see toTitleCase. */
 export function toTitleCaseSmart(input: string | null | undefined): string {
-  if (!input) return "";
-  return input
-    .toString()
-    .trim()
-    .replace(/\s+/g, " ")
-    .split(" ")
-    .map((w) => {
-      const up = w.toUpperCase().replace(/[.,]/g, "");
-      if (KEEP_UPPER.has(up)) return w.toUpperCase();
-      return toTitleCase(w);
-    })
-    .join(" ");
+  return (input ?? "").toString().trim();
 }
 
-/** Title-case an address — splits on commas / newlines and title-cases each segment. */
+/** Preserve original casing for multi-line addresses — only trims edges. */
 export function titleCaseAddress(input: string | null | undefined): string {
-  if (!input) return "";
-  return input
-    .toString()
-    .split(/(\n|,)/)
-    .map((seg) => (seg === "\n" || seg === "," ? seg : toTitleCaseSmart(seg)))
-    .join("")
-    .trim();
+  return (input ?? "").toString().replace(/[ \t]+\n/g, "\n").trim();
 }
 
 export function upperTrim(input: string | null | undefined): string {
