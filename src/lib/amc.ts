@@ -58,33 +58,29 @@ export const statusRowClass = (s: ReturnType<typeof amcStatus>) =>
     ? "bg-orange-50 hover:bg-orange-100/70"
     : "bg-red-50 hover:bg-red-100/70";
 
-const addMonthsSafe = (base: Date, months: number): Date => {
-  const day = base.getDate();
-  const d = new Date(base);
-  d.setDate(1);
-  d.setMonth(d.getMonth() + months);
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  d.setDate(Math.min(day, lastDay));
-  return d;
-};
-
 export const generatePMDates = (start: string, end: string): string[] => {
   const s = new Date(start + "T00:00:00");
   const e = new Date(end + "T00:00:00");
   if (!(e > s)) return [];
-  // Number of full months between start and end (rounded).
+  // Approximate AMC duration in months (rounded).
   const months = Math.round(
     (e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24 * 30.4375),
   );
-  // Quarterly visit count for the AMC duration. 12 months → 4 visits.
-  const visits = Math.floor(months / 3);
+  // Quarterly cadence: 4 PM visits per 12 months of AMC.
+  const visits = Math.max(0, Math.round(months / 3));
+  if (visits === 0) return [];
+  // Distribute visits evenly STRICTLY between start and end (exclusive of both).
+  // Split the AMC duration into (visits + 1) equal segments and place a visit
+  // at the boundary of each interior segment.
+  const totalMs = e.getTime() - s.getTime();
+  const step = totalMs / (visits + 1);
   const seen = new Set<string>();
   const out: string[] = [];
   for (let i = 1; i <= visits; i++) {
-    let d = addMonthsSafe(s, i * 3);
-    // Clamp the final visit to the AMC end date if the quarterly
-    // anniversary spills one day past end (e.g. start 29-May, end 28-May).
-    if (d > e) d = new Date(e);
+    const d = new Date(s.getTime() + step * i);
+    d.setHours(0, 0, 0, 0);
+    // Safety: keep strictly inside (start, end).
+    if (d <= s || d >= e) continue;
     const iso = d.toISOString().slice(0, 10);
     if (!seen.has(iso)) {
       seen.add(iso);
