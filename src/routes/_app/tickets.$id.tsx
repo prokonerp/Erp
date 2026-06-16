@@ -758,7 +758,7 @@ function TicketDetail() {
         </div>
       </div>
 
-      <TicketPrint t={t} customer={customer} />
+      <TicketPrint t={t} customer={customer} productModel={products.find((p) => p.name === t.product)?.model || t.product} />
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 14mm; }
@@ -811,7 +811,7 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
           </tr>
           <tr>
             <td className="border border-black px-2 py-1 font-bold">Model</td>
-            <td className="border border-black px-2 py-1">{products.find(p => p.name === t.product)?.model || t.product || "-"}</td>
+            <td className="border border-black px-2 py-1">{productModel || t.product || "-"}</td>
           </tr>
           <tr>
             <td className="border border-black px-2 py-1 font-bold">Serial No.</td>
