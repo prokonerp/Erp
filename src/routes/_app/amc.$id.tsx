@@ -404,13 +404,13 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
           <img
             src={prokonLogo.url}
             alt="Prokon Hi-Tech Systems"
-            className="h-16 max-w-[268px] object-contain"
+            className="h-16 max-w-[320px] object-contain"
           />
           {oemLogo && (
             <img
               src={oemLogo.url}
               alt={oemLogo.alt}
-              className="h-16 max-w-[192px] object-contain"
+              className="h-16 max-w-[140px] object-contain"
             />
           )}
         </div>
