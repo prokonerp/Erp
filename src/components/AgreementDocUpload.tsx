@@ -182,7 +182,7 @@ function PdfCanvasViewer({ data }: { data: ArrayBuffer }) {
         const container = containerRef.current;
         if (!container || cancelled) return;
         container.innerHTML = "";
-        const containerWidth = container.clientWidth - 32; // padding
+        const containerWidth = Math.max(320, container.clientWidth - 32); // padding, fallback if not laid out
         for (let i = 1; i <= pdfDoc.numPages; i++) {
           if (cancelled) return;
           const page = await pdfDoc.getPage(i);
@@ -190,7 +190,6 @@ function PdfCanvasViewer({ data }: { data: ArrayBuffer }) {
           const scale = Math.min(2, Math.max(1, containerWidth / viewport.width));
           const scaled = page.getViewport({ scale });
           const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d")!;
           const dpr = window.devicePixelRatio || 1;
           canvas.width = scaled.width * dpr;
           canvas.height = scaled.height * dpr;
@@ -199,13 +198,15 @@ function PdfCanvasViewer({ data }: { data: ArrayBuffer }) {
           canvas.style.display = "block";
           canvas.style.margin = "0 auto 12px";
           canvas.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
-          ctx.scale(dpr, dpr);
-          await page.render({ canvasContext: ctx, viewport: scaled }).promise;
-          if (cancelled) return;
           container.appendChild(canvas);
+          await page.render({ canvas, viewport: scaled, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise;
+          if (cancelled) return;
         }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to render PDF");
+        if (!cancelled) {
+          console.error("PDF render error:", e);
+          setError(e?.message || "Failed to render PDF");
+        }
       }
     })();
     return () => {
