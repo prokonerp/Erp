@@ -3,7 +3,7 @@ import eaton from "@/assets/oem-eaton.jpg.asset.json";
 import exide from "@/assets/oem-exide.png.asset.json";
 import luminous from "@/assets/oem-luminous.png.asset.json";
 import quanta from "@/assets/oem-quanta.gif.asset.json";
-import schneider from "@/assets/oem-schneider.jpg.asset.json";
+import schneider from "@/assets/oem-schneider.png.asset.json";
 
 // Map of normalised OEM brand name -> logo URL.
 // Keys are lowercase; the resolver also matches partial words so variants
