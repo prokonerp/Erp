@@ -185,6 +185,36 @@ export type Database = {
           },
         ]
       }
+      app_modules: {
+        Row: {
+          created_at: string
+          is_active: boolean
+          key: string
+          label: string
+          sort_order: number
+          supports_import: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          is_active?: boolean
+          key: string
+          label: string
+          sort_order?: number
+          supports_import?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          is_active?: boolean
+          key?: string
+          label?: string
+          sort_order?: number
+          supports_import?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       app_roles: {
         Row: {
           created_at: string
@@ -217,7 +247,9 @@ export type Database = {
           created_at: string
           custom_permissions: Json | null
           email: string | null
+          must_change_password: boolean
           name: string | null
+          password_changed_at: string
           phone: string | null
           role_id: string | null
           status: string
@@ -228,7 +260,9 @@ export type Database = {
           created_at?: string
           custom_permissions?: Json | null
           email?: string | null
+          must_change_password?: boolean
           name?: string | null
+          password_changed_at?: string
           phone?: string | null
           role_id?: string | null
           status?: string
@@ -239,7 +273,9 @@ export type Database = {
           created_at?: string
           custom_permissions?: Json | null
           email?: string | null
+          must_change_password?: boolean
           name?: string | null
+          password_changed_at?: string
           phone?: string | null
           role_id?: string | null
           status?: string
@@ -971,6 +1007,27 @@ export type Database = {
         }
         Relationships: []
       }
+      password_history: {
+        Row: {
+          created_at: string
+          id: string
+          password_hash: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          password_hash: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          password_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pm_visits: {
         Row: {
           amc_id: string
@@ -1299,6 +1356,8 @@ export type Database = {
           can_create: boolean
           can_delete: boolean
           can_edit: boolean
+          can_export: boolean
+          can_import: boolean
           can_read: boolean
           created_at: string
           enable_access: boolean
@@ -1311,6 +1370,8 @@ export type Database = {
           can_create?: boolean
           can_delete?: boolean
           can_edit?: boolean
+          can_export?: boolean
+          can_import?: boolean
           can_read?: boolean
           created_at?: string
           enable_access?: boolean
@@ -1323,6 +1384,8 @@ export type Database = {
           can_create?: boolean
           can_delete?: boolean
           can_edit?: boolean
+          can_export?: boolean
+          can_import?: boolean
           can_read?: boolean
           created_at?: string
           enable_access?: boolean
