@@ -1,11 +1,16 @@
-import { createFileRoute, Outlet, Link, Navigate, useNavigate, useLocation } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { FileText, ListChecks, LogOut, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList } from "lucide-react";
+import { FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
+import { getMyProfile } from "@/lib/admin-users.functions";
+import { UserProfileMenu, type ProfileInfo } from "@/components/UserProfileMenu";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -13,9 +18,38 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   const { session, loading } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const { can, isAdmin, loading: permLoading } = usePermissions();
+  const [profile, setProfile] = useState<ProfileInfo | null>(null);
+  const [forceChange, setForceChange] = useState(false);
+  const fetchProfile = useServerFn(getMyProfile);
+
+  async function loadProfile() {
+    try {
+      const p = await fetchProfile();
+      setProfile(p as any);
+      if (p.expired) {
+        setForceChange(true);
+      } else if (p.days_remaining === 7 || p.days_remaining === 3 || p.days_remaining === 1) {
+        const key = `pw-warn-${p.days_remaining}-${p.password_changed_at}`;
+        if (typeof window !== "undefined" && !sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, "1");
+          const msg =
+            p.days_remaining === 1
+              ? "Your password expires tomorrow."
+              : `Your password will expire in ${p.days_remaining} days.`;
+          toast.warning(msg);
+        }
+      }
+    } catch {
+      // ignore — profile is optional for layout rendering
+    }
+  }
+
+  useEffect(() => {
+    if (session) loadProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]);
 
   if (loading) return <div className="p-8 text-muted-foreground">Loading…</div>;
   if (!session) return <Navigate to="/auth" />;
@@ -84,24 +118,22 @@ function AppLayout() {
                 );
               })}
             </nav>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="shrink-0 text-white/85 hover:bg-white/10 hover:text-white"
-              onClick={async () => {
-                await supabase.auth.signOut();
-                navigate({ to: "/auth" });
-              }}
-            >
-              <LogOut className="h-4 w-4 mr-1" />
-              Sign out
-            </Button>
+            <UserProfileMenu profile={profile} onProfileChange={loadProfile} />
           </div>
         </div>
       </header>
       <main className="max-w-6xl mx-auto p-4 md:p-6">
         <Outlet />
       </main>
+      <ChangePasswordDialog
+        open={forceChange}
+        onOpenChange={setForceChange}
+        forced
+        onChanged={() => {
+          setForceChange(false);
+          loadProfile();
+        }}
+      />
     </div>
   );
 }
