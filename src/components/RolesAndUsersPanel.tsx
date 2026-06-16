@@ -578,6 +578,8 @@ function UserDialog({
           can_create: row.can_create,
           can_edit: row.can_edit,
           can_delete: row.can_delete,
+          can_export: !!row.can_export,
+          can_import: !!row.can_import,
         }
       : EMPTY_PERM;
   };
@@ -588,6 +590,7 @@ function UserDialog({
       const next = { ...cur, ...patch };
       if (!next.enable_access) {
         next.can_read = false; next.can_create = false; next.can_edit = false; next.can_delete = false;
+        next.can_export = false; next.can_import = false;
       }
       return { ...m, [mod]: next };
     });
