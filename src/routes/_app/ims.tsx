@@ -13,6 +13,7 @@ const TABS: { to: string; label: string }[] = [
   { to: "/ims/transfers", label: "Stock Transfer" },
   { to: "/ims/reservations", label: "Reservations" },
   { to: "/ims/oem-returns", label: "OEM Returns" },
+  { to: "/ims/indent-history", label: "Indent History" },
   { to: "/ims/reports", label: "Reports" },
   { to: "/ims/audit", label: "Audit Trail" },
 ];
