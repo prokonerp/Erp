@@ -5,9 +5,12 @@ import {
   listStock,
   listTransfers,
   listReservations,
+  listWarehouses,
+  formatWarehouse,
   type StockItem,
   type Transfer,
   type Reservation,
+  type WarehouseLite,
 } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/ims/")({
@@ -18,13 +21,16 @@ function Dashboard() {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [resv, setResv] = useState<Reservation[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [s, t, r] = await Promise.all([listStock(), listTransfers(), listReservations()]);
-        setStock(s); setTransfers(t); setResv(r);
+        const [s, t, r, w] = await Promise.all([
+          listStock(), listTransfers(), listReservations(), listWarehouses(),
+        ]);
+        setStock(s); setTransfers(t); setResv(r); setWarehouses(w);
       } finally {
         setLoading(false);
       }
@@ -106,17 +112,40 @@ function Dashboard() {
         <CardHeader><CardTitle className="text-base">Warehouse Snapshot</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50"><tr className="text-left"><th className="p-2">Warehouse</th><th className="p-2">Good</th><th className="p-2">Defective</th></tr></thead>
+            <thead className="bg-muted/50"><tr className="text-left"><th className="p-2">Warehouse</th><th className="p-2">Type</th><th className="p-2">Good</th><th className="p-2">Defective</th><th className="p-2">In Transit</th></tr></thead>
             <tbody>
-              {Array.from(new Set(stock.map((s) => s.warehouse_id || "—"))).map((w) => (
-                <tr key={w} className="border-t">
-                  <td className="p-2 font-mono text-xs">{w}</td>
-                  <td className="p-2">{good.filter((s) => (s.warehouse_id || "—") === w).length}</td>
-                  <td className="p-2">{defective.filter((s) => (s.warehouse_id || "—") === w).length}</td>
+              {(() => {
+                const ids = Array.from(new Set(stock.map((s) => s.warehouse_id).filter(Boolean) as string[]));
+                // Include warehouses with zero stock too, for full visibility
+                const allIds = Array.from(new Set([...ids, ...warehouses.map((w) => w.id)]));
+                if (allIds.length === 0) {
+                  return (<tr><td className="p-4 text-muted-foreground" colSpan={5}>No warehouses configured.</td></tr>);
+                }
+                return allIds.map((wid) => {
+                  const wh = warehouses.find((w) => w.id === wid) || null;
+                  return (
+                    <tr key={wid} className="border-t">
+                      <td className="p-2">{wh ? wh.name : "Unassigned"}</td>
+                      <td className="p-2 text-xs text-muted-foreground">{wh?.type || "—"}</td>
+                      <td className="p-2">{good.filter((s) => s.warehouse_id === wid && s.stock_status !== "in_transit").length}</td>
+                      <td className="p-2">{defective.filter((s) => s.warehouse_id === wid && s.stock_status !== "in_transit").length}</td>
+                      <td className="p-2">{stock.filter((s) => s.warehouse_id === wid && s.stock_status === "in_transit").length}</td>
+                    </tr>
+                  );
+                });
+              })()}
+              {stock.some((s) => !s.warehouse_id) && (
+                <tr className="border-t">
+                  <td className="p-2 italic text-muted-foreground">Unassigned</td>
+                  <td className="p-2">—</td>
+                  <td className="p-2">{good.filter((s) => !s.warehouse_id).length}</td>
+                  <td className="p-2">{defective.filter((s) => !s.warehouse_id).length}</td>
+                  <td className="p-2">0</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
+          <p className="text-xs text-muted-foreground mt-2">Showing warehouse names (type) from Warehouse Master. {formatWarehouse(warehouses[0]) && ""}</p>
         </CardContent>
       </Card>
     </div>
