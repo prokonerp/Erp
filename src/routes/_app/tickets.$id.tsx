@@ -448,20 +448,6 @@ function TicketDetail() {
 
   return (
     <div className="space-y-4">
-      <AlertDialog open={confirmPartsOpen} onOpenChange={setConfirmPartsOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Parts Used</AlertDialogTitle>
-            <AlertDialogDescription>
-              Please verify that the entered Part Model No, Part Serial No, and related details are correct. Once confirmed, these part entries will be locked and can only be edited by an Administrator. Do you want to continue?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmParts}>Confirm</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       {/* Branded header with OEM at top */}
       <Card className="print:hidden">
         <CardContent className="py-3 flex items-center justify-between gap-3 flex-wrap">
