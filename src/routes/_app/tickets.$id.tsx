@@ -664,7 +664,7 @@ function TicketDetail() {
                           />
                         </div>
                         <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} /></div>
-                        <div className="col-span-12 md:col-span-2"><Label>Model / Part Serial No</Label><Input value={p.serial || ""} onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
+                        <div className="col-span-12 md:col-span-2"><Label>Serial No</Label><Input value={p.serial || ""} onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
                         <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} /></div>
                         <div className="col-span-6 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} /></div>
                         <div className="col-span-2 md:col-span-1 flex">
@@ -715,7 +715,7 @@ function TicketDetail() {
                           />
                         </div>
                         <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} /></div>
-                        <div className="col-span-12 md:col-span-2"><Label>Model / Part Serial No</Label><Input value={p.serial || ""} onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
+                        <div className="col-span-12 md:col-span-2"><Label>Serial No</Label><Input value={p.serial || ""} onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
                         <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} /></div>
                         <div className="col-span-6 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} /></div>
                         <div className="col-span-2 md:col-span-1 flex">
@@ -979,7 +979,7 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
               <th className="border border-black px-2 py-1 w-8">#</th>
               <th className="border border-black px-2 py-1">Part / Item</th>
               <th className="border border-black px-2 py-1">Model / Part No</th>
-              <th className="border border-black px-2 py-1">Model / Part Serial No</th>
+              <th className="border border-black px-2 py-1">Serial No</th>
               <th className="border border-black px-2 py-1 w-16">Qty</th>
               <th className="border border-black px-2 py-1">Remarks</th>
             </tr></thead>
@@ -1006,7 +1006,7 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
               <th className="border border-black px-2 py-1 w-8">#</th>
               <th className="border border-black px-2 py-1">Part / Item</th>
               <th className="border border-black px-2 py-1">Model / Part No</th>
-              <th className="border border-black px-2 py-1">Model / Part Serial No</th>
+              <th className="border border-black px-2 py-1">Serial No</th>
               <th className="border border-black px-2 py-1 w-16">Qty</th>
               <th className="border border-black px-2 py-1">Remarks</th>
             </tr></thead>
