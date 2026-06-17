@@ -227,6 +227,21 @@ function TicketDetail() {
         return false;
       }
     }
+    if (payload.parts_used) {
+      const valid = (payload.parts_details || []).some((p) => (p.name || "").trim());
+      const closingStatuses = ["Closed"];
+      if (!valid) {
+        setBusy(false);
+        toast.error("At least one Part entry is required when Parts Used is enabled.");
+        return false;
+      }
+      // Also block closing without parts entries
+      if (closingStatuses.includes(payload.status) && !valid) {
+        setBusy(false);
+        toast.error("At least one Part entry is required when Parts Used is enabled.");
+        return false;
+      }
+    }
     if (payload.preferred_visit_datetime) {
       const pv = new Date(payload.preferred_visit_datetime).getTime();
       if (pv < Date.now() - 60000) {
@@ -451,14 +466,27 @@ function TicketDetail() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          {(() => {
+            const hasPart = (t.parts_details || []).some((p) => (p.name || "").trim());
+            const canIndent = !!t.oem_call && !!t.parts_used && hasPart;
+            const title = !t.oem_call
+              ? "Enable OEM Call to create an Indent"
+              : !t.parts_used
+              ? "Enable Parts Used to create an Indent"
+              : !hasPart
+              ? "Add at least one Part entry to create an Indent"
+              : "Create Indent from this OEM ticket";
+            return (
           <Button
             variant="outline"
-            disabled={!t.oem_call}
-            title={t.oem_call ? "Create Indent from this OEM ticket" : "Enable OEM Call to create an Indent"}
+            disabled={!canIndent}
+            title={title}
             onClick={() => navigate({ to: "/indent/new", search: { ticket_id: t.id } })}
           >
             <ClipboardList className="h-4 w-4 mr-1" />Create Indent
           </Button>
+            );
+          })()}
           <Button onClick={() => save()} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
         </div>
@@ -585,10 +613,11 @@ function TicketDetail() {
                   {t.parts_details.length === 0 && <p className="text-sm text-muted-foreground">No parts added yet.</p>}
                   {t.parts_details.map((p, i) => (
                     <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                      <div className="col-span-12 md:col-span-5"><Label>Part / Item</Label><Input value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
-                      <div className="col-span-4 md:col-span-2"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
-                      <div className="col-span-8 md:col-span-2"><Label>Serial</Label><Input value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
-                      <div className="col-span-10 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
+                      <div className="col-span-12 md:col-span-3"><Label>Part / Item</Label><Input value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
+                      <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
+                      <div className="col-span-8 md:col-span-2"><Label>Part Serial</Label><Input value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
+                      <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
+                      <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
                       <div className="col-span-2 md:col-span-1">
                         <Button size="icon" variant="ghost" onClick={() => delPart(i)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>

@@ -68,6 +68,7 @@ export type TicketStatus = (typeof TICKET_STATUSES)[number];
 export type PartLine = {
   name: string;
   qty: string;
+  model_no?: string;
   serial?: string;
   remarks?: string;
 };

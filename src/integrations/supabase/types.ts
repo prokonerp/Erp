@@ -771,6 +771,8 @@ export type Database = {
           oem_case_id: string | null
           oracles: string | null
           problem_reported: string | null
+          product_model: string | null
+          product_serial: string | null
           remarks: string | null
           ticket_id: string
           updated_at: string
@@ -796,6 +798,8 @@ export type Database = {
           oem_case_id?: string | null
           oracles?: string | null
           problem_reported?: string | null
+          product_model?: string | null
+          product_serial?: string | null
           remarks?: string | null
           ticket_id: string
           updated_at?: string
@@ -821,6 +825,8 @@ export type Database = {
           oem_case_id?: string | null
           oracles?: string | null
           problem_reported?: string | null
+          product_model?: string | null
+          product_serial?: string | null
           remarks?: string | null
           ticket_id?: string
           updated_at?: string

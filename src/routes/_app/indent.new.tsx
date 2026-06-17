@@ -31,6 +31,8 @@ type Form = {
   def_model_no: string;
   def_serial_no: string;
   problem_reported: string;
+  product_model: string;
+  product_serial: string;
   indent_type: IndentType | "";
   oracles: string;
   material_exchange_model: string;
@@ -52,6 +54,8 @@ const blank: Form = {
   def_model_no: "",
   def_serial_no: "",
   problem_reported: "",
+  product_model: "",
+  product_serial: "",
   indent_type: "",
   oracles: "",
   material_exchange_model: "",
@@ -75,7 +79,7 @@ function NewIndent() {
     (async () => {
       const { data, error } = await supabase
         .from("tickets")
-        .select("id, case_id, oem_call, oem_brand, oem_ref_id, product, serial_no, location, complaint, assigned_engineer_name")
+        .select("id, case_id, oem_call, oem_brand, oem_ref_id, product, serial_no, location, complaint, assigned_engineer_name, parts_used, parts_details")
         .eq("id", ticket_id)
         .maybeSingle();
       if (error) { toast.error(error.message); setLoading(false); return; }
@@ -85,17 +89,42 @@ function NewIndent() {
         navigate({ to: "/tickets/$id", params: { id: ticket_id } });
         return;
       }
+      const parts = Array.isArray((data as { parts_details?: unknown }).parts_details)
+        ? ((data as { parts_details: Array<{ name?: string; model_no?: string; serial?: string }> }).parts_details)
+        : [];
+      const firstPart = parts.find((p) => (p?.name || "").trim()) || parts[0] || {};
+      if (!data.parts_used || !parts.some((p) => (p?.name || "").trim())) {
+        toast.error("Indent requires Parts Used enabled with at least one Part entry");
+        navigate({ to: "/tickets/$id", params: { id: ticket_id } });
+        return;
+      }
+      // Latest engineer from assignment activity history
+      let latestEngineer = data.assigned_engineer_name || "";
+      const { data: acts } = await supabase
+        .from("ticket_activities")
+        .select("notes, created_at, kind")
+        .eq("ticket_id", ticket_id)
+        .eq("kind", "assigned")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (acts && acts.length) {
+        const note = (acts[0] as { notes?: string }).notes || "";
+        const m = note.match(/Assigned to (.+?)(?:\s*\(|$)/);
+        if (m) latestEngineer = m[1].trim();
+      }
       setForm((f) => ({
         ...f,
         ticket_id: data.id,
         case_id: data.case_id || "",
         oem_case_id: data.oem_ref_id || "",
         company: data.oem_brand || "",
-        def_model_no: data.product || "",
-        def_serial_no: data.serial_no || "",
+        def_model_no: firstPart.model_no || "",
+        def_serial_no: firstPart.serial || "",
+        product_model: data.product || "",
+        product_serial: data.serial_no || "",
         indent_city: data.location || "",
         problem_reported: data.complaint || "",
-        engineer_name: data.assigned_engineer_name || "",
+        engineer_name: latestEngineer,
       }));
       setLoading(false);
     })();
@@ -117,6 +146,8 @@ function NewIndent() {
       def_model_no: form.def_model_no || null,
       def_serial_no: form.def_serial_no || null,
       problem_reported: form.problem_reported || null,
+      product_model: form.product_model || null,
+      product_serial: form.product_serial || null,
       indent_type: form.indent_type || null,
       oracles: form.oracles || null,
       material_exchange_model: form.material_exchange_model || null,
@@ -171,12 +202,14 @@ function NewIndent() {
         <CardHeader><CardTitle className="text-base">Linked Ticket (auto)</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div><Label>Case ID</Label><Input value={form.case_id} readOnly className="font-mono bg-muted/50" /></div>
-          <div><Label>OEM Case ID</Label><Input value={form.oem_case_id} onChange={(e) => set({ oem_case_id: e.target.value })} className="font-mono" /></div>
+          <div><Label>OEM Case ID</Label><Input value={form.oem_case_id} readOnly className="font-mono bg-muted/50" /></div>
           <div><Label>Company (OEM)</Label><Input value={form.company} onChange={(e) => set({ company: e.target.value })} /></div>
-          <div><Label>DEF Model No</Label><Input value={form.def_model_no} onChange={(e) => set({ def_model_no: e.target.value })} /></div>
-          <div><Label>DEF Serial No</Label><Input value={form.def_serial_no} onChange={(e) => set({ def_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
+          <div><Label>DEF Part Model No</Label><Input value={form.def_model_no} onChange={(e) => set({ def_model_no: e.target.value })} /></div>
+          <div><Label>DEF Part Serial No</Label><Input value={form.def_serial_no} onChange={(e) => set({ def_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
           <div><Label>Engineer</Label><Input value={form.engineer_name} onChange={(e) => set({ engineer_name: e.target.value })} /></div>
           <div className="md:col-span-3"><Label>Problem Reported</Label><Textarea rows={2} value={form.problem_reported} onChange={(e) => set({ problem_reported: e.target.value })} /></div>
+          <div><Label>Product Model</Label><Input value={form.product_model} readOnly className="bg-muted/50" /></div>
+          <div><Label>Product Serial</Label><Input value={form.product_serial} readOnly className="font-mono bg-muted/50" /></div>
         </CardContent>
       </Card>
 
