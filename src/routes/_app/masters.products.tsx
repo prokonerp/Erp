@@ -32,7 +32,8 @@ const WARRANTY_TYPES = ["Manufacturer", "Seller", "AMC Covered"] as const;
 const WARRANTY_UNITS = ["Months", "Years"] as const;
 const WARRANTY_START = ["Invoice Date", "Installation Date", "Manual"] as const;
 const SERIAL_MODES = ["Manual", "Auto Generate"] as const;
-const DEFAULT_CATEGORIES = ["Accessories", "CCTV", "General", "Inverter/Battery", "Offline UPS", "Online UPS", "Solar Panel", "UPS Battery"];
+const DEFAULT_CATEGORIES = ["Accessories", "CCTV", "General", "Inverter/Battery", "Offline UPS", "Online UPS", "Solar Panel", "UPS Battery", "Spare Parts"];
+const SPARE_PARTS_CATEGORY = "Spare Parts";
 const TAX_OPTIONS = [
   { value: "EXEMPT", label: "Exempted" },
   { value: "0", label: "0%" },
@@ -106,6 +107,12 @@ export function ProductMasterPage() {
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
+  const [parentIds, setParentIds] = useState<string[]>([]);
+  const [linkedSpares, setLinkedSpares] = useState<ProductFull[]>([]);
+  const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
+  const [parentPickerOpen, setParentPickerOpen] = useState(false);
+  const [parentSearch, setParentSearch] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
@@ -122,6 +129,24 @@ export function ProductMasterPage() {
     return merged.sort((a, b) => a.localeCompare(b));
   }, [dbCategories]);
 
+  // Eligible parents for spare-part linking: active, non-spare-parts category, not self.
+  const eligibleParents = useMemo(
+    () => rows.filter(
+      (p) =>
+        p.active !== false &&
+        (p.category || "") !== SPARE_PARTS_CATEGORY &&
+        p.id !== editingId,
+    ),
+    [rows, editingId],
+  );
+  const filteredParents = useMemo(() => {
+    const s = parentSearch.trim().toLowerCase();
+    if (!s) return eligibleParents;
+    return eligibleParents.filter((p) =>
+      [p.name, p.model, p.brand, p.category].some((v) => (v || "").toLowerCase().includes(s)),
+    );
+  }, [eligibleParents, parentSearch]);
+
   async function saveNewCategory() {
     const name = newCatName.trim();
     if (!name) return;
@@ -132,6 +157,28 @@ export function ProductMasterPage() {
     setAddCatOpen(false);
     await loadCategories();
     setForm((f) => ({ ...f, category: name }));
+  }
+
+  async function loadLinksForEdit(p: ProductFull) {
+    setParentIds([]);
+    setLinkedSpares([]);
+    setLinkedParents([]);
+    if ((p.category || "") === SPARE_PARTS_CATEGORY) {
+      const { data } = await supabase
+        .from("product_spare_parts" as any)
+        .select("parent_product_id")
+        .eq("spare_part_id", p.id);
+      const ids = ((data || []) as { parent_product_id: string }[]).map((r) => r.parent_product_id);
+      setParentIds(ids);
+      setLinkedParents(rows.filter((r) => ids.includes(r.id)));
+    } else {
+      const { data } = await supabase
+        .from("product_spare_parts" as any)
+        .select("spare_part_id")
+        .eq("parent_product_id", p.id);
+      const ids = ((data || []) as { spare_part_id: string }[]).map((r) => r.spare_part_id);
+      setLinkedSpares(rows.filter((r) => ids.includes(r.id)));
+    }
   }
 
   const categories = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[], [rows]);
@@ -145,7 +192,10 @@ export function ProductMasterPage() {
     return matchQ && matchCat && matchBrand;
   }), [rows, q, filterCategory, filterBrand]);
 
-  function resetForm() { setForm(empty); setEditingId(null); setTab("details"); }
+  function resetForm() {
+    setForm(empty); setEditingId(null); setTab("details");
+    setParentIds([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
+  }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(p: ProductFull) {
     setForm({
@@ -173,6 +223,7 @@ export function ProductMasterPage() {
     });
     setEditingId(p.id);
     setOpen(true);
+    loadLinksForEdit(p);
   }
 
   async function save(addAnother = false) {
@@ -180,6 +231,11 @@ export function ProductMasterPage() {
       toast.error("Enter Brand and Model (used to identify product)"); return;
     }
     if (!form.category) { toast.error("Category is required"); return; }
+    const isSparePart = form.category === SPARE_PARTS_CATEGORY;
+    if (isSparePart && parentIds.length === 0) {
+      toast.error("At least one compatible parent product must be selected for Spare Parts.");
+      return;
+    }
     if (!form.central_tax) { toast.error("Central Tax Rate is required"); return; }
     if (!form.local_tax) { toast.error("Local Tax Rate is required"); return; }
     if (form.warranty_applicable && (!form.warranty_duration || Number(form.warranty_duration) <= 0)) {
@@ -217,18 +273,66 @@ export function ProductMasterPage() {
       warranty_start_from: form.warranty_applicable ? form.warranty_start_from : null,
       warranty_manual_override: form.warranty_manual_override,
     };
+    let productId = editingId;
     if (editingId) {
       const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
       if (error) return toast.error(error.message);
       toast.success("Product updated");
     } else {
-      const { error } = await supabase.from("products").insert(payload as any);
+      const { data, error } = await supabase.from("products").insert(payload as any).select("id").single();
       if (error) return toast.error(error.message);
+      productId = (data as { id: string } | null)?.id ?? null;
       toast.success("Product added");
     }
+
+    // Sync spare-part links when category is Spare Parts.
+    if (isSparePart && productId) {
+      await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
+      if (parentIds.length) {
+        const linkRows = parentIds.map((pid) => ({ spare_part_id: productId, parent_product_id: pid }));
+        const { error: linkErr } = await supabase.from("product_spare_parts" as any).insert(linkRows as any);
+        if (linkErr) toast.error(`Saved product but failed to link parents: ${linkErr.message}`);
+      }
+    } else if (!isSparePart && productId && editingId) {
+      // Switched away from spare parts — remove any existing parent links where this product was a spare.
+      await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
+    }
+
     await load();
     if (addAnother) resetForm();
     else { setOpen(false); resetForm(); }
+  }
+
+  function toggleParent(id: string) {
+    setParentIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function downloadCompatibilityReport() {
+    const { data } = await supabase
+      .from("product_spare_parts" as any)
+      .select("parent_product_id, spare_part_id");
+    const links = (data || []) as { parent_product_id: string; spare_part_id: string }[];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const out = links.map((l) => {
+      const sp = byId.get(l.spare_part_id);
+      const pp = byId.get(l.parent_product_id);
+      return {
+        spare_part: sp?.name || "",
+        spare_part_model: sp?.model || "",
+        spare_part_oem: sp?.brand || "",
+        parent_product: pp?.name || "",
+        parent_model: pp?.model || "",
+        parent_oem: pp?.brand || "",
+        parent_category: pp?.category || "",
+      };
+    });
+    const headers = ["spare_part", "spare_part_model", "spare_part_oem", "parent_product", "parent_model", "parent_oem", "parent_category"];
+    const csv = [headers.join(","), ...out.map((r) => headers.map((h) => `"${String((r as any)[h] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "Prokon_SpareParts_Compatibility.csv"; a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function del(id: string) {
