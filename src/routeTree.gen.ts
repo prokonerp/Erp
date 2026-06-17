@@ -42,6 +42,7 @@ import { Route as AppImsTransfersRouteImport } from './routes/_app/ims.transfers
 import { Route as AppImsTransactionsRouteImport } from './routes/_app/ims.transactions'
 import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
 import { Route as AppImsReservationsRouteImport } from './routes/_app/ims.reservations'
+import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
 import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
@@ -224,6 +225,11 @@ const AppImsReservationsRoute = AppImsReservationsRouteImport.update({
   path: '/reservations',
   getParentRoute: () => AppImsRoute,
 } as any)
+const AppImsReportsRoute = AppImsReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AppImsRoute,
+} as any)
 const AppImsOemReturnsRoute = AppImsOemReturnsRouteImport.update({
   id: '/oem-returns',
   path: '/oem-returns',
@@ -337,6 +343,7 @@ export interface FileRoutesByFullPath {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
+  '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
   '/ims/stock': typeof AppImsStockRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
@@ -383,6 +390,7 @@ export interface FileRoutesByTo {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
+  '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
   '/ims/stock': typeof AppImsStockRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
@@ -435,6 +443,7 @@ export interface FileRoutesById {
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/ims/oem-returns': typeof AppImsOemReturnsRoute
+  '/_app/ims/reports': typeof AppImsReportsRoute
   '/_app/ims/reservations': typeof AppImsReservationsRoute
   '/_app/ims/stock': typeof AppImsStockRoute
   '/_app/ims/transactions': typeof AppImsTransactionsRoute
@@ -488,6 +497,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/gatepass/$id'
     | '/ims/oem-returns'
+    | '/ims/reports'
     | '/ims/reservations'
     | '/ims/stock'
     | '/ims/transactions'
@@ -534,6 +544,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/gatepass/$id'
     | '/ims/oem-returns'
+    | '/ims/reports'
     | '/ims/reservations'
     | '/ims/stock'
     | '/ims/transactions'
@@ -585,6 +596,7 @@ export interface FileRouteTypes {
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
     | '/_app/ims/oem-returns'
+    | '/_app/ims/reports'
     | '/_app/ims/reservations'
     | '/_app/ims/stock'
     | '/_app/ims/transactions'
@@ -850,6 +862,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImsReservationsRouteImport
       parentRoute: typeof AppImsRoute
     }
+    '/_app/ims/reports': {
+      id: '/_app/ims/reports'
+      path: '/reports'
+      fullPath: '/ims/reports'
+      preLoaderRoute: typeof AppImsReportsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
     '/_app/ims/oem-returns': {
       id: '/_app/ims/oem-returns'
       path: '/oem-returns'
@@ -1055,6 +1074,7 @@ const AppImsTransfersRouteWithChildren = AppImsTransfersRoute._addFileChildren(
 
 interface AppImsRouteChildren {
   AppImsOemReturnsRoute: typeof AppImsOemReturnsRoute
+  AppImsReportsRoute: typeof AppImsReportsRoute
   AppImsReservationsRoute: typeof AppImsReservationsRoute
   AppImsStockRoute: typeof AppImsStockRoute
   AppImsTransactionsRoute: typeof AppImsTransactionsRoute
@@ -1064,6 +1084,7 @@ interface AppImsRouteChildren {
 
 const AppImsRouteChildren: AppImsRouteChildren = {
   AppImsOemReturnsRoute: AppImsOemReturnsRoute,
+  AppImsReportsRoute: AppImsReportsRoute,
   AppImsReservationsRoute: AppImsReservationsRoute,
   AppImsStockRoute: AppImsStockRoute,
   AppImsTransactionsRoute: AppImsTransactionsRoute,
