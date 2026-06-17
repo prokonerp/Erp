@@ -79,7 +79,7 @@ function NewIndent() {
     (async () => {
       const { data, error } = await supabase
         .from("tickets")
-        .select("id, case_id, oem_call, oem_brand, oem_ref_id, product, serial_no, location, complaint, assigned_engineer_name, parts_used, parts_details")
+        .select("id, case_id, oem_call, oem_brand, oem_ref_id, product, serial_no, location, complaint, assigned_engineer_name, defective_parts_received, defective_parts_details, good_parts_used, good_parts_details")
         .eq("id", ticket_id)
         .maybeSingle();
       if (error) { toast.error(error.message); setLoading(false); return; }
@@ -89,21 +89,19 @@ function NewIndent() {
         navigate({ to: "/tickets/$id", params: { id: ticket_id } });
         return;
       }
-      const parts = Array.isArray((data as { parts_details?: unknown }).parts_details)
-        ? ((data as { parts_details: Array<{ name?: string; model_no?: string; serial?: string; confirmed?: boolean }> }).parts_details)
-        : [];
-      const confirmedParts = parts.filter((p) => p?.confirmed && (p?.name || "").trim());
-      const firstPart = confirmedParts[0] || parts.find((p) => (p?.name || "").trim()) || parts[0] || {};
-      if (!data.parts_used || !parts.some((p) => (p?.name || "").trim())) {
-        toast.error("Indent requires Parts Used enabled with at least one Part entry");
+      const dRaw = (data as { defective_parts_details?: unknown }).defective_parts_details;
+      const gRaw = (data as { good_parts_details?: unknown }).good_parts_details;
+      const defParts: Array<{ name?: string; model_no?: string }> = Array.isArray(dRaw) ? (dRaw as Array<{ name?: string; model_no?: string }>) : [];
+      const goodParts: Array<{ name?: string; model_no?: string }> = Array.isArray(gRaw) ? (gRaw as Array<{ name?: string; model_no?: string }>) : [];
+      const defOn = !!(data as { defective_parts_received?: boolean }).defective_parts_received;
+      const goodOn = !!(data as { good_parts_used?: boolean }).good_parts_used;
+      if (!defOn && !goodOn) {
+        toast.error("Indent requires Defective Parts Received or Good Parts Used to be enabled on the ticket");
         navigate({ to: "/tickets/$id", params: { id: ticket_id } });
         return;
       }
-      if (confirmedParts.length === 0) {
-        toast.error("Indent can only be created from confirmed & locked parts. Please confirm parts on the ticket first.");
-        navigate({ to: "/tickets/$id", params: { id: ticket_id } });
-        return;
-      }
+      const firstDef = defParts.find((p) => (p?.name || "").trim() || (p?.model_no || "").trim()) || {};
+      const firstGood = goodParts.find((p) => (p?.name || "").trim() || (p?.model_no || "").trim()) || {};
       // Latest engineer from assignment activity history
       let latestEngineer = data.assigned_engineer_name || "";
       const { data: acts } = await supabase
@@ -124,8 +122,8 @@ function NewIndent() {
         case_id: data.case_id || "",
         oem_case_id: data.oem_ref_id || "",
         company: data.oem_brand || "",
-        def_model_no: firstPart.model_no || "",
-        def_serial_no: firstPart.serial || "",
+        def_model_no: firstDef.model_no || "",
+        def_serial_no: firstGood.model_no || "",
         product_model: data.product || "",
         product_serial: data.serial_no || "",
         indent_city: data.location || "",

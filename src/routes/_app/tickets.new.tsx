@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,9 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, CalendarClock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
-import { ImsSerialPicker } from "@/components/ImsSerialPicker";
-import { findAvailableStockBySerial } from "@/lib/ims";
-import { Trash2, ShieldCheck } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { PartLine } from "@/lib/tickets";
 
 export const Route = createFileRoute("/_app/tickets/new")({
@@ -58,8 +56,10 @@ function NewTicket() {
     special_instruction: "",
     preferred_visit_datetime: "",
   });
-  const [partsUsed, setPartsUsed] = useState(false);
-  const [parts, setParts] = useState<PartLine[]>([]);
+  const [defectiveOn, setDefectiveOn] = useState(false);
+  const [defectiveParts, setDefectiveParts] = useState<PartLine[]>([]);
+  const [goodOn, setGoodOn] = useState(false);
+  const [goodParts, setGoodParts] = useState<PartLine[]>([]);
 
   useEffect(() => {
     supabase.from("call_type_master").select("name").order("name").then(({ data }) => {
@@ -155,10 +155,17 @@ function NewTicket() {
   };
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
-  const updPart = (i: number, p: Partial<PartLine>) =>
-    setParts((rows) => rows.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
-  const addPart = () => setParts((rows) => [...rows, { name: "", qty: "1" }]);
-  const delPart = (i: number) => setParts((rows) => rows.filter((_, idx) => idx !== i));
+  type PartSetter = Dispatch<SetStateAction<PartLine[]>>;
+  const mkUpd = (setter: PartSetter) => (i: number, p: Partial<PartLine>) =>
+    setter((rows) => rows.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
+  const mkAdd = (setter: PartSetter) => () => setter((rows) => [...rows, { name: "", qty: "1" }]);
+  const mkDel = (setter: PartSetter) => (i: number) => setter((rows) => rows.filter((_, idx) => idx !== i));
+  const updDef = mkUpd(setDefectiveParts);
+  const addDef = mkAdd(setDefectiveParts);
+  const delDef = mkDel(setDefectiveParts);
+  const updGood = mkUpd(setGoodParts);
+  const addGood = mkAdd(setGoodParts);
+  const delGood = mkDel(setGoodParts);
 
   const submit = async () => {
     if (!form.customer_id) return toast.error("Please select a customer from Customer Master");
@@ -174,17 +181,13 @@ function NewTicket() {
         return toast.error("Preferred visit date & time cannot be in the past");
       }
     }
-    // Inventory validation for any parts entered upfront
-    if (partsUsed) {
-      const valid = parts.some((p) => (p.name || "").trim());
-      if (!valid) return toast.error("Add at least one part or turn off Parts Used");
-      for (const p of parts) {
-        if (!(p.name || "").trim() || !(p.model_no || "").trim() || !(p.serial || "").trim()) {
-          return toast.error("Each part needs Name, Model No and Serial");
-        }
-        const hit = await findAvailableStockBySerial((p.serial || "").trim(), p.model_no || null);
-        if (!hit) return toast.error(`Selected spare part serial "${p.serial}" is not available in inventory.`);
-      }
+    if (defectiveOn) {
+      const valid = defectiveParts.some((p) => (p.name || "").trim());
+      if (!valid) return toast.error("Add at least one Defective Part Received or turn the section off");
+    }
+    if (goodOn) {
+      const valid = goodParts.some((p) => (p.name || "").trim());
+      if (!valid) return toast.error("Add at least one Good Part Used or turn the section off");
     }
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
@@ -219,8 +222,13 @@ function NewTicket() {
       source: sourceMeta?.source ?? null,
       amc_id: sourceMeta?.amc_id ?? null,
       pm_visit_id: sourceMeta?.pm_visit_id ?? null,
-      parts_used: partsUsed,
-      parts_details: partsUsed ? parts : [],
+      // Legacy field kept in sync for back-compat (true if either section is enabled)
+      parts_used: defectiveOn || goodOn,
+      parts_details: goodOn ? goodParts : (defectiveOn ? defectiveParts : []),
+      defective_parts_received: defectiveOn,
+      defective_parts_details: defectiveOn ? defectiveParts : [],
+      good_parts_used: goodOn,
+      good_parts_details: goodOn ? goodParts : [],
     };
     // CASE ID is always auto-generated server-side
     delete (payload as Record<string, unknown>).case_id;
@@ -375,56 +383,84 @@ function NewTicket() {
         <div className="md:col-span-2 pt-2 border-t" />
         <div className="md:col-span-2 flex items-center justify-between">
           <div>
-            <Label className="text-base">Parts Used <span className="text-xs text-muted-foreground font-normal">(optional)</span></Label>
-            <p className="text-xs text-muted-foreground">Record spare parts at creation. Serials are validated against IMS inventory.</p>
+            <Label className="text-base">Defective Parts Received <span className="text-xs text-muted-foreground font-normal">(from customer)</span></Label>
+            <p className="text-xs text-muted-foreground">Capture defective material received from the customer.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Switch checked={partsUsed} onCheckedChange={(v) => { setPartsUsed(v); if (!v) setParts([]); else if (parts.length === 0) addPart(); }} />
-            <span className="text-sm text-muted-foreground">{partsUsed ? "Yes" : "No"}</span>
+            <Switch checked={defectiveOn} onCheckedChange={(v) => { setDefectiveOn(v); if (!v) setDefectiveParts([]); else if (defectiveParts.length === 0) addDef(); }} />
+            <span className="text-sm text-muted-foreground">{defectiveOn ? "ON" : "OFF"}</span>
           </div>
         </div>
-        {partsUsed && (
+        {defectiveOn && (
           <div className="md:col-span-2 space-y-2">
-            {parts.length === 0 && <p className="text-sm text-muted-foreground">No parts added yet.</p>}
-            {parts.map((p, i) => (
+            {defectiveParts.length === 0 && <p className="text-sm text-muted-foreground">No defective parts added yet.</p>}
+            {defectiveParts.map((p, i) => (
               <div key={i} className="rounded-md border p-2">
                 <div className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-12 md:col-span-3">
+                  <div className="col-span-12 md:col-span-4">
                     <Label>Part / Item</Label>
                     <TicketPartPicker
                       ticketProduct={form.product}
                       value={p.model_no || p.name}
-                      onSelect={(item) => updPart(i, { name: item.name, model_no: item.model || item.name })}
+                      onSelect={(item) => updDef(i, { name: item.name, model_no: item.model || item.name })}
                     />
                   </div>
-                  <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
-                  <div className="col-span-8 md:col-span-3">
-                    <Label>Part Serial</Label>
-                    <ImsSerialPicker
-                      value={p.serial || null}
-                      partModelNo={p.model_no || null}
-                      partName={p.name || null}
-                      stockType="good"
-                      allowManual
-                      onSelect={(_it, serial) => updPart(i, { serial })}
-                    />
-                  </div>
-                  <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
-                  <div className="col-span-10 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
+                  <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} /></div>
+                  <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} /></div>
+                  <div className="col-span-6 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} /></div>
                   <div className="col-span-2 md:col-span-1 flex">
-                    <Button type="button" size="icon" variant="ghost" onClick={() => delPart(i)}>
+                    <Button type="button" size="icon" variant="ghost" onClick={() => delDef(i)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
                 </div>
               </div>
             ))}
-            <Button type="button" size="sm" variant="outline" onClick={addPart}>
-              <Plus className="h-4 w-4 mr-1" />Add part
+            <Button type="button" size="sm" variant="outline" onClick={addDef}>
+              <Plus className="h-4 w-4 mr-1" />Add defective part
             </Button>
-            <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3" />Confirm & post to IMS from the ticket detail page after creation.
-            </p>
+          </div>
+        )}
+
+        <div className="md:col-span-2 pt-2 border-t" />
+        <div className="md:col-span-2 flex items-center justify-between">
+          <div>
+            <Label className="text-base">Good Parts Used <span className="text-xs text-muted-foreground font-normal">(issued to customer)</span></Label>
+            <p className="text-xs text-muted-foreground">Capture replacement material issued to the customer.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={goodOn} onCheckedChange={(v) => { setGoodOn(v); if (!v) setGoodParts([]); else if (goodParts.length === 0) addGood(); }} />
+            <span className="text-sm text-muted-foreground">{goodOn ? "ON" : "OFF"}</span>
+          </div>
+        </div>
+        {goodOn && (
+          <div className="md:col-span-2 space-y-2">
+            {goodParts.length === 0 && <p className="text-sm text-muted-foreground">No good parts added yet.</p>}
+            {goodParts.map((p, i) => (
+              <div key={i} className="rounded-md border p-2">
+                <div className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-12 md:col-span-4">
+                    <Label>Part / Item</Label>
+                    <TicketPartPicker
+                      ticketProduct={form.product}
+                      value={p.model_no || p.name}
+                      onSelect={(item) => updGood(i, { name: item.name, model_no: item.model || item.name })}
+                    />
+                  </div>
+                  <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} /></div>
+                  <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} /></div>
+                  <div className="col-span-6 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} /></div>
+                  <div className="col-span-2 md:col-span-1 flex">
+                    <Button type="button" size="icon" variant="ghost" onClick={() => delGood(i)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <Button type="button" size="sm" variant="outline" onClick={addGood}>
+              <Plus className="h-4 w-4 mr-1" />Add good part
+            </Button>
           </div>
         )}
 

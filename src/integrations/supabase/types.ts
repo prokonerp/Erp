@@ -2076,7 +2076,11 @@ export type Database = {
           customer_id: string | null
           customer_name: string
           customer_phone: string | null
+          defective_parts_details: Json
+          defective_parts_received: boolean
           deleted_at: string | null
+          good_parts_details: Json
+          good_parts_used: boolean
           id: string
           location: string | null
           oem_brand: string | null
@@ -2120,7 +2124,11 @@ export type Database = {
           customer_id?: string | null
           customer_name: string
           customer_phone?: string | null
+          defective_parts_details?: Json
+          defective_parts_received?: boolean
           deleted_at?: string | null
+          good_parts_details?: Json
+          good_parts_used?: boolean
           id?: string
           location?: string | null
           oem_brand?: string | null
@@ -2164,7 +2172,11 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string
           customer_phone?: string | null
+          defective_parts_details?: Json
+          defective_parts_received?: boolean
           deleted_at?: string | null
+          good_parts_details?: Json
+          good_parts_used?: boolean
           id?: string
           location?: string | null
           oem_brand?: string | null

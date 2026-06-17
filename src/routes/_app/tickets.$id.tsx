@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,15 +19,8 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useIsAdmin } from "@/lib/useRole";
-import { Lock, Unlock, ShieldCheck } from "lucide-react";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
-import { ImsSerialPicker } from "@/components/ImsSerialPicker";
-import { findAvailableStockBySerial, issueStockToTicket } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -53,6 +46,10 @@ type Ticket = {
   assigned_at: string | null;
   parts_used: boolean;
   parts_details: PartLine[];
+  defective_parts_received: boolean;
+  defective_parts_details: PartLine[];
+  good_parts_used: boolean;
+  good_parts_details: PartLine[];
   quotation_id: string | null;
   closed_at: string | null;
   remarks: string | null;
@@ -152,8 +149,6 @@ function TicketDetail() {
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
   const { isAdmin } = useIsAdmin();
-  const [confirmPartsOpen, setConfirmPartsOpen] = useState(false);
-  const partsBaselineRef = useRef<string>("[]");
 
   const load = async () => {
     const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
@@ -168,8 +163,20 @@ function TicketDetail() {
       const parts = Array.isArray((tk as { parts_details?: unknown }).parts_details)
         ? ((tk as { parts_details: unknown[] }).parts_details as PartLine[])
         : [];
-      setT({ ...row, parts_details: parts });
-      partsBaselineRef.current = JSON.stringify(parts);
+      const defParts = Array.isArray((tk as { defective_parts_details?: unknown }).defective_parts_details)
+        ? ((tk as { defective_parts_details: unknown[] }).defective_parts_details as PartLine[])
+        : [];
+      const goodParts = Array.isArray((tk as { good_parts_details?: unknown }).good_parts_details)
+        ? ((tk as { good_parts_details: unknown[] }).good_parts_details as PartLine[])
+        : [];
+      setT({
+        ...row,
+        parts_details: parts,
+        defective_parts_received: !!(tk as { defective_parts_received?: boolean }).defective_parts_received,
+        defective_parts_details: defParts,
+        good_parts_used: !!(tk as { good_parts_used?: boolean }).good_parts_used,
+        good_parts_details: goodParts,
+      });
       if (row.quotation_id) {
         const { data: q } = await supabase.from("quotations").select("quote_no").eq("id", row.quotation_id).single();
         setQuoteNo((q as { quote_no?: string } | null)?.quote_no || "");
@@ -252,21 +259,16 @@ function TicketDetail() {
         return false;
       }
     }
-    if (payload.parts_used) {
-      const valid = (payload.parts_details || []).some((p) => (p.name || "").trim());
-      const closingStatuses = ["Closed"];
-      if (!valid) {
-        setBusy(false);
-        toast.error("At least one Part entry is required when Parts Used is enabled.");
-        return false;
-      }
-      // Also block closing without parts entries
-      if (closingStatuses.includes(payload.status) && !valid) {
-        setBusy(false);
-        toast.error("At least one Part entry is required when Parts Used is enabled.");
-        return false;
-      }
+    if (payload.defective_parts_received) {
+      const valid = (payload.defective_parts_details || []).some((p) => (p.name || "").trim());
+      if (!valid) { setBusy(false); toast.error("Add at least one Defective Part Received or turn the section off."); return false; }
     }
+    if (payload.good_parts_used) {
+      const valid = (payload.good_parts_details || []).some((p) => (p.name || "").trim());
+      if (!valid) { setBusy(false); toast.error("Add at least one Good Part Used or turn the section off."); return false; }
+    }
+    // Keep legacy parts_used flag in sync for back-compat
+    payload.parts_used = !!payload.defective_parts_received || !!payload.good_parts_used;
     if (payload.preferred_visit_datetime) {
       const pv = new Date(payload.preferred_visit_datetime).getTime();
       if (pv < Date.now() - 60000) {
@@ -294,6 +296,10 @@ function TicketDetail() {
       assigned_at: payload.assigned_at,
       parts_used: payload.parts_used,
       parts_details: payload.parts_details,
+      defective_parts_received: payload.defective_parts_received,
+      defective_parts_details: payload.defective_parts_received ? payload.defective_parts_details : [],
+      good_parts_used: payload.good_parts_used,
+      good_parts_details: payload.good_parts_used ? payload.good_parts_details : [],
       remarks: payload.remarks,
       closed_at: payload.closed_at,
       oem_call: payload.oem_call,
@@ -305,30 +311,6 @@ function TicketDetail() {
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
-    // Audit: admin edits to previously-confirmed part rows
-    try {
-      const before: PartLine[] = JSON.parse(partsBaselineRef.current || "[]");
-      const after = payload.parts_details || [];
-      const changed: string[] = [];
-      for (const b of before) {
-        if (!b.confirmed) continue;
-        const key = `${(b.name || "").trim()}|${(b.serial || "").trim()}|${(b.model_no || "").trim()}`;
-        const match = after.find((a) => `${(a.name || "").trim()}|${(a.serial || "").trim()}|${(a.model_no || "").trim()}` === key)
-          || after.find((a) => (a.serial || "").trim() && (a.serial || "").trim() === (b.serial || "").trim());
-        if (!match) { changed.push(`removed ${b.name || "(unnamed)"}${b.serial ? ` · ${b.serial}` : ""}`); continue; }
-        const diffs: string[] = [];
-        (["name","model_no","serial","qty","remarks"] as const).forEach((k) => {
-          if ((b[k] || "") !== (match[k] || "")) diffs.push(`${k}: "${b[k] || ""}" → "${match[k] || ""}"`);
-        });
-        if (diffs.length) changed.push(`${b.name || "(unnamed)"}: ${diffs.join(", ")}`);
-      }
-      if (changed.length && isAdmin) {
-        const { data: u } = await supabase.auth.getUser();
-        const actor = u.user?.email || u.user?.id || "admin";
-        await logActivity("parts_admin_edit", `Admin (${actor}) edited confirmed parts — ${changed.join("; ")}`);
-      }
-      partsBaselineRef.current = JSON.stringify(after);
-    } catch { /* ignore audit failures */ }
     toast.success("Saved");
     return true;
   };
@@ -366,108 +348,16 @@ function TicketDetail() {
     await launchTicketWhatsApp(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)), "Engineer");
   };
 
-  const addPart = () => update({ parts_details: [...t.parts_details, { name: "", qty: "1" }] });
-  const updPart = (i: number, p: Partial<PartLine>) => {
-    const row = t.parts_details[i];
-    if (row?.confirmed && !isAdmin) {
-      toast.error("This part is locked. Only an Administrator can edit it.");
-      return;
-    }
-    update({ parts_details: t.parts_details.map((x, idx) => (idx === i ? { ...x, ...p } : x)) });
-  };
-  const delPart = async (i: number) => {
-    const row = t.parts_details[i];
-    if (row?.confirmed && !isAdmin) {
-      toast.error("This part is locked. Only an Administrator can delete it.");
-      return;
-    }
-    if (row?.confirmed && isAdmin) {
-      await logActivity("parts_admin_edit", `Admin deleted confirmed part: ${row.name || "(unnamed)"}${row.serial ? ` · Serial ${row.serial}` : ""}`);
-    }
-    update({ parts_details: t.parts_details.filter((_, idx) => idx !== i) });
-  };
-
-  const unlockPart = async (i: number) => {
-    if (!isAdmin) return;
-    const row = t.parts_details[i];
-    if (!row?.confirmed) return;
-    const next = t.parts_details.map((x, idx) =>
-      idx === i ? { ...x, confirmed: false, confirmed_by: null, confirmed_at: null } : x,
-    );
-    update({ parts_details: next });
-    const { data: u } = await supabase.auth.getUser();
-    const actor = u.user?.email || u.user?.id || "admin";
-    await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
-    await logActivity("parts_unlocked", `Admin (${actor}) unlocked part: ${row.name || "(unnamed)"}${row.serial ? ` · Serial ${row.serial}` : ""}`);
-    toast.success("Part unlocked for editing");
-    await load();
-  };
-
-  const confirmParts = async () => {
-    const rows = t.parts_details || [];
-    const toConfirm = rows.filter((p) => !p.confirmed);
-    if (toConfirm.length === 0) {
-      setConfirmPartsOpen(false);
-      return;
-    }
-    // Mandatory: name, model_no, serial
-    const invalid = toConfirm.some(
-      (p) => !(p.name || "").trim() || !(p.model_no || "").trim() || !(p.serial || "").trim(),
-    );
-    if (invalid) {
-      toast.error("Please complete all mandatory part details before confirming.");
-      return;
-    }
-    // Inventory validation: every serial must exist & be Available in IMS
-    const stockHits: Record<string, Awaited<ReturnType<typeof findAvailableStockBySerial>>> = {};
-    for (const p of toConfirm) {
-      const hit = await findAvailableStockBySerial((p.serial || "").trim(), p.model_no || null);
-      if (!hit) {
-        toast.error(`Selected spare part serial number "${p.serial}" is not available in inventory.`);
-        return;
-      }
-      stockHits[p.serial as string] = hit;
-    }
-    const { data: u } = await supabase.auth.getUser();
-    const actor = u.user?.email || u.user?.id || "user";
-    const stamp = new Date().toISOString();
-    const next = rows.map((p) =>
-      p.confirmed ? p : { ...p, confirmed: true, confirmed_by: actor, confirmed_at: stamp },
-    );
-    const { error } = await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
-    if (error) { toast.error(error.message); return; }
-    update({ parts_details: next });
-    // Push Good Stock Out per confirmed line (best-effort; do not block confirmation on failure)
-    for (const p of toConfirm) {
-      const stock = stockHits[p.serial as string];
-      if (!stock) continue;
-      try {
-        await issueStockToTicket({
-          stockItemId: stock.id,
-          ticketId: t.id,
-          ticketNo: t.case_id,
-          caseId: t.case_id,
-          engineer: t.assigned_engineer_name,
-          customerName: t.customer_name,
-          partModelNo: p.model_no || stock.part_model_no,
-          partSerialNo: p.serial || stock.part_serial_no,
-          partName: p.name || stock.part_name,
-          oem: stock.oem,
-          qty: Number(p.qty) || 1,
-        });
-      } catch (e) {
-        // surface but keep going so other rows still record
-        toast.warning(`IMS movement failed for ${p.serial}: ${(e as Error).message}`);
-      }
-    }
-    await logActivity(
-      "parts_confirmed",
-      `${toConfirm.length} part row(s) confirmed & locked by ${actor}${isAdmin ? " (admin)" : ""} — IMS Good Stock Out posted`,
-    );
-    setConfirmPartsOpen(false);
-    toast.success("Parts confirmed and locked");
-    await load();
-  };
+  const addDef = () => update({ defective_parts_details: [...(t.defective_parts_details || []), { name: "", qty: "1" }] });
+  const updDef = (i: number, p: Partial<PartLine>) =>
+    update({ defective_parts_details: (t.defective_parts_details || []).map((x, idx) => (idx === i ? { ...x, ...p } : x)) });
+  const delDef = (i: number) =>
+    update({ defective_parts_details: (t.defective_parts_details || []).filter((_, idx) => idx !== i) });
+  const addGood = () => update({ good_parts_details: [...(t.good_parts_details || []), { name: "", qty: "1" }] });
+  const updGood = (i: number, p: Partial<PartLine>) =>
+    update({ good_parts_details: (t.good_parts_details || []).map((x, idx) => (idx === i ? { ...x, ...p } : x)) });
+  const delGood = (i: number) =>
+    update({ good_parts_details: (t.good_parts_details || []).filter((_, idx) => idx !== i) });
 
   const addNote = async () => {
     if (!noteText.trim()) return;
@@ -549,20 +439,6 @@ function TicketDetail() {
 
   return (
     <div className="space-y-4">
-      <AlertDialog open={confirmPartsOpen} onOpenChange={setConfirmPartsOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Parts Used</AlertDialogTitle>
-            <AlertDialogDescription>
-              Please verify that the entered Part Model No, Part Serial No, and related details are correct. Once confirmed, these part entries will be locked and can only be edited by an Administrator. Do you want to continue?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmParts}>Confirm</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       {/* Branded header with OEM at top */}
       <Card className="print:hidden">
         <CardContent className="py-3 flex items-center justify-between gap-3 flex-wrap">
@@ -625,17 +501,13 @@ function TicketDetail() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
           {(() => {
-            const hasPart = (t.parts_details || []).some((p) => (p.name || "").trim());
-            const hasConfirmed = (t.parts_details || []).some((p) => p.confirmed && (p.name || "").trim());
-            const canIndent = !!t.oem_call && !!t.parts_used && hasPart && hasConfirmed;
+            const defOn = !!t.defective_parts_received;
+            const goodOn = !!t.good_parts_used;
+            const canIndent = !!t.oem_call && (defOn || goodOn);
             const title = !t.oem_call
               ? "Enable OEM Call to create an Indent"
-              : !t.parts_used
-              ? "Enable Parts Used to create an Indent"
-              : !hasPart
-              ? "Add at least one Part entry to create an Indent"
-              : !hasConfirmed
-              ? "Confirm & lock at least one Part entry before creating an Indent"
+              : !(defOn || goodOn)
+              ? "Enable Defective Parts Received or Good Parts Used to create an Indent"
               : "Create Indent from this OEM ticket";
             return (
           <Button
@@ -762,90 +634,100 @@ function TicketDetail() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Parts</CardTitle>
+              <CardTitle>Defective Parts Received <span className="text-xs font-normal text-muted-foreground">(from customer)</span></CardTitle>
               <div className="flex items-center gap-2">
-                <Label className="text-sm">Parts used</Label>
-                <Switch checked={t.parts_used} onCheckedChange={(v) => update({ parts_used: v })} />
+                <Label className="text-sm">{t.defective_parts_received ? "ON" : "OFF"}</Label>
+                <Switch
+                  checked={!!t.defective_parts_received}
+                  onCheckedChange={(v) => update({
+                    defective_parts_received: v,
+                    defective_parts_details: v
+                      ? ((t.defective_parts_details && t.defective_parts_details.length) ? t.defective_parts_details : [{ name: "", qty: "1" }])
+                      : [],
+                  })}
+                />
               </div>
             </CardHeader>
             <CardContent>
-              {t.parts_used ? (
+              {t.defective_parts_received ? (
                 <div className="space-y-2">
-                  {t.parts_details.length === 0 && <p className="text-sm text-muted-foreground">No parts added yet.</p>}
-                  {t.parts_details.map((p, i) => {
-                    const locked = !!p.confirmed && !isAdmin;
-                    return (
-                      <div key={i} className={`rounded-md border p-2 ${p.confirmed ? "border-green-300 bg-green-50/40" : "border-transparent"}`}>
-                        <div className="flex items-center justify-between mb-1">
-                          {p.confirmed ? (
-                            <Badge className="bg-green-100 text-green-800 border border-green-300" variant="outline">
-                              <Lock className="h-3 w-3 mr-1" />Confirmed / Locked
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-zinc-100 text-zinc-700">Draft</Badge>
-                          )}
-                          <div className="text-xs text-muted-foreground">
-                            {p.confirmed && p.confirmed_by ? `By ${p.confirmed_by}${p.confirmed_at ? ` · ${new Date(p.confirmed_at).toLocaleString()}` : ""}` : ""}
-                          </div>
+                  {(t.defective_parts_details || []).length === 0 && <p className="text-sm text-muted-foreground">No defective parts added yet.</p>}
+                  {(t.defective_parts_details || []).map((p, i) => (
+                    <div key={i} className="rounded-md border p-2">
+                      <div className="grid grid-cols-12 gap-2 items-end">
+                        <div className="col-span-12 md:col-span-4">
+                          <Label>Part / Item</Label>
+                          <TicketPartPicker
+                            ticketProduct={t.product}
+                            value={p.model_no || p.name}
+                            onSelect={(item) => updDef(i, { name: item.name, model_no: item.model || item.name })}
+                          />
                         </div>
-                         <div className="grid grid-cols-12 gap-2 items-end">
-                          <div className="col-span-12 md:col-span-3">
-                            <Label>Part / Item</Label>
-                            <TicketPartPicker
-                              ticketProduct={t.product}
-                              value={p.model_no || p.name}
-                              disabled={locked}
-                              onSelect={(item) => updPart(i, {
-                                name: item.name,
-                                model_no: item.model || item.name,
-                              })}
-                            />
-                          </div>
-                          <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input disabled={locked} value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
-                          <div className="col-span-8 md:col-span-2">
-                            <Label>Part Serial</Label>
-                            <ImsSerialPicker
-                              value={p.serial || null}
-                              partModelNo={p.model_no || null}
-                              partName={p.name || null}
-                              stockType="good"
-                              allowManual
-                              disabled={locked}
-                              onSelect={(_item, serial) => updPart(i, { serial })}
-                            />
-                          </div>
-                          <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input disabled={locked} value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
-                          <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input disabled={locked} value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
-                          <div className="col-span-2 md:col-span-1 flex gap-1">
-                            {p.confirmed && isAdmin && (
-                              <Button size="icon" variant="ghost" title="Unlock (Admin)" onClick={() => unlockPart(i)}>
-                                <Unlock className="h-4 w-4 text-amber-600" />
-                              </Button>
-                            )}
-                            <Button size="icon" variant="ghost" disabled={locked} onClick={() => delPart(i)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
+                        <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} /></div>
+                        <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} /></div>
+                        <div className="col-span-6 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} /></div>
+                        <div className="col-span-2 md:col-span-1 flex">
+                          <Button size="icon" variant="ghost" onClick={() => delDef(i)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
                         </div>
                       </div>
-                    );
-                  })}
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <Button size="sm" variant="outline" onClick={addPart}><Plus className="h-4 w-4 mr-1" />Add part</Button>
-                    {t.parts_details.length > 0 && t.parts_details.some((p) => !p.confirmed) && (
-                      <Button size="sm" onClick={() => setConfirmPartsOpen(true)}>
-                        <ShieldCheck className="h-4 w-4 mr-1" />Save & Confirm Parts
-                      </Button>
-                    )}
-                    {t.parts_details.length > 0 && t.parts_details.every((p) => p.confirmed) && (
-                      <span className="text-xs text-green-700 inline-flex items-center gap-1">
-                        <Lock className="h-3 w-3" />All parts confirmed & locked
-                      </span>
-                    )}
-                  </div>
+                    </div>
+                  ))}
+                  <Button size="sm" variant="outline" onClick={addDef}><Plus className="h-4 w-4 mr-1" />Add defective part</Button>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No parts used for this call.</p>
+                <p className="text-sm text-muted-foreground">Toggle ON to record defective material received from the customer.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Good Parts Used <span className="text-xs font-normal text-muted-foreground">(issued to customer)</span></CardTitle>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">{t.good_parts_used ? "ON" : "OFF"}</Label>
+                <Switch
+                  checked={!!t.good_parts_used}
+                  onCheckedChange={(v) => update({
+                    good_parts_used: v,
+                    good_parts_details: v
+                      ? ((t.good_parts_details && t.good_parts_details.length) ? t.good_parts_details : [{ name: "", qty: "1" }])
+                      : [],
+                  })}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {t.good_parts_used ? (
+                <div className="space-y-2">
+                  {(t.good_parts_details || []).length === 0 && <p className="text-sm text-muted-foreground">No good parts added yet.</p>}
+                  {(t.good_parts_details || []).map((p, i) => (
+                    <div key={i} className="rounded-md border p-2">
+                      <div className="grid grid-cols-12 gap-2 items-end">
+                        <div className="col-span-12 md:col-span-4">
+                          <Label>Part / Item</Label>
+                          <TicketPartPicker
+                            ticketProduct={t.product}
+                            value={p.model_no || p.name}
+                            onSelect={(item) => updGood(i, { name: item.name, model_no: item.model || item.name })}
+                          />
+                        </div>
+                        <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} /></div>
+                        <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} /></div>
+                        <div className="col-span-6 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} /></div>
+                        <div className="col-span-2 md:col-span-1 flex">
+                          <Button size="icon" variant="ghost" onClick={() => delGood(i)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Button size="sm" variant="outline" onClick={addGood}><Plus className="h-4 w-4 mr-1" />Add good part</Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Toggle ON to record replacement material issued to the customer.</p>
               )}
             </CardContent>
           </Card>
@@ -1087,24 +969,49 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
           </tr>
         </tbody>
       </table>
-      {t.parts_used && t.parts_details.length > 0 && (
+      {t.defective_parts_received && (t.defective_parts_details || []).length > 0 && (
         <>
-          <div className="font-bold mb-1">Parts Used</div>
+          <div className="font-bold mb-1">Defective Parts Received</div>
           <table className="w-full border border-black mb-3">
             <thead className="bg-gray-100"><tr>
               <th className="border border-black px-2 py-1 w-8">#</th>
               <th className="border border-black px-2 py-1">Part / Item</th>
+              <th className="border border-black px-2 py-1">Model / Part No</th>
               <th className="border border-black px-2 py-1 w-16">Qty</th>
-              <th className="border border-black px-2 py-1">Serial</th>
               <th className="border border-black px-2 py-1">Remarks</th>
             </tr></thead>
             <tbody>
-              {t.parts_details.map((p, i) => (
+              {(t.defective_parts_details || []).map((p, i) => (
                 <tr key={i}>
                   <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
                   <td className="border border-black px-2 py-1">{p.name}</td>
+                  <td className="border border-black px-2 py-1">{p.model_no || "-"}</td>
                   <td className="border border-black px-2 py-1 text-center">{p.qty}</td>
-                  <td className="border border-black px-2 py-1 font-mono">{p.serial || "-"}</td>
+                  <td className="border border-black px-2 py-1">{p.remarks || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+      {t.good_parts_used && (t.good_parts_details || []).length > 0 && (
+        <>
+          <div className="font-bold mb-1">Good Parts Used</div>
+          <table className="w-full border border-black mb-3">
+            <thead className="bg-gray-100"><tr>
+              <th className="border border-black px-2 py-1 w-8">#</th>
+              <th className="border border-black px-2 py-1">Part / Item</th>
+              <th className="border border-black px-2 py-1">Model / Part No</th>
+              <th className="border border-black px-2 py-1 w-16">Qty</th>
+              <th className="border border-black px-2 py-1">Remarks</th>
+            </tr></thead>
+            <tbody>
+              {(t.good_parts_details || []).map((p, i) => (
+                <tr key={i}>
+                  <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
+                  <td className="border border-black px-2 py-1">{p.name}</td>
+                  <td className="border border-black px-2 py-1">{p.model_no || "-"}</td>
+                  <td className="border border-black px-2 py-1 text-center">{p.qty}</td>
                   <td className="border border-black px-2 py-1">{p.remarks || "-"}</td>
                 </tr>
               ))}
