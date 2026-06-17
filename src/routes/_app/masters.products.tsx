@@ -726,6 +726,44 @@ export function ProductMasterPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={parentPickerOpen} onOpenChange={setParentPickerOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader><DialogTitle>Select Compatible Parent Products</DialogTitle></DialogHeader>
+          <Input
+            placeholder="Search by model, brand or category…"
+            value={parentSearch}
+            onChange={(e) => setParentSearch(e.target.value)}
+          />
+          <div className="overflow-y-auto border rounded-md">
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead className="w-10"></TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Brand</TableHead>
+                <TableHead>Category</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {filteredParents.map((p) => (
+                  <TableRow key={p.id} className="cursor-pointer" onClick={() => toggleParent(p.id)}>
+                    <TableCell><Checkbox checked={parentIds.includes(p.id)} onCheckedChange={() => toggleParent(p.id)} /></TableCell>
+                    <TableCell className="font-mono">{p.model || p.name}</TableCell>
+                    <TableCell>{p.brand || "—"}</TableCell>
+                    <TableCell>{p.category || "—"}</TableCell>
+                  </TableRow>
+                ))}
+                {filteredParents.length === 0 && (
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No products match.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex justify-between items-center pt-2">
+            <span className="text-sm text-muted-foreground">{parentIds.length} selected</span>
+            <Button size="sm" onClick={() => setParentPickerOpen(false)}>Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
