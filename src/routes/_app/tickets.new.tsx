@@ -16,6 +16,11 @@ import { Label as L } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, CalendarClock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { TicketPartPicker } from "@/components/TicketPartPicker";
+import { ImsSerialPicker } from "@/components/ImsSerialPicker";
+import { findAvailableStockBySerial } from "@/lib/ims";
+import { Trash2, ShieldCheck } from "lucide-react";
+import type { PartLine } from "@/lib/tickets";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -53,6 +58,8 @@ function NewTicket() {
     special_instruction: "",
     preferred_visit_datetime: "",
   });
+  const [partsUsed, setPartsUsed] = useState(false);
+  const [parts, setParts] = useState<PartLine[]>([]);
 
   useEffect(() => {
     supabase.from("call_type_master").select("name").order("name").then(({ data }) => {
@@ -148,6 +155,10 @@ function NewTicket() {
   };
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  const updPart = (i: number, p: Partial<PartLine>) =>
+    setParts((rows) => rows.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
+  const addPart = () => setParts((rows) => [...rows, { name: "", qty: "1" }]);
+  const delPart = (i: number) => setParts((rows) => rows.filter((_, idx) => idx !== i));
 
   const submit = async () => {
     if (!form.customer_id) return toast.error("Please select a customer from Customer Master");
@@ -161,6 +172,18 @@ function NewTicket() {
       const pv = new Date(form.preferred_visit_datetime).getTime();
       if (pv < Date.now() - 60000) {
         return toast.error("Preferred visit date & time cannot be in the past");
+      }
+    }
+    // Inventory validation for any parts entered upfront
+    if (partsUsed) {
+      const valid = parts.some((p) => (p.name || "").trim());
+      if (!valid) return toast.error("Add at least one part or turn off Parts Used");
+      for (const p of parts) {
+        if (!(p.name || "").trim() || !(p.model_no || "").trim() || !(p.serial || "").trim()) {
+          return toast.error("Each part needs Name, Model No and Serial");
+        }
+        const hit = await findAvailableStockBySerial((p.serial || "").trim(), p.model_no || null);
+        if (!hit) return toast.error(`Selected spare part serial "${p.serial}" is not available in inventory.`);
       }
     }
     setBusy(true);
@@ -196,6 +219,8 @@ function NewTicket() {
       source: sourceMeta?.source ?? null,
       amc_id: sourceMeta?.amc_id ?? null,
       pm_visit_id: sourceMeta?.pm_visit_id ?? null,
+      parts_used: partsUsed,
+      parts_details: partsUsed ? parts : [],
     };
     // CASE ID is always auto-generated server-side
     delete (payload as Record<string, unknown>).case_id;
