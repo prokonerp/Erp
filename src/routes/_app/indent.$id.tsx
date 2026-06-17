@@ -54,6 +54,8 @@ function IndentDetail() {
       material_rec_date: i.material_rec_date,
       engineer_name: i.engineer_name,
       remarks: i.remarks,
+      product_model: i.product_model,
+      product_serial: i.product_serial,
     } as never).eq("id", i.id);
     setBusy(false);
     if (error) return toast.error(error.message);
