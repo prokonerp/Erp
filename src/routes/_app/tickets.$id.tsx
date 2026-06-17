@@ -647,90 +647,100 @@ function TicketDetail() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Parts</CardTitle>
+              <CardTitle>Defective Parts Received <span className="text-xs font-normal text-muted-foreground">(from customer)</span></CardTitle>
               <div className="flex items-center gap-2">
-                <Label className="text-sm">Parts used</Label>
-                <Switch checked={t.parts_used} onCheckedChange={(v) => update({ parts_used: v })} />
+                <Label className="text-sm">{t.defective_parts_received ? "ON" : "OFF"}</Label>
+                <Switch
+                  checked={!!t.defective_parts_received}
+                  onCheckedChange={(v) => update({
+                    defective_parts_received: v,
+                    defective_parts_details: v
+                      ? ((t.defective_parts_details && t.defective_parts_details.length) ? t.defective_parts_details : [{ name: "", qty: "1" }])
+                      : [],
+                  })}
+                />
               </div>
             </CardHeader>
             <CardContent>
-              {t.parts_used ? (
+              {t.defective_parts_received ? (
                 <div className="space-y-2">
-                  {t.parts_details.length === 0 && <p className="text-sm text-muted-foreground">No parts added yet.</p>}
-                  {t.parts_details.map((p, i) => {
-                    const locked = !!p.confirmed && !isAdmin;
-                    return (
-                      <div key={i} className={`rounded-md border p-2 ${p.confirmed ? "border-green-300 bg-green-50/40" : "border-transparent"}`}>
-                        <div className="flex items-center justify-between mb-1">
-                          {p.confirmed ? (
-                            <Badge className="bg-green-100 text-green-800 border border-green-300" variant="outline">
-                              <Lock className="h-3 w-3 mr-1" />Confirmed / Locked
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-zinc-100 text-zinc-700">Draft</Badge>
-                          )}
-                          <div className="text-xs text-muted-foreground">
-                            {p.confirmed && p.confirmed_by ? `By ${p.confirmed_by}${p.confirmed_at ? ` · ${new Date(p.confirmed_at).toLocaleString()}` : ""}` : ""}
-                          </div>
+                  {(t.defective_parts_details || []).length === 0 && <p className="text-sm text-muted-foreground">No defective parts added yet.</p>}
+                  {(t.defective_parts_details || []).map((p, i) => (
+                    <div key={i} className="rounded-md border p-2">
+                      <div className="grid grid-cols-12 gap-2 items-end">
+                        <div className="col-span-12 md:col-span-4">
+                          <Label>Part / Item</Label>
+                          <TicketPartPicker
+                            ticketProduct={t.product}
+                            value={p.model_no || p.name}
+                            onSelect={(item) => updDef(i, { name: item.name, model_no: item.model || item.name })}
+                          />
                         </div>
-                         <div className="grid grid-cols-12 gap-2 items-end">
-                          <div className="col-span-12 md:col-span-3">
-                            <Label>Part / Item</Label>
-                            <TicketPartPicker
-                              ticketProduct={t.product}
-                              value={p.model_no || p.name}
-                              disabled={locked}
-                              onSelect={(item) => updPart(i, {
-                                name: item.name,
-                                model_no: item.model || item.name,
-                              })}
-                            />
-                          </div>
-                          <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input disabled={locked} value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
-                          <div className="col-span-8 md:col-span-2">
-                            <Label>Part Serial</Label>
-                            <ImsSerialPicker
-                              value={p.serial || null}
-                              partModelNo={p.model_no || null}
-                              partName={p.name || null}
-                              stockType="good"
-                              allowManual
-                              disabled={locked}
-                              onSelect={(_item, serial) => updPart(i, { serial })}
-                            />
-                          </div>
-                          <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input disabled={locked} value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
-                          <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input disabled={locked} value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
-                          <div className="col-span-2 md:col-span-1 flex gap-1">
-                            {p.confirmed && isAdmin && (
-                              <Button size="icon" variant="ghost" title="Unlock (Admin)" onClick={() => unlockPart(i)}>
-                                <Unlock className="h-4 w-4 text-amber-600" />
-                              </Button>
-                            )}
-                            <Button size="icon" variant="ghost" disabled={locked} onClick={() => delPart(i)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
+                        <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} /></div>
+                        <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} /></div>
+                        <div className="col-span-6 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} /></div>
+                        <div className="col-span-2 md:col-span-1 flex">
+                          <Button size="icon" variant="ghost" onClick={() => delDef(i)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
                         </div>
                       </div>
-                    );
-                  })}
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <Button size="sm" variant="outline" onClick={addPart}><Plus className="h-4 w-4 mr-1" />Add part</Button>
-                    {t.parts_details.length > 0 && t.parts_details.some((p) => !p.confirmed) && (
-                      <Button size="sm" onClick={() => setConfirmPartsOpen(true)}>
-                        <ShieldCheck className="h-4 w-4 mr-1" />Save & Confirm Parts
-                      </Button>
-                    )}
-                    {t.parts_details.length > 0 && t.parts_details.every((p) => p.confirmed) && (
-                      <span className="text-xs text-green-700 inline-flex items-center gap-1">
-                        <Lock className="h-3 w-3" />All parts confirmed & locked
-                      </span>
-                    )}
-                  </div>
+                    </div>
+                  ))}
+                  <Button size="sm" variant="outline" onClick={addDef}><Plus className="h-4 w-4 mr-1" />Add defective part</Button>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No parts used for this call.</p>
+                <p className="text-sm text-muted-foreground">Toggle ON to record defective material received from the customer.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Good Parts Used <span className="text-xs font-normal text-muted-foreground">(issued to customer)</span></CardTitle>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">{t.good_parts_used ? "ON" : "OFF"}</Label>
+                <Switch
+                  checked={!!t.good_parts_used}
+                  onCheckedChange={(v) => update({
+                    good_parts_used: v,
+                    good_parts_details: v
+                      ? ((t.good_parts_details && t.good_parts_details.length) ? t.good_parts_details : [{ name: "", qty: "1" }])
+                      : [],
+                  })}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {t.good_parts_used ? (
+                <div className="space-y-2">
+                  {(t.good_parts_details || []).length === 0 && <p className="text-sm text-muted-foreground">No good parts added yet.</p>}
+                  {(t.good_parts_details || []).map((p, i) => (
+                    <div key={i} className="rounded-md border p-2">
+                      <div className="grid grid-cols-12 gap-2 items-end">
+                        <div className="col-span-12 md:col-span-4">
+                          <Label>Part / Item</Label>
+                          <TicketPartPicker
+                            ticketProduct={t.product}
+                            value={p.model_no || p.name}
+                            onSelect={(item) => updGood(i, { name: item.name, model_no: item.model || item.name })}
+                          />
+                        </div>
+                        <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} /></div>
+                        <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} /></div>
+                        <div className="col-span-6 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} /></div>
+                        <div className="col-span-2 md:col-span-1 flex">
+                          <Button size="icon" variant="ghost" onClick={() => delGood(i)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Button size="sm" variant="outline" onClick={addGood}><Plus className="h-4 w-4 mr-1" />Add good part</Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Toggle ON to record replacement material issued to the customer.</p>
               )}
             </CardContent>
           </Card>
