@@ -466,14 +466,27 @@ function TicketDetail() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          {(() => {
+            const hasPart = (t.parts_details || []).some((p) => (p.name || "").trim());
+            const canIndent = !!t.oem_call && !!t.parts_used && hasPart;
+            const title = !t.oem_call
+              ? "Enable OEM Call to create an Indent"
+              : !t.parts_used
+              ? "Enable Parts Used to create an Indent"
+              : !hasPart
+              ? "Add at least one Part entry to create an Indent"
+              : "Create Indent from this OEM ticket";
+            return (
           <Button
             variant="outline"
-            disabled={!t.oem_call}
-            title={t.oem_call ? "Create Indent from this OEM ticket" : "Enable OEM Call to create an Indent"}
+            disabled={!canIndent}
+            title={title}
             onClick={() => navigate({ to: "/indent/new", search: { ticket_id: t.id } })}
           >
             <ClipboardList className="h-4 w-4 mr-1" />Create Indent
           </Button>
+            );
+          })()}
           <Button onClick={() => save()} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
         </div>
