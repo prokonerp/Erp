@@ -904,7 +904,7 @@ function TicketDetail() {
               {t.assigned_engineer_phone && (
                 <Button
                   variant="outline" size="sm" className="w-full"
-                  onClick={() => { waOpen(t.assigned_engineer_phone!, renderMsg("engineer_assign", engineerAssignMsg(t))); toast.success("Message copied — opening WhatsApp"); }}
+                  onClick={() => launchTicketWhatsApp(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)), "Engineer")}
                 >
                   <MessageCircle className="h-4 w-4 mr-1" />Resend WhatsApp
                 </Button>
@@ -924,7 +924,7 @@ function TicketDetail() {
                     {t.customer_phone && (
                       <Button
                         size="sm" className="w-full"
-                        onClick={() => { waOpen(t.customer_phone!, renderMsg("oow_quotation", `Dear ${t.customer_name}, please find our OOW quotation ${quoteNo} for case ${t.case_id}.`)); toast.success("Message copied — opening WhatsApp"); }}
+                        onClick={() => launchTicketWhatsApp(t.customer_phone, renderMsg("oow_quotation", `Dear ${t.customer_name}, please find our OOW quotation ${quoteNo} for case ${t.case_id}.`), "Customer")}
                       >
                         <MessageCircle className="h-4 w-4 mr-1" />Share Quotation on WhatsApp
                       </Button>
@@ -946,11 +946,11 @@ function TicketDetail() {
               <CardContent>
                 <Button
                   variant="outline" size="sm" className="w-full"
-                  onClick={() => { waOpen(t.customer_phone!, renderMsg("ticket_closed", customerClosedMsg(t))); toast.success("Message copied — opening WhatsApp"); }}
+                  onClick={() => launchTicketWhatsApp(t.customer_phone, renderMsg("ticket_closed", customerClosedMsg(t)), "Customer")}
                 >
                   <MessageCircle className="h-4 w-4 mr-1" />Send Closure Message
                 </Button>
-                <p className="text-xs text-muted-foreground mt-2">Opens WhatsApp Desktop/app. Message is also copied to clipboard — paste if needed.</p>
+                <p className="text-xs text-muted-foreground mt-2">Opens WhatsApp Web in a new browser tab with the message prefilled.</p>
               </CardContent>
             </Card>
           )}
