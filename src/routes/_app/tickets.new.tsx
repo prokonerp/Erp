@@ -17,9 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, CalendarClock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
-import { ImsSerialPicker } from "@/components/ImsSerialPicker";
-import { findAvailableStockBySerial } from "@/lib/ims";
-import { Trash2, ShieldCheck } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { PartLine } from "@/lib/tickets";
 
 export const Route = createFileRoute("/_app/tickets/new")({
@@ -58,8 +56,10 @@ function NewTicket() {
     special_instruction: "",
     preferred_visit_datetime: "",
   });
-  const [partsUsed, setPartsUsed] = useState(false);
-  const [parts, setParts] = useState<PartLine[]>([]);
+  const [defectiveOn, setDefectiveOn] = useState(false);
+  const [defectiveParts, setDefectiveParts] = useState<PartLine[]>([]);
+  const [goodOn, setGoodOn] = useState(false);
+  const [goodParts, setGoodParts] = useState<PartLine[]>([]);
 
   useEffect(() => {
     supabase.from("call_type_master").select("name").order("name").then(({ data }) => {
@@ -155,10 +155,17 @@ function NewTicket() {
   };
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
-  const updPart = (i: number, p: Partial<PartLine>) =>
-    setParts((rows) => rows.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
-  const addPart = () => setParts((rows) => [...rows, { name: "", qty: "1" }]);
-  const delPart = (i: number) => setParts((rows) => rows.filter((_, idx) => idx !== i));
+  type PartSetter = React.Dispatch<React.SetStateAction<PartLine[]>>;
+  const mkUpd = (setter: PartSetter) => (i: number, p: Partial<PartLine>) =>
+    setter((rows) => rows.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
+  const mkAdd = (setter: PartSetter) => () => setter((rows) => [...rows, { name: "", qty: "1" }]);
+  const mkDel = (setter: PartSetter) => (i: number) => setter((rows) => rows.filter((_, idx) => idx !== i));
+  const updDef = mkUpd(setDefectiveParts);
+  const addDef = mkAdd(setDefectiveParts);
+  const delDef = mkDel(setDefectiveParts);
+  const updGood = mkUpd(setGoodParts);
+  const addGood = mkAdd(setGoodParts);
+  const delGood = mkDel(setGoodParts);
 
   const submit = async () => {
     if (!form.customer_id) return toast.error("Please select a customer from Customer Master");
@@ -174,17 +181,13 @@ function NewTicket() {
         return toast.error("Preferred visit date & time cannot be in the past");
       }
     }
-    // Inventory validation for any parts entered upfront
-    if (partsUsed) {
-      const valid = parts.some((p) => (p.name || "").trim());
-      if (!valid) return toast.error("Add at least one part or turn off Parts Used");
-      for (const p of parts) {
-        if (!(p.name || "").trim() || !(p.model_no || "").trim() || !(p.serial || "").trim()) {
-          return toast.error("Each part needs Name, Model No and Serial");
-        }
-        const hit = await findAvailableStockBySerial((p.serial || "").trim(), p.model_no || null);
-        if (!hit) return toast.error(`Selected spare part serial "${p.serial}" is not available in inventory.`);
-      }
+    if (defectiveOn) {
+      const valid = defectiveParts.some((p) => (p.name || "").trim());
+      if (!valid) return toast.error("Add at least one Defective Part Received or turn the section off");
+    }
+    if (goodOn) {
+      const valid = goodParts.some((p) => (p.name || "").trim());
+      if (!valid) return toast.error("Add at least one Good Part Used or turn the section off");
     }
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
@@ -219,8 +222,13 @@ function NewTicket() {
       source: sourceMeta?.source ?? null,
       amc_id: sourceMeta?.amc_id ?? null,
       pm_visit_id: sourceMeta?.pm_visit_id ?? null,
-      parts_used: partsUsed,
-      parts_details: partsUsed ? parts : [],
+      // Legacy field kept in sync for back-compat (true if either section is enabled)
+      parts_used: defectiveOn || goodOn,
+      parts_details: goodOn ? goodParts : (defectiveOn ? defectiveParts : []),
+      defective_parts_received: defectiveOn,
+      defective_parts_details: defectiveOn ? defectiveParts : [],
+      good_parts_used: goodOn,
+      good_parts_details: goodOn ? goodParts : [],
     };
     // CASE ID is always auto-generated server-side
     delete (payload as Record<string, unknown>).case_id;
