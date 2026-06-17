@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
-import { FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList } from "lucide-react";
+import { FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -62,6 +62,7 @@ function AppLayout() {
     { to: "/crm", label: "Sales CRM", icon: Briefcase, module: "quotations" },
     { to: "/tickets", label: "Tickets", icon: Ticket, module: "tickets" },
     { to: "/indent", label: "Indent", icon: ClipboardList, module: "indent" },
+    { to: "/ims", label: "IMS", icon: Warehouse, module: "ims" },
     { to: "/reports", label: "Reports", icon: BarChart3, module: "reports" },
     { to: "/import", label: "Import CSV", icon: Upload, adminOnly: true },
   ];
