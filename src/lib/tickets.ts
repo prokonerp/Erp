@@ -1,3 +1,5 @@
+import { toast } from "sonner";
+
 export const CALL_TYPES = [
   "OOW",
   "Installation",
@@ -109,26 +111,25 @@ export function waLink(phone: string | null | undefined, text: string): string {
 /** Click handler: copy message to clipboard, then open WhatsApp in a new browser tab.
  *  Uses the wa.me universal link with target=_blank so WhatsApp is never embedded
  *  inside an iframe/modal (which browsers block with ERR_BLOCKED_BY_RESPONSE).
- *  Returns:
- *    "ok"       — new tab opened
- *    "invalid"  — phone number missing / invalid
- *    "blocked"  — popup blocked by browser; caller should show a fallback message
- */
+ *  Returns true if the phone is valid and a launch was attempted, false if the
+ *  number is missing/invalid. If the browser blocks the popup, a fallback toast
+ *  is shown automatically. */
 export async function waOpen(
   phone: string | null | undefined,
   text: string,
-): Promise<"ok" | "invalid" | "blocked"> {
+): Promise<boolean> {
   const p = waPhone(phone);
-  if (!p) return "invalid";
+  if (!p) return false;
   try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
   const url = `https://wa.me/${p}?text=${encodeURIComponent(text)}`;
+  let w: Window | null = null;
   try {
-    const w = window.open(url, "_blank", "noopener,noreferrer");
-    if (!w || w.closed || typeof w.closed === "undefined") return "blocked";
-    return "ok";
-  } catch {
-    return "blocked";
+    w = window.open(url, "_blank", "noopener,noreferrer");
+  } catch { /* handled below */ }
+  if (!w) {
+    toast.error("Unable to open WhatsApp. Please verify browser permissions and mobile number.");
   }
+  return true;
 }
 
 export function engineerAssignMsg(t: {
