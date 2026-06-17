@@ -79,7 +79,7 @@ function NewIndent() {
     (async () => {
       const { data, error } = await supabase
         .from("tickets")
-        .select("id, case_id, oem_call, oem_brand, oem_ref_id, product, serial_no, location, complaint, assigned_engineer_name")
+        .select("id, case_id, oem_call, oem_brand, oem_ref_id, product, serial_no, location, complaint, assigned_engineer_name, parts_used, parts_details")
         .eq("id", ticket_id)
         .maybeSingle();
       if (error) { toast.error(error.message); setLoading(false); return; }
@@ -89,17 +89,42 @@ function NewIndent() {
         navigate({ to: "/tickets/$id", params: { id: ticket_id } });
         return;
       }
+      const parts = Array.isArray((data as { parts_details?: unknown }).parts_details)
+        ? ((data as { parts_details: Array<{ name?: string; model_no?: string; serial?: string }> }).parts_details)
+        : [];
+      const firstPart = parts.find((p) => (p?.name || "").trim()) || parts[0] || {};
+      if (!data.parts_used || !parts.some((p) => (p?.name || "").trim())) {
+        toast.error("Indent requires Parts Used enabled with at least one Part entry");
+        navigate({ to: "/tickets/$id", params: { id: ticket_id } });
+        return;
+      }
+      // Latest engineer from assignment activity history
+      let latestEngineer = data.assigned_engineer_name || "";
+      const { data: acts } = await supabase
+        .from("ticket_activities")
+        .select("notes, created_at, kind")
+        .eq("ticket_id", ticket_id)
+        .eq("kind", "assigned")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (acts && acts.length) {
+        const note = (acts[0] as { notes?: string }).notes || "";
+        const m = note.match(/Assigned to (.+?)(?:\s*\(|$)/);
+        if (m) latestEngineer = m[1].trim();
+      }
       setForm((f) => ({
         ...f,
         ticket_id: data.id,
         case_id: data.case_id || "",
         oem_case_id: data.oem_ref_id || "",
         company: data.oem_brand || "",
-        def_model_no: data.product || "",
-        def_serial_no: data.serial_no || "",
+        def_model_no: firstPart.model_no || "",
+        def_serial_no: firstPart.serial || "",
+        product_model: data.product || "",
+        product_serial: data.serial_no || "",
         indent_city: data.location || "",
         problem_reported: data.complaint || "",
-        engineer_name: data.assigned_engineer_name || "",
+        engineer_name: latestEngineer,
       }));
       setLoading(false);
     })();
