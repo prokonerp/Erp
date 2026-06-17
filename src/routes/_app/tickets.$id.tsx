@@ -613,10 +613,11 @@ function TicketDetail() {
                   {t.parts_details.length === 0 && <p className="text-sm text-muted-foreground">No parts added yet.</p>}
                   {t.parts_details.map((p, i) => (
                     <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                      <div className="col-span-12 md:col-span-5"><Label>Part / Item</Label><Input value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
-                      <div className="col-span-4 md:col-span-2"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
-                      <div className="col-span-8 md:col-span-2"><Label>Serial</Label><Input value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
-                      <div className="col-span-10 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
+                      <div className="col-span-12 md:col-span-3"><Label>Part / Item</Label><Input value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
+                      <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
+                      <div className="col-span-8 md:col-span-2"><Label>Part Serial</Label><Input value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
+                      <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
+                      <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
                       <div className="col-span-2 md:col-span-1">
                         <Button size="icon" variant="ghost" onClick={() => delPart(i)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
