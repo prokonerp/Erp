@@ -256,6 +256,7 @@ function openWhatsAppWithAnchor(url: string): boolean {
 }
 
 let whatsAppDebugListenersAttached = false;
+let whatsAppEmbedObserver: MutationObserver | null = null;
 
 function ensureWhatsAppDebugListeners() {
   if (whatsAppDebugListenersAttached || typeof window === "undefined") return;
@@ -293,6 +294,29 @@ function getWhatsAppEmbedDiagnostics() {
       /whatsapp/i.test(el.textContent || ""),
     ).length,
   };
+}
+
+function observeWhatsAppEmbedsForDebug() {
+  if (whatsAppEmbedObserver || typeof document === "undefined" || typeof MutationObserver === "undefined") return;
+  whatsAppEmbedObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of Array.from(mutation.addedNodes)) {
+        if (!(node instanceof HTMLElement)) continue;
+        const html = node.outerHTML || node.textContent || "";
+        const isWhatsAppFrame = node.matches?.('iframe[src*="whatsapp.com"], iframe[src*="wa.me"]') || /<iframe[^>]+(whatsapp\.com|wa\.me)/i.test(html);
+        const isWhatsAppModal = (node.getAttribute("role") === "dialog" || node.hasAttribute("data-vaul-drawer")) && /whatsapp/i.test(html);
+        if (isWhatsAppFrame || isWhatsAppModal) {
+          console.warn("WhatsApp embedded rendering attempt detected and should be removed", {
+            iframeBeingCreated: isWhatsAppFrame,
+            modalBeingOpened: isWhatsAppModal,
+            drawerBeingOpened: node.hasAttribute("data-vaul-drawer"),
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+    }
+  });
+  whatsAppEmbedObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 async function logWhatsAppLaunch(entry: {
