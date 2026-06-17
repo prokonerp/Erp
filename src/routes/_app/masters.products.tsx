@@ -168,7 +168,7 @@ export function ProductMasterPage() {
         .from("product_spare_parts" as any)
         .select("parent_product_id")
         .eq("spare_part_id", p.id);
-      const ids = ((data || []) as { parent_product_id: string }[]).map((r) => r.parent_product_id);
+      const ids = ((data || []) as unknown as { parent_product_id: string }[]).map((r) => r.parent_product_id);
       setParentIds(ids);
       setLinkedParents(rows.filter((r) => ids.includes(r.id)));
     } else {
@@ -176,7 +176,7 @@ export function ProductMasterPage() {
         .from("product_spare_parts" as any)
         .select("spare_part_id")
         .eq("parent_product_id", p.id);
-      const ids = ((data || []) as { spare_part_id: string }[]).map((r) => r.spare_part_id);
+      const ids = ((data || []) as unknown as { spare_part_id: string }[]).map((r) => r.spare_part_id);
       setLinkedSpares(rows.filter((r) => ids.includes(r.id)));
     }
   }
@@ -311,7 +311,7 @@ export function ProductMasterPage() {
     const { data } = await supabase
       .from("product_spare_parts" as any)
       .select("parent_product_id, spare_part_id");
-    const links = (data || []) as { parent_product_id: string; spare_part_id: string }[];
+    const links = (data || []) as unknown as { parent_product_id: string; spare_part_id: string }[];
     const byId = new Map(rows.map((r) => [r.id, r]));
     const out = links.map((l) => {
       const sp = byId.get(l.spare_part_id);
