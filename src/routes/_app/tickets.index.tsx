@@ -44,6 +44,8 @@ type Row = {
   raised_by_name: string | null;
   created_at: string;
   oem_call?: boolean | null;
+  parts_used?: boolean | null;
+  parts_details?: Array<{ name?: string }> | null;
   special_instruction?: string | null;
   special_instruction_acknowledged?: boolean | null;
   has_special_activity?: boolean;
