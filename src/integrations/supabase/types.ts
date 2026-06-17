@@ -1557,6 +1557,45 @@ export type Database = {
         }
         Relationships: []
       }
+      product_spare_parts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          parent_product_id: string
+          spare_part_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          parent_product_id: string
+          spare_part_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          parent_product_id?: string
+          spare_part_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_spare_parts_parent_product_id_fkey"
+            columns: ["parent_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_spare_parts_spare_part_id_fkey"
+            columns: ["spare_part_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           active: boolean
