@@ -227,6 +227,18 @@ function TicketDetail() {
     } as never);
   };
 
+  const launchTicketWhatsApp = async (phone: string | null | undefined, message: string, recipientLabel: string) => {
+    const ok = await waOpen(phone, message, {
+      module: "ticket",
+      recordId: t.id,
+      recordNumber: t.case_id,
+      recipientLabel,
+      preferWeb: true,
+    });
+    if (!ok) return toast.error("Valid mobile number is required before sending WhatsApp message.");
+    toast.success("Opening WhatsApp Web…");
+  };
+
   const save = async (extra: Partial<Ticket> = {}) => {
     setBusy(true);
     const payload = { ...t, ...extra };
@@ -328,8 +340,7 @@ function TicketDetail() {
     await logActivity("status", `Status changed: ${prev} → ${next}`, prev, next);
     await load();
     if (next === "Closed" && t.customer_phone) {
-      await waOpen(t.customer_phone, renderMsg("ticket_closed", customerClosedMsg(t)));
-      toast.success("Message copied — opening WhatsApp");
+      await launchTicketWhatsApp(t.customer_phone, renderMsg("ticket_closed", customerClosedMsg(t)), "Customer");
     }
   };
 
@@ -349,8 +360,7 @@ function TicketDetail() {
       `Assigned to ${t.assigned_engineer_name} (${t.assigned_engineer_phone})`,
     );
     await load();
-    await waOpen(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)));
-    toast.success("Message copied — opening WhatsApp for engineer");
+    await launchTicketWhatsApp(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)), "Engineer");
   };
 
   const addPart = () => update({ parts_details: [...t.parts_details, { name: "", qty: "1" }] });
