@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
+import { waOpen } from "@/lib/tickets";
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
@@ -119,13 +120,12 @@ function QuoteEditor() {
     );
     window.open(`mailto:${customer.email}?subject=${sub}&body=${body}`);
   };
-  const sendWA = () => {
+  const sendWA = async () => {
     if (!customer?.phone) return toast.error("No customer phone");
-    const txt = encodeURIComponent(
-      `Hi ${customer.contact_name || customer.company}, sharing our quotation ${q!.quote_no} (${fmtMoney(totals.total)}, valid till ${fmtDate(q!.expiry_date)}). Please confirm. — Prokon Hi-Tech Systems`
-    );
-    const phone = customer.phone.replace(/\D/g, "");
-    window.open(`https://wa.me/${phone}?text=${txt}`);
+    const text = `Hi ${customer.contact_name || customer.company}, sharing our quotation ${q!.quote_no} (${fmtMoney(totals.total)}, valid till ${fmtDate(q!.expiry_date)}). Please confirm. — Prokon Hi-Tech Systems`;
+    const ok = await waOpen(customer.phone, text);
+    if (!ok) return toast.error("Valid mobile number is required before sending WhatsApp message.");
+    toast.success("Opening WhatsApp…");
   };
 
   if (!q || !settings) return <div className="text-muted-foreground">Loading…</div>;
