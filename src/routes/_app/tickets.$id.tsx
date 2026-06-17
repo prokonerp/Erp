@@ -305,6 +305,10 @@ function TicketDetail() {
       assigned_at: payload.assigned_at,
       parts_used: payload.parts_used,
       parts_details: payload.parts_details,
+      defective_parts_received: payload.defective_parts_received,
+      defective_parts_details: payload.defective_parts_received ? payload.defective_parts_details : [],
+      good_parts_used: payload.good_parts_used,
+      good_parts_details: payload.good_parts_used ? payload.good_parts_details : [],
       remarks: payload.remarks,
       closed_at: payload.closed_at,
       oem_call: payload.oem_call,
@@ -316,30 +320,6 @@ function TicketDetail() {
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
-    // Audit: admin edits to previously-confirmed part rows
-    try {
-      const before: PartLine[] = JSON.parse(partsBaselineRef.current || "[]");
-      const after = payload.parts_details || [];
-      const changed: string[] = [];
-      for (const b of before) {
-        if (!b.confirmed) continue;
-        const key = `${(b.name || "").trim()}|${(b.serial || "").trim()}|${(b.model_no || "").trim()}`;
-        const match = after.find((a) => `${(a.name || "").trim()}|${(a.serial || "").trim()}|${(a.model_no || "").trim()}` === key)
-          || after.find((a) => (a.serial || "").trim() && (a.serial || "").trim() === (b.serial || "").trim());
-        if (!match) { changed.push(`removed ${b.name || "(unnamed)"}${b.serial ? ` · ${b.serial}` : ""}`); continue; }
-        const diffs: string[] = [];
-        (["name","model_no","serial","qty","remarks"] as const).forEach((k) => {
-          if ((b[k] || "") !== (match[k] || "")) diffs.push(`${k}: "${b[k] || ""}" → "${match[k] || ""}"`);
-        });
-        if (diffs.length) changed.push(`${b.name || "(unnamed)"}: ${diffs.join(", ")}`);
-      }
-      if (changed.length && isAdmin) {
-        const { data: u } = await supabase.auth.getUser();
-        const actor = u.user?.email || u.user?.id || "admin";
-        await logActivity("parts_admin_edit", `Admin (${actor}) edited confirmed parts — ${changed.join("; ")}`);
-      }
-      partsBaselineRef.current = JSON.stringify(after);
-    } catch { /* ignore audit failures */ }
     toast.success("Saved");
     return true;
   };
@@ -377,108 +357,16 @@ function TicketDetail() {
     await launchTicketWhatsApp(t.assigned_engineer_phone, renderMsg("engineer_assign", engineerAssignMsg(t)), "Engineer");
   };
 
-  const addPart = () => update({ parts_details: [...t.parts_details, { name: "", qty: "1" }] });
-  const updPart = (i: number, p: Partial<PartLine>) => {
-    const row = t.parts_details[i];
-    if (row?.confirmed && !isAdmin) {
-      toast.error("This part is locked. Only an Administrator can edit it.");
-      return;
-    }
-    update({ parts_details: t.parts_details.map((x, idx) => (idx === i ? { ...x, ...p } : x)) });
-  };
-  const delPart = async (i: number) => {
-    const row = t.parts_details[i];
-    if (row?.confirmed && !isAdmin) {
-      toast.error("This part is locked. Only an Administrator can delete it.");
-      return;
-    }
-    if (row?.confirmed && isAdmin) {
-      await logActivity("parts_admin_edit", `Admin deleted confirmed part: ${row.name || "(unnamed)"}${row.serial ? ` · Serial ${row.serial}` : ""}`);
-    }
-    update({ parts_details: t.parts_details.filter((_, idx) => idx !== i) });
-  };
-
-  const unlockPart = async (i: number) => {
-    if (!isAdmin) return;
-    const row = t.parts_details[i];
-    if (!row?.confirmed) return;
-    const next = t.parts_details.map((x, idx) =>
-      idx === i ? { ...x, confirmed: false, confirmed_by: null, confirmed_at: null } : x,
-    );
-    update({ parts_details: next });
-    const { data: u } = await supabase.auth.getUser();
-    const actor = u.user?.email || u.user?.id || "admin";
-    await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
-    await logActivity("parts_unlocked", `Admin (${actor}) unlocked part: ${row.name || "(unnamed)"}${row.serial ? ` · Serial ${row.serial}` : ""}`);
-    toast.success("Part unlocked for editing");
-    await load();
-  };
-
-  const confirmParts = async () => {
-    const rows = t.parts_details || [];
-    const toConfirm = rows.filter((p) => !p.confirmed);
-    if (toConfirm.length === 0) {
-      setConfirmPartsOpen(false);
-      return;
-    }
-    // Mandatory: name, model_no, serial
-    const invalid = toConfirm.some(
-      (p) => !(p.name || "").trim() || !(p.model_no || "").trim() || !(p.serial || "").trim(),
-    );
-    if (invalid) {
-      toast.error("Please complete all mandatory part details before confirming.");
-      return;
-    }
-    // Inventory validation: every serial must exist & be Available in IMS
-    const stockHits: Record<string, Awaited<ReturnType<typeof findAvailableStockBySerial>>> = {};
-    for (const p of toConfirm) {
-      const hit = await findAvailableStockBySerial((p.serial || "").trim(), p.model_no || null);
-      if (!hit) {
-        toast.error(`Selected spare part serial number "${p.serial}" is not available in inventory.`);
-        return;
-      }
-      stockHits[p.serial as string] = hit;
-    }
-    const { data: u } = await supabase.auth.getUser();
-    const actor = u.user?.email || u.user?.id || "user";
-    const stamp = new Date().toISOString();
-    const next = rows.map((p) =>
-      p.confirmed ? p : { ...p, confirmed: true, confirmed_by: actor, confirmed_at: stamp },
-    );
-    const { error } = await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
-    if (error) { toast.error(error.message); return; }
-    update({ parts_details: next });
-    // Push Good Stock Out per confirmed line (best-effort; do not block confirmation on failure)
-    for (const p of toConfirm) {
-      const stock = stockHits[p.serial as string];
-      if (!stock) continue;
-      try {
-        await issueStockToTicket({
-          stockItemId: stock.id,
-          ticketId: t.id,
-          ticketNo: t.case_id,
-          caseId: t.case_id,
-          engineer: t.assigned_engineer_name,
-          customerName: t.customer_name,
-          partModelNo: p.model_no || stock.part_model_no,
-          partSerialNo: p.serial || stock.part_serial_no,
-          partName: p.name || stock.part_name,
-          oem: stock.oem,
-          qty: Number(p.qty) || 1,
-        });
-      } catch (e) {
-        // surface but keep going so other rows still record
-        toast.warning(`IMS movement failed for ${p.serial}: ${(e as Error).message}`);
-      }
-    }
-    await logActivity(
-      "parts_confirmed",
-      `${toConfirm.length} part row(s) confirmed & locked by ${actor}${isAdmin ? " (admin)" : ""} — IMS Good Stock Out posted`,
-    );
-    setConfirmPartsOpen(false);
-    toast.success("Parts confirmed and locked");
-    await load();
-  };
+  const addDef = () => update({ defective_parts_details: [...(t.defective_parts_details || []), { name: "", qty: "1" }] });
+  const updDef = (i: number, p: Partial<PartLine>) =>
+    update({ defective_parts_details: (t.defective_parts_details || []).map((x, idx) => (idx === i ? { ...x, ...p } : x)) });
+  const delDef = (i: number) =>
+    update({ defective_parts_details: (t.defective_parts_details || []).filter((_, idx) => idx !== i) });
+  const addGood = () => update({ good_parts_details: [...(t.good_parts_details || []), { name: "", qty: "1" }] });
+  const updGood = (i: number, p: Partial<PartLine>) =>
+    update({ good_parts_details: (t.good_parts_details || []).map((x, idx) => (idx === i ? { ...x, ...p } : x)) });
+  const delGood = (i: number) =>
+    update({ good_parts_details: (t.good_parts_details || []).filter((_, idx) => idx !== i) });
 
   const addNote = async () => {
     if (!noteText.trim()) return;
