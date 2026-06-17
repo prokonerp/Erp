@@ -418,6 +418,16 @@ function TicketDetail() {
       toast.error("Please complete all mandatory part details before confirming.");
       return;
     }
+    // Inventory validation: every serial must exist & be Available in IMS
+    const stockHits: Record<string, Awaited<ReturnType<typeof findAvailableStockBySerial>>> = {};
+    for (const p of toConfirm) {
+      const hit = await findAvailableStockBySerial((p.serial || "").trim(), p.model_no || null);
+      if (!hit) {
+        toast.error(`Selected spare part serial number "${p.serial}" is not available in inventory.`);
+        return;
+      }
+      stockHits[p.serial as string] = hit;
+    }
     const { data: u } = await supabase.auth.getUser();
     const actor = u.user?.email || u.user?.id || "user";
     const stamp = new Date().toISOString();
@@ -427,9 +437,32 @@ function TicketDetail() {
     const { error } = await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
     if (error) { toast.error(error.message); return; }
     update({ parts_details: next });
+    // Push Good Stock Out per confirmed line (best-effort; do not block confirmation on failure)
+    for (const p of toConfirm) {
+      const stock = stockHits[p.serial as string];
+      if (!stock) continue;
+      try {
+        await issueStockToTicket({
+          stockItemId: stock.id,
+          ticketId: t.id,
+          ticketNo: t.case_id,
+          caseId: t.case_id,
+          engineer: t.assigned_engineer_name,
+          customerName: t.customer_name,
+          partModelNo: p.model_no || stock.part_model_no,
+          partSerialNo: p.serial || stock.part_serial_no,
+          partName: p.name || stock.part_name,
+          oem: stock.oem,
+          qty: Number(p.qty) || 1,
+        });
+      } catch (e) {
+        // surface but keep going so other rows still record
+        toast.warning(`IMS movement failed for ${p.serial}: ${(e as Error).message}`);
+      }
+    }
     await logActivity(
       "parts_confirmed",
-      `${toConfirm.length} part row(s) confirmed & locked by ${actor}${isAdmin ? " (admin)" : ""}`,
+      `${toConfirm.length} part row(s) confirmed & locked by ${actor}${isAdmin ? " (admin)" : ""} — IMS Good Stock Out posted`,
     );
     setConfirmPartsOpen(false);
     toast.success("Parts confirmed and locked");
