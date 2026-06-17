@@ -106,16 +106,29 @@ export function waLink(phone: string | null | undefined, text: string): string {
     : `https://wa.me/?text=${t}`;
 }
 
-/** Click handler: copy message to clipboard, then open WhatsApp in a new tab.
- *  Using window.open with _blank avoids losing the current page if WhatsApp can't open. */
-export async function waOpen(phone: string | null | undefined, text: string): Promise<boolean> {
+/** Click handler: copy message to clipboard, then open WhatsApp in a new browser tab.
+ *  Uses the wa.me universal link with target=_blank so WhatsApp is never embedded
+ *  inside an iframe/modal (which browsers block with ERR_BLOCKED_BY_RESPONSE).
+ *  Returns:
+ *    "ok"       — new tab opened
+ *    "invalid"  — phone number missing / invalid
+ *    "blocked"  — popup blocked by browser; caller should show a fallback message
+ */
+export async function waOpen(
+  phone: string | null | undefined,
+  text: string,
+): Promise<"ok" | "invalid" | "blocked"> {
   const p = waPhone(phone);
-  if (!p) return false;
+  if (!p) return "invalid";
   try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
   const url = `https://wa.me/${p}?text=${encodeURIComponent(text)}`;
-  const w = window.open(url, "_blank", "noopener,noreferrer");
-  if (!w) window.location.href = url;
-  return true;
+  try {
+    const w = window.open(url, "_blank", "noopener,noreferrer");
+    if (!w || w.closed || typeof w.closed === "undefined") return "blocked";
+    return "ok";
+  } catch {
+    return "blocked";
+  }
 }
 
 export function engineerAssignMsg(t: {
