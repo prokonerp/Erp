@@ -138,7 +138,11 @@ export async function waOpen(
 ): Promise<boolean> {
   const p = waPhone(phone);
   if (!p) return false;
-  try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    /* ignore */
+  }
   const useWeb = options.preferWeb ?? !isMobileDevice();
   const url = useWeb
     ? `https://web.whatsapp.com/send?phone=${p}&text=${encodeURIComponent(text)}`
@@ -159,7 +163,9 @@ export async function waOpen(
     recipientMobile: p,
     whatsappUrl: url,
     launchSuccess: launched,
-    failureReason: launched ? null : failureReason || "Popup blocked or browser returned no window handle",
+    failureReason: launched
+      ? null
+      : failureReason || "Popup blocked or browser returned no window handle",
   });
   console.info("WhatsApp launch", {
     module: options.module || "general",
@@ -193,7 +199,7 @@ async function logWhatsAppLaunch(entry: {
 }) {
   try {
     const { data } = await supabase.auth.getUser();
-    const { error } = await supabase.from("whatsapp_launch_logs" as never).insert({
+    const { error } = await supabase.from("whatsapp_launch_logs").insert({
       module: entry.module,
       record_id: entry.recordId,
       record_number: entry.recordNumber,
@@ -203,7 +209,7 @@ async function logWhatsAppLaunch(entry: {
       launch_success: entry.launchSuccess,
       failure_reason: entry.failureReason,
       user_id: data.user?.id ?? null,
-    } as never);
+    });
     if (error) console.warn("WhatsApp launch log was not saved", error.message);
   } catch (error) {
     console.warn("WhatsApp launch log failed", error);
