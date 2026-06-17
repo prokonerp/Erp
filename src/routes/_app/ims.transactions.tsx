@@ -84,14 +84,15 @@ function TransactionsList() {
                 <th className="p-2">From</th>
                 <th className="p-2">To</th>
                 <th className="p-2">Qty</th>
+                <th className="p-2">Indent / Case</th>
                 <th className="p-2">Ref</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={8}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={9}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={8}>No transactions.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={9}>No transactions.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2 font-mono">{r.txn_no}</td>
@@ -101,6 +102,11 @@ function TransactionsList() {
                   <td className="p-2">{wh(r.from_warehouse_id)}{r.from_party ? ` (${r.from_party})` : ""}</td>
                   <td className="p-2">{wh(r.to_warehouse_id)}{r.to_party ? ` (${r.to_party})` : ""}</td>
                   <td className="p-2">{r.qty}</td>
+                  <td className="p-2 text-xs font-mono">
+                    {r.indent_id ? <div>IND: {r.indent_id.slice(0, 8)}…</div> : null}
+                    {r.oem_case_id ? <div>Case: {r.oem_case_id}</div> : null}
+                    {!r.indent_id && !r.oem_case_id ? "—" : null}
+                  </td>
                   <td className="p-2 text-xs">{r.reference || "—"}</td>
                 </tr>
               ))}

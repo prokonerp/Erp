@@ -44,6 +44,7 @@ import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
 import { Route as AppImsReservationsRouteImport } from './routes/_app/ims.reservations'
 import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
 import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
+import { Route as AppImsIndentHistoryRouteImport } from './routes/_app/ims.indent-history'
 import { Route as AppImsAuditRouteImport } from './routes/_app/ims.audit'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
@@ -236,6 +237,11 @@ const AppImsOemReturnsRoute = AppImsOemReturnsRouteImport.update({
   path: '/oem-returns',
   getParentRoute: () => AppImsRoute,
 } as any)
+const AppImsIndentHistoryRoute = AppImsIndentHistoryRouteImport.update({
+  id: '/indent-history',
+  path: '/indent-history',
+  getParentRoute: () => AppImsRoute,
+} as any)
 const AppImsAuditRoute = AppImsAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -349,6 +355,7 @@ export interface FileRoutesByFullPath {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/ims/audit': typeof AppImsAuditRoute
+  '/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
   '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
@@ -397,6 +404,7 @@ export interface FileRoutesByTo {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/ims/audit': typeof AppImsAuditRoute
+  '/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
   '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
@@ -451,6 +459,7 @@ export interface FileRoutesById {
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/ims/audit': typeof AppImsAuditRoute
+  '/_app/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/_app/ims/oem-returns': typeof AppImsOemReturnsRoute
   '/_app/ims/reports': typeof AppImsReportsRoute
   '/_app/ims/reservations': typeof AppImsReservationsRoute
@@ -506,6 +515,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/gatepass/$id'
     | '/ims/audit'
+    | '/ims/indent-history'
     | '/ims/oem-returns'
     | '/ims/reports'
     | '/ims/reservations'
@@ -554,6 +564,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/gatepass/$id'
     | '/ims/audit'
+    | '/ims/indent-history'
     | '/ims/oem-returns'
     | '/ims/reports'
     | '/ims/reservations'
@@ -607,6 +618,7 @@ export interface FileRouteTypes {
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
     | '/_app/ims/audit'
+    | '/_app/ims/indent-history'
     | '/_app/ims/oem-returns'
     | '/_app/ims/reports'
     | '/_app/ims/reservations'
@@ -888,6 +900,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImsOemReturnsRouteImport
       parentRoute: typeof AppImsRoute
     }
+    '/_app/ims/indent-history': {
+      id: '/_app/ims/indent-history'
+      path: '/indent-history'
+      fullPath: '/ims/indent-history'
+      preLoaderRoute: typeof AppImsIndentHistoryRouteImport
+      parentRoute: typeof AppImsRoute
+    }
     '/_app/ims/audit': {
       id: '/_app/ims/audit'
       path: '/audit'
@@ -1093,6 +1112,7 @@ const AppImsTransfersRouteWithChildren = AppImsTransfersRoute._addFileChildren(
 
 interface AppImsRouteChildren {
   AppImsAuditRoute: typeof AppImsAuditRoute
+  AppImsIndentHistoryRoute: typeof AppImsIndentHistoryRoute
   AppImsOemReturnsRoute: typeof AppImsOemReturnsRoute
   AppImsReportsRoute: typeof AppImsReportsRoute
   AppImsReservationsRoute: typeof AppImsReservationsRoute
@@ -1104,6 +1124,7 @@ interface AppImsRouteChildren {
 
 const AppImsRouteChildren: AppImsRouteChildren = {
   AppImsAuditRoute: AppImsAuditRoute,
+  AppImsIndentHistoryRoute: AppImsIndentHistoryRoute,
   AppImsOemReturnsRoute: AppImsOemReturnsRoute,
   AppImsReportsRoute: AppImsReportsRoute,
   AppImsReservationsRoute: AppImsReservationsRoute,
