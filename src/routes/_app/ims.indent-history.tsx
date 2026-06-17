@@ -59,7 +59,7 @@ function IndentHistory() {
         </CardHeader>
         <CardContent className="space-y-2">
           <Input
-            placeholder="Filter by Indent No / Ticket No / OEM Case ID / Part Serial No"
+            placeholder="Filter by Indent No / Ticket No / OEM Case ID / Model / Part Serial No"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -89,7 +89,7 @@ function IndentHistory() {
                   <th className="p-2">Txn No</th>
                   <th className="p-2">Date</th>
                   <th className="p-2">Type</th>
-                  <th className="p-2">Part / Serial</th>
+                  <th className="p-2">Model / Part · Serial</th>
                   <th className="p-2">From</th>
                   <th className="p-2">To</th>
                   <th className="p-2">Qty</th>

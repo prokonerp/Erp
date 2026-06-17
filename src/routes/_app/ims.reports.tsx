@@ -42,9 +42,9 @@ function Reports() {
   function expStock(name: string, items: StockItem[]) {
     exportCSV(name, [
       { header: "OEM", get: (r) => r.oem },
-      { header: "Part Name", get: (r) => r.part_name },
-      { header: "Model", get: (r) => r.part_model_no },
-      { header: "Serial", get: (r) => r.part_serial_no },
+      { header: "Model / Part Name", get: (r) => r.part_name },
+      { header: "Model / Part No", get: (r) => r.part_model_no },
+      { header: "Model / Part Serial No", get: (r) => r.part_serial_no },
       { header: "Type", get: (r) => STOCK_TYPE_LABEL[r.stock_type] },
       { header: "Status", get: (r) => STOCK_STATUS_LABEL[r.stock_status] },
       { header: "Warehouse", get: (r) => whName(r.warehouse_id) },
@@ -59,8 +59,8 @@ function Reports() {
       { header: "Txn No", get: (r) => r.txn_no },
       { header: "Date", get: (r) => r.txn_date },
       { header: "Type", get: (r) => TXN_TYPE_LABEL[r.txn_type] },
-      { header: "Part", get: (r) => r.part_name },
-      { header: "Serial", get: (r) => r.part_serial_no },
+      { header: "Model / Part", get: (r) => r.part_name },
+      { header: "Model / Part Serial No", get: (r) => r.part_serial_no },
       { header: "From Warehouse", get: (r) => whName(r.from_warehouse_id) },
       { header: "To Warehouse", get: (r) => whName(r.to_warehouse_id) },
       { header: "Qty", get: (r) => r.qty },
@@ -94,8 +94,8 @@ function Reports() {
             { header: "Status", get: (r) => TRANSFER_STATUS_LABEL[r.status] },
             { header: "Source", get: (r) => whName(r.source_warehouse_id) },
             { header: "Destination", get: (r) => whName(r.destination_warehouse_id) },
-            { header: "Part", get: (r) => r.part_name },
-            { header: "Serial", get: (r) => r.part_serial_no },
+            { header: "Model / Part", get: (r) => r.part_name },
+            { header: "Model / Part Serial No", get: (r) => r.part_serial_no },
             { header: "Qty", get: (r) => r.qty },
           ], transfers)}>Transfers</Button>
           <Button size="sm" variant="outline" onClick={() => exportCSV("ims_reservations", [
@@ -111,12 +111,12 @@ function Reports() {
       <Card>
         <CardHeader><CardTitle className="text-base">Traceability Search</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <Input placeholder="Serial / Model / Ticket / Indent / OEM Case ID" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input placeholder="Model / Part Serial No / Model / Ticket / Indent / OEM Case ID" value={q} onChange={(e) => setQ(e.target.value)} />
           {q && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50"><tr className="text-left">
-                  <th className="p-2">Serial</th><th className="p-2">Part</th><th className="p-2">Status</th><th className="p-2">Type</th><th className="p-2">Ticket</th><th className="p-2">Indent</th>
+                  <th className="p-2">Model / Part Serial No</th><th className="p-2">Model / Part Name</th><th className="p-2">Status</th><th className="p-2">Type</th><th className="p-2">Ticket</th><th className="p-2">Indent</th>
                 </tr></thead>
                 <tbody>
                   {trace.length === 0 ? (

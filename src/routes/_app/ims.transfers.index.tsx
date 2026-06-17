@@ -37,8 +37,8 @@ function TransfersList() {
               <tr className="text-left">
                 <th className="p-2">Transfer No</th>
                 <th className="p-2">Date</th>
-                <th className="p-2">Part</th>
-                <th className="p-2">Serial</th>
+                <th className="p-2">Model / Part</th>
+                <th className="p-2">Model / Part Serial No</th>
                 <th className="p-2">Qty</th>
                 <th className="p-2">Status</th>
                 <th className="p-2 text-right">Open</th>
