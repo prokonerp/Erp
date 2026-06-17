@@ -91,8 +91,8 @@ function NewIndent() {
       }
       const dRaw = (data as { defective_parts_details?: unknown }).defective_parts_details;
       const gRaw = (data as { good_parts_details?: unknown }).good_parts_details;
-      const defParts: Array<{ name?: string; model_no?: string }> = Array.isArray(dRaw) ? (dRaw as Array<{ name?: string; model_no?: string }>) : [];
-      const goodParts: Array<{ name?: string; model_no?: string }> = Array.isArray(gRaw) ? (gRaw as Array<{ name?: string; model_no?: string }>) : [];
+      const defParts: Array<{ name?: string; model_no?: string; serial?: string }> = Array.isArray(dRaw) ? (dRaw as Array<{ name?: string; model_no?: string; serial?: string }>) : [];
+      const goodParts: Array<{ name?: string; model_no?: string; serial?: string }> = Array.isArray(gRaw) ? (gRaw as Array<{ name?: string; model_no?: string; serial?: string }>) : [];
       const defOn = !!(data as { defective_parts_received?: boolean }).defective_parts_received;
       const goodOn = !!(data as { good_parts_used?: boolean }).good_parts_used;
       if (!defOn && !goodOn) {
@@ -100,8 +100,9 @@ function NewIndent() {
         navigate({ to: "/tickets/$id", params: { id: ticket_id } });
         return;
       }
-      const firstDef = defParts.find((p) => (p?.name || "").trim() || (p?.model_no || "").trim()) || {};
-      const firstGood = goodParts.find((p) => (p?.name || "").trim() || (p?.model_no || "").trim()) || {};
+      const firstDef = defParts.find((p) => (p?.name || "").trim() || (p?.model_no || "").trim() || (p?.serial || "").trim()) || {};
+      // Suppress unused warning — goodParts retained for future Good Parts mapping needs.
+      void goodParts;
       // Latest engineer from assignment activity history
       let latestEngineer = data.assigned_engineer_name || "";
       const { data: acts } = await supabase
@@ -123,7 +124,7 @@ function NewIndent() {
         oem_case_id: data.oem_ref_id || "",
         company: data.oem_brand || "",
         def_model_no: firstDef.model_no || "",
-        def_serial_no: firstGood.model_no || "",
+        def_serial_no: firstDef.serial || "",
         product_model: data.product || "",
         product_serial: data.serial_no || "",
         indent_city: data.location || "",
