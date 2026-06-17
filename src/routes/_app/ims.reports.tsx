@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { exportCSV } from "@/lib/exports";
 import {
   listStock, listTransactions, listTransfers, listReservations,
+  listWarehouses, warehouseLookup,
   STOCK_STATUS_LABEL, STOCK_TYPE_LABEL, TXN_TYPE_LABEL, TRANSFER_STATUS_LABEL,
-  type StockItem, type Transaction, type Transfer, type Reservation,
+  type StockItem, type Transaction, type Transfer, type Reservation, type WarehouseLite,
 } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/ims/reports")({
@@ -19,14 +20,19 @@ function Reports() {
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [resv, setResv] = useState<Reservation[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [q, setQ] = useState("");
 
   useEffect(() => {
     (async () => {
-      const [s, t, x, r] = await Promise.all([listStock(), listTransactions(), listTransfers(), listReservations()]);
-      setStock(s); setTxns(t); setTransfers(x); setResv(r);
+      const [s, t, x, r, w] = await Promise.all([
+        listStock(), listTransactions(), listTransfers(), listReservations(), listWarehouses(),
+      ]);
+      setStock(s); setTxns(t); setTransfers(x); setResv(r); setWarehouses(w);
     })();
   }, []);
+
+  const whName = warehouseLookup(warehouses);
 
   const trace = q.trim()
     ? stock.filter((s) => [s.part_serial_no, s.part_model_no, s.ticket_id, s.indent_id, s.oem_case_id]
@@ -41,7 +47,7 @@ function Reports() {
       { header: "Serial", get: (r) => r.part_serial_no },
       { header: "Type", get: (r) => STOCK_TYPE_LABEL[r.stock_type] },
       { header: "Status", get: (r) => STOCK_STATUS_LABEL[r.stock_status] },
-      { header: "Warehouse ID", get: (r) => r.warehouse_id },
+      { header: "Warehouse", get: (r) => whName(r.warehouse_id) },
       { header: "Ticket", get: (r) => r.ticket_id },
       { header: "Indent", get: (r) => r.indent_id },
       { header: "OEM Case", get: (r) => r.oem_case_id },
@@ -55,9 +61,12 @@ function Reports() {
       { header: "Type", get: (r) => TXN_TYPE_LABEL[r.txn_type] },
       { header: "Part", get: (r) => r.part_name },
       { header: "Serial", get: (r) => r.part_serial_no },
-      { header: "From WH", get: (r) => r.from_warehouse_id },
-      { header: "To WH", get: (r) => r.to_warehouse_id },
+      { header: "From Warehouse", get: (r) => whName(r.from_warehouse_id) },
+      { header: "To Warehouse", get: (r) => whName(r.to_warehouse_id) },
       { header: "Qty", get: (r) => r.qty },
+      { header: "Indent", get: (r) => r.indent_id },
+      { header: "OEM Case", get: (r) => r.oem_case_id },
+      { header: "Ticket", get: (r) => r.ticket_id },
       { header: "Reference", get: (r) => r.reference },
     ], items);
   }
@@ -83,8 +92,8 @@ function Reports() {
             { header: "No", get: (r) => r.transfer_no },
             { header: "Date", get: (r) => r.request_date },
             { header: "Status", get: (r) => TRANSFER_STATUS_LABEL[r.status] },
-            { header: "Source", get: (r) => r.source_warehouse_id },
-            { header: "Destination", get: (r) => r.destination_warehouse_id },
+            { header: "Source", get: (r) => whName(r.source_warehouse_id) },
+            { header: "Destination", get: (r) => whName(r.destination_warehouse_id) },
             { header: "Part", get: (r) => r.part_name },
             { header: "Serial", get: (r) => r.part_serial_no },
             { header: "Qty", get: (r) => r.qty },
