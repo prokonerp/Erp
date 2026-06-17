@@ -90,11 +90,17 @@ function NewIndent() {
         return;
       }
       const parts = Array.isArray((data as { parts_details?: unknown }).parts_details)
-        ? ((data as { parts_details: Array<{ name?: string; model_no?: string; serial?: string }> }).parts_details)
+        ? ((data as { parts_details: Array<{ name?: string; model_no?: string; serial?: string; confirmed?: boolean }> }).parts_details)
         : [];
-      const firstPart = parts.find((p) => (p?.name || "").trim()) || parts[0] || {};
+      const confirmedParts = parts.filter((p) => p?.confirmed && (p?.name || "").trim());
+      const firstPart = confirmedParts[0] || parts.find((p) => (p?.name || "").trim()) || parts[0] || {};
       if (!data.parts_used || !parts.some((p) => (p?.name || "").trim())) {
         toast.error("Indent requires Parts Used enabled with at least one Part entry");
+        navigate({ to: "/tickets/$id", params: { id: ticket_id } });
+        return;
+      }
+      if (confirmedParts.length === 0) {
+        toast.error("Indent can only be created from confirmed & locked parts. Please confirm parts on the ticket first.");
         navigate({ to: "/tickets/$id", params: { id: ticket_id } });
         return;
       }

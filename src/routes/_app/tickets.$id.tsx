@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,12 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useIsAdmin } from "@/lib/useRole";
+import { Lock, Unlock, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -142,6 +148,9 @@ function TicketDetail() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
+  const { isAdmin } = useIsAdmin();
+  const [confirmPartsOpen, setConfirmPartsOpen] = useState(false);
+  const partsBaselineRef = useRef<string>("[]");
 
   const load = async () => {
     const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
@@ -157,6 +166,7 @@ function TicketDetail() {
         ? ((tk as { parts_details: unknown[] }).parts_details as PartLine[])
         : [];
       setT({ ...row, parts_details: parts });
+      partsBaselineRef.current = JSON.stringify(parts);
       if (row.quotation_id) {
         const { data: q } = await supabase.from("quotations").select("quote_no").eq("id", row.quotation_id).single();
         setQuoteNo((q as { quote_no?: string } | null)?.quote_no || "");
@@ -280,6 +290,30 @@ function TicketDetail() {
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
+    // Audit: admin edits to previously-confirmed part rows
+    try {
+      const before: PartLine[] = JSON.parse(partsBaselineRef.current || "[]");
+      const after = payload.parts_details || [];
+      const changed: string[] = [];
+      for (const b of before) {
+        if (!b.confirmed) continue;
+        const key = `${(b.name || "").trim()}|${(b.serial || "").trim()}|${(b.model_no || "").trim()}`;
+        const match = after.find((a) => `${(a.name || "").trim()}|${(a.serial || "").trim()}|${(a.model_no || "").trim()}` === key)
+          || after.find((a) => (a.serial || "").trim() && (a.serial || "").trim() === (b.serial || "").trim());
+        if (!match) { changed.push(`removed ${b.name || "(unnamed)"}${b.serial ? ` · ${b.serial}` : ""}`); continue; }
+        const diffs: string[] = [];
+        (["name","model_no","serial","qty","remarks"] as const).forEach((k) => {
+          if ((b[k] || "") !== (match[k] || "")) diffs.push(`${k}: "${b[k] || ""}" → "${match[k] || ""}"`);
+        });
+        if (diffs.length) changed.push(`${b.name || "(unnamed)"}: ${diffs.join(", ")}`);
+      }
+      if (changed.length && isAdmin) {
+        const { data: u } = await supabase.auth.getUser();
+        const actor = u.user?.email || u.user?.id || "admin";
+        await logActivity("parts_admin_edit", `Admin (${actor}) edited confirmed parts — ${changed.join("; ")}`);
+      }
+      partsBaselineRef.current = JSON.stringify(after);
+    } catch { /* ignore audit failures */ }
     toast.success("Saved");
     return true;
   };
@@ -320,10 +354,74 @@ function TicketDetail() {
   };
 
   const addPart = () => update({ parts_details: [...t.parts_details, { name: "", qty: "1" }] });
-  const updPart = (i: number, p: Partial<PartLine>) =>
+  const updPart = (i: number, p: Partial<PartLine>) => {
+    const row = t.parts_details[i];
+    if (row?.confirmed && !isAdmin) {
+      toast.error("This part is locked. Only an Administrator can edit it.");
+      return;
+    }
     update({ parts_details: t.parts_details.map((x, idx) => (idx === i ? { ...x, ...p } : x)) });
-  const delPart = (i: number) =>
+  };
+  const delPart = async (i: number) => {
+    const row = t.parts_details[i];
+    if (row?.confirmed && !isAdmin) {
+      toast.error("This part is locked. Only an Administrator can delete it.");
+      return;
+    }
+    if (row?.confirmed && isAdmin) {
+      await logActivity("parts_admin_edit", `Admin deleted confirmed part: ${row.name || "(unnamed)"}${row.serial ? ` · Serial ${row.serial}` : ""}`);
+    }
     update({ parts_details: t.parts_details.filter((_, idx) => idx !== i) });
+  };
+
+  const unlockPart = async (i: number) => {
+    if (!isAdmin) return;
+    const row = t.parts_details[i];
+    if (!row?.confirmed) return;
+    const next = t.parts_details.map((x, idx) =>
+      idx === i ? { ...x, confirmed: false, confirmed_by: null, confirmed_at: null } : x,
+    );
+    update({ parts_details: next });
+    const { data: u } = await supabase.auth.getUser();
+    const actor = u.user?.email || u.user?.id || "admin";
+    await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
+    await logActivity("parts_unlocked", `Admin (${actor}) unlocked part: ${row.name || "(unnamed)"}${row.serial ? ` · Serial ${row.serial}` : ""}`);
+    toast.success("Part unlocked for editing");
+    await load();
+  };
+
+  const confirmParts = async () => {
+    const rows = t.parts_details || [];
+    const toConfirm = rows.filter((p) => !p.confirmed);
+    if (toConfirm.length === 0) {
+      setConfirmPartsOpen(false);
+      return;
+    }
+    // Mandatory: name, model_no, serial
+    const invalid = toConfirm.some(
+      (p) => !(p.name || "").trim() || !(p.model_no || "").trim() || !(p.serial || "").trim(),
+    );
+    if (invalid) {
+      toast.error("Please complete all mandatory part details before confirming.");
+      return;
+    }
+    const { data: u } = await supabase.auth.getUser();
+    const actor = u.user?.email || u.user?.id || "user";
+    const stamp = new Date().toISOString();
+    const next = rows.map((p) =>
+      p.confirmed ? p : { ...p, confirmed: true, confirmed_by: actor, confirmed_at: stamp },
+    );
+    const { error } = await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
+    if (error) { toast.error(error.message); return; }
+    update({ parts_details: next });
+    await logActivity(
+      "parts_confirmed",
+      `${toConfirm.length} part row(s) confirmed & locked by ${actor}${isAdmin ? " (admin)" : ""}`,
+    );
+    setConfirmPartsOpen(false);
+    toast.success("Parts confirmed and locked");
+    await load();
+  };
 
   const addNote = async () => {
     if (!noteText.trim()) return;
@@ -405,6 +503,20 @@ function TicketDetail() {
 
   return (
     <div className="space-y-4">
+      <AlertDialog open={confirmPartsOpen} onOpenChange={setConfirmPartsOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Parts Used</AlertDialogTitle>
+            <AlertDialogDescription>
+              Please verify that the entered Part Model No, Part Serial No, and related details are correct. Once confirmed, these part entries will be locked and can only be edited by an Administrator. Do you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmParts}>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* Branded header with OEM at top */}
       <Card className="print:hidden">
         <CardContent className="py-3 flex items-center justify-between gap-3 flex-wrap">
@@ -468,13 +580,16 @@ function TicketDetail() {
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
           {(() => {
             const hasPart = (t.parts_details || []).some((p) => (p.name || "").trim());
-            const canIndent = !!t.oem_call && !!t.parts_used && hasPart;
+            const hasConfirmed = (t.parts_details || []).some((p) => p.confirmed && (p.name || "").trim());
+            const canIndent = !!t.oem_call && !!t.parts_used && hasPart && hasConfirmed;
             const title = !t.oem_call
               ? "Enable OEM Call to create an Indent"
               : !t.parts_used
               ? "Enable Parts Used to create an Indent"
               : !hasPart
               ? "Add at least one Part entry to create an Indent"
+              : !hasConfirmed
+              ? "Confirm & lock at least one Part entry before creating an Indent"
               : "Create Indent from this OEM ticket";
             return (
           <Button
@@ -611,19 +726,55 @@ function TicketDetail() {
               {t.parts_used ? (
                 <div className="space-y-2">
                   {t.parts_details.length === 0 && <p className="text-sm text-muted-foreground">No parts added yet.</p>}
-                  {t.parts_details.map((p, i) => (
-                    <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                      <div className="col-span-12 md:col-span-3"><Label>Part / Item</Label><Input value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
-                      <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
-                      <div className="col-span-8 md:col-span-2"><Label>Part Serial</Label><Input value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
-                      <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
-                      <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
-                      <div className="col-span-2 md:col-span-1">
-                        <Button size="icon" variant="ghost" onClick={() => delPart(i)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  {t.parts_details.map((p, i) => {
+                    const locked = !!p.confirmed && !isAdmin;
+                    return (
+                      <div key={i} className={`rounded-md border p-2 ${p.confirmed ? "border-green-300 bg-green-50/40" : "border-transparent"}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          {p.confirmed ? (
+                            <Badge className="bg-green-100 text-green-800 border border-green-300" variant="outline">
+                              <Lock className="h-3 w-3 mr-1" />Confirmed / Locked
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-zinc-100 text-zinc-700">Draft</Badge>
+                          )}
+                          <div className="text-xs text-muted-foreground">
+                            {p.confirmed && p.confirmed_by ? `By ${p.confirmed_by}${p.confirmed_at ? ` · ${new Date(p.confirmed_at).toLocaleString()}` : ""}` : ""}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-12 gap-2 items-end">
+                          <div className="col-span-12 md:col-span-3"><Label>Part / Item</Label><Input disabled={locked} value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
+                          <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input disabled={locked} value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
+                          <div className="col-span-8 md:col-span-2"><Label>Part Serial</Label><Input disabled={locked} value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
+                          <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input disabled={locked} value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
+                          <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input disabled={locked} value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
+                          <div className="col-span-2 md:col-span-1 flex gap-1">
+                            {p.confirmed && isAdmin && (
+                              <Button size="icon" variant="ghost" title="Unlock (Admin)" onClick={() => unlockPart(i)}>
+                                <Unlock className="h-4 w-4 text-amber-600" />
+                              </Button>
+                            )}
+                            <Button size="icon" variant="ghost" disabled={locked} onClick={() => delPart(i)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  <Button size="sm" variant="outline" onClick={addPart}><Plus className="h-4 w-4 mr-1" />Add part</Button>
+                    );
+                  })}
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <Button size="sm" variant="outline" onClick={addPart}><Plus className="h-4 w-4 mr-1" />Add part</Button>
+                    {t.parts_details.length > 0 && t.parts_details.some((p) => !p.confirmed) && (
+                      <Button size="sm" onClick={() => setConfirmPartsOpen(true)}>
+                        <ShieldCheck className="h-4 w-4 mr-1" />Save & Confirm Parts
+                      </Button>
+                    )}
+                    {t.parts_details.length > 0 && t.parts_details.every((p) => p.confirmed) && (
+                      <span className="text-xs text-green-700 inline-flex items-center gap-1">
+                        <Lock className="h-3 w-3" />All parts confirmed & locked
+                      </span>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No parts used for this call.</p>

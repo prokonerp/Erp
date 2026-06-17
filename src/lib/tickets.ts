@@ -71,6 +71,9 @@ export type PartLine = {
   model_no?: string;
   serial?: string;
   remarks?: string;
+  confirmed?: boolean;
+  confirmed_by?: string | null;
+  confirmed_at?: string | null;
 };
 
 export const STATUS_COLOR: Record<string, string> = {
