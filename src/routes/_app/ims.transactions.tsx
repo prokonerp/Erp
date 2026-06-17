@@ -40,12 +40,15 @@ function TransactionsList() {
     return rows.filter((r) => {
       if (type !== "all" && r.txn_type !== type) return false;
       if (!s) return true;
-      return [r.txn_no, r.part_name, r.part_model_no, r.part_serial_no, r.oem, r.reference, r.notes]
+      return [r.txn_no, r.part_name, r.part_model_no, r.part_serial_no, r.oem, r.reference, r.notes, r.indent_id, r.ticket_id, r.oem_case_id]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
     });
   }, [rows, q, type]);
 
-  const wh = (id: string | null) => warehouses.find((w) => w.id === id)?.name || "—";
+  const wh = (id: string | null) => {
+    const w = warehouses.find((x) => x.id === id);
+    return w ? (w.type ? `${w.name} (${w.type})` : w.name) : "—";
+  };
 
   return (
     <div className="space-y-4">
@@ -57,7 +60,7 @@ function TransactionsList() {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Input placeholder="Txn no / part / serial / reference…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input placeholder="Txn no / part / serial / indent / case / ticket…" value={q} onChange={(e) => setQ(e.target.value)} />
           <Select value={type} onValueChange={setType}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
