@@ -554,13 +554,16 @@ function TicketDetail() {
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
           {(() => {
             const hasPart = (t.parts_details || []).some((p) => (p.name || "").trim());
-            const canIndent = !!t.oem_call && !!t.parts_used && hasPart;
+            const hasConfirmed = (t.parts_details || []).some((p) => p.confirmed && (p.name || "").trim());
+            const canIndent = !!t.oem_call && !!t.parts_used && hasPart && hasConfirmed;
             const title = !t.oem_call
               ? "Enable OEM Call to create an Indent"
               : !t.parts_used
               ? "Enable Parts Used to create an Indent"
               : !hasPart
               ? "Add at least one Part entry to create an Indent"
+              : !hasConfirmed
+              ? "Confirm & lock at least one Part entry before creating an Indent"
               : "Create Indent from this OEM ticket";
             return (
           <Button
