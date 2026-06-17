@@ -20,6 +20,7 @@ import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppNewRouteImport } from './routes/_app/new'
 import { Route as AppMastersRouteImport } from './routes/_app/masters'
 import { Route as AppIndentRouteImport } from './routes/_app/indent'
+import { Route as AppImsRouteImport } from './routes/_app/ims'
 import { Route as AppImportRouteImport } from './routes/_app/import'
 import { Route as AppCrmRouteImport } from './routes/_app/crm'
 import { Route as AppAmcRouteImport } from './routes/_app/amc'
@@ -102,6 +103,11 @@ const AppMastersRoute = AppMastersRouteImport.update({
 const AppIndentRoute = AppIndentRouteImport.update({
   id: '/indent',
   path: '/indent',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppImsRoute = AppImsRouteImport.update({
+  id: '/ims',
+  path: '/ims',
   getParentRoute: () => AppRoute,
 } as any)
 const AppImportRoute = AppImportRouteImport.update({
@@ -257,6 +263,7 @@ export interface FileRoutesByFullPath {
   '/amc': typeof AppAmcRouteWithChildren
   '/crm': typeof AppCrmRouteWithChildren
   '/import': typeof AppImportRoute
+  '/ims': typeof AppImsRoute
   '/indent': typeof AppIndentRouteWithChildren
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
@@ -296,6 +303,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/raise-ticket': typeof RaiseTicketRoute
   '/import': typeof AppImportRoute
+  '/ims': typeof AppImsRoute
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
   '/products': typeof AppProductsRoute
@@ -337,6 +345,7 @@ export interface FileRoutesById {
   '/_app/amc': typeof AppAmcRouteWithChildren
   '/_app/crm': typeof AppCrmRouteWithChildren
   '/_app/import': typeof AppImportRoute
+  '/_app/ims': typeof AppImsRoute
   '/_app/indent': typeof AppIndentRouteWithChildren
   '/_app/masters': typeof AppMastersRouteWithChildren
   '/_app/new': typeof AppNewRoute
@@ -380,6 +389,7 @@ export interface FileRouteTypes {
     | '/amc'
     | '/crm'
     | '/import'
+    | '/ims'
     | '/indent'
     | '/masters'
     | '/new'
@@ -419,6 +429,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/raise-ticket'
     | '/import'
+    | '/ims'
     | '/masters'
     | '/new'
     | '/products'
@@ -459,6 +470,7 @@ export interface FileRouteTypes {
     | '/_app/amc'
     | '/_app/crm'
     | '/_app/import'
+    | '/_app/ims'
     | '/_app/indent'
     | '/_app/masters'
     | '/_app/new'
@@ -578,6 +590,13 @@ declare module '@tanstack/react-router' {
       path: '/indent'
       fullPath: '/indent'
       preLoaderRoute: typeof AppIndentRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ims': {
+      id: '/_app/ims'
+      path: '/ims'
+      fullPath: '/ims'
+      preLoaderRoute: typeof AppImsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/import': {
@@ -907,6 +926,7 @@ interface AppRouteChildren {
   AppAmcRoute: typeof AppAmcRouteWithChildren
   AppCrmRoute: typeof AppCrmRouteWithChildren
   AppImportRoute: typeof AppImportRoute
+  AppImsRoute: typeof AppImsRoute
   AppIndentRoute: typeof AppIndentRouteWithChildren
   AppMastersRoute: typeof AppMastersRouteWithChildren
   AppNewRoute: typeof AppNewRoute
@@ -921,6 +941,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAmcRoute: AppAmcRouteWithChildren,
   AppCrmRoute: AppCrmRouteWithChildren,
   AppImportRoute: AppImportRoute,
+  AppImsRoute: AppImsRoute,
   AppIndentRoute: AppIndentRouteWithChildren,
   AppMastersRoute: AppMastersRouteWithChildren,
   AppNewRoute: AppNewRoute,
