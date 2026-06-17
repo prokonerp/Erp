@@ -166,6 +166,7 @@ function TicketDetail() {
         ? ((tk as { parts_details: unknown[] }).parts_details as PartLine[])
         : [];
       setT({ ...row, parts_details: parts });
+      partsBaselineRef.current = JSON.stringify(parts);
       if (row.quotation_id) {
         const { data: q } = await supabase.from("quotations").select("quote_no").eq("id", row.quotation_id).single();
         setQuoteNo((q as { quote_no?: string } | null)?.quote_no || "");
