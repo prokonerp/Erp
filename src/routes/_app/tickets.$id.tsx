@@ -227,6 +227,21 @@ function TicketDetail() {
         return false;
       }
     }
+    if (payload.parts_used) {
+      const valid = (payload.parts_details || []).some((p) => (p.name || "").trim());
+      const closingStatuses = ["Closed"];
+      if (!valid) {
+        setBusy(false);
+        toast.error("At least one Part entry is required when Parts Used is enabled.");
+        return false;
+      }
+      // Also block closing without parts entries
+      if (closingStatuses.includes(payload.status) && !valid) {
+        setBusy(false);
+        toast.error("At least one Part entry is required when Parts Used is enabled.");
+        return false;
+      }
+    }
     if (payload.preferred_visit_datetime) {
       const pv = new Date(payload.preferred_visit_datetime).getTime();
       if (pv < Date.now() - 60000) {
