@@ -1,98 +1,123 @@
-## Overview
+# IMS Module — Implementation Plan
 
-This is a large, multi-module change touching Imports, Masters, Tickets, and a brand-new INDENT module with database tables. I'll break it into 4 phases.
+A new top-level **IMS (Inventory Management System)** module that manages Good/Defective stock, warehouse-wise inventory, transfers, reservations, OEM returns, and full serial-number traceability — wired into existing Tickets, Indents, Products, OEM, and Warehouse masters.
 
----
+## Scope
 
-## Phase 1 — Import Template UI Standardization
+Reuse existing `warehouses`, `products`, `oem_brand_master`, `tickets`, `indents`. No new warehouse module.
 
-**Goal:** Import screens use the same branded header as "New Form" screens (Prokon + OEM logos, field grouping).
+## Database (single migration)
 
-- Audit current import UI (`src/routes/_app/import.tsx`) and the "New" form headers (e.g. `amc.new.tsx`, `tickets.new.tsx`, `crm.leads.tsx` new dialogs).
-- Extract a shared `<FormPageHeader>` component (Prokon logo left, optional OEM logo right, title, subtitle).
-- Apply it to the existing Import screen and all new import screens added in Phase 2.
+New tables (all with RLS + GRANTs, audit timestamps):
 
-## Phase 2 — Enable Import Across All Masters
+1. **`ims_stock_items`** — one row per uniquely traceable stock unit
+   - oem, category, part_name, part_model_no, **part_serial_no (UNIQUE)**
+   - warehouse_id (FK), warehouse_type (denormalized)
+   - stock_type: `good` | `defective`
+   - stock_status: `available` | `reserved` | `issued` | `in_transit` | `returned_to_oem` | `scrapped`
+   - ref fields: ticket_id, indent_id, oem_case_id, customer_id, customer_name, transaction_ref
+   - created_by, modified_by, timestamps
 
-**Goal:** Every Master sub-module supports Excel/CSV bulk import with validation and per-row error reporting.
+2. **`ims_transactions`** — every stock movement
+   - txn_no (auto: `PHS/IMS/...`), txn_date
+   - txn_type enum: `good_in`, `good_out`, `defective_in`, `defective_out`, `transfer_out`, `transfer_in`, `oem_return`, `oem_replacement_receipt`, `stock_adjustment`, `scrap_adjustment`
+   - stock_item_id, from_warehouse_id, to_warehouse_id, from_party, to_party
+   - qty (default 1, serialized items = 1), reference (ticket/indent/transfer id), notes, created_by
 
-Masters to cover:
-- Customer Master
-- Product Master
-- OEM/Brand Master
-- City/Area Master (currently part of branches/india data — confirm scope)
-- Engineer Master (employees)
-- Product Categories, Call Type Master, Vendors, Warehouses, Branches, Companies (existing masters)
+3. **`ims_transfers`** — warehouse-to-warehouse transfer header
+   - transfer_no (auto), request_date, source_warehouse_id, destination_warehouse_id
+   - oem, part_name, part_model_no, part_serial_no, stock_type, qty, reason, remarks
+   - status: `draft` | `submitted` | `approved` | `rejected` | `in_transit` | `received` | `completed`
+   - requested_by, approved_by, approved_at, rejected_reason
+   - received_by, received_at, receipt_remarks
 
-Pattern per master:
-- "Import" button on the master page → opens unified Import dialog/page.
-- Reuses `src/lib/csv.ts` parser + a per-master Zod schema.
-- Shows preview table, row-level validation errors, "Import valid rows" action.
-- Standard header from Phase 1.
+4. **`ims_reservations`**
+   - stock_item_id, ticket_id, indent_id, customer_id, reserved_by, reserved_at, released_at, status: `reserved` | `issued` | `released`
 
-A single generic `<MasterImport entity="customers" schema={...} columns={...} />` component will back all of them.
+5. **`ims_audit_log`**
+   - entity (`stock_item`|`transaction`|`transfer`|`reservation`), entity_id, action, old_value (jsonb), new_value (jsonb), user_id, role, created_at
 
-## Phase 3 — Ticket Module: Model & OEM Display
+6. **`ims_transaction_sequence`**, **`ims_transfer_sequence`** + trigger functions (mirror existing `set_indent_no` pattern)
 
-3.1 **Model dropdown** in Tickets list filters and New Ticket form: show **Model Name only** (strip the OEM/brand prefix/suffix currently shown).
+7. **Triggers**
+   - Auto-numbering for txns and transfers
+   - Audit log triggers on insert/update/delete for all four tables
+   - Prevent duplicate serial (unique constraint + friendly RAISE)
+   - On transfer status `approved` → set linked stock_item status `in_transit`
+   - On transfer `completed` → move stock_item warehouse + status back to `available`
 
-3.2 **OEM placement**: Move OEM/Brand chip to the **top header band** of:
-- Ticket list page (as a prominent filter/section header)
-- Ticket detail view (`tickets.$id.tsx`) — show OEM logo + name at top
+8. **RLS**: authenticated users read; create/edit per `has_permission('ims', ...)`; admin override; reservation/transfer approval gated by `has_role(admin)`.
 
-Files: `src/routes/_app/tickets.index.tsx`, `tickets.new.tsx`, `tickets.$id.tsx`, `src/components/ProductPicker.tsx`.
+9. **App-modules row**: insert `ims` into `app_modules` so role permissions can be assigned.
 
-## Phase 4 — NEW MODULE: INDENT
+## Library helpers (`src/lib/ims.ts`)
 
-### 4a. Database (migration)
+- Types for stock item, transaction, transfer, reservation
+- Queries: `listStock`, `getStockBySerial`, `searchStock({serial, model, ticket, indent, oem_case})`, `getStockHistory(stockId)`
+- Mutations: `createStockItem`, `createTransaction`, `createTransfer`, `submitTransfer`, `approveTransfer`, `rejectTransfer`, `markInTransit`, `confirmReceipt`, `reserveStock`, `releaseReservation`, `issueReservation`, `scrapStock`, `adjustStock`
+- Workflow helpers: `runAdvanceExchange`, `runExchange`, `runServiceShip` — auto-create the chain of transactions based on indent type
 
-New table `public.indents`:
-- `id`, `indent_no` (auto, format `PHS/IND/<seq>` via trigger), `indent_date`
-- `ticket_id` (FK → tickets, NOT NULL, cascade) — INDENT cannot exist without ticket
-- `indent_city`, `case_id`, `oem_case_id`, `company` (OEM brand)
-- `def_model_no`, `def_serial_no`
-- `problem_reported`
-- `indent_type` enum: `rma_advance_exchange`, `rma_exchange`, `rma_service_ship`
-- `oracles` (text)
-- `material_exchange_model`, `material_exchange_serial_no`
-- `material_rec_model_no`, `material_rec_serial_no`, `material_rec_date`
-- `engineer_name`
-- `created_by`, `created_at`, `updated_at`
+## Indent integration
 
-Plus: `indent_sequence` table + `next_indent_seq()` + `set_indent_no()` trigger.
-Plus: GRANTs, RLS policies, `updated_at` trigger.
+When an indent is created/updated, derive workflow from existing `indent_type` and auto-create the appropriate IMS transactions:
+- **Advance Exchange**: good_in (OEM→WH) → good_out (WH→Cust) → defective_in (Cust→WH) → defective_out (WH→OEM)
+- **Exchange**: good_out → defective_in → defective_out → good_in
+- **Service Ship**: good_in only
 
-### 4b. Backend rule
+Each step is triggered from the indent detail page (action buttons), not automatically — to match physical movement timing. Defective vs Replacement part attributes are kept separate (already supported in indents).
 
-- Trigger or check: insert blocked unless source ticket has `tag = 'OEM'` (or whatever the OEM tag column is — confirm in tickets schema).
+## Routes (`src/routes/_app/ims.*`)
 
-### 4c. Routes / UI
+```
+ims.tsx              -> layout with sub-nav
+ims.index.tsx        -> Dashboard
+ims.stock.tsx        -> Stock Ledger (filters, search)
+ims.stock.$id.tsx    -> Stock item detail + history
+ims.transactions.tsx -> Inventory Transactions list + new
+ims.transfers.tsx    -> Stock Transfer list
+ims.transfers.new.tsx
+ims.transfers.$id.tsx -> Detail + approve/receipt actions
+ims.reservations.tsx
+ims.oem-returns.tsx
+ims.reports.tsx      -> Stock/Movement/Traceability reports + CSV export
+ims.audit.tsx        -> Audit trail viewer
+```
 
-- `src/routes/_app/indent.tsx` — layout with sub-routes
-- `src/routes/_app/indent.index.tsx` — list of all indents
-- `src/routes/_app/indent.$id.tsx` — view/edit
-- `src/routes/_app/indent.new.tsx` — create (usually pre-populated from ticket)
+## Dashboard cards
 
-### 4d. Ticket quick action
+- Good stock totals (overall, by warehouse, by OEM)
+- Defective stock (overall, pending OEM return, by warehouse)
+- Transfers (pending approval, approved, in-transit, completed, rejected)
+- Reservations (reserved, available, issued)
 
-In `tickets.$id.tsx`, add **"Create INDENT"** button:
-- Enabled only when ticket tag = OEM
-- Pre-fills indent form from ticket data (city, case_id, oem_case_id, oem brand, model, serial, problem, engineer)
-- Navigates to `/indent/new?ticket_id=...`
+## Reports
 
-### 4e. Sync
+CSV export via existing `src/lib/exports.ts` for: Good Stock, Defective Stock, Warehouse-wise, OEM-wise, Inward, Outward, OEM Returns, Transfers, Reservations, and a Traceability search.
 
-Read-only mirror of ticket fields on indent view (city, case ids, brand, model, serial, problem, engineer) re-fetched from ticket on open.
+## Permissions / Roles
 
-### 4f. Nav
+- **Standard User**: create stock entry, create transfer request, reserve, view
+- **Warehouse User**: process inward/outward, confirm transfer receipt
+- **Admin**: approve transfers, modify inventory, stock adjustments, unlock, view audit
 
-Add INDENT to main app sidebar/nav in `src/routes/_app.tsx`.
+Enforced via `has_permission('ims', <action>)` + `has_role('admin')` for approvals.
 
----
+## Navigation
 
-## Clarifying questions before I start
+Add IMS entry to the app sidebar (`src/routes/_app.tsx`) gated by `has_permission('ims','access')`.
 
-1. **City/Area & Engineer Masters** — I don't see dedicated tables for these. Should "City Master" map to `branches` (city column) / a new table, and "Engineer Master" to `employees` filtered by a role?
-2. **Ticket "OEM tag"** — what field identifies an OEM ticket? Is it `tickets.tag = 'OEM'`, the linked product's brand, or a separate flag? I'll confirm via the schema, but please confirm intent.
-3. **INDENT permissions** — should INDENT be a new permission module in the role system (with read/create/edit/delete like other modules)?
-4. **Scope confirmation** — this is roughly 1–2 days of work in one shot. OK to ship all 4 phases in sequence in this same chat, or would you prefer I ship Phase 3 + Phase 4 first (the highest-impact items) and follow with Phase 1 + 2?
+## Out of scope (for this turn)
+
+- Barcode scanning hardware integration
+- Email/WhatsApp notifications on approval (can be added later)
+- Bulk import of opening stock (separate ticket)
+
+## Deliverable order
+
+1. Migration (tables, sequences, triggers, RLS, GRANTs, `app_modules` row)
+2. `src/lib/ims.ts` helpers + types
+3. Routes + UI (dashboard → stock → transactions → transfers → reservations → reports → audit)
+4. Sidebar nav entry
+5. Light hooks from indent detail page to trigger workflow transactions
+
+Approve to proceed, or tell me which sections to trim/expand.

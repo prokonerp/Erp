@@ -20,11 +20,13 @@ import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppNewRouteImport } from './routes/_app/new'
 import { Route as AppMastersRouteImport } from './routes/_app/masters'
 import { Route as AppIndentRouteImport } from './routes/_app/indent'
+import { Route as AppImsRouteImport } from './routes/_app/ims'
 import { Route as AppImportRouteImport } from './routes/_app/import'
 import { Route as AppCrmRouteImport } from './routes/_app/crm'
 import { Route as AppAmcRouteImport } from './routes/_app/amc'
 import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index'
 import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
+import { Route as AppImsIndexRouteImport } from './routes/_app/ims.index'
 import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
 import { Route as AppTicketsTemplatesRouteImport } from './routes/_app/tickets.templates'
@@ -36,6 +38,13 @@ import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.pr
 import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
 import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
 import { Route as AppIndentIdRouteImport } from './routes/_app/indent.$id'
+import { Route as AppImsTransfersRouteImport } from './routes/_app/ims.transfers'
+import { Route as AppImsTransactionsRouteImport } from './routes/_app/ims.transactions'
+import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
+import { Route as AppImsReservationsRouteImport } from './routes/_app/ims.reservations'
+import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
+import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
+import { Route as AppImsAuditRouteImport } from './routes/_app/ims.audit'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
@@ -47,6 +56,9 @@ import { Route as AppAmcPmRouteImport } from './routes/_app/amc.pm'
 import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
 import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
 import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
+import { Route as AppImsTransfersIndexRouteImport } from './routes/_app/ims.transfers.index'
+import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
+import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
 import { Route as AppCrmQuotationsIdRouteImport } from './routes/_app/crm.quotations.$id'
 import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
 
@@ -104,6 +116,11 @@ const AppIndentRoute = AppIndentRouteImport.update({
   path: '/indent',
   getParentRoute: () => AppRoute,
 } as any)
+const AppImsRoute = AppImsRouteImport.update({
+  id: '/ims',
+  path: '/ims',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppImportRoute = AppImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -128,6 +145,11 @@ const AppIndentIndexRoute = AppIndentIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppIndentRoute,
+} as any)
+const AppImsIndexRoute = AppImsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppImsRoute,
 } as any)
 const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
   id: '/',
@@ -184,6 +206,41 @@ const AppIndentIdRoute = AppIndentIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppIndentRoute,
 } as any)
+const AppImsTransfersRoute = AppImsTransfersRouteImport.update({
+  id: '/transfers',
+  path: '/transfers',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsTransactionsRoute = AppImsTransactionsRouteImport.update({
+  id: '/transactions',
+  path: '/transactions',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsStockRoute = AppImsStockRouteImport.update({
+  id: '/stock',
+  path: '/stock',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsReservationsRoute = AppImsReservationsRouteImport.update({
+  id: '/reservations',
+  path: '/reservations',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsReportsRoute = AppImsReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsOemReturnsRoute = AppImsOemReturnsRouteImport.update({
+  id: '/oem-returns',
+  path: '/oem-returns',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsAuditRoute = AppImsAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AppImsRoute,
+} as any)
 const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   id: '/gatepass/$id',
   path: '/gatepass/$id',
@@ -239,6 +296,21 @@ const AppAmcIdRoute = AppAmcIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppAmcRoute,
 } as any)
+const AppImsTransfersIndexRoute = AppImsTransfersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppImsTransfersRoute,
+} as any)
+const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppImsTransfersRoute,
+} as any)
+const AppImsTransfersIdRoute = AppImsTransfersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppImsTransfersRoute,
+} as any)
 const AppCrmQuotationsIdRoute = AppCrmQuotationsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -257,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/amc': typeof AppAmcRouteWithChildren
   '/crm': typeof AppCrmRouteWithChildren
   '/import': typeof AppImportRoute
+  '/ims': typeof AppImsRouteWithChildren
   '/indent': typeof AppIndentRouteWithChildren
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
@@ -275,6 +348,13 @@ export interface FileRoutesByFullPath {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/ims/audit': typeof AppImsAuditRoute
+  '/ims/oem-returns': typeof AppImsOemReturnsRoute
+  '/ims/reports': typeof AppImsReportsRoute
+  '/ims/reservations': typeof AppImsReservationsRoute
+  '/ims/stock': typeof AppImsStockRoute
+  '/ims/transactions': typeof AppImsTransactionsRoute
+  '/ims/transfers': typeof AppImsTransfersRouteWithChildren
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
@@ -286,10 +366,14 @@ export interface FileRoutesByFullPath {
   '/tickets/templates': typeof AppTicketsTemplatesRoute
   '/amc/': typeof AppAmcIndexRoute
   '/crm/': typeof AppCrmIndexRoute
+  '/ims/': typeof AppImsIndexRoute
   '/indent/': typeof AppIndentIndexRoute
   '/tickets/': typeof AppTicketsIndexRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
+  '/ims/transfers/$id': typeof AppImsTransfersIdRoute
+  '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/ims/transfers/': typeof AppImsTransfersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -312,6 +396,12 @@ export interface FileRoutesByTo {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/ims/audit': typeof AppImsAuditRoute
+  '/ims/oem-returns': typeof AppImsOemReturnsRoute
+  '/ims/reports': typeof AppImsReportsRoute
+  '/ims/reservations': typeof AppImsReservationsRoute
+  '/ims/stock': typeof AppImsStockRoute
+  '/ims/transactions': typeof AppImsTransactionsRoute
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
@@ -323,10 +413,14 @@ export interface FileRoutesByTo {
   '/tickets/templates': typeof AppTicketsTemplatesRoute
   '/amc': typeof AppAmcIndexRoute
   '/crm': typeof AppCrmIndexRoute
+  '/ims': typeof AppImsIndexRoute
   '/indent': typeof AppIndentIndexRoute
   '/tickets': typeof AppTicketsIndexRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
+  '/ims/transfers/$id': typeof AppImsTransfersIdRoute
+  '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/ims/transfers': typeof AppImsTransfersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -337,6 +431,7 @@ export interface FileRoutesById {
   '/_app/amc': typeof AppAmcRouteWithChildren
   '/_app/crm': typeof AppCrmRouteWithChildren
   '/_app/import': typeof AppImportRoute
+  '/_app/ims': typeof AppImsRouteWithChildren
   '/_app/indent': typeof AppIndentRouteWithChildren
   '/_app/masters': typeof AppMastersRouteWithChildren
   '/_app/new': typeof AppNewRoute
@@ -355,6 +450,13 @@ export interface FileRoutesById {
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
+  '/_app/ims/audit': typeof AppImsAuditRoute
+  '/_app/ims/oem-returns': typeof AppImsOemReturnsRoute
+  '/_app/ims/reports': typeof AppImsReportsRoute
+  '/_app/ims/reservations': typeof AppImsReservationsRoute
+  '/_app/ims/stock': typeof AppImsStockRoute
+  '/_app/ims/transactions': typeof AppImsTransactionsRoute
+  '/_app/ims/transfers': typeof AppImsTransfersRouteWithChildren
   '/_app/indent/$id': typeof AppIndentIdRoute
   '/_app/indent/new': typeof AppIndentNewRoute
   '/_app/masters/customers': typeof AppMastersCustomersRoute
@@ -366,10 +468,14 @@ export interface FileRoutesById {
   '/_app/tickets/templates': typeof AppTicketsTemplatesRoute
   '/_app/amc/': typeof AppAmcIndexRoute
   '/_app/crm/': typeof AppCrmIndexRoute
+  '/_app/ims/': typeof AppImsIndexRoute
   '/_app/indent/': typeof AppIndentIndexRoute
   '/_app/tickets/': typeof AppTicketsIndexRoute
   '/_app/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/_app/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
+  '/_app/ims/transfers/$id': typeof AppImsTransfersIdRoute
+  '/_app/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/_app/ims/transfers/': typeof AppImsTransfersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -380,6 +486,7 @@ export interface FileRouteTypes {
     | '/amc'
     | '/crm'
     | '/import'
+    | '/ims'
     | '/indent'
     | '/masters'
     | '/new'
@@ -398,6 +505,13 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/ims/audit'
+    | '/ims/oem-returns'
+    | '/ims/reports'
+    | '/ims/reservations'
+    | '/ims/stock'
+    | '/ims/transactions'
+    | '/ims/transfers'
     | '/indent/$id'
     | '/indent/new'
     | '/masters/customers'
@@ -409,10 +523,14 @@ export interface FileRouteTypes {
     | '/tickets/templates'
     | '/amc/'
     | '/crm/'
+    | '/ims/'
     | '/indent/'
     | '/tickets/'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
+    | '/ims/transfers/$id'
+    | '/ims/transfers/new'
+    | '/ims/transfers/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -435,6 +553,12 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/ims/audit'
+    | '/ims/oem-returns'
+    | '/ims/reports'
+    | '/ims/reservations'
+    | '/ims/stock'
+    | '/ims/transactions'
     | '/indent/$id'
     | '/indent/new'
     | '/masters/customers'
@@ -446,10 +570,14 @@ export interface FileRouteTypes {
     | '/tickets/templates'
     | '/amc'
     | '/crm'
+    | '/ims'
     | '/indent'
     | '/tickets'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
+    | '/ims/transfers/$id'
+    | '/ims/transfers/new'
+    | '/ims/transfers'
   id:
     | '__root__'
     | '/'
@@ -459,6 +587,7 @@ export interface FileRouteTypes {
     | '/_app/amc'
     | '/_app/crm'
     | '/_app/import'
+    | '/_app/ims'
     | '/_app/indent'
     | '/_app/masters'
     | '/_app/new'
@@ -477,6 +606,13 @@ export interface FileRouteTypes {
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
+    | '/_app/ims/audit'
+    | '/_app/ims/oem-returns'
+    | '/_app/ims/reports'
+    | '/_app/ims/reservations'
+    | '/_app/ims/stock'
+    | '/_app/ims/transactions'
+    | '/_app/ims/transfers'
     | '/_app/indent/$id'
     | '/_app/indent/new'
     | '/_app/masters/customers'
@@ -488,10 +624,14 @@ export interface FileRouteTypes {
     | '/_app/tickets/templates'
     | '/_app/amc/'
     | '/_app/crm/'
+    | '/_app/ims/'
     | '/_app/indent/'
     | '/_app/tickets/'
     | '/_app/crm/leads/$id'
     | '/_app/crm/quotations/$id'
+    | '/_app/ims/transfers/$id'
+    | '/_app/ims/transfers/new'
+    | '/_app/ims/transfers/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -580,6 +720,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndentRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/ims': {
+      id: '/_app/ims'
+      path: '/ims'
+      fullPath: '/ims'
+      preLoaderRoute: typeof AppImsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/import': {
       id: '/_app/import'
       path: '/import'
@@ -614,6 +761,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/indent/'
       preLoaderRoute: typeof AppIndentIndexRouteImport
       parentRoute: typeof AppIndentRoute
+    }
+    '/_app/ims/': {
+      id: '/_app/ims/'
+      path: '/'
+      fullPath: '/ims/'
+      preLoaderRoute: typeof AppImsIndexRouteImport
+      parentRoute: typeof AppImsRoute
     }
     '/_app/crm/': {
       id: '/_app/crm/'
@@ -692,6 +846,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndentIdRouteImport
       parentRoute: typeof AppIndentRoute
     }
+    '/_app/ims/transfers': {
+      id: '/_app/ims/transfers'
+      path: '/transfers'
+      fullPath: '/ims/transfers'
+      preLoaderRoute: typeof AppImsTransfersRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/transactions': {
+      id: '/_app/ims/transactions'
+      path: '/transactions'
+      fullPath: '/ims/transactions'
+      preLoaderRoute: typeof AppImsTransactionsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/stock': {
+      id: '/_app/ims/stock'
+      path: '/stock'
+      fullPath: '/ims/stock'
+      preLoaderRoute: typeof AppImsStockRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/reservations': {
+      id: '/_app/ims/reservations'
+      path: '/reservations'
+      fullPath: '/ims/reservations'
+      preLoaderRoute: typeof AppImsReservationsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/reports': {
+      id: '/_app/ims/reports'
+      path: '/reports'
+      fullPath: '/ims/reports'
+      preLoaderRoute: typeof AppImsReportsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/oem-returns': {
+      id: '/_app/ims/oem-returns'
+      path: '/oem-returns'
+      fullPath: '/ims/oem-returns'
+      preLoaderRoute: typeof AppImsOemReturnsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/audit': {
+      id: '/_app/ims/audit'
+      path: '/audit'
+      fullPath: '/ims/audit'
+      preLoaderRoute: typeof AppImsAuditRouteImport
+      parentRoute: typeof AppImsRoute
+    }
     '/_app/gatepass/$id': {
       id: '/_app/gatepass/$id'
       path: '/gatepass/$id'
@@ -768,6 +971,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/amc/$id'
       preLoaderRoute: typeof AppAmcIdRouteImport
       parentRoute: typeof AppAmcRoute
+    }
+    '/_app/ims/transfers/': {
+      id: '/_app/ims/transfers/'
+      path: '/'
+      fullPath: '/ims/transfers/'
+      preLoaderRoute: typeof AppImsTransfersIndexRouteImport
+      parentRoute: typeof AppImsTransfersRoute
+    }
+    '/_app/ims/transfers/new': {
+      id: '/_app/ims/transfers/new'
+      path: '/new'
+      fullPath: '/ims/transfers/new'
+      preLoaderRoute: typeof AppImsTransfersNewRouteImport
+      parentRoute: typeof AppImsTransfersRoute
+    }
+    '/_app/ims/transfers/$id': {
+      id: '/_app/ims/transfers/$id'
+      path: '/$id'
+      fullPath: '/ims/transfers/$id'
+      preLoaderRoute: typeof AppImsTransfersIdRouteImport
+      parentRoute: typeof AppImsTransfersRoute
     }
     '/_app/crm/quotations/$id': {
       id: '/_app/crm/quotations/$id'
@@ -851,6 +1075,47 @@ const AppCrmRouteChildren: AppCrmRouteChildren = {
 const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
+interface AppImsTransfersRouteChildren {
+  AppImsTransfersIdRoute: typeof AppImsTransfersIdRoute
+  AppImsTransfersNewRoute: typeof AppImsTransfersNewRoute
+  AppImsTransfersIndexRoute: typeof AppImsTransfersIndexRoute
+}
+
+const AppImsTransfersRouteChildren: AppImsTransfersRouteChildren = {
+  AppImsTransfersIdRoute: AppImsTransfersIdRoute,
+  AppImsTransfersNewRoute: AppImsTransfersNewRoute,
+  AppImsTransfersIndexRoute: AppImsTransfersIndexRoute,
+}
+
+const AppImsTransfersRouteWithChildren = AppImsTransfersRoute._addFileChildren(
+  AppImsTransfersRouteChildren,
+)
+
+interface AppImsRouteChildren {
+  AppImsAuditRoute: typeof AppImsAuditRoute
+  AppImsOemReturnsRoute: typeof AppImsOemReturnsRoute
+  AppImsReportsRoute: typeof AppImsReportsRoute
+  AppImsReservationsRoute: typeof AppImsReservationsRoute
+  AppImsStockRoute: typeof AppImsStockRoute
+  AppImsTransactionsRoute: typeof AppImsTransactionsRoute
+  AppImsTransfersRoute: typeof AppImsTransfersRouteWithChildren
+  AppImsIndexRoute: typeof AppImsIndexRoute
+}
+
+const AppImsRouteChildren: AppImsRouteChildren = {
+  AppImsAuditRoute: AppImsAuditRoute,
+  AppImsOemReturnsRoute: AppImsOemReturnsRoute,
+  AppImsReportsRoute: AppImsReportsRoute,
+  AppImsReservationsRoute: AppImsReservationsRoute,
+  AppImsStockRoute: AppImsStockRoute,
+  AppImsTransactionsRoute: AppImsTransactionsRoute,
+  AppImsTransfersRoute: AppImsTransfersRouteWithChildren,
+  AppImsIndexRoute: AppImsIndexRoute,
+}
+
+const AppImsRouteWithChildren =
+  AppImsRoute._addFileChildren(AppImsRouteChildren)
+
 interface AppIndentRouteChildren {
   AppIndentIdRoute: typeof AppIndentIdRoute
   AppIndentNewRoute: typeof AppIndentNewRoute
@@ -907,6 +1172,7 @@ interface AppRouteChildren {
   AppAmcRoute: typeof AppAmcRouteWithChildren
   AppCrmRoute: typeof AppCrmRouteWithChildren
   AppImportRoute: typeof AppImportRoute
+  AppImsRoute: typeof AppImsRouteWithChildren
   AppIndentRoute: typeof AppIndentRouteWithChildren
   AppMastersRoute: typeof AppMastersRouteWithChildren
   AppNewRoute: typeof AppNewRoute
@@ -921,6 +1187,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAmcRoute: AppAmcRouteWithChildren,
   AppCrmRoute: AppCrmRouteWithChildren,
   AppImportRoute: AppImportRoute,
+  AppImsRoute: AppImsRouteWithChildren,
   AppIndentRoute: AppIndentRouteWithChildren,
   AppMastersRoute: AppMastersRouteWithChildren,
   AppNewRoute: AppNewRoute,
@@ -942,13 +1209,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
