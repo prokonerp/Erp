@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, fmtMonthYear, generatePMDates, statusBadgeClass, statusLabel } from "@/lib/amc";
 import { AgreementDocUpload } from "@/components/AgreementDocUpload";
 import { getOemLogo } from "@/lib/oemLogos";
+import { waOpen } from "@/lib/tickets";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/_app/amc/$id")({
@@ -79,11 +80,11 @@ function AmcDetail() {
     `${nextPm ? fmtDate(nextPm) : "the upcoming PM date"}.\n\nEquipment Covered:\n${unitList}\n\n` +
     `Our engineer will reach out to confirm the slot. Please let us know if you'd like to reschedule.${signOff}`;
 
-  const sendWhatsapp = (body: string) => {
-    const raw = (a.contact_no || "").replace(/\D/g, "");
-    if (!raw) return toast.error("No contact number on file");
-    const phone = raw.length === 10 ? `91${raw}` : raw;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(body)}`, "_blank");
+  const sendWhatsapp = async (body: string) => {
+    if (!a.contact_no) return toast.error("No contact number on file");
+    const ok = await waOpen(a.contact_no, body);
+    if (!ok) return toast.error("Valid mobile number is required before sending WhatsApp message.");
+    toast.success("Opening WhatsApp…");
   };
   const sendEmail = (subject: string, body: string) => {
     if (!a.email) return toast.error("No email on file");
