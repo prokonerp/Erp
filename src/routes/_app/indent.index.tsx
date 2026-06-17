@@ -67,8 +67,8 @@ function IndentList() {
                 <th className="p-2">Case ID</th>
                 <th className="p-2">OEM Case ID</th>
                 <th className="p-2">Company</th>
-                <th className="p-2">Model</th>
-                <th className="p-2">Serial</th>
+                <th className="p-2">DEF Part Model No</th>
+                <th className="p-2">DEF Part Serial No</th>
                 <th className="p-2">Type</th>
                 <th className="p-2">Engineer</th>
                 <th className="p-2 text-right">Open</th>
