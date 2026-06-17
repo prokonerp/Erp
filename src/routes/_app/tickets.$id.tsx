@@ -510,17 +510,13 @@ function TicketDetail() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
           {(() => {
-            const hasPart = (t.parts_details || []).some((p) => (p.name || "").trim());
-            const hasConfirmed = (t.parts_details || []).some((p) => p.confirmed && (p.name || "").trim());
-            const canIndent = !!t.oem_call && !!t.parts_used && hasPart && hasConfirmed;
+            const defOn = !!t.defective_parts_received;
+            const goodOn = !!t.good_parts_used;
+            const canIndent = !!t.oem_call && (defOn || goodOn);
             const title = !t.oem_call
               ? "Enable OEM Call to create an Indent"
-              : !t.parts_used
-              ? "Enable Parts Used to create an Indent"
-              : !hasPart
-              ? "Add at least one Part entry to create an Indent"
-              : !hasConfirmed
-              ? "Confirm & lock at least one Part entry before creating an Indent"
+              : !(defOn || goodOn)
+              ? "Enable Defective Parts Received or Good Parts Used to create an Indent"
               : "Create Indent from this OEM ticket";
             return (
           <Button
