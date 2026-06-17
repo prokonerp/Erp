@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -155,7 +155,7 @@ function NewTicket() {
   };
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
-  type PartSetter = React.Dispatch<React.SetStateAction<PartLine[]>>;
+  type PartSetter = Dispatch<SetStateAction<PartLine[]>>;
   const mkUpd = (setter: PartSetter) => (i: number, p: Partial<PartLine>) =>
     setter((rows) => rows.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   const mkAdd = (setter: PartSetter) => () => setter((rows) => [...rows, { name: "", qty: "1" }]);
