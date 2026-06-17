@@ -32,7 +32,8 @@ const WARRANTY_TYPES = ["Manufacturer", "Seller", "AMC Covered"] as const;
 const WARRANTY_UNITS = ["Months", "Years"] as const;
 const WARRANTY_START = ["Invoice Date", "Installation Date", "Manual"] as const;
 const SERIAL_MODES = ["Manual", "Auto Generate"] as const;
-const DEFAULT_CATEGORIES = ["Accessories", "CCTV", "General", "Inverter/Battery", "Offline UPS", "Online UPS", "Solar Panel", "UPS Battery"];
+const DEFAULT_CATEGORIES = ["Accessories", "CCTV", "General", "Inverter/Battery", "Offline UPS", "Online UPS", "Solar Panel", "UPS Battery", "Spare Parts"];
+const SPARE_PARTS_CATEGORY = "Spare Parts";
 const TAX_OPTIONS = [
   { value: "EXEMPT", label: "Exempted" },
   { value: "0", label: "0%" },
@@ -106,6 +107,12 @@ export function ProductMasterPage() {
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
+  const [parentIds, setParentIds] = useState<string[]>([]);
+  const [linkedSpares, setLinkedSpares] = useState<ProductFull[]>([]);
+  const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
+  const [parentPickerOpen, setParentPickerOpen] = useState(false);
+  const [parentSearch, setParentSearch] = useState("");
+  void linkedParents; // reserved for future UI
 
   const load = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
@@ -122,6 +129,24 @@ export function ProductMasterPage() {
     return merged.sort((a, b) => a.localeCompare(b));
   }, [dbCategories]);
 
+  // Eligible parents for spare-part linking: active, non-spare-parts category, not self.
+  const eligibleParents = useMemo(
+    () => rows.filter(
+      (p) =>
+        p.active !== false &&
+        (p.category || "") !== SPARE_PARTS_CATEGORY &&
+        p.id !== editingId,
+    ),
+    [rows, editingId],
+  );
+  const filteredParents = useMemo(() => {
+    const s = parentSearch.trim().toLowerCase();
+    if (!s) return eligibleParents;
+    return eligibleParents.filter((p) =>
+      [p.name, p.model, p.brand, p.category].some((v) => (v || "").toLowerCase().includes(s)),
+    );
+  }, [eligibleParents, parentSearch]);
+
   async function saveNewCategory() {
     const name = newCatName.trim();
     if (!name) return;
@@ -132,6 +157,28 @@ export function ProductMasterPage() {
     setAddCatOpen(false);
     await loadCategories();
     setForm((f) => ({ ...f, category: name }));
+  }
+
+  async function loadLinksForEdit(p: ProductFull) {
+    setParentIds([]);
+    setLinkedSpares([]);
+    setLinkedParents([]);
+    if ((p.category || "") === SPARE_PARTS_CATEGORY) {
+      const { data } = await supabase
+        .from("product_spare_parts" as any)
+        .select("parent_product_id")
+        .eq("spare_part_id", p.id);
+      const ids = ((data || []) as unknown as { parent_product_id: string }[]).map((r) => r.parent_product_id);
+      setParentIds(ids);
+      setLinkedParents(rows.filter((r) => ids.includes(r.id)));
+    } else {
+      const { data } = await supabase
+        .from("product_spare_parts" as any)
+        .select("spare_part_id")
+        .eq("parent_product_id", p.id);
+      const ids = ((data || []) as unknown as { spare_part_id: string }[]).map((r) => r.spare_part_id);
+      setLinkedSpares(rows.filter((r) => ids.includes(r.id)));
+    }
   }
 
   const categories = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[], [rows]);
@@ -145,7 +192,10 @@ export function ProductMasterPage() {
     return matchQ && matchCat && matchBrand;
   }), [rows, q, filterCategory, filterBrand]);
 
-  function resetForm() { setForm(empty); setEditingId(null); setTab("details"); }
+  function resetForm() {
+    setForm(empty); setEditingId(null); setTab("details");
+    setParentIds([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
+  }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(p: ProductFull) {
     setForm({
@@ -173,6 +223,7 @@ export function ProductMasterPage() {
     });
     setEditingId(p.id);
     setOpen(true);
+    loadLinksForEdit(p);
   }
 
   async function save(addAnother = false) {
@@ -180,6 +231,11 @@ export function ProductMasterPage() {
       toast.error("Enter Brand and Model (used to identify product)"); return;
     }
     if (!form.category) { toast.error("Category is required"); return; }
+    const isSparePart = form.category === SPARE_PARTS_CATEGORY;
+    if (isSparePart && parentIds.length === 0) {
+      toast.error("At least one compatible parent product must be selected for Spare Parts.");
+      return;
+    }
     if (!form.central_tax) { toast.error("Central Tax Rate is required"); return; }
     if (!form.local_tax) { toast.error("Local Tax Rate is required"); return; }
     if (form.warranty_applicable && (!form.warranty_duration || Number(form.warranty_duration) <= 0)) {
@@ -217,18 +273,66 @@ export function ProductMasterPage() {
       warranty_start_from: form.warranty_applicable ? form.warranty_start_from : null,
       warranty_manual_override: form.warranty_manual_override,
     };
+    let productId = editingId;
     if (editingId) {
       const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
       if (error) return toast.error(error.message);
       toast.success("Product updated");
     } else {
-      const { error } = await supabase.from("products").insert(payload as any);
+      const { data, error } = await supabase.from("products").insert(payload as any).select("id").single();
       if (error) return toast.error(error.message);
+      productId = (data as { id: string } | null)?.id ?? null;
       toast.success("Product added");
     }
+
+    // Sync spare-part links when category is Spare Parts.
+    if (isSparePart && productId) {
+      await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
+      if (parentIds.length) {
+        const linkRows = parentIds.map((pid) => ({ spare_part_id: productId, parent_product_id: pid }));
+        const { error: linkErr } = await supabase.from("product_spare_parts" as any).insert(linkRows as any);
+        if (linkErr) toast.error(`Saved product but failed to link parents: ${linkErr.message}`);
+      }
+    } else if (!isSparePart && productId && editingId) {
+      // Switched away from spare parts — remove any existing parent links where this product was a spare.
+      await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
+    }
+
     await load();
     if (addAnother) resetForm();
     else { setOpen(false); resetForm(); }
+  }
+
+  function toggleParent(id: string) {
+    setParentIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function downloadCompatibilityReport() {
+    const { data } = await supabase
+      .from("product_spare_parts" as any)
+      .select("parent_product_id, spare_part_id");
+    const links = (data || []) as unknown as { parent_product_id: string; spare_part_id: string }[];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const out = links.map((l) => {
+      const sp = byId.get(l.spare_part_id);
+      const pp = byId.get(l.parent_product_id);
+      return {
+        spare_part: sp?.name || "",
+        spare_part_model: sp?.model || "",
+        spare_part_oem: sp?.brand || "",
+        parent_product: pp?.name || "",
+        parent_model: pp?.model || "",
+        parent_oem: pp?.brand || "",
+        parent_category: pp?.category || "",
+      };
+    });
+    const headers = ["spare_part", "spare_part_model", "spare_part_oem", "parent_product", "parent_model", "parent_oem", "parent_category"];
+    const csv = [headers.join(","), ...out.map((r) => headers.map((h) => `"${String((r as any)[h] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "Prokon_SpareParts_Compatibility.csv"; a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function del(id: string) {
@@ -273,6 +377,7 @@ export function ProductMasterPage() {
         <div className="flex gap-2">
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])} />
           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4 mr-1" />Import CSV</Button>
+          <Button variant="outline" size="sm" onClick={downloadCompatibilityReport}>Spare Parts Report</Button>
           <ExportButtons
             name="Prokon_Products"
             title="Product Master"
@@ -446,6 +551,62 @@ export function ProductMasterPage() {
                 <Checkbox id="active" checked={form.active} onCheckedChange={(v) => setForm({ ...form, active: !!v })} />
                 <Label htmlFor="active" className="text-sm font-normal cursor-pointer">Active (available in transaction dropdowns)</Label>
               </div>
+
+              {form.category === SPARE_PARTS_CATEGORY && (
+                <div className="md:col-span-2 rounded-md border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm font-medium">Compatible Parent Products *</Label>
+                      <p className="text-[11px] text-muted-foreground">Active products this spare part can be used in. Spare-parts items are excluded.</p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setParentPickerOpen(true)}>
+                      <Plus className="h-4 w-4 mr-1" />Add Products
+                    </Button>
+                  </div>
+                  {parentIds.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">No parent products selected yet.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {parentIds.map((id) => {
+                        const p = rows.find((r) => r.id === id);
+                        if (!p) return null;
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1">
+                            <span className="font-mono">{p.model || p.name}</span>
+                            <button type="button" onClick={() => toggleParent(id)} className="ml-1 hover:text-destructive" aria-label="Remove">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {editingId && form.category !== SPARE_PARTS_CATEGORY && linkedSpares.length > 0 && (
+                <div className="md:col-span-2 rounded-md border p-3 space-y-2">
+                  <Label className="text-sm font-medium">Linked Spare Parts ({linkedSpares.length})</Label>
+                  <Table>
+                    <TableHeader><TableRow>
+                      <TableHead>Spare Part</TableHead>
+                      <TableHead>Model No</TableHead>
+                      <TableHead>OEM</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {linkedSpares.map((sp) => (
+                        <TableRow key={sp.id}>
+                          <TableCell>{sp.name}</TableCell>
+                          <TableCell className="font-mono">{sp.model || "—"}</TableCell>
+                          <TableCell>{sp.brand || "—"}</TableCell>
+                          <TableCell>{sp.active === false ? <Badge variant="outline">Inactive</Badge> : <Badge>Active</Badge>}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </div>
             </TabsContent>
 
@@ -562,6 +723,44 @@ export function ProductMasterPage() {
               <Button variant="ghost" size="sm" onClick={() => { setAddCatOpen(false); setNewCatName(""); }}>Cancel</Button>
               <Button size="sm" onClick={saveNewCategory}>Save</Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={parentPickerOpen} onOpenChange={setParentPickerOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader><DialogTitle>Select Compatible Parent Products</DialogTitle></DialogHeader>
+          <Input
+            placeholder="Search by model, brand or category…"
+            value={parentSearch}
+            onChange={(e) => setParentSearch(e.target.value)}
+          />
+          <div className="overflow-y-auto border rounded-md">
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead className="w-10"></TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Brand</TableHead>
+                <TableHead>Category</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {filteredParents.map((p) => (
+                  <TableRow key={p.id} className="cursor-pointer" onClick={() => toggleParent(p.id)}>
+                    <TableCell><Checkbox checked={parentIds.includes(p.id)} onCheckedChange={() => toggleParent(p.id)} /></TableCell>
+                    <TableCell className="font-mono">{p.model || p.name}</TableCell>
+                    <TableCell>{p.brand || "—"}</TableCell>
+                    <TableCell>{p.category || "—"}</TableCell>
+                  </TableRow>
+                ))}
+                {filteredParents.length === 0 && (
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No products match.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex justify-between items-center pt-2">
+            <span className="text-sm text-muted-foreground">{parentIds.length} selected</span>
+            <Button size="sm" onClick={() => setParentPickerOpen(false)}>Done</Button>
           </div>
         </DialogContent>
       </Dialog>
