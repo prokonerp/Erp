@@ -150,6 +150,7 @@ function TicketDetail() {
   const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
   const { isAdmin } = useIsAdmin();
   const [confirmPartsOpen, setConfirmPartsOpen] = useState(false);
+  const partsBaselineRef = useRef<string>("[]");
 
   const load = async () => {
     const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
