@@ -290,6 +290,30 @@ function TicketDetail() {
     } as never).eq("id", t.id);
     setBusy(false);
     if (error) { toast.error(error.message); return false; }
+    // Audit: admin edits to previously-confirmed part rows
+    try {
+      const before: PartLine[] = JSON.parse(partsBaselineRef.current || "[]");
+      const after = payload.parts_details || [];
+      const changed: string[] = [];
+      for (const b of before) {
+        if (!b.confirmed) continue;
+        const key = `${(b.name || "").trim()}|${(b.serial || "").trim()}|${(b.model_no || "").trim()}`;
+        const match = after.find((a) => `${(a.name || "").trim()}|${(a.serial || "").trim()}|${(a.model_no || "").trim()}` === key)
+          || after.find((a) => (a.serial || "").trim() && (a.serial || "").trim() === (b.serial || "").trim());
+        if (!match) { changed.push(`removed ${b.name || "(unnamed)"}${b.serial ? ` · ${b.serial}` : ""}`); continue; }
+        const diffs: string[] = [];
+        (["name","model_no","serial","qty","remarks"] as const).forEach((k) => {
+          if ((b[k] || "") !== (match[k] || "")) diffs.push(`${k}: "${b[k] || ""}" → "${match[k] || ""}"`);
+        });
+        if (diffs.length) changed.push(`${b.name || "(unnamed)"}: ${diffs.join(", ")}`);
+      }
+      if (changed.length && isAdmin) {
+        const { data: u } = await supabase.auth.getUser();
+        const actor = u.user?.email || u.user?.id || "admin";
+        await logActivity("parts_admin_edit", `Admin (${actor}) edited confirmed parts — ${changed.join("; ")}`);
+      }
+      partsBaselineRef.current = JSON.stringify(after);
+    } catch { /* ignore audit failures */ }
     toast.success("Saved");
     return true;
   };
