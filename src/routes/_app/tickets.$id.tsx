@@ -24,10 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useIsAdmin } from "@/lib/useRole";
-import { Lock, Unlock, ShieldCheck } from "lucide-react";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
-import { ImsSerialPicker } from "@/components/ImsSerialPicker";
-import { findAvailableStockBySerial, issueStockToTicket } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
