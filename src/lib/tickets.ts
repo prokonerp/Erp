@@ -115,14 +115,12 @@ export type WaOpenOptions = WaLaunchContext & {
   preferWeb?: boolean;
 };
 
-/** WhatsApp launch URL. Desktop users are sent to WhatsApp Web; mobile uses wa.me. */
+/** WhatsApp launch URL. Always uses WhatsApp Web direct navigation; never embed this URL. */
 export function waLink(phone: string | null | undefined, text: string): string {
   const p = waPhone(phone);
   const t = encodeURIComponent(text);
   if (!p) return `https://web.whatsapp.com/send?text=${t}`;
-  return isMobileDevice()
-    ? `https://wa.me/${p}?text=${t}`
-    : `https://web.whatsapp.com/send?phone=${p}&text=${t}`;
+  return `https://web.whatsapp.com/send?phone=${p}&text=${t}`;
 }
 
 /** Click handler: copy message to clipboard, then open WhatsApp in a new browser tab.
@@ -138,21 +136,37 @@ export async function waOpen(
 ): Promise<boolean> {
   const p = waPhone(phone);
   if (!p) return false;
+  ensureWhatsAppDebugListeners();
+  const url = `https://web.whatsapp.com/send?phone=${p}&text=${encodeURIComponent(text)}`;
+  const embedDiagnostics = getWhatsAppEmbedDiagnostics();
+  let w: Window | null = null;
+  let failureReason: string | null = null;
+  let browserAction = "window.open(_blank)";
+  console.info("WhatsApp launch requested", {
+    module: options.module || "general",
+    recordNumber: options.recordNumber ?? null,
+    recipientMobile: p,
+    generatedUrl: url,
+    browserAction,
+    iframeBeingCreated: false,
+    modalBeingOpened: false,
+    drawerBeingOpened: false,
+    existingWhatsAppIframes: embedDiagnostics.whatsAppIframeCount,
+    existingWhatsAppDialogs: embedDiagnostics.whatsAppDialogCount,
+    timestamp: new Date().toISOString(),
+  });
+  try {
+    // Open synchronously before clipboard/logging awaits so popup blockers and
+    // app iframe sandboxes treat this as direct browser navigation, not embed.
+    w = window.open(url, "_blank");
+    if (w) w.opener = null;
+  } catch (error) {
+    failureReason = error instanceof Error ? error.message : "window.open failed";
+  }
   try {
     await navigator.clipboard.writeText(text);
   } catch {
     /* ignore */
-  }
-  const useWeb = options.preferWeb ?? !isMobileDevice();
-  const url = useWeb
-    ? `https://web.whatsapp.com/send?phone=${p}&text=${encodeURIComponent(text)}`
-    : `https://wa.me/${p}?text=${encodeURIComponent(text)}`;
-  let w: Window | null = null;
-  let failureReason: string | null = null;
-  try {
-    w = window.open(url, "_blank", "noopener,noreferrer");
-  } catch (error) {
-    failureReason = error instanceof Error ? error.message : "window.open failed";
   }
   const launched = !!w;
   void logWhatsAppLaunch({
@@ -167,24 +181,80 @@ export async function waOpen(
       ? null
       : failureReason || "Popup blocked or browser returned no window handle",
   });
-  console.info("WhatsApp launch", {
+  console.info("WhatsApp launch completed", {
     module: options.module || "general",
     recordNumber: options.recordNumber ?? null,
     recipientMobile: p,
-    whatsappUrl: url,
+    generatedUrl: url,
+    browserAction,
     launchSuccess: launched,
+    iframeCreated: getWhatsAppEmbedDiagnostics().whatsAppIframeCount > embedDiagnostics.whatsAppIframeCount,
+    modalOpened: getWhatsAppEmbedDiagnostics().whatsAppDialogCount > embedDiagnostics.whatsAppDialogCount,
+    failureReason,
     timestamp: new Date().toISOString(),
   });
   if (!w) {
+    browserAction = "fallback action window.open(_blank)";
     toast.error("Unable to launch WhatsApp automatically. Click here to open WhatsApp Web.", {
       action: {
         label: "Open WhatsApp Web",
-        onClick: () => window.open(url, "_blank", "noopener,noreferrer"),
+        onClick: () => {
+          console.info("WhatsApp fallback link clicked", {
+            generatedUrl: url,
+            browserAction,
+            iframeBeingCreated: false,
+            modalBeingOpened: false,
+            drawerBeingOpened: false,
+            timestamp: new Date().toISOString(),
+          });
+          const fallbackWindow = window.open(url, "_blank");
+          if (fallbackWindow) fallbackWindow.opener = null;
+        },
       },
       duration: 10000,
     });
   }
   return true;
+}
+
+let whatsAppDebugListenersAttached = false;
+
+function ensureWhatsAppDebugListeners() {
+  if (whatsAppDebugListenersAttached || typeof window === "undefined") return;
+  whatsAppDebugListenersAttached = true;
+  window.addEventListener("securitypolicyviolation", (event) => {
+    const blocked = event.blockedURI || "";
+    if (blocked.includes("whatsapp.com")) {
+      console.warn("WhatsApp CSP violation detected", {
+        blockedURI: event.blockedURI,
+        violatedDirective: event.violatedDirective,
+        effectiveDirective: event.effectiveDirective,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+  window.addEventListener("error", (event) => {
+    const message = String(event.message || "");
+    if (/whatsapp|x-frame-options|content-security-policy|refused to connect|blocked_by_response/i.test(message)) {
+      console.warn("WhatsApp browser error detected", {
+        message,
+        filename: event.filename,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+}
+
+function getWhatsAppEmbedDiagnostics() {
+  if (typeof document === "undefined") {
+    return { whatsAppIframeCount: 0, whatsAppDialogCount: 0 };
+  }
+  return {
+    whatsAppIframeCount: document.querySelectorAll('iframe[src*="whatsapp.com"], iframe[src*="wa.me"]').length,
+    whatsAppDialogCount: Array.from(document.querySelectorAll('[role="dialog"], [data-vaul-drawer]')).filter((el) =>
+      /whatsapp/i.test(el.textContent || ""),
+    ).length,
+  };
 }
 
 async function logWhatsAppLaunch(entry: {
