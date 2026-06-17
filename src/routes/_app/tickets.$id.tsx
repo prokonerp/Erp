@@ -25,6 +25,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useIsAdmin } from "@/lib/useRole";
 import { Lock, Unlock, ShieldCheck } from "lucide-react";
+import { TicketPartPicker } from "@/components/TicketPartPicker";
+import { ImsSerialPicker } from "@/components/ImsSerialPicker";
+import { findAvailableStockBySerial, issueStockToTicket } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -752,10 +755,32 @@ function TicketDetail() {
                             {p.confirmed && p.confirmed_by ? `By ${p.confirmed_by}${p.confirmed_at ? ` · ${new Date(p.confirmed_at).toLocaleString()}` : ""}` : ""}
                           </div>
                         </div>
-                        <div className="grid grid-cols-12 gap-2 items-end">
-                          <div className="col-span-12 md:col-span-3"><Label>Part / Item</Label><Input disabled={locked} value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
+                         <div className="grid grid-cols-12 gap-2 items-end">
+                          <div className="col-span-12 md:col-span-3">
+                            <Label>Part / Item</Label>
+                            <TicketPartPicker
+                              ticketProduct={t.product}
+                              value={p.model_no || p.name}
+                              disabled={locked}
+                              onSelect={(item) => updPart(i, {
+                                name: item.name,
+                                model_no: item.model || item.name,
+                              })}
+                            />
+                          </div>
                           <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input disabled={locked} value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
-                          <div className="col-span-8 md:col-span-2"><Label>Part Serial</Label><Input disabled={locked} value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
+                          <div className="col-span-8 md:col-span-2">
+                            <Label>Part Serial</Label>
+                            <ImsSerialPicker
+                              value={p.serial || null}
+                              partModelNo={p.model_no || null}
+                              partName={p.name || null}
+                              stockType="good"
+                              allowManual
+                              disabled={locked}
+                              onSelect={(_item, serial) => updPart(i, { serial })}
+                            />
+                          </div>
                           <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input disabled={locked} value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
                           <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input disabled={locked} value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
                           <div className="col-span-2 md:col-span-1 flex gap-1">
