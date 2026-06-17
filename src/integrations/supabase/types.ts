@@ -651,6 +651,455 @@ export type Database = {
         }
         Relationships: []
       }
+      ims_audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          entity: string
+          entity_id: string | null
+          id: string
+          new_value: Json | null
+          old_value: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          entity: string
+          entity_id?: string | null
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          new_value?: Json | null
+          old_value?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      ims_reservations: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          id: string
+          indent_id: string | null
+          notes: string | null
+          released_at: string | null
+          reserved_at: string
+          reserved_by: string | null
+          status: Database["public"]["Enums"]["ims_reservation_status"]
+          stock_item_id: string
+          ticket_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          indent_id?: string | null
+          notes?: string | null
+          released_at?: string | null
+          reserved_at?: string
+          reserved_by?: string | null
+          status?: Database["public"]["Enums"]["ims_reservation_status"]
+          stock_item_id: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          indent_id?: string | null
+          notes?: string | null
+          released_at?: string | null
+          reserved_at?: string
+          reserved_by?: string | null
+          status?: Database["public"]["Enums"]["ims_reservation_status"]
+          stock_item_id?: string
+          ticket_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ims_reservations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_reservations_indent_id_fkey"
+            columns: ["indent_id"]
+            isOneToOne: false
+            referencedRelation: "indents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_reservations_stock_item_id_fkey"
+            columns: ["stock_item_id"]
+            isOneToOne: false
+            referencedRelation: "ims_stock_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_reservations_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ims_stock_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          customer_name: string | null
+          id: string
+          indent_id: string | null
+          modified_by: string | null
+          notes: string | null
+          oem: string | null
+          oem_case_id: string | null
+          part_model_no: string | null
+          part_name: string
+          part_serial_no: string | null
+          stock_status: Database["public"]["Enums"]["ims_stock_status"]
+          stock_type: Database["public"]["Enums"]["ims_stock_type"]
+          ticket_id: string | null
+          transaction_ref: string | null
+          updated_at: string
+          warehouse_id: string | null
+          warehouse_type: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          id?: string
+          indent_id?: string | null
+          modified_by?: string | null
+          notes?: string | null
+          oem?: string | null
+          oem_case_id?: string | null
+          part_model_no?: string | null
+          part_name: string
+          part_serial_no?: string | null
+          stock_status?: Database["public"]["Enums"]["ims_stock_status"]
+          stock_type?: Database["public"]["Enums"]["ims_stock_type"]
+          ticket_id?: string | null
+          transaction_ref?: string | null
+          updated_at?: string
+          warehouse_id?: string | null
+          warehouse_type?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          id?: string
+          indent_id?: string | null
+          modified_by?: string | null
+          notes?: string | null
+          oem?: string | null
+          oem_case_id?: string | null
+          part_model_no?: string | null
+          part_name?: string
+          part_serial_no?: string | null
+          stock_status?: Database["public"]["Enums"]["ims_stock_status"]
+          stock_type?: Database["public"]["Enums"]["ims_stock_type"]
+          ticket_id?: string | null
+          transaction_ref?: string | null
+          updated_at?: string
+          warehouse_id?: string | null
+          warehouse_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ims_stock_items_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_stock_items_indent_id_fkey"
+            columns: ["indent_id"]
+            isOneToOne: false
+            referencedRelation: "indents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_stock_items_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_stock_items_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ims_transactions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          from_party: string | null
+          from_warehouse_id: string | null
+          id: string
+          indent_id: string | null
+          notes: string | null
+          oem: string | null
+          part_model_no: string | null
+          part_name: string | null
+          part_serial_no: string | null
+          qty: number
+          reference: string | null
+          stock_item_id: string | null
+          ticket_id: string | null
+          to_party: string | null
+          to_warehouse_id: string | null
+          transfer_id: string | null
+          txn_date: string
+          txn_no: string | null
+          txn_type: Database["public"]["Enums"]["ims_txn_type"]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          from_party?: string | null
+          from_warehouse_id?: string | null
+          id?: string
+          indent_id?: string | null
+          notes?: string | null
+          oem?: string | null
+          part_model_no?: string | null
+          part_name?: string | null
+          part_serial_no?: string | null
+          qty?: number
+          reference?: string | null
+          stock_item_id?: string | null
+          ticket_id?: string | null
+          to_party?: string | null
+          to_warehouse_id?: string | null
+          transfer_id?: string | null
+          txn_date?: string
+          txn_no?: string | null
+          txn_type: Database["public"]["Enums"]["ims_txn_type"]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          from_party?: string | null
+          from_warehouse_id?: string | null
+          id?: string
+          indent_id?: string | null
+          notes?: string | null
+          oem?: string | null
+          part_model_no?: string | null
+          part_name?: string | null
+          part_serial_no?: string | null
+          qty?: number
+          reference?: string | null
+          stock_item_id?: string | null
+          ticket_id?: string | null
+          to_party?: string | null
+          to_warehouse_id?: string | null
+          transfer_id?: string | null
+          txn_date?: string
+          txn_no?: string | null
+          txn_type?: Database["public"]["Enums"]["ims_txn_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ims_transactions_from_warehouse_id_fkey"
+            columns: ["from_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_transactions_indent_id_fkey"
+            columns: ["indent_id"]
+            isOneToOne: false
+            referencedRelation: "indents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_transactions_stock_item_id_fkey"
+            columns: ["stock_item_id"]
+            isOneToOne: false
+            referencedRelation: "ims_stock_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_transactions_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_transactions_to_warehouse_id_fkey"
+            columns: ["to_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ims_transfer_sequence: {
+        Row: {
+          id: number
+          last_seq: number
+        }
+        Insert: {
+          id: number
+          last_seq?: number
+        }
+        Update: {
+          id?: number
+          last_seq?: number
+        }
+        Relationships: []
+      }
+      ims_transfers: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          destination_warehouse_id: string | null
+          id: string
+          oem: string | null
+          part_model_no: string | null
+          part_name: string | null
+          part_serial_no: string | null
+          qty: number
+          reason: string | null
+          receipt_remarks: string | null
+          received_at: string | null
+          received_by: string | null
+          rejected_reason: string | null
+          remarks: string | null
+          request_date: string
+          requested_by: string | null
+          source_warehouse_id: string | null
+          status: Database["public"]["Enums"]["ims_transfer_status"]
+          stock_item_id: string | null
+          stock_type: Database["public"]["Enums"]["ims_stock_type"]
+          transfer_no: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          destination_warehouse_id?: string | null
+          id?: string
+          oem?: string | null
+          part_model_no?: string | null
+          part_name?: string | null
+          part_serial_no?: string | null
+          qty?: number
+          reason?: string | null
+          receipt_remarks?: string | null
+          received_at?: string | null
+          received_by?: string | null
+          rejected_reason?: string | null
+          remarks?: string | null
+          request_date?: string
+          requested_by?: string | null
+          source_warehouse_id?: string | null
+          status?: Database["public"]["Enums"]["ims_transfer_status"]
+          stock_item_id?: string | null
+          stock_type?: Database["public"]["Enums"]["ims_stock_type"]
+          transfer_no?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          destination_warehouse_id?: string | null
+          id?: string
+          oem?: string | null
+          part_model_no?: string | null
+          part_name?: string | null
+          part_serial_no?: string | null
+          qty?: number
+          reason?: string | null
+          receipt_remarks?: string | null
+          received_at?: string | null
+          received_by?: string | null
+          rejected_reason?: string | null
+          remarks?: string | null
+          request_date?: string
+          requested_by?: string | null
+          source_warehouse_id?: string | null
+          status?: Database["public"]["Enums"]["ims_transfer_status"]
+          stock_item_id?: string | null
+          stock_type?: Database["public"]["Enums"]["ims_stock_type"]
+          transfer_no?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ims_transfers_destination_warehouse_id_fkey"
+            columns: ["destination_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_transfers_source_warehouse_id_fkey"
+            columns: ["source_warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ims_transfers_stock_item_id_fkey"
+            columns: ["stock_item_id"]
+            isOneToOne: false
+            referencedRelation: "ims_stock_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ims_txn_sequence: {
+        Row: {
+          id: number
+          last_seq: number
+        }
+        Insert: {
+          id: number
+          last_seq?: number
+        }
+        Update: {
+          id?: number
+          last_seq?: number
+        }
+        Relationships: []
+      }
       incentive_rules: {
         Row: {
           active: boolean
@@ -1919,11 +2368,41 @@ export type Database = {
         Returns: boolean
       }
       next_amc_seq: { Args: never; Returns: number }
+      next_ims_transfer_seq: { Args: never; Returns: number }
+      next_ims_txn_seq: { Args: never; Returns: number }
       next_indent_seq: { Args: never; Returns: number }
       next_ticket_seq: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "user"
+      ims_reservation_status: "reserved" | "issued" | "released"
+      ims_stock_status:
+        | "available"
+        | "reserved"
+        | "issued"
+        | "in_transit"
+        | "returned_to_oem"
+        | "scrapped"
+      ims_stock_type: "good" | "defective"
+      ims_transfer_status:
+        | "draft"
+        | "submitted"
+        | "approved"
+        | "rejected"
+        | "in_transit"
+        | "received"
+        | "completed"
+      ims_txn_type:
+        | "good_in"
+        | "good_out"
+        | "defective_in"
+        | "defective_out"
+        | "transfer_out"
+        | "transfer_in"
+        | "oem_return"
+        | "oem_replacement_receipt"
+        | "stock_adjustment"
+        | "scrap_adjustment"
       indent_type: "rma_advance_exchange" | "rma_exchange" | "rma_service_ship"
     }
     CompositeTypes: {
@@ -2053,6 +2532,37 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      ims_reservation_status: ["reserved", "issued", "released"],
+      ims_stock_status: [
+        "available",
+        "reserved",
+        "issued",
+        "in_transit",
+        "returned_to_oem",
+        "scrapped",
+      ],
+      ims_stock_type: ["good", "defective"],
+      ims_transfer_status: [
+        "draft",
+        "submitted",
+        "approved",
+        "rejected",
+        "in_transit",
+        "received",
+        "completed",
+      ],
+      ims_txn_type: [
+        "good_in",
+        "good_out",
+        "defective_in",
+        "defective_out",
+        "transfer_out",
+        "transfer_in",
+        "oem_return",
+        "oem_replacement_receipt",
+        "stock_adjustment",
+        "scrap_adjustment",
+      ],
       indent_type: ["rma_advance_exchange", "rma_exchange", "rma_service_ship"],
     },
   },
