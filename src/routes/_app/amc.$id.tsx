@@ -82,9 +82,15 @@ function AmcDetail() {
 
   const sendWhatsapp = async (body: string) => {
     if (!a.contact_no) return toast.error("No contact number on file");
-    const ok = await waOpen(a.contact_no, body);
+    const ok = await waOpen(a.contact_no, body, {
+      module: "amc",
+      recordId: a.id,
+      recordNumber: a.agreement_no,
+      recipientLabel: a.client_name || a.client_company || "Client",
+      preferWeb: true,
+    });
     if (!ok) return toast.error("Valid mobile number is required before sending WhatsApp message.");
-    toast.success("Opening WhatsApp…");
+    toast.success("Opening WhatsApp Web…");
   };
   const sendEmail = (subject: string, body: string) => {
     if (!a.email) return toast.error("No email on file");

@@ -1860,6 +1860,48 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_launch_logs: {
+        Row: {
+          created_at: string
+          failure_reason: string | null
+          id: string
+          launch_success: boolean
+          module: string
+          recipient_label: string | null
+          recipient_mobile: string
+          record_id: string | null
+          record_number: string | null
+          user_id: string | null
+          whatsapp_url: string
+        }
+        Insert: {
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          launch_success?: boolean
+          module: string
+          recipient_label?: string | null
+          recipient_mobile: string
+          record_id?: string | null
+          record_number?: string | null
+          user_id?: string | null
+          whatsapp_url: string
+        }
+        Update: {
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          launch_success?: boolean
+          module?: string
+          recipient_label?: string | null
+          recipient_mobile?: string
+          record_id?: string | null
+          record_number?: string | null
+          user_id?: string | null
+          whatsapp_url?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

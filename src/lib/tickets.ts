@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export const CALL_TYPES = [
   "OOW",
@@ -98,18 +99,34 @@ export function waPhone(phone: string | null | undefined): string {
   return digits.length >= 11 ? digits : "";
 }
 
-/** WhatsApp universal link — works on mobile (opens app), desktop (opens WhatsApp Desktop),
- *  and falls back to WhatsApp Web in the browser if no app is installed. */
+function isMobileDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+export type WaLaunchContext = {
+  module?: "ticket" | "amc" | "crm" | string;
+  recordId?: string | null;
+  recordNumber?: string | null;
+  recipientLabel?: string | null;
+};
+
+export type WaOpenOptions = WaLaunchContext & {
+  preferWeb?: boolean;
+};
+
+/** WhatsApp launch URL. Desktop users are sent to WhatsApp Web; mobile uses wa.me. */
 export function waLink(phone: string | null | undefined, text: string): string {
   const p = waPhone(phone);
   const t = encodeURIComponent(text);
-  return p
+  if (!p) return `https://web.whatsapp.com/send?text=${t}`;
+  return isMobileDevice()
     ? `https://wa.me/${p}?text=${t}`
-    : `https://wa.me/?text=${t}`;
+    : `https://web.whatsapp.com/send?phone=${p}&text=${t}`;
 }
 
 /** Click handler: copy message to clipboard, then open WhatsApp in a new browser tab.
- *  Uses the wa.me universal link with target=_blank so WhatsApp is never embedded
+ *  Uses WhatsApp Web / wa.me with target=_blank so WhatsApp is never embedded
  *  inside an iframe/modal (which browsers block with ERR_BLOCKED_BY_RESPONSE).
  *  Returns true if the phone is valid and a launch was attempted, false if the
  *  number is missing/invalid. If the browser blocks the popup, a fallback toast
@@ -117,19 +134,86 @@ export function waLink(phone: string | null | undefined, text: string): string {
 export async function waOpen(
   phone: string | null | undefined,
   text: string,
+  options: WaOpenOptions = {},
 ): Promise<boolean> {
   const p = waPhone(phone);
   if (!p) return false;
-  try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
-  const url = `https://wa.me/${p}?text=${encodeURIComponent(text)}`;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    /* ignore */
+  }
+  const useWeb = options.preferWeb ?? !isMobileDevice();
+  const url = useWeb
+    ? `https://web.whatsapp.com/send?phone=${p}&text=${encodeURIComponent(text)}`
+    : `https://wa.me/${p}?text=${encodeURIComponent(text)}`;
   let w: Window | null = null;
+  let failureReason: string | null = null;
   try {
     w = window.open(url, "_blank", "noopener,noreferrer");
-  } catch { /* handled below */ }
+  } catch (error) {
+    failureReason = error instanceof Error ? error.message : "window.open failed";
+  }
+  const launched = !!w;
+  void logWhatsAppLaunch({
+    module: options.module || "general",
+    recordId: options.recordId ?? null,
+    recordNumber: options.recordNumber ?? null,
+    recipientLabel: options.recipientLabel ?? null,
+    recipientMobile: p,
+    whatsappUrl: url,
+    launchSuccess: launched,
+    failureReason: launched
+      ? null
+      : failureReason || "Popup blocked or browser returned no window handle",
+  });
+  console.info("WhatsApp launch", {
+    module: options.module || "general",
+    recordNumber: options.recordNumber ?? null,
+    recipientMobile: p,
+    whatsappUrl: url,
+    launchSuccess: launched,
+    timestamp: new Date().toISOString(),
+  });
   if (!w) {
-    toast.error("Unable to open WhatsApp. Please verify browser permissions and mobile number.");
+    toast.error("Unable to launch WhatsApp automatically. Click here to open WhatsApp Web.", {
+      action: {
+        label: "Open WhatsApp Web",
+        onClick: () => window.open(url, "_blank", "noopener,noreferrer"),
+      },
+      duration: 10000,
+    });
   }
   return true;
+}
+
+async function logWhatsAppLaunch(entry: {
+  module: string;
+  recordId: string | null;
+  recordNumber: string | null;
+  recipientLabel: string | null;
+  recipientMobile: string;
+  whatsappUrl: string;
+  launchSuccess: boolean;
+  failureReason: string | null;
+}) {
+  try {
+    const { data } = await supabase.auth.getUser();
+    const { error } = await supabase.from("whatsapp_launch_logs").insert({
+      module: entry.module,
+      record_id: entry.recordId,
+      record_number: entry.recordNumber,
+      recipient_label: entry.recipientLabel,
+      recipient_mobile: entry.recipientMobile,
+      whatsapp_url: entry.whatsappUrl,
+      launch_success: entry.launchSuccess,
+      failure_reason: entry.failureReason,
+      user_id: data.user?.id ?? null,
+    });
+    if (error) console.warn("WhatsApp launch log was not saved", error.message);
+  } catch (error) {
+    console.warn("WhatsApp launch log failed", error);
+  }
 }
 
 export function engineerAssignMsg(t: {
@@ -178,7 +262,10 @@ export function customerClosedMsg(t: {
 }
 
 /** Replace {{key}} placeholders in a template body. */
-export function renderTemplate(body: string, vars: Record<string, string | null | undefined>): string {
+export function renderTemplate(
+  body: string,
+  vars: Record<string, string | null | undefined>,
+): string {
   return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => {
     const v = vars[k];
     return v == null ? "" : String(v);
@@ -189,8 +276,15 @@ export type WaTemplateId = "engineer_assign" | "oow_quotation" | "ticket_closed"
 
 export const TEMPLATE_PLACEHOLDERS: Record<WaTemplateId, string[]> = {
   engineer_assign: [
-    "case_id", "call_type", "customer_name", "customer_phone",
-    "location", "customer_address", "product", "serial_no", "complaint",
+    "case_id",
+    "call_type",
+    "customer_name",
+    "customer_phone",
+    "location",
+    "customer_address",
+    "product",
+    "serial_no",
+    "complaint",
   ],
   oow_quotation: ["customer_name", "case_id", "quote_no", "product", "product_line"],
   ticket_closed: ["customer_name", "case_id", "product", "product_line"],

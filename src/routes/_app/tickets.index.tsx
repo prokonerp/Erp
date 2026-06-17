@@ -126,6 +126,18 @@ function TicketsList() {
     if (error) toast.error(error.message);
   };
 
+  const launchTicketWhatsApp = async (r: Row, phone: string | null | undefined, message: string, recipientLabel: string) => {
+    const ok = await waOpen(phone, message, {
+      module: "ticket",
+      recordId: r.id,
+      recordNumber: r.case_id,
+      recipientLabel,
+      preferWeb: true,
+    });
+    if (!ok) return toast.error(`${recipientLabel} phone invalid`);
+    toast.success("Opening WhatsApp Web…");
+  };
+
   const updateStatus = async (r: Row, next: string, opts: { notify?: boolean } = {}) => {
     const patch: Record<string, unknown> = { status: next };
     if (next === "Closed") patch.closed_at = new Date().toISOString();
@@ -137,7 +149,7 @@ function TicketsList() {
     } as never);
     toast.success(`Status updated to ${next}`);
     if (opts.notify && r.customer_phone) {
-      await waOpen(r.customer_phone, customerClosedMsg({ case_id: r.case_id, customer_name: r.customer_name, product: r.product }));
+      await launchTicketWhatsApp(r, r.customer_phone, customerClosedMsg({ case_id: r.case_id, customer_name: r.customer_name, product: r.product }), "Customer");
     }
     load();
   };
@@ -158,31 +170,26 @@ function TicketsList() {
     if (error) return toast.error(error.message);
     toast.success(`Assigned to ${emp.name}`);
     if (emp.phone) {
-      const ok = await waOpen(emp.phone, engineerAssignMsg({
+      await launchTicketWhatsApp(r, emp.phone, engineerAssignMsg({
         case_id: r.case_id, call_type: r.call_type, customer_name: r.customer_name,
         customer_phone: r.customer_phone, location: r.location, customer_address: r.customer_address,
         product: r.product, serial_no: r.serial_no, complaint: r.complaint,
-      }));
-      if (!ok) toast.error("Engineer phone invalid — WhatsApp not opened");
+      }), "Engineer");
     }
     load();
   };
 
   const notifyCustomer = async (r: Row) => {
-    const ok = await waOpen(r.customer_phone, customerClosedMsg({ case_id: r.case_id, customer_name: r.customer_name, product: r.product }));
-    if (!ok) return toast.error("Customer phone invalid");
-    toast.success("Opening WhatsApp…");
+    await launchTicketWhatsApp(r, r.customer_phone, customerClosedMsg({ case_id: r.case_id, customer_name: r.customer_name, product: r.product }), "Customer");
   };
 
   const notifyEngineer = async (r: Row) => {
     if (!r.assigned_engineer_phone) return toast.error("No engineer assigned");
-    const ok = await waOpen(r.assigned_engineer_phone, engineerAssignMsg({
+    await launchTicketWhatsApp(r, r.assigned_engineer_phone, engineerAssignMsg({
       case_id: r.case_id, call_type: r.call_type, customer_name: r.customer_name,
       customer_phone: r.customer_phone, location: r.location, customer_address: r.customer_address,
       product: r.product, serial_no: r.serial_no, complaint: r.complaint,
-    }));
-    if (!ok) return toast.error("Engineer phone invalid");
-    toast.success("Opening WhatsApp…");
+    }), "Engineer");
   };
 
   return (
