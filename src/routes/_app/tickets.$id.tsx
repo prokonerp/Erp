@@ -19,6 +19,12 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useIsAdmin } from "@/lib/useRole";
+import { Lock, Unlock, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
