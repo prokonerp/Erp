@@ -202,12 +202,14 @@ function NewIndent() {
         <CardHeader><CardTitle className="text-base">Linked Ticket (auto)</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div><Label>Case ID</Label><Input value={form.case_id} readOnly className="font-mono bg-muted/50" /></div>
-          <div><Label>OEM Case ID</Label><Input value={form.oem_case_id} onChange={(e) => set({ oem_case_id: e.target.value })} className="font-mono" /></div>
+          <div><Label>OEM Case ID</Label><Input value={form.oem_case_id} readOnly className="font-mono bg-muted/50" /></div>
           <div><Label>Company (OEM)</Label><Input value={form.company} onChange={(e) => set({ company: e.target.value })} /></div>
-          <div><Label>DEF Model No</Label><Input value={form.def_model_no} onChange={(e) => set({ def_model_no: e.target.value })} /></div>
-          <div><Label>DEF Serial No</Label><Input value={form.def_serial_no} onChange={(e) => set({ def_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
+          <div><Label>DEF Part Model No</Label><Input value={form.def_model_no} onChange={(e) => set({ def_model_no: e.target.value })} /></div>
+          <div><Label>DEF Part Serial No</Label><Input value={form.def_serial_no} onChange={(e) => set({ def_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
           <div><Label>Engineer</Label><Input value={form.engineer_name} onChange={(e) => set({ engineer_name: e.target.value })} /></div>
           <div className="md:col-span-3"><Label>Problem Reported</Label><Textarea rows={2} value={form.problem_reported} onChange={(e) => set({ problem_reported: e.target.value })} /></div>
+          <div><Label>Product Model</Label><Input value={form.product_model} readOnly className="bg-muted/50" /></div>
+          <div><Label>Product Serial</Label><Input value={form.product_serial} readOnly className="font-mono bg-muted/50" /></div>
         </CardContent>
       </Card>
 
