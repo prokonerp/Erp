@@ -121,6 +121,7 @@ const MODULES: Record<ModuleKey, ModuleDef> = {
       { key: "warranty_duration", label: "Warranty Duration", type: "integer", example: "12" },
       { key: "warranty_unit", label: "Warranty Unit", type: "enum", options: ["Months", "Years"], example: "Months" },
       { key: "active", label: "Active", type: "boolean", example: "true" },
+      { key: "parent_product_models", label: "Parent Product Models (Spare Parts only, comma-separated)", type: "text", virtual: true, example: "SRV3KI,SRV6KI,SRV10KI" },
     ],
   },
   employees: {
