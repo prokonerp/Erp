@@ -551,6 +551,62 @@ export function ProductMasterPage() {
                 <Checkbox id="active" checked={form.active} onCheckedChange={(v) => setForm({ ...form, active: !!v })} />
                 <Label htmlFor="active" className="text-sm font-normal cursor-pointer">Active (available in transaction dropdowns)</Label>
               </div>
+
+              {form.category === SPARE_PARTS_CATEGORY && (
+                <div className="md:col-span-2 rounded-md border p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm font-medium">Compatible Parent Products *</Label>
+                      <p className="text-[11px] text-muted-foreground">Active products this spare part can be used in. Spare-parts items are excluded.</p>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setParentPickerOpen(true)}>
+                      <Plus className="h-4 w-4 mr-1" />Add Products
+                    </Button>
+                  </div>
+                  {parentIds.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">No parent products selected yet.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {parentIds.map((id) => {
+                        const p = rows.find((r) => r.id === id);
+                        if (!p) return null;
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1">
+                            <span className="font-mono">{p.model || p.name}</span>
+                            <button type="button" onClick={() => toggleParent(id)} className="ml-1 hover:text-destructive" aria-label="Remove">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {editingId && form.category !== SPARE_PARTS_CATEGORY && linkedSpares.length > 0 && (
+                <div className="md:col-span-2 rounded-md border p-3 space-y-2">
+                  <Label className="text-sm font-medium">Linked Spare Parts ({linkedSpares.length})</Label>
+                  <Table>
+                    <TableHeader><TableRow>
+                      <TableHead>Spare Part</TableHead>
+                      <TableHead>Model No</TableHead>
+                      <TableHead>OEM</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {linkedSpares.map((sp) => (
+                        <TableRow key={sp.id}>
+                          <TableCell>{sp.name}</TableCell>
+                          <TableCell className="font-mono">{sp.model || "—"}</TableCell>
+                          <TableCell>{sp.brand || "—"}</TableCell>
+                          <TableCell>{sp.active === false ? <Badge variant="outline">Inactive</Badge> : <Badge>Active</Badge>}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </div>
             </TabsContent>
 
