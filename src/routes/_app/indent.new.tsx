@@ -31,6 +31,8 @@ type Form = {
   def_model_no: string;
   def_serial_no: string;
   problem_reported: string;
+  product_model: string;
+  product_serial: string;
   indent_type: IndentType | "";
   oracles: string;
   material_exchange_model: string;
@@ -52,6 +54,8 @@ const blank: Form = {
   def_model_no: "",
   def_serial_no: "",
   problem_reported: "",
+  product_model: "",
+  product_serial: "",
   indent_type: "",
   oracles: "",
   material_exchange_model: "",
