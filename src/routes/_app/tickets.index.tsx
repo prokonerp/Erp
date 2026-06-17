@@ -393,17 +393,13 @@ function RowActions({
         <DropdownMenuSeparator />
 
         {(() => {
-          const hasPart = Array.isArray(r.parts_details) && r.parts_details.some((p) => (p?.name || "").trim());
-          const hasConfirmed = Array.isArray(r.parts_details) && r.parts_details.some((p) => p?.confirmed && (p?.name || "").trim());
-          const canIndent = !!r.oem_call && !!r.parts_used && hasPart && hasConfirmed;
+          const defOn = !!r.defective_parts_received;
+          const goodOn = !!r.good_parts_used;
+          const canIndent = !!r.oem_call && (defOn || goodOn);
           const title = !r.oem_call
             ? "Enable OEM Call on the ticket to create an Indent"
-            : !r.parts_used
-            ? "Enable Parts Used on the ticket to create an Indent"
-            : !hasPart
-            ? "Add at least one Part entry on the ticket to create an Indent"
-            : !hasConfirmed
-            ? "Confirm & lock at least one Part entry on the ticket to create an Indent"
+            : !(defOn || goodOn)
+            ? "Enable Defective Parts Received or Good Parts Used on the ticket to create an Indent"
             : "Create Indent from this OEM ticket";
           return (
             <DropdownMenuItem asChild disabled={!canIndent}>
