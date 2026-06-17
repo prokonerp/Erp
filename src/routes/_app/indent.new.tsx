@@ -146,6 +146,8 @@ function NewIndent() {
       def_model_no: form.def_model_no || null,
       def_serial_no: form.def_serial_no || null,
       problem_reported: form.problem_reported || null,
+      product_model: form.product_model || null,
+      product_serial: form.product_serial || null,
       indent_type: form.indent_type || null,
       oracles: form.oracles || null,
       material_exchange_model: form.material_exchange_model || null,
