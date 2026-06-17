@@ -655,7 +655,7 @@ function TicketDetail() {
                   {(t.defective_parts_details || []).map((p, i) => (
                     <div key={i} className="rounded-md border p-2">
                       <div className="grid grid-cols-12 gap-2 items-end">
-                        <div className="col-span-12 md:col-span-4">
+                        <div className="col-span-12 md:col-span-3">
                           <Label>Part / Item</Label>
                           <TicketPartPicker
                             ticketProduct={t.product}
@@ -706,7 +706,7 @@ function TicketDetail() {
                   {(t.good_parts_details || []).map((p, i) => (
                     <div key={i} className="rounded-md border p-2">
                       <div className="grid grid-cols-12 gap-2 items-end">
-                        <div className="col-span-12 md:col-span-4">
+                        <div className="col-span-12 md:col-span-3">
                           <Label>Part / Item</Label>
                           <TicketPartPicker
                             ticketProduct={t.product}
@@ -715,8 +715,9 @@ function TicketDetail() {
                           />
                         </div>
                         <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} /></div>
+                        <div className="col-span-12 md:col-span-2"><Label>Model / Part Serial No</Label><Input value={p.serial || ""} onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
                         <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} /></div>
-                        <div className="col-span-6 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} /></div>
+                        <div className="col-span-6 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} /></div>
                         <div className="col-span-2 md:col-span-1 flex">
                           <Button size="icon" variant="ghost" onClick={() => delGood(i)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
