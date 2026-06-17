@@ -383,56 +383,84 @@ function NewTicket() {
         <div className="md:col-span-2 pt-2 border-t" />
         <div className="md:col-span-2 flex items-center justify-between">
           <div>
-            <Label className="text-base">Parts Used <span className="text-xs text-muted-foreground font-normal">(optional)</span></Label>
-            <p className="text-xs text-muted-foreground">Record spare parts at creation. Serials are validated against IMS inventory.</p>
+            <Label className="text-base">Defective Parts Received <span className="text-xs text-muted-foreground font-normal">(from customer)</span></Label>
+            <p className="text-xs text-muted-foreground">Capture defective material received from the customer.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Switch checked={partsUsed} onCheckedChange={(v) => { setPartsUsed(v); if (!v) setParts([]); else if (parts.length === 0) addPart(); }} />
-            <span className="text-sm text-muted-foreground">{partsUsed ? "Yes" : "No"}</span>
+            <Switch checked={defectiveOn} onCheckedChange={(v) => { setDefectiveOn(v); if (!v) setDefectiveParts([]); else if (defectiveParts.length === 0) addDef(); }} />
+            <span className="text-sm text-muted-foreground">{defectiveOn ? "ON" : "OFF"}</span>
           </div>
         </div>
-        {partsUsed && (
+        {defectiveOn && (
           <div className="md:col-span-2 space-y-2">
-            {parts.length === 0 && <p className="text-sm text-muted-foreground">No parts added yet.</p>}
-            {parts.map((p, i) => (
+            {defectiveParts.length === 0 && <p className="text-sm text-muted-foreground">No defective parts added yet.</p>}
+            {defectiveParts.map((p, i) => (
               <div key={i} className="rounded-md border p-2">
                 <div className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-12 md:col-span-3">
+                  <div className="col-span-12 md:col-span-4">
                     <Label>Part / Item</Label>
                     <TicketPartPicker
                       ticketProduct={form.product}
                       value={p.model_no || p.name}
-                      onSelect={(item) => updPart(i, { name: item.name, model_no: item.model || item.name })}
+                      onSelect={(item) => updDef(i, { name: item.name, model_no: item.model || item.name })}
                     />
                   </div>
-                  <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
-                  <div className="col-span-8 md:col-span-3">
-                    <Label>Part Serial</Label>
-                    <ImsSerialPicker
-                      value={p.serial || null}
-                      partModelNo={p.model_no || null}
-                      partName={p.name || null}
-                      stockType="good"
-                      allowManual
-                      onSelect={(_it, serial) => updPart(i, { serial })}
-                    />
-                  </div>
-                  <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
-                  <div className="col-span-10 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
+                  <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} /></div>
+                  <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} /></div>
+                  <div className="col-span-6 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} /></div>
                   <div className="col-span-2 md:col-span-1 flex">
-                    <Button type="button" size="icon" variant="ghost" onClick={() => delPart(i)}>
+                    <Button type="button" size="icon" variant="ghost" onClick={() => delDef(i)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
                 </div>
               </div>
             ))}
-            <Button type="button" size="sm" variant="outline" onClick={addPart}>
-              <Plus className="h-4 w-4 mr-1" />Add part
+            <Button type="button" size="sm" variant="outline" onClick={addDef}>
+              <Plus className="h-4 w-4 mr-1" />Add defective part
             </Button>
-            <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3" />Confirm & post to IMS from the ticket detail page after creation.
-            </p>
+          </div>
+        )}
+
+        <div className="md:col-span-2 pt-2 border-t" />
+        <div className="md:col-span-2 flex items-center justify-between">
+          <div>
+            <Label className="text-base">Good Parts Used <span className="text-xs text-muted-foreground font-normal">(issued to customer)</span></Label>
+            <p className="text-xs text-muted-foreground">Capture replacement material issued to the customer.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={goodOn} onCheckedChange={(v) => { setGoodOn(v); if (!v) setGoodParts([]); else if (goodParts.length === 0) addGood(); }} />
+            <span className="text-sm text-muted-foreground">{goodOn ? "ON" : "OFF"}</span>
+          </div>
+        </div>
+        {goodOn && (
+          <div className="md:col-span-2 space-y-2">
+            {goodParts.length === 0 && <p className="text-sm text-muted-foreground">No good parts added yet.</p>}
+            {goodParts.map((p, i) => (
+              <div key={i} className="rounded-md border p-2">
+                <div className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-12 md:col-span-4">
+                    <Label>Part / Item</Label>
+                    <TicketPartPicker
+                      ticketProduct={form.product}
+                      value={p.model_no || p.name}
+                      onSelect={(item) => updGood(i, { name: item.name, model_no: item.model || item.name })}
+                    />
+                  </div>
+                  <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} /></div>
+                  <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} /></div>
+                  <div className="col-span-6 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} /></div>
+                  <div className="col-span-2 md:col-span-1 flex">
+                    <Button type="button" size="icon" variant="ghost" onClick={() => delGood(i)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <Button type="button" size="sm" variant="outline" onClick={addGood}>
+              <Plus className="h-4 w-4 mr-1" />Add good part
+            </Button>
           </div>
         )}
 
