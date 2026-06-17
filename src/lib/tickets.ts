@@ -262,7 +262,10 @@ export function customerClosedMsg(t: {
 }
 
 /** Replace {{key}} placeholders in a template body. */
-export function renderTemplate(body: string, vars: Record<string, string | null | undefined>): string {
+export function renderTemplate(
+  body: string,
+  vars: Record<string, string | null | undefined>,
+): string {
   return body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => {
     const v = vars[k];
     return v == null ? "" : String(v);
@@ -273,8 +276,15 @@ export type WaTemplateId = "engineer_assign" | "oow_quotation" | "ticket_closed"
 
 export const TEMPLATE_PLACEHOLDERS: Record<WaTemplateId, string[]> = {
   engineer_assign: [
-    "case_id", "call_type", "customer_name", "customer_phone",
-    "location", "customer_address", "product", "serial_no", "complaint",
+    "case_id",
+    "call_type",
+    "customer_name",
+    "customer_phone",
+    "location",
+    "customer_address",
+    "product",
+    "serial_no",
+    "complaint",
   ],
   oow_quotation: ["customer_name", "case_id", "quote_no", "product", "product_line"],
   ticket_closed: ["customer_name", "case_id", "product", "product_line"],
