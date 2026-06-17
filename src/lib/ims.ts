@@ -78,6 +78,7 @@ export type Transaction = {
   notes: string | null;
   created_by: string | null;
   created_at: string;
+  oem_case_id: string | null;
 };
 
 export type Transfer = {
@@ -266,4 +267,27 @@ export async function listWarehouses(): Promise<WarehouseLite[]> {
   const { data, error } = await sb.from("warehouses").select("id,code,name,type").order("name");
   if (error) throw error;
   return (data || []) as WarehouseLite[];
+}
+
+/** Friendly display: "Delhi Warehouse (Godown)" */
+export function formatWarehouse(wh: WarehouseLite | null | undefined): string {
+  if (!wh) return "—";
+  return wh.type ? `${wh.name} (${wh.type})` : wh.name;
+}
+
+export function warehouseLookup(warehouses: WarehouseLite[]) {
+  const map = new Map(warehouses.map((w) => [w.id, w]));
+  return (id: string | null | undefined) => formatWarehouse(id ? map.get(id) : null);
+}
+
+/** Transactions filtered to those originating from an indent (or matching free-text). */
+export async function listIndentTransactions(): Promise<Transaction[]> {
+  const { data, error } = await sb
+    .from("ims_transactions")
+    .select("*")
+    .or("indent_id.not.is.null,oem_case_id.not.is.null")
+    .order("txn_date", { ascending: false })
+    .limit(1000);
+  if (error) throw error;
+  return (data || []) as Transaction[];
 }
