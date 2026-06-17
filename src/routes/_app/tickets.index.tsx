@@ -46,6 +46,8 @@ type Row = {
   oem_call?: boolean | null;
   parts_used?: boolean | null;
   parts_details?: Array<{ name?: string; confirmed?: boolean }> | null;
+  defective_parts_received?: boolean | null;
+  good_parts_used?: boolean | null;
   special_instruction?: string | null;
   special_instruction_acknowledged?: boolean | null;
   has_special_activity?: boolean;
