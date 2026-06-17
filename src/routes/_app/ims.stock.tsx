@@ -14,6 +14,7 @@ import {
   STOCK_STATUS_LABEL, STOCK_TYPE_LABEL,
   type StockItem, type WarehouseLite,
 } from "@/lib/ims";
+import { ImsModelPartPicker } from "@/components/ImsModelPartPicker";
 
 export const Route = createFileRoute("/_app/ims/stock")({
   component: StockLedger,
@@ -61,7 +62,7 @@ function StockLedger() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <Input placeholder="Serial / Model / Part / OEM / Case ID / Customer…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Input placeholder="Model / Part Name / No / Serial No / OEM / Case ID / Customer…" value={q} onChange={(e) => setQ(e.target.value)} />
             <Select value={type} onValueChange={setType}>
               <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
               <SelectContent>
@@ -90,9 +91,9 @@ function StockLedger() {
             <thead className="bg-muted/50">
               <tr className="text-left">
                 <th className="p-2">OEM</th>
-                <th className="p-2">Part</th>
-                <th className="p-2">Model</th>
-                <th className="p-2">Serial</th>
+                <th className="p-2">Model / Part Name</th>
+                <th className="p-2">Model / Part No</th>
+                <th className="p-2">Model / Part Serial No</th>
                 <th className="p-2">Warehouse</th>
                 <th className="p-2">Type</th>
                 <th className="p-2">Status</th>
@@ -130,7 +131,7 @@ function NewStockDialog({ open, onOpenChange, warehouses, onSaved }: {
   open: boolean; onOpenChange: (v: boolean) => void; warehouses: WarehouseLite[]; onSaved: () => void;
 }) {
   const [form, setForm] = useState({
-    oem: "", category: "", part_name: "", part_model_no: "", part_serial_no: "",
+    product_id: "", product_type: "", oem: "", category: "", part_name: "", part_model_no: "", part_serial_no: "",
     warehouse_id: "", stock_type: "good", oem_case_id: "", customer_name: "", notes: "",
   });
   const [saving, setSaving] = useState(false);
@@ -138,7 +139,7 @@ function NewStockDialog({ open, onOpenChange, warehouses, onSaved }: {
   function set<K extends keyof typeof form>(k: K, v: string) { setForm((f) => ({ ...f, [k]: v })); }
 
   async function save() {
-    if (!form.part_name.trim()) { toast.error("Part Name is required"); return; }
+    if (!form.part_name.trim()) { toast.error("Model / Part Name is required"); return; }
     setSaving(true);
     try {
       await createStock({
@@ -155,7 +156,7 @@ function NewStockDialog({ open, onOpenChange, warehouses, onSaved }: {
       });
       toast.success("Stock item created");
       onOpenChange(false);
-      setForm({ oem: "", category: "", part_name: "", part_model_no: "", part_serial_no: "",
+      setForm({ product_id: "", product_type: "", oem: "", category: "", part_name: "", part_model_no: "", part_serial_no: "",
         warehouse_id: "", stock_type: "good", oem_case_id: "", customer_name: "", notes: "" });
       onSaved();
     } catch (e: any) {
@@ -168,11 +169,33 @@ function NewStockDialog({ open, onOpenChange, warehouses, onSaved }: {
       <DialogContent className="max-w-2xl">
         <DialogHeader><DialogTitle>New Stock Entry</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <Label>Model / Part *</Label>
+            <ImsModelPartPicker
+              value={form.product_id || null}
+              onSelect={(p) => setForm((f) => ({
+                ...f,
+                product_id: p.id,
+                product_type: p.productType,
+                part_name: p.name,
+                part_model_no: p.model || "",
+                oem: p.brand || "",
+                category: p.category || "",
+              }))}
+            />
+            {form.product_type && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Type: <span className="font-medium">{form.product_type}</span>
+                {form.oem ? <> · OEM: <span className="font-medium">{form.oem}</span></> : null}
+                {form.category ? <> · Category: <span className="font-medium">{form.category}</span></> : null}
+              </div>
+            )}
+          </div>
+          <div><Label>Model / Part Name *</Label><Input value={form.part_name} onChange={(e) => set("part_name", e.target.value)} /></div>
+          <div><Label>Model / Part No</Label><Input value={form.part_model_no} onChange={(e) => set("part_model_no", e.target.value)} /></div>
+          <div className="col-span-2"><Label>Model / Part Serial No (unique)</Label><Input value={form.part_serial_no} onChange={(e) => set("part_serial_no", e.target.value)} /></div>
           <div><Label>OEM</Label><Input value={form.oem} onChange={(e) => set("oem", e.target.value)} /></div>
           <div><Label>Category</Label><Input value={form.category} onChange={(e) => set("category", e.target.value)} /></div>
-          <div className="col-span-2"><Label>Part Name *</Label><Input value={form.part_name} onChange={(e) => set("part_name", e.target.value)} /></div>
-          <div><Label>Part Model No</Label><Input value={form.part_model_no} onChange={(e) => set("part_model_no", e.target.value)} /></div>
-          <div><Label>Part Serial No (unique)</Label><Input value={form.part_serial_no} onChange={(e) => set("part_serial_no", e.target.value)} /></div>
           <div>
             <Label>Warehouse</Label>
             <Select value={form.warehouse_id} onValueChange={(v) => set("warehouse_id", v)}>
