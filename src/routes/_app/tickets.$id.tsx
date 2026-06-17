@@ -978,24 +978,49 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
           </tr>
         </tbody>
       </table>
-      {t.parts_used && t.parts_details.length > 0 && (
+      {t.defective_parts_received && (t.defective_parts_details || []).length > 0 && (
         <>
-          <div className="font-bold mb-1">Parts Used</div>
+          <div className="font-bold mb-1">Defective Parts Received</div>
           <table className="w-full border border-black mb-3">
             <thead className="bg-gray-100"><tr>
               <th className="border border-black px-2 py-1 w-8">#</th>
               <th className="border border-black px-2 py-1">Part / Item</th>
+              <th className="border border-black px-2 py-1">Model / Part No</th>
               <th className="border border-black px-2 py-1 w-16">Qty</th>
-              <th className="border border-black px-2 py-1">Serial</th>
               <th className="border border-black px-2 py-1">Remarks</th>
             </tr></thead>
             <tbody>
-              {t.parts_details.map((p, i) => (
+              {(t.defective_parts_details || []).map((p, i) => (
                 <tr key={i}>
                   <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
                   <td className="border border-black px-2 py-1">{p.name}</td>
+                  <td className="border border-black px-2 py-1">{p.model_no || "-"}</td>
                   <td className="border border-black px-2 py-1 text-center">{p.qty}</td>
-                  <td className="border border-black px-2 py-1 font-mono">{p.serial || "-"}</td>
+                  <td className="border border-black px-2 py-1">{p.remarks || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+      {t.good_parts_used && (t.good_parts_details || []).length > 0 && (
+        <>
+          <div className="font-bold mb-1">Good Parts Used</div>
+          <table className="w-full border border-black mb-3">
+            <thead className="bg-gray-100"><tr>
+              <th className="border border-black px-2 py-1 w-8">#</th>
+              <th className="border border-black px-2 py-1">Part / Item</th>
+              <th className="border border-black px-2 py-1">Model / Part No</th>
+              <th className="border border-black px-2 py-1 w-16">Qty</th>
+              <th className="border border-black px-2 py-1">Remarks</th>
+            </tr></thead>
+            <tbody>
+              {(t.good_parts_details || []).map((p, i) => (
+                <tr key={i}>
+                  <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
+                  <td className="border border-black px-2 py-1">{p.name}</td>
+                  <td className="border border-black px-2 py-1">{p.model_no || "-"}</td>
+                  <td className="border border-black px-2 py-1 text-center">{p.qty}</td>
                   <td className="border border-black px-2 py-1">{p.remarks || "-"}</td>
                 </tr>
               ))}
