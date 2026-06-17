@@ -38,6 +38,7 @@ import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.pr
 import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
 import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
 import { Route as AppIndentIdRouteImport } from './routes/_app/indent.$id'
+import { Route as AppImsTransfersRouteImport } from './routes/_app/ims.transfers'
 import { Route as AppImsTransactionsRouteImport } from './routes/_app/ims.transactions'
 import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
@@ -198,6 +199,11 @@ const AppIndentIdRoute = AppIndentIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppIndentRoute,
 } as any)
+const AppImsTransfersRoute = AppImsTransfersRouteImport.update({
+  id: '/transfers',
+  path: '/transfers',
+  getParentRoute: () => AppImsRoute,
+} as any)
 const AppImsTransactionsRoute = AppImsTransactionsRouteImport.update({
   id: '/transactions',
   path: '/transactions',
@@ -302,6 +308,7 @@ export interface FileRoutesByFullPath {
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/ims/stock': typeof AppImsStockRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
+  '/ims/transfers': typeof AppImsTransfersRoute
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
@@ -342,6 +349,7 @@ export interface FileRoutesByTo {
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/ims/stock': typeof AppImsStockRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
+  '/ims/transfers': typeof AppImsTransfersRoute
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
@@ -389,6 +397,7 @@ export interface FileRoutesById {
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/ims/stock': typeof AppImsStockRoute
   '/_app/ims/transactions': typeof AppImsTransactionsRoute
+  '/_app/ims/transfers': typeof AppImsTransfersRoute
   '/_app/indent/$id': typeof AppIndentIdRoute
   '/_app/indent/new': typeof AppIndentNewRoute
   '/_app/masters/customers': typeof AppMastersCustomersRoute
@@ -436,6 +445,7 @@ export interface FileRouteTypes {
     | '/gatepass/$id'
     | '/ims/stock'
     | '/ims/transactions'
+    | '/ims/transfers'
     | '/indent/$id'
     | '/indent/new'
     | '/masters/customers'
@@ -476,6 +486,7 @@ export interface FileRouteTypes {
     | '/gatepass/$id'
     | '/ims/stock'
     | '/ims/transactions'
+    | '/ims/transfers'
     | '/indent/$id'
     | '/indent/new'
     | '/masters/customers'
@@ -522,6 +533,7 @@ export interface FileRouteTypes {
     | '/_app/gatepass/$id'
     | '/_app/ims/stock'
     | '/_app/ims/transactions'
+    | '/_app/ims/transfers'
     | '/_app/indent/$id'
     | '/_app/indent/new'
     | '/_app/masters/customers'
@@ -752,6 +764,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndentIdRouteImport
       parentRoute: typeof AppIndentRoute
     }
+    '/_app/ims/transfers': {
+      id: '/_app/ims/transfers'
+      path: '/transfers'
+      fullPath: '/ims/transfers'
+      preLoaderRoute: typeof AppImsTransfersRouteImport
+      parentRoute: typeof AppImsRoute
+    }
     '/_app/ims/transactions': {
       id: '/_app/ims/transactions'
       path: '/transactions'
@@ -928,12 +947,14 @@ const AppCrmRouteWithChildren =
 interface AppImsRouteChildren {
   AppImsStockRoute: typeof AppImsStockRoute
   AppImsTransactionsRoute: typeof AppImsTransactionsRoute
+  AppImsTransfersRoute: typeof AppImsTransfersRoute
   AppImsIndexRoute: typeof AppImsIndexRoute
 }
 
 const AppImsRouteChildren: AppImsRouteChildren = {
   AppImsStockRoute: AppImsStockRoute,
   AppImsTransactionsRoute: AppImsTransactionsRoute,
+  AppImsTransfersRoute: AppImsTransfersRoute,
   AppImsIndexRoute: AppImsIndexRoute,
 }
 

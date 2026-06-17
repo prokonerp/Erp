@@ -1,30 +1,8 @@
-import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Plus, ExternalLink } from "lucide-react";
-import { listTransfers, TRANSFER_STATUS_LABEL, type Transfer } from "@/lib/ims";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/ims/transfers")({
-  component: TransfersIndex,
+  component: () => <Outlet />,
 });
-
-function TransfersIndex() {
-  const loc = useLocation();
-  // When on a nested route, show only the outlet
-  if (loc.pathname !== "/ims/transfers") return <Outlet />;
-
-  const [rows, setRows] = useState<Transfer[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try { setRows(await listTransfers()); } finally { setLoading(false); }
-    })();
-  }, []);
-
-  return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
