@@ -105,12 +105,14 @@ function IndentDetail() {
         <CardHeader><CardTitle className="text-base">Linked Ticket (read-only sync)</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div><Label>Case ID</Label><Input value={i.case_id || ""} onChange={(e) => update({ case_id: e.target.value })} className="font-mono bg-muted/50" readOnly /></div>
-          <div><Label>OEM Case ID</Label><Input value={i.oem_case_id || ""} onChange={(e) => update({ oem_case_id: e.target.value })} className="font-mono" /></div>
+          <div><Label>OEM Case ID</Label><Input value={i.oem_case_id || ""} readOnly className="font-mono bg-muted/50" /></div>
           <div><Label>Company (OEM)</Label><Input value={i.company || ""} onChange={(e) => update({ company: e.target.value })} /></div>
-          <div><Label>DEF Model No</Label><Input value={i.def_model_no || ""} onChange={(e) => update({ def_model_no: e.target.value })} /></div>
-          <div><Label>DEF Serial No</Label><Input value={i.def_serial_no || ""} onChange={(e) => update({ def_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
+          <div><Label>DEF Part Model No</Label><Input value={i.def_model_no || ""} onChange={(e) => update({ def_model_no: e.target.value })} /></div>
+          <div><Label>DEF Part Serial No</Label><Input value={i.def_serial_no || ""} onChange={(e) => update({ def_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
           <div><Label>Engineer</Label><Input value={i.engineer_name || ""} onChange={(e) => update({ engineer_name: e.target.value })} /></div>
           <div className="md:col-span-3"><Label>Problem Reported</Label><Textarea rows={2} value={i.problem_reported || ""} onChange={(e) => update({ problem_reported: e.target.value })} /></div>
+          <div><Label>Product Model</Label><Input value={i.product_model || ""} readOnly className="bg-muted/50" /></div>
+          <div><Label>Product Serial</Label><Input value={i.product_serial || ""} readOnly className="font-mono bg-muted/50" /></div>
         </CardContent>
       </Card>
 
