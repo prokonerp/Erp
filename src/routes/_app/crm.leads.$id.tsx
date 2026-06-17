@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { type Lead, type LeadActivity, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel } from "@/lib/crm";
+import { waOpen } from "@/lib/tickets";
 
 export const Route = createFileRoute("/_app/crm/leads/$id")({ component: LeadDetail });
 
@@ -85,12 +86,12 @@ function LeadDetail() {
     toast.success("Marked lost"); load();
   };
 
-  const sendWhatsapp = () => {
+  const sendWhatsapp = async () => {
     if (!customer?.phone) return toast.error("No phone");
-    const phone = customer.phone.replace(/\D/g, "");
-    const num = phone.length === 10 ? "91" + phone : phone;
     const msg = `Dear ${customer.contact_name || customer.company} Team,\n\nGentle follow-up regarding "${lead?.title}".\n\nPlease let us know your decision.\n\nRegards,\nProkon Hi-Tech Systems\nPhone: +91-9810000000 | Email: info@prokonhitech.com`;
-    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank");
+    const ok = await waOpen(customer.phone, msg);
+    if (!ok) return toast.error("Valid mobile number is required before sending WhatsApp message.");
+    toast.success("Opening WhatsApp…");
   };
   const sendEmail = () => {
     if (!customer?.email) return toast.error("No email");
