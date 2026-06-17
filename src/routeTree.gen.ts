@@ -38,6 +38,7 @@ import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.pr
 import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
 import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
 import { Route as AppIndentIdRouteImport } from './routes/_app/indent.$id'
+import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
@@ -196,6 +197,11 @@ const AppIndentIdRoute = AppIndentIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppIndentRoute,
 } as any)
+const AppImsStockRoute = AppImsStockRouteImport.update({
+  id: '/stock',
+  path: '/stock',
+  getParentRoute: () => AppImsRoute,
+} as any)
 const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   id: '/gatepass/$id',
   path: '/gatepass/$id',
@@ -288,6 +294,7 @@ export interface FileRoutesByFullPath {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/ims/stock': typeof AppImsStockRoute
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
@@ -326,6 +333,7 @@ export interface FileRoutesByTo {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/ims/stock': typeof AppImsStockRoute
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
@@ -371,6 +379,7 @@ export interface FileRoutesById {
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
+  '/_app/ims/stock': typeof AppImsStockRoute
   '/_app/indent/$id': typeof AppIndentIdRoute
   '/_app/indent/new': typeof AppIndentNewRoute
   '/_app/masters/customers': typeof AppMastersCustomersRoute
@@ -416,6 +425,7 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/ims/stock'
     | '/indent/$id'
     | '/indent/new'
     | '/masters/customers'
@@ -454,6 +464,7 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/ims/stock'
     | '/indent/$id'
     | '/indent/new'
     | '/masters/customers'
@@ -498,6 +509,7 @@ export interface FileRouteTypes {
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
+    | '/_app/ims/stock'
     | '/_app/indent/$id'
     | '/_app/indent/new'
     | '/_app/masters/customers'
@@ -728,6 +740,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndentIdRouteImport
       parentRoute: typeof AppIndentRoute
     }
+    '/_app/ims/stock': {
+      id: '/_app/ims/stock'
+      path: '/stock'
+      fullPath: '/ims/stock'
+      preLoaderRoute: typeof AppImsStockRouteImport
+      parentRoute: typeof AppImsRoute
+    }
     '/_app/gatepass/$id': {
       id: '/_app/gatepass/$id'
       path: '/gatepass/$id'
@@ -888,10 +907,12 @@ const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
 interface AppImsRouteChildren {
+  AppImsStockRoute: typeof AppImsStockRoute
   AppImsIndexRoute: typeof AppImsIndexRoute
 }
 
 const AppImsRouteChildren: AppImsRouteChildren = {
+  AppImsStockRoute: AppImsStockRoute,
   AppImsIndexRoute: AppImsIndexRoute,
 }
 
