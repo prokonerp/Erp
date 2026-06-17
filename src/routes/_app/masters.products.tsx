@@ -377,6 +377,7 @@ export function ProductMasterPage() {
         <div className="flex gap-2">
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])} />
           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4 mr-1" />Import CSV</Button>
+          <Button variant="outline" size="sm" onClick={downloadCompatibilityReport}>Spare Parts Report</Button>
           <ExportButtons
             name="Prokon_Products"
             title="Product Master"
