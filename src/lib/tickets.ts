@@ -124,7 +124,7 @@ export function waLink(phone: string | null | undefined, text: string): string {
 }
 
 /** Click handler: copy message to clipboard, then open WhatsApp in a new browser tab.
- *  Uses WhatsApp Web / wa.me with target=_blank so WhatsApp is never embedded
+ *  Uses WhatsApp Web with target=_blank so WhatsApp is never embedded
  *  inside an iframe/modal (which browsers block with ERR_BLOCKED_BY_RESPONSE).
  *  Returns true if the phone is valid and a launch was attempted, false if the
  *  number is missing/invalid. If the browser blocks the popup, a fallback toast
@@ -137,11 +137,13 @@ export async function waOpen(
   const p = waPhone(phone);
   if (!p) return false;
   ensureWhatsAppDebugListeners();
+  observeWhatsAppEmbedsForDebug();
   const url = `https://web.whatsapp.com/send?phone=${p}&text=${encodeURIComponent(text)}`;
   const embedDiagnostics = getWhatsAppEmbedDiagnostics();
   let w: Window | null = null;
   let failureReason: string | null = null;
   let browserAction = "window.open(_blank)";
+  let anchorFallbackAttempted = false;
   console.info("WhatsApp launch requested", {
     module: options.module || "general",
     recordNumber: options.recordNumber ?? null,
@@ -163,12 +165,16 @@ export async function waOpen(
   } catch (error) {
     failureReason = error instanceof Error ? error.message : "window.open failed";
   }
+  if (!w) {
+    anchorFallbackAttempted = openWhatsAppWithAnchor(url);
+    browserAction = anchorFallbackAttempted ? "anchor[target=_blank].click()" : browserAction;
+  }
   try {
     await navigator.clipboard.writeText(text);
   } catch {
     /* ignore */
   }
-  const launched = !!w;
+  const launched = !!w || anchorFallbackAttempted;
   void logWhatsAppLaunch({
     module: options.module || "general",
     recordId: options.recordId ?? null,
@@ -188,14 +194,15 @@ export async function waOpen(
     generatedUrl: url,
     browserAction,
     launchSuccess: launched,
+    anchorFallbackAttempted,
     iframeCreated: getWhatsAppEmbedDiagnostics().whatsAppIframeCount > embedDiagnostics.whatsAppIframeCount,
     modalOpened: getWhatsAppEmbedDiagnostics().whatsAppDialogCount > embedDiagnostics.whatsAppDialogCount,
     failureReason,
     timestamp: new Date().toISOString(),
   });
-  if (!w) {
+  if (!launched) {
     browserAction = "fallback action window.open(_blank)";
-    toast.error("Unable to launch WhatsApp automatically. Click here to open WhatsApp Web.", {
+    toast.error("Click below to open WhatsApp Web.", {
       action: {
         label: "Open WhatsApp Web",
         onClick: () => {
@@ -215,6 +222,37 @@ export async function waOpen(
     });
   }
   return true;
+}
+
+function openWhatsAppWithAnchor(url: string): boolean {
+  if (typeof document === "undefined") return false;
+  try {
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.setAttribute("aria-label", "Open WhatsApp Web");
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    console.info("WhatsApp anchor fallback attempted", {
+      generatedUrl: url,
+      browserAction: "anchor[target=_blank].click()",
+      iframeBeingCreated: false,
+      modalBeingOpened: false,
+      drawerBeingOpened: false,
+      timestamp: new Date().toISOString(),
+    });
+    return true;
+  } catch (error) {
+    console.warn("WhatsApp anchor fallback failed", {
+      generatedUrl: url,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    });
+    return false;
+  }
 }
 
 let whatsAppDebugListenersAttached = false;
