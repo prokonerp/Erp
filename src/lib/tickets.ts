@@ -174,7 +174,7 @@ export async function waOpen(
   } catch {
     /* ignore */
   }
-  const launched = !!w || anchorFallbackAttempted;
+  const launched = !!w;
   void logWhatsAppLaunch({
     module: options.module || "general",
     recordId: options.recordId ?? null,
