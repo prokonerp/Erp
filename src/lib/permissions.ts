@@ -9,6 +9,7 @@ export const FALLBACK_MODULES: { key: ModuleKey; label: string; supports_import?
   { key: "tickets", label: "Tickets", supports_import: true },
   { key: "indent", label: "Indent" },
   { key: "amc", label: "AMC", supports_import: true },
+  { key: "ims", label: "IMS" },
   { key: "gatepass", label: "Gatepass" },
   { key: "quotations", label: "Quotations" },
   { key: "reports", label: "Reports" },
