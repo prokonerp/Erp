@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, fmtMonthYear, generatePMDates, statusBadgeClass, statusLabel } from "@/lib/amc";
 import { AgreementDocUpload } from "@/components/AgreementDocUpload";
 import { getOemLogo } from "@/lib/oemLogos";
+import { waOpen } from "@/lib/tickets";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/_app/amc/$id")({
