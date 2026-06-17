@@ -14,6 +14,7 @@ import {
   TXN_TYPE_LABEL, type Transaction, type WarehouseLite, type TxnType,
 } from "@/lib/ims";
 import { ImsModelPartPicker } from "@/components/ImsModelPartPicker";
+import { ImsSerialPicker } from "@/components/ImsSerialPicker";
 
 export const Route = createFileRoute("/_app/ims/transactions")({
   component: TransactionsList,
@@ -195,7 +196,25 @@ function NewTxnDialog({ open, onOpenChange, warehouses, onSaved }: {
           <div><Label>OEM</Label><Input value={form.oem} onChange={(e) => set("oem", e.target.value)} /></div>
           <div><Label>Model / Part Name</Label><Input value={form.part_name} onChange={(e) => set("part_name", e.target.value)} /></div>
           <div><Label>Model / Part No</Label><Input value={form.part_model_no} onChange={(e) => set("part_model_no", e.target.value)} /></div>
-          <div><Label>Model / Part Serial No</Label><Input value={form.part_serial_no} onChange={(e) => set("part_serial_no", e.target.value)} /></div>
+          <div>
+            <Label>Model / Part Serial No</Label>
+            <ImsSerialPicker
+              value={form.part_serial_no || null}
+              partModelNo={form.part_model_no || null}
+              partName={form.part_name || null}
+              warehouseId={form.from_warehouse_id || null}
+              allowManual
+              onSelect={(item, serial) => setForm((f) => ({
+                ...f,
+                part_serial_no: serial,
+                ...(item ? {
+                  part_model_no: item.part_model_no || f.part_model_no,
+                  part_name: item.part_name || f.part_name,
+                  from_warehouse_id: f.from_warehouse_id || item.warehouse_id || "",
+                } : {}),
+              }))}
+            />
+          </div>
           <div>
             <Label>From Warehouse</Label>
             <Select value={form.from_warehouse_id} onValueChange={(v) => set("from_warehouse_id", v)}>
