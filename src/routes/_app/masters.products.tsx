@@ -112,7 +112,7 @@ export function ProductMasterPage() {
   const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentSearch, setParentSearch] = useState("");
-  const [reportOpen, setReportOpen] = useState(false);
+  void linkedParents; // reserved for future UI
 
   const load = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
