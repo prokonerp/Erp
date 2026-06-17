@@ -50,6 +50,10 @@ type Ticket = {
   assigned_at: string | null;
   parts_used: boolean;
   parts_details: PartLine[];
+  defective_parts_received: boolean;
+  defective_parts_details: PartLine[];
+  good_parts_used: boolean;
+  good_parts_details: PartLine[];
   quotation_id: string | null;
   closed_at: string | null;
   remarks: string | null;
@@ -149,8 +153,6 @@ function TicketDetail() {
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
   const { isAdmin } = useIsAdmin();
-  const [confirmPartsOpen, setConfirmPartsOpen] = useState(false);
-  const partsBaselineRef = useRef<string>("[]");
 
   const load = async () => {
     const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
@@ -165,8 +167,20 @@ function TicketDetail() {
       const parts = Array.isArray((tk as { parts_details?: unknown }).parts_details)
         ? ((tk as { parts_details: unknown[] }).parts_details as PartLine[])
         : [];
-      setT({ ...row, parts_details: parts });
-      partsBaselineRef.current = JSON.stringify(parts);
+      const defParts = Array.isArray((tk as { defective_parts_details?: unknown }).defective_parts_details)
+        ? ((tk as { defective_parts_details: unknown[] }).defective_parts_details as PartLine[])
+        : [];
+      const goodParts = Array.isArray((tk as { good_parts_details?: unknown }).good_parts_details)
+        ? ((tk as { good_parts_details: unknown[] }).good_parts_details as PartLine[])
+        : [];
+      setT({
+        ...row,
+        parts_details: parts,
+        defective_parts_received: !!(tk as { defective_parts_received?: boolean }).defective_parts_received,
+        defective_parts_details: defParts,
+        good_parts_used: !!(tk as { good_parts_used?: boolean }).good_parts_used,
+        good_parts_details: goodParts,
+      });
       if (row.quotation_id) {
         const { data: q } = await supabase.from("quotations").select("quote_no").eq("id", row.quotation_id).single();
         setQuoteNo((q as { quote_no?: string } | null)?.quote_no || "");
