@@ -25,6 +25,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useIsAdmin } from "@/lib/useRole";
 import { Lock, Unlock, ShieldCheck } from "lucide-react";
+import { TicketPartPicker } from "@/components/TicketPartPicker";
+import { ImsSerialPicker } from "@/components/ImsSerialPicker";
+import { findAvailableStockBySerial, issueStockToTicket } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -415,6 +418,16 @@ function TicketDetail() {
       toast.error("Please complete all mandatory part details before confirming.");
       return;
     }
+    // Inventory validation: every serial must exist & be Available in IMS
+    const stockHits: Record<string, Awaited<ReturnType<typeof findAvailableStockBySerial>>> = {};
+    for (const p of toConfirm) {
+      const hit = await findAvailableStockBySerial((p.serial || "").trim(), p.model_no || null);
+      if (!hit) {
+        toast.error(`Selected spare part serial number "${p.serial}" is not available in inventory.`);
+        return;
+      }
+      stockHits[p.serial as string] = hit;
+    }
     const { data: u } = await supabase.auth.getUser();
     const actor = u.user?.email || u.user?.id || "user";
     const stamp = new Date().toISOString();
@@ -424,9 +437,32 @@ function TicketDetail() {
     const { error } = await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
     if (error) { toast.error(error.message); return; }
     update({ parts_details: next });
+    // Push Good Stock Out per confirmed line (best-effort; do not block confirmation on failure)
+    for (const p of toConfirm) {
+      const stock = stockHits[p.serial as string];
+      if (!stock) continue;
+      try {
+        await issueStockToTicket({
+          stockItemId: stock.id,
+          ticketId: t.id,
+          ticketNo: t.case_id,
+          caseId: t.case_id,
+          engineer: t.assigned_engineer_name,
+          customerName: t.customer_name,
+          partModelNo: p.model_no || stock.part_model_no,
+          partSerialNo: p.serial || stock.part_serial_no,
+          partName: p.name || stock.part_name,
+          oem: stock.oem,
+          qty: Number(p.qty) || 1,
+        });
+      } catch (e) {
+        // surface but keep going so other rows still record
+        toast.warning(`IMS movement failed for ${p.serial}: ${(e as Error).message}`);
+      }
+    }
     await logActivity(
       "parts_confirmed",
-      `${toConfirm.length} part row(s) confirmed & locked by ${actor}${isAdmin ? " (admin)" : ""}`,
+      `${toConfirm.length} part row(s) confirmed & locked by ${actor}${isAdmin ? " (admin)" : ""} — IMS Good Stock Out posted`,
     );
     setConfirmPartsOpen(false);
     toast.success("Parts confirmed and locked");
@@ -752,10 +788,32 @@ function TicketDetail() {
                             {p.confirmed && p.confirmed_by ? `By ${p.confirmed_by}${p.confirmed_at ? ` · ${new Date(p.confirmed_at).toLocaleString()}` : ""}` : ""}
                           </div>
                         </div>
-                        <div className="grid grid-cols-12 gap-2 items-end">
-                          <div className="col-span-12 md:col-span-3"><Label>Part / Item</Label><Input disabled={locked} value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
+                         <div className="grid grid-cols-12 gap-2 items-end">
+                          <div className="col-span-12 md:col-span-3">
+                            <Label>Part / Item</Label>
+                            <TicketPartPicker
+                              ticketProduct={t.product}
+                              value={p.model_no || p.name}
+                              disabled={locked}
+                              onSelect={(item) => updPart(i, {
+                                name: item.name,
+                                model_no: item.model || item.name,
+                              })}
+                            />
+                          </div>
                           <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input disabled={locked} value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
-                          <div className="col-span-8 md:col-span-2"><Label>Part Serial</Label><Input disabled={locked} value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
+                          <div className="col-span-8 md:col-span-2">
+                            <Label>Part Serial</Label>
+                            <ImsSerialPicker
+                              value={p.serial || null}
+                              partModelNo={p.model_no || null}
+                              partName={p.name || null}
+                              stockType="good"
+                              allowManual
+                              disabled={locked}
+                              onSelect={(_item, serial) => updPart(i, { serial })}
+                            />
+                          </div>
                           <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input disabled={locked} value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
                           <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input disabled={locked} value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
                           <div className="col-span-2 md:col-span-1 flex gap-1">

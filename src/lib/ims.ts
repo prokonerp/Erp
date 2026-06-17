@@ -291,3 +291,63 @@ export async function listIndentTransactions(): Promise<Transaction[]> {
   if (error) throw error;
   return (data || []) as Transaction[];
 }
+
+/** Look up an AVAILABLE inventory stock item by serial (optionally scoped to a model). */
+export async function findAvailableStockBySerial(
+  serial: string,
+  partModelNo?: string | null,
+): Promise<StockItem | null> {
+  let q = sb.from("ims_stock_items").select("*").eq("part_serial_no", serial).eq("stock_status", "available");
+  if (partModelNo) q = q.eq("part_model_no", partModelNo);
+  const { data, error } = await q.maybeSingle();
+  if (error) throw error;
+  return (data || null) as StockItem | null;
+}
+
+/**
+ * Issue a stock item to a ticket: marks the item `issued` and writes a
+ * `good_out` (or `defective_out`) transaction with full traceability.
+ */
+export async function issueStockToTicket(input: {
+  stockItemId: string;
+  ticketId: string;
+  ticketNo?: string | null;
+  caseId?: string | null;
+  engineer?: string | null;
+  customerName?: string | null;
+  partModelNo?: string | null;
+  partSerialNo?: string | null;
+  partName?: string | null;
+  oem?: string | null;
+  qty?: number;
+}): Promise<void> {
+  const { data: stock } = await sb.from("ims_stock_items").select("*").eq("id", input.stockItemId).maybeSingle();
+  const txnType = (stock?.stock_type === "defective") ? "defective_out" : "good_out";
+  const refParts = [
+    input.ticketNo ? `Ticket ${input.ticketNo}` : null,
+    input.caseId ? `Case ${input.caseId}` : null,
+    input.engineer ? `Engineer ${input.engineer}` : null,
+  ].filter(Boolean).join(" · ");
+  await sb.from("ims_transactions").insert({
+    txn_type: txnType,
+    stock_item_id: input.stockItemId,
+    part_name: input.partName ?? stock?.part_name ?? null,
+    part_model_no: input.partModelNo ?? stock?.part_model_no ?? null,
+    part_serial_no: input.partSerialNo ?? stock?.part_serial_no ?? null,
+    oem: input.oem ?? stock?.oem ?? null,
+    from_warehouse_id: stock?.warehouse_id ?? null,
+    to_warehouse_id: null,
+    from_party: null,
+    to_party: input.customerName || "Customer (Ticket)",
+    qty: input.qty ?? 1,
+    ticket_id: input.ticketId,
+    reference: refParts || (input.ticketNo || input.caseId || null),
+    notes: "Auto-issued from Ticket → Parts Used confirmation",
+  });
+  await sb.from("ims_stock_items").update({
+    stock_status: "issued",
+    ticket_id: input.ticketId,
+    customer_name: input.customerName ?? null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", input.stockItemId);
+}
