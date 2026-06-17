@@ -979,6 +979,7 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
               <th className="border border-black px-2 py-1 w-8">#</th>
               <th className="border border-black px-2 py-1">Part / Item</th>
               <th className="border border-black px-2 py-1">Model / Part No</th>
+              <th className="border border-black px-2 py-1">Model / Part Serial No</th>
               <th className="border border-black px-2 py-1 w-16">Qty</th>
               <th className="border border-black px-2 py-1">Remarks</th>
             </tr></thead>
@@ -988,6 +989,7 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
                   <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
                   <td className="border border-black px-2 py-1">{p.name}</td>
                   <td className="border border-black px-2 py-1">{p.model_no || "-"}</td>
+                  <td className="border border-black px-2 py-1 font-mono">{p.serial || "-"}</td>
                   <td className="border border-black px-2 py-1 text-center">{p.qty}</td>
                   <td className="border border-black px-2 py-1">{p.remarks || "-"}</td>
                 </tr>
@@ -1004,6 +1006,7 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
               <th className="border border-black px-2 py-1 w-8">#</th>
               <th className="border border-black px-2 py-1">Part / Item</th>
               <th className="border border-black px-2 py-1">Model / Part No</th>
+              <th className="border border-black px-2 py-1">Model / Part Serial No</th>
               <th className="border border-black px-2 py-1 w-16">Qty</th>
               <th className="border border-black px-2 py-1">Remarks</th>
             </tr></thead>
@@ -1013,6 +1016,7 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
                   <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
                   <td className="border border-black px-2 py-1">{p.name}</td>
                   <td className="border border-black px-2 py-1">{p.model_no || "-"}</td>
+                  <td className="border border-black px-2 py-1 font-mono">{p.serial || "-"}</td>
                   <td className="border border-black px-2 py-1 text-center">{p.qty}</td>
                   <td className="border border-black px-2 py-1">{p.remarks || "-"}</td>
                 </tr>
