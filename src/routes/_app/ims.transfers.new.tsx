@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { createTransfer, listWarehouses, type WarehouseLite } from "@/lib/ims";
+import { ImsModelPartPicker } from "@/components/ImsModelPartPicker";
 
 export const Route = createFileRoute("/_app/ims/transfers/new")({
   component: NewTransfer,
@@ -17,6 +18,7 @@ function NewTransfer() {
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [form, setForm] = useState({
     source_warehouse_id: "", destination_warehouse_id: "",
+    product_id: "", product_type: "",
     oem: "", part_name: "", part_model_no: "", part_serial_no: "",
     stock_type: "good", qty: 1, reason: "", remarks: "",
   });
@@ -73,10 +75,30 @@ function NewTransfer() {
             <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
           </Select>
         </div>
+        <div className="md:col-span-2">
+          <Label>Model / Part</Label>
+          <ImsModelPartPicker
+            value={form.product_id || null}
+            onSelect={(p) => setForm((f) => ({
+              ...f,
+              product_id: p.id,
+              product_type: p.productType,
+              part_name: p.name,
+              part_model_no: p.model || "",
+              oem: p.brand || "",
+            }))}
+          />
+          {form.product_type && (
+            <div className="text-xs text-muted-foreground mt-1">
+              Type: <span className="font-medium">{form.product_type}</span>
+              {form.oem ? <> · OEM: <span className="font-medium">{form.oem}</span></> : null}
+            </div>
+          )}
+        </div>
         <div><Label>OEM</Label><Input value={form.oem} onChange={(e) => set("oem", e.target.value)} /></div>
-        <div><Label>Part Name</Label><Input value={form.part_name} onChange={(e) => set("part_name", e.target.value)} /></div>
-        <div><Label>Model No</Label><Input value={form.part_model_no} onChange={(e) => set("part_model_no", e.target.value)} /></div>
-        <div><Label>Serial No</Label><Input value={form.part_serial_no} onChange={(e) => set("part_serial_no", e.target.value)} /></div>
+        <div><Label>Model / Part Name</Label><Input value={form.part_name} onChange={(e) => set("part_name", e.target.value)} /></div>
+        <div><Label>Model / Part No</Label><Input value={form.part_model_no} onChange={(e) => set("part_model_no", e.target.value)} /></div>
+        <div><Label>Model / Part Serial No</Label><Input value={form.part_serial_no} onChange={(e) => set("part_serial_no", e.target.value)} /></div>
         <div>
           <Label>Stock Type</Label>
           <Select value={form.stock_type} onValueChange={(v) => set("stock_type", v)}>

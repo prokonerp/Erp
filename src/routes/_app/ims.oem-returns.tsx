@@ -45,8 +45,8 @@ function OemReturns() {
           <thead className="bg-muted/50">
             <tr className="text-left">
               <th className="p-2">OEM</th>
-              <th className="p-2">Part</th>
-              <th className="p-2">Serial</th>
+              <th className="p-2">Model / Part Name</th>
+              <th className="p-2">Model / Part Serial No</th>
               <th className="p-2">OEM Case</th>
               <th className="p-2">Status</th>
               <th className="p-2 text-right">Action</th>

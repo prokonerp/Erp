@@ -81,9 +81,9 @@ function TransferDetail() {
           <div><span className="text-muted-foreground">Source: </span>{whName(t.source_warehouse_id)}</div>
           <div><span className="text-muted-foreground">Destination: </span>{whName(t.destination_warehouse_id)}</div>
           <div><span className="text-muted-foreground">OEM: </span>{t.oem || "—"}</div>
-          <div><span className="text-muted-foreground">Part: </span>{t.part_name || "—"}</div>
-          <div><span className="text-muted-foreground">Model: </span>{t.part_model_no || "—"}</div>
-          <div><span className="text-muted-foreground">Serial: </span><span className="font-mono">{t.part_serial_no || "—"}</span></div>
+          <div><span className="text-muted-foreground">Model / Part Name: </span>{t.part_name || "—"}</div>
+          <div><span className="text-muted-foreground">Model / Part No: </span>{t.part_model_no || "—"}</div>
+          <div><span className="text-muted-foreground">Model / Part Serial No: </span><span className="font-mono">{t.part_serial_no || "—"}</span></div>
           <div><span className="text-muted-foreground">Qty: </span>{t.qty}</div>
           <div className="md:col-span-2"><span className="text-muted-foreground">Reason: </span>{t.reason || "—"}</div>
           <div className="md:col-span-2"><span className="text-muted-foreground">Remarks: </span>{t.remarks || "—"}</div>
