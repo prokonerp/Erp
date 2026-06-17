@@ -40,12 +40,15 @@ function TransactionsList() {
     return rows.filter((r) => {
       if (type !== "all" && r.txn_type !== type) return false;
       if (!s) return true;
-      return [r.txn_no, r.part_name, r.part_model_no, r.part_serial_no, r.oem, r.reference, r.notes]
+      return [r.txn_no, r.part_name, r.part_model_no, r.part_serial_no, r.oem, r.reference, r.notes, r.indent_id, r.ticket_id, r.oem_case_id]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
     });
   }, [rows, q, type]);
 
-  const wh = (id: string | null) => warehouses.find((w) => w.id === id)?.name || "—";
+  const wh = (id: string | null) => {
+    const w = warehouses.find((x) => x.id === id);
+    return w ? (w.type ? `${w.name} (${w.type})` : w.name) : "—";
+  };
 
   return (
     <div className="space-y-4">
@@ -57,7 +60,7 @@ function TransactionsList() {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Input placeholder="Txn no / part / serial / reference…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input placeholder="Txn no / part / serial / indent / case / ticket…" value={q} onChange={(e) => setQ(e.target.value)} />
           <Select value={type} onValueChange={setType}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -81,14 +84,15 @@ function TransactionsList() {
                 <th className="p-2">From</th>
                 <th className="p-2">To</th>
                 <th className="p-2">Qty</th>
+                <th className="p-2">Indent / Case</th>
                 <th className="p-2">Ref</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={8}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={9}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={8}>No transactions.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={9}>No transactions.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2 font-mono">{r.txn_no}</td>
@@ -98,6 +102,11 @@ function TransactionsList() {
                   <td className="p-2">{wh(r.from_warehouse_id)}{r.from_party ? ` (${r.from_party})` : ""}</td>
                   <td className="p-2">{wh(r.to_warehouse_id)}{r.to_party ? ` (${r.to_party})` : ""}</td>
                   <td className="p-2">{r.qty}</td>
+                  <td className="p-2 text-xs font-mono">
+                    {r.indent_id ? <div>IND: {r.indent_id.slice(0, 8)}…</div> : null}
+                    {r.oem_case_id ? <div>Case: {r.oem_case_id}</div> : null}
+                    {!r.indent_id && !r.oem_case_id ? "—" : null}
+                  </td>
                   <td className="p-2 text-xs">{r.reference || "—"}</td>
                 </tr>
               ))}

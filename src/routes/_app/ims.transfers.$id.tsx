@@ -40,7 +40,10 @@ function TransferDetail() {
   if (loading) return <div className="text-muted-foreground">Loading…</div>;
   if (!t) return <div className="text-muted-foreground">Transfer not found.</div>;
 
-  const whName = (wid: string | null) => warehouses.find((w) => w.id === wid)?.name || "—";
+  const whName = (wid: string | null) => {
+    const w = warehouses.find((x) => x.id === wid);
+    return w ? (w.type ? `${w.name} (${w.type})` : w.name) : "—";
+  };
 
   async function action(patch: Partial<Transfer>, msg: string) {
     setBusy(true);
@@ -48,7 +51,10 @@ function TransferDetail() {
       const { data } = await supabase.auth.getUser();
       const uid = data.user?.id;
       const final: Partial<Transfer> = { ...patch };
-      if (patch.status === "approved") { final.approved_by = uid || null; final.approved_at = new Date().toISOString(); }
+      if (patch.status === "approved" || patch.status === "in_transit") {
+        final.approved_by = uid || null;
+        final.approved_at = new Date().toISOString();
+      }
       if (patch.status === "received" || patch.status === "completed") {
         final.received_by = uid || null; final.received_at = new Date().toISOString();
       }
@@ -96,7 +102,10 @@ function TransferDetail() {
           )}
           {t.status === "submitted" && isAdmin && (
             <>
-              <Button size="sm" disabled={busy} onClick={() => action({ status: "approved" }, "Approved")}>Approve</Button>
+              <Button size="sm" disabled={busy}
+                onClick={() => action({ status: "in_transit" }, "Approved — stock dispatched (In Transit)")}>
+                Approve &amp; Dispatch
+              </Button>
               <div className="flex gap-2 items-center">
                 <Input placeholder="Reject reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="w-60" />
                 <Button size="sm" variant="destructive" disabled={busy || !rejectReason}
@@ -107,14 +116,14 @@ function TransferDetail() {
             </>
           )}
           {t.status === "approved" && (
-            <Button size="sm" disabled={busy} onClick={() => action({ status: "in_transit" }, "Marked in transit")}>Mark In Transit</Button>
+            <Button size="sm" disabled={busy} onClick={() => action({ status: "in_transit" }, "Marked in transit — Transfer Out recorded")}>Mark In Transit</Button>
           )}
           {(t.status === "in_transit" || t.status === "approved") && (
             <div className="flex gap-2 items-center">
               <Label className="text-xs">Receipt remarks</Label>
               <Input value={recvRemarks} onChange={(e) => setRecvRemarks(e.target.value)} className="w-60" />
               <Button size="sm" disabled={busy}
-                onClick={() => action({ status: "completed", receipt_remarks: recvRemarks || null }, "Receipt confirmed")}>
+                onClick={() => action({ status: "completed", receipt_remarks: recvRemarks || null }, "Receipt confirmed — Transfer In recorded, stock moved")}>
                 Confirm Receipt
               </Button>
             </div>

@@ -869,6 +869,7 @@ export type Database = {
           indent_id: string | null
           notes: string | null
           oem: string | null
+          oem_case_id: string | null
           part_model_no: string | null
           part_name: string | null
           part_serial_no: string | null
@@ -892,6 +893,7 @@ export type Database = {
           indent_id?: string | null
           notes?: string | null
           oem?: string | null
+          oem_case_id?: string | null
           part_model_no?: string | null
           part_name?: string | null
           part_serial_no?: string | null
@@ -915,6 +917,7 @@ export type Database = {
           indent_id?: string | null
           notes?: string | null
           oem?: string | null
+          oem_case_id?: string | null
           part_model_no?: string | null
           part_name?: string | null
           part_serial_no?: string | null
