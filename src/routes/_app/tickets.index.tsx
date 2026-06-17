@@ -383,15 +383,24 @@ function RowActions({
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem asChild disabled={!r.oem_call}>
-          <Link
-            to="/indent/new"
-            search={{ ticket_id: r.id }}
-            title={r.oem_call ? "Create Indent from this OEM ticket" : "Enable OEM Call on the ticket to create an Indent"}
-          >
-            <ClipboardList className="h-4 w-4 mr-2" />Create Indent
-          </Link>
-        </DropdownMenuItem>
+        {(() => {
+          const hasPart = Array.isArray(r.parts_details) && r.parts_details.some((p) => (p?.name || "").trim());
+          const canIndent = !!r.oem_call && !!r.parts_used && hasPart;
+          const title = !r.oem_call
+            ? "Enable OEM Call on the ticket to create an Indent"
+            : !r.parts_used
+            ? "Enable Parts Used on the ticket to create an Indent"
+            : !hasPart
+            ? "Add at least one Part entry on the ticket to create an Indent"
+            : "Create Indent from this OEM ticket";
+          return (
+            <DropdownMenuItem asChild disabled={!canIndent}>
+              <Link to="/indent/new" search={{ ticket_id: r.id }} title={title}>
+                <ClipboardList className="h-4 w-4 mr-2" />Create Indent
+              </Link>
+            </DropdownMenuItem>
+          );
+        })()}
 
         <DropdownMenuSeparator />
 
