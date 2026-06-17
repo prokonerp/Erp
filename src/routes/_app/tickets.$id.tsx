@@ -683,19 +683,55 @@ function TicketDetail() {
               {t.parts_used ? (
                 <div className="space-y-2">
                   {t.parts_details.length === 0 && <p className="text-sm text-muted-foreground">No parts added yet.</p>}
-                  {t.parts_details.map((p, i) => (
-                    <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                      <div className="col-span-12 md:col-span-3"><Label>Part / Item</Label><Input value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
-                      <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
-                      <div className="col-span-8 md:col-span-2"><Label>Part Serial</Label><Input value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
-                      <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
-                      <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
-                      <div className="col-span-2 md:col-span-1">
-                        <Button size="icon" variant="ghost" onClick={() => delPart(i)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  {t.parts_details.map((p, i) => {
+                    const locked = !!p.confirmed && !isAdmin;
+                    return (
+                      <div key={i} className={`rounded-md border p-2 ${p.confirmed ? "border-green-300 bg-green-50/40" : "border-transparent"}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          {p.confirmed ? (
+                            <Badge className="bg-green-100 text-green-800 border border-green-300" variant="outline">
+                              <Lock className="h-3 w-3 mr-1" />Confirmed / Locked
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-zinc-100 text-zinc-700">Draft</Badge>
+                          )}
+                          <div className="text-xs text-muted-foreground">
+                            {p.confirmed && p.confirmed_by ? `By ${p.confirmed_by}${p.confirmed_at ? ` · ${new Date(p.confirmed_at).toLocaleString()}` : ""}` : ""}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-12 gap-2 items-end">
+                          <div className="col-span-12 md:col-span-3"><Label>Part / Item</Label><Input disabled={locked} value={p.name} onChange={(e) => updPart(i, { name: e.target.value })} /></div>
+                          <div className="col-span-12 md:col-span-2"><Label>Part Model No</Label><Input disabled={locked} value={p.model_no || ""} onChange={(e) => updPart(i, { model_no: e.target.value })} /></div>
+                          <div className="col-span-8 md:col-span-2"><Label>Part Serial</Label><Input disabled={locked} value={p.serial || ""} onChange={(e) => updPart(i, { serial: e.target.value })} className="font-mono" /></div>
+                          <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input disabled={locked} value={p.qty} onChange={(e) => updPart(i, { qty: e.target.value })} /></div>
+                          <div className="col-span-10 md:col-span-3"><Label>Remarks</Label><Input disabled={locked} value={p.remarks || ""} onChange={(e) => updPart(i, { remarks: e.target.value })} /></div>
+                          <div className="col-span-2 md:col-span-1 flex gap-1">
+                            {p.confirmed && isAdmin && (
+                              <Button size="icon" variant="ghost" title="Unlock (Admin)" onClick={() => unlockPart(i)}>
+                                <Unlock className="h-4 w-4 text-amber-600" />
+                              </Button>
+                            )}
+                            <Button size="icon" variant="ghost" disabled={locked} onClick={() => delPart(i)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  <Button size="sm" variant="outline" onClick={addPart}><Plus className="h-4 w-4 mr-1" />Add part</Button>
+                    );
+                  })}
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <Button size="sm" variant="outline" onClick={addPart}><Plus className="h-4 w-4 mr-1" />Add part</Button>
+                    {t.parts_details.length > 0 && t.parts_details.some((p) => !p.confirmed) && (
+                      <Button size="sm" onClick={() => setConfirmPartsOpen(true)}>
+                        <ShieldCheck className="h-4 w-4 mr-1" />Save & Confirm Parts
+                      </Button>
+                    )}
+                    {t.parts_details.length > 0 && t.parts_details.every((p) => p.confirmed) && (
+                      <span className="text-xs text-green-700 inline-flex items-center gap-1">
+                        <Lock className="h-3 w-3" />All parts confirmed & locked
+                      </span>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No parts used for this call.</p>
