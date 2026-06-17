@@ -328,10 +328,74 @@ function TicketDetail() {
   };
 
   const addPart = () => update({ parts_details: [...t.parts_details, { name: "", qty: "1" }] });
-  const updPart = (i: number, p: Partial<PartLine>) =>
+  const updPart = (i: number, p: Partial<PartLine>) => {
+    const row = t.parts_details[i];
+    if (row?.confirmed && !isAdmin) {
+      toast.error("This part is locked. Only an Administrator can edit it.");
+      return;
+    }
     update({ parts_details: t.parts_details.map((x, idx) => (idx === i ? { ...x, ...p } : x)) });
-  const delPart = (i: number) =>
+  };
+  const delPart = async (i: number) => {
+    const row = t.parts_details[i];
+    if (row?.confirmed && !isAdmin) {
+      toast.error("This part is locked. Only an Administrator can delete it.");
+      return;
+    }
+    if (row?.confirmed && isAdmin) {
+      await logActivity("parts_admin_edit", `Admin deleted confirmed part: ${row.name || "(unnamed)"}${row.serial ? ` · Serial ${row.serial}` : ""}`);
+    }
     update({ parts_details: t.parts_details.filter((_, idx) => idx !== i) });
+  };
+
+  const unlockPart = async (i: number) => {
+    if (!isAdmin) return;
+    const row = t.parts_details[i];
+    if (!row?.confirmed) return;
+    const next = t.parts_details.map((x, idx) =>
+      idx === i ? { ...x, confirmed: false, confirmed_by: null, confirmed_at: null } : x,
+    );
+    update({ parts_details: next });
+    const { data: u } = await supabase.auth.getUser();
+    const actor = u.user?.email || u.user?.id || "admin";
+    await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
+    await logActivity("parts_unlocked", `Admin (${actor}) unlocked part: ${row.name || "(unnamed)"}${row.serial ? ` · Serial ${row.serial}` : ""}`);
+    toast.success("Part unlocked for editing");
+    await load();
+  };
+
+  const confirmParts = async () => {
+    const rows = t.parts_details || [];
+    const toConfirm = rows.filter((p) => !p.confirmed);
+    if (toConfirm.length === 0) {
+      setConfirmPartsOpen(false);
+      return;
+    }
+    // Mandatory: name, model_no, serial
+    const invalid = toConfirm.some(
+      (p) => !(p.name || "").trim() || !(p.model_no || "").trim() || !(p.serial || "").trim(),
+    );
+    if (invalid) {
+      toast.error("Please complete all mandatory part details before confirming.");
+      return;
+    }
+    const { data: u } = await supabase.auth.getUser();
+    const actor = u.user?.email || u.user?.id || "user";
+    const stamp = new Date().toISOString();
+    const next = rows.map((p) =>
+      p.confirmed ? p : { ...p, confirmed: true, confirmed_by: actor, confirmed_at: stamp },
+    );
+    const { error } = await supabase.from("tickets").update({ parts_details: next } as never).eq("id", t.id);
+    if (error) { toast.error(error.message); return; }
+    update({ parts_details: next });
+    await logActivity(
+      "parts_confirmed",
+      `${toConfirm.length} part row(s) confirmed & locked by ${actor}${isAdmin ? " (admin)" : ""}`,
+    );
+    setConfirmPartsOpen(false);
+    toast.success("Parts confirmed and locked");
+    await load();
+  };
 
   const addNote = async () => {
     if (!noteText.trim()) return;
