@@ -412,8 +412,32 @@ function ImportPage() {
           const ct = Number(payload.central_tax_rate ?? 0);
           const lt = Number(payload.local_tax_rate ?? 0);
           payload.tax_rate = ct + lt;
-          const { error } = await supabase.from("products").insert(payload as never);
+          const isSpare = String(payload.category || "").toLowerCase() === "spare parts";
+          const parentModelsRaw = (r["parent_product_models"] || "").trim();
+          const parentModels = parentModelsRaw
+            ? parentModelsRaw.split(",").map((s) => upperTrim(s)).filter(Boolean)
+            : [];
+          if (isSpare && parentModels.length === 0) {
+            throw new Error("Spare Parts row requires parent_product_models (comma-separated models)");
+          }
+          const { data: inserted, error } = await supabase
+            .from("products").insert(payload as never).select("id").single();
           if (error) throw new Error(error.message);
+          if (isSpare && parentModels.length) {
+            const spId = (inserted as { id: string } | null)?.id;
+            const { data: parents } = await supabase
+              .from("products").select("id, model, category, active")
+              .in("model", parentModels);
+            const parentRows = ((parents || []) as { id: string; model: string; category: string | null; active: boolean | null }[])
+              .filter((p) => p.active !== false && (p.category || "") !== "Spare Parts");
+            const missing = parentModels.filter((m) => !parentRows.some((p) => (p.model || "").toUpperCase() === m));
+            if (missing.length) throw new Error(`Parent model(s) not found / inactive / are spare parts: ${missing.join(", ")}`);
+            if (spId) {
+              const links = parentRows.map((p) => ({ spare_part_id: spId, parent_product_id: p.id }));
+              const { error: lErr } = await supabase.from("product_spare_parts" as never).insert(links as never);
+              if (lErr) throw new Error(`Product saved but linking failed: ${lErr.message}`);
+            }
+          }
         } else if (mod === "amcs") {
           const years = Number(r.duration_years || 1);
           const start = r.start_date;
