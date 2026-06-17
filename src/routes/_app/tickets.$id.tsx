@@ -263,21 +263,16 @@ function TicketDetail() {
         return false;
       }
     }
-    if (payload.parts_used) {
-      const valid = (payload.parts_details || []).some((p) => (p.name || "").trim());
-      const closingStatuses = ["Closed"];
-      if (!valid) {
-        setBusy(false);
-        toast.error("At least one Part entry is required when Parts Used is enabled.");
-        return false;
-      }
-      // Also block closing without parts entries
-      if (closingStatuses.includes(payload.status) && !valid) {
-        setBusy(false);
-        toast.error("At least one Part entry is required when Parts Used is enabled.");
-        return false;
-      }
+    if (payload.defective_parts_received) {
+      const valid = (payload.defective_parts_details || []).some((p) => (p.name || "").trim());
+      if (!valid) { setBusy(false); toast.error("Add at least one Defective Part Received or turn the section off."); return false; }
     }
+    if (payload.good_parts_used) {
+      const valid = (payload.good_parts_details || []).some((p) => (p.name || "").trim());
+      if (!valid) { setBusy(false); toast.error("Add at least one Good Part Used or turn the section off."); return false; }
+    }
+    // Keep legacy parts_used flag in sync for back-compat
+    payload.parts_used = !!payload.defective_parts_received || !!payload.good_parts_used;
     if (payload.preferred_visit_datetime) {
       const pv = new Date(payload.preferred_visit_datetime).getTime();
       if (pv < Date.now() - 60000) {
