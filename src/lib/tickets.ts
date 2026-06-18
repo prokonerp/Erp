@@ -77,6 +77,11 @@ export type PartLine = {
   confirmed?: boolean;
   confirmed_by?: string | null;
   confirmed_at?: string | null;
+  // Auto-populated rows from Indent Oracle Material Exchange (Oracle = Closed)
+  source?: "manual" | "oracle_exchange";
+  indent_id?: string | null;
+  indent_no?: string | null;
+  oracle_no?: string | null;
 };
 
 export const STATUS_COLOR: Record<string, string> = {
