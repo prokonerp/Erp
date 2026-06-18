@@ -137,12 +137,8 @@ export type Indent = {
  * Rows from this indent are de-duplicated by indent_id + oracle_no.
  */
 export async function syncTicketGoodPartsFromIndent(
-  supabase: {
-    from: (t: string) => {
-      select: (s: string) => { eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }> } };
-      update: (p: Record<string, unknown>) => { eq: (k: string, v: string) => Promise<{ error: { message: string } | null }> };
-    };
-  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
   indent: { id: string; indent_no: string | null; ticket_id: string; oracles_data: OracleBlock[] | null }
 ): Promise<void> {
   if (!indent.ticket_id) return;
