@@ -62,6 +62,7 @@ function NewIndent() {
   const [form, setForm] = useState<Form>(blank);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(Boolean(ticket_id));
+  const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (!ticket_id) return;
