@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ArrowLeft } from "lucide-react";
+import { Save, ArrowLeft, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { INDENT_TYPES, type IndentType } from "@/lib/indent";
+import { INDENT_TYPES, blankOracle, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
+import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 const searchSchema = z.object({ ticket_id: z.string().optional() });
@@ -28,20 +29,14 @@ type Form = {
   case_id: string;
   oem_case_id: string;
   company: string;
-  def_model_no: string;
-  def_serial_no: string;
   problem_reported: string;
   product_model: string;
   product_serial: string;
   indent_type: IndentType | "";
-  oracles: string;
-  material_exchange_model: string;
-  material_exchange_serial_no: string;
-  material_rec_model_no: string;
-  material_rec_serial_no: string;
-  material_rec_date: string;
   engineer_name: string;
   remarks: string;
+  oracles_data: OracleBlock[];
+  defective_parts_from_ticket: Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number }>;
 };
 
 const blank: Form = {
@@ -51,20 +46,14 @@ const blank: Form = {
   case_id: "",
   oem_case_id: "",
   company: "",
-  def_model_no: "",
-  def_serial_no: "",
   problem_reported: "",
   product_model: "",
   product_serial: "",
   indent_type: "",
-  oracles: "",
-  material_exchange_model: "",
-  material_exchange_serial_no: "",
-  material_rec_model_no: "",
-  material_rec_serial_no: "",
-  material_rec_date: "",
   engineer_name: "",
   remarks: "",
+  oracles_data: [],
+  defective_parts_from_ticket: [],
 };
 
 function NewIndent() {
