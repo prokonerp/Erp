@@ -106,19 +106,19 @@ function NewIndent() {
         const m = note.match(/Assigned to (.+?)(?:\s*\(|$)/);
         if (m) latestEngineer = m[1].trim();
       }
+      void firstDef;
       setForm((f) => ({
         ...f,
         ticket_id: data.id,
         case_id: data.case_id || "",
         oem_case_id: data.oem_ref_id || "",
         company: data.oem_brand || "",
-        def_model_no: firstDef.model_no || "",
-        def_serial_no: firstDef.serial || "",
         product_model: data.product || "",
         product_serial: data.serial_no || "",
         indent_city: data.location || "",
         problem_reported: data.complaint || "",
         engineer_name: latestEngineer,
+        defective_parts_from_ticket: defParts,
       }));
       setLoading(false);
     })();
@@ -137,18 +137,11 @@ function NewIndent() {
       case_id: form.case_id || null,
       oem_case_id: form.oem_case_id || null,
       company: form.company || null,
-      def_model_no: form.def_model_no || null,
-      def_serial_no: form.def_serial_no || null,
       problem_reported: form.problem_reported || null,
       product_model: form.product_model || null,
       product_serial: form.product_serial || null,
       indent_type: form.indent_type || null,
-      oracles: form.oracles || null,
-      material_exchange_model: form.material_exchange_model || null,
-      material_exchange_serial_no: form.material_exchange_serial_no || null,
-      material_rec_model_no: form.material_rec_model_no || null,
-      material_rec_serial_no: form.material_rec_serial_no || null,
-      material_rec_date: form.material_rec_date || null,
+      oracles_data: form.oracles_data,
       engineer_name: form.engineer_name || null,
       remarks: form.remarks || null,
       created_by: u.user?.id ?? null,
@@ -198,12 +191,10 @@ function NewIndent() {
           <div><Label>Case ID</Label><Input value={form.case_id} readOnly className="font-mono bg-muted/50" /></div>
           <div><Label>OEM Case ID</Label><Input value={form.oem_case_id} readOnly className="font-mono bg-muted/50" /></div>
           <div><Label>Company (OEM)</Label><Input value={form.company} onChange={(e) => set({ company: e.target.value })} /></div>
-          <div><Label>DEF Part Model No</Label><Input value={form.def_model_no} onChange={(e) => set({ def_model_no: e.target.value })} /></div>
-          <div><Label>DEF Part Serial No</Label><Input value={form.def_serial_no} onChange={(e) => set({ def_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
-          <div><Label>Engineer</Label><Input value={form.engineer_name} onChange={(e) => set({ engineer_name: e.target.value })} /></div>
-          <div className="md:col-span-3"><Label>Problem Reported</Label><Textarea rows={2} value={form.problem_reported} onChange={(e) => set({ problem_reported: e.target.value })} /></div>
           <div><Label>Product Model</Label><Input value={form.product_model} readOnly className="bg-muted/50" /></div>
           <div><Label>Product Serial</Label><Input value={form.product_serial} readOnly className="font-mono bg-muted/50" /></div>
+          <div><Label>Engineer</Label><Input value={form.engineer_name} onChange={(e) => set({ engineer_name: e.target.value })} /></div>
+          <div className="md:col-span-3"><Label>Problem Reported</Label><Textarea rows={2} value={form.problem_reported} onChange={(e) => set({ problem_reported: e.target.value })} /></div>
         </CardContent>
       </Card>
 
@@ -221,27 +212,31 @@ function NewIndent() {
               </SelectContent>
             </Select>
           </div>
-          <div className="md:col-span-3"><Label>Oracles</Label><Input value={form.oracles} onChange={(e) => set({ oracles: e.target.value })} placeholder="Oracle reference / SR / SO" /></div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Material Exchange</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div><Label>Material Exchange Model</Label><Input value={form.material_exchange_model} onChange={(e) => set({ material_exchange_model: e.target.value })} /></div>
-          <div><Label>Material Exchange Serial No</Label><Input value={form.material_exchange_serial_no} onChange={(e) => set({ material_exchange_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Material Received</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div><Label>Material Rec Model No</Label><Input value={form.material_rec_model_no} onChange={(e) => set({ material_rec_model_no: e.target.value })} /></div>
-          <div><Label>Material Rec Serial No</Label><Input value={form.material_rec_serial_no} onChange={(e) => set({ material_rec_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
-          <div><Label>Material Rec Date</Label><Input type="date" value={form.material_rec_date} onChange={(e) => set({ material_rec_date: e.target.value })} /></div>
           <div className="md:col-span-3"><Label>Remarks</Label><Textarea rows={2} value={form.remarks} onChange={(e) => set({ remarks: e.target.value })} /></div>
         </CardContent>
       </Card>
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Oracles</h2>
+        <Button variant="outline" size="sm" onClick={() => set({ oracles_data: [...form.oracles_data, blankOracle()] })}>
+          <Plus className="h-4 w-4 mr-1" />Add Oracle
+        </Button>
+      </div>
+      {form.oracles_data.length === 0 && (
+        <div className="text-sm text-muted-foreground border rounded-md p-4 text-center">
+          No Oracle entries yet. Click <span className="font-medium">Add Oracle</span> to capture Defective, Material Exchange and Material Received details.
+        </div>
+      )}
+      {form.oracles_data.map((o, idx) => (
+        <OracleBlockEditor
+          key={idx}
+          index={idx}
+          value={o}
+          defectiveParts={form.defective_parts_from_ticket}
+          onChange={(v) => set({ oracles_data: form.oracles_data.map((x, i) => (i === idx ? v : x)) })}
+          onRemove={() => set({ oracles_data: form.oracles_data.filter((_, i) => i !== idx) })}
+        />
+      ))}
     </div>
   );
 }
