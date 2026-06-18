@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ArrowLeft, Trash2, ExternalLink, Plus } from "lucide-react";
+import { Save, ArrowLeft, Trash2, ExternalLink, Plus, Timer } from "lucide-react";
 import { toast } from "sonner";
-import { INDENT_TYPES, blankOracle, type Indent, type IndentType, type OracleBlock } from "@/lib/indent";
+import { INDENT_TYPES, blankOracle, formatAge, indentClosedAt, indentStatusFromOracles, type Indent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
+import { useIsAdmin } from "@/lib/useRole";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/_app/indent/$id")({
@@ -24,6 +26,13 @@ function IndentDetail() {
   const [i, setI] = useState<Indent | null>(null);
   const [busy, setBusy] = useState(false);
   const [defParts, setDefParts] = useState<Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number }>>([]);
+  const { isAdmin } = useIsAdmin();
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -73,6 +82,10 @@ function IndentDetail() {
 
   if (!i) return <div className="text-sm text-muted-foreground">Loading…</div>;
   const oem = getOemLogo(i.company);
+  const indStatus = indentStatusFromOracles(i.oracles_data);
+  const closedAt = indentClosedAt(i.oracles_data);
+  const age = formatAge(i.created_at, closedAt);
+  void tick;
 
   return (
     <div className="space-y-4">
@@ -85,7 +98,14 @@ function IndentDetail() {
               <div className="text-xs text-muted-foreground">Indent · <span className="font-mono">{i.indent_no}</span></div>
             </div>
           </div>
-          {oem && <img src={oem.url} alt={oem.alt} className="h-9 w-auto object-contain" />}
+          <div className="flex items-center gap-3">
+            <Badge variant={indStatus === "closed" ? "default" : "secondary"}>{indStatus === "closed" ? "Closed" : "Open"}</Badge>
+            <div className="inline-flex items-center text-xs text-muted-foreground">
+              <Timer className="h-3 w-3 mr-1" />
+              {indStatus === "closed" ? `Resolution Time: ${age}` : `Age: ${age}`}
+            </div>
+            {oem && <img src={oem.url} alt={oem.alt} className="h-9 w-auto object-contain" />}
+          </div>
         </CardContent>
       </Card>
 
@@ -148,6 +168,7 @@ function IndentDetail() {
           index={idx}
           value={o}
           defectiveParts={defParts}
+          isAdmin={isAdmin}
           onChange={(v) => update({ oracles_data: (i.oracles_data || []).map((x, ix) => (ix === idx ? v : x)) })}
           onRemove={() => update({ oracles_data: (i.oracles_data || []).filter((_, ix) => ix !== idx) })}
         />
