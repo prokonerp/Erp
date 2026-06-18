@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, ArrowLeft, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { INDENT_TYPES, blankOracle, type IndentType, type OracleBlock } from "@/lib/indent";
+import { INDENT_TYPES, blankOracle, syncTicketGoodPartsFromIndent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -146,10 +146,17 @@ function NewIndent() {
       remarks: form.remarks || null,
       created_by: u.user?.id ?? null,
     };
-    const { data, error } = await supabase.from("indents" as never).insert(payload as never).select("id").maybeSingle() as unknown as { data: { id: string } | null; error: { message: string } | null };
+    const { data, error } = await supabase.from("indents" as never).insert(payload as never).select("id, indent_no").maybeSingle() as unknown as { data: { id: string; indent_no: string | null } | null; error: { message: string } | null };
     setBusy(false);
     if (error) return toast.error(error.message);
     if (!data) return toast.error("Failed to create Indent");
+    // Auto-populate the linked Ticket's Good Parts Used from closed Oracles.
+    await syncTicketGoodPartsFromIndent(supabase, {
+      id: data.id,
+      indent_no: data.indent_no,
+      ticket_id: form.ticket_id,
+      oracles_data: form.oracles_data,
+    });
     toast.success("Indent created");
     navigate({ to: "/indent/$id", params: { id: data.id } });
   };
