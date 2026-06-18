@@ -1222,6 +1222,7 @@ export type Database = {
           material_rec_serial_no: string | null
           oem_case_id: string | null
           oracles: string | null
+          oracles_data: Json
           problem_reported: string | null
           product_model: string | null
           product_serial: string | null
@@ -1249,6 +1250,7 @@ export type Database = {
           material_rec_serial_no?: string | null
           oem_case_id?: string | null
           oracles?: string | null
+          oracles_data?: Json
           problem_reported?: string | null
           product_model?: string | null
           product_serial?: string | null
@@ -1276,6 +1278,7 @@ export type Database = {
           material_rec_serial_no?: string | null
           oem_case_id?: string | null
           oracles?: string | null
+          oracles_data?: Json
           problem_reported?: string | null
           product_model?: string | null
           product_serial?: string | null

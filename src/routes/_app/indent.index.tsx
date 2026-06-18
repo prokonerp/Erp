@@ -32,7 +32,7 @@ function IndentList() {
   const filtered = !s
     ? rows
     : rows.filter((r) =>
-        [r.indent_no, r.case_id, r.oem_case_id, r.company, r.def_model_no, r.def_serial_no, r.engineer_name, r.indent_city]
+        [r.indent_no, r.case_id, r.oem_case_id, r.company, r.product_model, r.product_serial, r.engineer_name, r.indent_city]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(s)),
       );
@@ -53,7 +53,7 @@ function IndentList() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Input placeholder="Indent no, Case ID, OEM Case ID, company, model, serial, engineer, city…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input placeholder="Indent no, Case ID, OEM Case ID, company, product model/serial, engineer, city…" value={q} onChange={(e) => setQ(e.target.value)} />
         </CardContent>
       </Card>
 
@@ -67,8 +67,9 @@ function IndentList() {
                 <th className="p-2">Case ID</th>
                 <th className="p-2">OEM Case ID</th>
                 <th className="p-2">Company</th>
-                <th className="p-2">DEF Part Model No</th>
-                <th className="p-2">DEF Part Serial No</th>
+                <th className="p-2">Product Model</th>
+                <th className="p-2">Product Serial</th>
+                <th className="p-2">Oracles</th>
                 <th className="p-2">Type</th>
                 <th className="p-2">Engineer</th>
                 <th className="p-2 text-right">Open</th>
@@ -76,9 +77,9 @@ function IndentList() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={11}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>No Indents yet. Create one from an OEM ticket.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={11}>No Indents yet. Create one from an OEM ticket.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2 font-mono">{r.indent_no}</td>
@@ -86,8 +87,9 @@ function IndentList() {
                   <td className="p-2 font-mono">{r.case_id || "—"}</td>
                   <td className="p-2 font-mono">{r.oem_case_id || "—"}</td>
                   <td className="p-2">{r.company || "—"}</td>
-                  <td className="p-2">{r.def_model_no || "—"}</td>
-                  <td className="p-2 font-mono">{r.def_serial_no || "—"}</td>
+                  <td className="p-2">{r.product_model || "—"}</td>
+                  <td className="p-2 font-mono">{r.product_serial || "—"}</td>
+                  <td className="p-2 text-center">{(r.oracles_data?.length) || 0}</td>
                   <td className="p-2"><Badge variant="secondary">{indentTypeLabel(r.indent_type)}</Badge></td>
                   <td className="p-2">{r.engineer_name || "—"}</td>
                   <td className="p-2 text-right">
