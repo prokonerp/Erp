@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer } from "lucide-react";
+import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
@@ -28,6 +28,14 @@ function IndentDetail() {
   const [defParts, setDefParts] = useState<Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>>([]);
   const { isAdmin } = useIsAdmin();
   const [tick, setTick] = useState(0);
+  const storageKey = `indent:collapsed:${id}`;
+  const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(sessionStorage.getItem(`indent:collapsed:${id}`) || "{}"); } catch { return {}; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem(storageKey, JSON.stringify(collapsedMap)); } catch { /* noop */ }
+  }, [collapsedMap, storageKey]);
 
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 60_000);
@@ -196,6 +204,16 @@ function IndentDetail() {
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Oracles <span className="text-xs font-normal text-muted-foreground">(auto from Ticket Defective Parts)</span></h2>
+        {(i.oracles_data || []).length > 0 && (
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries((i.oracles_data || []).map((_, ix) => [ix, false])))}>
+              <ChevronsUpDown className="h-4 w-4 mr-1" />Expand All
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries((i.oracles_data || []).map((_, ix) => [ix, true])))}>
+              <ChevronsDownUp className="h-4 w-4 mr-1" />Collapse All
+            </Button>
+          </div>
+        )}
       </div>
       {(!i.oracles_data || i.oracles_data.length === 0) && (
         <div className="text-sm text-muted-foreground border rounded-md p-4 text-center">
@@ -209,6 +227,8 @@ function IndentDetail() {
           value={o}
           defectiveParts={defParts}
           isAdmin={isAdmin}
+          collapsed={!!collapsedMap[idx]}
+          onToggleCollapse={() => setCollapsedMap((m) => ({ ...m, [idx]: !m[idx] }))}
           onChange={(v) => update({ oracles_data: (i.oracles_data || []).map((x, ix) => (ix === idx ? v : x)) })}
           onRemove={() => update({ oracles_data: (i.oracles_data || []).filter((_, ix) => ix !== idx) })}
         />
