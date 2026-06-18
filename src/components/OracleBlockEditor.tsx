@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, FileText, Receipt, Lock, LockOpen, CheckCircle2 } from "lucide-react";
+import { Trash2, FileText, Receipt, Lock, LockOpen, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,6 +21,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
+  collapsed = false, onToggleCollapse,
 }: {
   index: number;
   value: OracleBlock;
@@ -28,6 +29,8 @@ export function OracleBlockEditor({
   onRemove: () => void;
   defectiveParts: DefectivePart[];
   isAdmin?: boolean;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -158,13 +161,34 @@ export function OracleBlockEditor({
 
   const oracleLabel = value.oracle_no ? value.oracle_no : `Oracle #${index + 1}`;
 
+  // Progress metrics for collapsed summary.
+  const defCount = value.defective_rows.length;
+  const exchDone = value.exchange_rows.filter((r) => r.warehouse_id && r.model_no && r.serial_no && parseInt(String(r.qty || "0"), 10) > 0).length;
+  const recvDone = value.received_rows.filter((r) => r.warehouse_id && r.model_no && r.serial_no && parseInt(String(r.qty || "0"), 10) > 0 && r.received_date).length;
+  const totalSlots = Math.max(defCount, 1) * 3;
+  const doneSlots = defCount + exchDone + recvDone;
+  const pct = defCount === 0 ? 0 : Math.min(100, Math.round((doneSlots / totalSlots) * 100));
+
   return (
-    <Card className={`border-2 ${closed ? "border-emerald-500/60 bg-emerald-500/5" : ""}`}>
+    <Card className={`border-2 ${closed ? "border-emerald-500/60 bg-emerald-500/5" : "border-amber-500/40"}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {onToggleCollapse && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onToggleCollapse} aria-label={collapsed ? "Expand" : "Collapse"}>
+              {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+            </Button>
+          )}
           <CardTitle className="text-base">Oracle {oracleLabel}</CardTitle>
-          <Badge variant={closed ? "default" : "secondary"}>{closed ? "Closed" : "Open"}</Badge>
-          {closed && (
+          <Badge className={closed ? "bg-emerald-600 hover:bg-emerald-600" : "bg-amber-500 hover:bg-amber-500"}>{closed ? "Closed" : "Open"}</Badge>
+          {collapsed && (
+            <span className="text-xs text-muted-foreground inline-flex flex-wrap gap-x-3 gap-y-0.5">
+              <span>Def: {defCount}</span>
+              <span>Exch: {exchDone}/{defCount}</span>
+              <span>Recv: {recvDone}/{defCount}</span>
+              <span className="font-medium">{pct}%</span>
+            </span>
+          )}
+          {closed && !collapsed && (
             <span className="text-xs text-muted-foreground">
               by {value.closed_by_name || "—"} · {value.closed_at ? new Date(value.closed_at).toLocaleString() : ""}
             </span>
@@ -195,6 +219,7 @@ export function OracleBlockEditor({
           )}
         </div>
       </CardHeader>
+      {!collapsed && (
       <CardContent className={`space-y-4 ${locked ? "pointer-events-none opacity-80" : ""}`}>
         <div className="max-w-xs">
           <Label>Oracle #</Label>
@@ -344,6 +369,7 @@ export function OracleBlockEditor({
           })}
         </div>
       </CardContent>
+      )}
 
       <AlertDialog open={shortageOpen} onOpenChange={setShortageOpen}>
         <AlertDialogContent>

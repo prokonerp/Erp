@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ArrowLeft } from "lucide-react";
+import { Save, ArrowLeft, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, syncTicketGoodPartsFromIndent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
@@ -62,6 +62,7 @@ function NewIndent() {
   const [form, setForm] = useState<Form>(blank);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(Boolean(ticket_id));
+  const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (!ticket_id) return;
@@ -226,6 +227,16 @@ function NewIndent() {
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Oracles <span className="text-xs font-normal text-muted-foreground">(auto from Ticket Defective Parts)</span></h2>
+        {form.oracles_data.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries(form.oracles_data.map((_, i) => [i, false])))}>
+              <ChevronsUpDown className="h-4 w-4 mr-1" />Expand All
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries(form.oracles_data.map((_, i) => [i, true])))}>
+              <ChevronsDownUp className="h-4 w-4 mr-1" />Collapse All
+            </Button>
+          </div>
+        )}
       </div>
       {form.oracles_data.length === 0 && (
         <div className="text-sm text-muted-foreground border rounded-md p-4 text-center">
@@ -238,6 +249,8 @@ function NewIndent() {
           index={idx}
           value={o}
           defectiveParts={form.defective_parts_from_ticket}
+          collapsed={!!collapsedMap[idx]}
+          onToggleCollapse={() => setCollapsedMap((m) => ({ ...m, [idx]: !m[idx] }))}
           onChange={(v) => set({ oracles_data: form.oracles_data.map((x, i) => (i === idx ? v : x)) })}
           onRemove={() => set({ oracles_data: form.oracles_data.filter((_, i) => i !== idx) })}
         />
