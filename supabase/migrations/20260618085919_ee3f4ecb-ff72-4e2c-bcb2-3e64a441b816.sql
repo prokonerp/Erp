@@ -1,0 +1,1 @@
+ALTER TABLE public.indents ADD COLUMN IF NOT EXISTS oracles_data jsonb NOT NULL DEFAULT '[]'::jsonb;
