@@ -130,3 +130,57 @@ export type Indent = {
   created_at: string;
   updated_at: string;
 };
+
+/**
+ * Sync the linked Ticket's Good Parts Used section from the Indent's
+ * CLOSED Oracle blocks (Material Exchange). Open oracles are ignored.
+ * Rows from this indent are de-duplicated by indent_id + oracle_no.
+ */
+export async function syncTicketGoodPartsFromIndent(
+  supabase: {
+    from: (t: string) => {
+      select: (s: string) => { eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }> } };
+      update: (p: Record<string, unknown>) => { eq: (k: string, v: string) => Promise<{ error: { message: string } | null }> };
+    };
+  },
+  indent: { id: string; indent_no: string | null; ticket_id: string; oracles_data: OracleBlock[] | null }
+): Promise<void> {
+  if (!indent.ticket_id) return;
+  const { data, error } = await supabase
+    .from("tickets")
+    .select("good_parts_used, good_parts_details")
+    .eq("id", indent.ticket_id)
+    .maybeSingle();
+  if (error) return;
+  type Row = {
+    name?: string; qty?: string; model_no?: string; serial?: string; remarks?: string;
+    source?: string; indent_id?: string | null; indent_no?: string | null; oracle_no?: string | null;
+  };
+  const tk = (data || {}) as { good_parts_used?: boolean; good_parts_details?: Row[] };
+  const existing: Row[] = Array.isArray(tk.good_parts_details) ? tk.good_parts_details : [];
+  // Drop previous rows generated from THIS indent — we re-build them from current oracles.
+  const kept = existing.filter((r) => !(r.source === "oracle_exchange" && r.indent_id === indent.id));
+  const oracleRows: Row[] = [];
+  for (const o of indent.oracles_data || []) {
+    if (o.status !== "closed") continue;
+    const ex = o.exchange;
+    if (!ex || !ex.model_no || !ex.serial_no) continue;
+    oracleRows.push({
+      name: ex.model_no,
+      model_no: ex.model_no,
+      serial: ex.serial_no,
+      qty: ex.qty || "1",
+      remarks: `Oracle ${o.oracle_no || ""} · ${indent.indent_no || ""}`.trim(),
+      source: "oracle_exchange",
+      indent_id: indent.id,
+      indent_no: indent.indent_no,
+      oracle_no: o.oracle_no || "",
+    });
+  }
+  const merged = [...kept, ...oracleRows];
+  const enableGood = oracleRows.length > 0 ? true : !!tk.good_parts_used;
+  await supabase.from("tickets").update({
+    good_parts_used: enableGood,
+    good_parts_details: merged as unknown as Record<string, unknown>,
+  }).eq("id", indent.ticket_id);
+}
