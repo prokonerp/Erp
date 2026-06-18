@@ -655,7 +655,11 @@ function TicketDetail() {
                   {(t.defective_parts_details || []).map((p, i) => (
                     <div key={i} className="rounded-md border p-2">
                       <div className="grid grid-cols-12 gap-2 items-end">
-                        <div className="col-span-12 md:col-span-3">
+                        <div className="col-span-12 md:col-span-2">
+                          <Label>Oracle #</Label>
+                          <Input value={p.oracle_no || ""} onChange={(e) => updDef(i, { oracle_no: e.target.value.toUpperCase() })} placeholder="e.g. ORA-001" className="font-mono" />
+                        </div>
+                        <div className="col-span-12 md:col-span-2">
                           <Label>Part / Item</Label>
                           <TicketPartPicker
                             ticketProduct={t.product}
@@ -663,7 +667,7 @@ function TicketDetail() {
                             onSelect={(item) => updDef(i, { name: item.name, model_no: item.model || item.name })}
                           />
                         </div>
-                        <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} /></div>
+                        <div className="col-span-12 md:col-span-2"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} /></div>
                         <div className="col-span-12 md:col-span-2"><Label>Serial No</Label><Input value={p.serial || ""} onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
                         <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} /></div>
                         <div className="col-span-6 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} /></div>
