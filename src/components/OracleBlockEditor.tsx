@@ -13,14 +13,14 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { oracleIsComplete, oracleStatus, type OracleBlock } from "@/lib/indent";
+import { normalizeOracle, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OracleReceivedRow } from "@/lib/indent";
 
-type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number };
+type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string };
 type Warehouse = { id: string; name: string; code: string };
 type StockRow = { id: string; part_name: string; part_model_no: string | null; part_serial_no: string | null; warehouse_id: string | null; warehouse_name?: string };
 
 export function OracleBlockEditor({
-  index, value, onChange, onRemove, defectiveParts, isAdmin = false,
+  index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
 }: {
   index: number;
   value: OracleBlock;
@@ -29,9 +29,12 @@ export function OracleBlockEditor({
   defectiveParts: DefectivePart[];
   isAdmin?: boolean;
 }) {
+  // Always work with a normalized block (arrays guaranteed).
+  const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [exchStock, setExchStock] = useState<StockRow[]>([]);
-  const [recvStock, setRecvStock] = useState<StockRow[]>([]);
+  // Per-row stock pools, keyed by row index.
+  const [exchStockByRow, setExchStockByRow] = useState<Record<number, StockRow[]>>({});
+  const [recvStockByRow, setRecvStockByRow] = useState<Record<number, StockRow[]>>({});
   const [shortageOpen, setShortageOpen] = useState(false);
   const [shortageMsg, setShortageMsg] = useState<string>("");
   const [shortageHasOther, setShortageHasOther] = useState(false);
@@ -41,6 +44,7 @@ export function OracleBlockEditor({
   const closed = status === "closed";
   const complete = oracleIsComplete(value);
   const locked = closed && !isAdmin;
+  void defectiveParts;
 
   useEffect(() => {
     (async () => {
@@ -49,30 +53,47 @@ export function OracleBlockEditor({
     })();
   }, []);
 
+  // Watch warehouse selection per row and refresh stock lists.
+  const exchWhKey = value.exchange_rows.map((r) => r.warehouse_id).join("|");
   useEffect(() => {
-    if (!value.exchange.warehouse_id) { setExchStock([]); return; }
     (async () => {
-      const { data } = await supabase.from("ims_stock_items")
-        .select("id,part_name,part_model_no,part_serial_no,warehouse_id")
-        .eq("warehouse_id", value.exchange.warehouse_id)
-        .eq("stock_status", "available")
-        .order("part_name");
-      setExchStock((data || []) as StockRow[]);
+      const next: Record<number, StockRow[]> = {};
+      await Promise.all(value.exchange_rows.map(async (r, i) => {
+        if (!r.warehouse_id) { next[i] = []; return; }
+        const { data } = await supabase.from("ims_stock_items")
+          .select("id,part_name,part_model_no,part_serial_no,warehouse_id")
+          .eq("warehouse_id", r.warehouse_id)
+          .eq("stock_status", "available")
+          .order("part_name");
+        next[i] = (data || []) as StockRow[];
+      }));
+      setExchStockByRow(next);
     })();
-  }, [value.exchange.warehouse_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exchWhKey]);
 
+  const recvWhKey = value.received_rows.map((r) => r.warehouse_id).join("|");
   useEffect(() => {
-    if (!value.received.warehouse_id) { setRecvStock([]); return; }
     (async () => {
-      const { data } = await supabase.from("ims_stock_items")
-        .select("id,part_name,part_model_no,part_serial_no,warehouse_id")
-        .eq("warehouse_id", value.received.warehouse_id)
-        .order("part_name");
-      setRecvStock((data || []) as StockRow[]);
+      const next: Record<number, StockRow[]> = {};
+      await Promise.all(value.received_rows.map(async (r, i) => {
+        if (!r.warehouse_id) { next[i] = []; return; }
+        const { data } = await supabase.from("ims_stock_items")
+          .select("id,part_name,part_model_no,part_serial_no,warehouse_id")
+          .eq("warehouse_id", r.warehouse_id)
+          .order("part_name");
+        next[i] = (data || []) as StockRow[];
+      }));
+      setRecvStockByRow(next);
     })();
-  }, [value.received.warehouse_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recvWhKey]);
 
-  const set = (patch: Partial<OracleBlock>) => onChange({ ...value, ...patch });
+  const setBlock = (patch: Partial<OracleBlock>) => onChange({ ...value, ...patch });
+  const setExchRow = (i: number, patch: Partial<OracleExchangeRow>) =>
+    setBlock({ exchange_rows: value.exchange_rows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
+  const setRecvRow = (i: number, patch: Partial<OracleReceivedRow>) =>
+    setBlock({ received_rows: value.received_rows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
 
   const confirmClose = async () => {
     const { data: u } = await supabase.auth.getUser();
@@ -87,68 +108,43 @@ export function OracleBlockEditor({
       closed_at: new Date().toISOString(),
     });
     setCloseOpen(false);
-    toast.success(`Oracle #${index + 1} closed`);
+    toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} closed`);
   };
 
   const reopen = () => {
     onChange({ ...value, status: "open", closed_by: null, closed_by_name: null, closed_at: null });
-    toast.success(`Oracle #${index + 1} reopened`);
+    toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} reopened`);
   };
 
-  // Defective dropdown: list ticket defective parts
-  const defOptions = useMemo(
-    () => defectiveParts.filter((p) => (p.model_no || "").trim() || (p.serial || "").trim() || (p.name || "").trim()),
-    [defectiveParts],
-  );
-
-  // Exchange model options (distinct part_name + part_model_no) within selected warehouse
-  const exchModels = useMemo(() => {
-    const seen = new Set<string>();
-    const out: { key: string; label: string; part_name: string; model_no: string }[] = [];
-    for (const s of exchStock) {
-      const key = `${s.part_name}||${s.part_model_no || ""}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ key, label: s.part_model_no ? `${s.part_name} — ${s.part_model_no}` : s.part_name, part_name: s.part_name, model_no: s.part_model_no || "" });
-    }
-    return out;
-  }, [exchStock]);
-
-  const exchSerials = useMemo(
-    () => exchStock.filter((s) => s.part_name === value.exchange.model_no.split("||")[0] && (s.part_model_no || "") === (value.exchange.model_no.split("||")[1] || "")),
-    [exchStock, value.exchange.model_no],
-  );
-
-  const recvModels = useMemo(() => {
+  const modelsFor = (rows: StockRow[]) => {
     const seen = new Set<string>();
     const out: { key: string; label: string }[] = [];
-    for (const s of recvStock) {
+    for (const s of rows) {
       const key = `${s.part_name}||${s.part_model_no || ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
       out.push({ key, label: s.part_model_no ? `${s.part_name} — ${s.part_model_no}` : s.part_name });
     }
     return out;
-  }, [recvStock]);
+  };
+  const serialsFor = (rows: StockRow[], modelKey: string) => {
+    const [pn, mn] = (modelKey || "").split("||");
+    return rows.filter((s) => s.part_name === pn && (s.part_model_no || "") === (mn || ""));
+  };
 
-  const recvSerials = useMemo(
-    () => recvStock.filter((s) => s.part_name === value.received.model_no.split("||")[0] && (s.part_model_no || "") === (value.received.model_no.split("||")[1] || "")),
-    [recvStock, value.received.model_no],
-  );
-
-  const checkStockAndValidate = async (qtyStr: string) => {
+  const checkStockAndValidate = async (rowIdx: number, qtyStr: string) => {
+    const row = value.exchange_rows[rowIdx];
     const qty = parseInt(qtyStr, 10);
-    if (!qty || !value.exchange.warehouse_id || !value.exchange.model_no) return;
-    const [partName, modelNo] = value.exchange.model_no.split("||");
-    const here = exchStock.filter((s) => s.part_name === partName && (s.part_model_no || "") === modelNo).length;
+    if (!qty || !row?.warehouse_id || !row?.model_no) return;
+    const [partName, modelNo] = row.model_no.split("||");
+    const here = (exchStockByRow[rowIdx] || []).filter((s) => s.part_name === partName && (s.part_model_no || "") === modelNo).length;
     if (qty <= here) return;
-    // Check other warehouses
     const { data: others } = await supabase.from("ims_stock_items")
       .select("id,warehouse_id")
       .eq("stock_status", "available")
       .eq("part_name", partName)
-      .neq("warehouse_id", value.exchange.warehouse_id);
-    const otherCount = (others || []).filter((s) => true).length;
+      .neq("warehouse_id", row.warehouse_id);
+    const otherCount = (others || []).length;
     const totalElsewhere = otherCount;
     if (totalElsewhere > 0) {
       setShortageHasOther(true);
@@ -160,11 +156,13 @@ export function OracleBlockEditor({
     setShortageOpen(true);
   };
 
+  const oracleLabel = value.oracle_no ? value.oracle_no : `Oracle #${index + 1}`;
+
   return (
     <Card className={`border-2 ${closed ? "border-emerald-500/60 bg-emerald-500/5" : ""}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <div className="flex items-center gap-2">
-          <CardTitle className="text-base">Oracle #{index + 1}</CardTitle>
+          <CardTitle className="text-base">Oracle {oracleLabel}</CardTitle>
           <Badge variant={closed ? "default" : "secondary"}>{closed ? "Closed" : "Open"}</Badge>
           {closed && (
             <span className="text-xs text-muted-foreground">
@@ -199,53 +197,34 @@ export function OracleBlockEditor({
       </CardHeader>
       <CardContent className={`space-y-4 ${locked ? "pointer-events-none opacity-80" : ""}`}>
         <div className="max-w-xs">
-          <Label>Oracle Number</Label>
+          <Label>Oracle #</Label>
           <Input
             type="text"
-            inputMode="numeric"
             value={value.oracle_no}
-            onChange={(e) => set({ oracle_no: e.target.value.replace(/[^0-9]/g, "") })}
-            placeholder="Enter Oracle # from external system"
-            readOnly={locked}
+            onChange={(e) => setBlock({ oracle_no: e.target.value })}
+            placeholder="Auto-set from Ticket"
+            readOnly
+            className="font-mono bg-muted/50"
           />
         </div>
 
-        {/* Defective */}
+        {/* Defective — auto-populated from ticket, read-only */}
         <div className="rounded-md border p-3 space-y-2">
-          <div className="text-sm font-semibold">A. Defective Parts (from Ticket)</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="md:col-span-2">
-              <Label>Defective Part</Label>
-              <Select
-                value={value.defective.def_serial_no || value.defective.def_model_no || ""}
-                onValueChange={(v) => {
-                  const found = defOptions.find((p) => (p.serial || p.model_no || "") === v);
-                  if (found) {
-                    set({ defective: {
-                      def_model_no: found.model_no || "",
-                      def_serial_no: found.serial || "",
-                      qty: String(found.qty ?? value.defective.qty ?? ""),
-                    } });
-                  }
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder={defOptions.length ? "Select defective part from ticket" : "No defective parts captured in ticket"} /></SelectTrigger>
-                <SelectContent>
-                  {defOptions.map((p, idx) => {
-                    const v = p.serial || p.model_no || `part-${idx}`;
-                    const label = [p.name, p.model_no, p.serial].filter(Boolean).join(" · ");
-                    return <SelectItem key={`${v}-${idx}`} value={v}>{label || `Part ${idx + 1}`}</SelectItem>;
-                  })}
-                </SelectContent>
-              </Select>
+          <div className="text-sm font-semibold">A. Defective Parts (from Ticket — read-only)</div>
+          {value.defective_rows.length === 0 && (
+            <div className="text-xs text-muted-foreground">No defective parts tagged to this Oracle in the ticket.</div>
+          )}
+          {value.defective_rows.map((d, i) => (
+            <div key={i} className="grid grid-cols-12 gap-2 items-end">
+              <div className="col-span-12 md:col-span-3"><Label>Parts / Item</Label><Input value={d.part_name || ""} readOnly className="bg-muted/50" /></div>
+              <div className="col-span-12 md:col-span-3"><Label>DEF Part Model No</Label><Input value={d.def_model_no} readOnly className="bg-muted/50" /></div>
+              <div className="col-span-12 md:col-span-3"><Label>DEF Part Serial No</Label><Input value={d.def_serial_no} readOnly className="font-mono bg-muted/50" /></div>
+              <div className="col-span-12 md:col-span-3"><Label>Qty</Label><Input value={d.qty} readOnly className="bg-muted/50" /></div>
             </div>
-            <div><Label>Qty</Label><Input type="number" min={1} value={value.defective.qty} onChange={(e) => set({ defective: { ...value.defective, qty: e.target.value } })} /></div>
-            <div><Label>DEF Part Model No</Label><Input value={value.defective.def_model_no} onChange={(e) => set({ defective: { ...value.defective, def_model_no: e.target.value } })} /></div>
-            <div><Label>DEF Part Serial No</Label><Input className="font-mono" value={value.defective.def_serial_no} onChange={(e) => set({ defective: { ...value.defective, def_serial_no: e.target.value.toUpperCase() } })} /></div>
-          </div>
+          ))}
         </div>
 
-        {/* Exchange */}
+        {/* Exchange — one row per defective row */}
         <div className="rounded-md border p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">B. Material Exchange (from IMS)</div>
@@ -253,55 +232,62 @@ export function OracleBlockEditor({
               <FileText className="h-4 w-4 mr-1" />Generate Delivery Challan
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div>
-              <Label>Warehouse</Label>
-              <Select
-                value={value.exchange.warehouse_id}
-                onValueChange={(v) => {
-                  const w = warehouses.find((x) => x.id === v);
-                  set({ exchange: { ...value.exchange, warehouse_id: v, warehouse_name: w?.name || "", model_no: "", serial_no: "" } });
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
-                <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Material Exchange Model</Label>
-              <Select
-                value={value.exchange.model_no}
-                onValueChange={(v) => set({ exchange: { ...value.exchange, model_no: v, serial_no: "" } })}
-                disabled={!value.exchange.warehouse_id}
-              >
-                <SelectTrigger><SelectValue placeholder={value.exchange.warehouse_id ? "Select model" : "Pick warehouse first"} /></SelectTrigger>
-                <SelectContent>{exchModels.map((m) => <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Material Exchange Serial</Label>
-              <Select
-                value={value.exchange.serial_no}
-                onValueChange={(v) => set({ exchange: { ...value.exchange, serial_no: v } })}
-                disabled={!value.exchange.model_no}
-              >
-                <SelectTrigger><SelectValue placeholder={value.exchange.model_no ? "Select serial" : "Pick model first"} /></SelectTrigger>
-                <SelectContent>{exchSerials.map((s) => <SelectItem key={s.id} value={s.part_serial_no || s.id}>{s.part_serial_no || "(no serial)"}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Qty</Label>
-              <Input
-                type="number" min={1}
-                value={value.exchange.qty}
-                onChange={(e) => set({ exchange: { ...value.exchange, qty: e.target.value } })}
-                onBlur={(e) => checkStockAndValidate(e.target.value)}
-              />
-            </div>
-          </div>
+          {value.exchange_rows.map((ex, i) => {
+            const stock = exchStockByRow[i] || [];
+            const models = modelsFor(stock);
+            const serials = serialsFor(stock, ex.model_no);
+            return (
+              <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 border-t first:border-t-0 first:pt-0">
+                <div>
+                  <Label>Warehouse <span className="text-muted-foreground text-xs">(Row {i + 1})</span></Label>
+                  <Select
+                    value={ex.warehouse_id}
+                    onValueChange={(v) => {
+                      const w = warehouses.find((x) => x.id === v);
+                      setExchRow(i, { warehouse_id: v, warehouse_name: w?.name || "", model_no: "", serial_no: "" });
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
+                    <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Material Exchange Model</Label>
+                  <Select
+                    value={ex.model_no}
+                    onValueChange={(v) => setExchRow(i, { model_no: v, serial_no: "" })}
+                    disabled={!ex.warehouse_id}
+                  >
+                    <SelectTrigger><SelectValue placeholder={ex.warehouse_id ? "Select model" : "Pick warehouse first"} /></SelectTrigger>
+                    <SelectContent>{models.map((m) => <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Material Exchange Serial</Label>
+                  <Select
+                    value={ex.serial_no}
+                    onValueChange={(v) => setExchRow(i, { serial_no: v })}
+                    disabled={!ex.model_no}
+                  >
+                    <SelectTrigger><SelectValue placeholder={ex.model_no ? "Select serial" : "Pick model first"} /></SelectTrigger>
+                    <SelectContent>{serials.map((s) => <SelectItem key={s.id} value={s.part_serial_no || s.id}>{s.part_serial_no || "(no serial)"}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Qty</Label>
+                  <Input
+                    type="number" min={1}
+                    value={ex.qty}
+                    onChange={(e) => setExchRow(i, { qty: e.target.value })}
+                    onBlur={(e) => checkStockAndValidate(i, e.target.value)}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Received */}
+        {/* Received — one row per defective row */}
         <div className="rounded-md border p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">C. Material Received (from IMS)</div>
@@ -309,46 +295,53 @@ export function OracleBlockEditor({
               <Receipt className="h-4 w-4 mr-1" />Generate GRN
             </Button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <Label>Warehouse</Label>
-              <Select
-                value={value.received.warehouse_id}
-                onValueChange={(v) => {
-                  const w = warehouses.find((x) => x.id === v);
-                  set({ received: { ...value.received, warehouse_id: v, warehouse_name: w?.name || "", model_no: "", serial_no: "" } });
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
-                <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Material Rec Model No</Label>
-              <Select
-                value={value.received.model_no}
-                onValueChange={(v) => set({ received: { ...value.received, model_no: v, serial_no: "" } })}
-                disabled={!value.received.warehouse_id}
-              >
-                <SelectTrigger><SelectValue placeholder={value.received.warehouse_id ? "Select model" : "Pick warehouse first"} /></SelectTrigger>
-                <SelectContent>{recvModels.map((m) => <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Material Rec Serial No</Label>
-              <Select
-                value={value.received.serial_no}
-                onValueChange={(v) => set({ received: { ...value.received, serial_no: v } })}
-                disabled={!value.received.model_no}
-              >
-                <SelectTrigger><SelectValue placeholder={value.received.model_no ? "Select serial" : "Pick model first"} /></SelectTrigger>
-                <SelectContent>{recvSerials.map((s) => <SelectItem key={s.id} value={s.part_serial_no || s.id}>{s.part_serial_no || "(no serial)"}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><Label>Qty</Label><Input type="number" min={1} value={value.received.qty} onChange={(e) => set({ received: { ...value.received, qty: e.target.value } })} /></div>
-            <div><Label>Material Rec Date</Label><Input type="date" value={value.received.received_date} onChange={(e) => set({ received: { ...value.received, received_date: e.target.value } })} /></div>
-            <div className="md:col-span-3"><Label>Remarks</Label><Textarea rows={2} value={value.received.remarks} onChange={(e) => set({ received: { ...value.received, remarks: e.target.value } })} /></div>
-          </div>
+          {value.received_rows.map((rcv, i) => {
+            const stock = recvStockByRow[i] || [];
+            const models = modelsFor(stock);
+            const serials = serialsFor(stock, rcv.model_no);
+            return (
+              <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t first:border-t-0 first:pt-0">
+                <div>
+                  <Label>Warehouse <span className="text-muted-foreground text-xs">(Row {i + 1})</span></Label>
+                  <Select
+                    value={rcv.warehouse_id}
+                    onValueChange={(v) => {
+                      const w = warehouses.find((x) => x.id === v);
+                      setRecvRow(i, { warehouse_id: v, warehouse_name: w?.name || "", model_no: "", serial_no: "" });
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
+                    <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Material Rec Model No</Label>
+                  <Select
+                    value={rcv.model_no}
+                    onValueChange={(v) => setRecvRow(i, { model_no: v, serial_no: "" })}
+                    disabled={!rcv.warehouse_id}
+                  >
+                    <SelectTrigger><SelectValue placeholder={rcv.warehouse_id ? "Select model" : "Pick warehouse first"} /></SelectTrigger>
+                    <SelectContent>{models.map((m) => <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Material Rec Serial No</Label>
+                  <Select
+                    value={rcv.serial_no}
+                    onValueChange={(v) => setRecvRow(i, { serial_no: v })}
+                    disabled={!rcv.model_no}
+                  >
+                    <SelectTrigger><SelectValue placeholder={rcv.model_no ? "Select serial" : "Pick model first"} /></SelectTrigger>
+                    <SelectContent>{serials.map((s) => <SelectItem key={s.id} value={s.part_serial_no || s.id}>{s.part_serial_no || "(no serial)"}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div><Label>Qty</Label><Input type="number" min={1} value={rcv.qty} onChange={(e) => setRecvRow(i, { qty: e.target.value })} /></div>
+                <div><Label>Material Rec Date</Label><Input type="date" value={rcv.received_date} onChange={(e) => setRecvRow(i, { received_date: e.target.value })} /></div>
+                <div className="md:col-span-3"><Label>Remarks</Label><Textarea rows={2} value={rcv.remarks} onChange={(e) => setRecvRow(i, { remarks: e.target.value })} /></div>
+              </div>
+            );
+          })}
         </div>
       </CardContent>
 
