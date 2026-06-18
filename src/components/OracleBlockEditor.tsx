@@ -6,26 +6,28 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, FileText, Receipt } from "lucide-react";
+import { Trash2, FileText, Receipt, Lock, LockOpen, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { OracleBlock } from "@/lib/indent";
+import { oracleIsComplete, oracleStatus, type OracleBlock } from "@/lib/indent";
 
 type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number };
 type Warehouse = { id: string; name: string; code: string };
 type StockRow = { id: string; part_name: string; part_model_no: string | null; part_serial_no: string | null; warehouse_id: string | null; warehouse_name?: string };
 
 export function OracleBlockEditor({
-  index, value, onChange, onRemove, defectiveParts,
+  index, value, onChange, onRemove, defectiveParts, isAdmin = false,
 }: {
   index: number;
   value: OracleBlock;
   onChange: (v: OracleBlock) => void;
   onRemove: () => void;
   defectiveParts: DefectivePart[];
+  isAdmin?: boolean;
 }) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [exchStock, setExchStock] = useState<StockRow[]>([]);
@@ -33,6 +35,12 @@ export function OracleBlockEditor({
   const [shortageOpen, setShortageOpen] = useState(false);
   const [shortageMsg, setShortageMsg] = useState<string>("");
   const [shortageHasOther, setShortageHasOther] = useState(false);
+  const [closeOpen, setCloseOpen] = useState(false);
+
+  const status = oracleStatus(value);
+  const closed = status === "closed";
+  const complete = oracleIsComplete(value);
+  const locked = closed && !isAdmin;
 
   useEffect(() => {
     (async () => {
@@ -65,6 +73,27 @@ export function OracleBlockEditor({
   }, [value.received.warehouse_id]);
 
   const set = (patch: Partial<OracleBlock>) => onChange({ ...value, ...patch });
+
+  const confirmClose = async () => {
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id || null;
+    const meta = (u.user?.user_metadata || {}) as { full_name?: string; name?: string };
+    const name = meta.full_name || meta.name || u.user?.email || null;
+    onChange({
+      ...value,
+      status: "closed",
+      closed_by: uid,
+      closed_by_name: name,
+      closed_at: new Date().toISOString(),
+    });
+    setCloseOpen(false);
+    toast.success(`Oracle #${index + 1} closed`);
+  };
+
+  const reopen = () => {
+    onChange({ ...value, status: "open", closed_by: null, closed_by_name: null, closed_at: null });
+    toast.success(`Oracle #${index + 1} reopened`);
+  };
 
   // Defective dropdown: list ticket defective parts
   const defOptions = useMemo(
@@ -132,12 +161,43 @@ export function OracleBlockEditor({
   };
 
   return (
-    <Card className="border-2">
+    <Card className={`border-2 ${closed ? "border-emerald-500/60 bg-emerald-500/5" : ""}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-base">Oracle #{index + 1}</CardTitle>
-        <Button variant="ghost" size="icon" onClick={onRemove}><Trash2 className="h-4 w-4" /></Button>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base">Oracle #{index + 1}</CardTitle>
+          <Badge variant={closed ? "default" : "secondary"}>{closed ? "Closed" : "Open"}</Badge>
+          {closed && (
+            <span className="text-xs text-muted-foreground">
+              by {value.closed_by_name || "—"} · {value.closed_at ? new Date(value.closed_at).toLocaleString() : ""}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {closed ? (
+            isAdmin ? (
+              <Button variant="outline" size="sm" onClick={reopen}>
+                <LockOpen className="h-4 w-4 mr-1" />Reopen
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground inline-flex items-center"><Lock className="h-3 w-3 mr-1" />Locked</span>
+            )
+          ) : (
+            <Button
+              variant="default"
+              size="sm"
+              disabled={!complete}
+              title={complete ? "Close this Oracle" : "Fill all mandatory fields to enable"}
+              onClick={() => setCloseOpen(true)}
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1" />Close Oracle
+            </Button>
+          )}
+          {!closed && (
+            <Button variant="ghost" size="icon" onClick={onRemove}><Trash2 className="h-4 w-4" /></Button>
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className={`space-y-4 ${locked ? "pointer-events-none opacity-80" : ""}`}>
         <div className="max-w-xs">
           <Label>Oracle Number</Label>
           <Input
@@ -146,6 +206,7 @@ export function OracleBlockEditor({
             value={value.oracle_no}
             onChange={(e) => set({ oracle_no: e.target.value.replace(/[^0-9]/g, "") })}
             placeholder="Enter Oracle # from external system"
+            readOnly={locked}
           />
         </div>
 
@@ -307,6 +368,21 @@ export function OracleBlockEditor({
                 Create Transfer
               </AlertDialogAction>
             )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={closeOpen} onOpenChange={setCloseOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close Oracle #{index + 1}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              All Oracle activities have been completed. Are you sure you want to close this Oracle? Closed Oracle fields will be locked from further editing.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmClose}>Confirm</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
