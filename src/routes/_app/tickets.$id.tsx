@@ -993,6 +993,7 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
           <table className="w-full border border-black mb-3">
             <thead className="bg-gray-100"><tr>
               <th className="border border-black px-2 py-1 w-8">#</th>
+              <th className="border border-black px-2 py-1">Oracle #</th>
               <th className="border border-black px-2 py-1">Part / Item</th>
               <th className="border border-black px-2 py-1">Model / Part No</th>
               <th className="border border-black px-2 py-1">Serial No</th>
@@ -1003,6 +1004,7 @@ function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: Custo
               {(t.defective_parts_details || []).map((p, i) => (
                 <tr key={i}>
                   <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
+                  <td className="border border-black px-2 py-1 font-mono">{p.oracle_no || "-"}</td>
                   <td className="border border-black px-2 py-1">{p.name}</td>
                   <td className="border border-black px-2 py-1">{p.model_no || "-"}</td>
                   <td className="border border-black px-2 py-1 font-mono">{p.serial || "-"}</td>
