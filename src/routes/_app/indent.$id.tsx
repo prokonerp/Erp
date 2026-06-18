@@ -7,10 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ArrowLeft, Trash2, ExternalLink } from "lucide-react";
+import { Save, ArrowLeft, Trash2, ExternalLink, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { INDENT_TYPES, type Indent, type IndentType } from "@/lib/indent";
+import { INDENT_TYPES, blankOracle, type Indent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
+import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/_app/indent/$id")({
@@ -22,12 +23,19 @@ function IndentDetail() {
   const navigate = useNavigate();
   const [i, setI] = useState<Indent | null>(null);
   const [busy, setBusy] = useState(false);
+  const [defParts, setDefParts] = useState<Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number }>>([]);
 
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase.from("indents" as never).select("*").eq("id", id).maybeSingle();
       if (error) { toast.error(error.message); return; }
-      setI((data || null) as unknown as Indent | null);
+      const ind = (data || null) as unknown as Indent | null;
+      setI(ind);
+      if (ind?.ticket_id) {
+        const { data: t } = await supabase.from("tickets").select("defective_parts_details").eq("id", ind.ticket_id).maybeSingle();
+        const raw = (t as { defective_parts_details?: unknown } | null)?.defective_parts_details;
+        setDefParts(Array.isArray(raw) ? (raw as Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number }>) : []);
+      }
     })();
   }, [id]);
 
@@ -42,16 +50,9 @@ function IndentDetail() {
       case_id: i.case_id,
       oem_case_id: i.oem_case_id,
       company: i.company,
-      def_model_no: i.def_model_no,
-      def_serial_no: i.def_serial_no,
       problem_reported: i.problem_reported,
       indent_type: i.indent_type,
-      oracles: i.oracles,
-      material_exchange_model: i.material_exchange_model,
-      material_exchange_serial_no: i.material_exchange_serial_no,
-      material_rec_model_no: i.material_rec_model_no,
-      material_rec_serial_no: i.material_rec_serial_no,
-      material_rec_date: i.material_rec_date,
+      oracles_data: i.oracles_data || [],
       engineer_name: i.engineer_name,
       remarks: i.remarks,
       product_model: i.product_model,
@@ -107,12 +108,10 @@ function IndentDetail() {
           <div><Label>Case ID</Label><Input value={i.case_id || ""} onChange={(e) => update({ case_id: e.target.value })} className="font-mono bg-muted/50" readOnly /></div>
           <div><Label>OEM Case ID</Label><Input value={i.oem_case_id || ""} readOnly className="font-mono bg-muted/50" /></div>
           <div><Label>Company (OEM)</Label><Input value={i.company || ""} onChange={(e) => update({ company: e.target.value })} /></div>
-          <div><Label>DEF Part Model No</Label><Input value={i.def_model_no || ""} onChange={(e) => update({ def_model_no: e.target.value })} /></div>
-          <div><Label>DEF Part Serial No</Label><Input value={i.def_serial_no || ""} onChange={(e) => update({ def_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
-          <div><Label>Engineer</Label><Input value={i.engineer_name || ""} onChange={(e) => update({ engineer_name: e.target.value })} /></div>
-          <div className="md:col-span-3"><Label>Problem Reported</Label><Textarea rows={2} value={i.problem_reported || ""} onChange={(e) => update({ problem_reported: e.target.value })} /></div>
           <div><Label>Product Model</Label><Input value={i.product_model || ""} readOnly className="bg-muted/50" /></div>
           <div><Label>Product Serial</Label><Input value={i.product_serial || ""} readOnly className="font-mono bg-muted/50" /></div>
+          <div><Label>Engineer</Label><Input value={i.engineer_name || ""} onChange={(e) => update({ engineer_name: e.target.value })} /></div>
+          <div className="md:col-span-3"><Label>Problem Reported</Label><Textarea rows={2} value={i.problem_reported || ""} onChange={(e) => update({ problem_reported: e.target.value })} /></div>
         </CardContent>
       </Card>
 
@@ -128,27 +127,31 @@ function IndentDetail() {
               <SelectContent>{INDENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div className="md:col-span-3"><Label>Oracles</Label><Input value={i.oracles || ""} onChange={(e) => update({ oracles: e.target.value })} /></div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Material Exchange</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div><Label>Material Exchange Model</Label><Input value={i.material_exchange_model || ""} onChange={(e) => update({ material_exchange_model: e.target.value })} /></div>
-          <div><Label>Material Exchange Serial No</Label><Input value={i.material_exchange_serial_no || ""} onChange={(e) => update({ material_exchange_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Material Received</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div><Label>Material Rec Model No</Label><Input value={i.material_rec_model_no || ""} onChange={(e) => update({ material_rec_model_no: e.target.value })} /></div>
-          <div><Label>Material Rec Serial No</Label><Input value={i.material_rec_serial_no || ""} onChange={(e) => update({ material_rec_serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
-          <div><Label>Material Rec Date</Label><Input type="date" value={i.material_rec_date || ""} onChange={(e) => update({ material_rec_date: e.target.value })} /></div>
           <div className="md:col-span-3"><Label>Remarks</Label><Textarea rows={2} value={i.remarks || ""} onChange={(e) => update({ remarks: e.target.value })} /></div>
         </CardContent>
       </Card>
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Oracles</h2>
+        <Button variant="outline" size="sm" onClick={() => update({ oracles_data: [ ...(i.oracles_data || []), blankOracle() ] })}>
+          <Plus className="h-4 w-4 mr-1" />Add Oracle
+        </Button>
+      </div>
+      {(!i.oracles_data || i.oracles_data.length === 0) && (
+        <div className="text-sm text-muted-foreground border rounded-md p-4 text-center">
+          No Oracle entries yet. Click <span className="font-medium">Add Oracle</span> to capture Defective, Material Exchange and Material Received details.
+        </div>
+      )}
+      {(i.oracles_data || []).map((o: OracleBlock, idx: number) => (
+        <OracleBlockEditor
+          key={idx}
+          index={idx}
+          value={o}
+          defectiveParts={defParts}
+          onChange={(v) => update({ oracles_data: (i.oracles_data || []).map((x, ix) => (ix === idx ? v : x)) })}
+          onRemove={() => update({ oracles_data: (i.oracles_data || []).filter((_, ix) => ix !== idx) })}
+        />
+      ))}
     </div>
   );
 }
