@@ -77,11 +77,13 @@ export type PartLine = {
   confirmed?: boolean;
   confirmed_by?: string | null;
   confirmed_at?: string | null;
+  // Oracle # tag — defective parts with the same value are grouped under
+  // one Oracle block when an Indent is created from the ticket.
+  oracle_no?: string;
   // Auto-populated rows from Indent Oracle Material Exchange (Oracle = Closed)
   source?: "manual" | "oracle_exchange";
   indent_id?: string | null;
   indent_no?: string | null;
-  oracle_no?: string | null;
 };
 
 export const STATUS_COLOR: Record<string, string> = {
