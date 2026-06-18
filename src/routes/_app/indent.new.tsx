@@ -8,9 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ArrowLeft, Plus } from "lucide-react";
+import { Save, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { INDENT_TYPES, blankOracle, syncTicketGoodPartsFromIndent, type IndentType, type OracleBlock } from "@/lib/indent";
+import { INDENT_TYPES, buildOraclesFromDefectiveParts, syncTicketGoodPartsFromIndent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -80,7 +80,7 @@ function NewIndent() {
       }
       const dRaw = (data as { defective_parts_details?: unknown }).defective_parts_details;
       const gRaw = (data as { good_parts_details?: unknown }).good_parts_details;
-      const defParts: Array<{ name?: string; model_no?: string; serial?: string }> = Array.isArray(dRaw) ? (dRaw as Array<{ name?: string; model_no?: string; serial?: string }>) : [];
+      const defParts: Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }> = Array.isArray(dRaw) ? (dRaw as Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>) : [];
       const goodParts: Array<{ name?: string; model_no?: string; serial?: string }> = Array.isArray(gRaw) ? (gRaw as Array<{ name?: string; model_no?: string; serial?: string }>) : [];
       const defOn = !!(data as { defective_parts_received?: boolean }).defective_parts_received;
       const goodOn = !!(data as { good_parts_used?: boolean }).good_parts_used;
@@ -119,6 +119,7 @@ function NewIndent() {
         problem_reported: data.complaint || "",
         engineer_name: latestEngineer,
         defective_parts_from_ticket: defParts,
+        oracles_data: buildOraclesFromDefectiveParts(defParts),
       }));
       setLoading(false);
     })();
@@ -224,14 +225,11 @@ function NewIndent() {
       </Card>
 
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Oracles</h2>
-        <Button variant="outline" size="sm" onClick={() => set({ oracles_data: [...form.oracles_data, blankOracle()] })}>
-          <Plus className="h-4 w-4 mr-1" />Add Oracle
-        </Button>
+        <h2 className="text-lg font-semibold">Oracles <span className="text-xs font-normal text-muted-foreground">(auto from Ticket Defective Parts)</span></h2>
       </div>
       {form.oracles_data.length === 0 && (
         <div className="text-sm text-muted-foreground border rounded-md p-4 text-center">
-          No Oracle entries yet. Click <span className="font-medium">Add Oracle</span> to capture Defective, Material Exchange and Material Received details.
+          No defective parts captured on the ticket — add parts with Oracle # tags in the linked ticket to auto-create Oracle blocks here.
         </div>
       )}
       {form.oracles_data.map((o, idx) => (
