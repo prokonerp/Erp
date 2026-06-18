@@ -77,9 +77,9 @@ function IndentList() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={11}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>No Indents yet. Create one from an OEM ticket.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={11}>No Indents yet. Create one from an OEM ticket.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2 font-mono">{r.indent_no}</td>
