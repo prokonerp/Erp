@@ -249,6 +249,8 @@ function NewIndent() {
           index={idx}
           value={o}
           defectiveParts={form.defective_parts_from_ticket}
+          collapsed={!!collapsedMap[idx]}
+          onToggleCollapse={() => setCollapsedMap((m) => ({ ...m, [idx]: !m[idx] }))}
           onChange={(v) => set({ oracles_data: form.oracles_data.map((x, i) => (i === idx ? v : x)) })}
           onRemove={() => set({ oracles_data: form.oracles_data.filter((_, i) => i !== idx) })}
         />
