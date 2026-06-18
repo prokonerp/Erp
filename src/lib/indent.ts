@@ -34,39 +34,118 @@ export type OracleReceived = {
   remarks: string;
 };
 
+export type OracleDefectiveRow = OracleDefective & { part_name?: string };
+export type OracleExchangeRow = OracleExchange;
+export type OracleReceivedRow = OracleReceived;
+
 export type OracleBlock = {
   oracle_no: string;
-  defective: OracleDefective;
-  exchange: OracleExchange;
-  received: OracleReceived;
+  // Row-level arrays (new structure). Each block can have N rows; the
+  // exchange/received arrays mirror the defective array length 1:1.
+  defective_rows: OracleDefectiveRow[];
+  exchange_rows: OracleExchangeRow[];
+  received_rows: OracleReceivedRow[];
+  // Legacy single-row fields — kept optional for backward compat reads only.
+  defective?: OracleDefective;
+  exchange?: OracleExchange;
+  received?: OracleReceived;
   status?: "open" | "closed";
   closed_by?: string | null;
   closed_by_name?: string | null;
   closed_at?: string | null;
 };
 
+const blankExchangeRow = (qty = ""): OracleExchangeRow => ({
+  warehouse_id: "", warehouse_name: "", model_no: "", serial_no: "", qty,
+});
+const blankReceivedRow = (qty = ""): OracleReceivedRow => ({
+  warehouse_id: "", warehouse_name: "", model_no: "", serial_no: "", qty, received_date: "", remarks: "",
+});
+
 export const blankOracle = (): OracleBlock => ({
   oracle_no: "",
-  defective: { def_model_no: "", def_serial_no: "", qty: "" },
-  exchange: { warehouse_id: "", warehouse_name: "", model_no: "", serial_no: "", qty: "" },
-  received: { warehouse_id: "", warehouse_name: "", model_no: "", serial_no: "", qty: "", received_date: "", remarks: "" },
+  defective_rows: [{ def_model_no: "", def_serial_no: "", qty: "" }],
+  exchange_rows: [blankExchangeRow()],
+  received_rows: [blankReceivedRow()],
   status: "open",
   closed_by: null,
   closed_by_name: null,
   closed_at: null,
 });
 
-export function oracleIsComplete(o: OracleBlock): boolean {
-  const d = o.defective;
-  const e = o.exchange;
-  const r = o.received;
-  const nn = (s: string) => !!(s && String(s).trim());
-  const qty = (s: string) => nn(s) && Number(s) > 0;
-  return (
-    nn(d.def_model_no) && nn(d.def_serial_no) && qty(d.qty) &&
-    nn(e.warehouse_id) && nn(e.model_no) && nn(e.serial_no) && qty(e.qty) &&
-    nn(r.warehouse_id) && nn(r.model_no) && nn(r.serial_no) && qty(r.qty) && nn(r.received_date)
-  );
+/** Normalize an oracle block: migrate legacy single-row shape → row arrays
+ *  and ensure exchange/received arrays match defective row count. */
+export function normalizeOracle(o: OracleBlock): OracleBlock {
+  const out: OracleBlock = { ...o };
+  const hasRows = Array.isArray(out.defective_rows) && out.defective_rows.length > 0;
+  if (!hasRows) {
+    const d = out.defective;
+    out.defective_rows = d ? [{ def_model_no: d.def_model_no || "", def_serial_no: d.def_serial_no || "", qty: d.qty || "" }] : [];
+  }
+  if (!Array.isArray(out.exchange_rows)) {
+    out.exchange_rows = out.exchange ? [{ ...out.exchange }] : [];
+  }
+  if (!Array.isArray(out.received_rows)) {
+    out.received_rows = out.received ? [{ ...out.received }] : [];
+  }
+  // Pad exchange/received to defective length
+  const n = out.defective_rows.length;
+  while (out.exchange_rows.length < n) out.exchange_rows.push(blankExchangeRow(out.defective_rows[out.exchange_rows.length]?.qty || ""));
+  while (out.received_rows.length < n) out.received_rows.push(blankReceivedRow(out.defective_rows[out.received_rows.length]?.qty || ""));
+  out.exchange_rows = out.exchange_rows.slice(0, n);
+  out.received_rows = out.received_rows.slice(0, n);
+  return out;
+}
+
+export function oracleIsComplete(oIn: OracleBlock): boolean {
+  const o = normalizeOracle(oIn);
+  const nn = (s?: string) => !!(s && String(s).trim());
+  const qty = (s?: string) => nn(s) && Number(s) > 0;
+  if (o.defective_rows.length === 0) return false;
+  for (let i = 0; i < o.defective_rows.length; i++) {
+    const d = o.defective_rows[i];
+    const e = o.exchange_rows[i];
+    const r = o.received_rows[i];
+    if (!(nn(d.def_model_no) && nn(d.def_serial_no) && qty(d.qty))) return false;
+    if (!e || !(nn(e.warehouse_id) && nn(e.model_no) && nn(e.serial_no) && qty(e.qty))) return false;
+    if (!r || !(nn(r.warehouse_id) && nn(r.model_no) && nn(r.serial_no) && qty(r.qty) && nn(r.received_date))) return false;
+  }
+  return true;
+}
+
+/** Build Oracle blocks from a ticket's Defective Parts list. Rows are
+ *  grouped by their `oracle_no` tag (case-insensitive trim). Parts without
+ *  an Oracle # are grouped under "Unassigned". */
+export function buildOraclesFromDefectiveParts(
+  parts: Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>,
+): OracleBlock[] {
+  const groups = new Map<string, OracleDefectiveRow[]>();
+  const order: string[] = [];
+  for (const p of parts || []) {
+    const key = (p.oracle_no || "").trim();
+    if (!key && !(p.name || p.model_no || p.serial)) continue;
+    const k = key || "Unassigned";
+    if (!groups.has(k)) { groups.set(k, []); order.push(k); }
+    groups.get(k)!.push({
+      part_name: p.name || "",
+      def_model_no: p.model_no || "",
+      def_serial_no: p.serial || "",
+      qty: String(p.qty ?? "1"),
+    });
+  }
+  return order.map((k) => {
+    const def = groups.get(k)!;
+    return {
+      oracle_no: k === "Unassigned" ? "" : k,
+      defective_rows: def,
+      exchange_rows: def.map((d) => blankExchangeRow(d.qty)),
+      received_rows: def.map((d) => blankReceivedRow(d.qty)),
+      status: "open" as const,
+      closed_by: null,
+      closed_by_name: null,
+      closed_at: null,
+    };
+  });
 }
 
 export function oracleStatus(o: OracleBlock): "open" | "closed" {
@@ -157,21 +236,25 @@ export async function syncTicketGoodPartsFromIndent(
   // Drop previous rows generated from THIS indent — we re-build them from current oracles.
   const kept = existing.filter((r) => !(r.source === "oracle_exchange" && r.indent_id === indent.id));
   const oracleRows: Row[] = [];
-  for (const o of indent.oracles_data || []) {
+  for (const oRaw of indent.oracles_data || []) {
+    const o = normalizeOracle(oRaw);
     if (o.status !== "closed") continue;
-    const ex = o.exchange;
-    if (!ex || !ex.model_no || !ex.serial_no) continue;
-    oracleRows.push({
-      name: ex.model_no,
-      model_no: ex.model_no,
-      serial: ex.serial_no,
-      qty: ex.qty || "1",
-      remarks: `Oracle ${o.oracle_no || ""} · ${indent.indent_no || ""}`.trim(),
-      source: "oracle_exchange",
-      indent_id: indent.id,
-      indent_no: indent.indent_no,
-      oracle_no: o.oracle_no || "",
-    });
+    for (const ex of o.exchange_rows) {
+      if (!ex || !ex.model_no || !ex.serial_no) continue;
+      // Serial select stores `part_serial_no || id`; model select stores "name||model_no"
+      const [partName, modelNo] = (ex.model_no || "").split("||");
+      oracleRows.push({
+        name: partName || ex.model_no,
+        model_no: modelNo || ex.model_no,
+        serial: ex.serial_no,
+        qty: ex.qty || "1",
+        remarks: `Oracle ${o.oracle_no || ""} · ${indent.indent_no || ""}`.trim(),
+        source: "oracle_exchange",
+        indent_id: indent.id,
+        indent_no: indent.indent_no,
+        oracle_no: o.oracle_no || "",
+      });
+    }
   }
   const merged = [...kept, ...oracleRows];
   const enableGood = oracleRows.length > 0 ? true : !!tk.good_parts_used;
