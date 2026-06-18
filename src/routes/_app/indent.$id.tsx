@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, ArrowLeft, Trash2, ExternalLink, Plus, Timer } from "lucide-react";
 import { toast } from "sonner";
-import { INDENT_TYPES, blankOracle, formatAge, indentClosedAt, indentStatusFromOracles, type Indent, type IndentType, type OracleBlock } from "@/lib/indent";
+import { INDENT_TYPES, blankOracle, formatAge, indentClosedAt, indentStatusFromOracles, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import { useIsAdmin } from "@/lib/useRole";
@@ -69,6 +69,12 @@ function IndentDetail() {
     } as never).eq("id", i.id);
     setBusy(false);
     if (error) return toast.error(error.message);
+    await syncTicketGoodPartsFromIndent(supabase, {
+      id: i.id,
+      indent_no: i.indent_no,
+      ticket_id: i.ticket_id,
+      oracles_data: i.oracles_data || [],
+    });
     toast.success("Saved");
   };
 
