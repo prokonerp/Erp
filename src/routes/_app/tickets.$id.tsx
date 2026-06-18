@@ -703,8 +703,19 @@ function TicketDetail() {
               {t.good_parts_used ? (
                 <div className="space-y-2">
                   {(t.good_parts_details || []).length === 0 && <p className="text-sm text-muted-foreground">No good parts added yet.</p>}
-                  {(t.good_parts_details || []).map((p, i) => (
-                    <div key={i} className="rounded-md border p-2">
+                  {(t.good_parts_details || []).map((p, i) => {
+                    const fromOracle = p.source === "oracle_exchange";
+                    const ro = fromOracle && !isAdmin;
+                    return (
+                    <div key={i} className={`rounded-md border p-2 ${fromOracle ? "bg-muted/40 border-primary/30" : ""}`}>
+                      {fromOracle && (
+                        <div className="flex items-center justify-between mb-1">
+                          <Badge variant="secondary" className="text-[10px]">
+                            Oracle Exchange{p.oracle_no ? ` · ${p.oracle_no}` : ""}{p.indent_no ? ` · ${p.indent_no}` : ""}
+                          </Badge>
+                          {ro && <span className="text-[10px] text-muted-foreground">Auto-synced (read-only)</span>}
+                        </div>
+                      )}
                       <div className="grid grid-cols-12 gap-2 items-end">
                         <div className="col-span-12 md:col-span-3">
                           <Label>Part / Item</Label>
@@ -712,20 +723,21 @@ function TicketDetail() {
                             ticketProduct={t.product}
                             value={p.model_no || p.name}
                             onSelect={(item) => updGood(i, { name: item.name, model_no: item.model || item.name })}
+                            disabled={ro}
                           />
                         </div>
-                        <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} /></div>
-                        <div className="col-span-12 md:col-span-2"><Label>Serial No</Label><Input value={p.serial || ""} onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
-                        <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} /></div>
-                        <div className="col-span-6 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} /></div>
+                        <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} readOnly={ro} /></div>
+                        <div className="col-span-12 md:col-span-2"><Label>Serial No</Label><Input value={p.serial || ""} onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })} className="font-mono" readOnly={ro} /></div>
+                        <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} readOnly={ro} /></div>
+                        <div className="col-span-6 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} readOnly={ro} /></div>
                         <div className="col-span-2 md:col-span-1 flex">
-                          <Button size="icon" variant="ghost" onClick={() => delGood(i)}>
+                          <Button size="icon" variant="ghost" onClick={() => delGood(i)} disabled={ro}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       </div>
                     </div>
-                  ))}
+                  );})}
                   <Button size="sm" variant="outline" onClick={addGood}><Plus className="h-4 w-4 mr-1" />Add good part</Button>
                 </div>
               ) : (
