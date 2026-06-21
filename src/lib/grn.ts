@@ -69,6 +69,7 @@ export type Grn = {
   approved_by: string | null;
   oem_logo_url: string | null;
   created_at: string;
+  created_by: string | null;
 };
 
 export const emptyGrnItem = (): GrnItem => ({
@@ -87,6 +88,14 @@ export async function fetchGrns(category: GrnCategory) {
   const { data, error } = await supabase
     .from("grns" as never)
     .select("*").eq("category", category).order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as unknown as Grn[];
+}
+
+export async function fetchAllGrns() {
+  const { data, error } = await supabase
+    .from("grns" as never)
+    .select("*").order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []) as unknown as Grn[];
 }
