@@ -162,15 +162,21 @@ function AppLayout() {
                           </DropdownMenuSubTrigger>
                           <DropdownMenuSubContent className="w-52">
                             <DropdownMenuItem asChild>
-                              <Link to="/challan/customer" className={itemCls(itemActive("/challan/customer"))}>
-                                <Send className="h-4 w-4" />
-                                To Customer
+                              <Link to="/challan" className={itemCls(itemActive("/challan"))}>
+                                <ListChecks className="h-4 w-4" />
+                                All Delivery Challans
                               </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem asChild>
-                              <Link to="/challan/oem" className={itemCls(itemActive("/challan/oem"))}>
+                              <Link to="/challan/customer/new" className={itemCls(itemActive("/challan/customer/new"))}>
                                 <Send className="h-4 w-4" />
-                                To OEM
+                                New: To Customer
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link to="/challan/oem/new" className={itemCls(itemActive("/challan/oem/new"))}>
+                                <Send className="h-4 w-4" />
+                                New: To OEM
                               </Link>
                             </DropdownMenuItem>
                           </DropdownMenuSubContent>
@@ -182,21 +188,27 @@ function AppLayout() {
                           </DropdownMenuSubTrigger>
                           <DropdownMenuSubContent className="w-52">
                             <DropdownMenuItem asChild>
-                              <Link to="/grn/customer" className={itemCls(itemActive("/grn/customer"))}>
-                                <PackageCheck className="h-4 w-4" />
-                                From Customer
+                              <Link to="/grn" className={itemCls(itemActive("/grn"))}>
+                                <ListChecks className="h-4 w-4" />
+                                All GRNs
                               </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem asChild>
-                              <Link to="/grn/oem" className={itemCls(itemActive("/grn/oem"))}>
+                              <Link to="/grn/customer/new" className={itemCls(itemActive("/grn/customer/new"))}>
                                 <PackageCheck className="h-4 w-4" />
-                                From OEM
+                                New: From Customer
                               </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem asChild>
-                              <Link to="/grn/general" className={itemCls(itemActive("/grn/general"))}>
+                              <Link to="/grn/oem/new" className={itemCls(itemActive("/grn/oem/new"))}>
                                 <PackageCheck className="h-4 w-4" />
-                                General
+                                New: From OEM
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link to="/grn/general/new" className={itemCls(itemActive("/grn/general/new"))}>
+                                <PackageCheck className="h-4 w-4" />
+                                New: General
                               </Link>
                             </DropdownMenuItem>
                           </DropdownMenuSubContent>
