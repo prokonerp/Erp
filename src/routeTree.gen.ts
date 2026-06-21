@@ -46,6 +46,7 @@ import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
 import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
 import { Route as AppImsIndentHistoryRouteImport } from './routes/_app/ims.indent-history'
 import { Route as AppImsAuditRouteImport } from './routes/_app/ims.audit'
+import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
@@ -254,6 +255,11 @@ const AppImsAuditRoute = AppImsAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AppImsRoute,
 } as any)
+const AppGrnCustomerRoute = AppGrnCustomerRouteImport.update({
+  id: '/grn/customer',
+  path: '/grn/customer',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   id: '/gatepass/$id',
   path: '/gatepass/$id',
@@ -399,6 +405,7 @@ export interface FileRoutesByFullPath {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/grn/customer': typeof AppGrnCustomerRoute
   '/ims/audit': typeof AppImsAuditRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -453,6 +460,7 @@ export interface FileRoutesByTo {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/grn/customer': typeof AppGrnCustomerRoute
   '/ims/audit': typeof AppImsAuditRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -515,6 +523,7 @@ export interface FileRoutesById {
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
+  '/_app/grn/customer': typeof AppGrnCustomerRoute
   '/_app/ims/audit': typeof AppImsAuditRoute
   '/_app/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/_app/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -578,6 +587,7 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/grn/customer'
     | '/ims/audit'
     | '/ims/indent-history'
     | '/ims/oem-returns'
@@ -632,6 +642,7 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/grn/customer'
     | '/ims/audit'
     | '/ims/indent-history'
     | '/ims/oem-returns'
@@ -693,6 +704,7 @@ export interface FileRouteTypes {
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
+    | '/_app/grn/customer'
     | '/_app/ims/audit'
     | '/_app/ims/indent-history'
     | '/_app/ims/oem-returns'
@@ -993,6 +1005,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/ims/audit'
       preLoaderRoute: typeof AppImsAuditRouteImport
       parentRoute: typeof AppImsRoute
+    }
+    '/_app/grn/customer': {
+      id: '/_app/grn/customer'
+      path: '/grn/customer'
+      fullPath: '/grn/customer'
+      preLoaderRoute: typeof AppGrnCustomerRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/gatepass/$id': {
       id: '/_app/gatepass/$id'
@@ -1361,6 +1380,7 @@ interface AppRouteChildren {
   AppChallanCustomerRoute: typeof AppChallanCustomerRouteWithChildren
   AppChallanOemRoute: typeof AppChallanOemRouteWithChildren
   AppGatepassIdRoute: typeof AppGatepassIdRoute
+  AppGrnCustomerRoute: typeof AppGrnCustomerRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -1379,6 +1399,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppChallanCustomerRoute: AppChallanCustomerRouteWithChildren,
   AppChallanOemRoute: AppChallanOemRouteWithChildren,
   AppGatepassIdRoute: AppGatepassIdRoute,
+  AppGrnCustomerRoute: AppGrnCustomerRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
