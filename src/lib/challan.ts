@@ -50,6 +50,7 @@ export type DeliveryChallan = {
   approved_by: string | null;
   oem_logo_url: string | null;
   created_at: string;
+  created_by: string | null;
 };
 
 export const emptyItem = (): ChallanItem => ({
@@ -63,6 +64,27 @@ export async function fetchChallans(docType: DocType) {
     .select("*").eq("doc_type", docType).order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []) as unknown as DeliveryChallan[];
+}
+
+export async function fetchAllChallans() {
+  const { data, error } = await supabase
+    .from("delivery_challans" as never)
+    .select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as unknown as DeliveryChallan[];
+}
+
+export async function fetchUserNameMap(ids: string[]): Promise<Record<string, string>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0) return {};
+  const { data, error } = await supabase
+    .from("app_users")
+    .select("user_id,name,email")
+    .in("user_id", unique);
+  if (error) return {};
+  const map: Record<string, string> = {};
+  for (const u of data || []) map[(u as any).user_id] = (u as any).name || (u as any).email || "";
+  return map;
 }
 
 export async function fetchChallan(id: string) {
