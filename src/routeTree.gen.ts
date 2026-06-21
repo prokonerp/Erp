@@ -52,6 +52,7 @@ import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotatio
 import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
 import { Route as AppCrmIncentivesRouteImport } from './routes/_app/crm.incentives'
 import { Route as AppCrmCustomersRouteImport } from './routes/_app/crm.customers'
+import { Route as AppChallanCustomerRouteImport } from './routes/_app/challan.customer'
 import { Route as AppAmcSettingsRouteImport } from './routes/_app/amc.settings'
 import { Route as AppAmcPmRouteImport } from './routes/_app/amc.pm'
 import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
@@ -277,6 +278,11 @@ const AppCrmCustomersRoute = AppCrmCustomersRouteImport.update({
   path: '/customers',
   getParentRoute: () => AppCrmRoute,
 } as any)
+const AppChallanCustomerRoute = AppChallanCustomerRouteImport.update({
+  id: '/challan/customer',
+  path: '/challan/customer',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAmcSettingsRoute = AppAmcSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -348,6 +354,7 @@ export interface FileRoutesByFullPath {
   '/amc/oem': typeof AppAmcOemRoute
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
+  '/challan/customer': typeof AppChallanCustomerRoute
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
@@ -397,6 +404,7 @@ export interface FileRoutesByTo {
   '/amc/oem': typeof AppAmcOemRoute
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
+  '/challan/customer': typeof AppChallanCustomerRoute
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
@@ -452,6 +460,7 @@ export interface FileRoutesById {
   '/_app/amc/oem': typeof AppAmcOemRoute
   '/_app/amc/pm': typeof AppAmcPmRoute
   '/_app/amc/settings': typeof AppAmcSettingsRoute
+  '/_app/challan/customer': typeof AppChallanCustomerRoute
   '/_app/crm/customers': typeof AppCrmCustomersRoute
   '/_app/crm/incentives': typeof AppCrmIncentivesRoute
   '/_app/crm/leads': typeof AppCrmLeadsRouteWithChildren
@@ -508,6 +517,7 @@ export interface FileRouteTypes {
     | '/amc/oem'
     | '/amc/pm'
     | '/amc/settings'
+    | '/challan/customer'
     | '/crm/customers'
     | '/crm/incentives'
     | '/crm/leads'
@@ -557,6 +567,7 @@ export interface FileRouteTypes {
     | '/amc/oem'
     | '/amc/pm'
     | '/amc/settings'
+    | '/challan/customer'
     | '/crm/customers'
     | '/crm/incentives'
     | '/crm/leads'
@@ -611,6 +622,7 @@ export interface FileRouteTypes {
     | '/_app/amc/oem'
     | '/_app/amc/pm'
     | '/_app/amc/settings'
+    | '/_app/challan/customer'
     | '/_app/crm/customers'
     | '/_app/crm/incentives'
     | '/_app/crm/leads'
@@ -956,6 +968,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCrmCustomersRouteImport
       parentRoute: typeof AppCrmRoute
     }
+    '/_app/challan/customer': {
+      id: '/_app/challan/customer'
+      path: '/challan/customer'
+      fullPath: '/challan/customer'
+      preLoaderRoute: typeof AppChallanCustomerRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/amc/settings': {
       id: '/_app/amc/settings'
       path: '/settings'
@@ -1201,6 +1220,7 @@ interface AppRouteChildren {
   AppRecordsRoute: typeof AppRecordsRoute
   AppReportsRoute: typeof AppReportsRoute
   AppTicketsRoute: typeof AppTicketsRouteWithChildren
+  AppChallanCustomerRoute: typeof AppChallanCustomerRoute
   AppGatepassIdRoute: typeof AppGatepassIdRoute
 }
 
@@ -1216,6 +1236,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppRecordsRoute: AppRecordsRoute,
   AppReportsRoute: AppReportsRoute,
   AppTicketsRoute: AppTicketsRouteWithChildren,
+  AppChallanCustomerRoute: AppChallanCustomerRoute,
   AppGatepassIdRoute: AppGatepassIdRoute,
 }
 
