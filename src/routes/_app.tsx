@@ -62,8 +62,7 @@ function AppLayout() {
 
   const allNav: { to: string; label: string; icon: any; module?: ModuleKey; adminOnly?: boolean }[] = [
     { to: "/masters", label: "Masters", icon: Database, module: "customers" },
-    { to: "/new", label: "New Gatepass", icon: FileText, module: "gatepass" },
-    { to: "/records", label: "Records", icon: ListChecks, module: "gatepass" },
+    { to: "/new", label: "Gate Passes", icon: FileText, module: "gatepass" },
     { to: "/amc", label: "AMC", icon: ShieldCheck, module: "amc" },
     { to: "/crm", label: "Sales CRM", icon: Briefcase, module: "quotations" },
     { to: "/tickets", label: "Tickets", icon: Ticket, module: "tickets" },
