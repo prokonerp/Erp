@@ -1,7 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ChallanListView } from "@/components/ChallanListView";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/challan/customer")({
-  component: () => <ChallanListView docType="customer" newTo="/challan/customer/new" />,
+  component: () => <Outlet />,
   head: () => ({ meta: [{ title: "Delivery Challan to Customer — Prokon" }] }),
 });
