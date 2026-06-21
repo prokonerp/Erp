@@ -238,8 +238,7 @@ export function ChallanForm({ docType }: Props) {
         <CardContent className="space-y-3">
           <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground px-1">
             <div className="col-span-1">Sr</div>
-            <div className="col-span-2">Part No</div>
-            <div className="col-span-2">Part Name</div>
+            <div className="col-span-4">Product (from Master)</div>
             <div className="col-span-3">Description</div>
             <div className="col-span-1">UOM</div>
             <div className="col-span-1">Qty</div>
