@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Plus, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import type { ChallanItem, DocType } from "@/lib/challan";
 import { emptyItem } from "@/lib/challan";
@@ -51,14 +52,31 @@ export function ChallanForm({ docType }: Props) {
     oem_logo_url: "",
   });
   const [busy, setBusy] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
 
-  const submit = async () => {
-    if (!form.party_name.trim()) return toast.error(`${isOem ? "OEM" : "Customer"} name is required`);
+  const validate = () => {
+    if (!form.party_name.trim()) {
+      toast.error(`${isOem ? "OEM" : "Customer"} name is required`);
+      return false;
+    }
     const cleanItems = items.filter((it) => it.part_name.trim() || it.part_no.trim());
-    if (cleanItems.length === 0) return toast.error("Add at least one material row");
+    if (cleanItems.length === 0) {
+      toast.error("Add at least one material row");
+      return false;
+    }
+    return true;
+  };
+
+  const openReview = () => {
+    if (validate()) setReviewOpen(true);
+  };
+
+  const submit = async () => {
+    if (!validate()) return;
+    const cleanItems = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     setBusy(true);
     const { data: userData } = await supabase.auth.getUser();
     const payload = {
@@ -74,6 +92,7 @@ export function ChallanForm({ docType }: Props) {
       .insert(payload as never).select("id").single();
     setBusy(false);
     if (error) return toast.error(error.message);
+    setReviewOpen(false);
     toast.success("Delivery Challan created");
     navigate({ to: "/challan/$id", params: { id: (data as { id: string }).id } });
   };
@@ -226,8 +245,142 @@ export function ChallanForm({ docType }: Props) {
       </Card>
 
       <div className="flex justify-end gap-2">
+        <Button size="lg" variant="outline" onClick={openReview} disabled={busy}>
+          <Eye className="h-4 w-4 mr-2" />Review Before Saving
+        </Button>
         <Button size="lg" onClick={submit} disabled={busy}>Save & Print Challan</Button>
       </div>
+
+      <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Review Delivery Challan — {isOem ? "To OEM" : "To Customer"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 text-sm">
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">Document Information</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                <ReviewField label="Challan Date" value={form.challan_date} />
+                <ReviewField label="Dispatch Date" value={form.dispatch_date} />
+                <ReviewField label="Status" value={form.status} />
+                <ReviewField label="Reference No." value={form.reference_no} />
+                <ReviewField label="Gate Pass No." value={form.gate_pass_no} />
+                <ReviewField label="Sales Order No." value={form.sales_order_no} />
+                <ReviewField label="Customer PO No." value={form.customer_po_no} />
+                <ReviewField label="Invoice No." value={form.invoice_no} />
+              </div>
+            </section>
+
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">{isOem ? "OEM" : "Customer"} Information</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                <ReviewField label={isOem ? "OEM Name" : "Customer Name"} value={form.party_name} />
+                <ReviewField label={isOem ? "OEM Code" : "Customer Code"} value={form.party_code} />
+                {isOem ? (
+                  <ReviewField label="OEM Plant" value={form.oem_plant} />
+                ) : (
+                  <ReviewField label="GSTIN" value={form.gstin} />
+                )}
+                <ReviewField label="Contact Person" value={form.contact_person} />
+                <ReviewField label="Contact Number" value={form.contact_number} />
+                {!isOem && <ReviewField label="Email" value={form.email} />}
+                <ReviewField label="Delivery Address" value={form.delivery_address} className="col-span-2 md:col-span-3" />
+              </div>
+            </section>
+
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">Transport Details</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                <ReviewField label="Transporter" value={form.transporter_name} />
+                <ReviewField label="Vehicle No." value={form.vehicle_number} />
+                <ReviewField label="Mode" value={form.mode_of_transport} />
+                <ReviewField label="Driver Name" value={form.driver_name} />
+                <ReviewField label="Driver Mobile" value={form.driver_mobile} />
+                <ReviewField label="LR No." value={form.lr_number} />
+                <ReviewField label="Packages" value={form.num_packages} />
+                <ReviewField label="Total Weight" value={form.total_weight} />
+              </div>
+            </section>
+
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">Material Details</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="border p-1">Sr</th>
+                      <th className="border p-1">Part No</th>
+                      <th className="border p-1">Part Name</th>
+                      <th className="border p-1">Description</th>
+                      {isOem && <th className="border p-1">Model</th>}
+                      {isOem && <th className="border p-1">Serial</th>}
+                      <th className="border p-1">UOM</th>
+                      <th className="border p-1">Qty</th>
+                      <th className="border p-1">Batch</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.filter((it) => it.part_name.trim() || it.part_no.trim()).map((it, i) => (
+                      <tr key={i}>
+                        <td className="border p-1 text-center">{i + 1}</td>
+                        <td className="border p-1">{it.part_no}</td>
+                        <td className="border p-1">{it.part_name}</td>
+                        <td className="border p-1">{it.description}</td>
+                        {isOem && <td className="border p-1">{it.model_no}</td>}
+                        {isOem && <td className="border p-1">{it.serial_no}</td>}
+                        <td className="border p-1">{it.uom}</td>
+                        <td className="border p-1 text-right">{it.qty}</td>
+                        <td className="border p-1">{it.batch_no}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                Total Qty: <span className="font-medium text-foreground">
+                  {items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0)}
+                </span>
+              </div>
+            </section>
+
+            {(form.internal_remarks || form.dispatch_remarks) && (
+              <section>
+                <h3 className="font-semibold mb-2 border-b pb-1">Remarks</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+                  <ReviewField label="Internal" value={form.internal_remarks} />
+                  <ReviewField label="Dispatch" value={form.dispatch_remarks} />
+                </div>
+              </section>
+            )}
+
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">Authorization</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                <ReviewField label="Prepared By" value={form.prepared_by} />
+                <ReviewField label="Checked By" value={form.checked_by} />
+                <ReviewField label="Approved By" value={form.approved_by} />
+              </div>
+            </section>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewOpen(false)} disabled={busy}>
+              Back to Edit
+            </Button>
+            <Button onClick={submit} disabled={busy}>
+              {busy ? "Saving..." : "Confirm, Save & Print"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ReviewField({ label, value, className = "" }: { label: string; value?: string; className?: string }) {
+  return (
+    <div className={className}>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-medium break-words">{value || "—"}</div>
     </div>
   );
 }
