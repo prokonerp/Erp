@@ -11,6 +11,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { emptyGrnItem, CATEGORY_LABEL, type GrnCategory, type GrnItem } from "@/lib/grn";
+import { CustomerPicker } from "@/components/CustomerPicker";
+import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
+import { ProductMasterPicker } from "@/components/ProductMasterPicker";
+import type { Customer } from "@/lib/crm";
+
+const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
 type Props = { category: GrnCategory };
 
@@ -19,6 +25,7 @@ export function GrnForm({ category }: Props) {
   const isOem = category === "oem";
   const isCust = category === "customer";
   const [items, setItems] = useState<GrnItem[]>([emptyGrnItem()]);
+  const [sourceId, setSourceId] = useState<string | null>(null);
   const [form, setForm] = useState({
     status: "Draft",
     grn_date: new Date().toISOString().slice(0, 10),
@@ -68,6 +75,42 @@ export function GrnForm({ category }: Props) {
 
   const updateItem = (i: number, patch: Partial<GrnItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+
+  const applyCustomer = (id: string | null, c: Customer | null) => {
+    setSourceId(id);
+    if (!c) {
+      setForm((f) => ({ ...f, source_name: "", source_code: "", source_gstin: "", source_contact_person: "", source_contact_number: "", source_email: "", source_address: "" }));
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      source_name: c.company || "",
+      source_code: custCode(c.id),
+      source_gstin: c.gst || "",
+      source_contact_person: c.contact_name || "",
+      source_contact_number: c.phone || "",
+      source_email: c.email || "",
+      source_address: c.shipping_address || c.billing_address || c.address || "",
+    }));
+  };
+
+  const applyVendor = (id: string | null, v: any) => {
+    setSourceId(id);
+    if (!v) {
+      setForm((f) => ({ ...f, source_name: "", source_code: "", source_gstin: "", source_contact_person: "", source_contact_number: "", source_email: "", source_address: "", oem_plant: "" }));
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      source_name: v.name || "",
+      source_code: vendorShortCode(v.id),
+      source_gstin: v.gstin || "",
+      source_contact_person: v.contact_name || "",
+      source_contact_number: v.phone || "",
+      source_email: v.email || "",
+      source_address: v.address || "",
+    }));
+  };
 
   const totals = items.reduce(
     (acc, it) => {
@@ -151,12 +194,22 @@ export function GrnForm({ category }: Props) {
       <Card>
         <CardHeader><CardTitle>2. {sourceLabel} Information</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>{sourceLabel} Name *</Label><Input value={form.source_name} onChange={(e) => setForm({ ...form, source_name: e.target.value })} /></div>
-          <div><Label>{sourceLabel} Code</Label><Input value={form.source_code} onChange={(e) => setForm({ ...form, source_code: e.target.value })} /></div>
+          <div className="md:col-span-2">
+            <Label>
+              {isCust ? "Customer (from Master)" : isOem ? "OEM (from Vendor Master)" : "Vendor (from Master)"} *
+            </Label>
+            {isCust ? (
+              <CustomerPicker value={sourceId} onChange={applyCustomer} required placeholder="Search customer…" />
+            ) : (
+              <VendorPicker value={sourceId} onChange={applyVendor} required label={isOem ? "OEM" : "Vendor"} placeholder={`Search ${isOem ? "OEM" : "vendor"}…`} />
+            )}
+          </div>
+          <div><Label>{sourceLabel} Name *</Label><Input value={form.source_name} readOnly className="bg-muted/40" /></div>
+          <div><Label>{sourceLabel} Code</Label><Input value={form.source_code} readOnly className="bg-muted/40" /></div>
           {isOem ? (
             <div><Label>OEM Plant / Location</Label><Input value={form.oem_plant} onChange={(e) => setForm({ ...form, oem_plant: e.target.value })} /></div>
           ) : (
-            <div><Label>GSTIN</Label><Input value={form.source_gstin} onChange={(e) => setForm({ ...form, source_gstin: e.target.value })} /></div>
+            <div><Label>GSTIN</Label><Input value={form.source_gstin} readOnly className="bg-muted/40" /></div>
           )}
           <div><Label>Contact Person</Label><Input value={form.source_contact_person} onChange={(e) => setForm({ ...form, source_contact_person: e.target.value })} /></div>
           <div><Label>Contact Number</Label><Input value={form.source_contact_number} onChange={(e) => setForm({ ...form, source_contact_number: e.target.value })} /></div>
@@ -199,8 +252,20 @@ export function GrnForm({ category }: Props) {
           {items.map((it, i) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
               <div className="col-span-1 flex items-center justify-center h-9 text-sm font-medium">{i + 1}</div>
-              <div className="col-span-6 md:col-span-2"><Input placeholder="Part No" value={it.part_no} onChange={(e) => updateItem(i, { part_no: e.target.value })} /></div>
-              <div className="col-span-6 md:col-span-2"><Input placeholder="Part Name" value={it.part_name} onChange={(e) => updateItem(i, { part_name: e.target.value })} /></div>
+              <div className="col-span-12 md:col-span-4">
+                <ProductMasterPicker
+                  onPick={(p) => updateItem(i, {
+                    part_no: p.sku || p.model || "",
+                    part_name: p.name,
+                    description: p.description || "",
+                    uom: p.unit || it.uom || "Nos",
+                    model_no: p.model || "",
+                  })}
+                />
+                <div className="mt-1 text-[11px] text-muted-foreground truncate">
+                  {[it.part_no, it.part_name].filter(Boolean).join(" — ")}
+                </div>
+              </div>
               <div className="col-span-12 md:col-span-2"><Input placeholder="Description" value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></div>
               <div className="col-span-3 md:col-span-1"><Input placeholder="UOM" value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></div>
               <div className="col-span-3 md:col-span-1"><Input type="number" min="0" placeholder="Recv" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></div>
