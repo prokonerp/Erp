@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse, Truck, PackageCheck, Send } from "lucide-react";
+import { ChevronDown, FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse, Truck, PackageCheck, Send } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
