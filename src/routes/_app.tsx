@@ -3,7 +3,13 @@ import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
-import { FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse } from "lucide-react";
+import { ChevronDown, FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -56,8 +62,7 @@ function AppLayout() {
 
   const allNav: { to: string; label: string; icon: any; module?: ModuleKey; adminOnly?: boolean }[] = [
     { to: "/masters", label: "Masters", icon: Database, module: "customers" },
-    { to: "/new", label: "New Gatepass", icon: FileText, module: "gatepass" },
-    { to: "/records", label: "Records", icon: ListChecks, module: "gatepass" },
+    { to: "/new", label: "Gate Passes", icon: FileText, module: "gatepass" },
     { to: "/amc", label: "AMC", icon: ShieldCheck, module: "amc" },
     { to: "/crm", label: "Sales CRM", icon: Briefcase, module: "quotations" },
     { to: "/tickets", label: "Tickets", icon: Ticket, module: "tickets" },
@@ -100,6 +105,48 @@ function AppLayout() {
               aria-label="Primary"
             >
               {navItems.map((n) => {
+                if (n.to === "/new") {
+                  const isActive = location.pathname === "/new" || location.pathname === "/records";
+                  return (
+                    <DropdownMenu key="gatepasses">
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant={isActive ? "default" : "ghost"}
+                          size="sm"
+                          className={
+                            isActive
+                              ? "shrink-0"
+                              : "shrink-0 text-white/85 hover:bg-white/10 hover:text-white"
+                          }
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          Gate Passes
+                          <ChevronDown className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-48">
+                        <DropdownMenuItem asChild>
+                          <Link
+                            to="/new"
+                            className={`cursor-pointer flex items-center gap-2 ${location.pathname === "/new" ? "bg-accent text-accent-foreground" : ""}`}
+                          >
+                            <FileText className="h-4 w-4" />
+                            New Gate Pass
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link
+                            to="/records"
+                            className={`cursor-pointer flex items-center gap-2 ${location.pathname === "/records" ? "bg-accent text-accent-foreground" : ""}`}
+                          >
+                            <ListChecks className="h-4 w-4" />
+                            History
+                          </Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                }
                 const active = location.pathname.startsWith(n.to);
                 return (
                   <Link key={n.to} to={n.to} className="shrink-0">
