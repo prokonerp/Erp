@@ -105,6 +105,48 @@ function AppLayout() {
               aria-label="Primary"
             >
               {navItems.map((n) => {
+                if (n.to === "/new") {
+                  const isActive = location.pathname === "/new" || location.pathname === "/records";
+                  return (
+                    <DropdownMenu key="gatepasses">
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant={isActive ? "default" : "ghost"}
+                          size="sm"
+                          className={
+                            isActive
+                              ? "shrink-0"
+                              : "shrink-0 text-white/85 hover:bg-white/10 hover:text-white"
+                          }
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          Gate Passes
+                          <ChevronDown className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-48">
+                        <DropdownMenuItem asChild>
+                          <Link
+                            to="/new"
+                            className={`cursor-pointer flex items-center gap-2 ${location.pathname === "/new" ? "bg-accent text-accent-foreground" : ""}`}
+                          >
+                            <FileText className="h-4 w-4" />
+                            New Gate Pass
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link
+                            to="/records"
+                            className={`cursor-pointer flex items-center gap-2 ${location.pathname === "/records" ? "bg-accent text-accent-foreground" : ""}`}
+                          >
+                            <ListChecks className="h-4 w-4" />
+                            History
+                          </Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                }
                 const active = location.pathname.startsWith(n.to);
                 return (
                   <Link key={n.to} to={n.to} className="shrink-0">
