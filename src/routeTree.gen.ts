@@ -29,6 +29,7 @@ import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index
 import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
 import { Route as AppImsIndexRouteImport } from './routes/_app/ims.index'
 import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
+import { Route as AppChallanIndexRouteImport } from './routes/_app/challan.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
 import { Route as AppTicketsTemplatesRouteImport } from './routes/_app/tickets.templates'
 import { Route as AppTicketsSettingsRouteImport } from './routes/_app/tickets.settings'
@@ -179,6 +180,11 @@ const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppCrmRoute,
+} as any)
+const AppChallanIndexRoute = AppChallanIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppChallanRoute,
 } as any)
 const AppAmcIndexRoute = AppAmcIndexRouteImport.update({
   id: '/',
@@ -488,6 +494,7 @@ export interface FileRoutesByFullPath {
   '/tickets/settings': typeof AppTicketsSettingsRoute
   '/tickets/templates': typeof AppTicketsTemplatesRoute
   '/amc/': typeof AppAmcIndexRoute
+  '/challan/': typeof AppChallanIndexRoute
   '/crm/': typeof AppCrmIndexRoute
   '/ims/': typeof AppImsIndexRoute
   '/indent/': typeof AppIndentIndexRoute
@@ -512,7 +519,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/raise-ticket': typeof RaiseTicketRoute
-  '/challan': typeof AppChallanRouteWithChildren
   '/import': typeof AppImportRoute
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
@@ -549,6 +555,7 @@ export interface FileRoutesByTo {
   '/tickets/settings': typeof AppTicketsSettingsRoute
   '/tickets/templates': typeof AppTicketsTemplatesRoute
   '/amc': typeof AppAmcIndexRoute
+  '/challan': typeof AppChallanIndexRoute
   '/crm': typeof AppCrmIndexRoute
   '/ims': typeof AppImsIndexRoute
   '/indent': typeof AppIndentIndexRoute
@@ -623,6 +630,7 @@ export interface FileRoutesById {
   '/_app/tickets/settings': typeof AppTicketsSettingsRoute
   '/_app/tickets/templates': typeof AppTicketsTemplatesRoute
   '/_app/amc/': typeof AppAmcIndexRoute
+  '/_app/challan/': typeof AppChallanIndexRoute
   '/_app/crm/': typeof AppCrmIndexRoute
   '/_app/ims/': typeof AppImsIndexRoute
   '/_app/indent/': typeof AppIndentIndexRoute
@@ -697,6 +705,7 @@ export interface FileRouteTypes {
     | '/tickets/settings'
     | '/tickets/templates'
     | '/amc/'
+    | '/challan/'
     | '/crm/'
     | '/ims/'
     | '/indent/'
@@ -721,7 +730,6 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/raise-ticket'
-    | '/challan'
     | '/import'
     | '/masters'
     | '/new'
@@ -758,6 +766,7 @@ export interface FileRouteTypes {
     | '/tickets/settings'
     | '/tickets/templates'
     | '/amc'
+    | '/challan'
     | '/crm'
     | '/ims'
     | '/indent'
@@ -831,6 +840,7 @@ export interface FileRouteTypes {
     | '/_app/tickets/settings'
     | '/_app/tickets/templates'
     | '/_app/amc/'
+    | '/_app/challan/'
     | '/_app/crm/'
     | '/_app/ims/'
     | '/_app/indent/'
@@ -1000,6 +1010,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/crm/'
       preLoaderRoute: typeof AppCrmIndexRouteImport
       parentRoute: typeof AppCrmRoute
+    }
+    '/_app/challan/': {
+      id: '/_app/challan/'
+      path: '/'
+      fullPath: '/challan/'
+      preLoaderRoute: typeof AppChallanIndexRouteImport
+      parentRoute: typeof AppChallanRoute
     }
     '/_app/amc/': {
       id: '/_app/amc/'
@@ -1413,12 +1430,14 @@ interface AppChallanRouteChildren {
   AppChallanIdRoute: typeof AppChallanIdRoute
   AppChallanCustomerRoute: typeof AppChallanCustomerRouteWithChildren
   AppChallanOemRoute: typeof AppChallanOemRouteWithChildren
+  AppChallanIndexRoute: typeof AppChallanIndexRoute
 }
 
 const AppChallanRouteChildren: AppChallanRouteChildren = {
   AppChallanIdRoute: AppChallanIdRoute,
   AppChallanCustomerRoute: AppChallanCustomerRouteWithChildren,
   AppChallanOemRoute: AppChallanOemRouteWithChildren,
+  AppChallanIndexRoute: AppChallanIndexRoute,
 }
 
 const AppChallanRouteWithChildren = AppChallanRoute._addFileChildren(
