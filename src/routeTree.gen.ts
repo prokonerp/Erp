@@ -64,6 +64,8 @@ import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
 import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
 import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
 import { Route as AppImsTransfersIndexRouteImport } from './routes/_app/ims.transfers.index'
+import { Route as AppChallanOemIndexRouteImport } from './routes/_app/challan.oem.index'
+import { Route as AppChallanCustomerIndexRouteImport } from './routes/_app/challan.customer.index'
 import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
 import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
 import { Route as AppCrmQuotationsIdRouteImport } from './routes/_app/crm.quotations.$id'
@@ -345,6 +347,16 @@ const AppImsTransfersIndexRoute = AppImsTransfersIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppImsTransfersRoute,
 } as any)
+const AppChallanOemIndexRoute = AppChallanOemIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppChallanOemRoute,
+} as any)
+const AppChallanCustomerIndexRoute = AppChallanCustomerIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppChallanCustomerRoute,
+} as any)
 const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -436,6 +448,8 @@ export interface FileRoutesByFullPath {
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/challan/customer/': typeof AppChallanCustomerIndexRoute
+  '/challan/oem/': typeof AppChallanOemIndexRoute
   '/ims/transfers/': typeof AppImsTransfersIndexRoute
 }
 export interface FileRoutesByTo {
@@ -454,8 +468,6 @@ export interface FileRoutesByTo {
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
   '/challan/$id': typeof AppChallanIdRoute
-  '/challan/customer': typeof AppChallanCustomerRouteWithChildren
-  '/challan/oem': typeof AppChallanOemRouteWithChildren
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
@@ -492,6 +504,8 @@ export interface FileRoutesByTo {
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/challan/customer': typeof AppChallanCustomerIndexRoute
+  '/challan/oem': typeof AppChallanOemIndexRoute
   '/ims/transfers': typeof AppImsTransfersIndexRoute
 }
 export interface FileRoutesById {
@@ -556,6 +570,8 @@ export interface FileRoutesById {
   '/_app/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
   '/_app/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/_app/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/_app/challan/customer/': typeof AppChallanCustomerIndexRoute
+  '/_app/challan/oem/': typeof AppChallanOemIndexRoute
   '/_app/ims/transfers/': typeof AppImsTransfersIndexRoute
 }
 export interface FileRouteTypes {
@@ -620,6 +636,8 @@ export interface FileRouteTypes {
     | '/crm/quotations/$id'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/challan/customer/'
+    | '/challan/oem/'
     | '/ims/transfers/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -638,8 +656,6 @@ export interface FileRouteTypes {
     | '/amc/pm'
     | '/amc/settings'
     | '/challan/$id'
-    | '/challan/customer'
-    | '/challan/oem'
     | '/crm/customers'
     | '/crm/incentives'
     | '/crm/leads'
@@ -676,6 +692,8 @@ export interface FileRouteTypes {
     | '/crm/quotations/$id'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/challan/customer'
+    | '/challan/oem'
     | '/ims/transfers'
   id:
     | '__root__'
@@ -739,6 +757,8 @@ export interface FileRouteTypes {
     | '/_app/crm/quotations/$id'
     | '/_app/ims/transfers/$id'
     | '/_app/ims/transfers/new'
+    | '/_app/challan/customer/'
+    | '/_app/challan/oem/'
     | '/_app/ims/transfers/'
   fileRoutesById: FileRoutesById
 }
@@ -1136,6 +1156,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImsTransfersIndexRouteImport
       parentRoute: typeof AppImsTransfersRoute
     }
+    '/_app/challan/oem/': {
+      id: '/_app/challan/oem/'
+      path: '/'
+      fullPath: '/challan/oem/'
+      preLoaderRoute: typeof AppChallanOemIndexRouteImport
+      parentRoute: typeof AppChallanOemRoute
+    }
+    '/_app/challan/customer/': {
+      id: '/_app/challan/customer/'
+      path: '/'
+      fullPath: '/challan/customer/'
+      preLoaderRoute: typeof AppChallanCustomerIndexRouteImport
+      parentRoute: typeof AppChallanCustomerRoute
+    }
     '/_app/ims/transfers/new': {
       id: '/_app/ims/transfers/new'
       path: '/new'
@@ -1343,10 +1377,12 @@ const AppTicketsRouteWithChildren = AppTicketsRoute._addFileChildren(
 
 interface AppChallanCustomerRouteChildren {
   AppChallanCustomerNewRoute: typeof AppChallanCustomerNewRoute
+  AppChallanCustomerIndexRoute: typeof AppChallanCustomerIndexRoute
 }
 
 const AppChallanCustomerRouteChildren: AppChallanCustomerRouteChildren = {
   AppChallanCustomerNewRoute: AppChallanCustomerNewRoute,
+  AppChallanCustomerIndexRoute: AppChallanCustomerIndexRoute,
 }
 
 const AppChallanCustomerRouteWithChildren =
@@ -1354,10 +1390,12 @@ const AppChallanCustomerRouteWithChildren =
 
 interface AppChallanOemRouteChildren {
   AppChallanOemNewRoute: typeof AppChallanOemNewRoute
+  AppChallanOemIndexRoute: typeof AppChallanOemIndexRoute
 }
 
 const AppChallanOemRouteChildren: AppChallanOemRouteChildren = {
   AppChallanOemNewRoute: AppChallanOemNewRoute,
+  AppChallanOemIndexRoute: AppChallanOemIndexRoute,
 }
 
 const AppChallanOemRouteWithChildren = AppChallanOemRoute._addFileChildren(
