@@ -3,7 +3,13 @@ import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
-import { FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse } from "lucide-react";
+import { ChevronDown, FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
