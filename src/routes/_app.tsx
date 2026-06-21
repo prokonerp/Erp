@@ -3,12 +3,15 @@ import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse, Truck, PackageCheck, Send } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
@@ -62,7 +65,7 @@ function AppLayout() {
 
   const allNav: { to: string; label: string; icon: any; module?: ModuleKey; adminOnly?: boolean }[] = [
     { to: "/masters", label: "Masters", icon: Database, module: "customers" },
-    { to: "/new", label: "Gate Passes", icon: FileText, module: "gatepass" },
+    { to: "/material-movement", label: "Material Movement", icon: Truck, module: "gatepass" },
     { to: "/amc", label: "AMC", icon: ShieldCheck, module: "amc" },
     { to: "/crm", label: "Sales CRM", icon: Briefcase, module: "quotations" },
     { to: "/tickets", label: "Tickets", icon: Ticket, module: "tickets" },
@@ -78,6 +81,14 @@ function AppLayout() {
         if (n.module) return can(n.module, "read");
         return true;
       });
+
+  const materialMovementPaths = ["/new", "/records", "/challan", "/grn"];
+  const isMaterialMovementActive = materialMovementPaths.some((p) =>
+    location.pathname === p || location.pathname.startsWith(p + "/") || location.pathname === p
+  ) || location.pathname.startsWith("/challan") || location.pathname.startsWith("/grn");
+  const itemActive = (path: string) => location.pathname === path;
+  const itemCls = (active: boolean) =>
+    `cursor-pointer flex items-center gap-2 ${active ? "bg-accent text-accent-foreground" : ""}`;
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -105,44 +116,91 @@ function AppLayout() {
               aria-label="Primary"
             >
               {navItems.map((n) => {
-                if (n.to === "/new") {
-                  const isActive = location.pathname === "/new" || location.pathname === "/records";
+                if (n.to === "/material-movement") {
                   return (
-                    <DropdownMenu key="gatepasses">
+                    <DropdownMenu key="material-movement">
                       <DropdownMenuTrigger asChild>
                         <Button
-                          variant={isActive ? "default" : "ghost"}
+                          variant={isMaterialMovementActive ? "default" : "ghost"}
                           size="sm"
                           className={
-                            isActive
+                            isMaterialMovementActive
                               ? "shrink-0"
                               : "shrink-0 text-white/85 hover:bg-white/10 hover:text-white"
                           }
                         >
-                          <FileText className="h-4 w-4 mr-1" />
-                          Gate Passes
+                          <Truck className="h-4 w-4 mr-1" />
+                          Material Movement
                           <ChevronDown className="h-3 w-3 ml-1" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-48">
-                        <DropdownMenuItem asChild>
-                          <Link
-                            to="/new"
-                            className={`cursor-pointer flex items-center gap-2 ${location.pathname === "/new" ? "bg-accent text-accent-foreground" : ""}`}
-                          >
+                      <DropdownMenuContent align="start" className="w-56">
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className="gap-2">
                             <FileText className="h-4 w-4" />
-                            New Gate Pass
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link
-                            to="/records"
-                            className={`cursor-pointer flex items-center gap-2 ${location.pathname === "/records" ? "bg-accent text-accent-foreground" : ""}`}
-                          >
-                            <ListChecks className="h-4 w-4" />
-                            History
-                          </Link>
-                        </DropdownMenuItem>
+                            <span className="flex-1">Gate Passes</span>
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-52">
+                            <DropdownMenuItem asChild>
+                              <Link to="/new" className={itemCls(itemActive("/new"))}>
+                                <FileText className="h-4 w-4" />
+                                New Gate Pass
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link to="/records" className={itemCls(itemActive("/records"))}>
+                                <ListChecks className="h-4 w-4" />
+                                History
+                              </Link>
+                            </DropdownMenuItem>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className="gap-2">
+                            <Send className="h-4 w-4" />
+                            <span className="flex-1">Delivery Challan</span>
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-52">
+                            <DropdownMenuItem asChild>
+                              <Link to="/challan/customer" className={itemCls(itemActive("/challan/customer"))}>
+                                <Send className="h-4 w-4" />
+                                To Customer
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link to="/challan/oem" className={itemCls(itemActive("/challan/oem"))}>
+                                <Send className="h-4 w-4" />
+                                To OEM
+                              </Link>
+                            </DropdownMenuItem>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className="gap-2">
+                            <PackageCheck className="h-4 w-4" />
+                            <span className="flex-1">GRN</span>
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-52">
+                            <DropdownMenuItem asChild>
+                              <Link to="/grn/customer" className={itemCls(itemActive("/grn/customer"))}>
+                                <PackageCheck className="h-4 w-4" />
+                                From Customer
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link to="/grn/oem" className={itemCls(itemActive("/grn/oem"))}>
+                                <PackageCheck className="h-4 w-4" />
+                                From OEM
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link to="/grn/general" className={itemCls(itemActive("/grn/general"))}>
+                                <PackageCheck className="h-4 w-4" />
+                                General
+                              </Link>
+                            </DropdownMenuItem>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   );
