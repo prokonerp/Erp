@@ -1,9 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ComingSoonPage } from "@/components/ComingSoonPage";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/grn/oem")({
-  component: () => (
-    <ComingSoonPage title="GRN — From OEM" category="grn:oem" />
-  ),
-  head: () => ({ meta: [{ title: "GRN from OEM — Prokon" }] }),
+  component: () => <Outlet />,
 });
