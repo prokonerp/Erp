@@ -771,6 +771,168 @@ export type Database = {
         }
         Relationships: []
       }
+      grns: {
+        Row: {
+          accepted_qty: number | null
+          approved_by: string | null
+          attachments: Json | null
+          bin_no: string | null
+          category: string
+          checked_by: string | null
+          created_at: string
+          created_by: string | null
+          driver_mobile: string | null
+          driver_name: string | null
+          grn_date: string
+          grn_no: string | null
+          id: string
+          internal_remarks: string | null
+          invoice_date: string | null
+          invoice_no: string | null
+          items: Json
+          lr_number: string | null
+          mode_of_transport: string | null
+          num_packages: string | null
+          oem_logo_url: string | null
+          oem_plant: string | null
+          po_no: string | null
+          qc_date: string | null
+          qc_inspector: string | null
+          qc_remarks: string | null
+          qc_status: string | null
+          receipt_date: string | null
+          receipt_remarks: string | null
+          received_by: string | null
+          reference_no: string | null
+          rejected_qty: number | null
+          source_address: string | null
+          source_code: string | null
+          source_contact_number: string | null
+          source_contact_person: string | null
+          source_doc_date: string | null
+          source_doc_no: string | null
+          source_doc_type: string | null
+          source_email: string | null
+          source_gstin: string | null
+          source_name: string | null
+          status: string
+          storage_location: string | null
+          ticket_no: string | null
+          total_weight: string | null
+          transporter_name: string | null
+          updated_at: string
+          vehicle_number: string | null
+          warehouse_id: string | null
+          warehouse_name: string | null
+        }
+        Insert: {
+          accepted_qty?: number | null
+          approved_by?: string | null
+          attachments?: Json | null
+          bin_no?: string | null
+          category: string
+          checked_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          driver_mobile?: string | null
+          driver_name?: string | null
+          grn_date?: string
+          grn_no?: string | null
+          id?: string
+          internal_remarks?: string | null
+          invoice_date?: string | null
+          invoice_no?: string | null
+          items?: Json
+          lr_number?: string | null
+          mode_of_transport?: string | null
+          num_packages?: string | null
+          oem_logo_url?: string | null
+          oem_plant?: string | null
+          po_no?: string | null
+          qc_date?: string | null
+          qc_inspector?: string | null
+          qc_remarks?: string | null
+          qc_status?: string | null
+          receipt_date?: string | null
+          receipt_remarks?: string | null
+          received_by?: string | null
+          reference_no?: string | null
+          rejected_qty?: number | null
+          source_address?: string | null
+          source_code?: string | null
+          source_contact_number?: string | null
+          source_contact_person?: string | null
+          source_doc_date?: string | null
+          source_doc_no?: string | null
+          source_doc_type?: string | null
+          source_email?: string | null
+          source_gstin?: string | null
+          source_name?: string | null
+          status?: string
+          storage_location?: string | null
+          ticket_no?: string | null
+          total_weight?: string | null
+          transporter_name?: string | null
+          updated_at?: string
+          vehicle_number?: string | null
+          warehouse_id?: string | null
+          warehouse_name?: string | null
+        }
+        Update: {
+          accepted_qty?: number | null
+          approved_by?: string | null
+          attachments?: Json | null
+          bin_no?: string | null
+          category?: string
+          checked_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          driver_mobile?: string | null
+          driver_name?: string | null
+          grn_date?: string
+          grn_no?: string | null
+          id?: string
+          internal_remarks?: string | null
+          invoice_date?: string | null
+          invoice_no?: string | null
+          items?: Json
+          lr_number?: string | null
+          mode_of_transport?: string | null
+          num_packages?: string | null
+          oem_logo_url?: string | null
+          oem_plant?: string | null
+          po_no?: string | null
+          qc_date?: string | null
+          qc_inspector?: string | null
+          qc_remarks?: string | null
+          qc_status?: string | null
+          receipt_date?: string | null
+          receipt_remarks?: string | null
+          received_by?: string | null
+          reference_no?: string | null
+          rejected_qty?: number | null
+          source_address?: string | null
+          source_code?: string | null
+          source_contact_number?: string | null
+          source_contact_person?: string | null
+          source_doc_date?: string | null
+          source_doc_no?: string | null
+          source_doc_type?: string | null
+          source_email?: string | null
+          source_gstin?: string | null
+          source_name?: string | null
+          status?: string
+          storage_location?: string | null
+          ticket_no?: string | null
+          total_weight?: string | null
+          transporter_name?: string | null
+          updated_at?: string
+          vehicle_number?: string | null
+          warehouse_id?: string | null
+          warehouse_name?: string | null
+        }
+        Relationships: []
+      }
       ims_audit_log: {
         Row: {
           action: string
