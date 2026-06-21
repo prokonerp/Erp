@@ -46,12 +46,17 @@ import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
 import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
 import { Route as AppImsIndentHistoryRouteImport } from './routes/_app/ims.indent-history'
 import { Route as AppImsAuditRouteImport } from './routes/_app/ims.audit'
+import { Route as AppGrnOemRouteImport } from './routes/_app/grn.oem'
+import { Route as AppGrnGeneralRouteImport } from './routes/_app/grn.general'
+import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
 import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
 import { Route as AppCrmIncentivesRouteImport } from './routes/_app/crm.incentives'
 import { Route as AppCrmCustomersRouteImport } from './routes/_app/crm.customers'
+import { Route as AppChallanOemRouteImport } from './routes/_app/challan.oem'
+import { Route as AppChallanCustomerRouteImport } from './routes/_app/challan.customer'
 import { Route as AppAmcSettingsRouteImport } from './routes/_app/amc.settings'
 import { Route as AppAmcPmRouteImport } from './routes/_app/amc.pm'
 import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
@@ -247,6 +252,21 @@ const AppImsAuditRoute = AppImsAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AppImsRoute,
 } as any)
+const AppGrnOemRoute = AppGrnOemRouteImport.update({
+  id: '/grn/oem',
+  path: '/grn/oem',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGrnGeneralRoute = AppGrnGeneralRouteImport.update({
+  id: '/grn/general',
+  path: '/grn/general',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGrnCustomerRoute = AppGrnCustomerRouteImport.update({
+  id: '/grn/customer',
+  path: '/grn/customer',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   id: '/gatepass/$id',
   path: '/gatepass/$id',
@@ -276,6 +296,16 @@ const AppCrmCustomersRoute = AppCrmCustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
   getParentRoute: () => AppCrmRoute,
+} as any)
+const AppChallanOemRoute = AppChallanOemRouteImport.update({
+  id: '/challan/oem',
+  path: '/challan/oem',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppChallanCustomerRoute = AppChallanCustomerRouteImport.update({
+  id: '/challan/customer',
+  path: '/challan/customer',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppAmcSettingsRoute = AppAmcSettingsRouteImport.update({
   id: '/settings',
@@ -348,12 +378,17 @@ export interface FileRoutesByFullPath {
   '/amc/oem': typeof AppAmcOemRoute
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
+  '/challan/customer': typeof AppChallanCustomerRoute
+  '/challan/oem': typeof AppChallanOemRoute
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/grn/customer': typeof AppGrnCustomerRoute
+  '/grn/general': typeof AppGrnGeneralRoute
+  '/grn/oem': typeof AppGrnOemRoute
   '/ims/audit': typeof AppImsAuditRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -397,12 +432,17 @@ export interface FileRoutesByTo {
   '/amc/oem': typeof AppAmcOemRoute
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
+  '/challan/customer': typeof AppChallanCustomerRoute
+  '/challan/oem': typeof AppChallanOemRoute
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/grn/customer': typeof AppGrnCustomerRoute
+  '/grn/general': typeof AppGrnGeneralRoute
+  '/grn/oem': typeof AppGrnOemRoute
   '/ims/audit': typeof AppImsAuditRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -452,12 +492,17 @@ export interface FileRoutesById {
   '/_app/amc/oem': typeof AppAmcOemRoute
   '/_app/amc/pm': typeof AppAmcPmRoute
   '/_app/amc/settings': typeof AppAmcSettingsRoute
+  '/_app/challan/customer': typeof AppChallanCustomerRoute
+  '/_app/challan/oem': typeof AppChallanOemRoute
   '/_app/crm/customers': typeof AppCrmCustomersRoute
   '/_app/crm/incentives': typeof AppCrmIncentivesRoute
   '/_app/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
+  '/_app/grn/customer': typeof AppGrnCustomerRoute
+  '/_app/grn/general': typeof AppGrnGeneralRoute
+  '/_app/grn/oem': typeof AppGrnOemRoute
   '/_app/ims/audit': typeof AppImsAuditRoute
   '/_app/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/_app/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -508,12 +553,17 @@ export interface FileRouteTypes {
     | '/amc/oem'
     | '/amc/pm'
     | '/amc/settings'
+    | '/challan/customer'
+    | '/challan/oem'
     | '/crm/customers'
     | '/crm/incentives'
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/grn/customer'
+    | '/grn/general'
+    | '/grn/oem'
     | '/ims/audit'
     | '/ims/indent-history'
     | '/ims/oem-returns'
@@ -557,12 +607,17 @@ export interface FileRouteTypes {
     | '/amc/oem'
     | '/amc/pm'
     | '/amc/settings'
+    | '/challan/customer'
+    | '/challan/oem'
     | '/crm/customers'
     | '/crm/incentives'
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/grn/customer'
+    | '/grn/general'
+    | '/grn/oem'
     | '/ims/audit'
     | '/ims/indent-history'
     | '/ims/oem-returns'
@@ -611,12 +666,17 @@ export interface FileRouteTypes {
     | '/_app/amc/oem'
     | '/_app/amc/pm'
     | '/_app/amc/settings'
+    | '/_app/challan/customer'
+    | '/_app/challan/oem'
     | '/_app/crm/customers'
     | '/_app/crm/incentives'
     | '/_app/crm/leads'
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
+    | '/_app/grn/customer'
+    | '/_app/grn/general'
+    | '/_app/grn/oem'
     | '/_app/ims/audit'
     | '/_app/ims/indent-history'
     | '/_app/ims/oem-returns'
@@ -914,6 +974,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImsAuditRouteImport
       parentRoute: typeof AppImsRoute
     }
+    '/_app/grn/oem': {
+      id: '/_app/grn/oem'
+      path: '/grn/oem'
+      fullPath: '/grn/oem'
+      preLoaderRoute: typeof AppGrnOemRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/grn/general': {
+      id: '/_app/grn/general'
+      path: '/grn/general'
+      fullPath: '/grn/general'
+      preLoaderRoute: typeof AppGrnGeneralRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/grn/customer': {
+      id: '/_app/grn/customer'
+      path: '/grn/customer'
+      fullPath: '/grn/customer'
+      preLoaderRoute: typeof AppGrnCustomerRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/gatepass/$id': {
       id: '/_app/gatepass/$id'
       path: '/gatepass/$id'
@@ -955,6 +1036,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/crm/customers'
       preLoaderRoute: typeof AppCrmCustomersRouteImport
       parentRoute: typeof AppCrmRoute
+    }
+    '/_app/challan/oem': {
+      id: '/_app/challan/oem'
+      path: '/challan/oem'
+      fullPath: '/challan/oem'
+      preLoaderRoute: typeof AppChallanOemRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/challan/customer': {
+      id: '/_app/challan/customer'
+      path: '/challan/customer'
+      fullPath: '/challan/customer'
+      preLoaderRoute: typeof AppChallanCustomerRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/amc/settings': {
       id: '/_app/amc/settings'
@@ -1201,7 +1296,12 @@ interface AppRouteChildren {
   AppRecordsRoute: typeof AppRecordsRoute
   AppReportsRoute: typeof AppReportsRoute
   AppTicketsRoute: typeof AppTicketsRouteWithChildren
+  AppChallanCustomerRoute: typeof AppChallanCustomerRoute
+  AppChallanOemRoute: typeof AppChallanOemRoute
   AppGatepassIdRoute: typeof AppGatepassIdRoute
+  AppGrnCustomerRoute: typeof AppGrnCustomerRoute
+  AppGrnGeneralRoute: typeof AppGrnGeneralRoute
+  AppGrnOemRoute: typeof AppGrnOemRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -1216,7 +1316,12 @@ const AppRouteChildren: AppRouteChildren = {
   AppRecordsRoute: AppRecordsRoute,
   AppReportsRoute: AppReportsRoute,
   AppTicketsRoute: AppTicketsRouteWithChildren,
+  AppChallanCustomerRoute: AppChallanCustomerRoute,
+  AppChallanOemRoute: AppChallanOemRoute,
   AppGatepassIdRoute: AppGatepassIdRoute,
+  AppGrnCustomerRoute: AppGrnCustomerRoute,
+  AppGrnGeneralRoute: AppGrnGeneralRoute,
+  AppGrnOemRoute: AppGrnOemRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
