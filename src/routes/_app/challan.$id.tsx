@@ -1,0 +1,230 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Printer } from "lucide-react";
+import { fetchChallan, type DeliveryChallan } from "@/lib/challan";
+import { getOemLogo } from "@/lib/oemLogos";
+import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/_app/challan/$id")({
+  component: ChallanView,
+  head: () => ({ meta: [{ title: "Delivery Challan — Prokon" }] }),
+});
+
+function ChallanView() {
+  const { id } = Route.useParams();
+  const [c, setC] = useState<DeliveryChallan | null>(null);
+
+  useEffect(() => {
+    fetchChallan(id).then(setC).catch((e) => toast.error(e.message));
+  }, [id]);
+
+  if (!c) return <div className="text-muted-foreground">Loading…</div>;
+  const isOem = c.doc_type === "oem";
+  const oemLogo = isOem ? (c.oem_logo_url ? { url: c.oem_logo_url, alt: c.party_name || "OEM" } : getOemLogo(c.party_name)) : null;
+
+  return (
+    <>
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 10mm; }
+          body * { visibility: hidden; }
+          #print-area, #print-area * { visibility: visible; }
+          #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+        }
+        #print-area { font-family: Arial, Helvetica, sans-serif; color: #111; }
+        #print-area table { border-collapse: collapse; width: 100%; }
+        #print-area th, #print-area td { border: 1px solid #333; padding: 4px 6px; font-size: 11px; vertical-align: top; }
+        #print-area thead { display: table-header-group; }
+      `}</style>
+
+      <div className="no-print flex items-center justify-between mb-4">
+        <Link to={isOem ? "/challan/oem" : "/challan/customer"}>
+          <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
+        </Link>
+        <Button onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print / PDF</Button>
+      </div>
+
+      <div id="print-area" className="bg-white text-black mx-auto shadow print:shadow-none" style={{ width: "190mm", minHeight: "277mm", padding: 0 }}>
+        {/* Header */}
+        <div style={{ display: "flex", borderBottom: "2px solid #000", paddingBottom: 8 }}>
+          <div style={{ width: isOem ? "35%" : "30%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 8 }}>
+            <img src={prokonLogo.url} alt="Prokon" style={{ maxHeight: isOem ? 45 : 60, objectFit: "contain" }} />
+            {isOem && oemLogo && (
+              <img src={oemLogo.url} alt={oemLogo.alt} style={{ maxHeight: 45, objectFit: "contain" }} />
+            )}
+          </div>
+          <div style={{ width: isOem ? "65%" : "70%", textAlign: "right", fontSize: 11, lineHeight: 1.4 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a8a" }}>PROKON HI-TECH SYSTEMS PVT. LTD.</div>
+            <div>Regd. Office: B-505, Picasso Centre, Sector-61, Gurgaon, Haryana</div>
+            <div>Factory: Plot 12, Industrial Area, Gurgaon</div>
+            <div>GSTIN: 06AAACP1234A1Z5 &nbsp;|&nbsp; Phone: +91-124-0000000</div>
+            <div>Email: info@prokon.in &nbsp;|&nbsp; Web: www.prokon.in</div>
+            {isOem && c.party_name && (
+              <div style={{ marginTop: 4, fontSize: 10, borderTop: "1px dashed #999", paddingTop: 4 }}>
+                <div><b>OEM:</b> {c.party_name}</div>
+                {c.oem_plant && <div><b>Plant:</b> {c.oem_plant}</div>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Title */}
+        <div style={{ textAlign: "center", margin: "8px 0" }}>
+          <div style={{ display: "inline-block", border: "2px solid #000", padding: "4px 16px", fontWeight: 700, letterSpacing: 2, fontSize: 14 }}>
+            DELIVERY CHALLAN
+          </div>
+          <div style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>
+            DOCUMENT TYPE: {isOem ? "TO OEM" : "TO CUSTOMER"}
+          </div>
+          <div style={{ fontSize: 11, marginTop: 2 }}>
+            <b>Challan No:</b> <span style={{ fontFamily: "monospace" }}>{c.challan_no}</span> &nbsp;&nbsp;
+            <b>Date:</b> {c.challan_date}
+          </div>
+        </div>
+
+        {/* Consignee & Dispatch */}
+        <table style={{ marginBottom: 6 }}>
+          <tbody>
+            <tr>
+              <td style={{ width: "50%" }}>
+                <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 2 }}>CONSIGNEE DETAILS</div>
+                <div style={{ fontSize: 11 }}>
+                  <div><b>{isOem ? "OEM" : "Customer"}:</b> {c.party_name}</div>
+                  {c.party_code && <div><b>Code:</b> {c.party_code}</div>}
+                  {c.gstin && <div><b>GSTIN:</b> {c.gstin}</div>}
+                  {c.delivery_address && <div><b>Address:</b> {c.delivery_address}</div>}
+                  {c.contact_person && <div><b>Contact:</b> {c.contact_person}</div>}
+                  {c.contact_number && <div><b>Phone:</b> {c.contact_number}</div>}
+                  {c.email && <div><b>Email:</b> {c.email}</div>}
+                </div>
+              </td>
+              <td style={{ width: "50%" }}>
+                <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 2 }}>DISPATCH DETAILS</div>
+                <div style={{ fontSize: 11 }}>
+                  <div><b>Challan No:</b> {c.challan_no}</div>
+                  <div><b>Challan Date:</b> {c.challan_date}</div>
+                  {c.dispatch_date && <div><b>Dispatch Date:</b> {c.dispatch_date}</div>}
+                  {c.vehicle_number && <div><b>Vehicle No:</b> {c.vehicle_number}</div>}
+                  {c.transporter_name && <div><b>Transporter:</b> {c.transporter_name}</div>}
+                  {c.lr_number && <div><b>LR No:</b> {c.lr_number}</div>}
+                  {c.gate_pass_no && <div><b>Gate Pass No:</b> {c.gate_pass_no}</div>}
+                  {c.mode_of_transport && <div><b>Mode:</b> {c.mode_of_transport}</div>}
+                  {(c.driver_name || c.driver_mobile) && <div><b>Driver:</b> {c.driver_name} {c.driver_mobile ? `(${c.driver_mobile})` : ""}</div>}
+                  {(c.num_packages || c.total_weight) && <div><b>Pkgs/Weight:</b> {c.num_packages || "-"} / {c.total_weight || "-"}</div>}
+                  {(c.sales_order_no || c.customer_po_no || c.invoice_no || c.reference_no) && (
+                    <div style={{ marginTop: 2, fontSize: 10 }}>
+                      {c.reference_no && <span><b>Ref:</b> {c.reference_no} &nbsp;</span>}
+                      {c.sales_order_no && <span><b>SO:</b> {c.sales_order_no} &nbsp;</span>}
+                      {c.customer_po_no && <span><b>PO:</b> {c.customer_po_no} &nbsp;</span>}
+                      {c.invoice_no && <span><b>Invoice:</b> {c.invoice_no}</span>}
+                    </div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Material table */}
+        <table style={{ marginBottom: 6 }}>
+          <thead style={{ background: "#eef2ff" }}>
+            <tr>
+              <th style={{ width: 28 }}>Sr</th>
+              <th>Part Name</th>
+              {isOem ? <th>Model No</th> : <th>Part No</th>}
+              {isOem ? <th>Serial No</th> : <th>Description</th>}
+              <th style={{ width: 60 }}>UOM</th>
+              <th style={{ width: 50 }}>Qty</th>
+              {!isOem && <th style={{ width: 90 }}>Batch No</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {(c.items || []).map((it, i) => (
+              <tr key={i}>
+                <td style={{ textAlign: "center" }}>{i + 1}</td>
+                <td>{it.part_name}</td>
+                <td>{isOem ? (it.model_no || it.part_no) : it.part_no}</td>
+                <td>{isOem ? (it.serial_no || "") : it.description}</td>
+                <td style={{ textAlign: "center" }}>{it.uom}</td>
+                <td style={{ textAlign: "center" }}>{it.qty}</td>
+                {!isOem && <td>{it.batch_no}</td>}
+              </tr>
+            ))}
+            {Array.from({ length: Math.max(0, 3 - (c.items?.length || 0)) }).map((_, i) => (
+              <tr key={`e${i}`}>
+                <td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td>
+                {!isOem && <td></td>}
+              </tr>
+            ))}
+            <tr style={{ fontWeight: 700, background: "#f8fafc" }}>
+              <td colSpan={isOem ? 5 : 5} style={{ textAlign: "right" }}>Total Qty</td>
+              <td style={{ textAlign: "center" }}>
+                {(c.items || []).reduce((s, it) => s + (parseFloat(it.qty) || 0), 0)}
+              </td>
+              {!isOem && <td></td>}
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Remarks */}
+        {(c.dispatch_remarks || c.internal_remarks) && (
+          <div style={{ fontSize: 11, marginBottom: 6, border: "1px solid #333", padding: 6 }}>
+            {c.dispatch_remarks && <div><b>Dispatch Remarks:</b> {c.dispatch_remarks}</div>}
+            {c.internal_remarks && <div><b>Internal Remarks:</b> {c.internal_remarks}</div>}
+          </div>
+        )}
+
+        {/* Terms */}
+        <div style={{ fontSize: 10, marginBottom: 10, border: "1px solid #333", padding: 6 }}>
+          <b>Terms &amp; Conditions:</b>
+          <ol style={{ margin: "4px 0 0 18px", padding: 0 }}>
+            <li>Goods once dispatched will not be taken back without prior written consent.</li>
+            <li>Goods received in good condition by the consignee.</li>
+            <li>Subject to company dispatch policies and applicable jurisdiction.</li>
+          </ol>
+        </div>
+
+        {/* Signatures */}
+        <table>
+          <tbody>
+            <tr>
+              {[
+                { label: "Prepared By", val: c.prepared_by },
+                { label: "Checked By", val: c.checked_by },
+                { label: "Authorized Signatory", val: c.approved_by },
+              ].map((s) => (
+                <td key={s.label} style={{ height: 70, verticalAlign: "bottom", textAlign: "center", width: "33%" }}>
+                  <div style={{ borderTop: "1px solid #000", paddingTop: 4, marginTop: 40, fontSize: 11, fontWeight: 600 }}>
+                    {s.label}
+                  </div>
+                  <div style={{ fontSize: 10 }}>{s.val || ""}</div>
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+
+        {!isOem && (
+          <table style={{ marginTop: 8 }}>
+            <tbody>
+              <tr>
+                <td style={{ height: 70, verticalAlign: "bottom" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>RECEIVED BY CUSTOMER</div>
+                  <div style={{ display: "flex", gap: 16, fontSize: 10 }}>
+                    <div style={{ flex: 1 }}>Name: ____________________</div>
+                    <div style={{ flex: 1 }}>Signature: ________________</div>
+                    <div style={{ flex: 1 }}>Date: _____________________</div>
+                    <div style={{ flex: 1 }}>Stamp: ____________________</div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+}

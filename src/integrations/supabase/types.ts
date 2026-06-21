@@ -549,6 +549,126 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_challans: {
+        Row: {
+          approved_by: string | null
+          challan_date: string
+          challan_no: string
+          checked_by: string | null
+          contact_number: string | null
+          contact_person: string | null
+          created_at: string
+          created_by: string | null
+          customer_po_no: string | null
+          delivery_address: string | null
+          dispatch_date: string | null
+          dispatch_remarks: string | null
+          doc_type: string
+          driver_mobile: string | null
+          driver_name: string | null
+          email: string | null
+          gate_pass_no: string | null
+          gstin: string | null
+          id: string
+          internal_remarks: string | null
+          invoice_no: string | null
+          items: Json
+          lr_number: string | null
+          mode_of_transport: string | null
+          num_packages: string | null
+          oem_logo_url: string | null
+          oem_plant: string | null
+          party_code: string | null
+          party_name: string | null
+          prepared_by: string | null
+          reference_no: string | null
+          sales_order_no: string | null
+          status: string
+          total_weight: string | null
+          transporter_name: string | null
+          updated_at: string
+          vehicle_number: string | null
+        }
+        Insert: {
+          approved_by?: string | null
+          challan_date?: string
+          challan_no: string
+          checked_by?: string | null
+          contact_number?: string | null
+          contact_person?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_po_no?: string | null
+          delivery_address?: string | null
+          dispatch_date?: string | null
+          dispatch_remarks?: string | null
+          doc_type: string
+          driver_mobile?: string | null
+          driver_name?: string | null
+          email?: string | null
+          gate_pass_no?: string | null
+          gstin?: string | null
+          id?: string
+          internal_remarks?: string | null
+          invoice_no?: string | null
+          items?: Json
+          lr_number?: string | null
+          mode_of_transport?: string | null
+          num_packages?: string | null
+          oem_logo_url?: string | null
+          oem_plant?: string | null
+          party_code?: string | null
+          party_name?: string | null
+          prepared_by?: string | null
+          reference_no?: string | null
+          sales_order_no?: string | null
+          status?: string
+          total_weight?: string | null
+          transporter_name?: string | null
+          updated_at?: string
+          vehicle_number?: string | null
+        }
+        Update: {
+          approved_by?: string | null
+          challan_date?: string
+          challan_no?: string
+          checked_by?: string | null
+          contact_number?: string | null
+          contact_person?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_po_no?: string | null
+          delivery_address?: string | null
+          dispatch_date?: string | null
+          dispatch_remarks?: string | null
+          doc_type?: string
+          driver_mobile?: string | null
+          driver_name?: string | null
+          email?: string | null
+          gate_pass_no?: string | null
+          gstin?: string | null
+          id?: string
+          internal_remarks?: string | null
+          invoice_no?: string | null
+          items?: Json
+          lr_number?: string | null
+          mode_of_transport?: string | null
+          num_packages?: string | null
+          oem_logo_url?: string | null
+          oem_plant?: string | null
+          party_code?: string | null
+          party_name?: string | null
+          prepared_by?: string | null
+          reference_no?: string | null
+          sales_order_no?: string | null
+          status?: string
+          total_weight?: string | null
+          transporter_name?: string | null
+          updated_at?: string
+          vehicle_number?: string | null
+        }
+        Relationships: []
+      }
       employees: {
         Row: {
           active: boolean
