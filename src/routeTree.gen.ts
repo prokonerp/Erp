@@ -29,6 +29,7 @@ import { Route as AppAmcRouteImport } from './routes/_app/amc'
 import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index'
 import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
 import { Route as AppImsIndexRouteImport } from './routes/_app/ims.index'
+import { Route as AppGrnIndexRouteImport } from './routes/_app/grn.index'
 import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
 import { Route as AppChallanIndexRouteImport } from './routes/_app/challan.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
@@ -181,6 +182,11 @@ const AppImsIndexRoute = AppImsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppImsRoute,
+} as any)
+const AppGrnIndexRoute = AppGrnIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppGrnRoute,
 } as any)
 const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
   id: '/',
@@ -503,6 +509,7 @@ export interface FileRoutesByFullPath {
   '/amc/': typeof AppAmcIndexRoute
   '/challan/': typeof AppChallanIndexRoute
   '/crm/': typeof AppCrmIndexRoute
+  '/grn/': typeof AppGrnIndexRoute
   '/ims/': typeof AppImsIndexRoute
   '/indent/': typeof AppIndentIndexRoute
   '/tickets/': typeof AppTicketsIndexRoute
@@ -526,7 +533,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/raise-ticket': typeof RaiseTicketRoute
-  '/grn': typeof AppGrnRouteWithChildren
   '/import': typeof AppImportRoute
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
@@ -565,6 +571,7 @@ export interface FileRoutesByTo {
   '/amc': typeof AppAmcIndexRoute
   '/challan': typeof AppChallanIndexRoute
   '/crm': typeof AppCrmIndexRoute
+  '/grn': typeof AppGrnIndexRoute
   '/ims': typeof AppImsIndexRoute
   '/indent': typeof AppIndentIndexRoute
   '/tickets': typeof AppTicketsIndexRoute
@@ -641,6 +648,7 @@ export interface FileRoutesById {
   '/_app/amc/': typeof AppAmcIndexRoute
   '/_app/challan/': typeof AppChallanIndexRoute
   '/_app/crm/': typeof AppCrmIndexRoute
+  '/_app/grn/': typeof AppGrnIndexRoute
   '/_app/ims/': typeof AppImsIndexRoute
   '/_app/indent/': typeof AppIndentIndexRoute
   '/_app/tickets/': typeof AppTicketsIndexRoute
@@ -717,6 +725,7 @@ export interface FileRouteTypes {
     | '/amc/'
     | '/challan/'
     | '/crm/'
+    | '/grn/'
     | '/ims/'
     | '/indent/'
     | '/tickets/'
@@ -740,7 +749,6 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/raise-ticket'
-    | '/grn'
     | '/import'
     | '/masters'
     | '/new'
@@ -779,6 +787,7 @@ export interface FileRouteTypes {
     | '/amc'
     | '/challan'
     | '/crm'
+    | '/grn'
     | '/ims'
     | '/indent'
     | '/tickets'
@@ -854,6 +863,7 @@ export interface FileRouteTypes {
     | '/_app/amc/'
     | '/_app/challan/'
     | '/_app/crm/'
+    | '/_app/grn/'
     | '/_app/ims/'
     | '/_app/indent/'
     | '/_app/tickets/'
@@ -1022,6 +1032,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/ims/'
       preLoaderRoute: typeof AppImsIndexRouteImport
       parentRoute: typeof AppImsRoute
+    }
+    '/_app/grn/': {
+      id: '/_app/grn/'
+      path: '/'
+      fullPath: '/grn/'
+      preLoaderRoute: typeof AppGrnIndexRouteImport
+      parentRoute: typeof AppGrnRoute
     }
     '/_app/crm/': {
       id: '/_app/crm/'
@@ -1554,6 +1571,7 @@ interface AppGrnRouteChildren {
   AppGrnCustomerRoute: typeof AppGrnCustomerRouteWithChildren
   AppGrnGeneralRoute: typeof AppGrnGeneralRouteWithChildren
   AppGrnOemRoute: typeof AppGrnOemRouteWithChildren
+  AppGrnIndexRoute: typeof AppGrnIndexRoute
 }
 
 const AppGrnRouteChildren: AppGrnRouteChildren = {
@@ -1561,6 +1579,7 @@ const AppGrnRouteChildren: AppGrnRouteChildren = {
   AppGrnCustomerRoute: AppGrnCustomerRouteWithChildren,
   AppGrnGeneralRoute: AppGrnGeneralRouteWithChildren,
   AppGrnOemRoute: AppGrnOemRouteWithChildren,
+  AppGrnIndexRoute: AppGrnIndexRoute,
 }
 
 const AppGrnRouteWithChildren =
