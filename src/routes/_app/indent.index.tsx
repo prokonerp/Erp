@@ -105,12 +105,12 @@ function IndentList() {
             <thead className="bg-muted/50">
               <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="p-2">Indent No</th>
+                <th className="p-2">Case ID</th>
+                <th className="p-2">OEM Case / Company</th>
+                <th className="p-2">Oracles · Defective Model / Serial</th>
                 <th className="p-2">Date</th>
                 <th className="p-2">Status</th>
                 <th className="p-2">Age</th>
-                <th className="p-2">Case ID</th>
-                <th className="p-2">Company / OEM Case</th>
-                <th className="p-2">Oracles · Defective Model / Serial</th>
                 <th className="p-2">Type</th>
                 <th className="p-2">Engineer</th>
                 <th className="p-2 text-right">Open</th>
@@ -131,20 +131,16 @@ function IndentList() {
                 return (
                 <tr key={r.id} className="border-t align-top hover:bg-muted/30">
                   <td className="p-2 font-mono text-xs whitespace-nowrap">{r.indent_no}</td>
-                  <td className="p-2 text-xs whitespace-nowrap" title={r.indent_date || ""}>{dateShort}</td>
-                  <td className="p-2"><Badge variant={st === "closed" ? "default" : "secondary"}>{st === "closed" ? "Closed" : "Open"}</Badge></td>
-                  <td className="p-2 text-xs whitespace-nowrap">{compactAge(age)}</td>
                   <td className="p-2 font-mono text-xs whitespace-nowrap">{r.case_id || "—"}</td>
                   <td className="p-2 whitespace-nowrap">
-                    <div className="text-sm font-medium leading-tight">{r.company || "—"}</div>
-                    <div className="font-mono text-[11px] text-muted-foreground leading-tight">{r.oem_case_id || "—"}</div>
+                    <div className="text-sm font-semibold text-foreground leading-tight">{r.oem_case_id || "—"}</div>
+                    <div className="text-[11px] text-muted-foreground leading-tight">{r.company || "—"}</div>
                   </td>
                   <td className="p-2">
                     {oracles.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">No oracles ({oClosed}/0)</span>
+                      <span className="text-xs text-muted-foreground">No oracles</span>
                     ) : (
                       <div className="space-y-0.5">
-                        <div className="text-[10px] text-muted-foreground">{oClosed}/{oracles.length} closed</div>
                         {oracles.map((o, i) => {
                           const st2 = oracleStatus(o);
                           const def = (o.defective_rows && o.defective_rows[0]) || o.defective;
@@ -153,7 +149,7 @@ function IndentList() {
                           return (
                             <div key={i} className="flex items-center gap-1.5 text-xs whitespace-nowrap leading-tight">
                               <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${st2 === "closed" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                              <span className="font-mono text-[11px]">{o.oracle_no || `#${i + 1}`}</span>
+                              <span className="font-mono text-[11px] font-medium">{o.oracle_no || `#${i + 1}`}</span>
                               <span className="text-muted-foreground">·</span>
                               <span>{model}</span>
                               <span className="text-muted-foreground">/</span>
@@ -161,9 +157,13 @@ function IndentList() {
                             </div>
                           );
                         })}
+                        <div className="text-[10px] text-muted-foreground font-medium">{oClosed}/{oracles.length} closed</div>
                       </div>
                     )}
                   </td>
+                  <td className="p-2 text-xs whitespace-nowrap" title={r.indent_date || ""}>{dateShort}</td>
+                  <td className="p-2"><Badge variant={st === "closed" ? "default" : "secondary"}>{st === "closed" ? "Closed" : "Open"}</Badge></td>
+                  <td className="p-2 text-xs whitespace-nowrap">{compactAge(age)}</td>
                   <td className="p-2"><Badge variant="secondary" className="whitespace-nowrap">{indentTypeLabel(r.indent_type)}</Badge></td>
                   <td className="p-2 text-xs whitespace-nowrap">{r.engineer_name || "—"}</td>
                   <td className="p-2 text-right">
