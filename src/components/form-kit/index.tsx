@@ -168,10 +168,15 @@ type FieldSize = "xs" | "sm" | "md" | "lg" | "xl" | "full";
  * Desktop targets 4–6 fields per row; tablet 3–4; mobile 1–2.
  */
 const sizeCls: Record<FieldSize, string> = {
+  // 6 per row on desktop
   xs:   "fk-col-xs col-span-6 sm:col-span-3 md:col-span-2 lg:col-span-2",
-  sm:   "fk-col-sm col-span-6 sm:col-span-4 md:col-span-3 lg:col-span-2",
-  md:   "fk-col-md col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-3",
+  // 4 per row on desktop
+  sm:   "fk-col-sm col-span-6 sm:col-span-4 md:col-span-3 lg:col-span-3",
+  // 3 per row on desktop
+  md:   "fk-col-md col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-4",
+  // 2 per row on desktop
   lg:   "fk-col-lg col-span-12 sm:col-span-6 lg:col-span-6",
+  // ~2/3 row
   xl:   "fk-col-xl col-span-12 lg:col-span-8",
   full: "fk-col-full col-span-12",
 };
