@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
 import {
+  ChevronDown,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -18,6 +19,8 @@ import {
   ClipboardList,
   Warehouse,
   PackageCheck,
+  Users,
+  Package,
   Send,
   LayoutDashboard,
   Menu,
