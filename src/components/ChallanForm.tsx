@@ -3,12 +3,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Trash2, Eye } from "lucide-react";
+import { Plus, Trash2, Eye, Save } from "lucide-react";
 import { toast } from "sonner";
 import type { ChallanItem, DocType } from "@/lib/challan";
 import { emptyItem } from "@/lib/challan";
@@ -16,6 +14,7 @@ import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import type { Customer } from "@/lib/crm";
+import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
@@ -140,21 +139,38 @@ export function ChallanForm({ docType }: Props) {
     navigate({ to: "/challan/$id", params: { id: (data as { id: string }).id } });
   };
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>New Delivery Challan — {isOem ? "To OEM" : "To Customer"}</CardTitle>
-        </CardHeader>
-      </Card>
+  const totalQty = items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0);
+  const partyLabel = isOem ? "OEM" : "Customer";
 
-      <Card>
-        <CardHeader><CardTitle>1. Document Information</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div><Label>Challan Date *</Label><Input type="date" value={form.challan_date} onChange={(e) => setForm({ ...form, challan_date: e.target.value })} /></div>
-          <div><Label>Dispatch Date</Label><Input type="date" value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} /></div>
-          <div>
-            <Label>Status</Label>
+  const actions = (
+    <>
+      <Button type="button" variant="outline" size="sm" onClick={openReview} disabled={busy} className="gap-1.5">
+        <Eye className="h-4 w-4" />
+        <span className="hidden sm:inline">Review</span>
+      </Button>
+      <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
+        <Save className="h-4 w-4" />
+        <span className="hidden sm:inline">Save &amp; Print</span>
+        <span className="sm:hidden">Save</span>
+      </Button>
+    </>
+  );
+
+  return (
+    <FormShell
+      title={`New Delivery Challan — ${isOem ? "To OEM" : "To Customer"}`}
+      description="Capture document, party, transport, material and authorization details."
+      actions={actions}
+    >
+      <FormSection title="Document Information" defaultOpen>
+        <FormGrid>
+          <FormField size="sm" label="Challan Date" required>
+            <Input type="date" value={form.challan_date} onChange={(e) => setForm({ ...form, challan_date: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Dispatch Date">
+            <Input type="date" value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Status">
             <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -164,152 +180,219 @@ export function ChallanForm({ docType }: Props) {
                 <SelectItem value="Cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>Reference No.</Label><Input value={form.reference_no} onChange={(e) => setForm({ ...form, reference_no: e.target.value })} /></div>
-          <div><Label>Gate Pass No.</Label><Input value={form.gate_pass_no} onChange={(e) => setForm({ ...form, gate_pass_no: e.target.value })} /></div>
-          <div><Label>Sales Order No.</Label><Input value={form.sales_order_no} onChange={(e) => setForm({ ...form, sales_order_no: e.target.value })} /></div>
-          <div><Label>Customer PO No.</Label><Input value={form.customer_po_no} onChange={(e) => setForm({ ...form, customer_po_no: e.target.value })} /></div>
-          <div><Label>Invoice No.</Label><Input value={form.invoice_no} onChange={(e) => setForm({ ...form, invoice_no: e.target.value })} /></div>
-        </CardContent>
-      </Card>
+          </FormField>
+          <FormField size="sm" label="Reference No.">
+            <Input value={form.reference_no} onChange={(e) => setForm({ ...form, reference_no: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Gate Pass No.">
+            <Input value={form.gate_pass_no} onChange={(e) => setForm({ ...form, gate_pass_no: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Sales Order No.">
+            <Input value={form.sales_order_no} onChange={(e) => setForm({ ...form, sales_order_no: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Customer PO No.">
+            <Input value={form.customer_po_no} onChange={(e) => setForm({ ...form, customer_po_no: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Invoice No.">
+            <Input value={form.invoice_no} onChange={(e) => setForm({ ...form, invoice_no: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle>2. {isOem ? "OEM" : "Customer"} Information</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <Label>{isOem ? "OEM (from Vendor Master)" : "Customer (from Master)"} *</Label>
+      <FormSection title={`${partyLabel} Information`} defaultOpen>
+        <FormGrid>
+          <FormField size="full" label={isOem ? "OEM (from Vendor Master)" : "Customer (from Master)"} required>
             {isOem ? (
               <VendorPicker value={partyId} onChange={applyVendor} required label="OEM" placeholder="Search OEM / vendor…" />
             ) : (
               <CustomerPicker value={partyId} onChange={applyCustomer} required placeholder="Search customer by name, mobile or GSTIN…" />
             )}
-          </div>
-          <div><Label>{isOem ? "OEM Name" : "Customer Name"} *</Label><Input value={form.party_name} readOnly className="bg-muted/40" /></div>
-          <div><Label>{isOem ? "OEM Code" : "Customer Code"}</Label><Input value={form.party_code} readOnly className="bg-muted/40" /></div>
+          </FormField>
+          <FormField size="md" label={`${partyLabel} Name`} required>
+            <Input value={form.party_name} readOnly className="bg-muted/40" />
+          </FormField>
+          <FormField size="md" label={`${partyLabel} Code`}>
+            <Input value={form.party_code} readOnly className="bg-muted/40" />
+          </FormField>
           {isOem ? (
-            <div><Label>OEM Plant / Location</Label><Input value={form.oem_plant} onChange={(e) => setForm({ ...form, oem_plant: e.target.value })} /></div>
+            <FormField size="md" label="OEM Plant / Location">
+              <Input value={form.oem_plant} onChange={(e) => setForm({ ...form, oem_plant: e.target.value })} />
+            </FormField>
           ) : (
-            <div><Label>GSTIN</Label><Input value={form.gstin} readOnly className="bg-muted/40" /></div>
+            <FormField size="md" label="GSTIN">
+              <Input value={form.gstin} readOnly className="bg-muted/40" />
+            </FormField>
           )}
-          <div><Label>Contact Person</Label><Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} /></div>
-          <div><Label>Contact Number</Label><Input value={form.contact_number} onChange={(e) => setForm({ ...form, contact_number: e.target.value })} /></div>
-          <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+          <FormField size="md" label="Contact Person">
+            <Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Contact Number">
+            <Input value={form.contact_number} onChange={(e) => setForm({ ...form, contact_number: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Email">
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </FormField>
           {isOem && (
-            <div><Label>OEM Logo URL (optional)</Label><Input placeholder="https://..." value={form.oem_logo_url} onChange={(e) => setForm({ ...form, oem_logo_url: e.target.value })} /></div>
+            <FormField size="md" label="OEM Logo URL (optional)">
+              <Input placeholder="https://..." value={form.oem_logo_url} onChange={(e) => setForm({ ...form, oem_logo_url: e.target.value })} />
+            </FormField>
           )}
-          <div className="md:col-span-2"><Label>Delivery Address</Label><Textarea rows={2} value={form.delivery_address} onChange={(e) => setForm({ ...form, delivery_address: e.target.value })} /></div>
-        </CardContent>
-      </Card>
+          <FormField size="full" label="Delivery Address">
+            <Textarea rows={2} value={form.delivery_address} onChange={(e) => setForm({ ...form, delivery_address: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle>3. Transport Details</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div><Label>Transporter Name</Label><Input value={form.transporter_name} onChange={(e) => setForm({ ...form, transporter_name: e.target.value })} /></div>
-          <div><Label>Vehicle Number</Label><Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} /></div>
-          <div>
-            <Label>Mode of Transport</Label>
+      <FormSection title="Transport Details">
+        <FormGrid>
+          <FormField size="md" label="Transporter Name">
+            <Input value={form.transporter_name} onChange={(e) => setForm({ ...form, transporter_name: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Vehicle Number">
+            <Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Mode of Transport">
             <Select value={form.mode_of_transport} onValueChange={(v) => setForm({ ...form, mode_of_transport: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="Road">Road</SelectItem>
-                <SelectItem value="Rail">Rail</SelectItem>
-                <SelectItem value="Air">Air</SelectItem>
-                <SelectItem value="Sea">Sea</SelectItem>
-                <SelectItem value="Hand Delivery">Hand Delivery</SelectItem>
-                <SelectItem value="Courier">Courier</SelectItem>
+                {["Road","Rail","Air","Sea","Hand Delivery","Courier"].map((m) => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>Driver Name</Label><Input value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} /></div>
-          <div><Label>Driver Mobile</Label><Input value={form.driver_mobile} onChange={(e) => setForm({ ...form, driver_mobile: e.target.value })} /></div>
-          <div><Label>LR / Consignment No.</Label><Input value={form.lr_number} onChange={(e) => setForm({ ...form, lr_number: e.target.value })} /></div>
-          <div><Label>No. of Packages</Label><Input value={form.num_packages} onChange={(e) => setForm({ ...form, num_packages: e.target.value })} /></div>
-          <div><Label>Total Weight</Label><Input value={form.total_weight} placeholder="e.g. 25 kg" onChange={(e) => setForm({ ...form, total_weight: e.target.value })} /></div>
-        </CardContent>
-      </Card>
+          </FormField>
+          <FormField size="md" label="Driver Name">
+            <Input value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Driver Mobile">
+            <Input value={form.driver_mobile} onChange={(e) => setForm({ ...form, driver_mobile: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="LR / Consignment No.">
+            <Input value={form.lr_number} onChange={(e) => setForm({ ...form, lr_number: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="No. of Packages">
+            <Input value={form.num_packages} onChange={(e) => setForm({ ...form, num_packages: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Total Weight">
+            <Input value={form.total_weight} placeholder="e.g. 25 kg" onChange={(e) => setForm({ ...form, total_weight: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>4. Material Details</CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setItems([...items, emptyItem()])}>
-            <Plus className="h-4 w-4 mr-1" />Add Row
+      <FormSection
+        title="Material Details"
+        description={`${items.length} row(s) • Total qty ${totalQty}`}
+        defaultOpen
+        right={
+          <Button type="button" size="sm" variant="outline" onClick={() => setItems([...items, emptyItem()])} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" /> Add Row
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground px-1">
-            <div className="col-span-1">Sr</div>
-            <div className="col-span-4">Product (from Master)</div>
-            <div className="col-span-3">Description</div>
-            <div className="col-span-1">UOM</div>
-            <div className="col-span-1">Qty</div>
-            <div className="col-span-1">Batch</div>
-            <div className="col-span-1"></div>
-          </div>
-          {items.map((it, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
-              <div className="col-span-1 flex items-center justify-center h-9 text-sm font-medium">{i + 1}</div>
-              <div className="col-span-12 md:col-span-4">
-                <ProductMasterPicker
-                  onPick={(p) => updateItem(i, {
-                    part_no: p.sku || p.model || "",
-                    part_name: p.name,
-                    description: p.description || "",
-                    uom: p.unit || it.uom || "Nos",
-                    model_no: p.model || "",
-                  })}
-                />
-                <div className="mt-1 text-[11px] text-muted-foreground truncate">
-                  {[it.part_no, it.part_name].filter(Boolean).join(" — ")}
-                </div>
-              </div>
-              <div className="col-span-12 md:col-span-3"><Input placeholder="Description" value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></div>
-              <div className="col-span-3 md:col-span-1"><Input placeholder="UOM" value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></div>
-              <div className="col-span-3 md:col-span-1"><Input type="number" min="0" placeholder="Qty" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} /></div>
-              <div className="col-span-4 md:col-span-1"><Input placeholder="Batch" value={it.batch_no} onChange={(e) => updateItem(i, { batch_no: e.target.value })} /></div>
-              <div className="col-span-2 md:col-span-1">
-                <Button size="icon" variant="ghost" onClick={() => setItems(items.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-              {isOem && (
-                <>
-                  <div className="col-span-6 md:col-span-3 md:col-start-2"><Input placeholder="Model No" value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></div>
-                  <div className="col-span-6 md:col-span-3"><Input placeholder="Serial No" value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></div>
-                </>
-              )}
-            </div>
-          ))}
-          <div className="text-sm text-muted-foreground">
-            Total Qty: <span className="font-medium text-foreground">
-              {items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0)}
-            </span> &nbsp;•&nbsp; Rows: {items.length}
-          </div>
-        </CardContent>
-      </Card>
+        }
+      >
+        <div className="overflow-x-auto -mx-2 sm:mx-0">
+          <table className="w-full text-sm border-separate border-spacing-0 min-w-[720px]">
+            <thead className="sticky top-0 z-10 bg-muted/60">
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="px-2 py-1.5 w-10">#</th>
+                <th className="px-2 py-1.5 min-w-[220px]">Product</th>
+                <th className="px-2 py-1.5">Description</th>
+                {isOem && <th className="px-2 py-1.5 w-32">Model No</th>}
+                {isOem && <th className="px-2 py-1.5 w-32">Serial No</th>}
+                <th className="px-2 py-1.5 w-20">UOM</th>
+                <th className="px-2 py-1.5 w-20">Qty</th>
+                <th className="px-2 py-1.5 w-28">Batch</th>
+                <th className="px-2 py-1.5 w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, i) => (
+                <tr key={i} className="border-t border-border/60">
+                  <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
+                  <td className="px-2 py-1.5 align-top border-t border-border/60">
+                    <ProductMasterPicker
+                      onPick={(p) => updateItem(i, {
+                        part_no: p.sku || p.model || "",
+                        part_name: p.name,
+                        description: p.description || "",
+                        uom: p.unit || it.uom || "Nos",
+                        model_no: p.model || "",
+                      })}
+                    />
+                    {(it.part_no || it.part_name) && (
+                      <div className="mt-1 text-[11px] text-muted-foreground truncate">
+                        {[it.part_no, it.part_name].filter(Boolean).join(" — ")}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} />
+                  </td>
+                  {isOem && (
+                    <td className="px-2 py-1.5 border-t border-border/60">
+                      <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
+                    </td>
+                  )}
+                  {isOem && (
+                    <td className="px-2 py-1.5 border-t border-border/60">
+                      <Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} />
+                    </td>
+                  )}
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} />
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input value={it.batch_no} onChange={(e) => updateItem(i, { batch_no: e.target.value })} />
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60 text-right">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setItems(items.filter((_, idx) => idx !== i))}
+                      disabled={items.length === 1}
+                      aria-label="Remove row"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle>5. Remarks</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>Internal Remarks</Label><Textarea rows={2} value={form.internal_remarks} onChange={(e) => setForm({ ...form, internal_remarks: e.target.value })} /></div>
-          <div><Label>Dispatch Remarks</Label><Textarea rows={2} value={form.dispatch_remarks} onChange={(e) => setForm({ ...form, dispatch_remarks: e.target.value })} /></div>
-        </CardContent>
-      </Card>
+      <FormSection title="Remarks & Authorization">
+        <FormGrid>
+          <FormField size="md" label="Internal Remarks">
+            <Textarea rows={2} value={form.internal_remarks} onChange={(e) => setForm({ ...form, internal_remarks: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Dispatch Remarks">
+            <Textarea rows={2} value={form.dispatch_remarks} onChange={(e) => setForm({ ...form, dispatch_remarks: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Prepared By">
+            <Input value={form.prepared_by} onChange={(e) => setForm({ ...form, prepared_by: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Checked By">
+            <Input value={form.checked_by} onChange={(e) => setForm({ ...form, checked_by: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Approved By">
+            <Input value={form.approved_by} onChange={(e) => setForm({ ...form, approved_by: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle>6. Authorization</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div><Label>Prepared By</Label><Input value={form.prepared_by} onChange={(e) => setForm({ ...form, prepared_by: e.target.value })} /></div>
-          <div><Label>Checked By</Label><Input value={form.checked_by} onChange={(e) => setForm({ ...form, checked_by: e.target.value })} /></div>
-          <div><Label>Approved By</Label><Input value={form.approved_by} onChange={(e) => setForm({ ...form, approved_by: e.target.value })} /></div>
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end gap-2">
-        <Button size="lg" variant="outline" onClick={openReview} disabled={busy}>
-          <Eye className="h-4 w-4 mr-2" />Review Before Saving
+      <StickyMobileActions>
+        <Button type="button" variant="outline" size="sm" onClick={openReview} disabled={busy} className="flex-1 gap-1.5">
+          <Eye className="h-4 w-4" /> Review
         </Button>
-        <Button size="lg" onClick={submit} disabled={busy}>Save & Print Challan</Button>
-      </div>
+        <Button type="button" size="sm" onClick={submit} disabled={busy} className="flex-1 gap-1.5">
+          <Save className="h-4 w-4" /> Save
+        </Button>
+      </StickyMobileActions>
 
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -332,10 +415,10 @@ export function ChallanForm({ docType }: Props) {
             </section>
 
             <section>
-              <h3 className="font-semibold mb-2 border-b pb-1">{isOem ? "OEM" : "Customer"} Information</h3>
+              <h3 className="font-semibold mb-2 border-b pb-1">{partyLabel} Information</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
-                <ReviewField label={isOem ? "OEM Name" : "Customer Name"} value={form.party_name} />
-                <ReviewField label={isOem ? "OEM Code" : "Customer Code"} value={form.party_code} />
+                <ReviewField label={`${partyLabel} Name`} value={form.party_name} />
+                <ReviewField label={`${partyLabel} Code`} value={form.party_code} />
                 {isOem ? (
                   <ReviewField label="OEM Plant" value={form.oem_plant} />
                 ) : (
@@ -397,9 +480,7 @@ export function ChallanForm({ docType }: Props) {
                 </table>
               </div>
               <div className="text-xs text-muted-foreground mt-2">
-                Total Qty: <span className="font-medium text-foreground">
-                  {items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0)}
-                </span>
+                Total Qty: <span className="font-medium text-foreground">{totalQty}</span>
               </div>
             </section>
 
@@ -432,7 +513,7 @@ export function ChallanForm({ docType }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </FormShell>
   );
 }
 

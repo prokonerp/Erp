@@ -4,6 +4,64 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* =========================
+ * Form Kit — compact enterprise form system
+ * Density tokens applied via [data-density="compact"|"comfortable"]
+ * ========================= */
+:root {
+  --form-field-gap: 12px;
+  --form-section-gap: 20px;
+  --form-card-pad: 16px;
+  --form-field-h: 40px;
+  --form-label-mb: 6px;
+}
+
+[data-density="compact"] {
+  --form-field-gap: 8px;
+  --form-section-gap: 14px;
+  --form-card-pad: 12px;
+  --form-field-h: 32px;
+  --form-label-mb: 3px;
+}
+
+/* Apply density to native inputs / shadcn primitives inside a form-kit shell */
+[data-density] :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), [data-slot="select-trigger"], [role="combobox"], button[data-slot="popover-trigger"]) {
+  height: var(--form-field-h);
+  min-height: var(--form-field-h);
+}
+[data-density] :where(textarea) {
+  min-height: calc(var(--form-field-h) + 8px);
+}
+[data-density="compact"] :where(label) {
+  margin-bottom: var(--form-label-mb);
+  font-size: 12px;
+}
+[data-density="compact"] :where(.fk-section) {
+  padding: var(--form-card-pad);
+}
+
+/* Form-kit visual primitives */
+.fk-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--form-section-gap);
+}
+.fk-section {
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.fk-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--form-field-gap);
+}
+/* Mobile-first responsive collapse */
+@media (max-width: 640px) {
+  .fk-col-sm, .fk-col-md, .fk-col-lg, .fk-col-full { grid-column: span 12 / span 12; }
+}
+
 /*
  * Design system definition.
  *
