@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   ChevronDown,
+  Building2,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -18,6 +19,8 @@ import {
   ClipboardList,
   Warehouse,
   PackageCheck,
+  Users,
+  Package,
   Send,
   LayoutDashboard,
   Menu,
@@ -43,6 +46,7 @@ function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    Masters: false,
     "Service Desk": false,
     Customers: false,
     Procurement: false,
@@ -91,8 +95,9 @@ function AppLayout() {
     adminOnly?: boolean;
     group?: string;
   }[] = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/masters", label: "Masters", icon: Database, module: "customers" },
+    { to: "/masters", label: "Company", icon: Building2, module: "customers", group: "Masters" },
+    { to: "/masters/customers", label: "Customers", icon: Users, module: "customers", group: "Masters" },
+    { to: "/masters/products", label: "Products", icon: Package, module: "customers", group: "Masters" },
     { to: "/tickets", label: "Service Desk (Tickets)", icon: Ticket, module: "tickets", group: "Service Desk" },
     { to: "/amc", label: "Contracts (AMC)", icon: ShieldCheck, module: "amc", group: "Service Desk" },
     { to: "/crm", label: "Customers (Sales & CRM)", icon: Briefcase, module: "quotations", group: "Customers" },
@@ -116,7 +121,7 @@ function AppLayout() {
       active ? "bg-accent text-accent-foreground font-medium" : "text-foreground/80 hover:bg-muted hover:text-foreground"
     }`;
 
-  const groupOrder = ["Service Desk", "Customers", "Procurement", "Material Movement", "Inventory", "Intelligence", "System"];
+  const groupOrder = ["Masters", "Service Desk", "Customers", "Procurement", "Material Movement", "Inventory", "Intelligence", "System"];
 
   const groupMap = new Map<string, typeof navItems>();
   const ungrouped: typeof navItems = [];
