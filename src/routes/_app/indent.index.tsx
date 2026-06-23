@@ -127,7 +127,6 @@ function IndentList() {
                 const age = formatAge(r.created_at, cAt);
                 const oracles = r.oracles_data || [];
                 const oClosed = oracles.filter((o) => oracleStatus(o) === "closed").length;
-                const dateShort = r.indent_date ? r.indent_date.slice(5) : "—";
                 return (
                 <tr key={r.id} className="border-t align-top hover:bg-muted/30">
                   <td className="p-2 font-mono text-xs whitespace-nowrap">{r.indent_no}</td>
