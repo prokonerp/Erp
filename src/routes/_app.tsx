@@ -95,8 +95,9 @@ function AppLayout() {
     adminOnly?: boolean;
     group?: string;
   }[] = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/masters", label: "Masters", icon: Database, module: "customers" },
+    { to: "/masters", label: "Company", icon: Building2, module: "customers", group: "Masters" },
+    { to: "/masters/customers", label: "Customers", icon: Users, module: "customers", group: "Masters" },
+    { to: "/masters/products", label: "Products", icon: Package, module: "customers", group: "Masters" },
     { to: "/tickets", label: "Service Desk (Tickets)", icon: Ticket, module: "tickets", group: "Service Desk" },
     { to: "/amc", label: "Contracts (AMC)", icon: ShieldCheck, module: "amc", group: "Service Desk" },
     { to: "/crm", label: "Customers (Sales & CRM)", icon: Briefcase, module: "quotations", group: "Customers" },
