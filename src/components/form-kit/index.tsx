@@ -138,20 +138,46 @@ export function FormSection({
   );
 }
 
-/* ---------- FormGrid ---------- */
-export function FormGrid({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("fk-grid", className)}>{children}</div>;
+/* ---------- FormGrid ----------
+ * Default: 12-col responsive grid (use FormField size for widths).
+ * Pass `auto` to switch to auto-packing CSS grid that fits as many
+ * fields per row as their min widths allow (ERP-style density).
+ */
+export function FormGrid({
+  children,
+  className,
+  auto = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  auto?: boolean;
+}) {
+  return <div className={cn(auto ? "fk-grid-auto" : "fk-grid", className)}>{children}</div>;
 }
 
 /* ---------- FormField ---------- */
-type FieldSize = "sm" | "md" | "lg" | "full";
+type FieldSize = "xs" | "sm" | "md" | "lg" | "xl" | "full";
+/*
+ * Intelligent width allocation on a 12-col grid:
+ *   xs   ~ 100-120px  (Qty, UOM, Tax%, Status, Priority)
+ *   sm   ~ 150-180px  (Ticket No, PO No, Asset ID, Category, Type, Dates)
+ *   md   ~ 220-280px  (Customer/Vendor/Contact/Location/Assigned To)
+ *   lg   ~ 1/2 row    (Address line, long ref)
+ *   xl   ~ 2/3 row    (Long single-line text)
+ *   full              (Description, Remarks, Notes, Specifications)
+ * Desktop targets 4–6 fields per row; tablet 3–4; mobile 1–2.
+ */
 const sizeCls: Record<FieldSize, string> = {
-  // sm: 1/4 desktop, 1/2 tablet, full mobile
-  sm: "fk-col-sm col-span-12 sm:col-span-6 lg:col-span-3",
-  // md: 1/2 on >=sm
-  md: "fk-col-md col-span-12 sm:col-span-6",
-  // lg: 2/3 on lg
-  lg: "fk-col-lg col-span-12 lg:col-span-8",
+  // 6 per row on desktop
+  xs:   "fk-col-xs col-span-6 sm:col-span-3 md:col-span-2 lg:col-span-2",
+  // 4 per row on desktop
+  sm:   "fk-col-sm col-span-6 sm:col-span-4 md:col-span-3 lg:col-span-3",
+  // 3 per row on desktop
+  md:   "fk-col-md col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-4",
+  // 2 per row on desktop
+  lg:   "fk-col-lg col-span-12 sm:col-span-6 lg:col-span-6",
+  // ~2/3 row
+  xl:   "fk-col-xl col-span-12 lg:col-span-8",
   full: "fk-col-full col-span-12",
 };
 

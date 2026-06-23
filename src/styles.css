@@ -9,18 +9,18 @@
  * Density tokens applied via [data-density="compact"|"comfortable"]
  * ========================= */
 :root {
-  --form-field-gap: 12px;
+  --form-field-gap: 10px;
   --form-section-gap: 20px;
   --form-card-pad: 16px;
-  --form-field-h: 40px;
+  --form-field-h: 36px;
   --form-label-mb: 6px;
 }
 
 [data-density="compact"] {
-  --form-field-gap: 8px;
+  --form-field-gap: 6px;
   --form-section-gap: 14px;
   --form-card-pad: 12px;
-  --form-field-h: 32px;
+  --form-field-h: 30px;
   --form-label-mb: 3px;
 }
 
@@ -28,9 +28,18 @@
 [data-density] :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), [data-slot="select-trigger"], [role="combobox"], button[data-slot="popover-trigger"]) {
   height: var(--form-field-h);
   min-height: var(--form-field-h);
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 13px;
+}
+[data-density="compact"] :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), [data-slot="select-trigger"], [role="combobox"], button[data-slot="popover-trigger"]) {
+  font-size: 12px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 [data-density] :where(textarea) {
   min-height: calc(var(--form-field-h) + 8px);
+  font-size: 13px;
 }
 [data-density="compact"] :where(label) {
   margin-bottom: var(--form-label-mb);
@@ -57,9 +66,18 @@
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--form-field-gap);
 }
-/* Mobile-first responsive collapse */
-@media (max-width: 640px) {
-  .fk-col-sm, .fk-col-md, .fk-col-lg, .fk-col-full { grid-column: span 12 / span 12; }
+/* Auto-packing grid: each field declares its own min width via inline style
+ * or default min of 160px. Fits as many as possible per row. */
+.fk-grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--form-field-gap);
+}
+/* Mobile-first responsive collapse for narrow viewports */
+@media (max-width: 480px) {
+  .fk-col-xs, .fk-col-sm, .fk-col-md, .fk-col-lg, .fk-col-xl, .fk-col-full {
+    grid-column: span 12 / span 12;
+  }
 }
 
 /*
