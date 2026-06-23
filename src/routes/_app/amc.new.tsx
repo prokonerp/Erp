@@ -225,21 +225,21 @@ function NewAmc() {
           <FormField label="AMC Agreement Number" hint={<>Format: <span className="font-mono">{prefixPreview}{`{ddMMyyHHmm}{SEQ}`}</span></>}>
             <Input value="Auto-generated on save" readOnly disabled className="bg-muted font-mono" />
           </FormField>
-          <FormField label="Duration" name="duration" size="sm">
+          <FormField label="Duration" name="duration" size="xs">
             <Select value={String(form.duration_years)} onValueChange={(v) => setForm({ ...form, duration_years: Number(v) })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {[1, 2, 3, 5].map((y) => <SelectItem key={y} value={String(y)}>{y} Year{y > 1 ? "s" : ""}</SelectItem>)}
+                {[1, 2, 3, 4, 5].map((y) => <SelectItem key={y} value={String(y)}>{y}Y</SelectItem>)}
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label="Start Date" name="start_date" hint={fmtDate(form.start_date)}>
+          <FormField label="Start Date" name="start_date" size="xs" hint={fmtDate(form.start_date)}>
             <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
           </FormField>
-          <FormField label="End Date (auto)" name="end_date">
+          <FormField label="End Date" name="end_date" size="xs">
             <Input value={fmtDate(end_date)} readOnly className="bg-muted" />
           </FormField>
-          <FormField label="AMC Value (₹)" name="amc_value" size="sm">
+          <FormField label="AMC Value (₹)" name="amc_value" size="xs">
             <Input type="number" min="0" value={form.amc_value} onChange={(e) => setForm({ ...form, amc_value: e.target.value })} />
           </FormField>
         </FormGrid>
@@ -263,23 +263,23 @@ function NewAmc() {
               })}
             />
           </FormField>
-          <FormField label="Client / Contact Person" name="client_name">
+          <FormField label="Client / Contact Person" name="client_name" size="md">
             <Input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} placeholder="Auto-filled — editable" />
           </FormField>
-          <FormField label="Company" name="client_company">
+          <FormField label="Company" name="client_company" size="md">
             <Input value={form.client_company} readOnly className="bg-muted" />
-          </FormField>
-          <FormField label="GSTIN" name="client_gst" size="sm">
-            <Input value={form.client_gst} readOnly className="bg-muted font-mono" />
           </FormField>
           <FormField label="Contact No." name="contact_no" size="sm">
             <Input value={form.contact_no} readOnly className="bg-muted" />
           </FormField>
-          <FormField label="Email" name="email">
+          <FormField label="Email" name="email" size="md">
             <Input type="email" value={form.email} readOnly className="bg-muted" />
           </FormField>
-          <FormField label="Billing Address" size="full">
-            <Textarea rows={2} value={form.client_address} readOnly className="bg-muted" />
+          <FormField label="Billing Address" size="lg">
+            <Input value={form.client_address} readOnly className="bg-muted" />
+          </FormField>
+          <FormField label="GSTIN" name="client_gst" size="sm">
+            <Input value={form.client_gst} readOnly className="bg-muted font-mono" />
           </FormField>
         </FormGrid>
       </FormSection>

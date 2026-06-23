@@ -356,15 +356,15 @@ function NewTicket() {
           <FormField label="City / Area" name="location">
             <Input value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="City" />
           </FormField>
-          <FormField label="Address" size="full">
-            <Textarea rows={2} value={form.customer_address} onChange={(e) => set({ customer_address: e.target.value })} />
+          <FormField label="Address" size="lg">
+            <Input value={form.customer_address} onChange={(e) => set({ customer_address: e.target.value })} placeholder="Street, area, landmark" />
           </FormField>
         </FormGrid>
       </FormSection>
 
       <FormSection title="Product & Issue" defaultOpen>
         <FormGrid>
-          <FormField label="Model" name="product" size="md">
+          <FormField label="Model" name="product" size="sm">
             <ProductPicker
               value={form.product_id}
               onChange={(id, p) => {
@@ -379,9 +379,9 @@ function NewTicket() {
             />
           </FormField>
           <FormField label="Serial Number" name="serial_no" size="sm">
-            <Input value={form.serial_no} onChange={(e) => set({ serial_no: e.target.value.toUpperCase() })} placeholder="e.g. APC2024XYZ" className="font-mono" />
+            <Input value={form.serial_no} onChange={(e) => set({ serial_no: e.target.value.toUpperCase() })} placeholder="APC2024XYZ" className="font-mono" />
           </FormField>
-          <FormField label="Preferred Visit Date & Time" hint="optional" size="md">
+          <FormField label="Preferred Visit" hint="optional" size="sm">
             <Input type="datetime-local" value={form.preferred_visit_datetime} onChange={(e) => set({ preferred_visit_datetime: e.target.value })} />
           </FormField>
           <FormField label="Complaint / Issue Description" size="full">
@@ -413,7 +413,7 @@ function NewTicket() {
                   <FormField label="Oracle #" size="sm">
                     <Input value={p.oracle_no || ""} onChange={(e) => updDef(i, { oracle_no: e.target.value.toUpperCase() })} placeholder="ORA-001" className="font-mono" />
                   </FormField>
-                  <FormField label="Part / Item" size="md">
+                  <FormField label="Part / Item" size="sm">
                     <TicketPartPicker
                       ticketProduct={form.product}
                       value={p.model_no || p.name}
@@ -421,15 +421,15 @@ function NewTicket() {
                     />
                   </FormField>
                   <FormField label="Model / Part No" size="sm">
-                    <Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} />
+                    <Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} className="font-mono" />
                   </FormField>
                   <FormField label="Serial No" size="sm">
                     <Input value={p.serial || ""} onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })} className="font-mono" />
                   </FormField>
                   <FormField label="Qty" size="xs">
-                    <Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} />
+                    <Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} maxLength={3} className="w-16 text-center" />
                   </FormField>
-                  <FormField label="Remarks" size="md">
+                  <FormField label="Remarks" size="sm">
                     <Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} />
                   </FormField>
                   <FormField label=" " size="xs">
@@ -464,7 +464,7 @@ function NewTicket() {
             {goodParts.map((p, i) => (
               <div key={i} className="rounded-md border p-2">
                 <FormGrid>
-                  <FormField label="Part / Item" size="md">
+                  <FormField label="Part / Item" size="sm">
                     <TicketPartPicker
                       ticketProduct={form.product}
                       value={p.model_no || p.name}
@@ -472,15 +472,15 @@ function NewTicket() {
                     />
                   </FormField>
                   <FormField label="Model / Part No" size="sm">
-                    <Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} />
+                    <Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} className="font-mono" />
                   </FormField>
                   <FormField label="Serial No" size="sm">
                     <Input value={p.serial || ""} onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })} className="font-mono" />
                   </FormField>
                   <FormField label="Qty" size="xs">
-                    <Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} />
+                    <Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} maxLength={3} className="w-16 text-center" />
                   </FormField>
-                  <FormField label="Remarks" size="md">
+                  <FormField label="Remarks" size="sm">
                     <Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} />
                   </FormField>
                   <FormField label=" " size="xs">
