@@ -193,6 +193,17 @@ function compactAge(age: string): string {
     .trim();
 }
 
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso + "T00:00:00");
+  if (isNaN(d.getTime())) return iso;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mmm = MONTHS[d.getMonth()];
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mmm}-${yy}`;
+}
+
 function Kpi({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <Card>
