@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   FileText,
   ListChecks,
