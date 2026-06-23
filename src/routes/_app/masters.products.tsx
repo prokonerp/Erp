@@ -360,6 +360,7 @@ export function ProductMasterPage() {
         hsn: upperTrim(r["HSN"] || "") || null,
         default_price: r["Price"] || r["Default Price"] ? Number(r["Price"] || r["Default Price"]) : null,
         description: r["Description"] || null,
+        weight_kg: r["Weight"] || r["Weight (kg)"] ? Number(r["Weight"] || r["Weight (kg)"]) : null,
         active: true,
       })).filter((p) => p.name);
       if (!payload.length) return toast.error("No valid rows. Required: Name");
