@@ -76,8 +76,8 @@
   align-items: start;
 }
 .fk-col       { min-width: 0; }
-.fk-col-xs    { grid-column: span 2; }   /* Qty, UOM, Tax%, Status */
-.fk-col-sm    { grid-column: span 3; }   /* Dates, Doc No, IDs — 4 per row */
+.fk-col-xs    { grid-column: span 1; }   /* Qty, UOM, Tax%, Status — ultra compact */
+.fk-col-sm    { grid-column: span 2; }   /* Dates, Doc No, IDs */
 .fk-col-md    { grid-column: span 3; }   /* Customer/Vendor/Contact — 4 per row */
 .fk-col-lg    { grid-column: span 4; }   /* Email, longer single-line */
 .fk-col-xl    { grid-column: span 6; }   /* Address, long ref — pairs with md/lg */

@@ -1910,6 +1910,7 @@ export type Database = {
           warranty_start_from: string | null
           warranty_type: string | null
           warranty_unit: string | null
+          weight_kg: number | null
         }
         Insert: {
           active?: boolean
@@ -1939,6 +1940,7 @@ export type Database = {
           warranty_start_from?: string | null
           warranty_type?: string | null
           warranty_unit?: string | null
+          weight_kg?: number | null
         }
         Update: {
           active?: boolean
@@ -1968,6 +1970,7 @@ export type Database = {
           warranty_start_from?: string | null
           warranty_type?: string | null
           warranty_unit?: string | null
+          weight_kg?: number | null
         }
         Relationships: []
       }
