@@ -5,15 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { type AmcUnit, addYears, fmtDate, generatePMDates } from "@/lib/amc";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { AgreementDocUpload } from "@/components/AgreementDocUpload";
+import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 
 export const Route = createFileRoute("/_app/amc/new")({
   component: NewAmc,
@@ -163,22 +163,30 @@ function NewAmc() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>OEM Registration</span>
-            <div className="flex items-center gap-2 text-sm font-normal">
-              <Label htmlFor="oem-toggle-new">Registered with OEM</Label>
-              <Switch id="oem-toggle-new" checked={form.oem_call} onCheckedChange={(v) => setForm({ ...form, oem_call: v })} />
-              <span className="text-xs text-muted-foreground">{form.oem_call ? "Yes" : "No"}</span>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        {form.oem_call && (
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>OEM Brand *</Label>
+    <FormShell
+      title="New AMC Agreement"
+      description="Create a new Annual Maintenance Contract"
+      storageKey="amc-form-density"
+      actions={
+        <Button size="sm" onClick={submit} disabled={busy}>
+          <Save className="h-4 w-4 mr-1" />{busy ? "Saving…" : "Save AMC"}
+        </Button>
+      }
+    >
+      <FormSection
+        title="OEM Registration"
+        defaultOpen={form.oem_call}
+        right={
+          <div className="flex items-center gap-2 text-xs">
+            <Label htmlFor="oem-toggle-new" className="text-xs">Registered with OEM</Label>
+            <Switch id="oem-toggle-new" checked={form.oem_call} onCheckedChange={(v) => setForm({ ...form, oem_call: v })} />
+            <span className="text-muted-foreground">{form.oem_call ? "Yes" : "No"}</span>
+          </div>
+        }
+      >
+        {form.oem_call ? (
+          <FormGrid>
+            <FormField label="OEM Brand" required name="oem_brand">
               <Select
                 value={form.oem_brand}
                 onValueChange={async (v) => {
@@ -201,40 +209,45 @@ function NewAmc() {
                   <SelectItem value="__add__">+ Add New OEM Brand</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>OEM Agreement Number *</Label>
+            </FormField>
+            <FormField label="OEM Agreement Number" required name="oem_ref_id">
               <Input value={form.oem_ref_id} onChange={(e) => setForm({ ...form, oem_ref_id: e.target.value.toUpperCase() })} placeholder="e.g. APC-2026-AB12345" className="font-mono" />
-            </div>
-            <div>
-              <Label>OEM Purchase Date</Label>
+            </FormField>
+            <FormField label="OEM Purchase Date" name="oem_purchase_date">
               <Input type="date" value={form.oem_purchase_date} onChange={(e) => setForm({ ...form, oem_purchase_date: e.target.value })} />
-            </div>
-          </CardContent>
-        )}
-      </Card>
+            </FormField>
+          </FormGrid>
+        ) : null}
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle>New AMC Agreement</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>AMC Agreement Number <span className="text-xs text-muted-foreground">(auto-generated)</span></Label>
+      <FormSection title="Agreement" defaultOpen>
+        <FormGrid>
+          <FormField label="AMC Agreement Number" hint={<>Format: <span className="font-mono">{prefixPreview}{`{ddMMyyHHmm}{SEQ}`}</span></>}>
             <Input value="Auto-generated on save" readOnly disabled className="bg-muted font-mono" />
-            <p className="text-[11px] text-muted-foreground mt-1">Format: <span className="font-mono">{prefixPreview}{`{ddMMyyHHmm}{SEQ}`}</span></p>
-          </div>
-          <div>
-            <Label>Duration</Label>
+          </FormField>
+          <FormField label="Duration" name="duration" size="sm">
             <Select value={String(form.duration_years)} onValueChange={(v) => setForm({ ...form, duration_years: Number(v) })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {[1, 2, 3, 5].map((y) => <SelectItem key={y} value={String(y)}>{y} Year{y > 1 ? "s" : ""}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div><Label>Start Date (DD-MM-YYYY)</Label><Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">{fmtDate(form.start_date)}</p></div>
-          <div><Label>End Date (auto)</Label><Input value={fmtDate(end_date)} readOnly className="bg-muted" /></div>
-          <div className="md:col-span-2">
-            <Label>Customer * <span className="text-xs text-muted-foreground font-normal">(from Customer Master)</span></Label>
+          </FormField>
+          <FormField label="Start Date" name="start_date" hint={fmtDate(form.start_date)}>
+            <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
+          </FormField>
+          <FormField label="End Date (auto)" name="end_date">
+            <Input value={fmtDate(end_date)} readOnly className="bg-muted" />
+          </FormField>
+          <FormField label="AMC Value (₹)" name="amc_value" size="sm">
+            <Input type="number" min="0" value={form.amc_value} onChange={(e) => setForm({ ...form, amc_value: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
+
+      <FormSection title="Customer" defaultOpen>
+        <FormGrid>
+          <FormField label="Customer (from Master)" required size="full">
             <CustomerPicker
               value={form.customer_id}
               required
@@ -249,23 +262,38 @@ function NewAmc() {
                 email: c?.email || "",
               })}
             />
-          </div>
-          <div><Label>Client / Contact Person</Label><Input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} placeholder="Auto-filled — editable" /></div>
-          <div><Label>Company</Label><Input value={form.client_company} readOnly className="bg-muted" /></div>
-          <div className="md:col-span-2"><Label>Billing Address</Label><Textarea rows={2} value={form.client_address} readOnly className="bg-muted" /></div>
-          <div><Label>GSTIN</Label><Input value={form.client_gst} readOnly className="bg-muted font-mono" /></div>
-          <div><Label>Contact No.</Label><Input value={form.contact_no} readOnly className="bg-muted" /></div>
-          <div><Label>Email</Label><Input type="email" value={form.email} readOnly className="bg-muted" /></div>
-          <div><Label>AMC Value (₹)</Label><Input type="number" min="0" value={form.amc_value} onChange={(e) => setForm({ ...form, amc_value: e.target.value })} /></div>
-        </CardContent>
-      </Card>
+          </FormField>
+          <FormField label="Client / Contact Person" name="client_name">
+            <Input value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} placeholder="Auto-filled — editable" />
+          </FormField>
+          <FormField label="Company" name="client_company">
+            <Input value={form.client_company} readOnly className="bg-muted" />
+          </FormField>
+          <FormField label="GSTIN" name="client_gst" size="sm">
+            <Input value={form.client_gst} readOnly className="bg-muted font-mono" />
+          </FormField>
+          <FormField label="Contact No." name="contact_no" size="sm">
+            <Input value={form.contact_no} readOnly className="bg-muted" />
+          </FormField>
+          <FormField label="Email" name="email">
+            <Input type="email" value={form.email} readOnly className="bg-muted" />
+          </FormField>
+          <FormField label="Billing Address" size="full">
+            <Textarea rows={2} value={form.client_address} readOnly className="bg-muted" />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Product Details</CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setUnits([...units, emptyUnit()])}><Plus className="h-4 w-4 mr-1" />Add unit</Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <FormSection
+        title="Product Details"
+        defaultOpen
+        right={
+          <Button size="sm" variant="outline" onClick={() => setUnits([...units, emptyUnit()])}>
+            <Plus className="h-4 w-4 mr-1" />Add unit
+          </Button>
+        }
+      >
+        <div className="space-y-3">
           {units.map((u, i) => (
             <ProductRow
               key={i}
@@ -278,34 +306,33 @@ function NewAmc() {
               canRemove={units.length > 1}
             />
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle>Terms & Conditions (editable)</CardTitle></CardHeader>
-        <CardContent>
-          <Textarea rows={12} value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} className="font-mono text-xs" />
-        </CardContent>
-      </Card>
+      <FormSection title="Terms & Conditions">
+        <Textarea rows={12} value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} className="font-mono text-xs" />
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle>Agreement Attachment</CardTitle></CardHeader>
-        <CardContent>
-          <AgreementDocUpload path={agreementDocPath} onChange={setAgreementDocPath} />
-        </CardContent>
-      </Card>
+      <FormSection title="Agreement Attachment">
+        <AgreementDocUpload path={agreementDocPath} onChange={setAgreementDocPath} />
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle>Remarks</CardTitle></CardHeader>
-        <CardContent>
-          <Textarea rows={2} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} />
-        </CardContent>
-      </Card>
+      <FormSection title="Remarks">
+        <Textarea rows={2} value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} />
+      </FormSection>
 
-      <div className="flex justify-end gap-2">
-        <Button size="lg" onClick={submit} disabled={busy}>Save AMC</Button>
+      <div className="hidden sm:flex justify-end gap-2 pt-2">
+        <Button onClick={submit} disabled={busy}>
+          <Save className="h-4 w-4 mr-1" />{busy ? "Saving…" : "Save AMC"}
+        </Button>
       </div>
-    </div>
+
+      <StickyMobileActions>
+        <Button onClick={submit} disabled={busy} className="flex-1">
+          <Save className="h-4 w-4 mr-1" />{busy ? "Saving…" : "Save AMC"}
+        </Button>
+      </StickyMobileActions>
+    </FormShell>
   );
 }
 
