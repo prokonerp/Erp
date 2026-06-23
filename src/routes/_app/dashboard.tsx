@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/lib/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -103,7 +103,7 @@ function QuickActions({ can, isAdmin }: { can: (m: ModuleKey, a?: any) => boolea
 /* ───────────── User Grid (permission-driven) ───────────── */
 
 function UserGrid({ can, engineerName }: { can: (m: ModuleKey, a?: any) => boolean; engineerName: string | null }) {
-  const visible: { key: ModuleKey; node: JSX.Element }[] = [];
+  const visible: { key: ModuleKey; node: ReactNode }[] = [];
   if (can("tickets", "read")) visible.push({ key: "tickets", node: <TicketsWidget scope={{ engineerName }} /> });
   if (can("amc", "read")) visible.push({ key: "amc", node: <AmcWidget /> });
   if (can("indent", "read")) visible.push({ key: "indent", node: <IndentWidget /> });
