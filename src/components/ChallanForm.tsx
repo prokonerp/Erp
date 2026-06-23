@@ -237,7 +237,7 @@ export function ChallanForm({ docType }: Props) {
               <Input placeholder="https://..." value={form.oem_logo_url} onChange={(e) => setForm({ ...form, oem_logo_url: e.target.value })} />
             </FormField>
           )}
-          <FormField size="full" label="Delivery Address">
+          <FormField size="xl" label="Delivery Address">
             <Textarea rows={2} value={form.delivery_address} onChange={(e) => setForm({ ...form, delivery_address: e.target.value })} />
           </FormField>
         </FormGrid>
