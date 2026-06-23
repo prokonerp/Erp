@@ -46,6 +46,7 @@ function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    Masters: false,
     "Service Desk": false,
     Customers: false,
     Procurement: false,
