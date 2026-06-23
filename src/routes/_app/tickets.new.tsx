@@ -239,7 +239,6 @@ function NewTicket() {
   };
 
   return (
-  return (
     <FormShell
       title="New Ticket"
       description="Capture a customer service request"
