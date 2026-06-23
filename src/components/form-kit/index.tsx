@@ -3,6 +3,8 @@ import {
   useContext,
   useState,
   useEffect,
+  isValidElement,
+  Children,
   type ReactNode,
 } from "react";
 import { ChevronDown, Rows3, Rows4 } from "lucide-react";
@@ -183,6 +185,8 @@ type FieldProps = {
   hint?: ReactNode;
   error?: ReactNode;
   size?: FieldSize;
+  /** Optional field name/key — used to auto-infer width when `size` is omitted. */
+  name?: string;
   className?: string;
   children: ReactNode;
 };
@@ -191,12 +195,14 @@ export function FormField({
   required,
   hint,
   error,
-  size = "md",
+  size,
+  name,
   className,
   children,
 }: FieldProps) {
+  const resolved = size ?? inferFieldSize({ label, name, children });
   return (
-    <div className={cn(sizeCls[size], "min-w-0 space-y-1", className)}>
+    <div className={cn(sizeCls[resolved], "min-w-0 space-y-1", className)}>
       {label ? (
         <Label className="text-xs font-medium text-muted-foreground">
           {label}
@@ -211,6 +217,56 @@ export function FormField({
       ) : null}
     </div>
   );
+}
+
+/* ---------- Auto width inference ----------
+ * Rules (first match wins):
+ *   textarea / address / description / remarks / notes / specs → full
+ *   date / time                                                → sm   (~140px)
+ *   status / priority / type / category / uom / qty / tax / %  → xs   (~100px)
+ *   *no, *id, code, sku, ref, gstin, pan, pin, mobile, phone   → sm
+ *   amount, price, rate, total, cost, value                    → xs
+ *   customer, vendor, oem, supplier, contact, assigned, owner  → md
+ *   department, branch, location, warehouse, project           → md
+ *   email, url, address line                                   → lg
+ * Fallback                                                     → md
+ */
+function inferFieldSize({
+  label,
+  name,
+  children,
+}: {
+  label?: ReactNode;
+  name?: string;
+  children: ReactNode;
+}): FieldSize {
+  // Detect textareas in the child tree
+  let hasTextarea = false;
+  Children.forEach(children, (c) => {
+    if (!isValidElement(c)) return;
+    const t: any = (c as any).type;
+    const nm = typeof t === "string" ? t : t?.displayName || t?.name || "";
+    if (nm === "textarea" || /Textarea/i.test(nm)) hasTextarea = true;
+  });
+  if (hasTextarea) return "full";
+
+  const key = `${typeof label === "string" ? label : ""} ${name ?? ""}`
+    .toLowerCase()
+    .trim();
+  if (!key) return "md";
+
+  const test = (re: RegExp) => re.test(key);
+
+  if (test(/\b(description|remarks?|notes?|comments?|specs?|specification|address)\b/)) return "full";
+  if (test(/\b(qty|quantity|uom|unit|tax|%|percent|rate|amount|price|total|cost|value|discount)\b/)) return "xs";
+  if (test(/\b(status|priority|type|category|kind|stage|severity|mode)\b/)) return "xs";
+  if (test(/\b(date|time|dob|deadline|due)\b/)) return "sm";
+  if (test(/\b(no\.?|number|id|code|sku|ref|gstin|pan|pin|zip|mobile|phone|contact no)\b/)) return "sm";
+  if (test(/\b(email|website|url|link)\b/)) return "lg";
+  if (test(/\b(customer|vendor|supplier|oem|client|party|contact|assigned|owner|user|employee|manager)\b/)) return "md";
+  if (test(/\b(department|branch|location|warehouse|site|project|team|role)\b/)) return "md";
+
+  return "md";
 }
 
 /* ---------- StickyMobileActions ----------
