@@ -24,6 +24,12 @@ import {
   Send,
   LayoutDashboard,
   Menu,
+  Store,
+  UserCog,
+  Wallet,
+  Boxes,
+  Truck,
+  IdCard,
 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
@@ -91,13 +97,23 @@ function AppLayout() {
     to: string;
     label: string;
     icon: any;
+    search?: Record<string, string>;
     module?: ModuleKey;
     adminOnly?: boolean;
     group?: string;
+    matchSearchTab?: string;
   }[] = [
-    { to: "/masters", label: "Company", icon: Building2, module: "customers", group: "Masters" },
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/masters", label: "Company", icon: Building2, module: "customers", group: "Masters", search: { tab: "company" }, matchSearchTab: "company" },
+    { to: "/masters", label: "Branches", icon: Store, module: "customers", group: "Masters", search: { tab: "branches" }, matchSearchTab: "branches" },
+    { to: "/masters", label: "Warehouses", icon: Warehouse, module: "customers", group: "Masters", search: { tab: "warehouses" }, matchSearchTab: "warehouses" },
     { to: "/masters/customers", label: "Customers", icon: Users, module: "customers", group: "Masters" },
+    { to: "/masters", label: "Vendors", icon: Truck, module: "customers", group: "Masters", search: { tab: "vendors" }, matchSearchTab: "vendors" },
     { to: "/masters/products", label: "Products", icon: Package, module: "customers", group: "Masters" },
+    { to: "/masters", label: "Employees", icon: IdCard, module: "customers", group: "Masters", search: { tab: "employees" }, matchSearchTab: "employees" },
+    { to: "/masters", label: "Inventory", icon: Boxes, module: "customers", group: "Masters", search: { tab: "inventory" }, matchSearchTab: "inventory" },
+    { to: "/masters", label: "Accounts", icon: Wallet, module: "customers", group: "Masters", search: { tab: "accounts" }, matchSearchTab: "accounts" },
+    { to: "/masters", label: "Users & Roles", icon: UserCog, module: "customers", group: "Masters", search: { tab: "users" }, matchSearchTab: "users" },
     { to: "/tickets", label: "Service Desk (Tickets)", icon: Ticket, module: "tickets", group: "Service Desk" },
     { to: "/amc", label: "Contracts (AMC)", icon: ShieldCheck, module: "amc", group: "Service Desk" },
     { to: "/crm", label: "Customers (Sales & CRM)", icon: Briefcase, module: "quotations", group: "Customers" },
@@ -116,6 +132,17 @@ function AppLayout() {
       });
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + "/");
+  const currentSearchTab = (() => {
+    if (typeof window === "undefined") return undefined;
+    const sp = new URLSearchParams(location.searchStr ?? window.location.search);
+    return sp.get("tab") ?? undefined;
+  })();
+  const isMasterTabActive = (path: string, tab?: string) => {
+    if (path !== "/masters") return isActive(path);
+    if (location.pathname !== "/masters") return false;
+    if (!tab) return !currentSearchTab || currentSearchTab === "company";
+    return currentSearchTab === tab;
+  };
   const navLinkCls = (active: boolean) =>
     `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
       active ? "bg-accent text-accent-foreground font-medium" : "text-foreground/80 hover:bg-muted hover:text-foreground"
@@ -269,7 +296,16 @@ function AppLayout() {
                 {isOpen && (
                   <div className="space-y-0.5">
                     {items.map((n) => (
-                      <Link key={n.to} to={n.to} className={navLinkCls(isActive(n.to))}>
+                      <Link
+                        key={`${n.to}-${n.matchSearchTab ?? ""}`}
+                        to={n.to}
+                        search={n.search as any}
+                        className={navLinkCls(
+                          n.group === "Masters"
+                            ? isMasterTabActive(n.to, n.matchSearchTab)
+                            : isActive(n.to)
+                        )}
+                      >
                         <n.icon className="h-4 w-4 shrink-0" />
                         {n.label}
                       </Link>
