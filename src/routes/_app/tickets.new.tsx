@@ -1,9 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,13 +10,13 @@ import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
-import { Label as L } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, CalendarClock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { Trash2 } from "lucide-react";
 import type { PartLine } from "@/lib/tickets";
+import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -240,262 +238,295 @@ function NewTicket() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        {form.special_instruction.trim() && (
-          <div className="mb-2 inline-flex items-center gap-2 self-start rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-red-700 animate-pulse">
-            <span className="h-2 w-2 rounded-full bg-red-600" />
-            Special Instruction
-          </div>
-        )}
-        {form.preferred_visit_datetime && (
-          <div className="mb-2 inline-flex items-center gap-2 self-start rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-700 animate-pulse">
-            <CalendarClock className="h-3 w-3" />
-            Preferred Visit: {new Date(form.preferred_visit_datetime).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-          </div>
-        )}
-        <CardTitle>New Ticket</CardTitle>
-      </CardHeader>
-      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {sourceMeta?.label && (
-          <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-            <span className="font-medium">Source:</span> {sourceMeta.label}
-            <span className="ml-2 text-xs text-muted-foreground">— fields pre-filled, review and submit.</span>
-          </div>
-        )}
-        <div>
-          <Label>Case ID <span className="text-muted-foreground text-xs">(auto-generated)</span></Label>
-          <Input value={form.case_id} readOnly disabled placeholder="Auto-generated on save" className="bg-muted" />
+    <FormShell
+      title="New Ticket"
+      description="Capture a customer service request"
+      storageKey="ticket-form-density"
+      actions={
+        <Button size="sm" onClick={submit} disabled={busy}>
+          {busy ? "Saving…" : "Create Ticket"}
+        </Button>
+      }
+    >
+      {(form.special_instruction.trim() || form.preferred_visit_datetime || sourceMeta?.label) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {form.special_instruction.trim() && (
+            <div className="inline-flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-red-700 animate-pulse">
+              <span className="h-2 w-2 rounded-full bg-red-600" />
+              Special Instruction
+            </div>
+          )}
+          {form.preferred_visit_datetime && (
+            <div className="inline-flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-700 animate-pulse">
+              <CalendarClock className="h-3 w-3" />
+              Preferred Visit: {new Date(form.preferred_visit_datetime).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </div>
+          )}
+          {sourceMeta?.label && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-1 text-xs">
+              <span className="font-medium">Source:</span> {sourceMeta.label}
+            </div>
+          )}
         </div>
-        <div>
-          <Label>OEM Call</Label>
-          <div className="flex items-center gap-3 h-9">
-            <Switch
-              checked={form.oem_call}
-              onCheckedChange={(v) => set({ oem_call: v, oem_brand: v ? form.oem_brand : "", oem_ref_id: v ? form.oem_ref_id : "", oem_purchase_date: v ? form.oem_purchase_date : "" })}
+      )}
+
+      <FormSection title="Ticket" defaultOpen>
+        <FormGrid>
+          <FormField label="Case ID" hint="auto-generated" name="case_id" size="sm">
+            <Input value={form.case_id} readOnly disabled placeholder="Auto" className="bg-muted" />
+          </FormField>
+          <FormField label="Call Type" required name="call_type" size="sm">
+            <Select value={form.call_type} onValueChange={(v) => { if (v === "__add__") { setAddingType(true); return; } set({ call_type: v }); }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {callTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                <SelectItem value="__add__"><span className="text-primary">+ Add New Call Type</span></SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField label="Priority" name="priority" size="xs">
+            <Select value={form.priority} onValueChange={(v) => set({ priority: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField label="OEM Call" size="sm">
+            <div className="flex items-center gap-2 h-9">
+              <Switch
+                checked={form.oem_call}
+                onCheckedChange={(v) => set({ oem_call: v, oem_brand: v ? form.oem_brand : "", oem_ref_id: v ? form.oem_ref_id : "", oem_purchase_date: v ? form.oem_purchase_date : "" })}
+              />
+              <span className="text-xs text-muted-foreground">{form.oem_call ? "Yes" : "No"}</span>
+            </div>
+          </FormField>
+
+          {form.oem_call && (
+            <>
+              <FormField label="OEM Brand" required name="oem_brand">
+                <Select value={form.oem_brand} onValueChange={(v) => { if (v === "__add__") { setAddingBrand(true); return; } set({ oem_brand: v }); }}>
+                  <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
+                  <SelectContent>
+                    {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                    <SelectItem value="__add__"><span className="text-primary">+ Add New Brand</span></SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="OEM Ref ID" required name="oem_ref_id">
+                <Input value={form.oem_ref_id} onChange={(e) => set({ oem_ref_id: e.target.value })} placeholder="OEM reference id" />
+              </FormField>
+              <FormField label="OEM Purchase Date" required name="oem_purchase_date">
+                <Input type="date" value={form.oem_purchase_date} onChange={(e) => set({ oem_purchase_date: e.target.value })} />
+              </FormField>
+            </>
+          )}
+        </FormGrid>
+      </FormSection>
+
+      <FormSection title="Customer" defaultOpen>
+        <FormGrid>
+          <FormField label="Customer (from Master)" required size="full">
+            <CustomerPicker
+              value={form.customer_id}
+              required
+              onChange={(id, c) => {
+                const cAny = (c || {}) as { city?: string; billing_city?: string; sector?: string };
+                set({
+                  customer_id: id || "",
+                  customer_name: c?.company || "",
+                  customer_phone: c?.phone || "",
+                  customer_email: c?.email || "",
+                  customer_address: c?.billing_address || c?.address || "",
+                  sector: cAny.sector || "",
+                  location: cAny.billing_city || cAny.city || c?.state || "",
+                });
+              }}
             />
-            <span className="text-sm text-muted-foreground">{form.oem_call ? "Yes — OEM tagged" : "No"}</span>
-          </div>
-        </div>
+          </FormField>
+          <FormField label="Contact Number" name="customer_phone" size="sm">
+            <Input value={form.customer_phone} onChange={(e) => set({ customer_phone: e.target.value })} />
+          </FormField>
+          <FormField label="Email" name="customer_email">
+            <Input type="email" value={form.customer_email} onChange={(e) => set({ customer_email: e.target.value })} />
+          </FormField>
+          <FormField label="Sector / Colony" name="sector">
+            <Input value={form.sector} onChange={(e) => set({ sector: e.target.value })} placeholder="e.g. Sector 61" />
+          </FormField>
+          <FormField label="City / Area" name="location">
+            <Input value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="City" />
+          </FormField>
+          <FormField label="Address" size="full">
+            <Textarea rows={2} value={form.customer_address} onChange={(e) => set({ customer_address: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-        {form.oem_call && (
-          <>
-            <div>
-              <Label>OEM Brand *</Label>
-              <Select value={form.oem_brand} onValueChange={(v) => { if (v === "__add__") { setAddingBrand(true); return; } set({ oem_brand: v }); }}>
-                <SelectTrigger><SelectValue placeholder="Select OEM brand" /></SelectTrigger>
-                <SelectContent>
-                  {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                  <SelectItem value="__add__"><span className="text-primary">+ Add New Brand</span></SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>OEM Ref ID *</Label>
-              <Input value={form.oem_ref_id} onChange={(e) => set({ oem_ref_id: e.target.value })} placeholder="OEM reference / ticket id" />
-            </div>
-            <div>
-              <Label>OEM Customer Purchase Date *</Label>
-              <Input type="date" value={form.oem_purchase_date} onChange={(e) => set({ oem_purchase_date: e.target.value })} />
-            </div>
-            <div />
-          </>
-        )}
+      <FormSection title="Product & Issue" defaultOpen>
+        <FormGrid>
+          <FormField label="Model" name="product" size="md">
+            <ProductPicker
+              value={form.product_id}
+              onChange={(id, p) => {
+                const modelName = p?.model || p?.name || "";
+                const brand = p?.brand || "";
+                set({
+                  product_id: id || "",
+                  product: modelName,
+                  ...(brand ? { oem_brand: brand } : {}),
+                });
+              }}
+            />
+          </FormField>
+          <FormField label="Serial Number" name="serial_no" size="sm">
+            <Input value={form.serial_no} onChange={(e) => set({ serial_no: e.target.value.toUpperCase() })} placeholder="e.g. APC2024XYZ" className="font-mono" />
+          </FormField>
+          <FormField label="Preferred Visit Date & Time" hint="optional" size="md">
+            <Input type="datetime-local" value={form.preferred_visit_datetime} onChange={(e) => set({ preferred_visit_datetime: e.target.value })} />
+          </FormField>
+          <FormField label="Complaint / Issue Description" size="full">
+            <Textarea rows={3} value={form.complaint} onChange={(e) => set({ complaint: e.target.value })} />
+          </FormField>
+          <FormField label="Special Instruction" hint="visible as blinking ribbon" size="full">
+            <Textarea rows={2} value={form.special_instruction} onChange={(e) => set({ special_instruction: e.target.value })} placeholder="Critical handling notes (optional)" />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-        <div>
-          <Label>Call Type *</Label>
-          <Select value={form.call_type} onValueChange={(v) => { if (v === "__add__") { setAddingType(true); return; } set({ call_type: v }); }}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {callTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-              <SelectItem value="__add__"><span className="text-primary">+ Add New Call Type</span></SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Customer Section (moved above Model) */}
-        <div className="md:col-span-2 pt-2 border-t" />
-        <div className="md:col-span-2">
-          <L>Customer * <span className="text-xs text-muted-foreground font-normal">(from Customer Master)</span></L>
-          <CustomerPicker
-            value={form.customer_id}
-            required
-            onChange={(id, c) => {
-              const cAny = (c || {}) as { city?: string; billing_city?: string; sector?: string };
-              set({
-                customer_id: id || "",
-                customer_name: c?.company || "",
-                customer_phone: c?.phone || "",
-                customer_email: c?.email || "",
-                customer_address: c?.billing_address || c?.address || "",
-                sector: cAny.sector || "",
-                location: cAny.billing_city || cAny.city || c?.state || "",
-              });
-            }}
-          />
-        </div>
-        <div><Label>Contact Number</Label><Input value={form.customer_phone} onChange={(e) => set({ customer_phone: e.target.value })} /></div>
-        <div><Label>Email</Label><Input type="email" value={form.customer_email} onChange={(e) => set({ customer_email: e.target.value })} /></div>
-        <div><Label>Sector / Colony Name</Label><Input value={form.sector} onChange={(e) => set({ sector: e.target.value })} placeholder="e.g. Sector 61 / DLF Phase 3" /></div>
-        <div><Label>City / Area</Label><Input value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="City or area" /></div>
-        <div className="md:col-span-2"><Label>Address</Label><Textarea rows={2} value={form.customer_address} onChange={(e) => set({ customer_address: e.target.value })} /></div>
-
-        {/* Model Section (now below Customer) */}
-        <div className="md:col-span-2 pt-2 border-t" />
-        <div>
-          <Label>Model</Label>
-          <ProductPicker
-            value={form.product_id}
-            onChange={(id, p) => {
-              const modelName = p?.model || p?.name || "";
-              const brand = p?.brand || "";
-              set({
-                product_id: id || "",
-                product: modelName,
-                ...(brand ? { oem_brand: brand } : {}),
-              });
-            }}
-          />
-        </div>
-        <div>
-          <Label>Serial Number</Label>
-          <Input value={form.serial_no} onChange={(e) => set({ serial_no: e.target.value.toUpperCase() })} placeholder="e.g. APC2024XYZ" className="font-mono" />
-        </div>
-        <div>
-          <Label>Priority</Label>
-          <Select value={form.priority} onValueChange={(v) => set({ priority: v })}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="md:col-span-2"><Label>Complaint / Issue Description</Label><Textarea rows={3} value={form.complaint} onChange={(e) => set({ complaint: e.target.value })} /></div>
-        <div className="md:col-span-2">
-          <Label>Special Instruction <span className="text-xs text-muted-foreground">(visible as blinking ribbon)</span></Label>
-          <Textarea rows={2} value={form.special_instruction} onChange={(e) => set({ special_instruction: e.target.value })} placeholder="Critical handling notes for the engineer (optional)" />
-        </div>
-        <div className="md:col-span-2">
-          <Label>Preferred Visit Date & Time <span className="text-xs text-muted-foreground">(optional)</span></Label>
-          <Input type="datetime-local" value={form.preferred_visit_datetime} onChange={(e) => set({ preferred_visit_datetime: e.target.value })} />
-        </div>
-
-        <div className="md:col-span-2 pt-2 border-t" />
-        <div className="md:col-span-2 flex items-center justify-between">
-          <div>
-            <Label className="text-base">Defective Parts Received <span className="text-xs text-muted-foreground font-normal">(from customer)</span></Label>
-            <p className="text-xs text-muted-foreground">Capture defective material received from the customer.</p>
-          </div>
+      <FormSection
+        title="Defective Parts Received"
+        description="From customer"
+        defaultOpen={defectiveOn}
+        right={
           <div className="flex items-center gap-2">
             <Switch checked={defectiveOn} onCheckedChange={(v) => { setDefectiveOn(v); if (!v) setDefectiveParts([]); else if (defectiveParts.length === 0) addDef(); }} />
-            <span className="text-sm text-muted-foreground">{defectiveOn ? "ON" : "OFF"}</span>
+            <span className="text-xs text-muted-foreground">{defectiveOn ? "ON" : "OFF"}</span>
           </div>
-        </div>
-        {defectiveOn && (
-          <div className="md:col-span-2 space-y-2">
+        }
+      >
+        {defectiveOn ? (
+          <div className="space-y-2">
             {defectiveParts.length === 0 && <p className="text-sm text-muted-foreground">No defective parts added yet.</p>}
             {defectiveParts.map((p, i) => (
               <div key={i} className="rounded-md border p-2">
-                <div className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-12 md:col-span-2">
-                    <Label>Oracle #</Label>
-                    <Input value={p.oracle_no || ""} onChange={(e) => updDef(i, { oracle_no: e.target.value.toUpperCase() })} placeholder="e.g. ORA-001" className="font-mono" />
-                  </div>
-                  <div className="col-span-12 md:col-span-2">
-                    <Label>Part / Item</Label>
+                <FormGrid>
+                  <FormField label="Oracle #" size="sm">
+                    <Input value={p.oracle_no || ""} onChange={(e) => updDef(i, { oracle_no: e.target.value.toUpperCase() })} placeholder="ORA-001" className="font-mono" />
+                  </FormField>
+                  <FormField label="Part / Item" size="md">
                     <TicketPartPicker
                       ticketProduct={form.product}
                       value={p.model_no || p.name}
                       onSelect={(item) => updDef(i, { name: item.name, model_no: item.model || item.name })}
                     />
-                  </div>
-                  <div className="col-span-12 md:col-span-2"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} /></div>
-                  <div className="col-span-12 md:col-span-2"><Label>Serial No</Label><Input value={p.serial || ""} onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
-                  <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} /></div>
-                  <div className="col-span-6 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} /></div>
-                  <div className="col-span-2 md:col-span-1 flex">
+                  </FormField>
+                  <FormField label="Model / Part No" size="sm">
+                    <Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} />
+                  </FormField>
+                  <FormField label="Serial No" size="sm">
+                    <Input value={p.serial || ""} onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })} className="font-mono" />
+                  </FormField>
+                  <FormField label="Qty" size="xs">
+                    <Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} />
+                  </FormField>
+                  <FormField label="Remarks" size="md">
+                    <Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} />
+                  </FormField>
+                  <FormField label=" " size="xs">
                     <Button type="button" size="icon" variant="ghost" onClick={() => delDef(i)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
-                  </div>
-                </div>
+                  </FormField>
+                </FormGrid>
               </div>
             ))}
             <Button type="button" size="sm" variant="outline" onClick={addDef}>
               <Plus className="h-4 w-4 mr-1" />Add defective part
             </Button>
           </div>
-        )}
+        ) : null}
+      </FormSection>
 
-        <div className="md:col-span-2 pt-2 border-t" />
-        <div className="md:col-span-2 flex items-center justify-between">
-          <div>
-            <Label className="text-base">Good Parts Used <span className="text-xs text-muted-foreground font-normal">(issued to customer)</span></Label>
-            <p className="text-xs text-muted-foreground">Capture replacement material issued to the customer.</p>
-          </div>
+      <FormSection
+        title="Good Parts Used"
+        description="Issued to customer"
+        defaultOpen={goodOn}
+        right={
           <div className="flex items-center gap-2">
             <Switch checked={goodOn} onCheckedChange={(v) => { setGoodOn(v); if (!v) setGoodParts([]); else if (goodParts.length === 0) addGood(); }} />
-            <span className="text-sm text-muted-foreground">{goodOn ? "ON" : "OFF"}</span>
+            <span className="text-xs text-muted-foreground">{goodOn ? "ON" : "OFF"}</span>
           </div>
-        </div>
-        {goodOn && (
-          <div className="md:col-span-2 space-y-2">
+        }
+      >
+        {goodOn ? (
+          <div className="space-y-2">
             {goodParts.length === 0 && <p className="text-sm text-muted-foreground">No good parts added yet.</p>}
             {goodParts.map((p, i) => (
               <div key={i} className="rounded-md border p-2">
-                <div className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-12 md:col-span-3">
-                    <Label>Part / Item</Label>
+                <FormGrid>
+                  <FormField label="Part / Item" size="md">
                     <TicketPartPicker
                       ticketProduct={form.product}
                       value={p.model_no || p.name}
                       onSelect={(item) => updGood(i, { name: item.name, model_no: item.model || item.name })}
                     />
-                  </div>
-                  <div className="col-span-12 md:col-span-3"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} /></div>
-                  <div className="col-span-12 md:col-span-2"><Label>Serial No</Label><Input value={p.serial || ""} onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
-                  <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} /></div>
-                  <div className="col-span-6 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} /></div>
-                  <div className="col-span-2 md:col-span-1 flex">
+                  </FormField>
+                  <FormField label="Model / Part No" size="sm">
+                    <Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} />
+                  </FormField>
+                  <FormField label="Serial No" size="sm">
+                    <Input value={p.serial || ""} onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })} className="font-mono" />
+                  </FormField>
+                  <FormField label="Qty" size="xs">
+                    <Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} />
+                  </FormField>
+                  <FormField label="Remarks" size="md">
+                    <Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} />
+                  </FormField>
+                  <FormField label=" " size="xs">
                     <Button type="button" size="icon" variant="ghost" onClick={() => delGood(i)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
-                  </div>
-                </div>
+                  </FormField>
+                </FormGrid>
               </div>
             ))}
             <Button type="button" size="sm" variant="outline" onClick={addGood}>
               <Plus className="h-4 w-4 mr-1" />Add good part
             </Button>
           </div>
-        )}
+        ) : null}
+      </FormSection>
 
-        <div className="md:col-span-2 flex justify-end gap-2">
-          <Button onClick={submit} disabled={busy} size="lg">Create Ticket</Button>
-        </div>
+      <div className="hidden sm:flex justify-end gap-2 pt-2">
+        <Button onClick={submit} disabled={busy}>{busy ? "Saving…" : "Create Ticket"}</Button>
+      </div>
 
-        <Dialog open={addingType} onOpenChange={setAddingType}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add New Call Type</DialogTitle></DialogHeader>
-            <Input autoFocus value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} placeholder="Call type name" onKeyDown={(e) => e.key === "Enter" && addCallType()} />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddingType(false)}>Cancel</Button>
-              <Button onClick={addCallType}><Plus className="h-4 w-4 mr-1" />Add</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      <Dialog open={addingType} onOpenChange={setAddingType}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add New Call Type</DialogTitle></DialogHeader>
+          <Input autoFocus value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} placeholder="Call type name" onKeyDown={(e) => e.key === "Enter" && addCallType()} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddingType(false)}>Cancel</Button>
+            <Button onClick={addCallType}><Plus className="h-4 w-4 mr-1" />Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <Dialog open={addingBrand} onOpenChange={setAddingBrand}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add New OEM Brand</DialogTitle></DialogHeader>
-            <Input autoFocus value={newBrandName} onChange={(e) => setNewBrandName(e.target.value)} placeholder="Brand name" onKeyDown={(e) => e.key === "Enter" && addOemBrand()} />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddingBrand(false)}>Cancel</Button>
-              <Button onClick={addOemBrand}><Plus className="h-4 w-4 mr-1" />Add</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
+      <Dialog open={addingBrand} onOpenChange={setAddingBrand}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add New OEM Brand</DialogTitle></DialogHeader>
+          <Input autoFocus value={newBrandName} onChange={(e) => setNewBrandName(e.target.value)} placeholder="Brand name" onKeyDown={(e) => e.key === "Enter" && addOemBrand()} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddingBrand(false)}>Cancel</Button>
+            <Button onClick={addOemBrand}><Plus className="h-4 w-4 mr-1" />Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <StickyMobileActions>
+        <Button onClick={submit} disabled={busy} className="flex-1">{busy ? "Saving…" : "Create Ticket"}</Button>
+      </StickyMobileActions>
+    </FormShell>
   );
 }
