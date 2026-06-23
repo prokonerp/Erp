@@ -134,7 +134,7 @@ function AppLayout() {
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + "/");
   const currentSearchTab = (() => {
     if (typeof window === "undefined") return undefined;
-    const sp = new URLSearchParams(location.searchStr ?? window.location.search);
+    const sp = new URLSearchParams(window.location.search);
     return sp.get("tab") ?? undefined;
   })();
   const isMasterTabActive = (path: string, tab?: string) => {
