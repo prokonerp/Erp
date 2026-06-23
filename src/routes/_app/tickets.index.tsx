@@ -256,17 +256,16 @@ function TicketsList() {
 
           <div className="overflow-x-auto border rounded-md">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left">
-                <tr>
+              <thead className="bg-muted/50">
+                <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="p-2">Case ID</th>
                   <th className="p-2">Type</th>
-                  <th className="p-2 w-16">Tag</th>
-                  <th className="p-2 w-16">Pr.</th>
+                  <th className="p-2 w-14">Tag</th>
+                  <th className="p-2 w-14">Pr.</th>
                   <th className="p-2 w-20">Timer</th>
                   <th className="p-2">Customer</th>
                   <th className="p-2">Model / Serial</th>
-                  <th className="p-2">Sector / Colony</th>
-                  <th className="p-2">City / Area</th>
+                  <th className="p-2">Sector · City</th>
                   <th className="p-2">Engineer</th>
                   <th className="p-2">Raised By</th>
                   <th className="p-2">Status</th>
@@ -275,12 +274,12 @@ function TicketsList() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={13} className="p-4 text-muted-foreground">Loading…</td></tr>
+                  <tr><td colSpan={12} className="p-4 text-muted-foreground">Loading…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={13} className="p-4 text-muted-foreground">No tickets.</td></tr>
+                  <tr><td colSpan={12} className="p-4 text-muted-foreground">No tickets.</td></tr>
                 ) : filtered.map((r) => (
-                  <tr key={r.id} className="border-t hover:bg-muted/30">
-                    <td className="p-2 font-mono">
+                  <tr key={r.id} className="border-t align-top hover:bg-muted/30">
+                    <td className="p-2 font-mono text-xs whitespace-nowrap">
                       {(r.has_special_activity || (r.special_instruction && r.special_instruction.trim())) && (
                         r.special_instruction_acknowledged ? (
                           <div className="mb-1 inline-flex items-center gap-1 rounded border border-green-400 bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-green-800" title="Special instruction acknowledged">
@@ -292,9 +291,9 @@ function TicketsList() {
                           </div>
                         )
                       )}
-                      <div>{r.case_id}</div>
+                      <div className="font-semibold text-foreground">{r.case_id}</div>
                     </td>
-                    <td className="p-2">{r.call_type}</td>
+                    <td className="p-2 text-xs whitespace-nowrap">{r.call_type}</td>
                     <td className="p-2">
                       {r.oem_call ? (
                         <Badge className="bg-purple-100 text-purple-800" variant="secondary">OEM</Badge>
@@ -319,16 +318,18 @@ function TicketsList() {
                       })()}
                     </td>
                     <td className="p-2">
-                      <div>{r.customer_name}</div>
-                      <div className="text-xs text-muted-foreground">{r.customer_phone}</div>
+                      <div className="text-sm font-semibold text-foreground leading-tight">{r.customer_name}</div>
+                      <div className="text-[11px] text-muted-foreground leading-tight font-mono">{r.customer_phone || "—"}</div>
                     </td>
                     <td className="p-2">
-                      <div>{r.product || "—"}</div>
-                      <div className="text-xs text-muted-foreground font-mono">{r.serial_no}</div>
+                      <div className="text-sm font-semibold text-foreground leading-tight">{r.product || "—"}</div>
+                      <div className="text-[11px] text-muted-foreground leading-tight font-mono">{r.serial_no || "—"}</div>
                     </td>
-                    <td className="p-2">{r.sector || "—"}</td>
-                    <td className="p-2">{r.location || "—"}</td>
-                    <td className="p-2">{r.assigned_engineer_name || <span className="text-muted-foreground">Unassigned</span>}</td>
+                    <td className="p-2 whitespace-nowrap">
+                      <div className="text-sm leading-tight">{r.sector || "—"}</div>
+                      <div className="text-[11px] text-muted-foreground leading-tight">{r.location || "—"}</div>
+                    </td>
+                    <td className="p-2 text-xs whitespace-nowrap">{r.assigned_engineer_name || <span className="text-muted-foreground">Unassigned</span>}</td>
                     <td className="p-2 text-xs">
                       {r.raised_by_type === "external" ? (
                         <Badge variant="outline">Customer</Badge>

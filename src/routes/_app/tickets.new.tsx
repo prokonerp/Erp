@@ -326,7 +326,7 @@ function NewTicket() {
 
       <FormSection title="Customer" defaultOpen>
         <FormGrid>
-          <FormField label="Customer (from Master)" required size="full">
+          <FormField label="Customer (from Master)" required size="lg">
             <CustomerPicker
               value={form.customer_id}
               required
@@ -347,13 +347,13 @@ function NewTicket() {
           <FormField label="Contact Number" name="customer_phone" size="sm">
             <Input value={form.customer_phone} onChange={(e) => set({ customer_phone: e.target.value })} />
           </FormField>
-          <FormField label="Email" name="customer_email">
+          <FormField label="Email" name="customer_email" size="md">
             <Input type="email" value={form.customer_email} onChange={(e) => set({ customer_email: e.target.value })} />
           </FormField>
-          <FormField label="Sector / Colony" name="sector">
+          <FormField label="Sector / Colony" name="sector" size="sm">
             <Input value={form.sector} onChange={(e) => set({ sector: e.target.value })} placeholder="e.g. Sector 61" />
           </FormField>
-          <FormField label="City / Area" name="location">
+          <FormField label="City / Area" name="location" size="sm">
             <Input value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="City" />
           </FormField>
           <FormField label="Address" size="lg">
