@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse, Truck, PackageCheck, Send } from "lucide-react";
+import { ChevronDown, FileText, ListChecks, ShieldCheck, Briefcase, Ticket, Upload, Database, BarChart3, ClipboardList, Warehouse, Truck, PackageCheck, Send, LayoutDashboard } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,6 +64,7 @@ function AppLayout() {
   if (!session) return <Navigate to="/auth" />;
 
   const allNav: { to: string; label: string; icon: any; module?: ModuleKey; adminOnly?: boolean }[] = [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/masters", label: "Masters", icon: Database, module: "customers" },
     { to: "/material-movement", label: "Material Movement", icon: Truck, module: "gatepass" },
     { to: "/amc", label: "AMC", icon: ShieldCheck, module: "amc" },
