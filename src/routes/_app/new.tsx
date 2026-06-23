@@ -3,14 +3,13 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { ProductPicker } from "@/components/ProductPicker";
+import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 
 export const Route = createFileRoute("/_app/new")({
   component: NewGatepass,
@@ -72,19 +71,26 @@ function NewGatepass() {
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader><CardTitle>New Gatepass</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>Date</Label><Input type="date" value={form.gatepass_date} onChange={(e) => setForm({ ...form, gatepass_date: e.target.value })} /></div>
-          <div><Label>Time</Label><Input type="time" value={form.gatepass_time} onChange={(e) => setForm({ ...form, gatepass_time: e.target.value })} /></div>
-          <div><Label>Person Taking Material *</Label><Input value={form.person_name} onChange={(e) => setForm({ ...form, person_name: e.target.value })} /></div>
-          <div><Label>Company / Department</Label><Input value={form.person_company} onChange={(e) => setForm({ ...form, person_company: e.target.value })} /></div>
-          <div><Label>Contact No.</Label><Input value={form.contact_no} onChange={(e) => setForm({ ...form, contact_no: e.target.value })} /></div>
-          <div><Label>Vehicle No.</Label><Input value={form.vehicle_no} onChange={(e) => setForm({ ...form, vehicle_no: e.target.value })} /></div>
-          <div><Label>Destination</Label><Input value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} /></div>
-          <div>
-            <Label>Type</Label>
+    <FormShell
+      title="New Gatepass"
+      description="Record material movement out of the premises."
+      actions={
+        <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
+          <Save className="h-4 w-4" />
+          <span className="hidden sm:inline">Save &amp; Print</span>
+          <span className="sm:hidden">Save</span>
+        </Button>
+      }
+    >
+      <FormSection title="Gatepass Details" defaultOpen>
+        <FormGrid>
+          <FormField size="sm" label="Date">
+            <Input type="date" value={form.gatepass_date} onChange={(e) => setForm({ ...form, gatepass_date: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Time">
+            <Input type="time" value={form.gatepass_time} onChange={(e) => setForm({ ...form, gatepass_time: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Type">
             <Select value={form.return_type} onValueChange={(v) => setForm({ ...form, return_type: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -92,57 +98,101 @@ function NewGatepass() {
                 <SelectItem value="Non-Returnable">Non-Returnable</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="md:col-span-2"><Label>Purpose</Label><Input value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} /></div>
-        </CardContent>
-      </Card>
+          </FormField>
+          <FormField size="sm" label="Vehicle No.">
+            <Input value={form.vehicle_no} onChange={(e) => setForm({ ...form, vehicle_no: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Person Taking Material" required>
+            <Input value={form.person_name} onChange={(e) => setForm({ ...form, person_name: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Company / Department">
+            <Input value={form.person_company} onChange={(e) => setForm({ ...form, person_company: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Contact No.">
+            <Input value={form.contact_no} onChange={(e) => setForm({ ...form, contact_no: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Destination">
+            <Input value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} />
+          </FormField>
+          <FormField size="full" label="Purpose">
+            <Input value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Items</CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setItems([...items, empty()])}><Plus className="h-4 w-4 mr-1" />Add row</Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {items.map((it, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 items-end border-b pb-3">
-              <div className="col-span-12 md:col-span-4">
-                <Label>Product</Label>
-                <ProductPicker
-                  value={it.product_id}
-                  required
-                  onChange={(id, p) => updateItem(i, {
-                    product_id: id || "",
-                    product: p?.name || "",
-                    unit: p?.unit || it.unit || "Nos",
-                  })}
-                />
-              </div>
-              <div className="col-span-6 md:col-span-3"><Label>Serial No.</Label><Input value={it.serial_no} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></div>
-              <div className="col-span-3 md:col-span-1"><Label>Qty</Label><Input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })} /></div>
-              <div className="col-span-3 md:col-span-1"><Label>Unit</Label><Input value={it.unit} onChange={(e) => updateItem(i, { unit: e.target.value })} /></div>
-              <div className="col-span-10 md:col-span-2"><Label>Remarks</Label><Input value={it.remarks} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></div>
-              <div className="col-span-2 md:col-span-1">
-                <Button size="icon" variant="ghost" onClick={() => setItems(items.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <FormSection
+        title="Items"
+        description={`${items.length} row(s)`}
+        defaultOpen
+        right={
+          <Button type="button" size="sm" variant="outline" onClick={() => setItems([...items, empty()])} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" /> Add Row
+          </Button>
+        }
+      >
+        <div className="overflow-x-auto -mx-2 sm:mx-0">
+          <table className="w-full text-sm border-separate border-spacing-0 min-w-[720px]">
+            <thead className="sticky top-0 z-10 bg-muted/60">
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="px-2 py-1.5 w-10">#</th>
+                <th className="px-2 py-1.5 min-w-[220px]">Product</th>
+                <th className="px-2 py-1.5">Serial No.</th>
+                <th className="px-2 py-1.5 w-20">Qty</th>
+                <th className="px-2 py-1.5 w-20">Unit</th>
+                <th className="px-2 py-1.5 min-w-[160px]">Remarks</th>
+                <th className="px-2 py-1.5 w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, i) => (
+                <tr key={i} className="align-top">
+                  <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <ProductPicker
+                      value={it.product_id}
+                      required
+                      onChange={(id, p) => updateItem(i, {
+                        product_id: id || "",
+                        product: p?.name || "",
+                        unit: p?.unit || it.unit || "Nos",
+                      })}
+                    />
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.unit} onChange={(e) => updateItem(i, { unit: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.remarks} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60 text-right">
+                    <Button type="button" size="icon" variant="ghost" onClick={() => setItems(items.filter((_, idx) => idx !== i))} disabled={items.length === 1} aria-label="Remove row">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle>Approvals & Notes</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>Prepared By</Label><Input value={form.prepared_by} onChange={(e) => setForm({ ...form, prepared_by: e.target.value })} /></div>
-          <div><Label>Authorised By</Label><Input value={form.authorised_by} onChange={(e) => setForm({ ...form, authorised_by: e.target.value })} /></div>
-          <div className="md:col-span-2"><Label>Remarks</Label><Textarea value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} rows={2} /></div>
-        </CardContent>
-      </Card>
+      <FormSection title="Approvals & Notes">
+        <FormGrid>
+          <FormField size="md" label="Prepared By">
+            <Input value={form.prepared_by} onChange={(e) => setForm({ ...form, prepared_by: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Authorised By">
+            <Input value={form.authorised_by} onChange={(e) => setForm({ ...form, authorised_by: e.target.value })} />
+          </FormField>
+          <FormField size="full" label="Remarks">
+            <Textarea value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} rows={2} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-      <div className="flex justify-end gap-2">
-        <Button size="lg" onClick={submit} disabled={busy}>Save & Print Challan</Button>
-      </div>
-    </div>
+      <StickyMobileActions>
+        <Button type="button" size="sm" onClick={submit} disabled={busy} className="flex-1 gap-1.5">
+          <Save className="h-4 w-4" /> Save &amp; Print
+        </Button>
+      </StickyMobileActions>
+    </FormShell>
   );
 }
