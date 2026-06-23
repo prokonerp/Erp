@@ -1,10 +1,9 @@
-import { createFileRoute, useNavigate, useSearch, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,6 +13,7 @@ import { INDENT_TYPES, buildOraclesFromDefectiveParts, syncTicketGoodPartsFromIn
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
+import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 
 const searchSchema = z.object({ ticket_id: z.string().optional() });
 
@@ -168,64 +168,86 @@ function NewIndent() {
   const oem = getOemLogo(form.company);
 
   return (
-    <div className="space-y-4">
+    <FormShell
+      title="New Indent"
+      description="Create an Oracle indent from the linked OEM ticket"
+      storageKey="indent-form-density"
+      actions={
+        <>
+          <Link to="/tickets/$id" params={{ id: form.ticket_id || "" }}>
+            <Button variant="ghost" size="sm" disabled={!form.ticket_id}>
+              <ArrowLeft className="h-4 w-4 mr-1" />Back
+            </Button>
+          </Link>
+          <Button size="sm" onClick={save} disabled={busy}>
+            <Save className="h-4 w-4 mr-1" />{busy ? "Saving…" : "Save Indent"}
+          </Button>
+        </>
+      }
+    >
       {/* Branded header */}
-      <Card>
-        <CardContent className="py-3 flex items-center justify-between gap-3 flex-wrap">
+      <Card className="fk-section">
+        <CardContent className="py-2.5 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <img src={prokonLogo.url} alt="Prokon" className="h-10 w-auto object-contain" />
+            <img src={prokonLogo.url} alt="Prokon" className="h-9 w-auto object-contain" />
             <div>
-              <div className="font-semibold leading-tight">Prokon Hi-Tech Systems</div>
+              <div className="text-sm font-semibold leading-tight">Prokon Hi-Tech Systems</div>
               <div className="text-xs text-muted-foreground">New Indent</div>
             </div>
           </div>
-          {oem && <img src={oem.url} alt={oem.alt} className="h-9 w-auto object-contain" />}
+          {oem && <img src={oem.url} alt={oem.alt} className="h-8 w-auto object-contain" />}
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-between">
-        <Link to="/tickets/$id" params={{ id: form.ticket_id || "" }}>
-          <Button variant="ghost" size="sm" disabled={!form.ticket_id}>
-            <ArrowLeft className="h-4 w-4 mr-1" />Back to Ticket
-          </Button>
-        </Link>
-        <Button onClick={save} disabled={busy}>
-          <Save className="h-4 w-4 mr-1" />{busy ? "Saving…" : "Save Indent"}
-        </Button>
-      </div>
+      <FormSection title="Linked Ticket (auto)" defaultOpen>
+        <FormGrid>
+          <FormField label="Case ID" name="case_id">
+            <Input value={form.case_id} readOnly className="font-mono bg-muted/50" />
+          </FormField>
+          <FormField label="OEM Case ID" name="oem_case_id">
+            <Input value={form.oem_case_id} readOnly className="font-mono bg-muted/50" />
+          </FormField>
+          <FormField label="Company (OEM)" name="company">
+            <Input value={form.company} onChange={(e) => set({ company: e.target.value })} />
+          </FormField>
+          <FormField label="Product Model" name="product_model">
+            <Input value={form.product_model} readOnly className="bg-muted/50" />
+          </FormField>
+          <FormField label="Product Serial" name="product_serial">
+            <Input value={form.product_serial} readOnly className="font-mono bg-muted/50" />
+          </FormField>
+          <FormField label="Engineer" name="engineer_name">
+            <Input value={form.engineer_name} onChange={(e) => set({ engineer_name: e.target.value })} />
+          </FormField>
+          <FormField label="Problem Reported" size="full">
+            <Textarea rows={2} value={form.problem_reported} onChange={(e) => set({ problem_reported: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-      <Card>
-        <CardHeader><CardTitle className="text-base">Linked Ticket (auto)</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div><Label>Case ID</Label><Input value={form.case_id} readOnly className="font-mono bg-muted/50" /></div>
-          <div><Label>OEM Case ID</Label><Input value={form.oem_case_id} readOnly className="font-mono bg-muted/50" /></div>
-          <div><Label>Company (OEM)</Label><Input value={form.company} onChange={(e) => set({ company: e.target.value })} /></div>
-          <div><Label>Product Model</Label><Input value={form.product_model} readOnly className="bg-muted/50" /></div>
-          <div><Label>Product Serial</Label><Input value={form.product_serial} readOnly className="font-mono bg-muted/50" /></div>
-          <div><Label>Engineer</Label><Input value={form.engineer_name} onChange={(e) => set({ engineer_name: e.target.value })} /></div>
-          <div className="md:col-span-3"><Label>Problem Reported</Label><Textarea rows={2} value={form.problem_reported} onChange={(e) => set({ problem_reported: e.target.value })} /></div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Indent</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div><Label>Indent City</Label><Input value={form.indent_city} onChange={(e) => set({ indent_city: e.target.value })} /></div>
-          <div><Label>Indent Date</Label><Input type="date" value={form.indent_date} onChange={(e) => set({ indent_date: e.target.value })} /></div>
-          <div>
-            <Label>Indent Type</Label>
+      <FormSection title="Indent Details" defaultOpen>
+        <FormGrid>
+          <FormField label="Indent City" name="indent_city">
+            <Input value={form.indent_city} onChange={(e) => set({ indent_city: e.target.value })} />
+          </FormField>
+          <FormField label="Indent Date" name="indent_date">
+            <Input type="date" value={form.indent_date} onChange={(e) => set({ indent_date: e.target.value })} />
+          </FormField>
+          <FormField label="Indent Type" name="indent_type" size="sm">
             <Select value={form.indent_type} onValueChange={(v) => set({ indent_type: v as IndentType })}>
               <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
               <SelectContent>
                 {INDENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div className="md:col-span-3"><Label>Remarks</Label><Textarea rows={2} value={form.remarks} onChange={(e) => set({ remarks: e.target.value })} /></div>
-        </CardContent>
-      </Card>
+          </FormField>
+          <FormField label="Remarks" size="full">
+            <Textarea rows={2} value={form.remarks} onChange={(e) => set({ remarks: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pt-1">
         <h2 className="text-lg font-semibold">Oracles <span className="text-xs font-normal text-muted-foreground">(auto from Ticket Defective Parts)</span></h2>
         {form.oracles_data.length > 0 && (
           <div className="flex items-center gap-2">
@@ -255,6 +277,12 @@ function NewIndent() {
           onRemove={() => set({ oracles_data: form.oracles_data.filter((_, i) => i !== idx) })}
         />
       ))}
-    </div>
+
+      <StickyMobileActions>
+        <Button onClick={save} disabled={busy} className="flex-1">
+          <Save className="h-4 w-4 mr-1" />{busy ? "Saving…" : "Save Indent"}
+        </Button>
+      </StickyMobileActions>
+    </FormShell>
   );
 }
