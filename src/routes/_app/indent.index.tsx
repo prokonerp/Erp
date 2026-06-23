@@ -127,7 +127,6 @@ function IndentList() {
                 const age = formatAge(r.created_at, cAt);
                 const oracles = r.oracles_data || [];
                 const oClosed = oracles.filter((o) => oracleStatus(o) === "closed").length;
-                const dateShort = r.indent_date ? r.indent_date.slice(5) : "—";
                 return (
                 <tr key={r.id} className="border-t align-top hover:bg-muted/30">
                   <td className="p-2 font-mono text-xs whitespace-nowrap">{r.indent_no}</td>
@@ -138,7 +137,7 @@ function IndentList() {
                   </td>
                   <td className="p-2">
                     {oracles.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">No oracles</span>
+                      <span className="text-sm text-muted-foreground">No oracles</span>
                     ) : (
                       <div className="space-y-0.5">
                         {oracles.map((o, i) => {
@@ -147,21 +146,21 @@ function IndentList() {
                           const model = def?.def_model_no || r.product_model || "—";
                           const serial = def?.def_serial_no || r.product_serial || "—";
                           return (
-                            <div key={i} className="flex items-center gap-1.5 text-xs whitespace-nowrap leading-tight">
+                            <div key={i} className="flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap leading-tight">
                               <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${st2 === "closed" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                              <span className="font-mono text-[11px] font-medium">{o.oracle_no || `#${i + 1}`}</span>
-                              <span className="text-muted-foreground">·</span>
+                              <span className="font-mono">{o.oracle_no || `#${i + 1}`}</span>
+                              <span className="text-muted-foreground font-normal">·</span>
                               <span>{model}</span>
-                              <span className="text-muted-foreground">/</span>
-                              <span className="font-mono text-[11px]">{serial}</span>
+                              <span className="text-muted-foreground font-normal">/</span>
+                              <span className="font-mono">{serial}</span>
                             </div>
                           );
                         })}
-                        <div className="text-[10px] text-muted-foreground font-medium">{oClosed}/{oracles.length} closed</div>
+                        <div className="text-xs text-muted-foreground font-medium">{oClosed}/{oracles.length} closed</div>
                       </div>
                     )}
                   </td>
-                  <td className="p-2 text-xs whitespace-nowrap" title={r.indent_date || ""}>{dateShort}</td>
+                  <td className="p-2 text-sm whitespace-nowrap" title={r.indent_date || ""}>{fmtDate(r.indent_date)}</td>
                   <td className="p-2"><Badge variant={st === "closed" ? "default" : "secondary"}>{st === "closed" ? "Closed" : "Open"}</Badge></td>
                   <td className="p-2 text-xs whitespace-nowrap">{compactAge(age)}</td>
                   <td className="p-2"><Badge variant="secondary" className="whitespace-nowrap">{indentTypeLabel(r.indent_type)}</Badge></td>
@@ -191,6 +190,17 @@ function compactAge(age: string): string {
     .replace(/\s*Sec(ond)?s?/gi, "s")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso + "T00:00:00");
+  if (isNaN(d.getTime())) return iso;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mmm = MONTHS[d.getMonth()];
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mmm}-${yy}`;
 }
 
 function Kpi({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
