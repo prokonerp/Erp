@@ -139,3 +139,389 @@ export function ChallanForm({ docType }: Props) {
     navigate({ to: "/challan/$id", params: { id: (data as { id: string }).id } });
   };
 
+  const totalQty = items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0);
+  const partyLabel = isOem ? "OEM" : "Customer";
+
+  const actions = (
+    <>
+      <Button type="button" variant="outline" size="sm" onClick={openReview} disabled={busy} className="gap-1.5">
+        <Eye className="h-4 w-4" />
+        <span className="hidden sm:inline">Review</span>
+      </Button>
+      <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
+        <Save className="h-4 w-4" />
+        <span className="hidden sm:inline">Save &amp; Print</span>
+        <span className="sm:hidden">Save</span>
+      </Button>
+    </>
+  );
+
+  return (
+    <FormShell
+      title={`New Delivery Challan — ${isOem ? "To OEM" : "To Customer"}`}
+      description="Capture document, party, transport, material and authorization details."
+      actions={actions}
+    >
+      <FormSection title="Document Information" defaultOpen>
+        <FormGrid>
+          <FormField size="sm" label="Challan Date" required>
+            <Input type="date" value={form.challan_date} onChange={(e) => setForm({ ...form, challan_date: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Dispatch Date">
+            <Input type="date" value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Status">
+            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Draft">Draft</SelectItem>
+                <SelectItem value="Submitted">Submitted</SelectItem>
+                <SelectItem value="Dispatched">Dispatched</SelectItem>
+                <SelectItem value="Cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField size="sm" label="Reference No.">
+            <Input value={form.reference_no} onChange={(e) => setForm({ ...form, reference_no: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Gate Pass No.">
+            <Input value={form.gate_pass_no} onChange={(e) => setForm({ ...form, gate_pass_no: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Sales Order No.">
+            <Input value={form.sales_order_no} onChange={(e) => setForm({ ...form, sales_order_no: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Customer PO No.">
+            <Input value={form.customer_po_no} onChange={(e) => setForm({ ...form, customer_po_no: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Invoice No.">
+            <Input value={form.invoice_no} onChange={(e) => setForm({ ...form, invoice_no: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
+
+      <FormSection title={`${partyLabel} Information`} defaultOpen>
+        <FormGrid>
+          <FormField size="full" label={isOem ? "OEM (from Vendor Master)" : "Customer (from Master)"} required>
+            {isOem ? (
+              <VendorPicker value={partyId} onChange={applyVendor} required label="OEM" placeholder="Search OEM / vendor…" />
+            ) : (
+              <CustomerPicker value={partyId} onChange={applyCustomer} required placeholder="Search customer by name, mobile or GSTIN…" />
+            )}
+          </FormField>
+          <FormField size="md" label={`${partyLabel} Name`} required>
+            <Input value={form.party_name} readOnly className="bg-muted/40" />
+          </FormField>
+          <FormField size="md" label={`${partyLabel} Code`}>
+            <Input value={form.party_code} readOnly className="bg-muted/40" />
+          </FormField>
+          {isOem ? (
+            <FormField size="md" label="OEM Plant / Location">
+              <Input value={form.oem_plant} onChange={(e) => setForm({ ...form, oem_plant: e.target.value })} />
+            </FormField>
+          ) : (
+            <FormField size="md" label="GSTIN">
+              <Input value={form.gstin} readOnly className="bg-muted/40" />
+            </FormField>
+          )}
+          <FormField size="md" label="Contact Person">
+            <Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Contact Number">
+            <Input value={form.contact_number} onChange={(e) => setForm({ ...form, contact_number: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Email">
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </FormField>
+          {isOem && (
+            <FormField size="md" label="OEM Logo URL (optional)">
+              <Input placeholder="https://..." value={form.oem_logo_url} onChange={(e) => setForm({ ...form, oem_logo_url: e.target.value })} />
+            </FormField>
+          )}
+          <FormField size="full" label="Delivery Address">
+            <Textarea rows={2} value={form.delivery_address} onChange={(e) => setForm({ ...form, delivery_address: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
+
+      <FormSection title="Transport Details">
+        <FormGrid>
+          <FormField size="md" label="Transporter Name">
+            <Input value={form.transporter_name} onChange={(e) => setForm({ ...form, transporter_name: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Vehicle Number">
+            <Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Mode of Transport">
+            <Select value={form.mode_of_transport} onValueChange={(v) => setForm({ ...form, mode_of_transport: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {["Road","Rail","Air","Sea","Hand Delivery","Courier"].map((m) => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+          <FormField size="md" label="Driver Name">
+            <Input value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Driver Mobile">
+            <Input value={form.driver_mobile} onChange={(e) => setForm({ ...form, driver_mobile: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="LR / Consignment No.">
+            <Input value={form.lr_number} onChange={(e) => setForm({ ...form, lr_number: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="No. of Packages">
+            <Input value={form.num_packages} onChange={(e) => setForm({ ...form, num_packages: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Total Weight">
+            <Input value={form.total_weight} placeholder="e.g. 25 kg" onChange={(e) => setForm({ ...form, total_weight: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
+
+      <FormSection
+        title="Material Details"
+        description={`${items.length} row(s) • Total qty ${totalQty}`}
+        defaultOpen
+        right={
+          <Button type="button" size="sm" variant="outline" onClick={() => setItems([...items, emptyItem()])} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" /> Add Row
+          </Button>
+        }
+      >
+        <div className="overflow-x-auto -mx-2 sm:mx-0">
+          <table className="w-full text-sm border-separate border-spacing-0 min-w-[720px]">
+            <thead className="sticky top-0 z-10 bg-muted/60">
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th className="px-2 py-1.5 w-10">#</th>
+                <th className="px-2 py-1.5 min-w-[220px]">Product</th>
+                <th className="px-2 py-1.5">Description</th>
+                {isOem && <th className="px-2 py-1.5 w-32">Model No</th>}
+                {isOem && <th className="px-2 py-1.5 w-32">Serial No</th>}
+                <th className="px-2 py-1.5 w-20">UOM</th>
+                <th className="px-2 py-1.5 w-20">Qty</th>
+                <th className="px-2 py-1.5 w-28">Batch</th>
+                <th className="px-2 py-1.5 w-10"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, i) => (
+                <tr key={i} className="border-t border-border/60">
+                  <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
+                  <td className="px-2 py-1.5 align-top border-t border-border/60">
+                    <ProductMasterPicker
+                      onPick={(p) => updateItem(i, {
+                        part_no: p.sku || p.model || "",
+                        part_name: p.name,
+                        description: p.description || "",
+                        uom: p.unit || it.uom || "Nos",
+                        model_no: p.model || "",
+                      })}
+                    />
+                    {(it.part_no || it.part_name) && (
+                      <div className="mt-1 text-[11px] text-muted-foreground truncate">
+                        {[it.part_no, it.part_name].filter(Boolean).join(" — ")}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} />
+                  </td>
+                  {isOem && (
+                    <td className="px-2 py-1.5 border-t border-border/60">
+                      <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
+                    </td>
+                  )}
+                  {isOem && (
+                    <td className="px-2 py-1.5 border-t border-border/60">
+                      <Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} />
+                    </td>
+                  )}
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} />
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input value={it.batch_no} onChange={(e) => updateItem(i, { batch_no: e.target.value })} />
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60 text-right">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setItems(items.filter((_, idx) => idx !== i))}
+                      disabled={items.length === 1}
+                      aria-label="Remove row"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </FormSection>
+
+      <FormSection title="Remarks & Authorization">
+        <FormGrid>
+          <FormField size="md" label="Internal Remarks">
+            <Textarea rows={2} value={form.internal_remarks} onChange={(e) => setForm({ ...form, internal_remarks: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Dispatch Remarks">
+            <Textarea rows={2} value={form.dispatch_remarks} onChange={(e) => setForm({ ...form, dispatch_remarks: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Prepared By">
+            <Input value={form.prepared_by} onChange={(e) => setForm({ ...form, prepared_by: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Checked By">
+            <Input value={form.checked_by} onChange={(e) => setForm({ ...form, checked_by: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Approved By">
+            <Input value={form.approved_by} onChange={(e) => setForm({ ...form, approved_by: e.target.value })} />
+          </FormField>
+        </FormGrid>
+      </FormSection>
+
+      <StickyMobileActions>
+        <Button type="button" variant="outline" size="sm" onClick={openReview} disabled={busy} className="flex-1 gap-1.5">
+          <Eye className="h-4 w-4" /> Review
+        </Button>
+        <Button type="button" size="sm" onClick={submit} disabled={busy} className="flex-1 gap-1.5">
+          <Save className="h-4 w-4" /> Save
+        </Button>
+      </StickyMobileActions>
+
+      <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Review Delivery Challan — {isOem ? "To OEM" : "To Customer"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 text-sm">
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">Document Information</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                <ReviewField label="Challan Date" value={form.challan_date} />
+                <ReviewField label="Dispatch Date" value={form.dispatch_date} />
+                <ReviewField label="Status" value={form.status} />
+                <ReviewField label="Reference No." value={form.reference_no} />
+                <ReviewField label="Gate Pass No." value={form.gate_pass_no} />
+                <ReviewField label="Sales Order No." value={form.sales_order_no} />
+                <ReviewField label="Customer PO No." value={form.customer_po_no} />
+                <ReviewField label="Invoice No." value={form.invoice_no} />
+              </div>
+            </section>
+
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">{partyLabel} Information</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                <ReviewField label={`${partyLabel} Name`} value={form.party_name} />
+                <ReviewField label={`${partyLabel} Code`} value={form.party_code} />
+                {isOem ? (
+                  <ReviewField label="OEM Plant" value={form.oem_plant} />
+                ) : (
+                  <ReviewField label="GSTIN" value={form.gstin} />
+                )}
+                <ReviewField label="Contact Person" value={form.contact_person} />
+                <ReviewField label="Contact Number" value={form.contact_number} />
+                {!isOem && <ReviewField label="Email" value={form.email} />}
+                <ReviewField label="Delivery Address" value={form.delivery_address} className="col-span-2 md:col-span-3" />
+              </div>
+            </section>
+
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">Transport Details</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                <ReviewField label="Transporter" value={form.transporter_name} />
+                <ReviewField label="Vehicle No." value={form.vehicle_number} />
+                <ReviewField label="Mode" value={form.mode_of_transport} />
+                <ReviewField label="Driver Name" value={form.driver_name} />
+                <ReviewField label="Driver Mobile" value={form.driver_mobile} />
+                <ReviewField label="LR No." value={form.lr_number} />
+                <ReviewField label="Packages" value={form.num_packages} />
+                <ReviewField label="Total Weight" value={form.total_weight} />
+              </div>
+            </section>
+
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">Material Details</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="border p-1">Sr</th>
+                      <th className="border p-1">Part No</th>
+                      <th className="border p-1">Part Name</th>
+                      <th className="border p-1">Description</th>
+                      {isOem && <th className="border p-1">Model</th>}
+                      {isOem && <th className="border p-1">Serial</th>}
+                      <th className="border p-1">UOM</th>
+                      <th className="border p-1">Qty</th>
+                      <th className="border p-1">Batch</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.filter((it) => it.part_name.trim() || it.part_no.trim()).map((it, i) => (
+                      <tr key={i}>
+                        <td className="border p-1 text-center">{i + 1}</td>
+                        <td className="border p-1">{it.part_no}</td>
+                        <td className="border p-1">{it.part_name}</td>
+                        <td className="border p-1">{it.description}</td>
+                        {isOem && <td className="border p-1">{it.model_no}</td>}
+                        {isOem && <td className="border p-1">{it.serial_no}</td>}
+                        <td className="border p-1">{it.uom}</td>
+                        <td className="border p-1 text-right">{it.qty}</td>
+                        <td className="border p-1">{it.batch_no}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                Total Qty: <span className="font-medium text-foreground">{totalQty}</span>
+              </div>
+            </section>
+
+            {(form.internal_remarks || form.dispatch_remarks) && (
+              <section>
+                <h3 className="font-semibold mb-2 border-b pb-1">Remarks</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
+                  <ReviewField label="Internal" value={form.internal_remarks} />
+                  <ReviewField label="Dispatch" value={form.dispatch_remarks} />
+                </div>
+              </section>
+            )}
+
+            <section>
+              <h3 className="font-semibold mb-2 border-b pb-1">Authorization</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                <ReviewField label="Prepared By" value={form.prepared_by} />
+                <ReviewField label="Checked By" value={form.checked_by} />
+                <ReviewField label="Approved By" value={form.approved_by} />
+              </div>
+            </section>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewOpen(false)} disabled={busy}>
+              Back to Edit
+            </Button>
+            <Button onClick={submit} disabled={busy}>
+              {busy ? "Saving..." : "Confirm, Save & Print"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </FormShell>
+  );
+}
+
+function ReviewField({ label, value, className = "" }: { label: string; value?: string; className?: string }) {
+  return (
+    <div className={className}>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="font-medium break-words">{value || "—"}</div>
+    </div>
+  );
+}
