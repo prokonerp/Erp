@@ -42,6 +42,15 @@ function AppLayout() {
   const [forceChange, setForceChange] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mmOpen, setMmOpen] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    "Service Desk": true,
+    Customers: true,
+    Procurement: true,
+    Inventory: true,
+    Intelligence: true,
+    System: true,
+  });
   const fetchProfile = useServerFn(getMyProfile);
 
   async function loadProfile() {
@@ -143,7 +152,7 @@ function AppLayout() {
       <aside
         className={`fixed lg:static inset-y-0 left-0 z-50 w-60 bg-background border-r flex flex-col shrink-0 transform transition-transform duration-200 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        } ${sidebarHidden ? "lg:hidden" : ""}`}
       >
         {/* Logo */}
         <div className="h-14 border-b flex items-center justify-center px-4">
@@ -173,26 +182,94 @@ function AppLayout() {
           {/* Grouped items */}
           {groupOrder.map((g) => {
             const items = groupMap.get(g);
-            if (!items || items.length === 0) return null;
+            const renderMmHere = g === "Inventory" && showMm;
+            if ((!items || items.length === 0) && !renderMmHere) return null;
+            const isOpen = openGroups[g] !== false;
             return (
               <div key={g}>
-                <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5">
-                  {g}
-                </h3>
-                <div className="space-y-0.5">
-                  {items.map((n) => (
-                    <Link key={n.to} to={n.to} className={navLinkCls(isActive(n.to))}>
-                      <n.icon className="h-4 w-4 shrink-0" />
-                      {n.label}
-                    </Link>
-                  ))}
-                </div>
+                {/* Material Movement is inserted just BEFORE Inventory group */}
+                {g === "Inventory" && showMm && renderMaterialMovement()}
+                {items && items.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
+                      className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground"
+                    >
+                      {isOpen ? (
+                        <ChevronDown className="h-3 w-3 shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3 shrink-0" />
+                      )}
+                      <span>{g}</span>
+                    </button>
+                    {isOpen && (
+                      <div className="space-y-0.5">
+                        {items.map((n) => (
+                          <Link key={n.to} to={n.to} className={navLinkCls(isActive(n.to))}>
+                            <n.icon className="h-4 w-4 shrink-0" />
+                            {n.label}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             );
           })}
+        </nav>
+      </aside>
 
-          {/* Material Movement expandable group */}
-          {showMm && (
+      {/* Main area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top bar */}
+        <header
+          className="h-14 border-b flex items-center justify-between px-4 sticky top-0 z-30 bg-background/95 backdrop-blur print:hidden"
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden lg:inline-flex"
+            onClick={() => setSidebarHidden((v) => !v)}
+            aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+            title={sidebarHidden ? "Show menu" : "Hide menu"}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <div className="flex-1" />
+          <UserProfileMenu profile={profile} onProfileChange={loadProfile} />
+        </header>
+
+        {/* Content */}
+        <main className="p-4 md:p-6">
+          <Outlet />
+        </main>
+      </div>
+
+      <ChangePasswordDialog
+        open={forceChange}
+        onOpenChange={setForceChange}
+        forced
+        onChanged={() => {
+          setForceChange(false);
+          loadProfile();
+        }}
+      />
+    </div>
+  );
+
+  function renderMaterialMovement() {
+    return (
             <div>
               <button
                 type="button"
@@ -252,44 +329,6 @@ function AppLayout() {
                 </div>
               )}
             </div>
-          )}
-        </nav>
-      </aside>
-
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header
-          className="h-14 border-b flex items-center justify-between px-4 sticky top-0 z-30 bg-background/95 backdrop-blur print:hidden"
-        >
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Open menu"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-          <div className="flex-1" />
-          <UserProfileMenu profile={profile} onProfileChange={loadProfile} />
-        </header>
-
-        {/* Content */}
-        <main className="p-4 md:p-6">
-          <Outlet />
-        </main>
-      </div>
-
-      <ChangePasswordDialog
-        open={forceChange}
-        onOpenChange={setForceChange}
-        forced
-        onChanged={() => {
-          setForceChange(false);
-          loadProfile();
-        }}
-      />
-    </div>
-  );
+    );
+  }
 }
