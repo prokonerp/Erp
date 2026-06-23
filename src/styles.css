@@ -103,6 +103,116 @@
   white-space: nowrap;
 }
 
+/* =========================
+ * Global ERP-density input sizing
+ * Auto-constrains common input shapes across EVERY form in the app
+ * (whether or not it opts into FormKit). Search bars in headers are
+ * unaffected because they don't carry these name/type signals.
+ * ========================= */
+
+/* Compact by type — dates, times, numbers are always short values */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+  max-width: 160px;
+}
+input[type="number"],
+input[inputmode="numeric"],
+input[inputmode="decimal"] {
+  max-width: 120px;
+}
+
+/* Compact by semantic name — quantities, money, codes, statuses */
+input[name*="qty" i],
+input[name*="quantity" i],
+input[name*="tax" i],
+input[name*="rate" i],
+input[name*="price" i],
+input[name*="amount" i],
+input[name*="total" i],
+input[name*="cost" i],
+input[name*="value" i],
+input[name*="discount" i],
+input[name*="weight" i],
+input[name*="percent" i],
+input[name*="duration" i] {
+  max-width: 120px;
+}
+
+/* Short IDs / codes / phone numbers */
+input[name$="_no" i],
+input[name$="_id" i],
+input[name*="code" i],
+input[name*="sku" i],
+input[name*="gstin" i],
+input[name*="pan" i],
+input[name*="pin" i],
+input[name*="zip" i],
+input[name*="mobile" i],
+input[name*="phone" i],
+input[name*="contact_no" i],
+input[name*="serial" i],
+input[name*="model" i],
+input[name*="ref" i],
+input[name*="number" i] {
+  max-width: 200px;
+}
+
+/* Medium — names, customer, vendor, project, owner */
+input[name*="customer" i],
+input[name*="vendor" i],
+input[name*="supplier" i],
+input[name*="oem" i],
+input[name*="client" i],
+input[name*="contact_person" i],
+input[name*="assigned" i],
+input[name*="owner" i],
+input[name*="manager" i],
+input[name*="department" i],
+input[name*="branch" i],
+input[name*="warehouse" i],
+input[name*="location" i],
+input[name*="project" i],
+input[name*="city" i],
+input[name*="state" i],
+input[name*="country" i] {
+  max-width: 260px;
+}
+
+/* Wider single-line fields */
+input[name*="email" i],
+input[name*="website" i],
+input[name*="url" i],
+input[name*="link" i] {
+  max-width: 340px;
+}
+input[name*="address" i]:not(textarea) {
+  max-width: 420px;
+}
+
+/* Selects/comboboxes follow the same shape via name attribute */
+button[role="combobox"][name*="status" i],
+button[role="combobox"][name*="priority" i],
+button[role="combobox"][name*="type" i],
+button[role="combobox"][name*="category" i],
+button[role="combobox"][name*="uom" i],
+[data-slot="select-trigger"][name*="status" i],
+[data-slot="select-trigger"][name*="priority" i],
+[data-slot="select-trigger"][name*="type" i],
+[data-slot="select-trigger"][name*="category" i],
+[data-slot="select-trigger"][name*="uom" i] {
+  max-width: 160px;
+}
+
+/* Inside grid cells, still allow full cell width if the cell is narrower */
+.fk-col input,
+.fk-col [data-slot="select-trigger"],
+.fk-col [role="combobox"] {
+  max-width: 100% !important;
+}
+
 /*
  * Design system definition.
  *
