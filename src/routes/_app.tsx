@@ -252,12 +252,12 @@ function AppLayout() {
                 <button
                   type="button"
                   onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
-                  className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground"
+                  className="w-full flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground"
                 >
                   {isOpen ? (
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-4 w-4 shrink-0" />
                   ) : (
-                    <ChevronRight className="h-3 w-3 shrink-0" />
+                    <ChevronRight className="h-4 w-4 shrink-0" />
                   )}
                   <span>{g}</span>
                 </button>
