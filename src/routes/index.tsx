@@ -8,5 +8,5 @@ export const Route = createFileRoute("/")({
 function Index() {
   const { session, loading } = useAuth();
   if (loading) return <div className="p-8 text-muted-foreground">Loading…</div>;
-  return <Navigate to={session ? "/new" : "/auth"} />;
+  return <Navigate to={session ? "/dashboard" : "/auth"} />;
 }
