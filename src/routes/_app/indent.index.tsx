@@ -103,17 +103,14 @@ function IndentList() {
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
-              <tr className="text-left">
+              <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="p-2">Indent No</th>
                 <th className="p-2">Date</th>
                 <th className="p-2">Status</th>
                 <th className="p-2">Age</th>
                 <th className="p-2">Case ID</th>
-                <th className="p-2">OEM Case ID</th>
-                <th className="p-2">Company</th>
-                <th className="p-2">Product Model</th>
-                <th className="p-2">Product Serial</th>
-                <th className="p-2">Oracles</th>
+                <th className="p-2">Company / OEM Case</th>
+                <th className="p-2">Oracles · Defective Model / Serial</th>
                 <th className="p-2">Type</th>
                 <th className="p-2">Engineer</th>
                 <th className="p-2 text-right">Open</th>
@@ -121,29 +118,54 @@ function IndentList() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={13}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={10}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={13}>No Indents yet. Create one from an OEM ticket.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={10}>No Indents yet. Create one from an OEM ticket.</td></tr>
               ) : filtered.map((r) => {
                 const st = indentStatusFromOracles(r.oracles_data);
                 const cAt = indentClosedAt(r.oracles_data);
                 const age = formatAge(r.created_at, cAt);
-                const oCount = r.oracles_data?.length || 0;
-                const oClosed = (r.oracles_data || []).filter((o) => oracleStatus(o) === "closed").length;
+                const oracles = r.oracles_data || [];
+                const oClosed = oracles.filter((o) => oracleStatus(o) === "closed").length;
+                const dateShort = r.indent_date ? r.indent_date.slice(5) : "—";
                 return (
-                <tr key={r.id} className="border-t">
-                  <td className="p-2 font-mono">{r.indent_no}</td>
-                  <td className="p-2">{r.indent_date}</td>
+                <tr key={r.id} className="border-t align-top hover:bg-muted/30">
+                  <td className="p-2 font-mono text-xs whitespace-nowrap">{r.indent_no}</td>
+                  <td className="p-2 text-xs whitespace-nowrap" title={r.indent_date || ""}>{dateShort}</td>
                   <td className="p-2"><Badge variant={st === "closed" ? "default" : "secondary"}>{st === "closed" ? "Closed" : "Open"}</Badge></td>
-                  <td className="p-2 whitespace-nowrap">{age}</td>
-                  <td className="p-2 font-mono">{r.case_id || "—"}</td>
-                  <td className="p-2 font-mono">{r.oem_case_id || "—"}</td>
-                  <td className="p-2">{r.company || "—"}</td>
-                  <td className="p-2">{r.product_model || "—"}</td>
-                  <td className="p-2 font-mono">{r.product_serial || "—"}</td>
-                  <td className="p-2 text-center">{oClosed}/{oCount}</td>
-                  <td className="p-2"><Badge variant="secondary">{indentTypeLabel(r.indent_type)}</Badge></td>
-                  <td className="p-2">{r.engineer_name || "—"}</td>
+                  <td className="p-2 text-xs whitespace-nowrap">{compactAge(age)}</td>
+                  <td className="p-2 font-mono text-xs whitespace-nowrap">{r.case_id || "—"}</td>
+                  <td className="p-2 whitespace-nowrap">
+                    <div className="text-sm font-medium leading-tight">{r.company || "—"}</div>
+                    <div className="font-mono text-[11px] text-muted-foreground leading-tight">{r.oem_case_id || "—"}</div>
+                  </td>
+                  <td className="p-2">
+                    {oracles.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">No oracles ({oClosed}/0)</span>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <div className="text-[10px] text-muted-foreground">{oClosed}/{oracles.length} closed</div>
+                        {oracles.map((o, i) => {
+                          const st2 = oracleStatus(o);
+                          const def = (o.defective_rows && o.defective_rows[0]) || o.defective;
+                          const model = def?.def_model_no || r.product_model || "—";
+                          const serial = def?.def_serial_no || r.product_serial || "—";
+                          return (
+                            <div key={i} className="flex items-center gap-1.5 text-xs whitespace-nowrap leading-tight">
+                              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${st2 === "closed" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                              <span className="font-mono text-[11px]">{o.oracle_no || `#${i + 1}`}</span>
+                              <span className="text-muted-foreground">·</span>
+                              <span>{model}</span>
+                              <span className="text-muted-foreground">/</span>
+                              <span className="font-mono text-[11px]">{serial}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-2"><Badge variant="secondary" className="whitespace-nowrap">{indentTypeLabel(r.indent_type)}</Badge></td>
+                  <td className="p-2 text-xs whitespace-nowrap">{r.engineer_name || "—"}</td>
                   <td className="p-2 text-right">
                     <Link to="/indent/$id" params={{ id: r.id }}>
                       <Button variant="ghost" size="sm"><ExternalLink className="h-4 w-4" /></Button>
@@ -158,6 +180,17 @@ function IndentList() {
       </Card>
     </div>
   );
+}
+
+function compactAge(age: string): string {
+  // "13 Hours 35 Min" -> "13h 35m"; "2 Days 4 Hours" -> "2d 4h"
+  return age
+    .replace(/\s*Days?/gi, "d")
+    .replace(/\s*Hours?/gi, "h")
+    .replace(/\s*Min(ute)?s?/gi, "m")
+    .replace(/\s*Sec(ond)?s?/gi, "s")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function Kpi({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
