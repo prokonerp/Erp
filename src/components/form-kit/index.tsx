@@ -168,17 +168,13 @@ type FieldSize = "xs" | "sm" | "md" | "lg" | "xl" | "full";
  * Desktop targets 4–6 fields per row; tablet 3–4; mobile 1–2.
  */
 const sizeCls: Record<FieldSize, string> = {
-  // 6 per row on desktop
-  xs:   "fk-col-xs col-span-6 sm:col-span-3 md:col-span-2 lg:col-span-2",
-  // 4 per row on desktop
-  sm:   "fk-col-sm col-span-6 sm:col-span-4 md:col-span-3 lg:col-span-3",
-  // 3 per row on desktop
-  md:   "fk-col-md col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-4",
-  // 2 per row on desktop
-  lg:   "fk-col-lg col-span-12 sm:col-span-6 lg:col-span-6",
-  // ~2/3 row
-  xl:   "fk-col-xl col-span-12 lg:col-span-8",
-  full: "fk-col-full col-span-12",
+  // Fixed pixel widths — ERP-density. Wrap to next line automatically.
+  xs:   "fk-col fk-col-xs",   // ~100px  (Qty, UOM, Tax%, Status, Priority)
+  sm:   "fk-col fk-col-sm",   // ~140px  (Dates, Doc No, IDs, Codes)
+  md:   "fk-col fk-col-md",   // ~200px  (Customer/Vendor/Contact)
+  lg:   "fk-col fk-col-lg",   // ~280px  (Address line, long ref)
+  xl:   "fk-col fk-col-xl",   // ~420px  (Long single-line text)
+  full: "fk-col fk-col-full", // 100% row
 };
 
 type FieldProps = {
