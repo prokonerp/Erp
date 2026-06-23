@@ -16,7 +16,6 @@ import {
   BarChart3,
   ClipboardList,
   Warehouse,
-  Truck,
   PackageCheck,
   Send,
   LayoutDashboard,
@@ -41,15 +40,15 @@ function AppLayout() {
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [forceChange, setForceChange] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mmOpen, setMmOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    "Service Desk": true,
-    Customers: true,
-    Procurement: true,
-    Inventory: true,
-    Intelligence: true,
-    System: true,
+    "Service Desk": false,
+    Customers: false,
+    Procurement: false,
+    "Material Movement": false,
+    Inventory: false,
+    Intelligence: false,
+    System: false,
   });
   const fetchProfile = useServerFn(getMyProfile);
 
@@ -116,13 +115,7 @@ function AppLayout() {
       active ? "bg-accent text-accent-foreground font-medium" : "text-foreground/80 hover:bg-muted hover:text-foreground"
     }`;
 
-  const mmPaths = ["/new", "/records", "/challan", "/grn"];
-  const isMaterialMovementActive =
-    mmPaths.some((p) => location.pathname === p || location.pathname.startsWith(p + "/")) ||
-    location.pathname.startsWith("/challan") ||
-    location.pathname.startsWith("/grn");
-
-  const groupOrder = ["Service Desk", "Customers", "Procurement", "Inventory", "Intelligence", "System"];
+  const groupOrder = ["Service Desk", "Customers", "Procurement", "Material Movement", "Inventory", "Intelligence", "System"];
 
   const groupMap = new Map<string, typeof navItems>();
   const ungrouped: typeof navItems = [];
@@ -182,38 +175,91 @@ function AppLayout() {
           {/* Grouped items */}
           {groupOrder.map((g) => {
             const items = groupMap.get(g);
-            const renderMmHere = g === "Inventory" && showMm;
-            if ((!items || items.length === 0) && !renderMmHere) return null;
+            if (g === "Material Movement") {
+              if (!showMm) return null;
+              const isOpen = openGroups[g] !== false;
+              return (
+                <div key={g}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
+                    className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground"
+                  >
+                    {isOpen ? (
+                      <ChevronDown className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3 shrink-0" />
+                    )}
+                    <span>{g}</span>
+                  </button>
+                  {isOpen && (
+                    <div className="space-y-0.5">
+                      <Link to="/new" className={navLinkCls(isActive("/new"))}>
+                        <FileText className="h-4 w-4 shrink-0" />
+                        New Gate Pass
+                      </Link>
+                      <Link to="/records" className={navLinkCls(isActive("/records"))}>
+                        <ListChecks className="h-4 w-4 shrink-0" />
+                        History
+                      </Link>
+                      <Link to="/challan" className={navLinkCls(isActive("/challan"))}>
+                        <Send className="h-4 w-4 shrink-0" />
+                        All Delivery Challans
+                      </Link>
+                      <Link to="/challan/customer/new" className={navLinkCls(isActive("/challan/customer/new"))}>
+                        <Send className="h-4 w-4 shrink-0" />
+                        New: To Customer
+                      </Link>
+                      <Link to="/challan/oem/new" className={navLinkCls(isActive("/challan/oem/new"))}>
+                        <Send className="h-4 w-4 shrink-0" />
+                        New: To OEM
+                      </Link>
+                      <Link to="/grn" className={navLinkCls(isActive("/grn"))}>
+                        <PackageCheck className="h-4 w-4 shrink-0" />
+                        All GRNs
+                      </Link>
+                      <Link to="/grn/customer/new" className={navLinkCls(isActive("/grn/customer/new"))}>
+                        <PackageCheck className="h-4 w-4 shrink-0" />
+                        New: From Customer
+                      </Link>
+                      <Link to="/grn/oem/new" className={navLinkCls(isActive("/grn/oem/new"))}>
+                        <PackageCheck className="h-4 w-4 shrink-0" />
+                        New: From OEM
+                      </Link>
+                      <Link to="/grn/general/new" className={navLinkCls(isActive("/grn/general/new"))}>
+                        <PackageCheck className="h-4 w-4 shrink-0" />
+                        New: General
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            if (!items || items.length === 0) return null;
             const isOpen = openGroups[g] !== false;
             return (
               <div key={g}>
-                {/* Material Movement is inserted just BEFORE Inventory group */}
-                {g === "Inventory" && showMm && renderMaterialMovement()}
-                {items && items.length > 0 && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
-                      className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground"
-                    >
-                      {isOpen ? (
-                        <ChevronDown className="h-3 w-3 shrink-0" />
-                      ) : (
-                        <ChevronRight className="h-3 w-3 shrink-0" />
-                      )}
-                      <span>{g}</span>
-                    </button>
-                    {isOpen && (
-                      <div className="space-y-0.5">
-                        {items.map((n) => (
-                          <Link key={n.to} to={n.to} className={navLinkCls(isActive(n.to))}>
-                            <n.icon className="h-4 w-4 shrink-0" />
-                            {n.label}
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                <button
+                  type="button"
+                  onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
+                  className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground"
+                >
+                  {isOpen ? (
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 shrink-0" />
+                  )}
+                  <span>{g}</span>
+                </button>
+                {isOpen && (
+                  <div className="space-y-0.5">
+                    {items.map((n) => (
+                      <Link key={n.to} to={n.to} className={navLinkCls(isActive(n.to))}>
+                        <n.icon className="h-4 w-4 shrink-0" />
+                        {n.label}
+                      </Link>
+                    ))}
+                  </div>
                 )}
               </div>
             );
@@ -267,68 +313,4 @@ function AppLayout() {
       />
     </div>
   );
-
-  function renderMaterialMovement() {
-    return (
-            <div>
-              <button
-                type="button"
-                onClick={() => setMmOpen((v) => !v)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                  isMaterialMovementActive
-                    ? "bg-accent text-accent-foreground font-medium"
-                    : "text-foreground/80 hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <Truck className="h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">Material Movement</span>
-                {mmOpen ? (
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                )}
-              </button>
-              {mmOpen && (
-                <div className="ml-5 mt-0.5 space-y-0.5 border-l pl-2">
-                  <Link to="/new" className={navLinkCls(isActive("/new"))}>
-                    <FileText className="h-4 w-4 shrink-0" />
-                    New Gate Pass
-                  </Link>
-                  <Link to="/records" className={navLinkCls(isActive("/records"))}>
-                    <ListChecks className="h-4 w-4 shrink-0" />
-                    History
-                  </Link>
-                  <Link to="/challan" className={navLinkCls(isActive("/challan"))}>
-                    <Send className="h-4 w-4 shrink-0" />
-                    All Delivery Challans
-                  </Link>
-                  <Link to="/challan/customer/new" className={navLinkCls(isActive("/challan/customer/new"))}>
-                    <Send className="h-4 w-4 shrink-0" />
-                    New: To Customer
-                  </Link>
-                  <Link to="/challan/oem/new" className={navLinkCls(isActive("/challan/oem/new"))}>
-                    <Send className="h-4 w-4 shrink-0" />
-                    New: To OEM
-                  </Link>
-                  <Link to="/grn" className={navLinkCls(isActive("/grn"))}>
-                    <PackageCheck className="h-4 w-4 shrink-0" />
-                    All GRNs
-                  </Link>
-                  <Link to="/grn/customer/new" className={navLinkCls(isActive("/grn/customer/new"))}>
-                    <PackageCheck className="h-4 w-4 shrink-0" />
-                    New: From Customer
-                  </Link>
-                  <Link to="/grn/oem/new" className={navLinkCls(isActive("/grn/oem/new"))}>
-                    <PackageCheck className="h-4 w-4 shrink-0" />
-                    New: From OEM
-                  </Link>
-                  <Link to="/grn/general/new" className={navLinkCls(isActive("/grn/general/new"))}>
-                    <PackageCheck className="h-4 w-4 shrink-0" />
-                    New: General
-                  </Link>
-                </div>
-              )}
-            </div>
-    );
-  }
 }
