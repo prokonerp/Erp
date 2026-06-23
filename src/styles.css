@@ -61,31 +61,38 @@
   background: var(--card);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
-/* ERP-style flex grid: fields keep fixed widths and wrap to next line.
- * Wider fields per size: xs ~100, sm ~140, md ~200, lg ~280, xl ~420, full 100%. */
-.fk-grid,
-.fk-grid-auto {
-  display: flex;
-  flex-wrap: wrap;
+/* ERP-style 12-col CSS grid. Field sizes map to column spans so rows
+ * stay perfectly aligned and adjacent fields share whitespace cleanly. */
+.fk-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--form-field-gap);
-  align-items: flex-start;
+  align-items: start;
 }
-.fk-col       { flex: 0 0 auto; min-width: 0; }
-.fk-col-xs    { width: 100px; }
-.fk-col-sm    { width: 140px; }
-.fk-col-md    { width: 200px; }
-.fk-col-lg    { width: 280px; }
-.fk-col-xl    { width: 420px; }
-.fk-col-full  { width: 100%; flex: 1 1 100%; }
-[data-density="compact"] .fk-col-xs   { width: 90px; }
-[data-density="compact"] .fk-col-sm   { width: 130px; }
-[data-density="compact"] .fk-col-md   { width: 180px; }
-[data-density="compact"] .fk-col-lg   { width: 260px; }
-[data-density="compact"] .fk-col-xl   { width: 380px; }
-/* On very narrow viewports collapse to full width so nothing clips */
-@media (max-width: 480px) {
-  .fk-col-xs, .fk-col-sm, .fk-col-md, .fk-col-lg, .fk-col-xl {
-    width: 100%;
+.fk-grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--form-field-gap);
+  align-items: start;
+}
+.fk-col       { min-width: 0; }
+.fk-col-xs    { grid-column: span 2; }   /* Qty, UOM, Tax%, Status */
+.fk-col-sm    { grid-column: span 3; }   /* Dates, Doc No, IDs — 4 per row */
+.fk-col-md    { grid-column: span 3; }   /* Customer/Vendor/Contact — 4 per row */
+.fk-col-lg    { grid-column: span 4; }   /* Email, longer single-line */
+.fk-col-xl    { grid-column: span 6; }   /* Address, long ref — pairs with md/lg */
+.fk-col-full  { grid-column: 1 / -1; }
+/* Tablet: collapse to a 6-col grid; existing spans cap at 6 */
+@media (max-width: 900px) {
+  .fk-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .fk-col-xl { grid-column: span 6; }
+  .fk-col-lg { grid-column: span 6; }
+}
+/* Phone: each field is its own row */
+@media (max-width: 540px) {
+  .fk-grid { grid-template-columns: 1fr; }
+  .fk-col-xs, .fk-col-sm, .fk-col-md, .fk-col-lg, .fk-col-xl, .fk-col-full {
+    grid-column: 1 / -1;
   }
 }
 /* Long values inside narrow fields should truncate, not overflow */
