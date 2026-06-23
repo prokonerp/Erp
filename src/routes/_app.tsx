@@ -121,7 +121,7 @@ function AppLayout() {
       active ? "bg-accent text-accent-foreground font-medium" : "text-foreground/80 hover:bg-muted hover:text-foreground"
     }`;
 
-  const groupOrder = ["Service Desk", "Customers", "Procurement", "Material Movement", "Inventory", "Intelligence", "System"];
+  const groupOrder = ["Masters", "Service Desk", "Customers", "Procurement", "Material Movement", "Inventory", "Intelligence", "System"];
 
   const groupMap = new Map<string, typeof navItems>();
   const ungrouped: typeof navItems = [];
