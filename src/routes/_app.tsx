@@ -144,12 +144,12 @@ function AppLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-60 bg-background border-r flex flex-col shrink-0 transform transition-transform duration-200 ${
+        className={`fixed lg:relative inset-y-0 left-0 z-50 bg-background border-r flex flex-col overflow-hidden transition-all duration-200 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        } ${sidebarHidden ? "lg:hidden" : ""}`}
+        } ${sidebarHidden ? "lg:w-0 lg:border-r-0" : "lg:w-60 shrink-0"} w-60`}
       >
         {/* Logo */}
-        <div className="h-14 border-b flex items-center justify-center px-4">
+        <div className="h-14 border-b flex items-center justify-between px-4">
           <Link to="/dashboard" className="leading-none">
             <img
               src={prokonLogo.url}
@@ -157,10 +157,19 @@ function AppLayout() {
               className="h-9 w-auto object-contain"
             />
           </Link>
+          <button
+            type="button"
+            onClick={() => setSidebarHidden(true)}
+            className="hidden lg:inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-5" aria-label="Primary">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-5" aria-label="Primary">
           {/* Ungrouped items */}
           {ungrouped.length > 0 && (
             <div className="space-y-0.5">
