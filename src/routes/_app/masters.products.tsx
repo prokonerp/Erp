@@ -54,6 +54,7 @@ type FormState = {
   local_tax: string;
   default_price: string;
   description: string;
+  weight_kg: string;
   active: boolean;
   serial_tracking: boolean;
   serial_mode: string;
@@ -68,7 +69,7 @@ type FormState = {
 
 const empty: FormState = {
   name: "", sku: "", category: "", brand: "", model: "", unit: "Nos",
-  hsn: "", central_tax: "", local_tax: "", default_price: "", description: "", active: true,
+  hsn: "", central_tax: "", local_tax: "", default_price: "", description: "", weight_kg: "", active: true,
   serial_tracking: false, serial_mode: "Manual", serial_format: "",
   warranty_applicable: false, warranty_type: "Manufacturer",
   warranty_duration: "12", warranty_unit: "Months",
@@ -77,6 +78,7 @@ const empty: FormState = {
 
 type ProductFull = ProductMaster & {
   sku?: string | null;
+  weight_kg?: number | null;
   tax_rate?: number | null;
   central_tax_rate?: number | null;
   local_tax_rate?: number | null;
@@ -210,6 +212,7 @@ export function ProductMasterPage() {
       local_tax: p.local_tax_exempt ? "EXEMPT" : (p.local_tax_rate != null ? String(p.local_tax_rate) : ""),
       default_price: p.default_price != null ? String(p.default_price) : "",
       description: p.description || "",
+      weight_kg: p.weight_kg != null ? String(p.weight_kg) : "",
       active: p.active !== false,
       serial_tracking: !!p.serial_tracking,
       serial_mode: p.serial_mode || "Manual",
@@ -262,6 +265,7 @@ export function ProductMasterPage() {
           : Number(form.central_tax) + Number(form.local_tax),
       default_price: form.default_price ? Number(form.default_price) : null,
       description: form.description || null,
+      weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
       active: form.active,
       serial_tracking: form.serial_tracking,
       serial_mode: form.serial_mode,
@@ -522,6 +526,10 @@ export function ProductMasterPage() {
               <div>
                 <Label>Default Price (₹)</Label>
                 <Input type="number" min="0" step="0.01" value={form.default_price} onChange={(e) => setForm({ ...form, default_price: e.target.value })} placeholder="Optional" />
+              </div>
+              <div>
+                <Label>Weight (kg)</Label>
+                <Input type="number" min="0" step="0.01" value={form.weight_kg} onChange={(e) => setForm({ ...form, weight_kg: e.target.value })} placeholder="e.g. 12.5" />
               </div>
               <div className="md:col-span-2 rounded-md border p-3 bg-muted/30">
                 <div className="text-sm font-medium mb-2">Default Tax Rates</div>
