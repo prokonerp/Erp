@@ -138,7 +138,7 @@ function IndentList() {
                   </td>
                   <td className="p-2">
                     {oracles.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">No oracles</span>
+                      <span className="text-sm text-muted-foreground">No oracles</span>
                     ) : (
                       <div className="space-y-0.5">
                         {oracles.map((o, i) => {
@@ -147,21 +147,21 @@ function IndentList() {
                           const model = def?.def_model_no || r.product_model || "—";
                           const serial = def?.def_serial_no || r.product_serial || "—";
                           return (
-                            <div key={i} className="flex items-center gap-1.5 text-xs whitespace-nowrap leading-tight">
+                            <div key={i} className="flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap leading-tight">
                               <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${st2 === "closed" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                              <span className="font-mono text-[11px] font-medium">{o.oracle_no || `#${i + 1}`}</span>
-                              <span className="text-muted-foreground">·</span>
+                              <span className="font-mono">{o.oracle_no || `#${i + 1}`}</span>
+                              <span className="text-muted-foreground font-normal">·</span>
                               <span>{model}</span>
-                              <span className="text-muted-foreground">/</span>
-                              <span className="font-mono text-[11px]">{serial}</span>
+                              <span className="text-muted-foreground font-normal">/</span>
+                              <span className="font-mono">{serial}</span>
                             </div>
                           );
                         })}
-                        <div className="text-[10px] text-muted-foreground font-medium">{oClosed}/{oracles.length} closed</div>
+                        <div className="text-xs text-muted-foreground font-medium">{oClosed}/{oracles.length} closed</div>
                       </div>
                     )}
                   </td>
-                  <td className="p-2 text-xs whitespace-nowrap" title={r.indent_date || ""}>{dateShort}</td>
+                  <td className="p-2 text-sm whitespace-nowrap" title={r.indent_date || ""}>{fmtDate(r.indent_date)}</td>
                   <td className="p-2"><Badge variant={st === "closed" ? "default" : "secondary"}>{st === "closed" ? "Closed" : "Open"}</Badge></td>
                   <td className="p-2 text-xs whitespace-nowrap">{compactAge(age)}</td>
                   <td className="p-2"><Badge variant="secondary" className="whitespace-nowrap">{indentTypeLabel(r.indent_type)}</Badge></td>
