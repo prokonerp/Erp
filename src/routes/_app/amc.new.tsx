@@ -222,10 +222,10 @@ function NewAmc() {
 
       <FormSection title="Agreement" defaultOpen>
         <FormGrid>
-          <FormField label="AMC Agreement Number" hint={<>Format: <span className="font-mono">{prefixPreview}{`{ddMMyyHHmm}{SEQ}`}</span></>}>
+          <FormField label="AMC Agreement Number" size="lg" hint={<>Format: <span className="font-mono">{prefixPreview}{`{ddMMyyHHmm}{SEQ}`}</span></>}>
             <Input value="Auto-generated on save" readOnly disabled className="bg-muted font-mono" />
           </FormField>
-          <FormField label="Duration" name="duration" size="xs">
+          <FormField label="Duration" name="duration" size="sm">
             <Select value={String(form.duration_years)} onValueChange={(v) => setForm({ ...form, duration_years: Number(v) })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -233,13 +233,13 @@ function NewAmc() {
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label="Start Date" name="start_date" size="xs" hint={fmtDate(form.start_date)}>
+          <FormField label="Start Date" name="start_date" size="md" hint={fmtDate(form.start_date)}>
             <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
           </FormField>
-          <FormField label="End Date" name="end_date" size="xs">
+          <FormField label="End Date" name="end_date" size="md">
             <Input value={fmtDate(end_date)} readOnly className="bg-muted" />
           </FormField>
-          <FormField label="AMC Value (₹)" name="amc_value" size="xs">
+          <FormField label="AMC Value (₹)" name="amc_value" size="sm">
             <Input type="number" min="0" value={form.amc_value} onChange={(e) => setForm({ ...form, amc_value: e.target.value })} />
           </FormField>
         </FormGrid>
