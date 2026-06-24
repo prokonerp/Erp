@@ -9,6 +9,7 @@ import { Upload, Download, FileCheck2 } from "lucide-react";
 import { toast } from "sonner";
 import { parseCSV, buildCSV, downloadCSV } from "@/lib/csv";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { stateFromGSTIN } from "@/lib/india";
 import { useIsAdmin } from "@/lib/useRole";
 import { FormPageHeader } from "@/components/FormPageHeader";
 
@@ -392,6 +393,16 @@ function ImportPage() {
           payload.contact_name = toTitleCaseSmart([r.salutation, first, last].filter(Boolean).join(" "));
           payload.state = payload.billing_state ?? null;
           payload.city = payload.billing_city ?? null;
+          // Auto-populate Place of Supply from GSTIN when not provided in the CSV
+          const gstStr = upperTrim((payload.gst as string) || "");
+          const gstState = stateFromGSTIN(gstStr);
+          if (!payload.place_of_supply && gstState) {
+            payload.place_of_supply = gstState;
+          }
+          if (!payload.billing_state && gstState) {
+            payload.billing_state = gstState;
+            payload.state = gstState;
+          }
           const joinAddr = (p: string) => [
             payload[`${p}_line1`], payload[`${p}_line2`], payload[`${p}_landmark`],
             payload[`${p}_city`], payload[`${p}_state`], payload[`${p}_pincode`], payload[`${p}_country`],
