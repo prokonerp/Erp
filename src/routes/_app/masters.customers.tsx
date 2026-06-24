@@ -300,6 +300,7 @@ export function CustomerMasterPage() {
       const payload = rowsCsv.map((r) => {
         const gst = upperTrim(r["GSTIN"] || r["GST"] || "");
         const stateAuto = stateFromGSTIN(gst);
+        const placeOfSupply = r["Place of Supply"] || stateAuto || r["State"] || null;
         return {
           company: toTitleCaseSmart(r["Company"] || r["Customer Name"] || r["Name"] || ""),
           contact_name: toTitleCaseSmart(r["Contact"] || r["Contact Name"] || ""),
@@ -308,6 +309,7 @@ export function CustomerMasterPage() {
           gst: gst || null,
           gst_status: r["GST Treatment"] || (gst ? "Regular" : "Unregistered"),
           state: r["State"] || r["Place of Supply"] || stateAuto || "Haryana",
+          place_of_supply: placeOfSupply,
           city: toTitleCaseSmart(r["City"] || "") || null,
           billing_address: titleCaseAddress(r["Billing Address"] || r["Address"] || "") || null,
           shipping_address: titleCaseAddress(r["Shipping Address"] || r["Billing Address"] || r["Address"] || "") || null,
