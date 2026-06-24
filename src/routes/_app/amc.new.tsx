@@ -215,7 +215,7 @@ function NewAmc() {
               <Input value={form.oem_ref_id} onChange={(e) => setForm({ ...form, oem_ref_id: e.target.value.toUpperCase() })} placeholder="e.g. APC-2026-AB12345" className="font-mono" />
             </FormField>
             <FormField label="OEM Purchase Date" name="oem_purchase_date">
-              <Input type="date" value={form.oem_purchase_date} onChange={(e) => setForm({ ...form, oem_purchase_date: e.target.value })} />
+              <DatePicker value={form.oem_purchase_date} onChange={(v) => setForm({ ...form, oem_purchase_date: v })} />
             </FormField>
           </FormGrid>
         ) : null}
