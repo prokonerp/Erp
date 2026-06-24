@@ -104,10 +104,8 @@ function IndentList() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="p-2">Indent No</th>
-                <th className="p-2">Case ID</th>
                 <th className="p-2">OEM Case / Company</th>
-                <th className="p-2">Oracles · Defective Model / Serial</th>
+                <th className="p-2">Oracles · Defective / Exchange / Received</th>
                 <th className="p-2">Date</th>
                 <th className="p-2">Status</th>
                 <th className="p-2">Age</th>
@@ -118,9 +116,9 @@ function IndentList() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={8}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>No Indents yet. Create one from an OEM ticket.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={8}>No Indents yet. Create one from an OEM ticket.</td></tr>
               ) : filtered.map((r) => {
                 const st = indentStatusFromOracles(r.oracles_data);
                 const cAt = indentClosedAt(r.oracles_data);
@@ -129,8 +127,6 @@ function IndentList() {
                 const oClosed = oracles.filter((o) => oracleStatus(o) === "closed").length;
                 return (
                 <tr key={r.id} className="border-t align-top hover:bg-muted/30">
-                  <td className="p-2 font-mono text-xs whitespace-nowrap">{r.indent_no}</td>
-                  <td className="p-2 font-mono text-xs whitespace-nowrap">{r.case_id || "—"}</td>
                   <td className="p-2 whitespace-nowrap">
                     <div className="text-sm font-semibold text-foreground leading-tight">{r.oem_case_id || "—"}</div>
                     <div className="text-[11px] text-muted-foreground leading-tight">{r.company || "—"}</div>
@@ -139,24 +135,45 @@ function IndentList() {
                     {oracles.length === 0 ? (
                       <span className="text-sm text-muted-foreground">No oracles</span>
                     ) : (
-                      <div className="space-y-0.5">
+                      <div className="space-y-2">
                         {oracles.map((o, i) => {
                           const st2 = oracleStatus(o);
-                          const def = (o.defective_rows && o.defective_rows[0]) || o.defective;
-                          const model = def?.def_model_no || r.product_model || "—";
-                          const serial = def?.def_serial_no || r.product_serial || "—";
+                          const defs = (o.defective_rows && o.defective_rows.length)
+                            ? o.defective_rows
+                            : (o.defective ? [{ def_model_no: o.defective.def_model_no, def_serial_no: o.defective.def_serial_no, qty: o.defective.qty }] : []);
+                          const exs = (o.exchange_rows && o.exchange_rows.length)
+                            ? o.exchange_rows
+                            : (o.exchange ? [o.exchange] : []);
+                          const recs = (o.received_rows && o.received_rows.length)
+                            ? o.received_rows
+                            : (o.received ? [o.received] : []);
+                          const rowCount = Math.max(defs.length, exs.length, recs.length, 1);
+                          const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
                           return (
-                            <div key={i} className="flex items-center gap-1.5 text-sm font-semibold whitespace-nowrap leading-tight">
-                              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${st2 === "closed" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                              <span className="font-mono">{o.oracle_no || `#${i + 1}`}</span>
-                              <span className="text-muted-foreground font-normal">·</span>
-                              <span>{model}</span>
-                              <span className="text-muted-foreground font-normal">/</span>
-                              <span className="font-mono">{serial}</span>
+                            <div key={i} className="rounded border bg-muted/30 px-2 py-1.5 space-y-1">
+                              <div className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
+                                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${st2 === "closed" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <span className="font-mono">Oracle {o.oracle_no || `#${i + 1}`}</span>
+                                <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-normal">
+                                  {st2 === "closed" ? "Closed" : "Open"}
+                                </span>
+                              </div>
+                              {Array.from({ length: rowCount }).map((_, ri) => {
+                                const d = defs[ri];
+                                const e = exs[ri];
+                                const rc = recs[ri];
+                                return (
+                                  <div key={ri} className="text-xs leading-tight space-y-0.5 pl-3">
+                                    <Line label="Defective" model={d?.def_model_no || r.product_model} serial={d?.def_serial_no || r.product_serial} />
+                                    <Line label="Exchange" model={cleanModel(e?.model_no)} serial={e?.serial_no} />
+                                    <Line label="Received" model={cleanModel(rc?.model_no)} serial={rc?.serial_no} />
+                                  </div>
+                                );
+                              })}
                             </div>
                           );
                         })}
-                        <div className="text-xs text-muted-foreground font-medium">{oClosed}/{oracles.length} closed</div>
+                        <div className="text-[11px] text-muted-foreground font-medium">{oClosed}/{oracles.length} closed</div>
                       </div>
                     )}
                   </td>
@@ -212,5 +229,18 @@ function Kpi({ label, value, hint }: { label: string; value: string | number; hi
         {hint && <div className="text-[10px] text-muted-foreground font-mono truncate">{hint}</div>}
       </CardContent>
     </Card>
+  );
+}
+
+function Line({ label, model, serial }: { label: string; model?: string | null; serial?: string | null }) {
+  const m = (model || "").trim();
+  const s = (serial || "").trim();
+  return (
+    <div className="flex items-center gap-1.5 whitespace-nowrap">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground w-16 shrink-0">{label}</span>
+      <span className="font-medium">{m || "—"}</span>
+      <span className="text-muted-foreground">/</span>
+      <span className="font-mono">{s || "—"}</span>
+    </div>
   );
 }
