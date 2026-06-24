@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { type AmcUnit, addYears, fmtDate, generatePMDates } from "@/lib/amc";
+import { DatePicker } from "@/components/DatePicker";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { AgreementDocUpload } from "@/components/AgreementDocUpload";
@@ -214,18 +215,18 @@ function NewAmc() {
               <Input value={form.oem_ref_id} onChange={(e) => setForm({ ...form, oem_ref_id: e.target.value.toUpperCase() })} placeholder="e.g. APC-2026-AB12345" className="font-mono" />
             </FormField>
             <FormField label="OEM Purchase Date" name="oem_purchase_date">
-              <Input type="date" value={form.oem_purchase_date} onChange={(e) => setForm({ ...form, oem_purchase_date: e.target.value })} />
+              <DatePicker value={form.oem_purchase_date} onChange={(v) => setForm({ ...form, oem_purchase_date: v })} />
             </FormField>
           </FormGrid>
         ) : null}
       </FormSection>
 
       <FormSection title="Agreement" defaultOpen>
-        <FormGrid>
-          <FormField label="AMC Agreement Number" size="lg" hint={<>Format: <span className="font-mono">{prefixPreview}{`{ddMMyyHHmm}{SEQ}`}</span></>}>
+        <FormGrid auto>
+          <FormField label="AMC Agreement Number" hint={<>Format: <span className="font-mono">{prefixPreview}{`{ddMMyyHHmm}{SEQ}`}</span></>}>
             <Input value="Auto-generated on save" readOnly disabled className="bg-muted font-mono" />
           </FormField>
-          <FormField label="Duration" name="duration" size="sm">
+          <FormField label="Duration" name="duration">
             <Select value={String(form.duration_years)} onValueChange={(v) => setForm({ ...form, duration_years: Number(v) })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -233,13 +234,13 @@ function NewAmc() {
               </SelectContent>
             </Select>
           </FormField>
-          <FormField label="Start Date" name="start_date" size="md" hint={fmtDate(form.start_date)}>
-            <Input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
+          <FormField label="Start Date" name="start_date" hint={fmtDate(form.start_date)}>
+            <DatePicker value={form.start_date} onChange={(v) => setForm({ ...form, start_date: v })} />
           </FormField>
-          <FormField label="End Date" name="end_date" size="md">
+          <FormField label="End Date" name="end_date">
             <Input value={fmtDate(end_date)} readOnly className="bg-muted" />
           </FormField>
-          <FormField label="AMC Value (₹)" name="amc_value" size="sm">
+          <FormField label="AMC Value (₹)" name="amc_value">
             <Input type="number" min="0" value={form.amc_value} onChange={(e) => setForm({ ...form, amc_value: e.target.value })} />
           </FormField>
         </FormGrid>
