@@ -231,3 +231,16 @@ function Kpi({ label, value, hint }: { label: string; value: string | number; hi
     </Card>
   );
 }
+
+function Line({ label, model, serial }: { label: string; model?: string | null; serial?: string | null }) {
+  const m = (model || "").trim();
+  const s = (serial || "").trim();
+  return (
+    <div className="flex items-center gap-1.5 whitespace-nowrap">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground w-16 shrink-0">{label}</span>
+      <span className="font-medium">{m || "—"}</span>
+      <span className="text-muted-foreground">/</span>
+      <span className="font-mono">{s || "—"}</span>
+    </div>
+  );
+}
