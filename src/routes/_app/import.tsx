@@ -393,6 +393,10 @@ function ImportPage() {
           payload.contact_name = toTitleCaseSmart([r.salutation, first, last].filter(Boolean).join(" "));
           payload.state = payload.billing_state ?? null;
           payload.city = payload.billing_city ?? null;
+          const gstStatus = ((payload.gst_status as string) || "").toLowerCase();
+          if (isBiz && gstStatus === "unregistered") {
+            payload.gst = "URP";
+          }
           // Auto-populate Place of Supply from GSTIN when not provided in the CSV
           const gstStr = upperTrim((payload.gst as string) || "");
           const gstState = stateFromGSTIN(gstStr);
