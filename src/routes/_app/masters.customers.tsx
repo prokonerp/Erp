@@ -232,7 +232,7 @@ export function CustomerMasterPage() {
       phone: form.phone.trim(),
       phone_area_code: form.area_code || "+91",
       email: form.email.trim().toLowerCase() || null,
-      gst: form.customer_type === "Business" ? (upperTrim(form.gst) || null) : null,
+      gst: form.customer_type === "Business" ? (form.gst_status === "Unregistered" ? "URP" : (upperTrim(form.gst) || null)) : null,
       gst_status: form.gst_status,
       pan: form.pan ? upperTrim(form.pan) : null,
       place_of_supply: form.place_of_supply || null,
