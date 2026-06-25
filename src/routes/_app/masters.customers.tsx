@@ -301,13 +301,17 @@ export function CustomerMasterPage() {
         const gst = upperTrim(r["GSTIN"] || r["GST"] || "");
         const stateAuto = stateFromGSTIN(gst);
         const placeOfSupply = r["Place of Supply"] || stateAuto || r["State"] || null;
+        const companyName = toTitleCaseSmart(r["Company"] || r["Customer Name"] || r["Name"] || "");
+        const isBiz = !!(r["Company"] || "").trim();
+        const gstStatus = r["GST Treatment"] || (gst ? "Regular" : "Unregistered");
         return {
-          company: toTitleCaseSmart(r["Company"] || r["Customer Name"] || r["Name"] || ""),
+          customer_type: isBiz ? "Business" : "Individual",
+          company: companyName,
           contact_name: toTitleCaseSmart(r["Contact"] || r["Contact Name"] || ""),
           phone: (r["Phone"] || r["Mobile"] || "").trim(),
           email: (r["Email"] || "").trim().toLowerCase() || null,
-          gst: gst || null,
-          gst_status: r["GST Treatment"] || (gst ? "Regular" : "Unregistered"),
+          gst: isBiz && gstStatus === "Unregistered" ? "URP" : (gst || null),
+          gst_status: gstStatus,
           state: r["State"] || r["Place of Supply"] || stateAuto || "Haryana",
           place_of_supply: placeOfSupply,
           city: toTitleCaseSmart(r["City"] || "") || null,
