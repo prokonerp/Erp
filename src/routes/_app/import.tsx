@@ -269,7 +269,7 @@ function validateField(field: FieldDef, raw: string): string | null {
   switch (field.type) {
     case "email": if (!EMAIL_RE.test(v)) return `${field.label}: invalid email`; break;
     case "phone": if (!PHONE_RE.test(v.replace(/\D/g, ""))) return `${field.label}: must be 10 digits`; break;
-    case "gst": if (!GST_RE.test(v.toUpperCase())) return `${field.label}: invalid GSTIN`; break;
+    case "gst": { const uv = v.toUpperCase(); if (uv !== "URP" && !GST_RE.test(uv)) return `${field.label}: invalid GSTIN`; break; }
     case "pan": if (!PAN_RE.test(v.toUpperCase())) return `${field.label}: invalid PAN`; break;
     case "date": if (!DATE_RE.test(v)) return `${field.label}: use YYYY-MM-DD`; break;
     case "number":
