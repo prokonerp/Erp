@@ -207,7 +207,7 @@ export function CustomerMasterPage() {
     if (!isValidPhone(form.phone)) { toast.error("Enter a valid 10-digit mobile number"); setTab("basic"); return; }
     if (!form.email.trim()) { toast.error("Email is required"); setTab("basic"); return; }
     if (!EMAIL_REGEX.test(form.email.trim())) { toast.error("Enter a valid email address"); setTab("basic"); return; }
-    if (form.customer_type === "Business" && !form.gst.trim()) { toast.error("GST Number is required for Business"); setTab("gst"); return; }
+    if (form.customer_type === "Business" && form.gst_status !== "Unregistered" && !form.gst.trim()) { toast.error("GST Number is required for Business"); setTab("gst"); return; }
     if (form.gst_status === "Regular" && !isValidGSTIN(form.gst)) { toast.error("Enter a valid 15-character GSTIN"); setTab("gst"); return; }
     if (form.pan && !PAN_REGEX.test(form.pan.toUpperCase().trim())) { toast.error("PAN must be 10 chars (AAAAA9999A)"); setTab("gst"); return; }
     for (let i = 0; i < form.contacts.length; i++) {
@@ -232,7 +232,7 @@ export function CustomerMasterPage() {
       phone: form.phone.trim(),
       phone_area_code: form.area_code || "+91",
       email: form.email.trim().toLowerCase() || null,
-      gst: form.customer_type === "Business" ? (upperTrim(form.gst) || null) : null,
+      gst: form.customer_type === "Business" ? (form.gst_status === "Unregistered" ? "URP" : (upperTrim(form.gst) || null)) : null,
       gst_status: form.gst_status,
       pan: form.pan ? upperTrim(form.pan) : null,
       place_of_supply: form.place_of_supply || null,
@@ -301,13 +301,17 @@ export function CustomerMasterPage() {
         const gst = upperTrim(r["GSTIN"] || r["GST"] || "");
         const stateAuto = stateFromGSTIN(gst);
         const placeOfSupply = r["Place of Supply"] || stateAuto || r["State"] || null;
+        const companyName = toTitleCaseSmart(r["Company"] || r["Customer Name"] || r["Name"] || "");
+        const isBiz = !!(r["Company"] || "").trim();
+        const gstStatus = r["GST Treatment"] || (gst ? "Regular" : "Unregistered");
         return {
-          company: toTitleCaseSmart(r["Company"] || r["Customer Name"] || r["Name"] || ""),
+          customer_type: isBiz ? "Business" : "Individual",
+          company: companyName,
           contact_name: toTitleCaseSmart(r["Contact"] || r["Contact Name"] || ""),
           phone: (r["Phone"] || r["Mobile"] || "").trim(),
           email: (r["Email"] || "").trim().toLowerCase() || null,
-          gst: gst || null,
-          gst_status: r["GST Treatment"] || (gst ? "Regular" : "Unregistered"),
+          gst: isBiz && gstStatus === "Unregistered" ? "URP" : (gst || null),
+          gst_status: gstStatus,
           state: r["State"] || r["Place of Supply"] || stateAuto || "Haryana",
           place_of_supply: placeOfSupply,
           city: toTitleCaseSmart(r["City"] || "") || null,

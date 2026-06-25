@@ -269,7 +269,7 @@ function validateField(field: FieldDef, raw: string): string | null {
   switch (field.type) {
     case "email": if (!EMAIL_RE.test(v)) return `${field.label}: invalid email`; break;
     case "phone": if (!PHONE_RE.test(v.replace(/\D/g, ""))) return `${field.label}: must be 10 digits`; break;
-    case "gst": if (!GST_RE.test(v.toUpperCase())) return `${field.label}: invalid GSTIN`; break;
+    case "gst": { const uv = v.toUpperCase(); if (uv !== "URP" && !GST_RE.test(uv)) return `${field.label}: invalid GSTIN`; break; }
     case "pan": if (!PAN_RE.test(v.toUpperCase())) return `${field.label}: invalid PAN`; break;
     case "date": if (!DATE_RE.test(v)) return `${field.label}: use YYYY-MM-DD`; break;
     case "number":
@@ -393,6 +393,10 @@ function ImportPage() {
           payload.contact_name = toTitleCaseSmart([r.salutation, first, last].filter(Boolean).join(" "));
           payload.state = payload.billing_state ?? null;
           payload.city = payload.billing_city ?? null;
+          const gstStatus = ((payload.gst_status as string) || "").toLowerCase();
+          if (isBiz && gstStatus === "unregistered") {
+            payload.gst = "URP";
+          }
           // Auto-populate Place of Supply from GSTIN when not provided in the CSV
           const gstStr = upperTrim((payload.gst as string) || "");
           const gstState = stateFromGSTIN(gstStr);
