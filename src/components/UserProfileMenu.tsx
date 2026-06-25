@@ -61,10 +61,10 @@ export function UserProfileMenu({
           <Button
             variant="ghost"
             size="sm"
-            className="shrink-0 gap-2 text-white/85 hover:bg-white/10 hover:text-white px-2"
+            className="shrink-0 gap-2 px-2"
           >
             <Avatar className="h-7 w-7">
-              <AvatarFallback className="text-xs bg-white/15 text-white">
+              <AvatarFallback className="text-xs bg-primary/10 text-primary">
                 {initials(profile?.name ?? null, profile?.email ?? null)}
               </AvatarFallback>
             </Avatar>
