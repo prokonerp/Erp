@@ -385,7 +385,7 @@ export function CustomerMasterPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base">All Customers ({rows.length})</CardTitle>
+          <CardTitle className="text-base">All Customers ({totalCount || rows.length})</CardTitle>
           <Input placeholder="Search by name, phone, GST, city…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
         </CardHeader>
         <CardContent className="overflow-x-auto">
