@@ -96,10 +96,13 @@ export type Database = {
           created_at: string
           created_by: string | null
           customer_id: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           duration_years: number
           email: string | null
           end_date: string
           id: string
+          is_deleted: boolean
           oem_brand: string | null
           oem_call: boolean
           oem_purchase_date: string | null
@@ -124,10 +127,13 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           duration_years?: number
           email?: string | null
           end_date: string
           id?: string
+          is_deleted?: boolean
           oem_brand?: string | null
           oem_call?: boolean
           oem_purchase_date?: string | null
@@ -152,10 +158,13 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           duration_years?: number
           email?: string | null
           end_date?: string
           id?: string
+          is_deleted?: boolean
           oem_brand?: string | null
           oem_call?: boolean
           oem_purchase_date?: string | null
@@ -1491,12 +1500,15 @@ export type Database = {
           created_by: string | null
           def_model_no: string | null
           def_serial_no: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           engineer_name: string | null
           id: string
           indent_city: string | null
           indent_date: string
           indent_no: string | null
           indent_type: Database["public"]["Enums"]["indent_type"] | null
+          is_deleted: boolean
           material_exchange_model: string | null
           material_exchange_serial_no: string | null
           material_rec_date: string | null
@@ -1519,12 +1531,15 @@ export type Database = {
           created_by?: string | null
           def_model_no?: string | null
           def_serial_no?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           engineer_name?: string | null
           id?: string
           indent_city?: string | null
           indent_date?: string
           indent_no?: string | null
           indent_type?: Database["public"]["Enums"]["indent_type"] | null
+          is_deleted?: boolean
           material_exchange_model?: string | null
           material_exchange_serial_no?: string | null
           material_rec_date?: string | null
@@ -1547,12 +1562,15 @@ export type Database = {
           created_by?: string | null
           def_model_no?: string | null
           def_serial_no?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           engineer_name?: string | null
           id?: string
           indent_city?: string | null
           indent_date?: string
           indent_no?: string | null
           indent_type?: Database["public"]["Enums"]["indent_type"] | null
+          is_deleted?: boolean
           material_exchange_model?: string | null
           material_exchange_serial_no?: string | null
           material_rec_date?: string | null
@@ -2367,9 +2385,11 @@ export type Database = {
           defective_parts_details: Json
           defective_parts_received: boolean
           deleted_at: string | null
+          deleted_by: string | null
           good_parts_details: Json
           good_parts_used: boolean
           id: string
+          is_deleted: boolean
           location: string | null
           oem_brand: string | null
           oem_call: boolean
@@ -2415,9 +2435,11 @@ export type Database = {
           defective_parts_details?: Json
           defective_parts_received?: boolean
           deleted_at?: string | null
+          deleted_by?: string | null
           good_parts_details?: Json
           good_parts_used?: boolean
           id?: string
+          is_deleted?: boolean
           location?: string | null
           oem_brand?: string | null
           oem_call?: boolean
@@ -2463,9 +2485,11 @@ export type Database = {
           defective_parts_details?: Json
           defective_parts_received?: boolean
           deleted_at?: string | null
+          deleted_by?: string | null
           good_parts_details?: Json
           good_parts_used?: boolean
           id?: string
+          is_deleted?: boolean
           location?: string | null
           oem_brand?: string | null
           oem_call?: boolean
@@ -2714,6 +2738,14 @@ export type Database = {
       next_ims_txn_seq: { Args: never; Returns: number }
       next_indent_seq: { Args: never; Returns: number }
       next_ticket_seq: { Args: never; Returns: number }
+      purge_archived_records: {
+        Args: never
+        Returns: {
+          amcs_deleted: number
+          indents_deleted: number
+          tickets_deleted: number
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "user"
