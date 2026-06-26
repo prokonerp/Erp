@@ -26,6 +26,7 @@ import { Route as AppGrnRouteImport } from './routes/_app/grn'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCrmRouteImport } from './routes/_app/crm'
 import { Route as AppChallanRouteImport } from './routes/_app/challan'
+import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppAmcRouteImport } from './routes/_app/amc'
 import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index'
 import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
@@ -167,6 +168,11 @@ const AppCrmRoute = AppCrmRouteImport.update({
 const AppChallanRoute = AppChallanRouteImport.update({
   id: '/challan',
   path: '/challan',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppArchiveRoute = AppArchiveRouteImport.update({
+  id: '/archive',
+  path: '/archive',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAmcRoute = AppAmcRouteImport.update({
@@ -465,6 +471,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/raise-ticket': typeof RaiseTicketRoute
   '/amc': typeof AppAmcRouteWithChildren
+  '/archive': typeof AppArchiveRoute
   '/challan': typeof AppChallanRouteWithChildren
   '/crm': typeof AppCrmRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
@@ -540,6 +547,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/raise-ticket': typeof RaiseTicketRoute
+  '/archive': typeof AppArchiveRoute
   '/dashboard': typeof AppDashboardRoute
   '/import': typeof AppImportRoute
   '/masters': typeof AppMastersRouteWithChildren
@@ -606,6 +614,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/raise-ticket': typeof RaiseTicketRoute
   '/_app/amc': typeof AppAmcRouteWithChildren
+  '/_app/archive': typeof AppArchiveRoute
   '/_app/challan': typeof AppChallanRouteWithChildren
   '/_app/crm': typeof AppCrmRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
@@ -684,6 +693,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/raise-ticket'
     | '/amc'
+    | '/archive'
     | '/challan'
     | '/crm'
     | '/dashboard'
@@ -759,6 +769,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/raise-ticket'
+    | '/archive'
     | '/dashboard'
     | '/import'
     | '/masters'
@@ -824,6 +835,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/raise-ticket'
     | '/_app/amc'
+    | '/_app/archive'
     | '/_app/challan'
     | '/_app/crm'
     | '/_app/dashboard'
@@ -1022,6 +1034,13 @@ declare module '@tanstack/react-router' {
       path: '/challan'
       fullPath: '/challan'
       preLoaderRoute: typeof AppChallanRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/archive': {
+      id: '/_app/archive'
+      path: '/archive'
+      fullPath: '/archive'
+      preLoaderRoute: typeof AppArchiveRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/amc': {
@@ -1701,6 +1720,7 @@ const AppTicketsRouteWithChildren = AppTicketsRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAmcRoute: typeof AppAmcRouteWithChildren
+  AppArchiveRoute: typeof AppArchiveRoute
   AppChallanRoute: typeof AppChallanRouteWithChildren
   AppCrmRoute: typeof AppCrmRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
@@ -1719,6 +1739,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAmcRoute: AppAmcRouteWithChildren,
+  AppArchiveRoute: AppArchiveRoute,
   AppChallanRoute: AppChallanRouteWithChildren,
   AppCrmRoute: AppCrmRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
