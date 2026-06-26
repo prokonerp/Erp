@@ -114,6 +114,7 @@ function isValidPhone(p: string): boolean {
 
 export function CustomerMasterPage() {
   const [rows, setRows] = useState<Customer[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -123,8 +124,27 @@ export function CustomerMasterPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
-    const { data } = await supabase.from("customers").select("*").order("company");
-    setRows((data || []) as unknown as Customer[]);
+    // Supabase caps a single response at 1000 rows. Page through to load everything.
+    const PAGE = 1000;
+    let from = 0;
+    const all: any[] = [];
+    // First call returns exact count so the header shows the true total.
+    // Subsequent calls page until we've fetched every row.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { data, count, error } = await supabase
+        .from("customers")
+        .select("*", { count: "exact" })
+        .order("company")
+        .range(from, from + PAGE - 1);
+      if (error) break;
+      const batch = data || [];
+      all.push(...batch);
+      if (count != null) setTotalCount(count);
+      if (batch.length < PAGE) break;
+      from += PAGE;
+    }
+    setRows(all as unknown as Customer[]);
   };
   useEffect(() => { load(); }, []);
 
@@ -365,7 +385,7 @@ export function CustomerMasterPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base">All Customers ({rows.length})</CardTitle>
+          <CardTitle className="text-base">All Customers ({totalCount || rows.length})</CardTitle>
           <Input placeholder="Search by name, phone, GST, city…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
         </CardHeader>
         <CardContent className="overflow-x-auto">
