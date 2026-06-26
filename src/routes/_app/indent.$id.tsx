@@ -122,9 +122,10 @@ function IndentDetail() {
 
   const del = async () => {
     if (!i || !confirm("Delete this Indent?")) return;
-    const { error } = await supabase.from("indents" as never).delete().eq("id", i.id);
+    const { softDelete } = await import("@/lib/softDelete");
+    const { error } = await softDelete("indents", i.id);
     if (error) return toast.error(error.message);
-    toast.success("Deleted");
+    toast.success("Moved to Archive");
     navigate({ to: "/indent" });
   };
 
