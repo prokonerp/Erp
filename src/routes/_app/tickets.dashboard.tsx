@@ -60,6 +60,7 @@ function TicketsDashboard() {
       const { data } = await supabase
         .from("tickets")
         .select("id,case_id,call_type,status,customer_name,product,assigned_engineer_name,assigned_at,closed_at,created_at")
+        .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .limit(2000);
       setRows((data || []) as Row[]);
