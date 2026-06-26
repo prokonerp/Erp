@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 import { FormPageHeader } from "@/components/FormPageHeader";
+import { softDelete as softDeleteRow, useRealtimeRefetch } from "@/lib/softDelete";
 
 export const Route = createFileRoute("/_app/tickets/")({
   component: TicketsList,
@@ -74,7 +75,7 @@ function TicketsList() {
 
   const load = async () => {
     setLoading(true);
-    let query = supabase.from("tickets").select("*").is("deleted_at", null).order("created_at", { ascending: false }).limit(500);
+    let query = supabase.from("tickets").select("*").eq("is_deleted", false).order("created_at", { ascending: false }).limit(500);
     if (status !== "all") query = query.eq("status", status);
     if (type !== "all") query = query.eq("call_type", type);
     const { data } = await query;
@@ -95,6 +96,7 @@ function TicketsList() {
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, type]);
+  useRealtimeRefetch("tickets", () => load());
 
   const cities = useMemo(() => Array.from(new Set(rows.map((r) => (r.location || "").trim()).filter(Boolean))).sort(), [rows]);
 
@@ -157,9 +159,9 @@ function TicketsList() {
   };
 
   const softDelete = async (r: Row) => {
-    const { error } = await supabase.from("tickets").update({ deleted_at: new Date().toISOString() } as never).eq("id", r.id);
+    const { error } = await softDeleteRow("tickets", r.id);
     if (error) return toast.error(error.message);
-    toast.success(`Ticket ${r.case_id} deleted`);
+    toast.success(`Ticket ${r.case_id} moved to Archive`);
     load();
   };
 
