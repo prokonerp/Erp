@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Search } from "lucide-react";
 import { indentTypeLabel, indentStatusFromOracles, indentClosedAt, formatAge, oracleStatus, type Indent } from "@/lib/indent";
+import { useRealtimeRefetch } from "@/lib/softDelete";
 
 export const Route = createFileRoute("/_app/indent/")({
   component: IndentList,
@@ -18,16 +19,17 @@ function IndentList() {
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from("indents" as never)
-        .select("*")
-        .order("created_at", { ascending: false });
-      setRows((data || []) as unknown as Indent[]);
-      setLoading(false);
-    })();
-  }, []);
+  const load = async () => {
+    const { data } = await supabase
+      .from("indents" as never)
+      .select("*")
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false });
+    setRows((data || []) as unknown as Indent[]);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+  useRealtimeRefetch("indents", load);
 
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 60_000);

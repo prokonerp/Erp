@@ -399,8 +399,10 @@ function TicketDetail() {
 
   const del = async () => {
     if (!confirm(`Delete ticket ${t.case_id}?`)) return;
-    await supabase.from("tickets").delete().eq("id", t.id);
-    toast.success("Deleted");
+    const { softDelete } = await import("@/lib/softDelete");
+    const { error } = await softDelete("tickets", t.id);
+    if (error) return toast.error(error.message);
+    toast.success("Moved to Archive");
     navigate({ to: "/tickets" });
   };
 

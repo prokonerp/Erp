@@ -30,6 +30,7 @@ import {
   Boxes,
   Truck,
   IdCard,
+  Archive as ArchiveIcon,
 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
@@ -121,6 +122,7 @@ function AppLayout() {
     { to: "/ims", label: "Inventory (IMS)", icon: Warehouse, module: "ims", group: "Inventory" },
     { to: "/reports", label: "Reports", icon: BarChart3, module: "reports", group: "Intelligence" },
     { to: "/import", label: "Data Import (CSV Import)", icon: Upload, adminOnly: true, group: "System" },
+    { to: "/archive", label: "Archive (Deleted Records)", icon: ArchiveIcon, adminOnly: true, group: "System" },
   ];
 
   const navItems = permLoading

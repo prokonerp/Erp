@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STATUS_COLOR, TICKET_STATUSES, CALL_TYPES } from "@/lib/tickets";
 import { Eye } from "lucide-react";
+import { useRealtimeRefetch } from "@/lib/softDelete";
 
 export const Route = createFileRoute("/_app/tickets/dashboard")({
   component: TicketsDashboard,
@@ -54,18 +55,19 @@ function TicketsDashboard() {
   const isActive = (f: Filter) =>
     JSON.stringify(f) === JSON.stringify(filter);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from("tickets")
-        .select("id,case_id,call_type,status,customer_name,product,assigned_engineer_name,assigned_at,closed_at,created_at")
-        .order("created_at", { ascending: false })
-        .limit(2000);
-      setRows((data || []) as Row[]);
-      setLoading(false);
-    })();
-  }, []);
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("tickets")
+      .select("id,case_id,call_type,status,customer_name,product,assigned_engineer_name,assigned_at,closed_at,created_at")
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false })
+      .limit(2000);
+    setRows((data || []) as Row[]);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+  useRealtimeRefetch("tickets", load);
 
   const start = rangeStart(range);
 

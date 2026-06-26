@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { hoursExcludingSundays } from "@/lib/tickets";
 import type { ModuleKey } from "@/lib/permissions";
+import { useRealtimeRefetch } from "@/lib/softDelete";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -227,16 +228,16 @@ type TicketRow = {
 
 function TicketsWidget({ scope }: { scope: { engineerName: string | null } }) {
   const [rows, setRows] = useState<TicketRow[] | null>(null);
-  useEffect(() => {
-    (async () => {
-      let q = supabase.from("tickets")
-        .select("id,case_id,status,priority,assigned_engineer_name,created_at,closed_at")
-        .is("deleted_at", null).order("created_at", { ascending: false }).limit(1000);
-      if (scope.engineerName) q = q.eq("assigned_engineer_name", scope.engineerName);
-      const { data } = await q;
-      setRows((data || []) as TicketRow[]);
-    })();
-  }, [scope.engineerName]);
+  const load = async () => {
+    let q = supabase.from("tickets")
+      .select("id,case_id,status,priority,assigned_engineer_name,created_at,closed_at")
+      .eq("is_deleted", false).order("created_at", { ascending: false }).limit(1000);
+    if (scope.engineerName) q = q.eq("assigned_engineer_name", scope.engineerName);
+    const { data } = await q;
+    setRows((data || []) as TicketRow[]);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [scope.engineerName]);
+  useRealtimeRefetch("tickets", load);
 
   const k = useMemo(() => {
     const r = rows || [];
@@ -268,14 +269,14 @@ type PmRow = { id: string; scheduled_date: string; completed_at: string | null }
 function AmcWidget() {
   const [amcs, setAmcs] = useState<AmcRow[] | null>(null);
   const [pms, setPms] = useState<PmRow[] | null>(null);
-  useEffect(() => {
-    (async () => {
-      const { data: a } = await supabase.from("amcs").select("id,agreement_no,end_date").order("end_date", { ascending: true }).limit(1000);
-      setAmcs((a || []) as AmcRow[]);
-      const { data: p } = await supabase.from("pm_visits").select("id,scheduled_date,completed_at").limit(1000);
-      setPms((p || []) as PmRow[]);
-    })();
-  }, []);
+  const load = async () => {
+    const { data: a } = await supabase.from("amcs").select("id,agreement_no,end_date").eq("is_deleted", false).order("end_date", { ascending: true }).limit(1000);
+    setAmcs((a || []) as AmcRow[]);
+    const { data: p } = await supabase.from("pm_visits").select("id,scheduled_date,completed_at").limit(1000);
+    setPms((p || []) as PmRow[]);
+  };
+  useEffect(() => { load(); }, []);
+  useRealtimeRefetch("amcs", load);
 
   const k = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -309,12 +310,12 @@ type IndentRow = { id: string; indent_no: string; created_at: string; oracles_da
 
 function IndentWidget() {
   const [rows, setRows] = useState<IndentRow[] | null>(null);
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.from("indents" as never).select("id,indent_no,created_at,oracles_data,created_by").order("created_at", { ascending: false }).limit(1000);
-      setRows((data || []) as unknown as IndentRow[]);
-    })();
-  }, []);
+  const load = async () => {
+    const { data } = await supabase.from("indents" as never).select("id,indent_no,created_at,oracles_data,created_by").eq("is_deleted", false).order("created_at", { ascending: false }).limit(1000);
+    setRows((data || []) as unknown as IndentRow[]);
+  };
+  useEffect(() => { load(); }, []);
+  useRealtimeRefetch("indents", load);
   const k = useMemo(() => {
     const r = rows || [];
     let openOracles = 0, closedOracles = 0, fullyOpen = 0, fullyClosed = 0;
@@ -479,12 +480,12 @@ function quarterRange(offset = 0) {
 
 function QuarterlyTicketsCard() {
   const [rows, setRows] = useState<{ created_at: string; status: string }[] | null>(null);
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.from("tickets").select("created_at,status").is("deleted_at", null).order("created_at", { ascending: false }).limit(5000);
-      setRows((data || []) as any);
-    })();
-  }, []);
+  const load = async () => {
+    const { data } = await supabase.from("tickets").select("created_at,status").eq("is_deleted", false).order("created_at", { ascending: false }).limit(5000);
+    setRows((data || []) as any);
+  };
+  useEffect(() => { load(); }, []);
+  useRealtimeRefetch("tickets", load);
   const cur = quarterRange(0); const prev = quarterRange(-1);
   const inRange = (iso: string, s: Date, e: Date) => { const d = new Date(iso); return d >= s && d < e; };
   const r = rows || [];
@@ -538,17 +539,17 @@ function BarLine({ label, value, max, tone }: { label: string; value: number; ma
 
 function TeamPerformanceCard() {
   const [rows, setRows] = useState<{ assigned_engineer_name: string | null; status: string; closed_at: string | null }[] | null>(null);
-  useEffect(() => {
-    (async () => {
-      const since = new Date(); since.setDate(since.getDate() - 90);
-      const { data } = await supabase.from("tickets")
-        .select("assigned_engineer_name,status,closed_at")
-        .is("deleted_at", null)
-        .gte("created_at", since.toISOString())
-        .limit(5000);
-      setRows((data || []) as any);
-    })();
-  }, []);
+  const load = async () => {
+    const since = new Date(); since.setDate(since.getDate() - 90);
+    const { data } = await supabase.from("tickets")
+      .select("assigned_engineer_name,status,closed_at")
+      .eq("is_deleted", false)
+      .gte("created_at", since.toISOString())
+      .limit(5000);
+    setRows((data || []) as any);
+  };
+  useEffect(() => { load(); }, []);
+  useRealtimeRefetch("tickets", load);
   const top = useMemo(() => {
     const r = rows || [];
     const m = new Map<string, { closed: number; total: number }>();
@@ -602,13 +603,12 @@ type FeedItem = { id: string; module: ModuleKey; title: string; subtitle: string
 function ActivityFeed({ can, isAdmin, engineerName }: { can: (m: ModuleKey, a?: any) => boolean; isAdmin: boolean; engineerName: string | null }) {
   const [items, setItems] = useState<FeedItem[] | null>(null);
 
-  useEffect(() => {
-    (async () => {
+  const load = async () => {
       const collected: FeedItem[] = [];
       const showAll = isAdmin;
       if (showAll || can("tickets", "read")) {
         let q = supabase.from("tickets").select("id,case_id,status,customer_name,assigned_engineer_name,created_at")
-          .is("deleted_at", null).order("created_at", { ascending: false }).limit(15);
+          .eq("is_deleted", false).order("created_at", { ascending: false }).limit(15);
         if (!showAll && engineerName) q = q.eq("assigned_engineer_name", engineerName);
         const { data } = await q;
         (data || []).forEach((t: any) => collected.push({
@@ -619,7 +619,7 @@ function ActivityFeed({ can, isAdmin, engineerName }: { can: (m: ModuleKey, a?: 
       }
       if (showAll || can("indent", "read")) {
         const { data } = await supabase.from("indents" as never)
-          .select("id,indent_no,company,created_at").order("created_at", { ascending: false }).limit(10);
+          .select("id,indent_no,company,created_at").eq("is_deleted", false).order("created_at", { ascending: false }).limit(10);
         (data || []).forEach((x: any) => collected.push({
           id: `i-${x.id}`, module: "indent",
           title: `${x.indent_no} · ${x.company || "—"}`, subtitle: "Indent created",
@@ -628,7 +628,7 @@ function ActivityFeed({ can, isAdmin, engineerName }: { can: (m: ModuleKey, a?: 
       }
       if (showAll || can("amc", "read")) {
         const { data } = await supabase.from("amcs")
-          .select("id,agreement_no,client_company,client_name,created_at").order("created_at", { ascending: false }).limit(10);
+          .select("id,agreement_no,client_company,client_name,created_at").eq("is_deleted", false).order("created_at", { ascending: false }).limit(10);
         (data || []).forEach((x: any) => collected.push({
           id: `a-${x.id}`, module: "amc",
           title: `${x.agreement_no} · ${x.client_company || x.client_name || "—"}`, subtitle: "AMC created",
@@ -637,8 +637,9 @@ function ActivityFeed({ can, isAdmin, engineerName }: { can: (m: ModuleKey, a?: 
       }
       collected.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
       setItems(collected.slice(0, 15));
-    })();
-  }, [isAdmin, engineerName]);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [isAdmin, engineerName]);
+  useRealtimeRefetch(["tickets", "indents", "amcs"], load);
 
   const moduleIcon = (m: ModuleKey) => {
     if (m === "tickets") return Ticket;

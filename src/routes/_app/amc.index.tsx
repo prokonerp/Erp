@@ -11,6 +11,7 @@ import { ExportButtons } from "@/components/ExportButtons";
 import { usePermissions } from "@/lib/usePermissions";
 import { type DateRange, type RangeMode, currentMonth, resolveRange, overlaps } from "@/lib/dateRange";
 import { DateFilterBar } from "@/components/DateFilterBar";
+import { useRealtimeRefetch } from "@/lib/softDelete";
 
 export const Route = createFileRoute("/_app/amc/")({
   component: AmcDashboard,
@@ -26,10 +27,12 @@ function AmcDashboard() {
   const { can } = usePermissions();
   const canCreateTicket = can("tickets", "create");
 
-  useEffect(() => {
-    supabase.from("amcs").select("*").order("end_date", { ascending: true })
+  const load = () => {
+    supabase.from("amcs").select("*").eq("is_deleted", false).order("end_date", { ascending: true })
       .then(({ data }) => setRows((data || []) as unknown as Amc[]));
-  }, []);
+  };
+  useEffect(() => { load(); }, []);
+  useRealtimeRefetch("amcs", load);
 
   const range = useMemo(() => resolveRange(rangeMode, customRange), [rangeMode, customRange]);
   const decorated = useMemo(() => rows.map((r) => ({ ...r, _status: amcStatus(r.end_date) })), [rows]);
