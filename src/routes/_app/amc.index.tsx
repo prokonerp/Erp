@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck, Ticket as TicketIcon, Briefcase } from "lucide-react";
+import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck, Ticket as TicketIcon, Briefcase, List } from "lucide-react";
 import { type Amc, amcStatus, fmtDate, statusBadgeClass, statusLabel, statusRowClass } from "@/lib/amc";
 import { ExportButtons } from "@/components/ExportButtons";
 import { usePermissions } from "@/lib/usePermissions";
