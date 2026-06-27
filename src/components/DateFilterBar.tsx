@@ -32,6 +32,7 @@ export function DateFilterBar({ mode, setMode, range, setRange }: Props) {
     <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card px-3 py-2">
       <CalendarRange className="h-4 w-4 text-muted-foreground" />
       <span className="text-xs uppercase tracking-wide text-muted-foreground mr-1">Date filter</span>
+      <Chip m="all" label="All" />
       <Chip m="week" label="Current Week" />
       <Chip m="month" label="Current Month" />
       <Popover>
