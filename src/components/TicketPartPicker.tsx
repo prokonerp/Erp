@@ -42,7 +42,6 @@ export function TicketPartPicker({ ticketProduct, value, onSelect, className, di
     let alive = true;
     (async () => {
       setLoading(true);
-      const sb = supabase as any;
       const all = await fetchAll<any>("products", (q) =>
         q.select("id,name,model,brand,category,active").eq("active", true),
       ).catch(() => [] as any[]);
