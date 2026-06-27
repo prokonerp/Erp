@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAll } from "@/lib/fetchAll";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -35,12 +36,12 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
 
   useEffect(() => {
     let alive = true;
-    supabase.from("products")
-      .select("id,name,model,brand,category,active")
-      .order("name")
-      .then(({ data }) => {
+    fetchAll<any>("products", (q) =>
+      q.select("id,name,model,brand,category,active").order("name"),
+    )
+      .then((data) => {
         if (!alive) return;
-        const mapped: ImsModelPart[] = ((data || []) as any[])
+        const mapped: ImsModelPart[] = data
           .filter((p) => p.active !== false)
           .map((p) => ({
             id: p.id,
@@ -52,7 +53,8 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
           }));
         setRows(mapped);
         setLoading(false);
-      });
+      })
+      .catch(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
 
