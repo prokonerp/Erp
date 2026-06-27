@@ -200,7 +200,7 @@ const MODULES: Record<ModuleKey, ModuleDef> = {
       { key: "contact_no", label: "Contact No.", type: "phone", example: "9876543210" },
       { key: "email", label: "Email", type: "email", example: "ramesh@acme.in" },
       { key: "start_date", label: "Start Date (YYYY-MM-DD)", type: "date", required: true, example: "2026-01-01" },
-      { key: "duration_years", label: "Duration (Years)", type: "integer", required: true, example: "1" },
+      { key: "duration_years", label: "Duration (Years — use 0.5 for 6 months)", type: "number", required: true, example: "1" },
       { key: "amc_value", label: "AMC Value", type: "number", example: "12000" },
       { key: "category", label: "Product Category", type: "title", virtual: true, example: "UPS" },
       { key: "model", label: "Model", type: "upper", virtual: true, example: "SMT1000I" },

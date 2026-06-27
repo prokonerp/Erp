@@ -89,8 +89,8 @@ export const generatePMDates = (start: string, durationYears: number): string[] 
 };
 
 export const addYears = (date: string, years: number): string => {
-  const d = new Date(date + "T00:00:00");
-  d.setFullYear(d.getFullYear() + years);
+  const months = Math.round(years * 12);
+  const d = new Date(addMonths(date, months) + "T00:00:00");
   // typical AMC end = day before next anniversary
   d.setDate(d.getDate() - 1);
   return d.toISOString().slice(0, 10);

@@ -277,7 +277,13 @@ ${body}
               <Label>Duration</Label>
               <Select value={String(a.duration_years)} onValueChange={(v) => update({ duration_years: Number(v) })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{[1, 2, 3, 5].map((y) => <SelectItem key={y} value={String(y)}>{y} Year{y > 1 ? "s" : ""}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {[0.5, 1, 2, 3, 4, 5].map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y === 0.5 ? "6 Months" : `${y} Year${y > 1 ? "s" : ""}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
               </Select>
             </div>
             <div><Label>Start Date (DD-MM-YYYY)</Label><Input type="date" value={a.start_date} onChange={(e) => update({ start_date: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">{fmtDate(a.start_date)}</p></div>
@@ -439,7 +445,7 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
         <div className="text-right"><b>Date:</b> {fmtDate(new Date().toISOString().slice(0, 10))}</div>
         <div><b>Start:</b> {fmtDate(a.start_date)}</div>
         <div className="text-right"><b>End:</b> {fmtDate(a.end_date)}</div>
-        <div><b>Duration:</b> {a.duration_years} Year(s)</div>
+        <div><b>Duration:</b> {a.duration_years === 0.5 ? "6 Months" : `${a.duration_years} Year${a.duration_years > 1 ? "s" : ""}`}</div>
         <div className="text-right"><b>AMC Value:</b> ₹ {Number(a.amc_value || 0).toLocaleString("en-IN")}</div>
       </div>
 

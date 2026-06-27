@@ -230,7 +230,11 @@ function NewAmc() {
             <Select value={String(form.duration_years)} onValueChange={(v) => setForm({ ...form, duration_years: Number(v) })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {[1, 2, 3, 4, 5].map((y) => <SelectItem key={y} value={String(y)}>{y}Y</SelectItem>)}
+                {[0.5, 1, 2, 3, 4, 5].map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y === 0.5 ? "6M" : `${y}Y`}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </FormField>
