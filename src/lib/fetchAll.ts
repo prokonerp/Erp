@@ -1,0 +1,29 @@
+import { supabase } from "@/integrations/supabase/client";
+
+/**
+ * Fetch ALL rows from a Supabase table, bypassing the default 1000-row cap
+ * by paging through with .range() in batches of `pageSize`.
+ *
+ * Usage:
+ *   const rows = await fetchAll("customers", (q) => q.select("*").order("company"));
+ */
+export async function fetchAll<T = any>(
+  table: string,
+  build: (q: any) => any,
+  pageSize = 1000,
+): Promise<T[]> {
+  const all: T[] = [];
+  let from = 0;
+  // Safety cap to avoid runaway loops
+  for (let i = 0; i < 1000; i++) {
+    const to = from + pageSize - 1;
+    const q = build((supabase as any).from(table)).range(from, to);
+    const { data, error } = await q;
+    if (error) throw error;
+    const batch = (data || []) as T[];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
