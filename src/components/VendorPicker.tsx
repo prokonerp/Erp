@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAll } from "@/lib/fetchAll";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -32,11 +33,15 @@ export function VendorPicker({ value, onChange, required, placeholder = "Search 
 
   useEffect(() => {
     let alive = true;
-    supabase.from("vendors").select("id,name,contact_name,phone,email,address,gstin").order("name").then(({ data }) => {
-      if (!alive) return;
-      setRows((data || []) as unknown as Vendor[]);
-      setLoading(false);
-    });
+    fetchAll<Vendor>("vendors", (q) =>
+      q.select("id,name,contact_name,phone,email,address,gstin").order("name"),
+    )
+      .then((data) => {
+        if (!alive) return;
+        setRows(data);
+        setLoading(false);
+      })
+      .catch(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
 
