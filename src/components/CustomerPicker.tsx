@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAll } from "@/lib/fetchAll";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -22,11 +23,13 @@ export function CustomerPicker({ value, onChange, required, placeholder = "Searc
 
   useEffect(() => {
     let alive = true;
-    supabase.from("customers").select("*").order("company").then(({ data }) => {
-      if (!alive) return;
-      setRows((data || []) as unknown as Customer[]);
-      setLoading(false);
-    });
+    fetchAll<Customer>("customers", (q) => q.select("*").order("company"))
+      .then((data) => {
+        if (!alive) return;
+        setRows(data);
+        setLoading(false);
+      })
+      .catch(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
 
