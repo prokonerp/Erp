@@ -277,7 +277,13 @@ ${body}
               <Label>Duration</Label>
               <Select value={String(a.duration_years)} onValueChange={(v) => update({ duration_years: Number(v) })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{[1, 2, 3, 5].map((y) => <SelectItem key={y} value={String(y)}>{y} Year{y > 1 ? "s" : ""}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {[0.5, 1, 2, 3, 4, 5].map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y === 0.5 ? "6 Months" : `${y} Year${y > 1 ? "s" : ""}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
               </Select>
             </div>
             <div><Label>Start Date (DD-MM-YYYY)</Label><Input type="date" value={a.start_date} onChange={(e) => update({ start_date: e.target.value })} /><p className="text-xs text-muted-foreground mt-1">{fmtDate(a.start_date)}</p></div>
