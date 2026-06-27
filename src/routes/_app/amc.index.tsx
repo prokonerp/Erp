@@ -22,7 +22,7 @@ function AmcDashboard() {
   const [rows, setRows] = useState<Amc[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "expiring" | "expired">("all");
-  const [rangeMode, setRangeMode] = useState<RangeMode>("month");
+  const [rangeMode, setRangeMode] = useState<RangeMode>("all");
   const [customRange, setCustomRange] = useState<DateRange>(currentMonth());
   const { can } = usePermissions();
   const canCreateTicket = can("tickets", "create");
