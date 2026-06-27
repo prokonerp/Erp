@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck, Ticket as TicketIcon, Briefcase } from "lucide-react";
+import { Search, Plus, Settings, AlertTriangle, CalendarClock, Eye, CalendarCheck, Ticket as TicketIcon, Briefcase, List } from "lucide-react";
 import { type Amc, amcStatus, fmtDate, statusBadgeClass, statusLabel, statusRowClass } from "@/lib/amc";
 import { ExportButtons } from "@/components/ExportButtons";
 import { usePermissions } from "@/lib/usePermissions";
@@ -84,6 +84,7 @@ function AmcDashboard() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold">AMC Management</h1>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => { setFilter("all"); setRangeMode("all"); }}><List className="h-4 w-4 mr-1" />Show All AMCs</Button>
           <Link to="/amc/oem"><Button variant="outline" size="sm"><Briefcase className="h-4 w-4 mr-1" />AMC OEM Data</Button></Link>
           <Link to="/amc/pm"><Button variant="outline" size="sm"><CalendarCheck className="h-4 w-4 mr-1" />PM Schedule</Button></Link>
           <Link to="/amc/settings"><Button variant="outline" size="sm"><Settings className="h-4 w-4 mr-1" />Terms Template</Button></Link>

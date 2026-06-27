@@ -1,4 +1,4 @@
-export type RangeMode = "week" | "month" | "custom";
+export type RangeMode = "all" | "week" | "month" | "custom";
 
 export type DateRange = { from: string; to: string }; // YYYY-MM-DD inclusive
 
@@ -25,6 +25,7 @@ export const currentMonth = (): DateRange => {
 };
 
 export const resolveRange = (mode: RangeMode, custom?: Partial<DateRange>): DateRange => {
+  if (mode === "all") return { from: "1900-01-01", to: "2100-12-31" };
   if (mode === "week") return currentWeek();
   if (mode === "month") return currentMonth();
   return { from: custom?.from || currentMonth().from, to: custom?.to || currentMonth().to };
