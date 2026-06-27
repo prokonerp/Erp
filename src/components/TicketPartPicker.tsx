@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAll } from "@/lib/fetchAll";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -42,9 +43,9 @@ export function TicketPartPicker({ ticketProduct, value, onSelect, className, di
     (async () => {
       setLoading(true);
       const sb = supabase as any;
-      const { data: prods } = await sb.from("products")
-        .select("id,name,model,brand,category,active").eq("active", true);
-      const all = (prods || []) as any[];
+      const all = await fetchAll<any>("products", (q) =>
+        q.select("id,name,model,brand,category,active").eq("active", true),
+      ).catch(() => [] as any[]);
       const toPart = (p: any): TicketPart => ({
         id: p.id, name: p.name, model: p.model, brand: p.brand, category: p.category,
         productType: (p.category || "").toLowerCase().includes("spare") ? "Spare Part" : "Product",
@@ -65,9 +66,10 @@ export function TicketPartPicker({ ticketProduct, value, onSelect, className, di
         return;
       }
 
-      const { data: links } = await sb.from("product_spare_parts")
-        .select("spare_part_id").eq("parent_product_id", parent.id);
-      const spareIds = new Set(((links || []) as any[]).map((l) => l.spare_part_id));
+      const links = await fetchAll<any>("product_spare_parts", (q) =>
+        q.select("spare_part_id").eq("parent_product_id", parent.id),
+      ).catch(() => [] as any[]);
+      const spareIds = new Set(links.map((l) => l.spare_part_id));
       const out: TicketPart[] = [toPart(parent), ...all.filter((p) => spareIds.has(p.id)).map(toPart)];
       if (!alive) return;
       setRows(out);
