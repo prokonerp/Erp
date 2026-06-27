@@ -1,4 +1,4 @@
-export type RangeMode = "week" | "month" | "custom";
+export type RangeMode = "all" | "week" | "month" | "custom";
 
 export type DateRange = { from: string; to: string }; // YYYY-MM-DD inclusive
 
