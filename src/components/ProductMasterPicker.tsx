@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAll } from "@/lib/fetchAll";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -37,15 +38,15 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
 
   useEffect(() => {
     let alive = true;
-    supabase
-      .from("products")
-      .select("id,sku,name,model,brand,category,hsn,unit,description,active")
-      .order("name")
-      .then(({ data }) => {
+    fetchAll<ProductMaster>("products", (q) =>
+      q.select("id,sku,name,model,brand,category,hsn,unit,description,active").order("name"),
+    )
+      .then((data) => {
         if (!alive) return;
-        setRows(((data || []) as unknown as ProductMaster[]).filter((p) => p.active !== false));
+        setRows(data.filter((p) => p.active !== false));
         setLoading(false);
-      });
+      })
+      .catch(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
 
