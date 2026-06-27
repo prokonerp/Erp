@@ -11,19 +11,25 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
-  captionLayout = "label",
+  captionLayout = "dropdown",
   buttonVariant = "ghost",
   formatters,
   components,
+  startMonth,
+  endMonth,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>["variant"];
 }) {
   const defaultClassNames = getDefaultClassNames();
+  const _startMonth = startMonth ?? new Date(1950, 0);
+  const _endMonth = endMonth ?? new Date(new Date().getFullYear() + 10, 11);
 
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      startMonth={_startMonth}
+      endMonth={_endMonth}
       className={cn(
         "bg-background group/calendar p-3 [--cell-size:2rem] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
