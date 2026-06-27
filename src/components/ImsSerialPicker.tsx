@@ -50,19 +50,25 @@ export function ImsSerialPicker({
     let alive = true;
     if (!partModelNo && !partName) { setRows([]); return; }
     setLoading(true);
-    let q = (supabase as any).from("ims_stock_items")
-      .select("id,part_serial_no,part_model_no,part_name,warehouse_id,stock_type,stock_status")
-      .eq("stock_status", "available")
-      .not("part_serial_no", "is", null);
-    if (partModelNo) q = q.eq("part_model_no", partModelNo);
-    else if (partName) q = q.eq("part_name", partName);
-    if (stockType) q = q.eq("stock_type", stockType);
-    if (warehouseId) q = q.eq("warehouse_id", warehouseId);
-    q.order("part_serial_no").then(({ data }: any) => {
-      if (!alive) return;
-      setRows((data || []) as SerialItem[]);
-      setLoading(false);
-    });
+    import("@/lib/fetchAll").then(({ fetchAll }) =>
+      fetchAll<SerialItem>("ims_stock_items", (qq) => {
+        let q = qq
+          .select("id,part_serial_no,part_model_no,part_name,warehouse_id,stock_type,stock_status")
+          .eq("stock_status", "available")
+          .not("part_serial_no", "is", null);
+        if (partModelNo) q = q.eq("part_model_no", partModelNo);
+        else if (partName) q = q.eq("part_name", partName);
+        if (stockType) q = q.eq("stock_type", stockType);
+        if (warehouseId) q = q.eq("warehouse_id", warehouseId);
+        return q.order("part_serial_no");
+      })
+        .then((data) => {
+          if (!alive) return;
+          setRows(data);
+          setLoading(false);
+        })
+        .catch(() => { if (alive) setLoading(false); }),
+    );
     return () => { alive = false; };
   }, [partModelNo, partName, stockType, warehouseId]);
 
