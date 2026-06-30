@@ -1,142 +1,288 @@
 "use client";
 
 import * as React from "react";
-import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
-
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
 
-const Select = SelectPrimitive.Root;
+/**
+ * Searchable Select — drop-in replacement for the shadcn/Radix Select API.
+ * Renders a Popover + Command (cmdk) under the hood so every dropdown in the
+ * app gains real-time search, keyboard navigation and accessible focus.
+ *
+ * Supported usage (unchanged from prior code):
+ *   <Select value={v} onValueChange={setV}>
+ *     <SelectTrigger><SelectValue placeholder="…" /></SelectTrigger>
+ *     <SelectContent>
+ *       <SelectGroup>
+ *         <SelectLabel>Group</SelectLabel>
+ *         <SelectItem value="a">Label A</SelectItem>
+ *         <SelectSeparator />
+ *         <SelectItem value="b">Label B</SelectItem>
+ *       </SelectGroup>
+ *     </SelectContent>
+ *   </Select>
+ */
 
-const SelectGroup = SelectPrimitive.Group;
+type Ctx = {
+  value: string | undefined;
+  setValue: (v: string) => void;
+  open: boolean;
+  setOpen: (o: boolean) => void;
+  labelMap: Map<string, React.ReactNode>;
+  disabled?: boolean;
+};
+const SelectCtx = React.createContext<Ctx | null>(null);
+const useSelectCtx = () => {
+  const c = React.useContext(SelectCtx);
+  if (!c) throw new Error("Select.* must be used within <Select>");
+  return c;
+};
 
-const SelectValue = SelectPrimitive.Value;
+function nodeToText(node: React.ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeToText).join(" ");
+  if (React.isValidElement(node)) return nodeToText((node.props as any).children);
+  return "";
+}
 
-const SelectTrigger = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
-  <SelectPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background cursor-pointer data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-    <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-50" />
-    </SelectPrimitive.Icon>
-  </SelectPrimitive.Trigger>
-));
-SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
+function buildLabelMap(
+  children: React.ReactNode,
+  map: Map<string, React.ReactNode> = new Map(),
+): Map<string, React.ReactNode> {
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return;
+    const t: any = child.type;
+    const props: any = child.props;
+    if (t === SelectItem) {
+      map.set(String(props.value), props.children);
+    } else if (props?.children) {
+      buildLabelMap(props.children, map);
+    }
+  });
+  return map;
+}
 
-const SelectScrollUpButton = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.ScrollUpButton>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>
->(({ className, ...props }, ref) => (
-  <SelectPrimitive.ScrollUpButton
-    ref={ref}
-    className={cn("flex cursor-default items-center justify-center py-1", className)}
-    {...props}
-  >
-    <ChevronUp className="h-4 w-4" />
-  </SelectPrimitive.ScrollUpButton>
-));
-SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
+type SelectProps = {
+  value?: string;
+  defaultValue?: string;
+  onValueChange?: (v: string) => void;
+  open?: boolean;
+  onOpenChange?: (o: boolean) => void;
+  disabled?: boolean;
+  required?: boolean;
+  name?: string;
+  children?: React.ReactNode;
+};
 
-const SelectScrollDownButton = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.ScrollDownButton>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>
->(({ className, ...props }, ref) => (
-  <SelectPrimitive.ScrollDownButton
-    ref={ref}
-    className={cn("flex cursor-default items-center justify-center py-1", className)}
-    {...props}
-  >
-    <ChevronDown className="h-4 w-4" />
-  </SelectPrimitive.ScrollDownButton>
-));
-SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName;
+const Select: React.FC<SelectProps> = ({
+  value,
+  defaultValue,
+  onValueChange,
+  open,
+  onOpenChange,
+  disabled,
+  children,
+}) => {
+  const [innerVal, setInnerVal] = React.useState<string | undefined>(defaultValue);
+  const [innerOpen, setInnerOpen] = React.useState(false);
+  const val = value !== undefined ? value : innerVal;
+  const setVal = React.useCallback(
+    (v: string) => {
+      if (value === undefined) setInnerVal(v);
+      onValueChange?.(v);
+    },
+    [value, onValueChange],
+  );
+  const isOpen = open !== undefined ? open : innerOpen;
+  const setOpen = React.useCallback(
+    (o: boolean) => {
+      if (open === undefined) setInnerOpen(o);
+      onOpenChange?.(o);
+    },
+    [open, onOpenChange],
+  );
+  const labelMap = React.useMemo(() => buildLabelMap(children), [children]);
 
-const SelectContent = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", ...props }, ref) => (
-  <SelectPrimitive.Portal>
-    <SelectPrimitive.Content
-      ref={ref}
+  return (
+    <SelectCtx.Provider value={{ value: val, setValue: setVal, open: isOpen, setOpen, labelMap, disabled }}>
+      <Popover open={isOpen} onOpenChange={(o) => !disabled && setOpen(o)}>
+        {children}
+      </Popover>
+    </SelectCtx.Provider>
+  );
+};
+
+const SelectTrigger = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(
+  ({ className, children, ...props }, ref) => {
+    const { disabled, value } = useSelectCtx();
+    return (
+      <PopoverTrigger asChild>
+        <button
+          ref={ref}
+          type="button"
+          disabled={disabled}
+          data-placeholder={value === undefined || value === "" ? "" : undefined}
+          className={cn(
+            "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background cursor-pointer data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+            className,
+          )}
+          {...props}
+        >
+          <span className="flex-1 text-left truncate">{children}</span>
+          <ChevronDown className="h-4 w-4 opacity-50 ml-2 shrink-0" />
+        </button>
+      </PopoverTrigger>
+    );
+  },
+);
+SelectTrigger.displayName = "SelectTrigger";
+
+type SelectValueProps = { placeholder?: React.ReactNode; className?: string; children?: React.ReactNode };
+const SelectValue: React.FC<SelectValueProps> = ({ placeholder, className, children }) => {
+  const { value, labelMap } = useSelectCtx();
+  const label = value !== undefined && value !== "" ? labelMap.get(String(value)) : undefined;
+  if (label !== undefined && label !== null && label !== "") {
+    return <span className={cn("truncate", className)}>{label}</span>;
+  }
+  return <span className={cn("text-muted-foreground truncate", className)}>{children ?? placeholder}</span>;
+};
+
+// ---- Marker components (rendered via extraction inside SelectContent) ----
+type SelectItemProps = {
+  value: string;
+  children?: React.ReactNode;
+  disabled?: boolean;
+  className?: string;
+};
+const SelectItem: React.FC<SelectItemProps> = () => null;
+SelectItem.displayName = "SelectItem";
+
+const SelectGroup: React.FC<{ children?: React.ReactNode }> = ({ children }) => <>{children}</>;
+SelectGroup.displayName = "SelectGroup";
+
+const SelectLabel: React.FC<{ children?: React.ReactNode; className?: string }> = () => null;
+SelectLabel.displayName = "SelectLabel";
+
+const SelectSeparator: React.FC<{ className?: string }> = () => null;
+SelectSeparator.displayName = "SelectSeparator";
+
+const SelectScrollUpButton: React.FC<{ className?: string }> = () => null;
+const SelectScrollDownButton: React.FC<{ className?: string }> = () => null;
+
+// ---- SelectContent (renders Command with extracted items) ----
+type ExtractedItem =
+  | { kind: "item"; value: string; node: React.ReactNode; text: string; disabled?: boolean }
+  | { kind: "label"; node: React.ReactNode }
+  | { kind: "separator" };
+
+function extractItems(children: React.ReactNode, into: ExtractedItem[] = []): ExtractedItem[] {
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return;
+    const t: any = child.type;
+    const props: any = child.props;
+    if (t === SelectItem) {
+      into.push({
+        kind: "item",
+        value: String(props.value),
+        node: props.children,
+        text: nodeToText(props.children),
+        disabled: props.disabled,
+      });
+    } else if (t === SelectLabel) {
+      into.push({ kind: "label", node: props.children });
+    } else if (t === SelectSeparator) {
+      into.push({ kind: "separator" });
+    } else if (t === SelectGroup || t === React.Fragment) {
+      extractItems(props.children, into);
+    } else if (props?.children) {
+      // Permissive recurse so wrapped items still register
+      extractItems(props.children, into);
+    }
+  });
+  return into;
+}
+
+const SelectContent: React.FC<{
+  className?: string;
+  children?: React.ReactNode;
+  position?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  align?: "start" | "center" | "end";
+}> = ({ className, children, searchable, searchPlaceholder = "Search…", align = "start" }) => {
+  const { value, setValue, setOpen } = useSelectCtx();
+  const items = React.useMemo(() => extractItems(children), [children]);
+  const itemCount = items.filter((i) => i.kind === "item").length;
+  const showSearch = searchable ?? itemCount > 5;
+
+  return (
+    <PopoverContent
+      align={align}
+      sideOffset={4}
       className={cn(
-        "relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-select-content-transform-origin)",
-        position === "popper" &&
-          "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+        "p-0 w-[var(--radix-popover-trigger-width)] min-w-[var(--radix-popover-trigger-width)] max-h-[min(360px,var(--radix-popover-content-available-height))]",
         className,
       )}
-      position={position}
-      {...props}
+      onOpenAutoFocus={(e) => {
+        // Let cmdk's input take focus naturally when searchable; otherwise focus the list
+        if (!showSearch) e.preventDefault();
+      }}
     >
-      <SelectScrollUpButton />
-      <SelectPrimitive.Viewport
-        className={cn(
-          "p-1",
-          position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
-        )}
+      <Command
+        loop
+        filter={(val, search) => {
+          const s = search.toLowerCase().trim();
+          if (!s) return 1;
+          return val.toLowerCase().includes(s) ? 1 : 0;
+        }}
       >
-        {children}
-      </SelectPrimitive.Viewport>
-      <SelectScrollDownButton />
-    </SelectPrimitive.Content>
-  </SelectPrimitive.Portal>
-));
-SelectContent.displayName = SelectPrimitive.Content.displayName;
+        {showSearch && <CommandInput placeholder={searchPlaceholder} className="h-9" />}
+        <CommandList className="max-h-[300px]">
+          <CommandEmpty>No results.</CommandEmpty>
+          {items.map((it, idx) => {
+            if (it.kind === "label") {
+              return (
+                <div key={`l-${idx}`} className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                  {it.node}
+                </div>
+              );
+            }
+            if (it.kind === "separator") return <CommandSeparator key={`s-${idx}`} />;
+            return (
+              <CommandItem
+                key={`i-${it.value}-${idx}`}
+                value={`${it.text} ${it.value}`}
+                disabled={it.disabled}
+                onSelect={() => {
+                  setValue(it.value);
+                  setOpen(false);
+                }}
+                className="cursor-pointer"
+              >
+                <Check className={cn("mr-2 h-4 w-4 shrink-0", value === it.value ? "opacity-100" : "opacity-0")} />
+                <span className="flex-1 truncate">{it.node}</span>
+              </CommandItem>
+            );
+          })}
+        </CommandList>
+      </Command>
+    </PopoverContent>
+  );
+};
+SelectContent.displayName = "SelectContent";
 
-const SelectLabel = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.Label>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>
->(({ className, ...props }, ref) => (
-  <SelectPrimitive.Label
-    ref={ref}
-    className={cn("px-2 py-1.5 text-sm font-semibold", className)}
-    {...props}
-  />
-));
-SelectLabel.displayName = SelectPrimitive.Label.displayName;
-
-const SelectItem = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
-  <SelectPrimitive.Item
-    ref={ref}
-    className={cn(
-      "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-      className,
-    )}
-    {...props}
-  >
-    <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
-      <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
-      </SelectPrimitive.ItemIndicator>
-    </span>
-    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
-  </SelectPrimitive.Item>
-));
-SelectItem.displayName = SelectPrimitive.Item.displayName;
-
-const SelectSeparator = React.forwardRef<
-  React.ElementRef<typeof SelectPrimitive.Separator>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
->(({ className, ...props }, ref) => (
-  <SelectPrimitive.Separator
-    ref={ref}
-    className={cn("-mx-1 my-1 h-px bg-muted", className)}
-    {...props}
-  />
-));
-SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
+// Suppress unused-import warning for ChevronUp (kept for API parity with shadcn imports)
+void ChevronUp;
 
 export {
   Select,
