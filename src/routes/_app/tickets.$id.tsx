@@ -21,6 +21,7 @@ import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -595,7 +596,10 @@ function TicketDetail() {
               </div>
               <div className="md:col-span-2">
                 <Label>Preferred Visit Date & Time <span className="text-xs text-muted-foreground">(optional)</span></Label>
-                <Input type="datetime-local" value={toDatetimeLocal(t.preferred_visit_datetime)} onChange={(e) => { update({ preferred_visit_datetime: e.target.value || null }); save({ preferred_visit_datetime: e.target.value || null }); }} />
+                <DateTimePicker
+                  value={toDatetimeLocal(t.preferred_visit_datetime)}
+                  onChange={(v) => { update({ preferred_visit_datetime: v || null }); save({ preferred_visit_datetime: v || null }); }}
+                />
               </div>
             </CardContent>
           </Card>
