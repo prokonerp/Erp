@@ -17,6 +17,7 @@ import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { Trash2 } from "lucide-react";
 import type { PartLine } from "@/lib/tickets";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
+import { DateTimePicker } from "@/components/DateTimePicker";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
