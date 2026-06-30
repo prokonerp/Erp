@@ -382,7 +382,7 @@ function NewTicket() {
             <Input value={form.serial_no} onChange={(e) => set({ serial_no: e.target.value.toUpperCase() })} placeholder="APC2024XYZ" className="font-mono" />
           </FormField>
           <FormField label="Preferred Visit" hint="optional" size="sm">
-            <Input type="datetime-local" value={form.preferred_visit_datetime} onChange={(e) => set({ preferred_visit_datetime: e.target.value })} />
+            <DateTimePicker value={form.preferred_visit_datetime} onChange={(v) => set({ preferred_visit_datetime: v })} />
           </FormField>
           <FormField label="Complaint / Issue Description" size="full">
             <Textarea rows={3} value={form.complaint} onChange={(e) => set({ complaint: e.target.value })} />
