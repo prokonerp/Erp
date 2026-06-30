@@ -558,16 +558,16 @@ function TicketDetail() {
 
           <Card>
             <CardHeader><CardTitle>Ticket Details</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div><Label>Case ID</Label><Input value={t.case_id} onChange={(e) => update({ case_id: e.target.value })} className="font-mono" /></div>
-              <div>
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-1"><Label>Case ID</Label><Input value={t.case_id} onChange={(e) => update({ case_id: e.target.value })} className="font-mono" /></div>
+              <div className="md:col-span-1">
                 <Label>Call Type</Label>
                 <Select value={t.call_type} onValueChange={(v) => update({ call_type: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{CALL_TYPES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div>
+              <div className="md:col-span-2">
                 <Label>Model</Label>
                 <Select
                   value={t.product || ""}
@@ -583,9 +583,9 @@ function TicketDetail() {
                   })}</SelectContent>
                 </Select>
               </div>
-              <div><Label>Serial Number</Label><Input value={t.serial_no || ""} onChange={(e) => update({ serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
-              <div className="md:col-span-2"><Label>Complaint</Label><Textarea rows={2} value={t.complaint || ""} onChange={(e) => update({ complaint: e.target.value })} /></div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-1"><Label>Serial Number</Label><Input value={t.serial_no || ""} onChange={(e) => update({ serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
+              <div className="md:col-span-3"><Label>Complaint</Label><Textarea rows={2} value={t.complaint || ""} onChange={(e) => update({ complaint: e.target.value })} /></div>
+              <div className="md:col-span-3">
                 <Label>Special Instruction <span className="text-xs text-muted-foreground">(shows blinking ribbon when filled)</span></Label>
                 <Textarea rows={2} value={t.special_instruction || ""} onChange={(e) => update({ special_instruction: e.target.value })} placeholder="Critical handling notes for engineer (optional)" />
                 {acknowledged && (
@@ -594,7 +594,7 @@ function TicketDetail() {
                   </div>
                 )}
               </div>
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <Label>Preferred Visit Date & Time <span className="text-xs text-muted-foreground">(optional)</span></Label>
                 <DateTimePicker
                   value={toDatetimeLocal(t.preferred_visit_datetime)}

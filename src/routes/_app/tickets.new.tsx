@@ -365,7 +365,7 @@ function NewTicket() {
 
       <FormSection title="Product & Issue" defaultOpen>
         <FormGrid>
-          <FormField label="Model" name="product" size="sm">
+          <FormField label="Model" name="product" size="md">
             <ProductPicker
               value={form.product_id}
               onChange={(id, p) => {
@@ -382,7 +382,7 @@ function NewTicket() {
           <FormField label="Serial Number" name="serial_no" size="sm">
             <Input value={form.serial_no} onChange={(e) => set({ serial_no: e.target.value.toUpperCase() })} placeholder="APC2024XYZ" className="font-mono" />
           </FormField>
-          <FormField label="Preferred Visit" hint="optional" size="sm">
+          <FormField label="Preferred Visit" hint="optional" size="md">
             <DateTimePicker value={form.preferred_visit_datetime} onChange={(v) => set({ preferred_visit_datetime: v })} />
           </FormField>
           <FormField label="Complaint / Issue Description" size="full">
