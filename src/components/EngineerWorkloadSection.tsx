@@ -214,10 +214,10 @@ export function EngineerWorkloadSection() {
     <div className="space-y-4">
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <SumCard label="Today's New" value={summary.today} tone="active" to="/tickets?scope=today" />
-        <SumCard label="Carry-over" value={summary.carry} tone={summary.carry ? "alert" : "muted"} to="/tickets?scope=carry" />
-        <SumCard label="Total Active" value={summary.active} tone="neutral" to="/tickets?scope=active" />
-        <SumCard label="Closed Today" value={summary.closedToday} tone="positive" to="/tickets?scope=closedToday" />
+        <SumCard label="Today's New" value={summary.today} tone="active" search={{ scope: "today" }} />
+        <SumCard label="Carry-over" value={summary.carry} tone={summary.carry ? "alert" : "muted"} search={{ scope: "carry" }} />
+        <SumCard label="Total Active" value={summary.active} tone="neutral" search={{ scope: "active" }} />
+        <SumCard label="Closed Today" value={summary.closedToday} tone="positive" search={{ scope: "closedToday" }} />
         <SumCard label="Avg / Engineer" value={summary.avg} tone="muted" />
       </div>
 
@@ -291,14 +291,14 @@ export function EngineerWorkloadSection() {
                         <tr key={e.name} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setExpanded(isOpen ? null : e.name)}>
                           <td className="p-2">{isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</td>
                           <td className="p-2 font-medium">{e.name}</td>
-                          <NumCell value={e.today} link={`/tickets?scope=today&engineer=${encodeURIComponent(e.name)}`} />
-                          <NumCell value={e.carry} link={`/tickets?scope=carry&engineer=${encodeURIComponent(e.name)}`} />
-                          <NumCell value={e.active} link={`/tickets?scope=active&engineer=${encodeURIComponent(e.name)}`} strong />
-                          <NumCell value={e.inProgress} link={`/tickets?status=In+Progress&engineer=${encodeURIComponent(e.name)}`} />
-                          <NumCell value={e.open} link={`/tickets?scope=active&engineer=${encodeURIComponent(e.name)}`} />
-                          <NumCell value={e.waiting} link={`/tickets?status=Waiting+for+Parts&engineer=${encodeURIComponent(e.name)}`} />
-                          <NumCell value={e.closedToday} link={`/tickets?scope=closedToday&engineer=${encodeURIComponent(e.name)}`} />
-                          <NumCell value={e.high} link={`/tickets?scope=highPriority&engineer=${encodeURIComponent(e.name)}`} />
+                          <NumCell value={e.today} search={{ scope: "today", engineer: e.name }} />
+                          <NumCell value={e.carry} search={{ scope: "carry", engineer: e.name }} />
+                          <NumCell value={e.active} search={{ scope: "active", engineer: e.name }} strong />
+                          <NumCell value={e.inProgress} search={{ status: "In Progress", engineer: e.name }} />
+                          <NumCell value={e.open} search={{ scope: "active", engineer: e.name }} />
+                          <NumCell value={e.waiting} search={{ status: "Waiting for Parts", engineer: e.name }} />
+                          <NumCell value={e.closedToday} search={{ scope: "closedToday", engineer: e.name }} />
+                          <NumCell value={e.high} search={{ scope: "highPriority", engineer: e.name }} />
                           <td className="p-2 text-right whitespace-nowrap">{e.oldestDays > 0 ? `${e.oldestDays}d` : "—"}</td>
                           <td className="p-2"><CapacityBadge count={e.active} /></td>
                         </tr>
@@ -432,7 +432,7 @@ export function EngineerWorkloadSection() {
 
 /* ── sub components ── */
 
-function SumCard({ label, value, tone, to }: { label: string; value: number | string; tone: "active" | "alert" | "positive" | "neutral" | "muted"; to?: string }) {
+function SumCard({ label, value, tone, search }: { label: string; value: number | string; tone: "active" | "alert" | "positive" | "neutral" | "muted"; search?: Record<string, string> }) {
   const bar = {
     active: "border-l-blue-500 text-blue-700",
     alert: "border-l-red-500 text-red-700",
@@ -446,15 +446,16 @@ function SumCard({ label, value, tone, to }: { label: string; value: number | st
       <div className={`text-2xl font-bold ${bar.split(" ")[1]}`}>{value}</div>
     </div>
   );
-  return to ? <Link to={to as any}>{body}</Link> : body;
+  return search ? <Link to="/tickets" search={search as any}>{body}</Link> : body;
 }
 
-function NumCell({ value, link, strong }: { value: number; link: string; strong?: boolean }) {
+function NumCell({ value, search, strong }: { value: number; search: Record<string, string>; strong?: boolean }) {
   return (
     <td className="p-2 text-right whitespace-nowrap">
       {value > 0 ? (
         <Link
-          to={link as any}
+          to="/tickets"
+          search={search as any}
           onClick={(e) => e.stopPropagation()}
           className={`hover:underline ${strong ? "font-bold text-primary" : "font-semibold text-foreground"}`}
         >
@@ -491,7 +492,7 @@ function EngineerDetail({ engineer, tickets }: { engineer: string; tickets: T[] 
     <div>
       <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between">
         <span><strong>{engineer}</strong> · {tickets.length} active tickets</span>
-        <Link to={`/tickets?engineer=${encodeURIComponent(engineer)}&scope=active` as any} className="text-primary hover:underline">Open in tickets →</Link>
+        <Link to="/tickets" search={{ engineer, scope: "active" } as any} className="text-primary hover:underline">Open in tickets →</Link>
       </div>
       <div className="overflow-x-auto border rounded-md bg-card">
         <table className="w-full text-xs">
