@@ -359,10 +359,12 @@ function UsersSection() {
   const [editing, setEditing] = useState<AppUser | null>(null);
   const [pwdFor, setPwdFor] = useState<AppUser | null>(null);
 
+  const callListAuth = useServerFn(listAuthUsers);
   const callCreate = useServerFn(createAppUser);
   const callUpdate = useServerFn(updateAppUser);
   const callPwd = useServerFn(setUserPassword);
   const callDel = useServerFn(deleteAppUser);
+  const [authLoading, setAuthLoading] = useState(true);
 
   async function load() {
     const [{ data: au }, { data: r }, { data: ur }] = await Promise.all([
@@ -373,13 +375,16 @@ function UsersSection() {
     setAppUsers((au as AppUser[]) ?? []);
     setRoles((r as Role[]) ?? []);
     setAdminIds(new Set((ur ?? []).map((x: any) => x.user_id)));
+    setAuthLoading(true);
     try {
-      const res = await listAuthUsers();
+      const res = await callListAuth();
       setAuthUsers(res.users);
       (window as any).__authUsers = res.users;
     } catch (e: any) {
       console.error("listAuthUsers failed:", e?.message ?? e);
       (window as any).__authErr = String(e?.message ?? e);
+    } finally {
+      setAuthLoading(false);
     }
   }
   useEffect(() => {
