@@ -29,6 +29,7 @@ export const Route = createFileRoute("/_app/tickets/")({
     bucket: typeof s.bucket === "string" ? s.bucket : undefined,
     oem: typeof s.oem === "string" ? s.oem : undefined,
     parts: typeof s.parts === "string" ? s.parts : undefined,
+    ageBucket: typeof s.ageBucket === "string" ? s.ageBucket : undefined,
   }),
   component: TicketsList,
 });
@@ -81,6 +82,7 @@ function TicketsList() {
   const [bucket, setBucket] = useState<string>(search.bucket || "all");
   const [oemFilter, setOemFilter] = useState<string>(search.oem || "all");
   const [partsFilter, setPartsFilter] = useState<string>(search.parts || "all");
+  const [ageBucket, setAgeBucket] = useState<string>(search.ageBucket || "all");
   const [loading, setLoading] = useState(true);
   const [, setNowTick] = useState(0);
 
@@ -93,7 +95,8 @@ function TicketsList() {
     if (search.bucket !== undefined) setBucket(search.bucket || "all");
     if (search.oem !== undefined) setOemFilter(search.oem || "all");
     if (search.parts !== undefined) setPartsFilter(search.parts || "all");
-  }, [search.engineer, search.status, search.scope, search.priority, search.bucket, search.oem, search.parts]);
+    if (search.ageBucket !== undefined) setAgeBucket(search.ageBucket || "all");
+  }, [search.engineer, search.status, search.scope, search.priority, search.bucket, search.oem, search.parts, search.ageBucket]);
 
   // Tick once per minute so the timer column stays fresh.
   useEffect(() => {
@@ -152,6 +155,14 @@ function TicketsList() {
         if (bucket === "48-72" && !(h >= 48 && h < 72)) return false;
         if (bucket === "gt72" && !(h >= 72)) return false;
       }
+      if (ageBucket !== "all") {
+        if (r.status === "Closed" || r.status === "Cancelled") return false;
+        const h = (Date.now() - new Date(r.created_at).getTime()) / 3_600_000;
+        if (ageBucket === "lt24" && !(h < 24)) return false;
+        if (ageBucket === "24-48" && !(h >= 24 && h < 48)) return false;
+        if (ageBucket === "48-72" && !(h >= 48 && h < 72)) return false;
+        if (ageBucket === "gt72" && !(h >= 72)) return false;
+      }
       if (scope === "today") {
         const at = (r as any).assigned_at || r.created_at;
         if (!inToday(at)) return false;
@@ -190,7 +201,7 @@ function TicketsList() {
       if (ac !== bc) return ac - bc;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter]);
+  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter, ageBucket]);
 
   const setPriority = async (id: string, p: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, priority: p } : r)));
