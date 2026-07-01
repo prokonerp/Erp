@@ -277,6 +277,27 @@ function TicketsList() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all") && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-muted-foreground uppercase tracking-wide">Active filter:</span>
+              {engineerFilter !== "all" && (
+                <Badge variant="outline" className="gap-1">Engineer: {engineerFilter}
+                  <button className="ml-1" onClick={() => setEngineerFilter("all")}>×</button>
+                </Badge>
+              )}
+              {priorityFilter !== "all" && (
+                <Badge variant="outline" className="gap-1">Priority: {priorityFilter}
+                  <button className="ml-1" onClick={() => setPriorityFilter("all")}>×</button>
+                </Badge>
+              )}
+              {scope !== "all" && (
+                <Badge variant="outline" className="gap-1">Scope: {scope}
+                  <button className="ml-1" onClick={() => setScope("all")}>×</button>
+                </Badge>
+              )}
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); }}>Clear all</Button>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
             <Input placeholder="Search case / customer / serial / sector…" value={q} onChange={(e) => setQ(e.target.value)} />
             <Select value={status} onValueChange={setStatus}>
