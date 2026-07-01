@@ -359,7 +359,6 @@ function UsersSection() {
   const [editing, setEditing] = useState<AppUser | null>(null);
   const [pwdFor, setPwdFor] = useState<AppUser | null>(null);
 
-  const callListAuth = useServerFn(listAuthUsers);
   const callCreate = useServerFn(createAppUser);
   const callUpdate = useServerFn(updateAppUser);
   const callPwd = useServerFn(setUserPassword);
@@ -375,7 +374,7 @@ function UsersSection() {
     setRoles((r as Role[]) ?? []);
     setAdminIds(new Set((ur ?? []).map((x: any) => x.user_id)));
     try {
-      const res = await callListAuth();
+      const res = await listAuthUsers();
       setAuthUsers(res.users);
       (window as any).__authUsers = res.users;
     } catch (e: any) {
