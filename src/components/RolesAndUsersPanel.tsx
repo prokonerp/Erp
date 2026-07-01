@@ -443,7 +443,11 @@ function UsersSection() {
                         </span>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {a?.last_sign_in_at ? new Date(a.last_sign_in_at).toLocaleString() : "—"}
+                        {a?.last_sign_in_at
+                          ? new Date(a.last_sign_in_at).toLocaleString()
+                          : authLoading
+                            ? "Loading…"
+                            : "Never"}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
