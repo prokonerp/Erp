@@ -41,6 +41,7 @@ function MastersPage() {
     { value: "employees", label: "Employees" },
     { value: "inventory", label: "Inventory" },
     { value: "accounts", label: "Accounts" },
+    { value: "complaints", label: "Complaints" },
     { value: "users", label: "Users & Roles" },
   ];
   const handleTabChange = (v: string) => {
@@ -213,6 +214,17 @@ function MastersPage() {
           />
         </TabsContent>
 
+        <TabsContent value="complaints" className="mt-4">
+          <MasterCrud
+            table="complaint_master"
+            title="Complaint Master"
+            canEdit={isAdmin}
+            fields={[
+              { key: "name", label: "Complaint Name", type: "title", required: true },
+              { key: "active", label: "Active", type: "boolean" },
+            ]}
+          />
+        </TabsContent>
 
         <TabsContent value="users" className="mt-4">
           <RolesAndUsersPanel isAdmin={isAdmin} />

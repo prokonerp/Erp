@@ -18,6 +18,7 @@ import { Trash2 } from "lucide-react";
 import type { PartLine } from "@/lib/tickets";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { DateTimePicker } from "@/components/DateTimePicker";
+import { ComplaintPicker } from "@/components/ComplaintPicker";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -385,8 +386,8 @@ function NewTicket() {
           <FormField label="Preferred Visit" hint="optional" size="md">
             <DateTimePicker value={form.preferred_visit_datetime} onChange={(v) => set({ preferred_visit_datetime: v })} />
           </FormField>
-          <FormField label="Complaint / Issue Description" size="full">
-            <Textarea rows={3} value={form.complaint} onChange={(e) => set({ complaint: e.target.value })} />
+          <FormField label="Complaint / Issue Description" size="md">
+            <ComplaintPicker value={form.complaint} onChange={(v) => set({ complaint: v })} />
           </FormField>
           <FormField label="Special Instruction" hint="visible as blinking ribbon" size="full">
             <Textarea rows={2} value={form.special_instruction} onChange={(e) => set({ special_instruction: e.target.value })} placeholder="Critical handling notes (optional)" />
