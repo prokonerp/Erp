@@ -14,6 +14,7 @@ import { hoursExcludingSundays } from "@/lib/tickets";
 import type { ModuleKey } from "@/lib/permissions";
 import { useRealtimeRefetch } from "@/lib/softDelete";
 import { EngineerWorkloadSection } from "@/components/EngineerWorkloadSection";
+import { ExecutionTimeSection } from "@/components/ExecutionTimeSection";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -140,6 +141,7 @@ function AdminGrid() {
   return (
     <div className="space-y-4">
       <EngineerWorkloadSection />
+      <ExecutionTimeSection />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <TicketsWidget scope={{ engineerName: null }} />
         <AmcWidget />
