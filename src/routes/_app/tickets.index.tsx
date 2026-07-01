@@ -21,6 +21,12 @@ import { FormPageHeader } from "@/components/FormPageHeader";
 import { softDelete as softDeleteRow, useRealtimeRefetch } from "@/lib/softDelete";
 
 export const Route = createFileRoute("/_app/tickets/")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    engineer: typeof s.engineer === "string" ? s.engineer : undefined,
+    status: typeof s.status === "string" ? s.status : undefined,
+    scope: typeof s.scope === "string" ? s.scope : undefined,
+    priority: typeof s.priority === "string" ? s.priority : undefined,
+  }),
   component: TicketsList,
 });
 
@@ -57,15 +63,27 @@ type Row = {
 type Employee = { id: string; name: string; phone: string | null; department: string | null; active: boolean };
 
 function TicketsList() {
+  const search = Route.useSearch();
   const { isAdmin } = useIsAdmin();
   const [rows, setRows] = useState<Row[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<string>("all");
+  const [status, setStatus] = useState<string>(search.status || "all");
   const [type, setType] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
+  const [engineerFilter, setEngineerFilter] = useState<string>(search.engineer || "all");
+  const [priorityFilter, setPriorityFilter] = useState<string>(search.priority || "all");
+  const [scope, setScope] = useState<string>(search.scope || "all");
   const [loading, setLoading] = useState(true);
   const [, setNowTick] = useState(0);
+
+  // sync URL → state when navigating to /tickets?engineer=… from dashboard
+  useEffect(() => {
+    if (search.engineer !== undefined) setEngineerFilter(search.engineer || "all");
+    if (search.status !== undefined) setStatus(search.status || "all");
+    if (search.scope !== undefined) setScope(search.scope || "all");
+    if (search.priority !== undefined) setPriorityFilter(search.priority || "all");
+  }, [search.engineer, search.status, search.scope, search.priority]);
 
   // Tick once per minute so the timer column stays fresh.
   useEffect(() => {
@@ -101,8 +119,36 @@ function TicketsList() {
   const cities = useMemo(() => Array.from(new Set(rows.map((r) => (r.location || "").trim()).filter(Boolean))).sort(), [rows]);
 
   const filtered = useMemo(() => {
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date(startOfToday); endOfToday.setDate(endOfToday.getDate() + 1);
+    const inToday = (iso: string | null | undefined) => {
+      if (!iso) return false;
+      const d = new Date(iso);
+      return d >= startOfToday && d < endOfToday;
+    };
     const out = rows.filter((r) => {
       if (cityFilter !== "all" && (r.location || "").trim() !== cityFilter) return false;
+      if (engineerFilter !== "all" && (r.assigned_engineer_name || "") !== engineerFilter) return false;
+      if (priorityFilter !== "all" && (r.priority || "") !== priorityFilter) return false;
+      if (scope === "today") {
+        const at = (r as any).assigned_at || r.created_at;
+        if (!inToday(at)) return false;
+      } else if (scope === "carry") {
+        const at = (r as any).assigned_at || r.created_at;
+        if (inToday(at) || !at) return false;
+        if (r.status === "Closed") return false;
+      } else if (scope === "active") {
+        if (r.status === "Closed" || r.status === "Cancelled") return false;
+      } else if (scope === "closedToday") {
+        if (r.status !== "Closed") return false;
+        if (!inToday((r as any).closed_at)) return false;
+      } else if (scope === "highPriority") {
+        if (r.status === "Closed" || r.status === "Cancelled") return false;
+        if (r.priority !== "P1" && r.priority !== "P2") return false;
+      } else if (scope === "overdue") {
+        if (r.status === "Closed" || r.status === "Cancelled") return false;
+        if (hoursExcludingSundays(r.created_at) <= 24) return false;
+      }
       if (!q.trim()) return true;
       const s = q.toLowerCase();
       return (
@@ -122,7 +168,7 @@ function TicketsList() {
       if (ac !== bc) return ac - bc;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [rows, q, cityFilter]);
+  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope]);
 
   const setPriority = async (id: string, p: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, priority: p } : r)));
