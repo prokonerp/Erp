@@ -378,7 +378,7 @@ function UsersSection() {
       const res = await callListAuth();
       setAuthUsers(res.users);
     } catch (e: any) {
-      // ignore
+      console.error("listAuthUsers failed:", e?.message ?? e);
     }
   }
   useEffect(() => {
