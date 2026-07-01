@@ -15,6 +15,8 @@ import type { ModuleKey } from "@/lib/permissions";
 import { useRealtimeRefetch } from "@/lib/softDelete";
 import { EngineerWorkloadSection } from "@/components/EngineerWorkloadSection";
 import { ExecutionTimeSection } from "@/components/ExecutionTimeSection";
+import { OpenAgeSection, PerformanceSplitSection } from "@/components/OpenAgeSection";
+import { ExecutiveKpisSection } from "@/components/ExecutiveKpisSection";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -139,9 +141,23 @@ function UserGrid({ can, engineerName }: { can: (m: ModuleKey, a?: any) => boole
 
 function AdminGrid() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Section 1 · Executive KPI row */}
+      <ExecutiveKpisSection />
+
+      {/* Section 2 · Engineer workload */}
       <EngineerWorkloadSection />
-      <ExecutionTimeSection />
+
+      {/* Section 3 · Two focused charts side-by-side */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <ExecutionTimeSection />
+        <OpenAgeSection />
+      </div>
+
+      {/* Section 4 · Performance summary: OEM vs Non-OEM + Parts */}
+      <PerformanceSplitSection />
+
+      {/* Section 5 · Module snapshots */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <TicketsWidget scope={{ engineerName: null }} />
         <AmcWidget />
@@ -150,8 +166,12 @@ function AdminGrid() {
         <ImsWidget />
         <MaterialMovementWidget />
       </div>
-      <QuarterlyTicketsCard />
-      <TeamPerformanceCard />
+
+      {/* Section 6 · Trends & leaderboards */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <QuarterlyTicketsCard />
+        <TeamPerformanceCard />
+      </div>
     </div>
   );
 }
