@@ -26,6 +26,9 @@ export const Route = createFileRoute("/_app/tickets/")({
     status: typeof s.status === "string" ? s.status : undefined,
     scope: typeof s.scope === "string" ? s.scope : undefined,
     priority: typeof s.priority === "string" ? s.priority : undefined,
+    bucket: typeof s.bucket === "string" ? s.bucket : undefined,
+    oem: typeof s.oem === "string" ? s.oem : undefined,
+    parts: typeof s.parts === "string" ? s.parts : undefined,
   }),
   component: TicketsList,
 });
@@ -50,6 +53,7 @@ type Row = {
   raised_by_type: string | null;
   raised_by_name: string | null;
   created_at: string;
+  closed_at?: string | null;
   oem_call?: boolean | null;
   parts_used?: boolean | null;
   parts_details?: Array<{ name?: string; confirmed?: boolean }> | null;
@@ -74,6 +78,9 @@ function TicketsList() {
   const [engineerFilter, setEngineerFilter] = useState<string>(search.engineer || "all");
   const [priorityFilter, setPriorityFilter] = useState<string>(search.priority || "all");
   const [scope, setScope] = useState<string>(search.scope || "all");
+  const [bucket, setBucket] = useState<string>(search.bucket || "all");
+  const [oemFilter, setOemFilter] = useState<string>(search.oem || "all");
+  const [partsFilter, setPartsFilter] = useState<string>(search.parts || "all");
   const [loading, setLoading] = useState(true);
   const [, setNowTick] = useState(0);
 
@@ -83,7 +90,10 @@ function TicketsList() {
     if (search.status !== undefined) setStatus(search.status || "all");
     if (search.scope !== undefined) setScope(search.scope || "all");
     if (search.priority !== undefined) setPriorityFilter(search.priority || "all");
-  }, [search.engineer, search.status, search.scope, search.priority]);
+    if (search.bucket !== undefined) setBucket(search.bucket || "all");
+    if (search.oem !== undefined) setOemFilter(search.oem || "all");
+    if (search.parts !== undefined) setPartsFilter(search.parts || "all");
+  }, [search.engineer, search.status, search.scope, search.priority, search.bucket, search.oem, search.parts]);
 
   // Tick once per minute so the timer column stays fresh.
   useEffect(() => {
@@ -130,6 +140,18 @@ function TicketsList() {
       if (cityFilter !== "all" && (r.location || "").trim() !== cityFilter) return false;
       if (engineerFilter !== "all" && (r.assigned_engineer_name || "") !== engineerFilter) return false;
       if (priorityFilter !== "all" && (r.priority || "") !== priorityFilter) return false;
+      if (oemFilter === "oem" && !r.oem_call) return false;
+      if (oemFilter === "phs" && r.oem_call) return false;
+      if (partsFilter === "with" && !r.defective_parts_received) return false;
+      if (partsFilter === "without" && r.defective_parts_received) return false;
+      if (bucket !== "all") {
+        if (r.status !== "Closed" || !r.closed_at) return false;
+        const h = (new Date(r.closed_at).getTime() - new Date(r.created_at).getTime()) / 3_600_000;
+        if (bucket === "lt24" && !(h < 24)) return false;
+        if (bucket === "24-48" && !(h >= 24 && h < 48)) return false;
+        if (bucket === "48-72" && !(h >= 48 && h < 72)) return false;
+        if (bucket === "gt72" && !(h >= 72)) return false;
+      }
       if (scope === "today") {
         const at = (r as any).assigned_at || r.created_at;
         if (!inToday(at)) return false;
@@ -168,7 +190,7 @@ function TicketsList() {
       if (ac !== bc) return ac - bc;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope]);
+  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter]);
 
   const setPriority = async (id: string, p: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, priority: p } : r)));
@@ -277,7 +299,7 @@ function TicketsList() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all") && (
+          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all" || bucket !== "all" || oemFilter !== "all" || partsFilter !== "all") && (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-muted-foreground uppercase tracking-wide">Active filter:</span>
               {engineerFilter !== "all" && (
@@ -295,7 +317,22 @@ function TicketsList() {
                   <button className="ml-1" onClick={() => setScope("all")}>×</button>
                 </Badge>
               )}
-              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); }}>Clear all</Button>
+              {bucket !== "all" && (
+                <Badge variant="outline" className="gap-1">Exec: {({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[bucket] || bucket}
+                  <button className="ml-1" onClick={() => setBucket("all")}>×</button>
+                </Badge>
+              )}
+              {oemFilter !== "all" && (
+                <Badge variant="outline" className="gap-1">{oemFilter === "oem" ? "OEM only" : "PHS only"}
+                  <button className="ml-1" onClick={() => setOemFilter("all")}>×</button>
+                </Badge>
+              )}
+              {partsFilter !== "all" && (
+                <Badge variant="outline" className="gap-1">{partsFilter === "with" ? "With Parts" : "Without Parts"}
+                  <button className="ml-1" onClick={() => setPartsFilter("all")}>×</button>
+                </Badge>
+              )}
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); setBucket("all"); setOemFilter("all"); setPartsFilter("all"); }}>Clear all</Button>
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
