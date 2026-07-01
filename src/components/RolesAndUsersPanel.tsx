@@ -364,6 +364,7 @@ function UsersSection() {
   const callUpdate = useServerFn(updateAppUser);
   const callPwd = useServerFn(setUserPassword);
   const callDel = useServerFn(deleteAppUser);
+  const [authLoading, setAuthLoading] = useState(true);
 
   async function load() {
     const [{ data: au }, { data: r }, { data: ur }] = await Promise.all([
@@ -374,11 +375,16 @@ function UsersSection() {
     setAppUsers((au as AppUser[]) ?? []);
     setRoles((r as Role[]) ?? []);
     setAdminIds(new Set((ur ?? []).map((x: any) => x.user_id)));
+    setAuthLoading(true);
     try {
       const res = await callListAuth();
       setAuthUsers(res.users);
+      (window as any).__authUsers = res.users;
     } catch (e: any) {
-      // ignore
+      console.error("listAuthUsers failed:", e?.message ?? e);
+      (window as any).__authErr = String(e?.message ?? e);
+    } finally {
+      setAuthLoading(false);
     }
   }
   useEffect(() => {
@@ -437,7 +443,11 @@ function UsersSection() {
                         </span>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {a?.last_sign_in_at ? new Date(a.last_sign_in_at).toLocaleString() : "—"}
+                        {a?.last_sign_in_at
+                          ? new Date(a.last_sign_in_at).toLocaleString()
+                          : authLoading
+                            ? "Loading…"
+                            : "Never"}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
