@@ -22,6 +22,7 @@ import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { DateTimePicker } from "@/components/DateTimePicker";
+import { ComplaintPicker } from "@/components/ComplaintPicker";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -584,7 +585,7 @@ function TicketDetail() {
                 </Select>
               </div>
               <div className="md:col-span-1"><Label>Serial Number</Label><Input value={t.serial_no || ""} onChange={(e) => update({ serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
-              <div className="md:col-span-3"><Label>Complaint</Label><Textarea rows={2} value={t.complaint || ""} onChange={(e) => update({ complaint: e.target.value })} /></div>
+              <div className="md:col-span-3"><Label>Complaint</Label><ComplaintPicker value={t.complaint || ""} onChange={(v) => update({ complaint: v })} /></div>
               <div className="md:col-span-3">
                 <Label>Special Instruction <span className="text-xs text-muted-foreground">(shows blinking ribbon when filled)</span></Label>
                 <Textarea rows={2} value={t.special_instruction || ""} onChange={(e) => update({ special_instruction: e.target.value })} placeholder="Critical handling notes for engineer (optional)" />
