@@ -86,6 +86,7 @@ function TicketsList() {
   const [ageBucket, setAgeBucket] = useState<string>(search.ageBucket || "all");
   const [loading, setLoading] = useState(true);
   const [, setNowTick] = useState(0);
+  const [view, setView] = useState<"table" | "cards">("table");
 
   // sync URL → state when navigating to /tickets?engineer=… from dashboard
   useEffect(() => {
