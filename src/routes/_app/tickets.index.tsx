@@ -602,3 +602,145 @@ function RowActions({
     </DropdownMenu>
   );
 }
+function scopeLabel(s: string) {
+  return ({today:"Today",carry:"Carry-over",active:"Active",closedToday:"Closed today",overdue:"Overdue",highPriority:"High priority"} as Record<string,string>)[s] || s;
+}
+
+function FilterChip({ icon, label, value, active, onClear, children }: { icon: React.ReactNode; label: string; value?: string; active: boolean; onClear: () => void; children: React.ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex items-center gap-1.5 h-9 rounded-md border px-2.5 text-xs font-medium transition hover:bg-accent ${active ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-foreground"}`}
+        >
+          <span className={active ? "text-primary" : "text-muted-foreground"}>{icon}</span>
+          <span>{label}</span>
+          {value && <span className="max-w-[100px] truncate opacity-90">· {value}</span>}
+          {active && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); onClear(); }}
+              className="ml-0.5 -mr-1 rounded p-0.5 hover:bg-primary/20"
+            >
+              <X className="h-3 w-3" />
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-1">
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ChipMenu({ options, value, onChange, searchable }: { options: { v: string; l: string }[]; value: string; onChange: (v: string) => void; searchable?: boolean }) {
+  const [q, setQ] = useState("");
+  const filtered = searchable ? options.filter((o) => o.l.toLowerCase().includes(q.toLowerCase())) : options;
+  return (
+    <div className="space-y-1">
+      {searchable && (
+        <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} className="h-8 text-xs" />
+      )}
+      <div className="max-h-64 overflow-auto">
+        {filtered.map((o) => (
+          <button
+            key={o.v}
+            onClick={() => onChange(o.v)}
+            className={`w-full text-left px-2 py-1.5 text-xs rounded hover:bg-accent ${value === o.v ? "bg-primary/10 font-semibold text-primary" : ""}`}
+          >
+            {o.l}
+          </button>
+        ))}
+        {filtered.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground text-center">No matches</div>}
+      </div>
+    </div>
+  );
+}
+
+function MoreField({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { v: string; l: string }[] }) {
+  return (
+    <div>
+      <div className="text-xs font-medium mb-1">{label}</div>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {options.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ActiveChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <Badge variant="secondary" className="gap-1 pl-2 pr-1 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
+      {label}
+      <button onClick={onClear} className="rounded-full p-0.5 hover:bg-primary/20"><X className="h-3 w-3" /></button>
+    </Badge>
+  );
+}
+
+function TicketCard({ r, employees, isAdmin, onReassign, onStatusChange, onNotifyCustomer, onNotifyEngineer, onSoftDelete, onPriority }: {
+  r: Row;
+  employees: Employee[];
+  isAdmin: boolean;
+  onReassign: (r: Row, e: Employee) => void;
+  onStatusChange: (r: Row, next: string, opts?: { notify?: boolean }) => void;
+  onNotifyCustomer: (r: Row) => void;
+  onNotifyEngineer: (r: Row) => void;
+  onSoftDelete: (r: Row) => void;
+  onPriority: (id: string, p: string) => void;
+}) {
+  const hours = hoursExcludingSundays(r.created_at, new Date());
+  const isOverdue = hours > 24 && r.status !== "Closed" && r.status !== "Cancelled";
+  return (
+    <div className="group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm hover:shadow-md hover:border-primary/40 transition">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0">
+          <Link to="/tickets/$id" params={{ id: r.id }} className="font-mono text-xs font-semibold text-primary hover:underline truncate block">
+            {r.case_id}
+          </Link>
+          <div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground">
+            <span>{r.call_type}</span>
+            {r.oem_call ? <Badge className="bg-purple-100 text-purple-800 px-1 py-0 text-[9px]" variant="secondary">OEM</Badge> : <Badge variant="outline" className="px-1 py-0 text-[9px]">PHS</Badge>}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Select value={r.priority || "P3"} onValueChange={(v) => onPriority(r.id, v)}>
+            <SelectTrigger className={`h-6 w-11 px-1 text-[10px] font-bold ${PRIORITY_COLOR[r.priority || "P3"] || ""}`}><SelectValue /></SelectTrigger>
+            <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+          </Select>
+          <RowActions r={r} employees={employees} isAdmin={isAdmin} onReassign={onReassign} onStatusChange={onStatusChange} onNotifyCustomer={onNotifyCustomer} onNotifyEngineer={onNotifyEngineer} onSoftDelete={onSoftDelete} />
+        </div>
+      </div>
+
+      <div className="text-sm font-semibold leading-tight truncate">{r.customer_name}</div>
+      <div className="text-[11px] text-muted-foreground truncate">{r.product || "—"}{r.serial_no ? ` · ${r.serial_no}` : ""}</div>
+
+      <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
+        <div className="flex items-center gap-1 min-w-0 text-muted-foreground">
+          <MapPin className="h-3 w-3 shrink-0" />
+          <span className="truncate">{r.location || "—"}</span>
+        </div>
+        <div className="flex items-center gap-1 min-w-0 text-muted-foreground">
+          <Phone className="h-3 w-3 shrink-0" />
+          <span className="truncate font-mono">{r.customer_phone || "—"}</span>
+        </div>
+        <div className="flex items-center gap-1 min-w-0 text-muted-foreground col-span-2">
+          <User className="h-3 w-3 shrink-0" />
+          <span className="truncate">{r.assigned_engineer_name || <span className="italic">Unassigned</span>}</span>
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-2 pt-2 border-t">
+        <Badge className={`${STATUS_COLOR[r.status] || "bg-zinc-100 text-zinc-700"} text-[10px]`} variant="secondary">{r.status}</Badge>
+        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium ${timerBadgeColor(hours)}`} title={`${hours.toFixed(1)}h since creation`}>
+          <Clock className="h-2.5 w-2.5" />{formatHours(hours)}{isOverdue && <AlertTriangle className="h-2.5 w-2.5 ml-0.5" />}
+        </span>
+      </div>
+    </div>
+  );
+}
