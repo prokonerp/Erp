@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
-import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList } from "lucide-react";
+import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
