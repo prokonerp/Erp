@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeRefetch } from "@/lib/softDelete";
 import {
-  Ticket, CheckCircle2, PlusCircle, RotateCcw, AlertTriangle, Timer, Hourglass,
+  Ticket, CheckCircle2, PlusCircle, RotateCcw, AlertTriangle, Timer, Hourglass, Flame,
 } from "lucide-react";
 import { hoursExcludingSundays } from "@/lib/tickets";
 
@@ -13,6 +13,7 @@ type T = {
   created_at: string;
   closed_at: string | null;
   assigned_at: string | null;
+  priority: string | null;
 };
 
 function fmtH(h: number) {
@@ -38,7 +39,7 @@ export function ExecutiveKpisSection() {
     for (let from = 0; ; from += size) {
       const { data, error } = await supabase
         .from("tickets")
-        .select("id,status,created_at,closed_at,assigned_at")
+        .select("id,status,priority,created_at,closed_at,assigned_at")
         .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .range(from, from + size - 1);
@@ -67,6 +68,7 @@ export function ExecutiveKpisSection() {
     const newToday = r.filter((t) => isToday(t.created_at, start, end));
     const carry = open.filter((t) => !isToday(t.assigned_at || t.created_at, start, end));
     const overdue = open.filter((t) => hoursExcludingSundays(t.created_at) > 24);
+    const highPri = open.filter((t) => t.priority === "P1" || t.priority === "P2");
 
     const execHrs = r
       .filter((t) => t.status === "Closed" && t.closed_at)
@@ -82,6 +84,7 @@ export function ExecutiveKpisSection() {
       newToday: newToday.length,
       carry: carry.length,
       overdue: overdue.length,
+      highPri: highPri.length,
       avgExec, avgAge,
     };
   }, [rows]);
@@ -97,12 +100,13 @@ export function ExecutiveKpisSection() {
     { label: "New Today", value: k.newToday, icon: PlusCircle, tone: "info", to: "/tickets", search: { scope: "today" } },
     { label: "Carry-over", value: k.carry, icon: RotateCcw, tone: k.carry ? "warn" : "muted", to: "/tickets", search: { scope: "carry" } },
     { label: "Overdue >24h", value: k.overdue, icon: AlertTriangle, tone: k.overdue ? "bad" : "muted", to: "/tickets", search: { scope: "overdue" } },
+    { label: "High Priority", value: k.highPri, icon: Flame, tone: k.highPri ? "bad" : "muted", to: "/tickets", search: { scope: "highPriority" } },
     { label: "Avg Execution", value: fmtH(k.avgExec), icon: Timer, tone: "muted" },
     { label: "Avg Open Age", value: fmtH(k.avgAge), icon: Hourglass, tone: k.avgAge > 48 ? "warn" : "muted" },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2">
       {cards.map((c) => <Kpi key={c.label} {...c} loading={loading} />)}
     </div>
   );
