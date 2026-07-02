@@ -108,8 +108,9 @@ function QuickActions({ can, isAdmin }: { can: (m: ModuleKey, a?: any) => boolea
 /* ───────────── User Grid (permission-driven) ───────────── */
 
 function UserGrid({ can, engineerName }: { can: (m: ModuleKey, a?: any) => boolean; engineerName: string | null }) {
+  const hasTickets = can("tickets", "read");
   const visible: { key: ModuleKey; node: ReactNode }[] = [];
-  if (can("tickets", "read")) visible.push({ key: "tickets", node: <TicketsWidget scope={{ engineerName }} /> });
+  if (hasTickets) visible.push({ key: "tickets", node: <TicketsWidget scope={{ engineerName: null }} /> });
   if (can("amc", "read")) visible.push({ key: "amc", node: <AmcWidget /> });
   if (can("indent", "read")) visible.push({ key: "indent", node: <IndentWidget /> });
   if (can("quotations", "read")) visible.push({ key: "quotations", node: <CrmWidget /> });
@@ -131,8 +132,19 @@ function UserGrid({ can, engineerName }: { can: (m: ModuleKey, a?: any) => boole
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      {visible.map((v) => <div key={v.key}>{v.node}</div>)}
+    <div className="space-y-5">
+      {hasTickets && (
+        <>
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">Ticket Operations Summary</h2>
+            <ExecutiveKpisSection />
+          </div>
+          <EngineerWorkloadSection />
+        </>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {visible.map((v) => <div key={v.key}>{v.node}</div>)}
+      </div>
     </div>
   );
 }
