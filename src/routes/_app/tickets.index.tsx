@@ -312,67 +312,72 @@ function TicketsList() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all" || bucket !== "all" || oemFilter !== "all" || partsFilter !== "all") && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-muted-foreground uppercase tracking-wide">Active filter:</span>
-              {engineerFilter !== "all" && (
-                <Badge variant="outline" className="gap-1">Engineer: {engineerFilter}
-                  <button className="ml-1" onClick={() => setEngineerFilter("all")}>×</button>
-                </Badge>
-              )}
-              {priorityFilter !== "all" && (
-                <Badge variant="outline" className="gap-1">Priority: {priorityFilter}
-                  <button className="ml-1" onClick={() => setPriorityFilter("all")}>×</button>
-                </Badge>
-              )}
-              {scope !== "all" && (
-                <Badge variant="outline" className="gap-1">Scope: {scope}
-                  <button className="ml-1" onClick={() => setScope("all")}>×</button>
-                </Badge>
-              )}
-              {bucket !== "all" && (
-                <Badge variant="outline" className="gap-1">Exec: {({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[bucket] || bucket}
-                  <button className="ml-1" onClick={() => setBucket("all")}>×</button>
-                </Badge>
-              )}
-              {oemFilter !== "all" && (
-                <Badge variant="outline" className="gap-1">{oemFilter === "oem" ? "OEM only" : "PHS only"}
-                  <button className="ml-1" onClick={() => setOemFilter("all")}>×</button>
-                </Badge>
-              )}
-              {partsFilter !== "all" && (
-                <Badge variant="outline" className="gap-1">{partsFilter === "with" ? "With Parts" : "Without Parts"}
-                  <button className="ml-1" onClick={() => setPartsFilter("all")}>×</button>
-                </Badge>
-              )}
-              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); setBucket("all"); setOemFilter("all"); setPartsFilter("all"); }}>Clear all</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px] max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input placeholder="Search case, customer, serial…" value={q} onChange={(e) => setQ(e.target.value)} className="h-9 pl-8 text-sm" />
             </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-            <Input placeholder="Search case / customer / serial / sector…" value={q} onChange={(e) => setQ(e.target.value)} />
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {TICKET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger><SelectValue placeholder="All call types" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All call types</SelectItem>
-                {CALL_TYPES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={cityFilter} onValueChange={setCityFilter}>
-              <SelectTrigger><SelectValue placeholder="All cities" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All cities / areas</SelectItem>
-                {cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <FilterChip icon={<Calendar className="h-3.5 w-3.5" />} label="Date" value={scope !== "all" ? scopeLabel(scope) : ""} active={scope !== "all"} onClear={() => setScope("all")}>
+              <ChipMenu options={[{v:"all",l:"All time"},{v:"today",l:"Today"},{v:"carry",l:"Carry-over"},{v:"active",l:"Active"},{v:"closedToday",l:"Closed today"},{v:"overdue",l:"Overdue (>24h)"},{v:"highPriority",l:"High priority"}]} value={scope} onChange={setScope} />
+            </FilterChip>
+            <FilterChip icon={<User className="h-3.5 w-3.5" />} label="Engineer" value={engineerFilter !== "all" ? engineerFilter : ""} active={engineerFilter !== "all"} onClear={() => setEngineerFilter("all")}>
+              <ChipMenu searchable options={[{v:"all",l:"All engineers"},...employees.map((e)=>({v:e.name,l:e.name}))]} value={engineerFilter} onChange={setEngineerFilter} />
+            </FilterChip>
+            <FilterChip icon={<Tag className="h-3.5 w-3.5" />} label="Status" value={status !== "all" ? status : ""} active={status !== "all"} onClear={() => setStatus("all")}>
+              <ChipMenu options={[{v:"all",l:"All statuses"},...TICKET_STATUSES.map((s)=>({v:s,l:s}))]} value={status} onChange={setStatus} />
+            </FilterChip>
+            <FilterChip icon={<Zap className="h-3.5 w-3.5" />} label="Priority" value={priorityFilter !== "all" ? priorityFilter : ""} active={priorityFilter !== "all"} onClear={() => setPriorityFilter("all")}>
+              <ChipMenu options={[{v:"all",l:"All priorities"},...PRIORITIES.map((p)=>({v:p,l:p}))]} value={priorityFilter} onChange={setPriorityFilter} />
+            </FilterChip>
+            <FilterChip icon={<Building2 className="h-3.5 w-3.5" />} label="City" value={cityFilter !== "all" ? cityFilter : ""} active={cityFilter !== "all"} onClear={() => setCityFilter("all")}>
+              <ChipMenu searchable options={[{v:"all",l:"All cities"},...cities.map((c)=>({v:c,l:c}))]} value={cityFilter} onChange={setCityFilter} />
+            </FilterChip>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="h-9 gap-1.5"><SlidersHorizontal className="h-3.5 w-3.5" />More</Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 space-y-3">
+                <MoreField label="Call type" value={type} onChange={setType} options={[{v:"all",l:"All call types"},...CALL_TYPES.map((s)=>({v:s,l:s}))]} />
+                <MoreField label="OEM / PHS" value={oemFilter} onChange={setOemFilter} options={[{v:"all",l:"All"},{v:"oem",l:"OEM only"},{v:"phs",l:"PHS only"}]} />
+                <MoreField label="Parts" value={partsFilter} onChange={setPartsFilter} options={[{v:"all",l:"All"},{v:"with",l:"With parts"},{v:"without",l:"Without parts"}]} />
+                <MoreField label="Execution bucket" value={bucket} onChange={setBucket} options={[{v:"all",l:"All"},{v:"lt24",l:"< 24h"},{v:"24-48",l:"24–48h"},{v:"48-72",l:"48–72h"},{v:"gt72",l:"> 72h"}]} />
+                <MoreField label="Open age" value={ageBucket} onChange={setAgeBucket} options={[{v:"all",l:"All"},{v:"lt24",l:"< 24h"},{v:"24-48",l:"24–48h"},{v:"48-72",l:"48–72h"},{v:"gt72",l:"> 72h"}]} />
+              </PopoverContent>
+            </Popover>
+            <div className="ml-auto flex items-center gap-1 rounded-md border p-0.5 bg-muted/40">
+              <Button size="sm" variant={view === "table" ? "default" : "ghost"} className="h-7 w-7 p-0" onClick={() => setView("table")} title="Table view"><List className="h-3.5 w-3.5" /></Button>
+              <Button size="sm" variant={view === "cards" ? "default" : "ghost"} className="h-7 w-7 p-0" onClick={() => setView("cards")} title="Card view"><LayoutGrid className="h-3.5 w-3.5" /></Button>
+            </div>
           </div>
 
+          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all" || bucket !== "all" || oemFilter !== "all" || partsFilter !== "all" || status !== "all" || type !== "all" || cityFilter !== "all" || ageBucket !== "all") && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground">Active:</span>
+              {status !== "all" && <ActiveChip label={`Status: ${status}`} onClear={() => setStatus("all")} />}
+              {scope !== "all" && <ActiveChip label={`Date: ${scopeLabel(scope)}`} onClear={() => setScope("all")} />}
+              {engineerFilter !== "all" && <ActiveChip label={`Engineer: ${engineerFilter}`} onClear={() => setEngineerFilter("all")} />}
+              {priorityFilter !== "all" && <ActiveChip label={`Priority: ${priorityFilter}`} onClear={() => setPriorityFilter("all")} />}
+              {cityFilter !== "all" && <ActiveChip label={`City: ${cityFilter}`} onClear={() => setCityFilter("all")} />}
+              {type !== "all" && <ActiveChip label={`Type: ${type}`} onClear={() => setType("all")} />}
+              {oemFilter !== "all" && <ActiveChip label={oemFilter === "oem" ? "OEM only" : "PHS only"} onClear={() => setOemFilter("all")} />}
+              {partsFilter !== "all" && <ActiveChip label={partsFilter === "with" ? "With parts" : "Without parts"} onClear={() => setPartsFilter("all")} />}
+              {bucket !== "all" && <ActiveChip label={`Exec: ${({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[bucket]}`} onClear={() => setBucket("all")} />}
+              {ageBucket !== "all" && <ActiveChip label={`Age: ${({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[ageBucket]}`} onClear={() => setAgeBucket("all")} />}
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); setBucket("all"); setOemFilter("all"); setPartsFilter("all"); setStatus("all"); setType("all"); setCityFilter("all"); setAgeBucket("all"); }}>Clear all</Button>
+            </div>
+          )}
+
+          <div className="text-xs text-muted-foreground">{filtered.length} ticket{filtered.length === 1 ? "" : "s"}</div>
+
+          {view === "cards" ? (
+            loading ? <div className="p-4 text-muted-foreground">Loading…</div> :
+            filtered.length === 0 ? <div className="p-8 text-center text-muted-foreground border rounded-md">No tickets match your filters.</div> :
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {filtered.map((r) => (
+                <TicketCard key={r.id} r={r} employees={employees} isAdmin={isAdmin} onReassign={reassign} onStatusChange={updateStatus} onNotifyCustomer={notifyCustomer} onNotifyEngineer={notifyEngineer} onSoftDelete={softDelete} onPriority={setPriority} />
+              ))}
+            </div>
+          ) : (
           <div className="overflow-x-auto border rounded-md">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
@@ -476,6 +481,7 @@ function TicketsList() {
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
     </div>
