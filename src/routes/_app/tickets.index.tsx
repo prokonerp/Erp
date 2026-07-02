@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
-import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList } from "lucide-react";
+import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
@@ -85,6 +86,7 @@ function TicketsList() {
   const [ageBucket, setAgeBucket] = useState<string>(search.ageBucket || "all");
   const [loading, setLoading] = useState(true);
   const [, setNowTick] = useState(0);
+  const [view, setView] = useState<"table" | "cards">("table");
 
   // sync URL → state when navigating to /tickets?engineer=… from dashboard
   useEffect(() => {
@@ -310,67 +312,72 @@ function TicketsList() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all" || bucket !== "all" || oemFilter !== "all" || partsFilter !== "all") && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-muted-foreground uppercase tracking-wide">Active filter:</span>
-              {engineerFilter !== "all" && (
-                <Badge variant="outline" className="gap-1">Engineer: {engineerFilter}
-                  <button className="ml-1" onClick={() => setEngineerFilter("all")}>×</button>
-                </Badge>
-              )}
-              {priorityFilter !== "all" && (
-                <Badge variant="outline" className="gap-1">Priority: {priorityFilter}
-                  <button className="ml-1" onClick={() => setPriorityFilter("all")}>×</button>
-                </Badge>
-              )}
-              {scope !== "all" && (
-                <Badge variant="outline" className="gap-1">Scope: {scope}
-                  <button className="ml-1" onClick={() => setScope("all")}>×</button>
-                </Badge>
-              )}
-              {bucket !== "all" && (
-                <Badge variant="outline" className="gap-1">Exec: {({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[bucket] || bucket}
-                  <button className="ml-1" onClick={() => setBucket("all")}>×</button>
-                </Badge>
-              )}
-              {oemFilter !== "all" && (
-                <Badge variant="outline" className="gap-1">{oemFilter === "oem" ? "OEM only" : "PHS only"}
-                  <button className="ml-1" onClick={() => setOemFilter("all")}>×</button>
-                </Badge>
-              )}
-              {partsFilter !== "all" && (
-                <Badge variant="outline" className="gap-1">{partsFilter === "with" ? "With Parts" : "Without Parts"}
-                  <button className="ml-1" onClick={() => setPartsFilter("all")}>×</button>
-                </Badge>
-              )}
-              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); setBucket("all"); setOemFilter("all"); setPartsFilter("all"); }}>Clear all</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px] max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input placeholder="Search case, customer, serial…" value={q} onChange={(e) => setQ(e.target.value)} className="h-9 pl-8 text-sm" />
             </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-            <Input placeholder="Search case / customer / serial / sector…" value={q} onChange={(e) => setQ(e.target.value)} />
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {TICKET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger><SelectValue placeholder="All call types" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All call types</SelectItem>
-                {CALL_TYPES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={cityFilter} onValueChange={setCityFilter}>
-              <SelectTrigger><SelectValue placeholder="All cities" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All cities / areas</SelectItem>
-                {cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <FilterChip icon={<Calendar className="h-3.5 w-3.5" />} label="Date" value={scope !== "all" ? scopeLabel(scope) : ""} active={scope !== "all"} onClear={() => setScope("all")}>
+              <ChipMenu options={[{v:"all",l:"All time"},{v:"today",l:"Today"},{v:"carry",l:"Carry-over"},{v:"active",l:"Active"},{v:"closedToday",l:"Closed today"},{v:"overdue",l:"Overdue (>24h)"},{v:"highPriority",l:"High priority"}]} value={scope} onChange={setScope} />
+            </FilterChip>
+            <FilterChip icon={<User className="h-3.5 w-3.5" />} label="Engineer" value={engineerFilter !== "all" ? engineerFilter : ""} active={engineerFilter !== "all"} onClear={() => setEngineerFilter("all")}>
+              <ChipMenu searchable options={[{v:"all",l:"All engineers"},...employees.map((e)=>({v:e.name,l:e.name}))]} value={engineerFilter} onChange={setEngineerFilter} />
+            </FilterChip>
+            <FilterChip icon={<Tag className="h-3.5 w-3.5" />} label="Status" value={status !== "all" ? status : ""} active={status !== "all"} onClear={() => setStatus("all")}>
+              <ChipMenu options={[{v:"all",l:"All statuses"},...TICKET_STATUSES.map((s)=>({v:s,l:s}))]} value={status} onChange={setStatus} />
+            </FilterChip>
+            <FilterChip icon={<Zap className="h-3.5 w-3.5" />} label="Priority" value={priorityFilter !== "all" ? priorityFilter : ""} active={priorityFilter !== "all"} onClear={() => setPriorityFilter("all")}>
+              <ChipMenu options={[{v:"all",l:"All priorities"},...PRIORITIES.map((p)=>({v:p,l:p}))]} value={priorityFilter} onChange={setPriorityFilter} />
+            </FilterChip>
+            <FilterChip icon={<Building2 className="h-3.5 w-3.5" />} label="City" value={cityFilter !== "all" ? cityFilter : ""} active={cityFilter !== "all"} onClear={() => setCityFilter("all")}>
+              <ChipMenu searchable options={[{v:"all",l:"All cities"},...cities.map((c)=>({v:c,l:c}))]} value={cityFilter} onChange={setCityFilter} />
+            </FilterChip>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="h-9 gap-1.5"><SlidersHorizontal className="h-3.5 w-3.5" />More</Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 space-y-3">
+                <MoreField label="Call type" value={type} onChange={setType} options={[{v:"all",l:"All call types"},...CALL_TYPES.map((s)=>({v:s,l:s}))]} />
+                <MoreField label="OEM / PHS" value={oemFilter} onChange={setOemFilter} options={[{v:"all",l:"All"},{v:"oem",l:"OEM only"},{v:"phs",l:"PHS only"}]} />
+                <MoreField label="Parts" value={partsFilter} onChange={setPartsFilter} options={[{v:"all",l:"All"},{v:"with",l:"With parts"},{v:"without",l:"Without parts"}]} />
+                <MoreField label="Execution bucket" value={bucket} onChange={setBucket} options={[{v:"all",l:"All"},{v:"lt24",l:"< 24h"},{v:"24-48",l:"24–48h"},{v:"48-72",l:"48–72h"},{v:"gt72",l:"> 72h"}]} />
+                <MoreField label="Open age" value={ageBucket} onChange={setAgeBucket} options={[{v:"all",l:"All"},{v:"lt24",l:"< 24h"},{v:"24-48",l:"24–48h"},{v:"48-72",l:"48–72h"},{v:"gt72",l:"> 72h"}]} />
+              </PopoverContent>
+            </Popover>
+            <div className="ml-auto flex items-center gap-1 rounded-md border p-0.5 bg-muted/40">
+              <Button size="sm" variant={view === "table" ? "default" : "ghost"} className="h-7 w-7 p-0" onClick={() => setView("table")} title="Table view"><List className="h-3.5 w-3.5" /></Button>
+              <Button size="sm" variant={view === "cards" ? "default" : "ghost"} className="h-7 w-7 p-0" onClick={() => setView("cards")} title="Card view"><LayoutGrid className="h-3.5 w-3.5" /></Button>
+            </div>
           </div>
 
+          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all" || bucket !== "all" || oemFilter !== "all" || partsFilter !== "all" || status !== "all" || type !== "all" || cityFilter !== "all" || ageBucket !== "all") && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground">Active:</span>
+              {status !== "all" && <ActiveChip label={`Status: ${status}`} onClear={() => setStatus("all")} />}
+              {scope !== "all" && <ActiveChip label={`Date: ${scopeLabel(scope)}`} onClear={() => setScope("all")} />}
+              {engineerFilter !== "all" && <ActiveChip label={`Engineer: ${engineerFilter}`} onClear={() => setEngineerFilter("all")} />}
+              {priorityFilter !== "all" && <ActiveChip label={`Priority: ${priorityFilter}`} onClear={() => setPriorityFilter("all")} />}
+              {cityFilter !== "all" && <ActiveChip label={`City: ${cityFilter}`} onClear={() => setCityFilter("all")} />}
+              {type !== "all" && <ActiveChip label={`Type: ${type}`} onClear={() => setType("all")} />}
+              {oemFilter !== "all" && <ActiveChip label={oemFilter === "oem" ? "OEM only" : "PHS only"} onClear={() => setOemFilter("all")} />}
+              {partsFilter !== "all" && <ActiveChip label={partsFilter === "with" ? "With parts" : "Without parts"} onClear={() => setPartsFilter("all")} />}
+              {bucket !== "all" && <ActiveChip label={`Exec: ${({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[bucket]}`} onClear={() => setBucket("all")} />}
+              {ageBucket !== "all" && <ActiveChip label={`Age: ${({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[ageBucket]}`} onClear={() => setAgeBucket("all")} />}
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); setBucket("all"); setOemFilter("all"); setPartsFilter("all"); setStatus("all"); setType("all"); setCityFilter("all"); setAgeBucket("all"); }}>Clear all</Button>
+            </div>
+          )}
+
+          <div className="text-xs text-muted-foreground">{filtered.length} ticket{filtered.length === 1 ? "" : "s"}</div>
+
+          {view === "cards" ? (
+            loading ? <div className="p-4 text-muted-foreground">Loading…</div> :
+            filtered.length === 0 ? <div className="p-8 text-center text-muted-foreground border rounded-md">No tickets match your filters.</div> :
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {filtered.map((r) => (
+                <TicketCard key={r.id} r={r} employees={employees} isAdmin={isAdmin} onReassign={reassign} onStatusChange={updateStatus} onNotifyCustomer={notifyCustomer} onNotifyEngineer={notifyEngineer} onSoftDelete={softDelete} onPriority={setPriority} />
+              ))}
+            </div>
+          ) : (
           <div className="overflow-x-auto border rounded-md">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
@@ -474,6 +481,7 @@ function TicketsList() {
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -592,5 +600,147 @@ function RowActions({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+function scopeLabel(s: string) {
+  return ({today:"Today",carry:"Carry-over",active:"Active",closedToday:"Closed today",overdue:"Overdue",highPriority:"High priority"} as Record<string,string>)[s] || s;
+}
+
+function FilterChip({ icon, label, value, active, onClear, children }: { icon: React.ReactNode; label: string; value?: string; active: boolean; onClear: () => void; children: React.ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex items-center gap-1.5 h-9 rounded-md border px-2.5 text-xs font-medium transition hover:bg-accent ${active ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-foreground"}`}
+        >
+          <span className={active ? "text-primary" : "text-muted-foreground"}>{icon}</span>
+          <span>{label}</span>
+          {value && <span className="max-w-[100px] truncate opacity-90">· {value}</span>}
+          {active && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); onClear(); }}
+              className="ml-0.5 -mr-1 rounded p-0.5 hover:bg-primary/20"
+            >
+              <X className="h-3 w-3" />
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-1">
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ChipMenu({ options, value, onChange, searchable }: { options: { v: string; l: string }[]; value: string; onChange: (v: string) => void; searchable?: boolean }) {
+  const [q, setQ] = useState("");
+  const filtered = searchable ? options.filter((o) => o.l.toLowerCase().includes(q.toLowerCase())) : options;
+  return (
+    <div className="space-y-1">
+      {searchable && (
+        <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} className="h-8 text-xs" />
+      )}
+      <div className="max-h-64 overflow-auto">
+        {filtered.map((o) => (
+          <button
+            key={o.v}
+            onClick={() => onChange(o.v)}
+            className={`w-full text-left px-2 py-1.5 text-xs rounded hover:bg-accent ${value === o.v ? "bg-primary/10 font-semibold text-primary" : ""}`}
+          >
+            {o.l}
+          </button>
+        ))}
+        {filtered.length === 0 && <div className="px-2 py-3 text-xs text-muted-foreground text-center">No matches</div>}
+      </div>
+    </div>
+  );
+}
+
+function MoreField({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { v: string; l: string }[] }) {
+  return (
+    <div>
+      <div className="text-xs font-medium mb-1">{label}</div>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {options.map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function ActiveChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <Badge variant="secondary" className="gap-1 pl-2 pr-1 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
+      {label}
+      <button onClick={onClear} className="rounded-full p-0.5 hover:bg-primary/20"><X className="h-3 w-3" /></button>
+    </Badge>
+  );
+}
+
+function TicketCard({ r, employees, isAdmin, onReassign, onStatusChange, onNotifyCustomer, onNotifyEngineer, onSoftDelete, onPriority }: {
+  r: Row;
+  employees: Employee[];
+  isAdmin: boolean;
+  onReassign: (r: Row, e: Employee) => void;
+  onStatusChange: (r: Row, next: string, opts?: { notify?: boolean }) => void;
+  onNotifyCustomer: (r: Row) => void;
+  onNotifyEngineer: (r: Row) => void;
+  onSoftDelete: (r: Row) => void;
+  onPriority: (id: string, p: string) => void;
+}) {
+  const hours = hoursExcludingSundays(r.created_at, new Date());
+  const isOverdue = hours > 24 && r.status !== "Closed" && r.status !== "Cancelled";
+  return (
+    <div className="group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm hover:shadow-md hover:border-primary/40 transition">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0">
+          <Link to="/tickets/$id" params={{ id: r.id }} className="font-mono text-xs font-semibold text-primary hover:underline truncate block">
+            {r.case_id}
+          </Link>
+          <div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground">
+            <span>{r.call_type}</span>
+            {r.oem_call ? <Badge className="bg-purple-100 text-purple-800 px-1 py-0 text-[9px]" variant="secondary">OEM</Badge> : <Badge variant="outline" className="px-1 py-0 text-[9px]">PHS</Badge>}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Select value={r.priority || "P3"} onValueChange={(v) => onPriority(r.id, v)}>
+            <SelectTrigger className={`h-6 w-11 px-1 text-[10px] font-bold ${PRIORITY_COLOR[r.priority || "P3"] || ""}`}><SelectValue /></SelectTrigger>
+            <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+          </Select>
+          <RowActions r={r} employees={employees} isAdmin={isAdmin} onReassign={onReassign} onStatusChange={onStatusChange} onNotifyCustomer={onNotifyCustomer} onNotifyEngineer={onNotifyEngineer} onSoftDelete={onSoftDelete} />
+        </div>
+      </div>
+
+      <div className="text-sm font-semibold leading-tight truncate">{r.customer_name}</div>
+      <div className="text-[11px] text-muted-foreground truncate">{r.product || "—"}{r.serial_no ? ` · ${r.serial_no}` : ""}</div>
+
+      <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
+        <div className="flex items-center gap-1 min-w-0 text-muted-foreground">
+          <MapPin className="h-3 w-3 shrink-0" />
+          <span className="truncate">{r.location || "—"}</span>
+        </div>
+        <div className="flex items-center gap-1 min-w-0 text-muted-foreground">
+          <Phone className="h-3 w-3 shrink-0" />
+          <span className="truncate font-mono">{r.customer_phone || "—"}</span>
+        </div>
+        <div className="flex items-center gap-1 min-w-0 text-muted-foreground col-span-2">
+          <User className="h-3 w-3 shrink-0" />
+          <span className="truncate">{r.assigned_engineer_name || <span className="italic">Unassigned</span>}</span>
+        </div>
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-2 pt-2 border-t">
+        <Badge className={`${STATUS_COLOR[r.status] || "bg-zinc-100 text-zinc-700"} text-[10px]`} variant="secondary">{r.status}</Badge>
+        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium ${timerBadgeColor(hours)}`} title={`${hours.toFixed(1)}h since creation`}>
+          <Clock className="h-2.5 w-2.5" />{formatHours(hours)}{isOverdue && <AlertTriangle className="h-2.5 w-2.5 ml-0.5" />}
+        </span>
+      </div>
+    </div>
   );
 }
