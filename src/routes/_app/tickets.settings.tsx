@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Trash2, Plus } from "lucide-react";
 import { useIsAdmin } from "@/lib/useRole";
+import { MasterCrud } from "@/components/MasterCrud";
 
 export const Route = createFileRoute("/_app/tickets/settings")({
   component: TicketSettings,
@@ -98,6 +99,16 @@ function TicketSettings() {
           </div>
         </CardContent>
       </Card>
+
+      <MasterCrud
+        table="complaint_master"
+        title="Complaints"
+        canEdit={isAdmin}
+        fields={[
+          { key: "name", label: "Complaint Name", type: "title", required: true },
+          { key: "active", label: "Active", type: "boolean" },
+        ]}
+      />
     </div>
   );
 }
