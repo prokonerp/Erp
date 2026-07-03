@@ -23,6 +23,7 @@ import { useIsAdmin } from "@/lib/useRole";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { ComplaintPicker } from "@/components/ComplaintPicker";
+import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
