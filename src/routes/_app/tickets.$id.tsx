@@ -23,6 +23,7 @@ import { useIsAdmin } from "@/lib/useRole";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { ComplaintPicker } from "@/components/ComplaintPicker";
+import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -150,6 +151,7 @@ function TicketDetail() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
+  const [closingOpen, setClosingOpen] = useState(false);
   const { isAdmin } = useIsAdmin();
 
   const load = async () => {
@@ -318,17 +320,45 @@ function TicketDetail() {
   };
 
   const changeStatus = async (next: string) => {
+    if (next === "Closed") {
+      setClosingOpen(true);
+      return;
+    }
     const prev = t.status;
     const extra: Partial<Ticket> = { status: next };
-    if (next === "Closed") extra.closed_at = new Date().toISOString();
     update(extra);
     const ok = await save(extra);
     if (!ok) return;
     await logActivity("status", `Status changed: ${prev} → ${next}`, prev, next);
     await load();
-    if (next === "Closed" && t.customer_phone) {
+  };
+
+  const confirmClose = async (remarks: string): Promise<boolean> => {
+    const prev = t.status;
+    const { data: u } = await supabase.auth.getUser();
+    const actorName =
+      (u.user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ||
+      (u.user?.user_metadata as { full_name?: string; name?: string } | null)?.name ||
+      u.user?.email ||
+      "User";
+    const ts = new Date().toLocaleString();
+    const noteBody = `Closing Remarks by ${actorName} at ${ts}:\n${remarks}`;
+    const { error: noteErr } = await supabase.from("ticket_activities").insert({
+      ticket_id: t.id, kind: "note", notes: noteBody, actor: u.user?.id ?? null,
+    } as never);
+    if (noteErr) { toast.error(`Could not save remarks: ${noteErr.message}`); return false; }
+    const closedAt = new Date().toISOString();
+    const { error: upErr } = await supabase.from("tickets").update({
+      status: "Closed", closed_at: closedAt,
+    } as never).eq("id", t.id);
+    if (upErr) { toast.error(`Remarks saved, but closing failed: ${upErr.message}`); return false; }
+    await logActivity("status", `Status changed: ${prev} → Closed`, prev, "Closed");
+    toast.success("Ticket closed");
+    await load();
+    if (t.customer_phone) {
       await launchTicketWhatsApp(t.customer_phone, renderMsg("ticket_closed", customerClosedMsg(t)), "Customer");
     }
+    return true;
   };
 
   const assignEngineer = async () => {
@@ -932,6 +962,12 @@ function TicketDetail() {
         .ticket-print { display: none; }
         @media print { .ticket-print { display: block !important; } }
       `}</style>
+      <ClosingRemarksDialog
+        open={closingOpen}
+        onOpenChange={setClosingOpen}
+        caseId={t.case_id}
+        onConfirm={confirmClose}
+      />
     </div>
   );
 }
