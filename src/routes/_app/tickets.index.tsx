@@ -523,6 +523,14 @@ function TicketsList() {
         </CardContent>
       </Card>
     </div>
+      <ClosingRemarksDialog
+        open={!!closingCtx}
+        onOpenChange={(v) => { if (!v) setClosingCtx(null); }}
+        caseId={closingCtx?.r.case_id}
+        onConfirm={confirmClose}
+      />
+      <>{null}</>
+    <></>
   );
 }
 
