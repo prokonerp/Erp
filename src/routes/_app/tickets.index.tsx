@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 import { FormPageHeader } from "@/components/FormPageHeader";
 import { softDelete as softDeleteRow, useRealtimeRefetch } from "@/lib/softDelete";
+import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
 
 export const Route = createFileRoute("/_app/tickets/")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -87,6 +88,7 @@ function TicketsList() {
   const [loading, setLoading] = useState(true);
   const [, setNowTick] = useState(0);
   const [view, setView] = useState<"table" | "cards">("table");
+  const [closingCtx, setClosingCtx] = useState<{ r: Row; notify: boolean } | null>(null);
 
   // sync URL → state when navigating to /tickets?engineer=… from dashboard
   useEffect(() => {
@@ -224,8 +226,11 @@ function TicketsList() {
   };
 
   const updateStatus = async (r: Row, next: string, opts: { notify?: boolean } = {}) => {
+    if (next === "Closed") {
+      setClosingCtx({ r, notify: !!opts.notify });
+      return;
+    }
     const patch: Record<string, unknown> = { status: next };
-    if (next === "Closed") patch.closed_at = new Date().toISOString();
     const { error } = await supabase.from("tickets").update(patch as never).eq("id", r.id);
     if (error) return toast.error(error.message);
     await supabase.from("ticket_activities").insert({
@@ -237,6 +242,39 @@ function TicketsList() {
       await launchTicketWhatsApp(r, r.customer_phone, customerClosedMsg({ case_id: r.case_id, customer_name: r.customer_name, product: r.product }), "Customer");
     }
     load();
+  };
+
+  const confirmClose = async (remarks: string): Promise<boolean> => {
+    if (!closingCtx) return false;
+    const { r, notify } = closingCtx;
+    const { data: u } = await supabase.auth.getUser();
+    const actorName =
+      (u.user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ||
+      (u.user?.user_metadata as { full_name?: string; name?: string } | null)?.name ||
+      u.user?.email ||
+      "User";
+    const ts = new Date().toLocaleString();
+    const noteBody = `Closing Remarks by ${actorName} at ${ts}:\n${remarks}`;
+    // 1) Save the note first so remarks are persisted before status change.
+    const { error: noteErr } = await supabase.from("ticket_activities").insert({
+      ticket_id: r.id, kind: "note", notes: noteBody, actor: u.user?.id ?? null,
+    } as never);
+    if (noteErr) { toast.error(`Could not save remarks: ${noteErr.message}`); return false; }
+    // 2) Update the ticket status only after the note is stored.
+    const { error: upErr } = await supabase.from("tickets").update({
+      status: "Closed", closed_at: new Date().toISOString(),
+    } as never).eq("id", r.id);
+    if (upErr) { toast.error(`Remarks saved, but closing failed: ${upErr.message}`); return false; }
+    await supabase.from("ticket_activities").insert({
+      ticket_id: r.id, kind: "status", from_status: r.status, to_status: "Closed",
+      notes: `Status changed: ${r.status} → Closed`, actor: u.user?.id ?? null,
+    } as never);
+    toast.success("Ticket closed");
+    if (notify && r.customer_phone) {
+      await launchTicketWhatsApp(r, r.customer_phone, customerClosedMsg({ case_id: r.case_id, customer_name: r.customer_name, product: r.product }), "Customer");
+    }
+    load();
+    return true;
   };
 
   const softDelete = async (r: Row) => {
