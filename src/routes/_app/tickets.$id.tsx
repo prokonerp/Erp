@@ -962,6 +962,12 @@ function TicketDetail() {
         .ticket-print { display: none; }
         @media print { .ticket-print { display: block !important; } }
       `}</style>
+      <ClosingRemarksDialog
+        open={closingOpen}
+        onOpenChange={setClosingOpen}
+        caseId={t.case_id}
+        onConfirm={confirmClose}
+      />
     </div>
   );
 }
