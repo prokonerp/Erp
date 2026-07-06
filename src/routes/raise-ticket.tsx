@@ -27,7 +27,7 @@ export const Route = createFileRoute("/raise-ticket")({
   }),
 });
 
-type Attachment = { path: string; kind: "serial_photo" | "issue_photo" | "other"; preview: string };
+type Attachment = { path: string; token: string; kind: "serial_photo" | "issue_photo" | "other"; preview: string };
 
 function PublicTicketForm() {
   const submit = useServerFn(submitPublicTicket);
@@ -65,7 +65,7 @@ function PublicTicketForm() {
       const bytes = new Uint8Array(buf);
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
       const data_base64 = btoa(bin);
-      const { path } = await uploadFn({
+      const { path, token } = await uploadFn({
         data: {
           filename: file.name || "upload.jpg",
           content_type: file.type || "image/jpeg",
@@ -74,7 +74,7 @@ function PublicTicketForm() {
         },
       });
       const preview = URL.createObjectURL(file);
-      setAttachments((a) => [...a, { path, kind, preview }]);
+      setAttachments((a) => [...a, { path, token, kind, preview }]);
       toast.success("Photo uploaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
@@ -86,7 +86,7 @@ function PublicTicketForm() {
   const removePhoto = async (idx: number) => {
     const a = attachments[idx];
     setAttachments((arr) => arr.filter((_, i) => i !== idx));
-    try { await deleteFn({ data: { path: a.path } }); } catch { /* ignore */ }
+    try { await deleteFn({ data: { path: a.path, token: a.token } }); } catch { /* ignore */ }
   };
 
   const onSubmit = async () => {
