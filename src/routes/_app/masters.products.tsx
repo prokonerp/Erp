@@ -168,7 +168,8 @@ export function ProductMasterPage() {
     setParentIds([]);
     setLinkedSpares([]);
     setLinkedParents([]);
-    if ((p.category || "") === SPARE_PARTS_CATEGORY) {
+    const hasParentTagging = !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY;
+    if (hasParentTagging) {
       const { data } = await supabase
         .from("product_spare_parts" as any)
         .select("parent_product_id")
@@ -176,7 +177,8 @@ export function ProductMasterPage() {
       const ids = ((data || []) as unknown as { parent_product_id: string }[]).map((r) => r.parent_product_id);
       setParentIds(ids);
       setLinkedParents(rows.filter((r) => ids.includes(r.id)));
-    } else {
+    }
+    if (!hasParentTagging || (p.category || "") !== SPARE_PARTS_CATEGORY) {
       const { data } = await supabase
         .from("product_spare_parts" as any)
         .select("spare_part_id")
