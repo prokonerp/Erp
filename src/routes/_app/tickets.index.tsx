@@ -529,8 +529,8 @@ function TicketsList() {
                       <div className="text-sm font-semibold text-foreground leading-tight">{r.product || "—"}</div>
                       <div className="text-[11px] text-muted-foreground leading-tight font-mono">{r.serial_no || "—"}</div>
                     </td>
-                    <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm leading-tight">{r.sector || "—"}</div>
+                    <td className="p-2 max-w-[140px]">
+                      <div className="text-sm leading-tight break-words whitespace-normal">{r.sector || "—"}</div>
                       <div className="text-[11px] text-muted-foreground leading-tight">{r.location || "—"}</div>
                     </td>
                     <td className="p-2 max-w-[180px] break-words whitespace-normal text-xs">{r.complaint || "—"}</td>
