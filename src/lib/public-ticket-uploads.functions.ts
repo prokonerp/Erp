@@ -13,7 +13,32 @@ const uploadSchema = z.object({
 
 const deleteSchema = z.object({
   path: z.string().min(1).max(500),
+  token: z.string().min(10).max(200),
 });
+
+async function signPath(path: string): Promise<string> {
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!secret) throw new Error("Server misconfigured");
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(path));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
 
 export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
   .inputValidator((input) => uploadSchema.parse(input))
@@ -36,13 +61,18 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
       .from("ticket-attachments")
       .upload(path, buf, { cacheControl: "3600", upsert: false, contentType: data.content_type });
     if (error) throw new Error(error.message);
-    return { path };
+    const token = await signPath(path);
+    return { path, token };
   });
 
 export const deletePublicTicketAttachment = createServerFn({ method: "POST" })
   .inputValidator((input) => deleteSchema.parse(input))
   .handler(async ({ data }) => {
     if (!data.path.startsWith("public/")) throw new Error("Invalid path");
+    const expected = await signPath(data.path);
+    if (!timingSafeEqual(expected, data.token)) {
+      throw new Error("Invalid delete token");
+    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.storage.from("ticket-attachments").remove([data.path]);
     return { ok: true };
