@@ -226,6 +226,7 @@ export function ProductMasterPage() {
       warranty_unit: p.warranty_unit || "Months",
       warranty_start_from: p.warranty_start_from || "Invoice Date",
       warranty_manual_override: p.warranty_manual_override !== false,
+      parent_tagging_required: !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY,
     });
     setEditingId(p.id);
     setOpen(true);
@@ -238,8 +239,9 @@ export function ProductMasterPage() {
     }
     if (!form.category) { toast.error("Category is required"); return; }
     const isSparePart = form.category === SPARE_PARTS_CATEGORY;
-    if (isSparePart && parentIds.length === 0) {
-      toast.error("At least one compatible parent product must be selected for Spare Parts.");
+    const requireParents = form.parent_tagging_required || isSparePart;
+    if (requireParents && parentIds.length === 0) {
+      toast.error("At least one compatible parent product must be selected.");
       return;
     }
     if (!form.central_tax) { toast.error("Central Tax Rate is required"); return; }
@@ -279,6 +281,7 @@ export function ProductMasterPage() {
       warranty_unit: form.warranty_applicable ? form.warranty_unit : null,
       warranty_start_from: form.warranty_applicable ? form.warranty_start_from : null,
       warranty_manual_override: form.warranty_manual_override,
+      parent_tagging_required: form.parent_tagging_required || isSparePart,
     };
     let productId = editingId;
     if (editingId) {
@@ -293,15 +296,15 @@ export function ProductMasterPage() {
     }
 
     // Sync spare-part links when category is Spare Parts.
-    if (isSparePart && productId) {
+    if (requireParents && productId) {
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
       if (parentIds.length) {
         const linkRows = parentIds.map((pid) => ({ spare_part_id: productId, parent_product_id: pid }));
         const { error: linkErr } = await supabase.from("product_spare_parts" as any).insert(linkRows as any);
         if (linkErr) toast.error(`Saved product but failed to link parents: ${linkErr.message}`);
       }
-    } else if (!isSparePart && productId && editingId) {
-      // Switched away from spare parts — remove any existing parent links where this product was a spare.
+    } else if (!requireParents && productId && editingId) {
+      // Parent tagging disabled — remove any existing parent links where this product was a child.
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
     }
 
