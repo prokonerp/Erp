@@ -569,12 +569,24 @@ export function ProductMasterPage() {
                 <Label htmlFor="active" className="text-sm font-normal cursor-pointer">Active (available in transaction dropdowns)</Label>
               </div>
 
-              {form.category === SPARE_PARTS_CATEGORY && (
+              <div className="md:col-span-2 flex items-center justify-between rounded-md border p-3 bg-muted/20">
+                <div>
+                  <Label className="text-sm font-medium">Parent Tagging Required</Label>
+                  <p className="text-[11px] text-muted-foreground">Enable to tag compatible parent products (auto-on for Spare Parts).</p>
+                </div>
+                <Switch
+                  checked={form.parent_tagging_required || form.category === SPARE_PARTS_CATEGORY}
+                  disabled={form.category === SPARE_PARTS_CATEGORY}
+                  onCheckedChange={(v) => setForm({ ...form, parent_tagging_required: v })}
+                />
+              </div>
+
+              {(form.parent_tagging_required || form.category === SPARE_PARTS_CATEGORY) && (
                 <div className="md:col-span-2 rounded-md border p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
                       <Label className="text-sm font-medium">Compatible Parent Products *</Label>
-                      <p className="text-[11px] text-muted-foreground">Active products this spare part can be used in. Spare-parts items are excluded.</p>
+                      <p className="text-[11px] text-muted-foreground">Active parent products this item can be tagged to. Spare-parts items are excluded.</p>
                     </div>
                     <Button type="button" size="sm" variant="outline" onClick={() => setParentPickerOpen(true)}>
                       <Plus className="h-4 w-4 mr-1" />Add Products
