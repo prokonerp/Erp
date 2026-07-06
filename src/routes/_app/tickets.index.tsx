@@ -431,11 +431,12 @@ function TicketsList() {
             </div>
           </div>
 
-          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all" || bucket !== "all" || oemFilter !== "all" || partsFilter !== "all" || status !== "all" || type !== "all" || cityFilter !== "all" || ageBucket !== "all") && (
+          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all" || bucket !== "all" || oemFilter !== "all" || partsFilter !== "all" || status !== "all" || type !== "all" || cityFilter !== "all" || ageBucket !== "all" || dateRange?.from) && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <span className="text-muted-foreground">Active:</span>
               {status !== "all" && <ActiveChip label={`Status: ${status}`} onClear={() => setStatus("all")} />}
               {scope !== "all" && <ActiveChip label={`Date: ${scopeLabel(scope)}`} onClear={() => setScope("all")} />}
+              {dateRange?.from && <ActiveChip label={`Range: ${format(dateRange.from, "dd MMM")}${dateRange.to ? ` – ${format(dateRange.to, "dd MMM")}` : ""}`} onClear={() => setDateRange(undefined)} />}
               {engineerFilter !== "all" && <ActiveChip label={`Engineer: ${engineerFilter}`} onClear={() => setEngineerFilter("all")} />}
               {priorityFilter !== "all" && <ActiveChip label={`Priority: ${priorityFilter}`} onClear={() => setPriorityFilter("all")} />}
               {cityFilter !== "all" && <ActiveChip label={`City: ${cityFilter}`} onClear={() => setCityFilter("all")} />}
@@ -444,7 +445,7 @@ function TicketsList() {
               {partsFilter !== "all" && <ActiveChip label={partsFilter === "with" ? "With parts" : "Without parts"} onClear={() => setPartsFilter("all")} />}
               {bucket !== "all" && <ActiveChip label={`Exec: ${({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[bucket]}`} onClear={() => setBucket("all")} />}
               {ageBucket !== "all" && <ActiveChip label={`Age: ${({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[ageBucket]}`} onClear={() => setAgeBucket("all")} />}
-              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); setBucket("all"); setOemFilter("all"); setPartsFilter("all"); setStatus("all"); setType("all"); setCityFilter("all"); setAgeBucket("all"); }}>Clear all</Button>
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); setBucket("all"); setOemFilter("all"); setPartsFilter("all"); setStatus("all"); setType("all"); setCityFilter("all"); setAgeBucket("all"); setDateRange(undefined); }}>Clear all</Button>
             </div>
           )}
 
