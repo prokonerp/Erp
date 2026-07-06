@@ -65,6 +65,7 @@ type FormState = {
   warranty_unit: string;
   warranty_start_from: string;
   warranty_manual_override: boolean;
+  parent_tagging_required: boolean;
 };
 
 const empty: FormState = {
@@ -74,6 +75,7 @@ const empty: FormState = {
   warranty_applicable: false, warranty_type: "Manufacturer",
   warranty_duration: "12", warranty_unit: "Months",
   warranty_start_from: "Invoice Date", warranty_manual_override: true,
+  parent_tagging_required: false,
 };
 
 type ProductFull = ProductMaster & {
@@ -93,6 +95,7 @@ type ProductFull = ProductMaster & {
   warranty_unit?: string | null;
   warranty_start_from?: string | null;
   warranty_manual_override?: boolean;
+  parent_tagging_required?: boolean;
 };
 
 export function ProductMasterPage() {
