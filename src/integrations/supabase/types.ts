@@ -1939,6 +1939,7 @@ export type Database = {
           local_tax_rate: number | null
           model: string | null
           name: string | null
+          parent_tagging_required: boolean
           serial_format: string | null
           serial_mode: string
           serial_tracking: boolean
@@ -1969,6 +1970,7 @@ export type Database = {
           local_tax_rate?: number | null
           model?: string | null
           name?: string | null
+          parent_tagging_required?: boolean
           serial_format?: string | null
           serial_mode?: string
           serial_tracking?: boolean
@@ -1999,6 +2001,7 @@ export type Database = {
           local_tax_rate?: number | null
           model?: string | null
           name?: string | null
+          parent_tagging_required?: boolean
           serial_format?: string | null
           serial_mode?: string
           serial_tracking?: boolean

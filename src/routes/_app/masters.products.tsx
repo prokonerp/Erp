@@ -65,6 +65,7 @@ type FormState = {
   warranty_unit: string;
   warranty_start_from: string;
   warranty_manual_override: boolean;
+  parent_tagging_required: boolean;
 };
 
 const empty: FormState = {
@@ -74,6 +75,7 @@ const empty: FormState = {
   warranty_applicable: false, warranty_type: "Manufacturer",
   warranty_duration: "12", warranty_unit: "Months",
   warranty_start_from: "Invoice Date", warranty_manual_override: true,
+  parent_tagging_required: false,
 };
 
 type ProductFull = ProductMaster & {
@@ -93,6 +95,7 @@ type ProductFull = ProductMaster & {
   warranty_unit?: string | null;
   warranty_start_from?: string | null;
   warranty_manual_override?: boolean;
+  parent_tagging_required?: boolean;
 };
 
 export function ProductMasterPage() {
@@ -165,7 +168,8 @@ export function ProductMasterPage() {
     setParentIds([]);
     setLinkedSpares([]);
     setLinkedParents([]);
-    if ((p.category || "") === SPARE_PARTS_CATEGORY) {
+    const hasParentTagging = !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY;
+    if (hasParentTagging) {
       const { data } = await supabase
         .from("product_spare_parts" as any)
         .select("parent_product_id")
@@ -173,7 +177,8 @@ export function ProductMasterPage() {
       const ids = ((data || []) as unknown as { parent_product_id: string }[]).map((r) => r.parent_product_id);
       setParentIds(ids);
       setLinkedParents(rows.filter((r) => ids.includes(r.id)));
-    } else {
+    }
+    if (!hasParentTagging || (p.category || "") !== SPARE_PARTS_CATEGORY) {
       const { data } = await supabase
         .from("product_spare_parts" as any)
         .select("spare_part_id")
@@ -223,6 +228,7 @@ export function ProductMasterPage() {
       warranty_unit: p.warranty_unit || "Months",
       warranty_start_from: p.warranty_start_from || "Invoice Date",
       warranty_manual_override: p.warranty_manual_override !== false,
+      parent_tagging_required: !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY,
     });
     setEditingId(p.id);
     setOpen(true);
@@ -235,8 +241,9 @@ export function ProductMasterPage() {
     }
     if (!form.category) { toast.error("Category is required"); return; }
     const isSparePart = form.category === SPARE_PARTS_CATEGORY;
-    if (isSparePart && parentIds.length === 0) {
-      toast.error("At least one compatible parent product must be selected for Spare Parts.");
+    const requireParents = form.parent_tagging_required || isSparePart;
+    if (requireParents && parentIds.length === 0) {
+      toast.error("At least one compatible parent product must be selected.");
       return;
     }
     if (!form.central_tax) { toast.error("Central Tax Rate is required"); return; }
@@ -276,6 +283,7 @@ export function ProductMasterPage() {
       warranty_unit: form.warranty_applicable ? form.warranty_unit : null,
       warranty_start_from: form.warranty_applicable ? form.warranty_start_from : null,
       warranty_manual_override: form.warranty_manual_override,
+      parent_tagging_required: form.parent_tagging_required || isSparePart,
     };
     let productId = editingId;
     if (editingId) {
@@ -290,15 +298,15 @@ export function ProductMasterPage() {
     }
 
     // Sync spare-part links when category is Spare Parts.
-    if (isSparePart && productId) {
+    if (requireParents && productId) {
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
       if (parentIds.length) {
         const linkRows = parentIds.map((pid) => ({ spare_part_id: productId, parent_product_id: pid }));
         const { error: linkErr } = await supabase.from("product_spare_parts" as any).insert(linkRows as any);
         if (linkErr) toast.error(`Saved product but failed to link parents: ${linkErr.message}`);
       }
-    } else if (!isSparePart && productId && editingId) {
-      // Switched away from spare parts — remove any existing parent links where this product was a spare.
+    } else if (!requireParents && productId && editingId) {
+      // Parent tagging disabled — remove any existing parent links where this product was a child.
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
     }
 
@@ -561,12 +569,24 @@ export function ProductMasterPage() {
                 <Label htmlFor="active" className="text-sm font-normal cursor-pointer">Active (available in transaction dropdowns)</Label>
               </div>
 
-              {form.category === SPARE_PARTS_CATEGORY && (
+              <div className="md:col-span-2 flex items-center justify-between rounded-md border p-3 bg-muted/20">
+                <div>
+                  <Label className="text-sm font-medium">Parent Tagging Required</Label>
+                  <p className="text-[11px] text-muted-foreground">Enable to tag compatible parent products (auto-on for Spare Parts).</p>
+                </div>
+                <Switch
+                  checked={form.parent_tagging_required || form.category === SPARE_PARTS_CATEGORY}
+                  disabled={form.category === SPARE_PARTS_CATEGORY}
+                  onCheckedChange={(v) => setForm({ ...form, parent_tagging_required: v })}
+                />
+              </div>
+
+              {(form.parent_tagging_required || form.category === SPARE_PARTS_CATEGORY) && (
                 <div className="md:col-span-2 rounded-md border p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
                       <Label className="text-sm font-medium">Compatible Parent Products *</Label>
-                      <p className="text-[11px] text-muted-foreground">Active products this spare part can be used in. Spare-parts items are excluded.</p>
+                      <p className="text-[11px] text-muted-foreground">Active parent products this item can be tagged to. Spare-parts items are excluded.</p>
                     </div>
                     <Button type="button" size="sm" variant="outline" onClick={() => setParentPickerOpen(true)}>
                       <Plus className="h-4 w-4 mr-1" />Add Products

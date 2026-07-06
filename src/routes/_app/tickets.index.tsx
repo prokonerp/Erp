@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarUI } from "@/components/ui/calendar";
+import type { DateRange } from "react-day-picker";
+import { format } from "date-fns";
 import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
 import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
@@ -85,6 +88,7 @@ function TicketsList() {
   const [oemFilter, setOemFilter] = useState<string>(search.oem || "all");
   const [partsFilter, setPartsFilter] = useState<string>(search.parts || "all");
   const [ageBucket, setAgeBucket] = useState<string>(search.ageBucket || "all");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [, setNowTick] = useState(0);
   const [view, setView] = useState<"table" | "cards">("table");
@@ -186,6 +190,13 @@ function TicketsList() {
         if (r.status === "Closed" || r.status === "Cancelled") return false;
         if (hoursExcludingSundays(r.created_at) <= 24) return false;
       }
+      if (dateRange?.from) {
+        const from = new Date(dateRange.from); from.setHours(0,0,0,0);
+        const to = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
+        to.setHours(23,59,59,999);
+        const t = new Date(r.created_at).getTime();
+        if (t < from.getTime() || t > to.getTime()) return false;
+      }
       if (!q.trim()) return true;
       const s = q.toLowerCase();
       return (
@@ -205,7 +216,7 @@ function TicketsList() {
       if (ac !== bc) return ac - bc;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter, ageBucket]);
+  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter, ageBucket, dateRange]);
 
   const setPriority = async (id: string, p: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, priority: p } : r)));
@@ -358,6 +369,38 @@ function TicketsList() {
             <FilterChip icon={<Calendar className="h-3.5 w-3.5" />} label="Date" value={scope !== "all" ? scopeLabel(scope) : ""} active={scope !== "all"} onClear={() => setScope("all")}>
               <ChipMenu options={[{v:"all",l:"All time"},{v:"today",l:"Today"},{v:"carry",l:"Carry-over"},{v:"active",l:"Active"},{v:"closedToday",l:"Closed today"},{v:"overdue",l:"Overdue (>24h)"},{v:"highPriority",l:"High priority"}]} value={scope} onChange={setScope} />
             </FilterChip>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  size="sm"
+                  variant={dateRange?.from ? "default" : "outline"}
+                  className="h-9 gap-1.5"
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  {dateRange?.from
+                    ? dateRange.to
+                      ? `${format(dateRange.from, "dd MMM")} – ${format(dateRange.to, "dd MMM")}`
+                      : format(dateRange.from, "dd MMM yyyy")
+                    : "Calendar"}
+                  {dateRange?.from && (
+                    <X className="h-3 w-3 ml-1 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDateRange(undefined); }} />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-auto p-0 pointer-events-auto">
+                <CalendarUI
+                  mode="range"
+                  numberOfMonths={2}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  initialFocus
+                  className="p-3 pointer-events-auto"
+                />
+                <div className="flex justify-end gap-2 border-t p-2">
+                  <Button size="sm" variant="ghost" onClick={() => setDateRange(undefined)}>Clear</Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <FilterChip icon={<User className="h-3.5 w-3.5" />} label="Engineer" value={engineerFilter !== "all" ? engineerFilter : ""} active={engineerFilter !== "all"} onClear={() => setEngineerFilter("all")}>
               <ChipMenu searchable options={[{v:"all",l:"All engineers"},...employees.map((e)=>({v:e.name,l:e.name}))]} value={engineerFilter} onChange={setEngineerFilter} />
             </FilterChip>
@@ -388,11 +431,12 @@ function TicketsList() {
             </div>
           </div>
 
-          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all" || bucket !== "all" || oemFilter !== "all" || partsFilter !== "all" || status !== "all" || type !== "all" || cityFilter !== "all" || ageBucket !== "all") && (
+          {(engineerFilter !== "all" || priorityFilter !== "all" || scope !== "all" || bucket !== "all" || oemFilter !== "all" || partsFilter !== "all" || status !== "all" || type !== "all" || cityFilter !== "all" || ageBucket !== "all" || dateRange?.from) && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <span className="text-muted-foreground">Active:</span>
               {status !== "all" && <ActiveChip label={`Status: ${status}`} onClear={() => setStatus("all")} />}
               {scope !== "all" && <ActiveChip label={`Date: ${scopeLabel(scope)}`} onClear={() => setScope("all")} />}
+              {dateRange?.from && <ActiveChip label={`Range: ${format(dateRange.from, "dd MMM")}${dateRange.to ? ` – ${format(dateRange.to, "dd MMM")}` : ""}`} onClear={() => setDateRange(undefined)} />}
               {engineerFilter !== "all" && <ActiveChip label={`Engineer: ${engineerFilter}`} onClear={() => setEngineerFilter("all")} />}
               {priorityFilter !== "all" && <ActiveChip label={`Priority: ${priorityFilter}`} onClear={() => setPriorityFilter("all")} />}
               {cityFilter !== "all" && <ActiveChip label={`City: ${cityFilter}`} onClear={() => setCityFilter("all")} />}
@@ -401,7 +445,7 @@ function TicketsList() {
               {partsFilter !== "all" && <ActiveChip label={partsFilter === "with" ? "With parts" : "Without parts"} onClear={() => setPartsFilter("all")} />}
               {bucket !== "all" && <ActiveChip label={`Exec: ${({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[bucket]}`} onClear={() => setBucket("all")} />}
               {ageBucket !== "all" && <ActiveChip label={`Age: ${({lt24:"<24h","24-48":"24–48h","48-72":"48–72h",gt72:">72h"} as Record<string,string>)[ageBucket]}`} onClear={() => setAgeBucket("all")} />}
-              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); setBucket("all"); setOemFilter("all"); setPartsFilter("all"); setStatus("all"); setType("all"); setCityFilter("all"); setAgeBucket("all"); }}>Clear all</Button>
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEngineerFilter("all"); setPriorityFilter("all"); setScope("all"); setBucket("all"); setOemFilter("all"); setPartsFilter("all"); setStatus("all"); setType("all"); setCityFilter("all"); setAgeBucket("all"); setDateRange(undefined); }}>Clear all</Button>
             </div>
           )}
 
