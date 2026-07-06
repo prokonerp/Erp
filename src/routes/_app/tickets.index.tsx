@@ -369,6 +369,38 @@ function TicketsList() {
             <FilterChip icon={<Calendar className="h-3.5 w-3.5" />} label="Date" value={scope !== "all" ? scopeLabel(scope) : ""} active={scope !== "all"} onClear={() => setScope("all")}>
               <ChipMenu options={[{v:"all",l:"All time"},{v:"today",l:"Today"},{v:"carry",l:"Carry-over"},{v:"active",l:"Active"},{v:"closedToday",l:"Closed today"},{v:"overdue",l:"Overdue (>24h)"},{v:"highPriority",l:"High priority"}]} value={scope} onChange={setScope} />
             </FilterChip>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  size="sm"
+                  variant={dateRange?.from ? "default" : "outline"}
+                  className="h-9 gap-1.5"
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                  {dateRange?.from
+                    ? dateRange.to
+                      ? `${format(dateRange.from, "dd MMM")} – ${format(dateRange.to, "dd MMM")}`
+                      : format(dateRange.from, "dd MMM yyyy")
+                    : "Calendar"}
+                  {dateRange?.from && (
+                    <X className="h-3 w-3 ml-1 hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDateRange(undefined); }} />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-auto p-0 pointer-events-auto">
+                <CalendarUI
+                  mode="range"
+                  numberOfMonths={2}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  initialFocus
+                  className="p-3 pointer-events-auto"
+                />
+                <div className="flex justify-end gap-2 border-t p-2">
+                  <Button size="sm" variant="ghost" onClick={() => setDateRange(undefined)}>Clear</Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <FilterChip icon={<User className="h-3.5 w-3.5" />} label="Engineer" value={engineerFilter !== "all" ? engineerFilter : ""} active={engineerFilter !== "all"} onClear={() => setEngineerFilter("all")}>
               <ChipMenu searchable options={[{v:"all",l:"All engineers"},...employees.map((e)=>({v:e.name,l:e.name}))]} value={engineerFilter} onChange={setEngineerFilter} />
             </FilterChip>
