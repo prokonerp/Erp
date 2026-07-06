@@ -457,9 +457,9 @@ function TicketsList() {
               ))}
             </div>
           ) : (
-          <div className="overflow-x-auto border rounded-md">
+          <div className="overflow-auto border rounded-md max-h-[60vh]">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50">
+              <thead className="bg-muted sticky top-0 z-10">
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="p-2">Case ID</th>
                   <th className="p-2">Type</th>
