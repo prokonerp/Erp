@@ -428,6 +428,7 @@ function TicketsList() {
                   <th className="p-2">Customer</th>
                   <th className="p-2">Model / Serial</th>
                   <th className="p-2">Sector · City</th>
+                  <th className="p-2 max-w-[180px]">Complaint</th>
                   <th className="p-2">Engineer</th>
                   <th className="p-2">Raised By</th>
                   <th className="p-2">Status</th>
@@ -436,9 +437,9 @@ function TicketsList() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={12} className="p-4 text-muted-foreground">Loading…</td></tr>
+                  <tr><td colSpan={13} className="p-4 text-muted-foreground">Loading…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={12} className="p-4 text-muted-foreground">No tickets.</td></tr>
+                  <tr><td colSpan={13} className="p-4 text-muted-foreground">No tickets.</td></tr>
                 ) : filtered.map((r) => (
                   <tr key={r.id} className="border-t align-top hover:bg-muted/30">
                     <td className="p-2 font-mono text-xs whitespace-nowrap">
@@ -491,6 +492,7 @@ function TicketsList() {
                       <div className="text-sm leading-tight">{r.sector || "—"}</div>
                       <div className="text-[11px] text-muted-foreground leading-tight">{r.location || "—"}</div>
                     </td>
+                    <td className="p-2 max-w-[180px] break-words whitespace-normal text-xs">{r.complaint || "—"}</td>
                     <td className="p-2 text-xs whitespace-nowrap">{r.assigned_engineer_name || <span className="text-muted-foreground">Unassigned</span>}</td>
                     <td className="p-2 text-xs">
                       {r.raised_by_type === "external" ? (
