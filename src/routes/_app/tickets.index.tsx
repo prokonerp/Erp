@@ -366,9 +366,6 @@ function TicketsList() {
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input placeholder="Search case, customer, serial…" value={q} onChange={(e) => setQ(e.target.value)} className="h-9 pl-8 text-sm" />
             </div>
-            <FilterChip icon={<Calendar className="h-3.5 w-3.5" />} label="Date" value={scope !== "all" ? scopeLabel(scope) : ""} active={scope !== "all"} onClear={() => setScope("all")}>
-              <ChipMenu options={[{v:"all",l:"All time"},{v:"today",l:"Today"},{v:"carry",l:"Carry-over"},{v:"active",l:"Active"},{v:"closedToday",l:"Closed today"},{v:"overdue",l:"Overdue (>24h)"},{v:"highPriority",l:"High priority"}]} value={scope} onChange={setScope} />
-            </FilterChip>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -460,9 +457,9 @@ function TicketsList() {
               ))}
             </div>
           ) : (
-          <div className="overflow-x-auto border rounded-md">
+          <div className="overflow-auto border rounded-md max-h-[60vh]">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50">
+              <thead className="bg-muted sticky top-0 z-10">
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="p-2">Case ID</th>
                   <th className="p-2">Type</th>
@@ -532,8 +529,8 @@ function TicketsList() {
                       <div className="text-sm font-semibold text-foreground leading-tight">{r.product || "—"}</div>
                       <div className="text-[11px] text-muted-foreground leading-tight font-mono">{r.serial_no || "—"}</div>
                     </td>
-                    <td className="p-2 whitespace-nowrap">
-                      <div className="text-sm leading-tight">{r.sector || "—"}</div>
+                    <td className="p-2 max-w-[140px]">
+                      <div className="text-sm leading-tight break-words whitespace-normal">{r.sector || "—"}</div>
                       <div className="text-[11px] text-muted-foreground leading-tight">{r.location || "—"}</div>
                     </td>
                     <td className="p-2 max-w-[180px] break-words whitespace-normal text-xs">{r.complaint || "—"}</td>
