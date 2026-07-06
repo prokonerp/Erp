@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarUI } from "@/components/ui/calendar";
+import type { DateRange } from "react-day-picker";
+import { format } from "date-fns";
 import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
 import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
@@ -85,6 +88,7 @@ function TicketsList() {
   const [oemFilter, setOemFilter] = useState<string>(search.oem || "all");
   const [partsFilter, setPartsFilter] = useState<string>(search.parts || "all");
   const [ageBucket, setAgeBucket] = useState<string>(search.ageBucket || "all");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [, setNowTick] = useState(0);
   const [view, setView] = useState<"table" | "cards">("table");
@@ -186,6 +190,13 @@ function TicketsList() {
         if (r.status === "Closed" || r.status === "Cancelled") return false;
         if (hoursExcludingSundays(r.created_at) <= 24) return false;
       }
+      if (dateRange?.from) {
+        const from = new Date(dateRange.from); from.setHours(0,0,0,0);
+        const to = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
+        to.setHours(23,59,59,999);
+        const t = new Date(r.created_at).getTime();
+        if (t < from.getTime() || t > to.getTime()) return false;
+      }
       if (!q.trim()) return true;
       const s = q.toLowerCase();
       return (
@@ -205,7 +216,7 @@ function TicketsList() {
       if (ac !== bc) return ac - bc;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter, ageBucket]);
+  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter, ageBucket, dateRange]);
 
   const setPriority = async (id: string, p: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, priority: p } : r)));
