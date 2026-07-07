@@ -96,6 +96,7 @@ export type InvoiceItemRow = {
 export type ItemDraft = {
   product_id: string | null;
   description: string;
+  // (fields below are added for warehouse + serial tracking)
   hsn: string;
   qty: number;
   unit: string;
