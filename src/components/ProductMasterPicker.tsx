@@ -18,6 +18,7 @@ export type ProductMaster = {
   unit: string | null;
   description: string | null;
   active: boolean | null;
+  serial_tracking?: boolean | null;
 };
 
 type Props = {
@@ -39,7 +40,7 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
   useEffect(() => {
     let alive = true;
     fetchAll<ProductMaster>("products", (q) =>
-      q.select("id,sku,name,model,brand,category,hsn,unit,description,active").order("name"),
+      q.select("id,sku,name,model,brand,category,hsn,unit,description,active,serial_tracking").order("name"),
     )
       .then((data) => {
         if (!alive) return;
