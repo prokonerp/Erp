@@ -304,33 +304,72 @@ export type Database = {
       branches: {
         Row: {
           address: string | null
+          bank_account: string | null
+          bank_branch: string | null
+          bank_ifsc: string | null
+          bank_name: string | null
+          cin: string | null
           company_id: string | null
           created_at: string
+          email: string | null
           gstin: string | null
           id: string
+          invoice_footer: string | null
+          is_default: boolean
+          logo_url: string | null
           name: string
+          pan: string | null
           phone: string | null
+          state_code: string | null
+          state_name: string | null
           updated_at: string
+          upi_id: string | null
         }
         Insert: {
           address?: string | null
+          bank_account?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
+          cin?: string | null
           company_id?: string | null
           created_at?: string
+          email?: string | null
           gstin?: string | null
           id?: string
+          invoice_footer?: string | null
+          is_default?: boolean
+          logo_url?: string | null
           name: string
+          pan?: string | null
           phone?: string | null
+          state_code?: string | null
+          state_name?: string | null
           updated_at?: string
+          upi_id?: string | null
         }
         Update: {
           address?: string | null
+          bank_account?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
+          cin?: string | null
           company_id?: string | null
           created_at?: string
+          email?: string | null
           gstin?: string | null
           id?: string
+          invoice_footer?: string | null
+          is_default?: boolean
+          logo_url?: string | null
           name?: string
+          pan?: string | null
           phone?: string | null
+          state_code?: string | null
+          state_name?: string | null
           updated_at?: string
+          upi_id?: string | null
         }
         Relationships: [
           {
@@ -491,6 +530,7 @@ export type Database = {
           shipping_pincode: string | null
           shipping_state: string | null
           state: string | null
+          state_code: string | null
           street: string | null
           updated_at: string
         }
@@ -534,6 +574,7 @@ export type Database = {
           shipping_pincode?: string | null
           shipping_state?: string | null
           state?: string | null
+          state_code?: string | null
           street?: string | null
           updated_at?: string
         }
@@ -577,6 +618,7 @@ export type Database = {
           shipping_pincode?: string | null
           shipping_state?: string | null
           state?: string | null
+          state_code?: string | null
           street?: string | null
           updated_at?: string
         }
@@ -743,6 +785,77 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      eway_bills: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          distance_km: number | null
+          doc_type: string | null
+          error: string | null
+          ewb_date: string | null
+          ewb_no: string | null
+          id: string
+          invoice_id: string
+          payload: Json | null
+          response: Json | null
+          status: string
+          transport_mode: string | null
+          transporter_id: string | null
+          transporter_name: string | null
+          updated_at: string
+          valid_till: string | null
+          vehicle_no: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          distance_km?: number | null
+          doc_type?: string | null
+          error?: string | null
+          ewb_date?: string | null
+          ewb_no?: string | null
+          id?: string
+          invoice_id: string
+          payload?: Json | null
+          response?: Json | null
+          status?: string
+          transport_mode?: string | null
+          transporter_id?: string | null
+          transporter_name?: string | null
+          updated_at?: string
+          valid_till?: string | null
+          vehicle_no?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          distance_km?: number | null
+          doc_type?: string | null
+          error?: string | null
+          ewb_date?: string | null
+          ewb_no?: string | null
+          id?: string
+          invoice_id?: string
+          payload?: Json | null
+          response?: Json | null
+          status?: string
+          transport_mode?: string | null
+          transporter_id?: string | null
+          transporter_name?: string | null
+          updated_at?: string
+          valid_till?: string | null
+          vehicle_no?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eway_bills_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gatepasses: {
         Row: {
@@ -1677,6 +1790,327 @@ export type Database = {
           },
         ]
       }
+      invoice_items: {
+        Row: {
+          cess: number
+          cgst: number
+          created_at: string
+          description: string
+          discount_pct: number
+          gst_rate: number
+          hsn: string | null
+          id: string
+          igst: number
+          invoice_id: string
+          line_total: number
+          product_id: string | null
+          qty: number
+          rate: number
+          sgst: number
+          sr_no: number
+          taxable_value: number
+          unit: string | null
+        }
+        Insert: {
+          cess?: number
+          cgst?: number
+          created_at?: string
+          description: string
+          discount_pct?: number
+          gst_rate?: number
+          hsn?: string | null
+          id?: string
+          igst?: number
+          invoice_id: string
+          line_total?: number
+          product_id?: string | null
+          qty?: number
+          rate?: number
+          sgst?: number
+          sr_no?: number
+          taxable_value?: number
+          unit?: string | null
+        }
+        Update: {
+          cess?: number
+          cgst?: number
+          created_at?: string
+          description?: string
+          discount_pct?: number
+          gst_rate?: number
+          hsn?: string | null
+          id?: string
+          igst?: number
+          invoice_id?: string
+          line_total?: number
+          product_id?: string | null
+          qty?: number
+          rate?: number
+          sgst?: number
+          sr_no?: number
+          taxable_value?: number
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_settings: {
+        Row: {
+          branch_id: string
+          created_at: string
+          current_fy: string | null
+          fy_reset: boolean
+          id: string
+          next_seq: number
+          notes_default: string | null
+          place_of_supply_default: string | null
+          prefix: string
+          terms_default: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          current_fy?: string | null
+          fy_reset?: boolean
+          id?: string
+          next_seq?: number
+          notes_default?: string | null
+          place_of_supply_default?: string | null
+          prefix?: string
+          terms_default?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          current_fy?: string | null
+          fy_reset?: boolean
+          id?: string
+          next_seq?: number
+          notes_default?: string | null
+          place_of_supply_default?: string | null
+          prefix?: string
+          terms_default?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_settings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          ack_date: string | null
+          ack_no: string | null
+          billing_address: string | null
+          branch_id: string
+          buyer_gstin: string | null
+          buyer_name: string | null
+          buyer_state: string | null
+          buyer_state_code: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cess: number
+          cgst: number
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          deleted_at: string | null
+          discount: number
+          due_date: string | null
+          einvoice_error: string | null
+          einvoice_status: string | null
+          ewaybill_date: string | null
+          ewaybill_no: string | null
+          ewaybill_valid_till: string | null
+          id: string
+          igst: number
+          invoice_date: string
+          invoice_no: string | null
+          irn: string | null
+          is_deleted: boolean
+          is_interstate: boolean
+          linked_dc_ids: string[] | null
+          linked_quote_id: string | null
+          notes: string | null
+          pdf_url: string | null
+          place_of_supply: string | null
+          place_of_supply_code: string | null
+          qr_payload: string | null
+          reverse_charge: boolean
+          round_off: number
+          seller_address: string | null
+          seller_gstin: string | null
+          seller_name: string | null
+          seller_state: string | null
+          seller_state_code: string | null
+          sgst: number
+          shipping_address: string | null
+          status: string
+          subtotal: number
+          taxable_value: number
+          terms: string | null
+          total: number
+          total_in_words: string | null
+          total_paid: number
+          updated_at: string
+        }
+        Insert: {
+          ack_date?: string | null
+          ack_no?: string | null
+          billing_address?: string | null
+          branch_id: string
+          buyer_gstin?: string | null
+          buyer_name?: string | null
+          buyer_state?: string | null
+          buyer_state_code?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cess?: number
+          cgst?: number
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          deleted_at?: string | null
+          discount?: number
+          due_date?: string | null
+          einvoice_error?: string | null
+          einvoice_status?: string | null
+          ewaybill_date?: string | null
+          ewaybill_no?: string | null
+          ewaybill_valid_till?: string | null
+          id?: string
+          igst?: number
+          invoice_date?: string
+          invoice_no?: string | null
+          irn?: string | null
+          is_deleted?: boolean
+          is_interstate?: boolean
+          linked_dc_ids?: string[] | null
+          linked_quote_id?: string | null
+          notes?: string | null
+          pdf_url?: string | null
+          place_of_supply?: string | null
+          place_of_supply_code?: string | null
+          qr_payload?: string | null
+          reverse_charge?: boolean
+          round_off?: number
+          seller_address?: string | null
+          seller_gstin?: string | null
+          seller_name?: string | null
+          seller_state?: string | null
+          seller_state_code?: string | null
+          sgst?: number
+          shipping_address?: string | null
+          status?: string
+          subtotal?: number
+          taxable_value?: number
+          terms?: string | null
+          total?: number
+          total_in_words?: string | null
+          total_paid?: number
+          updated_at?: string
+        }
+        Update: {
+          ack_date?: string | null
+          ack_no?: string | null
+          billing_address?: string | null
+          branch_id?: string
+          buyer_gstin?: string | null
+          buyer_name?: string | null
+          buyer_state?: string | null
+          buyer_state_code?: string | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cess?: number
+          cgst?: number
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          deleted_at?: string | null
+          discount?: number
+          due_date?: string | null
+          einvoice_error?: string | null
+          einvoice_status?: string | null
+          ewaybill_date?: string | null
+          ewaybill_no?: string | null
+          ewaybill_valid_till?: string | null
+          id?: string
+          igst?: number
+          invoice_date?: string
+          invoice_no?: string | null
+          irn?: string | null
+          is_deleted?: boolean
+          is_interstate?: boolean
+          linked_dc_ids?: string[] | null
+          linked_quote_id?: string | null
+          notes?: string | null
+          pdf_url?: string | null
+          place_of_supply?: string | null
+          place_of_supply_code?: string | null
+          qr_payload?: string | null
+          reverse_charge?: boolean
+          round_off?: number
+          seller_address?: string | null
+          seller_gstin?: string | null
+          seller_name?: string | null
+          seller_state?: string | null
+          seller_state_code?: string | null
+          sgst?: number
+          shipping_address?: string | null
+          status?: string
+          subtotal?: number
+          taxable_value?: number
+          terms?: string | null
+          total?: number
+          total_in_words?: string | null
+          total_paid?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_linked_quote_id_fkey"
+            columns: ["linked_quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_activities: {
         Row: {
           activity_date: string
@@ -1813,6 +2247,98 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_allocations: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          invoice_id: string
+          payment_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          payment_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          payment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_allocations_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_allocations_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments_received"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments_received: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          mode: string
+          notes: string | null
+          payment_date: string
+          payment_no: string | null
+          reference: string | null
+          unallocated: number
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          mode?: string
+          notes?: string | null
+          payment_date?: string
+          payment_no?: string | null
+          reference?: string | null
+          unallocated?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          mode?: string
+          notes?: string | null
+          payment_date?: string
+          payment_no?: string | null
+          reference?: string | null
+          unallocated?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_received_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pm_visits: {
         Row: {
           amc_id: string
@@ -1933,6 +2459,7 @@ export type Database = {
           created_at: string
           default_price: number | null
           description: string | null
+          gst_rate: number | null
           hsn: string | null
           id: string
           local_tax_exempt: boolean
@@ -1945,6 +2472,7 @@ export type Database = {
           serial_tracking: boolean
           sku: string | null
           tax_rate: number | null
+          track_stock_on_invoice: boolean
           unit: string
           updated_at: string
           warranty_applicable: boolean
@@ -1964,6 +2492,7 @@ export type Database = {
           created_at?: string
           default_price?: number | null
           description?: string | null
+          gst_rate?: number | null
           hsn?: string | null
           id?: string
           local_tax_exempt?: boolean
@@ -1976,6 +2505,7 @@ export type Database = {
           serial_tracking?: boolean
           sku?: string | null
           tax_rate?: number | null
+          track_stock_on_invoice?: boolean
           unit?: string
           updated_at?: string
           warranty_applicable?: boolean
@@ -1995,6 +2525,7 @@ export type Database = {
           created_at?: string
           default_price?: number | null
           description?: string | null
+          gst_rate?: number | null
           hsn?: string | null
           id?: string
           local_tax_exempt?: boolean
@@ -2007,6 +2538,7 @@ export type Database = {
           serial_tracking?: boolean
           sku?: string | null
           tax_rate?: number | null
+          track_stock_on_invoice?: boolean
           unit?: string
           updated_at?: string
           warranty_applicable?: boolean
