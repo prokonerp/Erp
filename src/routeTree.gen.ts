@@ -32,6 +32,7 @@ import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppAmcRouteImport } from './routes/_app/amc'
 import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index'
 import { Route as AppSalesIndexRouteImport } from './routes/_app/sales.index'
+import { Route as AppPoIndexRouteImport } from './routes/_app/po.index'
 import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
 import { Route as AppImsIndexRouteImport } from './routes/_app/ims.index'
 import { Route as AppGrnIndexRouteImport } from './routes/_app/grn.index'
@@ -210,6 +211,11 @@ const AppSalesIndexRoute = AppSalesIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppSalesRoute,
+} as any)
+const AppPoIndexRoute = AppPoIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppPoRoute,
 } as any)
 const AppIndentIndexRoute = AppIndentIndexRouteImport.update({
   id: '/',
@@ -547,7 +553,7 @@ export interface FileRoutesByFullPath {
   '/indent': typeof AppIndentRouteWithChildren
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
-  '/po': typeof AppPoRoute
+  '/po': typeof AppPoRouteWithChildren
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
@@ -596,6 +602,7 @@ export interface FileRoutesByFullPath {
   '/grn/': typeof AppGrnIndexRoute
   '/ims/': typeof AppImsIndexRoute
   '/indent/': typeof AppIndentIndexRoute
+  '/po/': typeof AppPoIndexRoute
   '/sales/': typeof AppSalesIndexRoute
   '/tickets/': typeof AppTicketsIndexRoute
   '/challan/customer/new': typeof AppChallanCustomerNewRoute
@@ -629,7 +636,6 @@ export interface FileRoutesByTo {
   '/import': typeof AppImportRoute
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
-  '/po': typeof AppPoRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
@@ -670,6 +676,7 @@ export interface FileRoutesByTo {
   '/grn': typeof AppGrnIndexRoute
   '/ims': typeof AppImsIndexRoute
   '/indent': typeof AppIndentIndexRoute
+  '/po': typeof AppPoIndexRoute
   '/sales': typeof AppSalesIndexRoute
   '/tickets': typeof AppTicketsIndexRoute
   '/challan/customer/new': typeof AppChallanCustomerNewRoute
@@ -711,7 +718,7 @@ export interface FileRoutesById {
   '/_app/indent': typeof AppIndentRouteWithChildren
   '/_app/masters': typeof AppMastersRouteWithChildren
   '/_app/new': typeof AppNewRoute
-  '/_app/po': typeof AppPoRoute
+  '/_app/po': typeof AppPoRouteWithChildren
   '/_app/products': typeof AppProductsRoute
   '/_app/records': typeof AppRecordsRoute
   '/_app/reports': typeof AppReportsRoute
@@ -760,6 +767,7 @@ export interface FileRoutesById {
   '/_app/grn/': typeof AppGrnIndexRoute
   '/_app/ims/': typeof AppImsIndexRoute
   '/_app/indent/': typeof AppIndentIndexRoute
+  '/_app/po/': typeof AppPoIndexRoute
   '/_app/sales/': typeof AppSalesIndexRoute
   '/_app/tickets/': typeof AppTicketsIndexRoute
   '/_app/challan/customer/new': typeof AppChallanCustomerNewRoute
@@ -850,6 +858,7 @@ export interface FileRouteTypes {
     | '/grn/'
     | '/ims/'
     | '/indent/'
+    | '/po/'
     | '/sales/'
     | '/tickets/'
     | '/challan/customer/new'
@@ -883,7 +892,6 @@ export interface FileRouteTypes {
     | '/import'
     | '/masters'
     | '/new'
-    | '/po'
     | '/products'
     | '/records'
     | '/reports'
@@ -924,6 +932,7 @@ export interface FileRouteTypes {
     | '/grn'
     | '/ims'
     | '/indent'
+    | '/po'
     | '/sales'
     | '/tickets'
     | '/challan/customer/new'
@@ -1013,6 +1022,7 @@ export interface FileRouteTypes {
     | '/_app/grn/'
     | '/_app/ims/'
     | '/_app/indent/'
+    | '/_app/po/'
     | '/_app/sales/'
     | '/_app/tickets/'
     | '/_app/challan/customer/new'
@@ -1207,6 +1217,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/sales/'
       preLoaderRoute: typeof AppSalesIndexRouteImport
       parentRoute: typeof AppSalesRoute
+    }
+    '/_app/po/': {
+      id: '/_app/po/'
+      path: '/'
+      fullPath: '/po/'
+      preLoaderRoute: typeof AppPoIndexRouteImport
+      parentRoute: typeof AppPoRoute
     }
     '/_app/indent/': {
       id: '/_app/indent/'
@@ -1903,6 +1920,16 @@ const AppMastersRouteWithChildren = AppMastersRoute._addFileChildren(
   AppMastersRouteChildren,
 )
 
+interface AppPoRouteChildren {
+  AppPoIndexRoute: typeof AppPoIndexRoute
+}
+
+const AppPoRouteChildren: AppPoRouteChildren = {
+  AppPoIndexRoute: AppPoIndexRoute,
+}
+
+const AppPoRouteWithChildren = AppPoRoute._addFileChildren(AppPoRouteChildren)
+
 interface AppSalesRouteChildren {
   AppSalesQuotationsRoute: typeof AppSalesQuotationsRoute
   AppSalesSettingsRoute: typeof AppSalesSettingsRoute
@@ -1965,7 +1992,7 @@ interface AppRouteChildren {
   AppIndentRoute: typeof AppIndentRouteWithChildren
   AppMastersRoute: typeof AppMastersRouteWithChildren
   AppNewRoute: typeof AppNewRoute
-  AppPoRoute: typeof AppPoRoute
+  AppPoRoute: typeof AppPoRouteWithChildren
   AppProductsRoute: typeof AppProductsRoute
   AppRecordsRoute: typeof AppRecordsRoute
   AppReportsRoute: typeof AppReportsRoute
@@ -1986,7 +2013,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndentRoute: AppIndentRouteWithChildren,
   AppMastersRoute: AppMastersRouteWithChildren,
   AppNewRoute: AppNewRoute,
-  AppPoRoute: AppPoRoute,
+  AppPoRoute: AppPoRouteWithChildren,
   AppProductsRoute: AppProductsRoute,
   AppRecordsRoute: AppRecordsRoute,
   AppReportsRoute: AppReportsRoute,
