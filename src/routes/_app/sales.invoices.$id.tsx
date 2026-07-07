@@ -256,7 +256,14 @@ function InvoiceView() {
               {items.map((it) => (
                 <tr key={it.id} className="border-t">
                   <td className="p-2 text-xs">{it.sr_no}</td>
-                  <td className="p-2">{it.description}</td>
+                  <td className="p-2">
+                    <div>{it.description}</div>
+                    {it.serial_numbers && it.serial_numbers.length > 0 && (
+                      <div className="text-[11px] text-muted-foreground font-mono mt-1">
+                        Serial No: {it.serial_numbers.join(", ")}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-2 font-mono text-xs">{it.hsn || "—"}</td>
                   <td className="p-2 text-right">{it.qty} {it.unit}</td>
                   <td className="p-2 text-right">{inr(it.rate)}</td>
