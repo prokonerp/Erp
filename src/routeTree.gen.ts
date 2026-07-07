@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTicketsRouteImport } from './routes/_app/tickets'
+import { Route as AppSalesRouteImport } from './routes/_app/sales'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppRecordsRouteImport } from './routes/_app/records'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
@@ -29,6 +30,7 @@ import { Route as AppChallanRouteImport } from './routes/_app/challan'
 import { Route as AppArchiveRouteImport } from './routes/_app/archive'
 import { Route as AppAmcRouteImport } from './routes/_app/amc'
 import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index'
+import { Route as AppSalesIndexRouteImport } from './routes/_app/sales.index'
 import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
 import { Route as AppImsIndexRouteImport } from './routes/_app/ims.index'
 import { Route as AppGrnIndexRouteImport } from './routes/_app/grn.index'
@@ -40,6 +42,8 @@ import { Route as AppTicketsSettingsRouteImport } from './routes/_app/tickets.se
 import { Route as AppTicketsNewRouteImport } from './routes/_app/tickets.new'
 import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.dashboard'
 import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
+import { Route as AppSalesSettingsRouteImport } from './routes/_app/sales.settings'
+import { Route as AppSalesQuotationsRouteImport } from './routes/_app/sales.quotations'
 import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.products'
 import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
 import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
@@ -70,12 +74,18 @@ import { Route as AppAmcPmRouteImport } from './routes/_app/amc.pm'
 import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
 import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
 import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
+import { Route as AppSalesPaymentsIndexRouteImport } from './routes/_app/sales.payments.index'
+import { Route as AppSalesInvoicesIndexRouteImport } from './routes/_app/sales.invoices.index'
+import { Route as AppSalesEwayIndexRouteImport } from './routes/_app/sales.eway.index'
 import { Route as AppImsTransfersIndexRouteImport } from './routes/_app/ims.transfers.index'
 import { Route as AppGrnOemIndexRouteImport } from './routes/_app/grn.oem.index'
 import { Route as AppGrnGeneralIndexRouteImport } from './routes/_app/grn.general.index'
 import { Route as AppGrnCustomerIndexRouteImport } from './routes/_app/grn.customer.index'
 import { Route as AppChallanOemIndexRouteImport } from './routes/_app/challan.oem.index'
 import { Route as AppChallanCustomerIndexRouteImport } from './routes/_app/challan.customer.index'
+import { Route as AppSalesPaymentsNewRouteImport } from './routes/_app/sales.payments.new'
+import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.invoices.new'
+import { Route as AppSalesInvoicesIdRouteImport } from './routes/_app/sales.invoices.$id'
 import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
 import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
 import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
@@ -108,6 +118,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppTicketsRoute = AppTicketsRouteImport.update({
   id: '/tickets',
   path: '/tickets',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSalesRoute = AppSalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportsRoute = AppReportsRouteImport.update({
@@ -185,6 +200,11 @@ const AppTicketsIndexRoute = AppTicketsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppTicketsRoute,
 } as any)
+const AppSalesIndexRoute = AppSalesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
 const AppIndentIndexRoute = AppIndentIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -239,6 +259,16 @@ const AppTicketsIdRoute = AppTicketsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => AppTicketsRoute,
+} as any)
+const AppSalesSettingsRoute = AppSalesSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesQuotationsRoute = AppSalesQuotationsRouteImport.update({
+  id: '/quotations',
+  path: '/quotations',
+  getParentRoute: () => AppSalesRoute,
 } as any)
 const AppMastersProductsRoute = AppMastersProductsRouteImport.update({
   id: '/products',
@@ -390,6 +420,21 @@ const AppAmcIdRoute = AppAmcIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppAmcRoute,
 } as any)
+const AppSalesPaymentsIndexRoute = AppSalesPaymentsIndexRouteImport.update({
+  id: '/payments/',
+  path: '/payments/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesInvoicesIndexRoute = AppSalesInvoicesIndexRouteImport.update({
+  id: '/invoices/',
+  path: '/invoices/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesEwayIndexRoute = AppSalesEwayIndexRouteImport.update({
+  id: '/eway/',
+  path: '/eway/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
 const AppImsTransfersIndexRoute = AppImsTransfersIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -419,6 +464,21 @@ const AppChallanCustomerIndexRoute = AppChallanCustomerIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppChallanCustomerRoute,
+} as any)
+const AppSalesPaymentsNewRoute = AppSalesPaymentsNewRouteImport.update({
+  id: '/payments/new',
+  path: '/payments/new',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesInvoicesNewRoute = AppSalesInvoicesNewRouteImport.update({
+  id: '/invoices/new',
+  path: '/invoices/new',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesInvoicesIdRoute = AppSalesInvoicesIdRouteImport.update({
+  id: '/invoices/$id',
+  path: '/invoices/$id',
+  getParentRoute: () => AppSalesRoute,
 } as any)
 const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
   id: '/new',
@@ -484,6 +544,7 @@ export interface FileRoutesByFullPath {
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
+  '/sales': typeof AppSalesRouteWithChildren
   '/tickets': typeof AppTicketsRouteWithChildren
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
@@ -515,6 +576,8 @@ export interface FileRoutesByFullPath {
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
   '/masters/products': typeof AppMastersProductsRoute
+  '/sales/quotations': typeof AppSalesQuotationsRoute
+  '/sales/settings': typeof AppSalesSettingsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
   '/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/tickets/new': typeof AppTicketsNewRoute
@@ -526,6 +589,7 @@ export interface FileRoutesByFullPath {
   '/grn/': typeof AppGrnIndexRoute
   '/ims/': typeof AppImsIndexRoute
   '/indent/': typeof AppIndentIndexRoute
+  '/sales/': typeof AppSalesIndexRoute
   '/tickets/': typeof AppTicketsIndexRoute
   '/challan/customer/new': typeof AppChallanCustomerNewRoute
   '/challan/oem/new': typeof AppChallanOemNewRoute
@@ -536,12 +600,18 @@ export interface FileRoutesByFullPath {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
+  '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
+  '/sales/payments/new': typeof AppSalesPaymentsNewRoute
   '/challan/customer/': typeof AppChallanCustomerIndexRoute
   '/challan/oem/': typeof AppChallanOemIndexRoute
   '/grn/customer/': typeof AppGrnCustomerIndexRoute
   '/grn/general/': typeof AppGrnGeneralIndexRoute
   '/grn/oem/': typeof AppGrnOemIndexRoute
   '/ims/transfers/': typeof AppImsTransfersIndexRoute
+  '/sales/eway/': typeof AppSalesEwayIndexRoute
+  '/sales/invoices/': typeof AppSalesInvoicesIndexRoute
+  '/sales/payments/': typeof AppSalesPaymentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -579,6 +649,8 @@ export interface FileRoutesByTo {
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
   '/masters/products': typeof AppMastersProductsRoute
+  '/sales/quotations': typeof AppSalesQuotationsRoute
+  '/sales/settings': typeof AppSalesSettingsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
   '/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/tickets/new': typeof AppTicketsNewRoute
@@ -590,6 +662,7 @@ export interface FileRoutesByTo {
   '/grn': typeof AppGrnIndexRoute
   '/ims': typeof AppImsIndexRoute
   '/indent': typeof AppIndentIndexRoute
+  '/sales': typeof AppSalesIndexRoute
   '/tickets': typeof AppTicketsIndexRoute
   '/challan/customer/new': typeof AppChallanCustomerNewRoute
   '/challan/oem/new': typeof AppChallanOemNewRoute
@@ -600,12 +673,18 @@ export interface FileRoutesByTo {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
+  '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
+  '/sales/payments/new': typeof AppSalesPaymentsNewRoute
   '/challan/customer': typeof AppChallanCustomerIndexRoute
   '/challan/oem': typeof AppChallanOemIndexRoute
   '/grn/customer': typeof AppGrnCustomerIndexRoute
   '/grn/general': typeof AppGrnGeneralIndexRoute
   '/grn/oem': typeof AppGrnOemIndexRoute
   '/ims/transfers': typeof AppImsTransfersIndexRoute
+  '/sales/eway': typeof AppSalesEwayIndexRoute
+  '/sales/invoices': typeof AppSalesInvoicesIndexRoute
+  '/sales/payments': typeof AppSalesPaymentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -627,6 +706,7 @@ export interface FileRoutesById {
   '/_app/products': typeof AppProductsRoute
   '/_app/records': typeof AppRecordsRoute
   '/_app/reports': typeof AppReportsRoute
+  '/_app/sales': typeof AppSalesRouteWithChildren
   '/_app/tickets': typeof AppTicketsRouteWithChildren
   '/_app/amc/$id': typeof AppAmcIdRoute
   '/_app/amc/new': typeof AppAmcNewRoute
@@ -658,6 +738,8 @@ export interface FileRoutesById {
   '/_app/indent/new': typeof AppIndentNewRoute
   '/_app/masters/customers': typeof AppMastersCustomersRoute
   '/_app/masters/products': typeof AppMastersProductsRoute
+  '/_app/sales/quotations': typeof AppSalesQuotationsRoute
+  '/_app/sales/settings': typeof AppSalesSettingsRoute
   '/_app/tickets/$id': typeof AppTicketsIdRoute
   '/_app/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/_app/tickets/new': typeof AppTicketsNewRoute
@@ -669,6 +751,7 @@ export interface FileRoutesById {
   '/_app/grn/': typeof AppGrnIndexRoute
   '/_app/ims/': typeof AppImsIndexRoute
   '/_app/indent/': typeof AppIndentIndexRoute
+  '/_app/sales/': typeof AppSalesIndexRoute
   '/_app/tickets/': typeof AppTicketsIndexRoute
   '/_app/challan/customer/new': typeof AppChallanCustomerNewRoute
   '/_app/challan/oem/new': typeof AppChallanOemNewRoute
@@ -679,12 +762,18 @@ export interface FileRoutesById {
   '/_app/grn/oem/new': typeof AppGrnOemNewRoute
   '/_app/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/_app/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/_app/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
+  '/_app/sales/invoices/new': typeof AppSalesInvoicesNewRoute
+  '/_app/sales/payments/new': typeof AppSalesPaymentsNewRoute
   '/_app/challan/customer/': typeof AppChallanCustomerIndexRoute
   '/_app/challan/oem/': typeof AppChallanOemIndexRoute
   '/_app/grn/customer/': typeof AppGrnCustomerIndexRoute
   '/_app/grn/general/': typeof AppGrnGeneralIndexRoute
   '/_app/grn/oem/': typeof AppGrnOemIndexRoute
   '/_app/ims/transfers/': typeof AppImsTransfersIndexRoute
+  '/_app/sales/eway/': typeof AppSalesEwayIndexRoute
+  '/_app/sales/invoices/': typeof AppSalesInvoicesIndexRoute
+  '/_app/sales/payments/': typeof AppSalesPaymentsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -706,6 +795,7 @@ export interface FileRouteTypes {
     | '/products'
     | '/records'
     | '/reports'
+    | '/sales'
     | '/tickets'
     | '/amc/$id'
     | '/amc/new'
@@ -737,6 +827,8 @@ export interface FileRouteTypes {
     | '/indent/new'
     | '/masters/customers'
     | '/masters/products'
+    | '/sales/quotations'
+    | '/sales/settings'
     | '/tickets/$id'
     | '/tickets/dashboard'
     | '/tickets/new'
@@ -748,6 +840,7 @@ export interface FileRouteTypes {
     | '/grn/'
     | '/ims/'
     | '/indent/'
+    | '/sales/'
     | '/tickets/'
     | '/challan/customer/new'
     | '/challan/oem/new'
@@ -758,12 +851,18 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/sales/invoices/$id'
+    | '/sales/invoices/new'
+    | '/sales/payments/new'
     | '/challan/customer/'
     | '/challan/oem/'
     | '/grn/customer/'
     | '/grn/general/'
     | '/grn/oem/'
     | '/ims/transfers/'
+    | '/sales/eway/'
+    | '/sales/invoices/'
+    | '/sales/payments/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -801,6 +900,8 @@ export interface FileRouteTypes {
     | '/indent/new'
     | '/masters/customers'
     | '/masters/products'
+    | '/sales/quotations'
+    | '/sales/settings'
     | '/tickets/$id'
     | '/tickets/dashboard'
     | '/tickets/new'
@@ -812,6 +913,7 @@ export interface FileRouteTypes {
     | '/grn'
     | '/ims'
     | '/indent'
+    | '/sales'
     | '/tickets'
     | '/challan/customer/new'
     | '/challan/oem/new'
@@ -822,12 +924,18 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/sales/invoices/$id'
+    | '/sales/invoices/new'
+    | '/sales/payments/new'
     | '/challan/customer'
     | '/challan/oem'
     | '/grn/customer'
     | '/grn/general'
     | '/grn/oem'
     | '/ims/transfers'
+    | '/sales/eway'
+    | '/sales/invoices'
+    | '/sales/payments'
   id:
     | '__root__'
     | '/'
@@ -848,6 +956,7 @@ export interface FileRouteTypes {
     | '/_app/products'
     | '/_app/records'
     | '/_app/reports'
+    | '/_app/sales'
     | '/_app/tickets'
     | '/_app/amc/$id'
     | '/_app/amc/new'
@@ -879,6 +988,8 @@ export interface FileRouteTypes {
     | '/_app/indent/new'
     | '/_app/masters/customers'
     | '/_app/masters/products'
+    | '/_app/sales/quotations'
+    | '/_app/sales/settings'
     | '/_app/tickets/$id'
     | '/_app/tickets/dashboard'
     | '/_app/tickets/new'
@@ -890,6 +1001,7 @@ export interface FileRouteTypes {
     | '/_app/grn/'
     | '/_app/ims/'
     | '/_app/indent/'
+    | '/_app/sales/'
     | '/_app/tickets/'
     | '/_app/challan/customer/new'
     | '/_app/challan/oem/new'
@@ -900,12 +1012,18 @@ export interface FileRouteTypes {
     | '/_app/grn/oem/new'
     | '/_app/ims/transfers/$id'
     | '/_app/ims/transfers/new'
+    | '/_app/sales/invoices/$id'
+    | '/_app/sales/invoices/new'
+    | '/_app/sales/payments/new'
     | '/_app/challan/customer/'
     | '/_app/challan/oem/'
     | '/_app/grn/customer/'
     | '/_app/grn/general/'
     | '/_app/grn/oem/'
     | '/_app/ims/transfers/'
+    | '/_app/sales/eway/'
+    | '/_app/sales/invoices/'
+    | '/_app/sales/payments/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -950,6 +1068,13 @@ declare module '@tanstack/react-router' {
       path: '/tickets'
       fullPath: '/tickets'
       preLoaderRoute: typeof AppTicketsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/sales': {
+      id: '/_app/sales'
+      path: '/sales'
+      fullPath: '/sales'
+      preLoaderRoute: typeof AppSalesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/reports': {
@@ -1057,6 +1182,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTicketsIndexRouteImport
       parentRoute: typeof AppTicketsRoute
     }
+    '/_app/sales/': {
+      id: '/_app/sales/'
+      path: '/'
+      fullPath: '/sales/'
+      preLoaderRoute: typeof AppSalesIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
     '/_app/indent/': {
       id: '/_app/indent/'
       path: '/'
@@ -1133,6 +1265,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/tickets/$id'
       preLoaderRoute: typeof AppTicketsIdRouteImport
       parentRoute: typeof AppTicketsRoute
+    }
+    '/_app/sales/settings': {
+      id: '/_app/sales/settings'
+      path: '/settings'
+      fullPath: '/sales/settings'
+      preLoaderRoute: typeof AppSalesSettingsRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/quotations': {
+      id: '/_app/sales/quotations'
+      path: '/quotations'
+      fullPath: '/sales/quotations'
+      preLoaderRoute: typeof AppSalesQuotationsRouteImport
+      parentRoute: typeof AppSalesRoute
     }
     '/_app/masters/products': {
       id: '/_app/masters/products'
@@ -1344,6 +1490,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAmcIdRouteImport
       parentRoute: typeof AppAmcRoute
     }
+    '/_app/sales/payments/': {
+      id: '/_app/sales/payments/'
+      path: '/payments'
+      fullPath: '/sales/payments/'
+      preLoaderRoute: typeof AppSalesPaymentsIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/invoices/': {
+      id: '/_app/sales/invoices/'
+      path: '/invoices'
+      fullPath: '/sales/invoices/'
+      preLoaderRoute: typeof AppSalesInvoicesIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/eway/': {
+      id: '/_app/sales/eway/'
+      path: '/eway'
+      fullPath: '/sales/eway/'
+      preLoaderRoute: typeof AppSalesEwayIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
     '/_app/ims/transfers/': {
       id: '/_app/ims/transfers/'
       path: '/'
@@ -1385,6 +1552,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/challan/customer/'
       preLoaderRoute: typeof AppChallanCustomerIndexRouteImport
       parentRoute: typeof AppChallanCustomerRoute
+    }
+    '/_app/sales/payments/new': {
+      id: '/_app/sales/payments/new'
+      path: '/payments/new'
+      fullPath: '/sales/payments/new'
+      preLoaderRoute: typeof AppSalesPaymentsNewRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/invoices/new': {
+      id: '/_app/sales/invoices/new'
+      path: '/invoices/new'
+      fullPath: '/sales/invoices/new'
+      preLoaderRoute: typeof AppSalesInvoicesNewRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/invoices/$id': {
+      id: '/_app/sales/invoices/$id'
+      path: '/invoices/$id'
+      fullPath: '/sales/invoices/$id'
+      preLoaderRoute: typeof AppSalesInvoicesIdRouteImport
+      parentRoute: typeof AppSalesRoute
     }
     '/_app/ims/transfers/new': {
       id: '/_app/ims/transfers/new'
@@ -1696,6 +1884,34 @@ const AppMastersRouteWithChildren = AppMastersRoute._addFileChildren(
   AppMastersRouteChildren,
 )
 
+interface AppSalesRouteChildren {
+  AppSalesQuotationsRoute: typeof AppSalesQuotationsRoute
+  AppSalesSettingsRoute: typeof AppSalesSettingsRoute
+  AppSalesIndexRoute: typeof AppSalesIndexRoute
+  AppSalesInvoicesIdRoute: typeof AppSalesInvoicesIdRoute
+  AppSalesInvoicesNewRoute: typeof AppSalesInvoicesNewRoute
+  AppSalesPaymentsNewRoute: typeof AppSalesPaymentsNewRoute
+  AppSalesEwayIndexRoute: typeof AppSalesEwayIndexRoute
+  AppSalesInvoicesIndexRoute: typeof AppSalesInvoicesIndexRoute
+  AppSalesPaymentsIndexRoute: typeof AppSalesPaymentsIndexRoute
+}
+
+const AppSalesRouteChildren: AppSalesRouteChildren = {
+  AppSalesQuotationsRoute: AppSalesQuotationsRoute,
+  AppSalesSettingsRoute: AppSalesSettingsRoute,
+  AppSalesIndexRoute: AppSalesIndexRoute,
+  AppSalesInvoicesIdRoute: AppSalesInvoicesIdRoute,
+  AppSalesInvoicesNewRoute: AppSalesInvoicesNewRoute,
+  AppSalesPaymentsNewRoute: AppSalesPaymentsNewRoute,
+  AppSalesEwayIndexRoute: AppSalesEwayIndexRoute,
+  AppSalesInvoicesIndexRoute: AppSalesInvoicesIndexRoute,
+  AppSalesPaymentsIndexRoute: AppSalesPaymentsIndexRoute,
+}
+
+const AppSalesRouteWithChildren = AppSalesRoute._addFileChildren(
+  AppSalesRouteChildren,
+)
+
 interface AppTicketsRouteChildren {
   AppTicketsIdRoute: typeof AppTicketsIdRoute
   AppTicketsDashboardRoute: typeof AppTicketsDashboardRoute
@@ -1733,6 +1949,7 @@ interface AppRouteChildren {
   AppProductsRoute: typeof AppProductsRoute
   AppRecordsRoute: typeof AppRecordsRoute
   AppReportsRoute: typeof AppReportsRoute
+  AppSalesRoute: typeof AppSalesRouteWithChildren
   AppTicketsRoute: typeof AppTicketsRouteWithChildren
   AppGatepassIdRoute: typeof AppGatepassIdRoute
 }
@@ -1752,6 +1969,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppProductsRoute: AppProductsRoute,
   AppRecordsRoute: AppRecordsRoute,
   AppReportsRoute: AppReportsRoute,
+  AppSalesRoute: AppSalesRouteWithChildren,
   AppTicketsRoute: AppTicketsRouteWithChildren,
   AppGatepassIdRoute: AppGatepassIdRoute,
 }
@@ -1767,13 +1985,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
