@@ -123,7 +123,7 @@ export async function renderInvoicePdf(args: {
   ];
   const rightMeta: [string, string][] = [
     ["E-Way Bill No.", invoice.ewaybill_no || "—"],
-    ["Payment Terms", args.meta?.payment_terms || "100% Advance"],
+    ["Payment Terms", args.meta?.payment_terms || ""],
     ["PO No.", args.meta?.po_no || ""],
     ["PO Date", args.meta?.po_date || ""],
     ["IRN", invoice.irn ? invoice.irn.slice(0, 24) + "…" : "—"],
@@ -192,9 +192,13 @@ export async function renderInvoicePdf(args: {
     : [["S.N.", "Description of Goods", "HSN/SAC", "Qty", "Unit", "List Price", "Disc", "CGST %", "CGST Amt", "SGST %", "SGST Amt", "Amount (Rs.)"]];
   const body = items.map((it) => {
     const half = it.gst_rate / 2;
+    const serials = (it as any).serial_numbers as string[] | null | undefined;
+    const desc = serials && serials.length > 0
+      ? `${it.description}\nSerial No: ${serials.join(", ")}`
+      : it.description;
     const base = [
       String(it.sr_no),
-      it.description,
+      desc,
       it.hsn || "",
       String(it.qty),
       it.unit || "Nos",

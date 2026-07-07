@@ -148,7 +148,7 @@ function InvoiceView() {
     const [y, m, day] = d.slice(0, 10).split("-");
     return y && m && day ? `${day}-${m}-${y}` : d;
   };
-  const pdfMeta = { po_no: inv.po_number || "", po_date: fmtDMY(inv.po_date) };
+  const pdfMeta = { po_no: inv.po_number || "", po_date: fmtDMY(inv.po_date), payment_terms: inv.payment_terms || "" };
 
   return (
     <div className="space-y-4">
@@ -214,6 +214,9 @@ function InvoiceView() {
           <CardHeader className="pb-2"><CardTitle className="text-sm">Amounts</CardTitle></CardHeader>
           <CardContent className="text-sm space-y-1">
             <div className="flex justify-between"><span>Taxable</span><span>{inr(inv.taxable_value)}</span></div>
+            {inv.payment_terms && (
+              <div className="flex justify-between text-xs text-muted-foreground"><span>Payment Terms</span><span>{inv.payment_terms}</span></div>
+            )}
             {inv.is_interstate ? (
               <div className="flex justify-between"><span>IGST</span><span>{inr(inv.igst)}</span></div>
             ) : (
@@ -256,7 +259,14 @@ function InvoiceView() {
               {items.map((it) => (
                 <tr key={it.id} className="border-t">
                   <td className="p-2 text-xs">{it.sr_no}</td>
-                  <td className="p-2">{it.description}</td>
+                  <td className="p-2">
+                    <div>{it.description}</div>
+                    {it.serial_numbers && it.serial_numbers.length > 0 && (
+                      <div className="text-[11px] text-muted-foreground font-mono mt-1">
+                        Serial No: {it.serial_numbers.join(", ")}
+                      </div>
+                    )}
+                  </td>
                   <td className="p-2 font-mono text-xs">{it.hsn || "—"}</td>
                   <td className="p-2 text-right">{it.qty} {it.unit}</td>
                   <td className="p-2 text-right">{inr(it.rate)}</td>

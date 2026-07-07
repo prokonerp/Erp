@@ -67,6 +67,7 @@ export type InvoiceRow = {
   notes: string | null;
   terms: string | null;
   pdf_url: string | null;
+  payment_terms: string | null;
 
   created_by: string | null;
   created_at: string;
@@ -91,17 +92,25 @@ export type InvoiceItemRow = {
   igst: number;
   cess: number;
   line_total: number;
+  warehouse_id?: string | null;
+  serial_numbers?: string[];
 };
 
 export type ItemDraft = {
   product_id: string | null;
   description: string;
+  // (fields below are added for warehouse + serial tracking)
   hsn: string;
   qty: number;
   unit: string;
   rate: number;
   discount_pct: number;
   gst_rate: number;
+  warehouse_id: string | null;
+  serial_numbers: string[];
+  is_serialized: boolean;
+  part_model_no: string | null;
+  part_name: string | null;
 };
 
 export const emptyItem = (): ItemDraft => ({
@@ -113,6 +122,11 @@ export const emptyItem = (): ItemDraft => ({
   rate: 0,
   discount_pct: 0,
   gst_rate: 18,
+  warehouse_id: null,
+  serial_numbers: [],
+  is_serialized: false,
+  part_model_no: null,
+  part_name: null,
 });
 
 export const INVOICE_STATUSES: { value: InvoiceStatus; label: string; tone: string }[] = [
@@ -201,6 +215,8 @@ export function itemDraftFromBreakup(
     igst: b.igst,
     cess: b.cess,
     line_total: b.line_total,
+    warehouse_id: d.warehouse_id,
+    serial_numbers: d.serial_numbers ?? [],
   };
 }
 

@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trash2, Plus, Save, Zap } from "lucide-react";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
+import { SerialMultiPicker } from "@/components/SerialMultiPicker";
 import type { Customer } from "@/lib/crm";
 import {
   fetchBranches,
@@ -45,9 +46,12 @@ function NewInvoice() {
   const [shipping, setShipping] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState<string>("");
   const [items, setItems] = useState<ItemDraft[]>([emptyItem()]);
   const [headerDiscount, setHeaderDiscount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [serialPickerIdx, setSerialPickerIdx] = useState<number | null>(null);
 
   useEffect(() => {
     fetchBranches().then((bs) => {
@@ -55,6 +59,8 @@ function NewInvoice() {
       const def = bs.find((b) => b.is_default) || bs[0];
       if (def) setBranchId(def.id);
     }).catch((e) => toast.error(e.message));
+    supabase.from("warehouses").select("id,name,code").eq("status", "Active").order("name")
+      .then(({ data }) => setWarehouses((data ?? []) as any));
   }, []);
 
   const branch = useMemo(() => branches.find((b) => b.id === branchId) || null, [branches, branchId]);
@@ -96,6 +102,18 @@ function NewInvoice() {
     if (!customer) return toast.error("Choose a customer");
     if (items.length === 0 || items.some((it) => !it.description.trim())) return toast.error("Every line needs a description");
     if (items.some((it) => Number(it.gst_rate) > 0 && !it.hsn.trim())) return toast.error("HSN code is mandatory when GST > 0");
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (!it.warehouse_id) return toast.error(`Line ${i + 1}: select a warehouse`);
+      if (it.is_serialized) {
+        if (it.serial_numbers.length !== Math.floor(Number(it.qty))) {
+          return toast.error(`Line ${i + 1}: select ${Math.floor(Number(it.qty))} serial number(s)`);
+        }
+      }
+    }
+    // Prevent duplicate serials across lines
+    const allSerials = items.flatMap((it) => it.serial_numbers);
+    if (new Set(allSerials).size !== allSerials.length) return toast.error("Duplicate serial numbers across lines");
     if (gstinError) return toast.error(gstinError);
 
     setSaving(true);
@@ -134,6 +152,7 @@ function NewInvoice() {
         status,
         notes,
         terms,
+        payment_terms: paymentTerms || null,
       };
       const { data: inv, error } = await supabase.from("invoices").insert(invoicePayload).select("id, invoice_no").single();
       if (error) throw error;
@@ -209,6 +228,28 @@ function NewInvoice() {
               <Input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
             </div>
             <div className="md:col-span-2">
+              <Label className="text-xs">Payment Terms</Label>
+              <div className="flex gap-2">
+                <select
+                  className="h-9 rounded-md border bg-background px-2 text-sm w-40"
+                  value={["Advance","7 Days","15 Days","30 Days"].includes(paymentTerms) ? paymentTerms : "Custom"}
+                  onChange={(e) => setPaymentTerms(e.target.value === "Custom" ? "" : e.target.value)}
+                >
+                  <option value="Advance">Advance</option>
+                  <option value="7 Days">7 Days</option>
+                  <option value="15 Days">15 Days</option>
+                  <option value="30 Days">30 Days</option>
+                  <option value="Custom">Custom</option>
+                </select>
+                <Input
+                  className="flex-1"
+                  placeholder="e.g. 45 Days / Against Delivery"
+                  value={paymentTerms}
+                  onChange={(e) => setPaymentTerms(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="md:col-span-2">
               <Label className="text-xs">Billing Address</Label>
               <Textarea rows={2} value={billing} onChange={(e) => setBilling(e.target.value)} />
             </div>
@@ -250,6 +291,7 @@ function NewInvoice() {
                   <th className="p-2 text-left w-8">#</th>
                   <th className="p-2 text-left min-w-[220px]">Product / Description</th>
                   <th className="p-2 text-left w-24">HSN *</th>
+                  <th className="p-2 text-left w-40">Warehouse *</th>
                   <th className="p-2 text-right w-20">Qty</th>
                   <th className="p-2 text-left w-20">Unit</th>
                   <th className="p-2 text-right w-24">Rate</th>
@@ -274,11 +316,46 @@ function NewInvoice() {
                             hsn: p.hsn || "",
                             unit: p.unit || "Nos",
                             gst_rate: (p as any).gst_rate ?? it.gst_rate,
+                            is_serialized: !!(p as any).serial_tracking,
+                            part_model_no: p.model,
+                            part_name: p.name,
+                            serial_numbers: [],
                           })}
                         />
                         <Input className="h-8 text-xs" placeholder="Description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
+                        {it.is_serialized && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={it.serial_numbers.length === Math.floor(Number(it.qty)) ? "outline" : "secondary"}
+                              className="h-7 text-xs"
+                              onClick={() => setSerialPickerIdx(idx)}
+                              disabled={!it.warehouse_id || Number(it.qty) <= 0}
+                            >
+                              Serials: {it.serial_numbers.length}/{Math.floor(Number(it.qty)) || 0}
+                            </Button>
+                            {it.serial_numbers.length > 0 && (
+                              <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[220px]">
+                                {it.serial_numbers.join(", ")}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="p-2"><Input className="h-8 text-xs" value={it.hsn} onChange={(e) => setItem(idx, { hsn: e.target.value })} /></td>
+                      <td className="p-2">
+                        <select
+                          className="w-full h-8 rounded-md border bg-background px-1 text-xs"
+                          value={it.warehouse_id || ""}
+                          onChange={(e) => setItem(idx, { warehouse_id: e.target.value || null, serial_numbers: [] })}
+                        >
+                          <option value="">— select —</option>
+                          {warehouses.map((w) => (
+                            <option key={w.id} value={w.id}>{w.name}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="p-2"><Input type="number" step="0.001" className="h-8 text-xs text-right" value={it.qty} onChange={(e) => setItem(idx, { qty: Number(e.target.value) })} /></td>
                       <td className="p-2"><Input className="h-8 text-xs" value={it.unit} onChange={(e) => setItem(idx, { unit: e.target.value })} /></td>
                       <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.rate} onChange={(e) => setItem(idx, { rate: Number(e.target.value) })} /></td>
@@ -302,6 +379,20 @@ function NewInvoice() {
           </div>
         </CardContent>
       </Card>
+
+      {serialPickerIdx !== null && items[serialPickerIdx] && (
+        <SerialMultiPicker
+          open={serialPickerIdx !== null}
+          onOpenChange={(v) => !v && setSerialPickerIdx(null)}
+          qty={Math.floor(Number(items[serialPickerIdx].qty)) || 0}
+          warehouseId={items[serialPickerIdx].warehouse_id}
+          partModelNo={items[serialPickerIdx].part_model_no}
+          partName={items[serialPickerIdx].part_name}
+          value={items[serialPickerIdx].serial_numbers}
+          excludeSerials={items.flatMap((it, i) => (i === serialPickerIdx ? [] : it.serial_numbers))}
+          onConfirm={(sns) => setItem(serialPickerIdx, { serial_numbers: sns })}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
