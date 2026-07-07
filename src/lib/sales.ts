@@ -92,7 +92,7 @@ export type InvoiceItemRow = {
   cess: number;
   line_total: number;
   warehouse_id?: string | null;
-  serial_numbers?: string[] | null;
+  serial_numbers?: string[];
 };
 
 export type ItemDraft = {
