@@ -150,7 +150,9 @@ export async function renderInvoicePdf(args: {
           ["SGST", inr(invoice.sgst)] as [string, string],
         ]),
     ...(invoice.cess ? [["Cess", inr(invoice.cess)] as [string, string]] : []),
-    ...(invoice.round_off ? [["Round Off", (invoice.round_off >= 0 ? "+ " : "− ") + inr(Math.abs(invoice.round_off))] as [string, string] : []),
+    ...(invoice.round_off
+      ? ([["Round Off", (invoice.round_off >= 0 ? "+ " : "− ") + inr(Math.abs(invoice.round_off))]] as [string, string][])
+      : []),
     ["GRAND TOTAL", inr(invoice.total)],
   ];
   const tblLeft = w - margin - 220;
