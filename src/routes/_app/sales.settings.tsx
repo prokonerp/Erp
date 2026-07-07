@@ -25,6 +25,8 @@ type Settings = {
   terms_default: string | null;
   notes_default: string | null;
   place_of_supply_default: string | null;
+  theme_color?: string;
+  copy_label?: string;
 };
 
 function SalesSettings() {
@@ -51,6 +53,7 @@ function SalesSettings() {
       setSettings(data ? (data as any) : {
         branch_id: branchId, prefix: "PHS/INV/", fy_reset: true, next_seq: 1,
         terms_default: "", notes_default: "", place_of_supply_default: "",
+        theme_color: "#000000", copy_label: "Original Copy",
       });
     });
   }, [branchId, branches]);
@@ -153,6 +156,36 @@ function SalesSettings() {
             <div className="md:col-span-4"><Label className="text-xs">Default Terms & Conditions</Label><Textarea rows={3} value={settings.terms_default || ""} onChange={(e) => setSettings({ ...settings, terms_default: e.target.value })} /></div>
             <div className="md:col-span-4"><Label className="text-xs">Default Notes</Label><Textarea rows={2} value={settings.notes_default || ""} onChange={(e) => setSettings({ ...settings, notes_default: e.target.value })} /></div>
             <div className="md:col-span-4 flex justify-end"><Button size="sm" onClick={saveSettings}>Save Numbering</Button></div>
+          </CardContent>
+        </Card>
+      )}
+
+      {settings && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Invoice Appearance</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div>
+              <Label className="text-xs">Theme Color (borders + accents)</Label>
+              <div className="flex items-center gap-2">
+                <input type="color" className="h-9 w-14 rounded border" value={settings.theme_color || "#000000"} onChange={(e) => setSettings({ ...settings, theme_color: e.target.value })} />
+                <Input value={settings.theme_color || "#000000"} onChange={(e) => setSettings({ ...settings, theme_color: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Copy Label (top-right)</Label>
+              <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={settings.copy_label || "Original Copy"} onChange={(e) => setSettings({ ...settings, copy_label: e.target.value })}>
+                <option>Original Copy</option>
+                <option>Duplicate Copy</option>
+                <option>Triplicate Copy</option>
+                <option>Office Copy</option>
+              </select>
+            </div>
+            <div className="md:col-span-2 flex gap-2">
+              {["#000000", "#1f3864", "#7c2d12", "#065f46", "#7c3aed", "#b91c1c"].map((c) => (
+                <button key={c} type="button" className="h-9 w-9 rounded border" style={{ background: c, borderColor: c === (settings.theme_color || "") ? "#000" : "#ccc", borderWidth: c === (settings.theme_color || "") ? 2 : 1 }} onClick={() => setSettings({ ...settings, theme_color: c })} aria-label={`Set color ${c}`} />
+              ))}
+            </div>
+            <div className="md:col-span-4 flex justify-end"><Button size="sm" onClick={saveSettings}>Save Appearance</Button></div>
           </CardContent>
         </Card>
       )}
