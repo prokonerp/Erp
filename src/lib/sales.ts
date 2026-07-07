@@ -67,6 +67,7 @@ export type InvoiceRow = {
   notes: string | null;
   terms: string | null;
   pdf_url: string | null;
+  payment_terms: string | null;
 
   created_by: string | null;
   created_at: string;

@@ -148,7 +148,7 @@ function InvoiceView() {
     const [y, m, day] = d.slice(0, 10).split("-");
     return y && m && day ? `${day}-${m}-${y}` : d;
   };
-  const pdfMeta = { po_no: inv.po_number || "", po_date: fmtDMY(inv.po_date) };
+  const pdfMeta = { po_no: inv.po_number || "", po_date: fmtDMY(inv.po_date), payment_terms: inv.payment_terms || "" };
 
   return (
     <div className="space-y-4">
