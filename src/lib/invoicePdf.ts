@@ -154,7 +154,7 @@ export async function renderInvoicePdf(args: {
   doc.text("Shipped to:", margin + halfW + 6, y + 10);
   doc.setTextColor(0, 0, 0);
 
-  const partyFields = (name: string, addr: string, phone: string, state: string, pin: string, gst: string) => [
+  const partyFields = (name: string, addr: string, phone: string, state: string, pin: string, gst: string): [string, string][] => [
     ["Name", name],
     ["Address", addr],
     ["Mobile No", phone],
