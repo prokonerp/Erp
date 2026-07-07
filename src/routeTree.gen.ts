@@ -79,6 +79,7 @@ import { Route as AppGrnGeneralIndexRouteImport } from './routes/_app/grn.genera
 import { Route as AppGrnCustomerIndexRouteImport } from './routes/_app/grn.customer.index'
 import { Route as AppChallanOemIndexRouteImport } from './routes/_app/challan.oem.index'
 import { Route as AppChallanCustomerIndexRouteImport } from './routes/_app/challan.customer.index'
+import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.invoices.new'
 import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
 import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
 import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
@@ -438,6 +439,11 @@ const AppChallanCustomerIndexRoute = AppChallanCustomerIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppChallanCustomerRoute,
 } as any)
+const AppSalesInvoicesNewRoute = AppSalesInvoicesNewRouteImport.update({
+  id: '/invoices/new',
+  path: '/invoices/new',
+  getParentRoute: () => AppSalesRoute,
+} as any)
 const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -556,6 +562,7 @@ export interface FileRoutesByFullPath {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/challan/customer/': typeof AppChallanCustomerIndexRoute
   '/challan/oem/': typeof AppChallanOemIndexRoute
   '/grn/customer/': typeof AppGrnCustomerIndexRoute
@@ -622,6 +629,7 @@ export interface FileRoutesByTo {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/challan/customer': typeof AppChallanCustomerIndexRoute
   '/challan/oem': typeof AppChallanOemIndexRoute
   '/grn/customer': typeof AppGrnCustomerIndexRoute
@@ -704,6 +712,7 @@ export interface FileRoutesById {
   '/_app/grn/oem/new': typeof AppGrnOemNewRoute
   '/_app/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/_app/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/_app/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/_app/challan/customer/': typeof AppChallanCustomerIndexRoute
   '/_app/challan/oem/': typeof AppChallanOemIndexRoute
   '/_app/grn/customer/': typeof AppGrnCustomerIndexRoute
@@ -786,6 +795,7 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/sales/invoices/new'
     | '/challan/customer/'
     | '/challan/oem/'
     | '/grn/customer/'
@@ -852,6 +862,7 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/sales/invoices/new'
     | '/challan/customer'
     | '/challan/oem'
     | '/grn/customer'
@@ -933,6 +944,7 @@ export interface FileRouteTypes {
     | '/_app/grn/oem/new'
     | '/_app/ims/transfers/$id'
     | '/_app/ims/transfers/new'
+    | '/_app/sales/invoices/new'
     | '/_app/challan/customer/'
     | '/_app/challan/oem/'
     | '/_app/grn/customer/'
@@ -1441,6 +1453,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChallanCustomerIndexRouteImport
       parentRoute: typeof AppChallanCustomerRoute
     }
+    '/_app/sales/invoices/new': {
+      id: '/_app/sales/invoices/new'
+      path: '/invoices/new'
+      fullPath: '/sales/invoices/new'
+      preLoaderRoute: typeof AppSalesInvoicesNewRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
     '/_app/ims/transfers/new': {
       id: '/_app/ims/transfers/new'
       path: '/new'
@@ -1753,11 +1772,13 @@ const AppMastersRouteWithChildren = AppMastersRoute._addFileChildren(
 
 interface AppSalesRouteChildren {
   AppSalesIndexRoute: typeof AppSalesIndexRoute
+  AppSalesInvoicesNewRoute: typeof AppSalesInvoicesNewRoute
   AppSalesInvoicesIndexRoute: typeof AppSalesInvoicesIndexRoute
 }
 
 const AppSalesRouteChildren: AppSalesRouteChildren = {
   AppSalesIndexRoute: AppSalesIndexRoute,
+  AppSalesInvoicesNewRoute: AppSalesInvoicesNewRoute,
   AppSalesInvoicesIndexRoute: AppSalesInvoicesIndexRoute,
 }
 

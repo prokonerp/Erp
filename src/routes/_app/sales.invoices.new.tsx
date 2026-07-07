@@ -136,8 +136,9 @@ function NewInvoice() {
 
       const itemRows = items.map((d, i) => {
         const b = totals.items[i];
-        return { invoice_id: inv.id, sr_no: i + 1, ...itemDraftFromBreakup(d, b), sr_no_dup: undefined };
-      }).map((r: any) => { delete r.sr_no_dup; return r; });
+        const row = itemDraftFromBreakup(d, b);
+        return { ...row, invoice_id: inv.id, sr_no: i + 1 };
+      });
       const { error: e2 } = await supabase.from("invoice_items").insert(itemRows);
       if (e2) throw e2;
 
