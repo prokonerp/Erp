@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trash2, Plus, Save, Zap } from "lucide-react";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
+import { SerialMultiPicker } from "@/components/SerialMultiPicker";
 import type { Customer } from "@/lib/crm";
 import {
   fetchBranches,
@@ -45,9 +46,12 @@ function NewInvoice() {
   const [shipping, setShipping] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState<string>("");
   const [items, setItems] = useState<ItemDraft[]>([emptyItem()]);
   const [headerDiscount, setHeaderDiscount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [serialPickerIdx, setSerialPickerIdx] = useState<number | null>(null);
 
   useEffect(() => {
     fetchBranches().then((bs) => {
@@ -55,6 +59,8 @@ function NewInvoice() {
       const def = bs.find((b) => b.is_default) || bs[0];
       if (def) setBranchId(def.id);
     }).catch((e) => toast.error(e.message));
+    supabase.from("warehouses").select("id,name,code").eq("status", "Active").order("name")
+      .then(({ data }) => setWarehouses((data ?? []) as any));
   }, []);
 
   const branch = useMemo(() => branches.find((b) => b.id === branchId) || null, [branches, branchId]);
@@ -96,6 +102,18 @@ function NewInvoice() {
     if (!customer) return toast.error("Choose a customer");
     if (items.length === 0 || items.some((it) => !it.description.trim())) return toast.error("Every line needs a description");
     if (items.some((it) => Number(it.gst_rate) > 0 && !it.hsn.trim())) return toast.error("HSN code is mandatory when GST > 0");
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (!it.warehouse_id) return toast.error(`Line ${i + 1}: select a warehouse`);
+      if (it.is_serialized) {
+        if (it.serial_numbers.length !== Math.floor(Number(it.qty))) {
+          return toast.error(`Line ${i + 1}: select ${Math.floor(Number(it.qty))} serial number(s)`);
+        }
+      }
+    }
+    // Prevent duplicate serials across lines
+    const allSerials = items.flatMap((it) => it.serial_numbers);
+    if (new Set(allSerials).size !== allSerials.length) return toast.error("Duplicate serial numbers across lines");
     if (gstinError) return toast.error(gstinError);
 
     setSaving(true);
@@ -134,6 +152,7 @@ function NewInvoice() {
         status,
         notes,
         terms,
+        payment_terms: paymentTerms || null,
       };
       const { data: inv, error } = await supabase.from("invoices").insert(invoicePayload).select("id, invoice_no").single();
       if (error) throw error;
