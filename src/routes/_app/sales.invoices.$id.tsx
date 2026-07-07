@@ -214,6 +214,9 @@ function InvoiceView() {
           <CardHeader className="pb-2"><CardTitle className="text-sm">Amounts</CardTitle></CardHeader>
           <CardContent className="text-sm space-y-1">
             <div className="flex justify-between"><span>Taxable</span><span>{inr(inv.taxable_value)}</span></div>
+            {inv.payment_terms && (
+              <div className="flex justify-between text-xs text-muted-foreground"><span>Payment Terms</span><span>{inv.payment_terms}</span></div>
+            )}
             {inv.is_interstate ? (
               <div className="flex justify-between"><span>IGST</span><span>{inr(inv.igst)}</span></div>
             ) : (
