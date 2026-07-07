@@ -126,6 +126,7 @@ function AppLayout() {
     { to: "/sales/eway", label: "e-Way Bills", icon: Truck, module: "sales", group: "Sales" },
     { to: "/sales/settings", label: "Sales Settings", icon: UserCog, module: "sales", group: "Sales", adminOnly: true },
     { to: "/indent", label: "Purchase Requests (Indent)", icon: ClipboardList, module: "indent", group: "Procurement" },
+    { to: "/po", label: "Purchase Orders", icon: FileText, module: "po", group: "Procurement" },
     { to: "/ims", label: "Inventory (IMS)", icon: Warehouse, module: "ims", group: "Inventory" },
     { to: "/reports", label: "Reports", icon: BarChart3, module: "reports", group: "Intelligence" },
     { to: "/import", label: "Data Import (CSV Import)", icon: Upload, adminOnly: true, group: "System" },

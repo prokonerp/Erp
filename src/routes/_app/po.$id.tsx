@@ -1,0 +1,202 @@
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Printer, Download, ArrowLeft, Zap, Send, CheckCircle2, Ban } from "lucide-react";
+import {
+  fetchPOWithItems,
+  inrPO,
+  poStatusMeta,
+  PO_STATUSES,
+  type PORow,
+  type POItemRow,
+  type POStatus,
+} from "@/lib/purchaseOrder";
+import { fetchBranches, type BranchRow } from "@/lib/sales";
+import { downloadPurchaseOrderPdf, printPurchaseOrderPdf } from "@/lib/purchaseOrderPdf";
+
+export const Route = createFileRoute("/_app/po/$id")({
+  component: POView,
+  head: () => ({ meta: [{ title: "Purchase Order — Prokon" }] }),
+});
+
+function POView() {
+  const { id } = Route.useParams();
+  const nav = useNavigate();
+  const [po, setPo] = useState<PORow | null>(null);
+  const [items, setItems] = useState<POItemRow[]>([]);
+  const [branch, setBranch] = useState<BranchRow | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const r = await fetchPOWithItems(id);
+      setPo(r.po);
+      setItems(r.items);
+      const bs = await fetchBranches();
+      setBranch(bs.find((b) => b.id === r.po.branch_id) || null);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function setStatus(next: POStatus) {
+    if (!po) return;
+    const { error } = await (supabase as any).from("purchase_orders").update({ status: next }).eq("id", po.id);
+    if (error) return toast.error(error.message);
+    toast.success(`Status → ${poStatusMeta(next).label}`);
+    load();
+  }
+
+  async function del() {
+    if (!po) return;
+    if (!confirm("Delete this Purchase Order? This cannot be undone.")) return;
+    const { error } = await (supabase as any).from("purchase_orders").delete().eq("id", po.id);
+    if (error) return toast.error(error.message);
+    toast.success("Deleted");
+    nav({ to: "/po" });
+  }
+
+  if (loading) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  if (!po) return <div className="text-sm text-muted-foreground">PO not found.</div>;
+
+  const sm = poStatusMeta(po.status);
+  const canPrint = po.status !== "draft";
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" asChild><Link to="/po"><ArrowLeft className="h-4 w-4 mr-1" />Back</Link></Button>
+          <h2 className="text-lg font-semibold font-mono">{po.po_no || po.id.slice(0, 8)}</h2>
+          <span className={"inline-block px-2 py-0.5 rounded-full text-xs " + sm.tone}>{sm.label}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {po.status === "draft" && (
+            <Button size="sm" onClick={() => setStatus("approved")}><Zap className="h-4 w-4 mr-1" />Approve</Button>
+          )}
+          {po.status === "approved" && (
+            <Button size="sm" onClick={() => setStatus("sent")}><Send className="h-4 w-4 mr-1" />Mark Sent</Button>
+          )}
+          {(po.status === "sent" || po.status === "partial") && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setStatus("partial")}>Partial</Button>
+              <Button size="sm" onClick={() => setStatus("completed")}><CheckCircle2 className="h-4 w-4 mr-1" />Complete</Button>
+            </>
+          )}
+          {po.status !== "cancelled" && po.status !== "completed" && (
+            <Button size="sm" variant="outline" onClick={() => setStatus("cancelled")}><Ban className="h-4 w-4 mr-1" />Cancel</Button>
+          )}
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => printPurchaseOrderPdf({ po, items, branch })}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => downloadPurchaseOrderPdf({ po, items, branch }, `${po.po_no || "PO"}.pdf`)}><Download className="h-4 w-4 mr-1" />PDF</Button>
+          <Button size="sm" variant="ghost" className="text-destructive" onClick={del}>Delete</Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Vendor</CardTitle></CardHeader>
+          <CardContent className="text-sm space-y-1">
+            <div className="font-medium">{po.vendor_name}</div>
+            {po.vendor_address && <div className="text-muted-foreground whitespace-pre-line">{po.vendor_address}</div>}
+            {po.vendor_gstin && <div><span className="text-muted-foreground">GSTIN:</span> <span className="font-mono">{po.vendor_gstin}</span></div>}
+            {po.vendor_state_name && <div className="text-xs"><span className="text-muted-foreground">State:</span> {po.vendor_state_name} ({po.vendor_state_code})</div>}
+            {(po.vendor_contact_name || po.vendor_phone || po.vendor_email) && (
+              <div className="pt-1 border-t text-xs">
+                {po.vendor_contact_name} {po.vendor_phone && `· ${po.vendor_phone}`} {po.vendor_email && `· ${po.vendor_email}`}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Delivery</CardTitle></CardHeader>
+          <CardContent className="text-sm space-y-1">
+            <div>
+              <span className="text-muted-foreground text-xs">Type:</span>{" "}
+              <span className="font-medium">
+                {po.delivery_address_type === "customer" ? "Customer Site" : po.delivery_address_type === "custom" ? "Custom" : "Organization"}
+              </span>
+            </div>
+            {po.customer_name && <div className="text-xs"><span className="text-muted-foreground">Customer:</span> {po.customer_name}</div>}
+            <div className="whitespace-pre-line text-xs">{po.delivery_address || "—"}</div>
+            {po.delivery_date && <div className="text-xs pt-1 border-t"><span className="text-muted-foreground">Expected:</span> {po.delivery_date}</div>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Summary</CardTitle></CardHeader>
+          <CardContent className="text-sm space-y-1">
+            <div className="flex justify-between"><span className="text-muted-foreground">PO Date</span><span>{po.po_date}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Payment Terms</span><span>{po.payment_terms || "—"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Tax Type</span><span>{po.is_interstate ? "IGST (inter-state)" : "CGST + SGST"}</span></div>
+            <div className="pt-1 border-t flex justify-between font-bold text-base"><span>Total</span><span>{inrPO(po.total)}</span></div>
+            <p className="text-xs text-muted-foreground italic">{po.total_in_words}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Items</CardTitle></CardHeader>
+        <CardContent className="p-0 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="p-2 text-left w-8">#</th>
+                <th className="p-2 text-left">Description</th>
+                <th className="p-2 text-left w-24">HSN</th>
+                <th className="p-2 text-right w-20">Qty</th>
+                <th className="p-2 text-left w-16">Unit</th>
+                <th className="p-2 text-right w-24">Rate</th>
+                <th className="p-2 text-right w-20">GST%</th>
+                <th className="p-2 text-right w-28">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id} className="border-t">
+                  <td className="p-2 text-xs">{it.sr_no}</td>
+                  <td className="p-2">{it.description}</td>
+                  <td className="p-2 font-mono text-xs">{it.hsn || "—"}</td>
+                  <td className="p-2 text-right">{it.qty}</td>
+                  <td className="p-2">{it.unit}</td>
+                  <td className="p-2 text-right">{inrPO(it.rate)}</td>
+                  <td className="p-2 text-right">{it.gst_rate}%</td>
+                  <td className="p-2 text-right font-medium">{inrPO(it.line_total)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-muted/40 text-sm">
+              <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">Subtotal</td><td className="p-2 text-right">{inrPO(po.subtotal)}</td></tr>
+              {po.discount > 0 && <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">Discount</td><td className="p-2 text-right">{inrPO(po.discount)}</td></tr>}
+              <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">Taxable</td><td className="p-2 text-right">{inrPO(po.taxable_value)}</td></tr>
+              {po.is_interstate ? (
+                <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">IGST</td><td className="p-2 text-right">{inrPO(po.igst)}</td></tr>
+              ) : (
+                <>
+                  <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">CGST</td><td className="p-2 text-right">{inrPO(po.cgst)}</td></tr>
+                  <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">SGST</td><td className="p-2 text-right">{inrPO(po.sgst)}</td></tr>
+                </>
+              )}
+              {po.round_off !== 0 && <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">Round Off</td><td className="p-2 text-right">{inrPO(po.round_off)}</td></tr>}
+              <tr className="font-bold"><td colSpan={7} className="p-2 text-right">Grand Total</td><td className="p-2 text-right">{inrPO(po.total)}</td></tr>
+            </tfoot>
+          </table>
+        </CardContent>
+      </Card>
+
+      {(po.notes || po.terms) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {po.notes && <Card><CardHeader className="pb-2"><CardTitle className="text-base">Notes</CardTitle></CardHeader><CardContent className="text-sm whitespace-pre-line">{po.notes}</CardContent></Card>}
+          {po.terms && <Card><CardHeader className="pb-2"><CardTitle className="text-base">Terms & Conditions</CardTitle></CardHeader><CardContent className="text-sm whitespace-pre-line">{po.terms}</CardContent></Card>}
+        </div>
+      )}
+    </div>
+  );
+}

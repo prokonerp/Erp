@@ -2420,6 +2420,53 @@ export type Database = {
           },
         ]
       }
+      po_settings: {
+        Row: {
+          branch_id: string
+          created_at: string
+          current_fy: string | null
+          fy_reset: boolean
+          id: string
+          next_seq: number
+          notes_default: string | null
+          prefix: string
+          terms_default: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          current_fy?: string | null
+          fy_reset?: boolean
+          id?: string
+          next_seq?: number
+          notes_default?: string | null
+          prefix?: string
+          terms_default?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          current_fy?: string | null
+          fy_reset?: boolean
+          id?: string
+          next_seq?: number
+          notes_default?: string | null
+          prefix?: string
+          terms_default?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_settings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_categories: {
         Row: {
           created_at: string
@@ -2578,6 +2625,241 @@ export type Database = {
           weight_kg?: number | null
         }
         Relationships: []
+      }
+      purchase_order_items: {
+        Row: {
+          cess: number
+          cgst: number
+          created_at: string
+          description: string
+          discount_pct: number
+          gst_rate: number
+          hsn: string | null
+          id: string
+          igst: number
+          line_total: number
+          po_id: string
+          product_id: string | null
+          qty: number
+          rate: number
+          received_qty: number
+          sgst: number
+          sr_no: number
+          taxable_value: number
+          unit: string | null
+        }
+        Insert: {
+          cess?: number
+          cgst?: number
+          created_at?: string
+          description: string
+          discount_pct?: number
+          gst_rate?: number
+          hsn?: string | null
+          id?: string
+          igst?: number
+          line_total?: number
+          po_id: string
+          product_id?: string | null
+          qty?: number
+          rate?: number
+          received_qty?: number
+          sgst?: number
+          sr_no?: number
+          taxable_value?: number
+          unit?: string | null
+        }
+        Update: {
+          cess?: number
+          cgst?: number
+          created_at?: string
+          description?: string
+          discount_pct?: number
+          gst_rate?: number
+          hsn?: string | null
+          id?: string
+          igst?: number
+          line_total?: number
+          po_id?: string
+          product_id?: string | null
+          qty?: number
+          rate?: number
+          received_qty?: number
+          sgst?: number
+          sr_no?: number
+          taxable_value?: number
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          branch_id: string
+          buyer_address: string | null
+          buyer_gstin: string | null
+          buyer_name: string | null
+          buyer_state_code: string | null
+          buyer_state_name: string | null
+          cess: number
+          cgst: number
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          customer_name: string | null
+          delivery_address: string | null
+          delivery_address_type: string
+          delivery_date: string | null
+          discount: number
+          id: string
+          igst: number
+          is_interstate: boolean
+          notes: string | null
+          payment_terms: string | null
+          po_date: string
+          po_no: string | null
+          round_off: number
+          sgst: number
+          status: string
+          subtotal: number
+          taxable_value: number
+          terms: string | null
+          total: number
+          total_in_words: string | null
+          updated_at: string
+          vendor_address: string | null
+          vendor_contact_name: string | null
+          vendor_email: string | null
+          vendor_gstin: string | null
+          vendor_id: string
+          vendor_name: string | null
+          vendor_phone: string | null
+          vendor_state_code: string | null
+          vendor_state_name: string | null
+        }
+        Insert: {
+          branch_id: string
+          buyer_address?: string | null
+          buyer_gstin?: string | null
+          buyer_name?: string | null
+          buyer_state_code?: string | null
+          buyer_state_name?: string | null
+          cess?: number
+          cgst?: number
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          delivery_address?: string | null
+          delivery_address_type?: string
+          delivery_date?: string | null
+          discount?: number
+          id?: string
+          igst?: number
+          is_interstate?: boolean
+          notes?: string | null
+          payment_terms?: string | null
+          po_date?: string
+          po_no?: string | null
+          round_off?: number
+          sgst?: number
+          status?: string
+          subtotal?: number
+          taxable_value?: number
+          terms?: string | null
+          total?: number
+          total_in_words?: string | null
+          updated_at?: string
+          vendor_address?: string | null
+          vendor_contact_name?: string | null
+          vendor_email?: string | null
+          vendor_gstin?: string | null
+          vendor_id: string
+          vendor_name?: string | null
+          vendor_phone?: string | null
+          vendor_state_code?: string | null
+          vendor_state_name?: string | null
+        }
+        Update: {
+          branch_id?: string
+          buyer_address?: string | null
+          buyer_gstin?: string | null
+          buyer_name?: string | null
+          buyer_state_code?: string | null
+          buyer_state_name?: string | null
+          cess?: number
+          cgst?: number
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          delivery_address?: string | null
+          delivery_address_type?: string
+          delivery_date?: string | null
+          discount?: number
+          id?: string
+          igst?: number
+          is_interstate?: boolean
+          notes?: string | null
+          payment_terms?: string | null
+          po_date?: string
+          po_no?: string | null
+          round_off?: number
+          sgst?: number
+          status?: string
+          subtotal?: number
+          taxable_value?: number
+          terms?: string | null
+          total?: number
+          total_in_words?: string | null
+          updated_at?: string
+          vendor_address?: string | null
+          vendor_contact_name?: string | null
+          vendor_email?: string | null
+          vendor_gstin?: string | null
+          vendor_id?: string
+          vendor_name?: string | null
+          vendor_phone?: string | null
+          vendor_state_code?: string | null
+          vendor_state_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quotations: {
         Row: {

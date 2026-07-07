@@ -8,6 +8,7 @@ export const FALLBACK_MODULES: { key: ModuleKey; label: string; supports_import?
   { key: "products", label: "Products", supports_import: true },
   { key: "tickets", label: "Tickets", supports_import: true },
   { key: "indent", label: "Indent" },
+  { key: "po", label: "Purchase Orders" },
   { key: "amc", label: "AMC", supports_import: true },
   { key: "ims", label: "IMS" },
   { key: "gatepass", label: "Gatepass" },
