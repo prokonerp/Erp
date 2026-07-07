@@ -18,6 +18,7 @@ import { Route as AppSalesRouteImport } from './routes/_app/sales'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppRecordsRouteImport } from './routes/_app/records'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
+import { Route as AppPoRouteImport } from './routes/_app/po'
 import { Route as AppNewRouteImport } from './routes/_app/new'
 import { Route as AppMastersRouteImport } from './routes/_app/masters'
 import { Route as AppIndentRouteImport } from './routes/_app/indent'
@@ -138,6 +139,11 @@ const AppRecordsRoute = AppRecordsRouteImport.update({
 const AppProductsRoute = AppProductsRouteImport.update({
   id: '/products',
   path: '/products',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPoRoute = AppPoRouteImport.update({
+  id: '/po',
+  path: '/po',
   getParentRoute: () => AppRoute,
 } as any)
 const AppNewRoute = AppNewRouteImport.update({
@@ -541,6 +547,7 @@ export interface FileRoutesByFullPath {
   '/indent': typeof AppIndentRouteWithChildren
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
+  '/po': typeof AppPoRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
@@ -622,6 +629,7 @@ export interface FileRoutesByTo {
   '/import': typeof AppImportRoute
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
+  '/po': typeof AppPoRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
@@ -703,6 +711,7 @@ export interface FileRoutesById {
   '/_app/indent': typeof AppIndentRouteWithChildren
   '/_app/masters': typeof AppMastersRouteWithChildren
   '/_app/new': typeof AppNewRoute
+  '/_app/po': typeof AppPoRoute
   '/_app/products': typeof AppProductsRoute
   '/_app/records': typeof AppRecordsRoute
   '/_app/reports': typeof AppReportsRoute
@@ -792,6 +801,7 @@ export interface FileRouteTypes {
     | '/indent'
     | '/masters'
     | '/new'
+    | '/po'
     | '/products'
     | '/records'
     | '/reports'
@@ -873,6 +883,7 @@ export interface FileRouteTypes {
     | '/import'
     | '/masters'
     | '/new'
+    | '/po'
     | '/products'
     | '/records'
     | '/reports'
@@ -953,6 +964,7 @@ export interface FileRouteTypes {
     | '/_app/indent'
     | '/_app/masters'
     | '/_app/new'
+    | '/_app/po'
     | '/_app/products'
     | '/_app/records'
     | '/_app/reports'
@@ -1096,6 +1108,13 @@ declare module '@tanstack/react-router' {
       path: '/products'
       fullPath: '/products'
       preLoaderRoute: typeof AppProductsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/po': {
+      id: '/_app/po'
+      path: '/po'
+      fullPath: '/po'
+      preLoaderRoute: typeof AppPoRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/new': {
@@ -1946,6 +1965,7 @@ interface AppRouteChildren {
   AppIndentRoute: typeof AppIndentRouteWithChildren
   AppMastersRoute: typeof AppMastersRouteWithChildren
   AppNewRoute: typeof AppNewRoute
+  AppPoRoute: typeof AppPoRoute
   AppProductsRoute: typeof AppProductsRoute
   AppRecordsRoute: typeof AppRecordsRoute
   AppReportsRoute: typeof AppReportsRoute
@@ -1966,6 +1986,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndentRoute: AppIndentRouteWithChildren,
   AppMastersRoute: AppMastersRouteWithChildren,
   AppNewRoute: AppNewRoute,
+  AppPoRoute: AppPoRoute,
   AppProductsRoute: AppProductsRoute,
   AppRecordsRoute: AppRecordsRoute,
   AppReportsRoute: AppReportsRoute,
