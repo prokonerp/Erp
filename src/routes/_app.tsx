@@ -30,6 +30,7 @@ import {
   Boxes,
   Truck,
   IdCard,
+  Receipt,
   Archive as ArchiveIcon,
 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
@@ -59,6 +60,7 @@ function AppLayout() {
     Procurement: false,
     "Material Movement": false,
     Inventory: false,
+    Sales: false,
     Intelligence: false,
     System: false,
   });
@@ -118,6 +120,11 @@ function AppLayout() {
     { to: "/tickets", label: "Service Desk (Tickets)", icon: Ticket, module: "tickets", group: "Service Desk" },
     { to: "/amc", label: "Contracts (AMC)", icon: ShieldCheck, module: "amc", group: "Service Desk" },
     { to: "/crm", label: "Customers (Sales & CRM)", icon: Briefcase, module: "quotations", group: "Customers" },
+    { to: "/sales", label: "HEAD SALES", icon: Receipt, module: "sales", group: "Sales" },
+    { to: "/sales/invoices", label: "Invoices", icon: FileText, module: "sales", group: "Sales" },
+    { to: "/sales/payments", label: "Payments", icon: Wallet, module: "sales", group: "Sales" },
+    { to: "/sales/eway", label: "e-Way Bills", icon: Truck, module: "sales", group: "Sales" },
+    { to: "/sales/settings", label: "Sales Settings", icon: UserCog, module: "sales", group: "Sales", adminOnly: true },
     { to: "/indent", label: "Purchase Requests (Indent)", icon: ClipboardList, module: "indent", group: "Procurement" },
     { to: "/ims", label: "Inventory (IMS)", icon: Warehouse, module: "ims", group: "Inventory" },
     { to: "/reports", label: "Reports", icon: BarChart3, module: "reports", group: "Intelligence" },
@@ -150,7 +157,7 @@ function AppLayout() {
       active ? "bg-accent text-accent-foreground font-medium" : "text-foreground/80 hover:bg-muted hover:text-foreground"
     }`;
 
-  const groupOrder = ["Masters", "Service Desk", "Customers", "Procurement", "Material Movement", "Inventory", "Intelligence", "System"];
+  const groupOrder = ["Masters", "Service Desk", "Customers", "Sales", "Procurement", "Material Movement", "Inventory", "Intelligence", "System"];
 
   const groupMap = new Map<string, typeof navItems>();
   const ungrouped: typeof navItems = [];
