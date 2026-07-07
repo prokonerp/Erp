@@ -1871,6 +1871,7 @@ export type Database = {
       invoice_settings: {
         Row: {
           branch_id: string
+          copy_label: string
           created_at: string
           current_fy: string | null
           fy_reset: boolean
@@ -1880,10 +1881,12 @@ export type Database = {
           place_of_supply_default: string | null
           prefix: string
           terms_default: string | null
+          theme_color: string
           updated_at: string
         }
         Insert: {
           branch_id: string
+          copy_label?: string
           created_at?: string
           current_fy?: string | null
           fy_reset?: boolean
@@ -1893,10 +1896,12 @@ export type Database = {
           place_of_supply_default?: string | null
           prefix?: string
           terms_default?: string | null
+          theme_color?: string
           updated_at?: string
         }
         Update: {
           branch_id?: string
+          copy_label?: string
           created_at?: string
           current_fy?: string | null
           fy_reset?: boolean
@@ -1906,6 +1911,7 @@ export type Database = {
           place_of_supply_default?: string | null
           prefix?: string
           terms_default?: string | null
+          theme_color?: string
           updated_at?: string
         }
         Relationships: [
