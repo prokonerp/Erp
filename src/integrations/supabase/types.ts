@@ -1962,6 +1962,8 @@ export type Database = {
           pdf_url: string | null
           place_of_supply: string | null
           place_of_supply_code: string | null
+          po_date: string | null
+          po_number: string | null
           qr_payload: string | null
           reverse_charge: boolean
           round_off: number
@@ -2018,6 +2020,8 @@ export type Database = {
           pdf_url?: string | null
           place_of_supply?: string | null
           place_of_supply_code?: string | null
+          po_date?: string | null
+          po_number?: string | null
           qr_payload?: string | null
           reverse_charge?: boolean
           round_off?: number
@@ -2074,6 +2078,8 @@ export type Database = {
           pdf_url?: string | null
           place_of_supply?: string | null
           place_of_supply_code?: string | null
+          po_date?: string | null
+          po_number?: string | null
           qr_payload?: string | null
           reverse_charge?: boolean
           round_off?: number
