@@ -291,6 +291,7 @@ function NewInvoice() {
                   <th className="p-2 text-left w-8">#</th>
                   <th className="p-2 text-left min-w-[220px]">Product / Description</th>
                   <th className="p-2 text-left w-24">HSN *</th>
+                  <th className="p-2 text-left w-40">Warehouse *</th>
                   <th className="p-2 text-right w-20">Qty</th>
                   <th className="p-2 text-left w-20">Unit</th>
                   <th className="p-2 text-right w-24">Rate</th>
@@ -315,11 +316,46 @@ function NewInvoice() {
                             hsn: p.hsn || "",
                             unit: p.unit || "Nos",
                             gst_rate: (p as any).gst_rate ?? it.gst_rate,
+                            is_serialized: !!(p as any).serial_tracking,
+                            part_model_no: p.model,
+                            part_name: p.name,
+                            serial_numbers: [],
                           })}
                         />
                         <Input className="h-8 text-xs" placeholder="Description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
+                        {it.is_serialized && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={it.serial_numbers.length === Math.floor(Number(it.qty)) ? "outline" : "secondary"}
+                              className="h-7 text-xs"
+                              onClick={() => setSerialPickerIdx(idx)}
+                              disabled={!it.warehouse_id || Number(it.qty) <= 0}
+                            >
+                              Serials: {it.serial_numbers.length}/{Math.floor(Number(it.qty)) || 0}
+                            </Button>
+                            {it.serial_numbers.length > 0 && (
+                              <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[220px]">
+                                {it.serial_numbers.join(", ")}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="p-2"><Input className="h-8 text-xs" value={it.hsn} onChange={(e) => setItem(idx, { hsn: e.target.value })} /></td>
+                      <td className="p-2">
+                        <select
+                          className="w-full h-8 rounded-md border bg-background px-1 text-xs"
+                          value={it.warehouse_id || ""}
+                          onChange={(e) => setItem(idx, { warehouse_id: e.target.value || null, serial_numbers: [] })}
+                        >
+                          <option value="">— select —</option>
+                          {warehouses.map((w) => (
+                            <option key={w.id} value={w.id}>{w.name}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="p-2"><Input type="number" step="0.001" className="h-8 text-xs text-right" value={it.qty} onChange={(e) => setItem(idx, { qty: Number(e.target.value) })} /></td>
                       <td className="p-2"><Input className="h-8 text-xs" value={it.unit} onChange={(e) => setItem(idx, { unit: e.target.value })} /></td>
                       <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.rate} onChange={(e) => setItem(idx, { rate: Number(e.target.value) })} /></td>
@@ -343,6 +379,20 @@ function NewInvoice() {
           </div>
         </CardContent>
       </Card>
+
+      {serialPickerIdx !== null && items[serialPickerIdx] && (
+        <SerialMultiPicker
+          open={serialPickerIdx !== null}
+          onOpenChange={(v) => !v && setSerialPickerIdx(null)}
+          qty={Math.floor(Number(items[serialPickerIdx].qty)) || 0}
+          warehouseId={items[serialPickerIdx].warehouse_id}
+          partModelNo={items[serialPickerIdx].part_model_no}
+          partName={items[serialPickerIdx].part_name}
+          value={items[serialPickerIdx].serial_numbers}
+          excludeSerials={items.flatMap((it, i) => (i === serialPickerIdx ? [] : it.serial_numbers))}
+          onConfirm={(sns) => setItem(serialPickerIdx, { serial_numbers: sns })}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
