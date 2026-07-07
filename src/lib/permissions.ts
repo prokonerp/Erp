@@ -12,6 +12,7 @@ export const FALLBACK_MODULES: { key: ModuleKey; label: string; supports_import?
   { key: "ims", label: "IMS" },
   { key: "gatepass", label: "Gatepass" },
   { key: "quotations", label: "Quotations" },
+  { key: "sales", label: "Sales & Invoicing" },
   { key: "reports", label: "Reports" },
 ];
 
