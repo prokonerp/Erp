@@ -200,6 +200,14 @@ function NewInvoice() {
               <Label className="text-xs">Due Date</Label>
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
+            <div>
+              <Label className="text-xs">PO Number</Label>
+              <Input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Customer PO No." />
+            </div>
+            <div>
+              <Label className="text-xs">PO Date</Label>
+              <Input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
+            </div>
             <div className="md:col-span-2">
               <Label className="text-xs">Billing Address</Label>
               <Textarea rows={2} value={billing} onChange={(e) => setBilling(e.target.value)} />
