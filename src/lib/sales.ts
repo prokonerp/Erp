@@ -34,6 +34,9 @@ export type InvoiceRow = {
   linked_quote_id: string | null;
   linked_dc_ids: string[] | null;
 
+  po_number: string | null;
+  po_date: string | null;
+
   subtotal: number;
   discount: number;
   taxable_value: number;

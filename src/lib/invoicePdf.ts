@@ -124,8 +124,8 @@ export async function renderInvoicePdf(args: {
   const rightMeta: [string, string][] = [
     ["E-Way Bill No.", invoice.ewaybill_no || "—"],
     ["Payment Terms", args.meta?.payment_terms || "100% Advance"],
-    ["PO No.", args.meta?.po_no || "—"],
-    ["PO Date", args.meta?.po_date || "—"],
+    ["PO No.", args.meta?.po_no || ""],
+    ["PO Date", args.meta?.po_date || ""],
     ["IRN", invoice.irn ? invoice.irn.slice(0, 24) + "…" : "—"],
   ];
   doc.setFontSize(8.5);
