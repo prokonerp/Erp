@@ -228,6 +228,28 @@ function NewInvoice() {
               <Input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
             </div>
             <div className="md:col-span-2">
+              <Label className="text-xs">Payment Terms</Label>
+              <div className="flex gap-2">
+                <select
+                  className="h-9 rounded-md border bg-background px-2 text-sm w-40"
+                  value={["Advance","7 Days","15 Days","30 Days"].includes(paymentTerms) ? paymentTerms : "Custom"}
+                  onChange={(e) => setPaymentTerms(e.target.value === "Custom" ? "" : e.target.value)}
+                >
+                  <option value="Advance">Advance</option>
+                  <option value="7 Days">7 Days</option>
+                  <option value="15 Days">15 Days</option>
+                  <option value="30 Days">30 Days</option>
+                  <option value="Custom">Custom</option>
+                </select>
+                <Input
+                  className="flex-1"
+                  placeholder="e.g. 45 Days / Against Delivery"
+                  value={paymentTerms}
+                  onChange={(e) => setPaymentTerms(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="md:col-span-2">
               <Label className="text-xs">Billing Address</Label>
               <Textarea rows={2} value={billing} onChange={(e) => setBilling(e.target.value)} />
             </div>
