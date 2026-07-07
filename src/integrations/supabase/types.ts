@@ -1806,10 +1806,12 @@ export type Database = {
           product_id: string | null
           qty: number
           rate: number
+          serial_numbers: string[]
           sgst: number
           sr_no: number
           taxable_value: number
           unit: string | null
+          warehouse_id: string | null
         }
         Insert: {
           cess?: number
@@ -1826,10 +1828,12 @@ export type Database = {
           product_id?: string | null
           qty?: number
           rate?: number
+          serial_numbers?: string[]
           sgst?: number
           sr_no?: number
           taxable_value?: number
           unit?: string | null
+          warehouse_id?: string | null
         }
         Update: {
           cess?: number
@@ -1846,10 +1850,12 @@ export type Database = {
           product_id?: string | null
           qty?: number
           rate?: number
+          serial_numbers?: string[]
           sgst?: number
           sr_no?: number
           taxable_value?: number
           unit?: string | null
+          warehouse_id?: string | null
         }
         Relationships: [
           {
@@ -1864,6 +1870,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]
@@ -1959,6 +1972,7 @@ export type Database = {
           linked_dc_ids: string[] | null
           linked_quote_id: string | null
           notes: string | null
+          payment_terms: string | null
           pdf_url: string | null
           place_of_supply: string | null
           place_of_supply_code: string | null
@@ -2017,6 +2031,7 @@ export type Database = {
           linked_dc_ids?: string[] | null
           linked_quote_id?: string | null
           notes?: string | null
+          payment_terms?: string | null
           pdf_url?: string | null
           place_of_supply?: string | null
           place_of_supply_code?: string | null
@@ -2075,6 +2090,7 @@ export type Database = {
           linked_dc_ids?: string[] | null
           linked_quote_id?: string | null
           notes?: string | null
+          payment_terms?: string | null
           pdf_url?: string | null
           place_of_supply?: string | null
           place_of_supply_code?: string | null
