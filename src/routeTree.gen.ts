@@ -46,6 +46,7 @@ import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.d
 import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
 import { Route as AppSalesSettingsRouteImport } from './routes/_app/sales.settings'
 import { Route as AppSalesQuotationsRouteImport } from './routes/_app/sales.quotations'
+import { Route as AppPoNewRouteImport } from './routes/_app/po.new'
 import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.products'
 import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
 import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
@@ -281,6 +282,11 @@ const AppSalesQuotationsRoute = AppSalesQuotationsRouteImport.update({
   id: '/quotations',
   path: '/quotations',
   getParentRoute: () => AppSalesRoute,
+} as any)
+const AppPoNewRoute = AppPoNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppPoRoute,
 } as any)
 const AppMastersProductsRoute = AppMastersProductsRouteImport.update({
   id: '/products',
@@ -589,6 +595,7 @@ export interface FileRoutesByFullPath {
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
   '/masters/products': typeof AppMastersProductsRoute
+  '/po/new': typeof AppPoNewRoute
   '/sales/quotations': typeof AppSalesQuotationsRoute
   '/sales/settings': typeof AppSalesSettingsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
@@ -663,6 +670,7 @@ export interface FileRoutesByTo {
   '/indent/new': typeof AppIndentNewRoute
   '/masters/customers': typeof AppMastersCustomersRoute
   '/masters/products': typeof AppMastersProductsRoute
+  '/po/new': typeof AppPoNewRoute
   '/sales/quotations': typeof AppSalesQuotationsRoute
   '/sales/settings': typeof AppSalesSettingsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
@@ -754,6 +762,7 @@ export interface FileRoutesById {
   '/_app/indent/new': typeof AppIndentNewRoute
   '/_app/masters/customers': typeof AppMastersCustomersRoute
   '/_app/masters/products': typeof AppMastersProductsRoute
+  '/_app/po/new': typeof AppPoNewRoute
   '/_app/sales/quotations': typeof AppSalesQuotationsRoute
   '/_app/sales/settings': typeof AppSalesSettingsRoute
   '/_app/tickets/$id': typeof AppTicketsIdRoute
@@ -845,6 +854,7 @@ export interface FileRouteTypes {
     | '/indent/new'
     | '/masters/customers'
     | '/masters/products'
+    | '/po/new'
     | '/sales/quotations'
     | '/sales/settings'
     | '/tickets/$id'
@@ -919,6 +929,7 @@ export interface FileRouteTypes {
     | '/indent/new'
     | '/masters/customers'
     | '/masters/products'
+    | '/po/new'
     | '/sales/quotations'
     | '/sales/settings'
     | '/tickets/$id'
@@ -1009,6 +1020,7 @@ export interface FileRouteTypes {
     | '/_app/indent/new'
     | '/_app/masters/customers'
     | '/_app/masters/products'
+    | '/_app/po/new'
     | '/_app/sales/quotations'
     | '/_app/sales/settings'
     | '/_app/tickets/$id'
@@ -1315,6 +1327,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/sales/quotations'
       preLoaderRoute: typeof AppSalesQuotationsRouteImport
       parentRoute: typeof AppSalesRoute
+    }
+    '/_app/po/new': {
+      id: '/_app/po/new'
+      path: '/new'
+      fullPath: '/po/new'
+      preLoaderRoute: typeof AppPoNewRouteImport
+      parentRoute: typeof AppPoRoute
     }
     '/_app/masters/products': {
       id: '/_app/masters/products'
@@ -1921,10 +1940,12 @@ const AppMastersRouteWithChildren = AppMastersRoute._addFileChildren(
 )
 
 interface AppPoRouteChildren {
+  AppPoNewRoute: typeof AppPoNewRoute
   AppPoIndexRoute: typeof AppPoIndexRoute
 }
 
 const AppPoRouteChildren: AppPoRouteChildren = {
+  AppPoNewRoute: AppPoNewRoute,
   AppPoIndexRoute: AppPoIndexRoute,
 }
 
