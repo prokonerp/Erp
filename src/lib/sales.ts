@@ -91,6 +91,8 @@ export type InvoiceItemRow = {
   igst: number;
   cess: number;
   line_total: number;
+  warehouse_id?: string | null;
+  serial_numbers?: string[] | null;
 };
 
 export type ItemDraft = {
@@ -212,6 +214,8 @@ export function itemDraftFromBreakup(
     igst: b.igst,
     cess: b.cess,
     line_total: b.line_total,
+    warehouse_id: d.warehouse_id,
+    serial_numbers: d.serial_numbers ?? [],
   };
 }
 
