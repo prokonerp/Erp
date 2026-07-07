@@ -72,6 +72,7 @@ import { Route as AppAmcPmRouteImport } from './routes/_app/amc.pm'
 import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
 import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
 import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
+import { Route as AppSalesInvoicesIndexRouteImport } from './routes/_app/sales.invoices.index'
 import { Route as AppImsTransfersIndexRouteImport } from './routes/_app/ims.transfers.index'
 import { Route as AppGrnOemIndexRouteImport } from './routes/_app/grn.oem.index'
 import { Route as AppGrnGeneralIndexRouteImport } from './routes/_app/grn.general.index'
@@ -402,6 +403,11 @@ const AppAmcIdRoute = AppAmcIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppAmcRoute,
 } as any)
+const AppSalesInvoicesIndexRoute = AppSalesInvoicesIndexRouteImport.update({
+  id: '/invoices/',
+  path: '/invoices/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
 const AppImsTransfersIndexRoute = AppImsTransfersIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -556,6 +562,7 @@ export interface FileRoutesByFullPath {
   '/grn/general/': typeof AppGrnGeneralIndexRoute
   '/grn/oem/': typeof AppGrnOemIndexRoute
   '/ims/transfers/': typeof AppImsTransfersIndexRoute
+  '/sales/invoices/': typeof AppSalesInvoicesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -621,6 +628,7 @@ export interface FileRoutesByTo {
   '/grn/general': typeof AppGrnGeneralIndexRoute
   '/grn/oem': typeof AppGrnOemIndexRoute
   '/ims/transfers': typeof AppImsTransfersIndexRoute
+  '/sales/invoices': typeof AppSalesInvoicesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -702,6 +710,7 @@ export interface FileRoutesById {
   '/_app/grn/general/': typeof AppGrnGeneralIndexRoute
   '/_app/grn/oem/': typeof AppGrnOemIndexRoute
   '/_app/ims/transfers/': typeof AppImsTransfersIndexRoute
+  '/_app/sales/invoices/': typeof AppSalesInvoicesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -783,6 +792,7 @@ export interface FileRouteTypes {
     | '/grn/general/'
     | '/grn/oem/'
     | '/ims/transfers/'
+    | '/sales/invoices/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -848,6 +858,7 @@ export interface FileRouteTypes {
     | '/grn/general'
     | '/grn/oem'
     | '/ims/transfers'
+    | '/sales/invoices'
   id:
     | '__root__'
     | '/'
@@ -928,6 +939,7 @@ export interface FileRouteTypes {
     | '/_app/grn/general/'
     | '/_app/grn/oem/'
     | '/_app/ims/transfers/'
+    | '/_app/sales/invoices/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1380,6 +1392,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAmcIdRouteImport
       parentRoute: typeof AppAmcRoute
     }
+    '/_app/sales/invoices/': {
+      id: '/_app/sales/invoices/'
+      path: '/invoices'
+      fullPath: '/sales/invoices/'
+      preLoaderRoute: typeof AppSalesInvoicesIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
     '/_app/ims/transfers/': {
       id: '/_app/ims/transfers/'
       path: '/'
@@ -1734,10 +1753,12 @@ const AppMastersRouteWithChildren = AppMastersRoute._addFileChildren(
 
 interface AppSalesRouteChildren {
   AppSalesIndexRoute: typeof AppSalesIndexRoute
+  AppSalesInvoicesIndexRoute: typeof AppSalesInvoicesIndexRoute
 }
 
 const AppSalesRouteChildren: AppSalesRouteChildren = {
   AppSalesIndexRoute: AppSalesIndexRoute,
+  AppSalesInvoicesIndexRoute: AppSalesInvoicesIndexRoute,
 }
 
 const AppSalesRouteWithChildren = AppSalesRoute._addFileChildren(
