@@ -40,6 +40,7 @@ function InvoiceView() {
   const [items, setItems] = useState<InvoiceItemRow[]>([]);
   const [branch, setBranch] = useState<BranchRow | null>(null);
   const [customer, setCustomer] = useState<any>(null);
+  const [pdfTheme, setPdfTheme] = useState<{ themeColor: string; copyLabel: string }>({ themeColor: "#000000", copyLabel: "Original Copy" });
   const [loading, setLoading] = useState(true);
 
   // e-Way form
@@ -59,6 +60,8 @@ function InvoiceView() {
       ]);
       setBranch(bs.find((b) => b.id === r.invoice.branch_id) || null);
       setCustomer(cust);
+      const { data: st } = await supabase.from("invoice_settings").select("theme_color,copy_label").eq("branch_id", r.invoice.branch_id).maybeSingle();
+      if (st) setPdfTheme({ themeColor: (st as any).theme_color || "#000000", copyLabel: (st as any).copy_label || "Original Copy" });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -164,8 +167,8 @@ function InvoiceView() {
           <Button size="sm" variant="outline" asChild>
             <Link to="/sales/payments/new" search={{ invoice_id: inv.id } as any}><Wallet className="h-4 w-4 mr-1.5" />Record Payment</Link>
           </Button>
-          <Button size="sm" variant="outline" onClick={() => printInvoicePdf({ invoice: inv, items, branch, customer })}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
-          <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf({ invoice: inv, items, branch, customer })}><Download className="h-4 w-4 mr-1.5" />PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => printInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel })}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
+          <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel })}><Download className="h-4 w-4 mr-1.5" />PDF</Button>
         </div>
       </div>
 
