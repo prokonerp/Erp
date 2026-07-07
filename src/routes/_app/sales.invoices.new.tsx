@@ -39,6 +39,8 @@ function NewInvoice() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState<string>("");
+  const [poNumber, setPoNumber] = useState("");
+  const [poDate, setPoDate] = useState("");
   const [billing, setBilling] = useState("");
   const [shipping, setShipping] = useState("");
   const [notes, setNotes] = useState("");
@@ -103,6 +105,8 @@ function NewInvoice() {
         due_date: dueDate || null,
         branch_id: branchId,
         customer_id: customer.id,
+        po_number: poNumber || null,
+        po_date: poDate || null,
         seller_name: branch.name,
         seller_gstin: branch.gstin,
         seller_state: sellerState,
