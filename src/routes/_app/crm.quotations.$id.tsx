@@ -190,7 +190,6 @@ function QuoteEditor() {
           <Button size="sm" variant="outline" onClick={addItem}><Plus className="h-4 w-4 mr-1" />Add row</Button>
         </CardHeader>
         <CardContent>
-          <UpsSmartPanel items={q.items} onAddItems={addItems} />
           {q.items.length === 0 && <div className="text-sm text-muted-foreground">No items. Click "Add row".</div>}
           {q.items.map((it, i) => (
             <div key={i} className="border rounded-md p-3 mb-2 space-y-2">
