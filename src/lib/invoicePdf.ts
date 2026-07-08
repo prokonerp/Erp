@@ -126,7 +126,7 @@ export async function renderInvoicePdf(args: {
     ["Payment Terms", args.meta?.payment_terms || ""],
     ["PO No.", args.meta?.po_no || ""],
     ["PO Date", args.meta?.po_date || ""],
-    ["IRN", invoice.irn ? invoice.irn.slice(0, 24) + "…" : "—"],
+    ["Due Date", invoice.due_date ? (() => { const [Y,M,D] = invoice.due_date!.slice(0,10).split("-"); return `${D}-${M}-${Y}`; })() : "—"],
   ];
   doc.setFontSize(8.5);
   leftMeta.forEach((r, i) => {
@@ -184,6 +184,26 @@ export async function renderInvoicePdf(args: {
   drawParty(ship, margin + halfW);
   doc.setLineWidth(0.6);
   y += partyH;
+
+  // ============ E-INVOICE ROW (IRN / Ack No / Ack Date) ============
+  const eiH = 16;
+  drawRect(doc, margin, y, cw, eiH);
+  doc.setFont("helvetica", "bold").setFontSize(8);
+  const ackDateFmt = invoice.ack_date
+    ? (() => { const d = new Date(invoice.ack_date!); const dd = String(d.getDate()).padStart(2,"0"); const mm = String(d.getMonth()+1).padStart(2,"0"); return `${dd}-${mm}-${d.getFullYear()}`; })()
+    : "";
+  const col = cw / 3;
+  const drawEi = (label: string, val: string, x: number) => {
+    doc.setFont("helvetica", "bold").text(label + ":", x + 6, y + 11);
+    const lw = doc.getTextWidth(label + ": ");
+    doc.setFont("helvetica", "normal").text(val || "—", x + 6 + lw + 2, y + 11);
+  };
+  drawEi("IRN", invoice.irn || "", margin);
+  doc.line(margin + col, y, margin + col, y + eiH);
+  drawEi("Ack No", invoice.ack_no || "", margin + col);
+  doc.line(margin + col * 2, y, margin + col * 2, y + eiH);
+  drawEi("Ack Date", ackDateFmt, margin + col * 2);
+  y += eiH;
 
   // ============ ITEMS TABLE ============
   const isInter = invoice.is_interstate;
@@ -373,15 +393,12 @@ export async function renderInvoicePdf(args: {
   doc.setTextColor(255, 255, 255).setFont("helvetica", "bold").setFontSize(8.5);
   doc.text("Signatures", margin + col1W + col2W + col3W / 2, y + 10, { align: "center" });
   doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "normal").setFontSize(8.5);
-  doc.text("Receiver's Signature", margin + col1W + col2W + 6, y + 40);
-  doc.setLineWidth(0.3);
-  doc.line(margin + col1W + col2W + 6, y + 60, margin + col1W + col2W + col3W - 6, y + 60);
-
+  const sigX = margin + col1W + col2W;
   doc.setFont("helvetica", "bold").setFontSize(9);
-  doc.text(`For ${(branch?.name || "PROKON HI-TECH SYSTEMS").toUpperCase()}`, margin + col1W + col2W + col3W / 2, y + footerH - 30, { align: "center" });
+  doc.text(`For ${(branch?.name || "PROKON HI-TECH SYSTEMS").toUpperCase()}`, sigX + col3W - 6, y + 28, { align: "right" });
+  // Blank space for physical signature
   doc.setFont("helvetica", "normal").setFontSize(8.5);
-  doc.text("Authorised Signatory", margin + col1W + col2W + col3W / 2, y + footerH - 8, { align: "center" });
+  doc.text("Authorised Signatory", sigX + col3W - 6, y + footerH - 8, { align: "right" });
 
   // Ensure we haven't overflowed
   if (y + footerH > pageH - margin) {
