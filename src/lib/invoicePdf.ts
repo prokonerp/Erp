@@ -393,15 +393,12 @@ export async function renderInvoicePdf(args: {
   doc.setTextColor(255, 255, 255).setFont("helvetica", "bold").setFontSize(8.5);
   doc.text("Signatures", margin + col1W + col2W + col3W / 2, y + 10, { align: "center" });
   doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "normal").setFontSize(8.5);
-  doc.text("Receiver's Signature", margin + col1W + col2W + 6, y + 40);
-  doc.setLineWidth(0.3);
-  doc.line(margin + col1W + col2W + 6, y + 60, margin + col1W + col2W + col3W - 6, y + 60);
-
+  const sigX = margin + col1W + col2W;
   doc.setFont("helvetica", "bold").setFontSize(9);
-  doc.text(`For ${(branch?.name || "PROKON HI-TECH SYSTEMS").toUpperCase()}`, margin + col1W + col2W + col3W / 2, y + footerH - 30, { align: "center" });
+  doc.text(`For ${(branch?.name || "PROKON HI-TECH SYSTEMS").toUpperCase()}`, sigX + col3W - 6, y + 28, { align: "right" });
+  // Blank space for physical signature
   doc.setFont("helvetica", "normal").setFontSize(8.5);
-  doc.text("Authorised Signatory", margin + col1W + col2W + col3W / 2, y + footerH - 8, { align: "center" });
+  doc.text("Authorised Signatory", sigX + col3W - 6, y + footerH - 8, { align: "right" });
 
   // Ensure we haven't overflowed
   if (y + footerH > pageH - margin) {
