@@ -60,50 +60,50 @@ export async function renderInvoicePdf(args: {
   doc.setDrawColor(tr, tg, tb).setLineWidth(0.6);
 
   // ============ HEADER BOX ============
-  const headerH = 110;
+  const headerH = 92;
   let y = margin;
   drawRect(doc, margin, y, cw, headerH);
 
   // Logo box (left)
-  const logoW = 90;
+  const logoW = 78;
   doc.setLineWidth(0.4);
   drawRect(doc, margin, y, logoW, headerH);
   doc.setLineWidth(0.6);
   if (branch?.logo_url) {
     try { doc.addImage(branch.logo_url, "JPEG", margin + 6, y + 6, logoW - 12, headerH - 12); } catch { /* ignore */ }
   } else {
-    doc.setFont("helvetica", "bold").setFontSize(18).setTextColor(tr, tg, tb);
+    doc.setFont("helvetica", "bold").setFontSize(16).setTextColor(tr, tg, tb);
     doc.text("PROKON", margin + logoW / 2, y + headerH / 2, { align: "center", baseline: "middle" });
     doc.setTextColor(0, 0, 0);
   }
 
   // Copy label (right)
-  const copyW = 90;
-  drawRect(doc, margin + cw - copyW, y, copyW, 18);
-  doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(tr, tg, tb);
-  doc.text(copyLabel, margin + cw - copyW / 2, y + 12, { align: "center" });
+  const copyW = 82;
+  drawRect(doc, margin + cw - copyW, y, copyW, 14);
+  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(tr, tg, tb);
+  doc.text(copyLabel, margin + cw - copyW / 2, y + 10, { align: "center" });
   doc.setTextColor(0, 0, 0);
 
   // Center block
   const cx = margin + logoW + (cw - logoW - copyW) / 2;
-  doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(tr, tg, tb);
-  doc.text("TAX INVOICE", cx, y + 14, { align: "center" });
+  doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(tr, tg, tb);
+  doc.text("TAX INVOICE", cx, y + 12, { align: "center" });
   doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold").setFontSize(14);
-  doc.text((branch?.name || "PROKON HI-TECH SYSTEMS").toUpperCase(), cx, y + 32, { align: "center" });
-  doc.setFont("helvetica", "normal").setFontSize(8.5);
+  doc.setFont("helvetica", "bold").setFontSize(13);
+  doc.text((branch?.name || "PROKON HI-TECH SYSTEMS").toUpperCase(), cx, y + 26, { align: "center" });
+  doc.setFont("helvetica", "normal").setFontSize(8);
   const addrLines = textLines(doc, branch?.address || "", cw - logoW - copyW - 20);
-  let ay = y + 46;
-  addrLines.slice(0, 2).forEach((ln) => { doc.text(ln, cx, ay, { align: "center" }); ay += 10; });
-  if (branch?.cin) { doc.text(`Udyam No: ${branch.cin}`, cx, ay, { align: "center" }); ay += 10; }
-  if (branch?.gstin) { doc.setFont("helvetica", "bold"); doc.text(`GSTIN: ${branch.gstin}`, cx, ay, { align: "center" }); ay += 10; doc.setFont("helvetica", "normal"); }
+  let ay = y + 38;
+  addrLines.slice(0, 2).forEach((ln) => { doc.text(ln, cx, ay, { align: "center" }); ay += 9; });
+  if (branch?.cin) { doc.text(`Udyam No: ${branch.cin}`, cx, ay, { align: "center" }); ay += 9; }
+  if (branch?.gstin) { doc.setFont("helvetica", "bold"); doc.text(`GSTIN: ${branch.gstin}`, cx, ay, { align: "center" }); ay += 9; doc.setFont("helvetica", "normal"); }
   const contact = [branch?.phone ? `Tel: ${branch.phone}` : "", branch?.email ? `Email: ${branch.email}` : ""].filter(Boolean).join("  |  ");
   if (contact) doc.text(contact, cx, ay, { align: "center" });
 
   y += headerH;
 
   // ============ META (2 col grid) ============
-  const metaH = 90;
+  const metaH = 72;
   const halfW = cw / 2;
   drawRect(doc, margin, y, cw, metaH);
   doc.line(margin + halfW, y, margin + halfW, y + metaH);
@@ -142,46 +142,44 @@ export async function renderInvoicePdf(args: {
   y += metaH;
 
   // ============ BILL TO / SHIP TO ============
-  const partyH = 110;
+  const partyH = 74;
   drawRect(doc, margin, y, halfW, partyH);
   drawRect(doc, margin + halfW, y, halfW, partyH);
   // Title bars
   doc.setFillColor(tr, tg, tb);
-  doc.rect(margin, y, halfW, 14, "F");
-  doc.rect(margin + halfW, y, halfW, 14, "F");
-  doc.setTextColor(255, 255, 255).setFont("helvetica", "bold").setFontSize(9);
-  doc.text("Billed to:", margin + 6, y + 10);
-  doc.text("Shipped to:", margin + halfW + 6, y + 10);
+  doc.rect(margin, y, halfW, 12, "F");
+  doc.rect(margin + halfW, y, halfW, 12, "F");
+  doc.setTextColor(255, 255, 255).setFont("helvetica", "bold").setFontSize(8.5);
+  doc.text("Billed to:", margin + 6, y + 9);
+  doc.text("Shipped to:", margin + halfW + 6, y + 9);
   doc.setTextColor(0, 0, 0);
 
-  const partyFields = (name: string, addr: string, phone: string, state: string, pin: string, gst: string): [string, string][] => [
-    ["Name", name],
-    ["Address", addr],
-    ["Mobile No", phone],
-    ["State", state],
-    ["Pincode", pin],
-    ["GSTIN / UIN", gst],
-  ];
   const billName = invoice.buyer_name || customer?.company || "";
   const billAddr = invoice.billing_address || customer?.billing_address || "";
   const shipAddr = invoice.shipping_address || customer?.shipping_address || billAddr;
-  const pinMatch = (billAddr.match(/\b\d{6}\b/) || [""])[0];
-  const bill = partyFields(billName, billAddr, customer?.phone || "", invoice.buyer_state || customer?.state || "", pinMatch, invoice.buyer_gstin || customer?.gst || "");
-  const ship = partyFields(billName, shipAddr, customer?.phone || "", invoice.buyer_state || customer?.state || "", pinMatch, invoice.buyer_gstin || customer?.gst || "");
+  const buyerState = invoice.buyer_state || customer?.state || "";
+  const buyerGst = invoice.buyer_gstin || customer?.gst || "";
+  const buyerPhone = customer?.phone || "";
 
-  doc.setFontSize(8);
-  const partyRowH = (partyH - 14) / 6;
-  const drawParty = (rows: [string, string][], x0: number) => {
-    rows.forEach((r, i) => {
-      const yy = y + 14 + i * partyRowH;
-      if (i > 0) { doc.setLineWidth(0.2); doc.line(x0, yy, x0 + halfW, yy); }
-      doc.setFont("helvetica", "bold").text(r[0], x0 + 6, yy + partyRowH / 2 + 2);
-      const lines = textLines(doc, r[1] || "—", halfW - 90);
-      doc.setFont("helvetica", "normal").text(lines.slice(0, 2).join(" "), x0 + 78, yy + partyRowH / 2 + 2);
-    });
+  const drawParty = (name: string, addr: string, x0: number) => {
+    let py = y + 12 + 10;
+    doc.setFont("helvetica", "bold").setFontSize(9);
+    doc.text(name || "—", x0 + 6, py, { maxWidth: halfW - 12 });
+    py += 11;
+    doc.setFont("helvetica", "normal").setFontSize(8);
+    const addrLn = textLines(doc, addr || "—", halfW - 12).slice(0, 3);
+    addrLn.forEach((ln) => { doc.text(ln, x0 + 6, py); py += 9; });
+    if (buyerState) { doc.text(`State: ${buyerState}`, x0 + 6, py); py += 9; }
+    if (buyerGst) {
+      doc.setFont("helvetica", "bold");
+      doc.text(`GSTIN: ${buyerGst}`, x0 + 6, py);
+      doc.setFont("helvetica", "normal");
+      py += 9;
+    }
+    if (buyerPhone) { doc.text(`Mob: ${buyerPhone}`, x0 + 6, py); }
   };
-  drawParty(bill, margin);
-  drawParty(ship, margin + halfW);
+  drawParty(billName, billAddr, margin);
+  drawParty(billName, shipAddr, margin + halfW);
   doc.setLineWidth(0.6);
   y += partyH;
 
