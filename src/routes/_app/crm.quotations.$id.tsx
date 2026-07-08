@@ -184,6 +184,8 @@ function QuoteEditor() {
         </CardContent>
       </Card>
 
+      <UpsSmartPanel items={q.items} onAddItems={addItems} />
+
       <Card className="print:hidden">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Item table</CardTitle>
