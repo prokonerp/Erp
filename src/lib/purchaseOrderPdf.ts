@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { amountInWords } from "@/lib/gst";
-import { inrPO, type PORow, type POItemRow } from "@/lib/purchaseOrder";
+import { type PORow, type POItemRow } from "@/lib/purchaseOrder";
 import type { BranchRow } from "@/lib/sales";
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -18,11 +18,25 @@ function fmtDMY(d: string | null | undefined): string {
   return `${p[2]}-${p[1]}-${p[0]}`;
 }
 
+// jsPDF built-in Helvetica lacks the ₹ glyph — renders as "¹".
+// Use "Rs. " prefix everywhere in the PDF for reliable rendering.
+function inrPdf(n: number | null | undefined): string {
+  const v = Number(n) || 0;
+  return "Rs. " + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function renderPurchaseOrderPdf(args: {
   po: PORow;
   items: POItemRow[];
   branch: BranchRow | null;
   themeColor?: string;
+  settings?: {
+    company_name?: string | null;
+    company_address?: string | null;
+    udyam_no?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  } | null;
 }): jsPDF {
   const { po, items, branch } = args;
   const themeColor = args.themeColor || "#1f3864";
@@ -34,20 +48,28 @@ export function renderPurchaseOrderPdf(args: {
 
   doc.setDrawColor(tr, tg, tb).setLineWidth(0.7);
 
+  // Resolve company (settings override branch). Never fall back to warehouse.name for company_name.
+  const s = args.settings || {};
+  const companyName = (s.company_name || "Prokon Hi-Tech Systems").toString();
+  const companyAddress = (s.company_address || branch?.address || "").toString();
+  const companyGstin = branch?.gstin || "";
+  const companyPhone = s.phone || branch?.phone || "";
+  const companyEmail = s.email || branch?.email || "";
+
   // Header
   let y = margin;
   const headerH = 78;
   doc.rect(margin, y, cw, headerH);
   // Left: company
   doc.setFont("helvetica", "bold").setFontSize(15).setTextColor(tr, tg, tb);
-  doc.text((branch?.name || "PROKON HI-TECH SYSTEMS").toUpperCase(), margin + 10, y + 20);
+  doc.text(companyName, margin + 10, y + 20);
   doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "normal").setFontSize(8.5);
-  const addrLines = doc.splitTextToSize(branch?.address || "", cw * 0.55) as string[];
+  doc.setFont("helvetica", "normal").setFontSize(9);
+  const addrLines = doc.splitTextToSize(companyAddress, cw * 0.55) as string[];
   let ay = y + 34;
   addrLines.slice(0, 3).forEach((l) => { doc.text(l, margin + 10, ay); ay += 10; });
-  if (branch?.gstin) { doc.setFont("helvetica", "bold"); doc.text(`GSTIN: ${branch.gstin}`, margin + 10, ay); ay += 10; doc.setFont("helvetica", "normal"); }
-  const c = [branch?.phone ? `Tel: ${branch.phone}` : "", branch?.email ? `Email: ${branch.email}` : ""].filter(Boolean).join("   ");
+  if (companyGstin) { doc.setFont("helvetica", "bold"); doc.text(`GSTIN: ${companyGstin}`, margin + 10, ay); ay += 10; doc.setFont("helvetica", "normal"); }
+  const c = [companyPhone ? `Tel: ${companyPhone}` : "", companyEmail ? `Email: ${companyEmail}` : ""].filter(Boolean).join("   ");
   if (c) doc.text(c, margin + 10, ay);
 
   // Right: title
@@ -102,7 +124,7 @@ export function renderPurchaseOrderPdf(args: {
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    styles: { fontSize: 8.5, cellPadding: 4, lineColor: [tr, tg, tb], lineWidth: 0.3, textColor: 20 },
+    styles: { fontSize: 9, cellPadding: 4, lineColor: [tr, tg, tb], lineWidth: 0.3, textColor: 20 },
     headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontStyle: "bold", halign: "center" },
     head: [[
       "#", "Product / Description", "HSN", "Qty", "Unit", "Rate",
@@ -114,52 +136,53 @@ export function renderPurchaseOrderPdf(args: {
       it.hsn || "—",
       String(it.qty),
       it.unit || "",
-      inrPO(it.rate),
+      inrPdf(it.rate),
       `${it.gst_rate}%`,
-      inrPO(it.line_total),
+      inrPdf(it.line_total),
     ]),
     columnStyles: {
       0: { halign: "center", cellWidth: 22 },
       2: { halign: "center", cellWidth: 50 },
-      3: { halign: "right", cellWidth: 40 },
+      3: { halign: "center", cellWidth: 40 },
       4: { halign: "center", cellWidth: 40 },
       5: { halign: "right", cellWidth: 60 },
-      6: { halign: "right", cellWidth: 50 },
+      6: { halign: "center", cellWidth: 50 },
       7: { halign: "right", cellWidth: 70 },
     },
   });
 
-  let ty = (doc as any).lastAutoTable.finalY + 6;
+  let ty = (doc as any).lastAutoTable.finalY + 8;
 
-  // Totals block (right column)
-  const totalsW = 240;
+  // Totals block — right-aligned column with label left / value right, same column width.
+  const totalsW = 260;
   const totalsX = margin + cw - totalsW;
+  const labelX = totalsX + 10;
+  const valueX = totalsX + totalsW - 10;
   const rows: [string, string][] = [
-    ["Subtotal", inrPO(po.subtotal)],
-    ["Discount", inrPO(po.discount)],
-    ["Taxable Value", inrPO(po.taxable_value)],
+    ["Subtotal", inrPdf(po.subtotal)],
+    ["Discount", inrPdf(po.discount)],
+    ["Taxable Value", inrPdf(po.taxable_value)],
   ];
-  if (po.is_interstate) rows.push(["IGST", inrPO(po.igst)]);
+  if (po.is_interstate) rows.push(["IGST", inrPdf(po.igst)]);
   else {
-    rows.push(["CGST", inrPO(po.cgst)]);
-    rows.push(["SGST", inrPO(po.sgst)]);
+    rows.push(["CGST", inrPdf(po.cgst)]);
+    rows.push(["SGST", inrPdf(po.sgst)]);
   }
-  if (Number(po.round_off) !== 0) rows.push(["Round Off", inrPO(po.round_off)]);
+  if (Number(po.round_off) !== 0) rows.push(["Round Off", inrPdf(po.round_off)]);
 
-  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal").setFontSize(10);
   rows.forEach(([k, v]) => {
-    doc.setFont("helvetica", "normal");
-    doc.text(k, totalsX + 8, ty + 10);
-    doc.text(v, totalsX + totalsW - 8, ty + 10, { align: "right" });
-    ty += 14;
+    doc.text(`${k}:`, labelX, ty + 12);
+    doc.text(v, valueX, ty + 12, { align: "right" });
+    ty += 15;
   });
   doc.setLineWidth(0.5);
-  doc.line(totalsX, ty + 2, totalsX + totalsW, ty + 2);
-  ty += 6;
-  doc.setFont("helvetica", "bold").setFontSize(10);
-  doc.text("Grand Total", totalsX + 8, ty + 10);
-  doc.text(inrPO(po.total), totalsX + totalsW - 8, ty + 10, { align: "right" });
-  ty += 18;
+  doc.line(totalsX, ty + 3, totalsX + totalsW, ty + 3);
+  ty += 8;
+  doc.setFont("helvetica", "bold").setFontSize(11);
+  doc.text("Grand Total:", labelX, ty + 12);
+  doc.text(inrPdf(po.total), valueX, ty + 12, { align: "right" });
+  ty += 22;
 
   doc.setFont("helvetica", "italic").setFontSize(8);
   const words = po.total_in_words || amountInWords(po.total);
@@ -193,8 +216,8 @@ export function renderPurchaseOrderPdf(args: {
   doc.line(margin + cw - 180, sigY, margin + cw - 20, sigY);
   doc.setFont("helvetica", "normal").setFontSize(8.5);
   doc.text("Authorized Signatory", margin + cw - 100, sigY + 12, { align: "center" });
-  doc.setFont("helvetica", "bold").setFontSize(9);
-  doc.text(`For ${branch?.name || "PROKON HI-TECH SYSTEMS"}`, margin + cw - 100, sigY - 6, { align: "center" });
+  doc.setFont("helvetica", "bold").setFontSize(10);
+  doc.text(`For ${companyName}`, margin + cw - 100, sigY - 6, { align: "center" });
 
   return doc;
 }
