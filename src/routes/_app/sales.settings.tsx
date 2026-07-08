@@ -147,12 +147,6 @@ function SalesSettings() {
 
       {settings && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Invoice Numbering</CardTitle></CardHeader>
-          <div style={{ display: "none" }} />
-        </Card>
-      )}
-      {settings && (
-        <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Company Header (shown on Invoice PDF)</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2"><Label className="text-xs">Company Name</Label><Input value={settings.company_name || ""} placeholder="Prokon Hi-Tech Systems" onChange={(e) => setSettings({ ...settings, company_name: e.target.value })} /></div>
