@@ -71,6 +71,7 @@ import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotatio
 import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
 import { Route as AppCrmIncentivesRouteImport } from './routes/_app/crm.incentives'
 import { Route as AppCrmCustomersRouteImport } from './routes/_app/crm.customers'
+import { Route as AppCrmBundlesRouteImport } from './routes/_app/crm.bundles'
 import { Route as AppChallanOemRouteImport } from './routes/_app/challan.oem'
 import { Route as AppChallanCustomerRouteImport } from './routes/_app/challan.customer'
 import { Route as AppChallanIdRouteImport } from './routes/_app/challan.$id'
@@ -410,6 +411,11 @@ const AppCrmCustomersRoute = AppCrmCustomersRouteImport.update({
   path: '/customers',
   getParentRoute: () => AppCrmRoute,
 } as any)
+const AppCrmBundlesRoute = AppCrmBundlesRouteImport.update({
+  id: '/bundles',
+  path: '/bundles',
+  getParentRoute: () => AppCrmRoute,
+} as any)
 const AppChallanOemRoute = AppChallanOemRouteImport.update({
   id: '/oem',
   path: '/oem',
@@ -585,6 +591,7 @@ export interface FileRoutesByFullPath {
   '/challan/$id': typeof AppChallanIdRoute
   '/challan/customer': typeof AppChallanCustomerRouteWithChildren
   '/challan/oem': typeof AppChallanOemRouteWithChildren
+  '/crm/bundles': typeof AppCrmBundlesRoute
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
@@ -666,6 +673,7 @@ export interface FileRoutesByTo {
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
   '/challan/$id': typeof AppChallanIdRoute
+  '/crm/bundles': typeof AppCrmBundlesRoute
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
@@ -756,6 +764,7 @@ export interface FileRoutesById {
   '/_app/challan/$id': typeof AppChallanIdRoute
   '/_app/challan/customer': typeof AppChallanCustomerRouteWithChildren
   '/_app/challan/oem': typeof AppChallanOemRouteWithChildren
+  '/_app/crm/bundles': typeof AppCrmBundlesRoute
   '/_app/crm/customers': typeof AppCrmCustomersRoute
   '/_app/crm/incentives': typeof AppCrmIncentivesRoute
   '/_app/crm/leads': typeof AppCrmLeadsRouteWithChildren
@@ -850,6 +859,7 @@ export interface FileRouteTypes {
     | '/challan/$id'
     | '/challan/customer'
     | '/challan/oem'
+    | '/crm/bundles'
     | '/crm/customers'
     | '/crm/incentives'
     | '/crm/leads'
@@ -931,6 +941,7 @@ export interface FileRouteTypes {
     | '/amc/pm'
     | '/amc/settings'
     | '/challan/$id'
+    | '/crm/bundles'
     | '/crm/customers'
     | '/crm/incentives'
     | '/crm/leads'
@@ -1020,6 +1031,7 @@ export interface FileRouteTypes {
     | '/_app/challan/$id'
     | '/_app/challan/customer'
     | '/_app/challan/oem'
+    | '/_app/crm/bundles'
     | '/_app/crm/customers'
     | '/_app/crm/incentives'
     | '/_app/crm/leads'
@@ -1527,6 +1539,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCrmCustomersRouteImport
       parentRoute: typeof AppCrmRoute
     }
+    '/_app/crm/bundles': {
+      id: '/_app/crm/bundles'
+      path: '/bundles'
+      fullPath: '/crm/bundles'
+      preLoaderRoute: typeof AppCrmBundlesRouteImport
+      parentRoute: typeof AppCrmRoute
+    }
     '/_app/challan/oem': {
       id: '/_app/challan/oem'
       path: '/oem'
@@ -1823,6 +1842,7 @@ const AppCrmQuotationsRouteWithChildren =
   AppCrmQuotationsRoute._addFileChildren(AppCrmQuotationsRouteChildren)
 
 interface AppCrmRouteChildren {
+  AppCrmBundlesRoute: typeof AppCrmBundlesRoute
   AppCrmCustomersRoute: typeof AppCrmCustomersRoute
   AppCrmIncentivesRoute: typeof AppCrmIncentivesRoute
   AppCrmLeadsRoute: typeof AppCrmLeadsRouteWithChildren
@@ -1832,6 +1852,7 @@ interface AppCrmRouteChildren {
 }
 
 const AppCrmRouteChildren: AppCrmRouteChildren = {
+  AppCrmBundlesRoute: AppCrmBundlesRoute,
   AppCrmCustomersRoute: AppCrmCustomersRoute,
   AppCrmIncentivesRoute: AppCrmIncentivesRoute,
   AppCrmLeadsRoute: AppCrmLeadsRouteWithChildren,
