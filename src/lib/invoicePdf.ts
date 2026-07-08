@@ -126,7 +126,7 @@ export async function renderInvoicePdf(args: {
     ["Payment Terms", args.meta?.payment_terms || ""],
     ["PO No.", args.meta?.po_no || ""],
     ["PO Date", args.meta?.po_date || ""],
-    ["IRN", invoice.irn ? invoice.irn.slice(0, 24) + "…" : "—"],
+    ["Due Date", invoice.due_date ? (() => { const [Y,M,D] = invoice.due_date!.slice(0,10).split("-"); return `${D}-${M}-${Y}`; })() : "—"],
   ];
   doc.setFontSize(8.5);
   leftMeta.forEach((r, i) => {
