@@ -52,6 +52,8 @@ function NewInvoice() {
   const [saving, setSaving] = useState(false);
   const [warehouses, setWarehouses] = useState<{ id: string; name: string; code: string }[]>([]);
   const [serialPickerIdx, setSerialPickerIdx] = useState<number | null>(null);
+  const [sameAsBilling, setSameAsBilling] = useState(true);
+  const [termsTouched, setTermsTouched] = useState(false);
 
   useEffect(() => {
     fetchBranches().then((bs) => {
@@ -68,9 +70,35 @@ function NewInvoice() {
   useEffect(() => {
     if (customer) {
       setBilling(customer.billing_address || (customer as any).address || "");
-      setShipping((customer as any).shipping_address || customer.billing_address || (customer as any).address || "");
+      const ship = (customer as any).shipping_address || customer.billing_address || (customer as any).address || "";
+      setShipping(ship);
+      setSameAsBilling(!ship || ship === (customer.billing_address || (customer as any).address || ""));
     }
   }, [customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync shipping with billing when "same as" is on
+  useEffect(() => {
+    if (sameAsBilling) setShipping(billing);
+  }, [sameAsBilling, billing]);
+
+  // Auto-load default terms + place-of-supply from invoice_settings when branch is chosen
+  useEffect(() => {
+    if (!branchId) return;
+    supabase
+      .from("invoice_settings")
+      .select("terms_default,notes_default")
+      .eq("branch_id", branchId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        if (!termsTouched && !terms && (data as any).terms_default) {
+          setTerms((data as any).terms_default);
+        }
+        if (!notes && (data as any).notes_default) {
+          setNotes((data as any).notes_default);
+        }
+      });
+  }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sellerCode = branch?.state_code || stateCodeFromGSTIN(branch?.gstin) || null;
   const buyerCode = (customer as any)?.state_code || stateCodeFromGSTIN(customer?.gst || null);
@@ -254,8 +282,23 @@ function NewInvoice() {
               <Textarea rows={2} value={billing} onChange={(e) => setBilling(e.target.value)} />
             </div>
             <div className="md:col-span-2">
-              <Label className="text-xs">Shipping Address</Label>
-              <Textarea rows={2} value={shipping} onChange={(e) => setShipping(e.target.value)} />
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Shipping Address</Label>
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sameAsBilling}
+                    onChange={(e) => setSameAsBilling(e.target.checked)}
+                  />
+                  Same as Billing Address
+                </label>
+              </div>
+              <Textarea
+                rows={2}
+                value={shipping}
+                disabled={sameAsBilling}
+                onChange={(e) => setShipping(e.target.value)}
+              />
             </div>
           </CardContent>
         </Card>
@@ -404,7 +447,12 @@ function NewInvoice() {
             </div>
             <div>
               <Label className="text-xs">Terms & Conditions</Label>
-              <Textarea rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} />
+              <Textarea
+                rows={3}
+                value={terms}
+                onChange={(e) => { setTerms(e.target.value); setTermsTouched(true); }}
+                placeholder="Auto-loaded from Sales Settings; edit to override for this invoice."
+              />
             </div>
           </CardContent>
         </Card>
