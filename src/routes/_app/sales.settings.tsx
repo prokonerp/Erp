@@ -27,6 +27,11 @@ type Settings = {
   place_of_supply_default: string | null;
   theme_color?: string;
   copy_label?: string;
+  company_name?: string | null;
+  company_address?: string | null;
+  udyam_no?: string | null;
+  phone?: string | null;
+  email?: string | null;
 };
 
 function SalesSettings() {
@@ -54,6 +59,7 @@ function SalesSettings() {
         branch_id: branchId, prefix: "PHS/INV/", fy_reset: true, next_seq: 1,
         terms_default: "", notes_default: "", place_of_supply_default: "",
         theme_color: "#000000", copy_label: "Original Copy",
+        company_name: "", company_address: "", udyam_no: "", phone: "", email: "",
       });
     });
   }, [branchId, branches]);
@@ -139,6 +145,20 @@ function SalesSettings() {
         </Card>
       )}
 
+      {settings && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Company Header (shown on Invoice PDF)</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2"><Label className="text-xs">Company Name</Label><Input value={settings.company_name || ""} placeholder="Prokon Hi-Tech Systems" onChange={(e) => setSettings({ ...settings, company_name: e.target.value })} /></div>
+            <div><Label className="text-xs">Udyam No</Label><Input value={settings.udyam_no || ""} onChange={(e) => setSettings({ ...settings, udyam_no: e.target.value })} /></div>
+            <div className="md:col-span-3"><Label className="text-xs">Company Address</Label><Textarea rows={2} value={settings.company_address || ""} placeholder="3C-58, BP, NIT-3, Faridabad-121001" onChange={(e) => setSettings({ ...settings, company_address: e.target.value })} /></div>
+            <div><Label className="text-xs">Phone</Label><Input value={settings.phone || ""} onChange={(e) => setSettings({ ...settings, phone: e.target.value })} /></div>
+            <div className="md:col-span-2"><Label className="text-xs">Email</Label><Input value={settings.email || ""} onChange={(e) => setSettings({ ...settings, email: e.target.value })} /></div>
+            <div className="md:col-span-3 text-xs text-muted-foreground">Leave blank to fall back to the Seller (Branch) details above. GSTIN always comes from the Seller/Branch.</div>
+            <div className="md:col-span-3 flex justify-end"><Button size="sm" onClick={saveSettings}>Save Company Header</Button></div>
+          </CardContent>
+        </Card>
+      )}
       {settings && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Invoice Numbering</CardTitle></CardHeader>

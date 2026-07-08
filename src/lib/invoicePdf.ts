@@ -45,6 +45,13 @@ export async function renderInvoicePdf(args: {
   customer: Customer | null;
   themeColor?: string;
   copyLabel?: string;
+  settings?: {
+    company_name?: string | null;
+    company_address?: string | null;
+    udyam_no?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  } | null;
   meta?: { vehicle_no?: string | null; po_no?: string | null; po_date?: string | null; payment_terms?: string | null };
 }): Promise<jsPDF> {
   const { invoice, items, branch, customer } = args;
@@ -54,18 +61,28 @@ export async function renderInvoicePdf(args: {
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const w = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 20;
+  const margin = 18;
   const cw = w - margin * 2;
 
   doc.setDrawColor(tr, tg, tb).setLineWidth(0.6);
 
+  // ============ RESOLVE COMPANY (settings override branch) ============
+  const s = args.settings || {};
+  const companyName = (s.company_name || branch?.name || "").toString();
+  const companyAddress = (s.company_address || branch?.address || "").toString();
+  const companyGstin = branch?.gstin || "";
+  const companyUdyam = s.udyam_no || branch?.cin || "";
+  const companyPhone = s.phone || branch?.phone || "";
+  const companyEmail = s.email || branch?.email || "";
+  if (!companyName) console.error("[invoicePdf] company_name missing in settings/branch");
+
   // ============ HEADER BOX ============
-  const headerH = 92;
+  const headerH = 82;
   let y = margin;
   drawRect(doc, margin, y, cw, headerH);
 
   // Logo box (left)
-  const logoW = 78;
+  const logoW = 70;
   doc.setLineWidth(0.4);
   drawRect(doc, margin, y, logoW, headerH);
   doc.setLineWidth(0.6);
@@ -73,12 +90,13 @@ export async function renderInvoicePdf(args: {
     try { doc.addImage(branch.logo_url, "JPEG", margin + 6, y + 6, logoW - 12, headerH - 12); } catch { /* ignore */ }
   } else {
     doc.setFont("helvetica", "bold").setFontSize(16).setTextColor(tr, tg, tb);
-    doc.text("PROKON", margin + logoW / 2, y + headerH / 2, { align: "center", baseline: "middle" });
+    const initials = (companyName.split(/\s+/).map((t) => t[0]).filter(Boolean).slice(0, 2).join("") || "").toUpperCase();
+    doc.text(initials || "•", margin + logoW / 2, y + headerH / 2, { align: "center", baseline: "middle" });
     doc.setTextColor(0, 0, 0);
   }
 
   // Copy label (right)
-  const copyW = 82;
+  const copyW = 78;
   drawRect(doc, margin + cw - copyW, y, copyW, 14);
   doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(tr, tg, tb);
   doc.text(copyLabel, margin + cw - copyW / 2, y + 10, { align: "center" });
@@ -86,24 +104,26 @@ export async function renderInvoicePdf(args: {
 
   // Center block
   const cx = margin + logoW + (cw - logoW - copyW) / 2;
-  doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(tr, tg, tb);
-  doc.text("TAX INVOICE", cx, y + 12, { align: "center" });
+  doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(tr, tg, tb);
+  doc.text("TAX INVOICE", cx, y + 11, { align: "center" });
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold").setFontSize(13);
-  doc.text((branch?.name || "PROKON HI-TECH SYSTEMS").toUpperCase(), cx, y + 26, { align: "center" });
+  doc.text(companyName.toUpperCase(), cx, y + 24, { align: "center" });
   doc.setFont("helvetica", "normal").setFontSize(8);
-  const addrLines = textLines(doc, branch?.address || "", cw - logoW - copyW - 20);
-  let ay = y + 38;
+  const addrLines = textLines(doc, companyAddress, cw - logoW - copyW - 20);
+  let ay = y + 35;
   addrLines.slice(0, 2).forEach((ln) => { doc.text(ln, cx, ay, { align: "center" }); ay += 9; });
-  if (branch?.cin) { doc.text(`Udyam No: ${branch.cin}`, cx, ay, { align: "center" }); ay += 9; }
-  if (branch?.gstin) { doc.setFont("helvetica", "bold"); doc.text(`GSTIN: ${branch.gstin}`, cx, ay, { align: "center" }); ay += 9; doc.setFont("helvetica", "normal"); }
-  const contact = [branch?.phone ? `Tel: ${branch.phone}` : "", branch?.email ? `Email: ${branch.email}` : ""].filter(Boolean).join("  |  ");
+  const idParts: string[] = [];
+  if (companyGstin) idParts.push(`GSTIN: ${companyGstin}`);
+  if (companyUdyam) idParts.push(`Udyam No: ${companyUdyam}`);
+  if (idParts.length) { doc.setFont("helvetica", "bold"); doc.text(idParts.join("  |  "), cx, ay, { align: "center" }); ay += 9; doc.setFont("helvetica", "normal"); }
+  const contact = [companyPhone ? `Phone: ${companyPhone}` : "", companyEmail ? `Email: ${companyEmail}` : ""].filter(Boolean).join("  |  ");
   if (contact) doc.text(contact, cx, ay, { align: "center" });
 
   y += headerH;
 
   // ============ META (2 col grid) ============
-  const metaH = 72;
+  const metaH = 62;
   const halfW = cw / 2;
   drawRect(doc, margin, y, cw, metaH);
   doc.line(margin + halfW, y, margin + halfW, y + metaH);
@@ -142,7 +162,7 @@ export async function renderInvoicePdf(args: {
   y += metaH;
 
   // ============ BILL TO / SHIP TO ============
-  const partyH = 74;
+  const partyH = 70;
   drawRect(doc, margin, y, halfW, partyH);
   drawRect(doc, margin + halfW, y, halfW, partyH);
   // Title bars
@@ -269,21 +289,27 @@ export async function renderInvoicePdf(args: {
   y = (doc as any).lastAutoTable.finalY;
 
   // ============ ROUND OFF + GRAND TOTAL ============
-  const totalsW = 200;
+  const totalsW = 220;
   const totalsX = margin + cw - totalsW;
+  const labelX = totalsX + 8;
+  const valueX = totalsX + totalsW - 8;
   doc.setLineWidth(0.4);
-  drawRect(doc, margin, y, cw - totalsW, 18);
-  doc.setFont("helvetica", "normal").setFontSize(8.5);
-  doc.text(`Add: Rounded Off (${invoice.round_off >= 0 ? "+" : "-"})`, margin + 6, y + 12);
-  doc.text(inr(Math.abs(invoice.round_off || 0)), margin + cw - totalsW - 6, y + 12, { align: "right" });
-
+  // Left spacer box aligned with totals column
+  drawRect(doc, margin, y, cw - totalsW, 36);
+  // Rounded off row (right column)
+  drawRect(doc, totalsX, y, totalsW, 18);
+  doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(0, 0, 0);
+  doc.text(`Rounded Off (${(invoice.round_off || 0) >= 0 ? "+" : "-"})`, labelX, y + 12);
+  doc.text(inr(Math.abs(invoice.round_off || 0)), valueX, y + 12, { align: "right" });
+  // Grand total row (right column, filled)
   doc.setFillColor(tr, tg, tb);
-  doc.rect(totalsX, y, totalsW, 18, "F");
+  doc.rect(totalsX, y + 18, totalsW, 18, "F");
   doc.setTextColor(255, 255, 255).setFont("helvetica", "bold").setFontSize(10);
-  doc.text("GRAND TOTAL", totalsX + 6, y + 12);
-  doc.text(inr(invoice.total), totalsX + totalsW - 6, y + 12, { align: "right" });
+  doc.text("GRAND TOTAL", labelX, y + 30);
+  doc.text(inr(invoice.total), valueX, y + 30, { align: "right" });
   doc.setTextColor(0, 0, 0);
-  y += 18;
+  doc.setLineWidth(0.6);
+  y += 36;
 
   // ============ TAX SUMMARY ROW ============
   const rateGroups = new Map<number, { taxable: number; cgst: number; sgst: number; igst: number }>();
@@ -393,7 +419,7 @@ export async function renderInvoicePdf(args: {
   doc.setTextColor(0, 0, 0);
   const sigX = margin + col1W + col2W;
   doc.setFont("helvetica", "bold").setFontSize(9);
-  doc.text(`For ${(branch?.name || "PROKON HI-TECH SYSTEMS").toUpperCase()}`, sigX + col3W - 6, y + 28, { align: "right" });
+  doc.text(`For ${companyName.toUpperCase()}`, sigX + col3W - 6, y + 28, { align: "right" });
   // Blank space for physical signature
   doc.setFont("helvetica", "normal").setFontSize(8.5);
   doc.text("Authorised Signatory", sigX + col3W - 6, y + footerH - 8, { align: "right" });

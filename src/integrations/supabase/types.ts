@@ -1884,47 +1884,62 @@ export type Database = {
       invoice_settings: {
         Row: {
           branch_id: string
+          company_address: string | null
+          company_name: string | null
           copy_label: string
           created_at: string
           current_fy: string | null
+          email: string | null
           fy_reset: boolean
           id: string
           next_seq: number
           notes_default: string | null
+          phone: string | null
           place_of_supply_default: string | null
           prefix: string
           terms_default: string | null
           theme_color: string
+          udyam_no: string | null
           updated_at: string
         }
         Insert: {
           branch_id: string
+          company_address?: string | null
+          company_name?: string | null
           copy_label?: string
           created_at?: string
           current_fy?: string | null
+          email?: string | null
           fy_reset?: boolean
           id?: string
           next_seq?: number
           notes_default?: string | null
+          phone?: string | null
           place_of_supply_default?: string | null
           prefix?: string
           terms_default?: string | null
           theme_color?: string
+          udyam_no?: string | null
           updated_at?: string
         }
         Update: {
           branch_id?: string
+          company_address?: string | null
+          company_name?: string | null
           copy_label?: string
           created_at?: string
           current_fy?: string | null
+          email?: string | null
           fy_reset?: boolean
           id?: string
           next_seq?: number
           notes_default?: string | null
+          phone?: string | null
           place_of_supply_default?: string | null
           prefix?: string
           terms_default?: string | null
           theme_color?: string
+          udyam_no?: string | null
           updated_at?: string
         }
         Relationships: [
