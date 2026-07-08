@@ -185,6 +185,26 @@ export async function renderInvoicePdf(args: {
   doc.setLineWidth(0.6);
   y += partyH;
 
+  // ============ E-INVOICE ROW (IRN / Ack No / Ack Date) ============
+  const eiH = 16;
+  drawRect(doc, margin, y, cw, eiH);
+  doc.setFont("helvetica", "bold").setFontSize(8);
+  const ackDateFmt = invoice.ack_date
+    ? (() => { const d = new Date(invoice.ack_date!); const dd = String(d.getDate()).padStart(2,"0"); const mm = String(d.getMonth()+1).padStart(2,"0"); return `${dd}-${mm}-${d.getFullYear()}`; })()
+    : "";
+  const col = cw / 3;
+  const drawEi = (label: string, val: string, x: number) => {
+    doc.setFont("helvetica", "bold").text(label + ":", x + 6, y + 11);
+    const lw = doc.getTextWidth(label + ": ");
+    doc.setFont("helvetica", "normal").text(val || "—", x + 6 + lw + 2, y + 11);
+  };
+  drawEi("IRN", invoice.irn || "", margin);
+  doc.line(margin + col, y, margin + col, y + eiH);
+  drawEi("Ack No", invoice.ack_no || "", margin + col);
+  doc.line(margin + col * 2, y, margin + col * 2, y + eiH);
+  drawEi("Ack Date", ackDateFmt, margin + col * 2);
+  y += eiH;
+
   // ============ ITEMS TABLE ============
   const isInter = invoice.is_interstate;
   const head = isInter
