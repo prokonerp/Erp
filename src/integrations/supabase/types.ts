@@ -301,6 +301,56 @@ export type Database = {
           },
         ]
       }
+      battery_catalog: {
+        Row: {
+          active: boolean
+          ah: number
+          brand: string | null
+          created_at: string
+          id: string
+          model: string | null
+          price: number
+          product_id: string | null
+          tier: string
+          updated_at: string
+          voltage: number
+        }
+        Insert: {
+          active?: boolean
+          ah: number
+          brand?: string | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          price?: number
+          product_id?: string | null
+          tier?: string
+          updated_at?: string
+          voltage?: number
+        }
+        Update: {
+          active?: boolean
+          ah?: number
+          brand?: string | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          price?: number
+          product_id?: string | null
+          tier?: string
+          updated_at?: string
+          voltage?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "battery_catalog_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branches: {
         Row: {
           address: string | null
@@ -3417,6 +3467,47 @@ export type Database = {
             columns: ["pm_visit_id"]
             isOneToOne: false
             referencedRelation: "pm_visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ups_bundles: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          items: Json
+          label: string | null
+          parent_product_id: string
+          updated_at: string
+          ups_load_watts: number | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          items?: Json
+          label?: string | null
+          parent_product_id: string
+          updated_at?: string
+          ups_load_watts?: number | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          items?: Json
+          label?: string | null
+          parent_product_id?: string
+          updated_at?: string
+          ups_load_watts?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ups_bundles_parent_product_id_fkey"
+            columns: ["parent_product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]

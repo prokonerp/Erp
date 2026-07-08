@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
+import { UpsSmartPanel } from "@/components/UpsSmartPanel";
 import { waOpen } from "@/lib/tickets";
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
@@ -66,6 +67,11 @@ function QuoteEditor() {
     setQ({ ...q, items });
   };
   const addItem = () => q && setQ({ ...q, items: [...q.items, { description: "", qty: 1, unit: "Nos", rate: 0, discount_percent: 0, tax_percent: 18, amount: 0 }] });
+  const addItems = (rows: QuoteItem[]) => {
+    if (!q) return;
+    const next = rows.map((r) => ({ ...r, amount: lineAmount(r) }));
+    setQ({ ...q, items: [...q.items, ...next] });
+  };
   const delItem = (i: number) => q && setQ({ ...q, items: q.items.filter((_, x) => x !== i) });
 
   const applyTemplate = (tplId: string) => {
@@ -177,6 +183,8 @@ function QuoteEditor() {
           </div>
         </CardContent>
       </Card>
+
+      <UpsSmartPanel items={q.items} onAddItems={addItems} />
 
       <Card className="print:hidden">
         <CardHeader className="flex flex-row items-center justify-between">
