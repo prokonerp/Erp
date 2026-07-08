@@ -29,6 +29,13 @@ function POView() {
   const [items, setItems] = useState<POItemRow[]>([]);
   const [branch, setBranch] = useState<BranchRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pdfSettings, setPdfSettings] = useState<{
+    company_name: string | null;
+    company_address: string | null;
+    udyam_no: string | null;
+    phone: string | null;
+    email: string | null;
+  } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -38,6 +45,18 @@ function POView() {
       setItems(r.items);
       const bs = await fetchBranches();
       setBranch(bs.find((b) => b.id === r.po.branch_id) || null);
+      const { data: st } = await (supabase as any)
+        .from("invoice_settings")
+        .select("company_name,company_address,udyam_no,phone,email")
+        .eq("branch_id", r.po.branch_id)
+        .maybeSingle();
+      setPdfSettings(st ? {
+        company_name: st.company_name ?? null,
+        company_address: st.company_address ?? null,
+        udyam_no: st.udyam_no ?? null,
+        phone: st.phone ?? null,
+        email: st.email ?? null,
+      } : null);
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -93,8 +112,8 @@ function POView() {
           {po.status !== "cancelled" && po.status !== "completed" && (
             <Button size="sm" variant="outline" onClick={() => setStatus("cancelled")}><Ban className="h-4 w-4 mr-1" />Cancel</Button>
           )}
-          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => printPurchaseOrderPdf({ po, items, branch })}><Printer className="h-4 w-4 mr-1" />Print</Button>
-          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => downloadPurchaseOrderPdf({ po, items, branch }, `${po.po_no || "PO"}.pdf`)}><Download className="h-4 w-4 mr-1" />PDF</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => printPurchaseOrderPdf({ po, items, branch, settings: pdfSettings })}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => downloadPurchaseOrderPdf({ po, items, branch, settings: pdfSettings }, `${po.po_no || "PO"}.pdf`)}><Download className="h-4 w-4 mr-1" />PDF</Button>
           <Button size="sm" variant="ghost" className="text-destructive" onClick={del}>Delete</Button>
         </div>
       </div>
