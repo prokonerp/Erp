@@ -27,6 +27,11 @@ type Settings = {
   place_of_supply_default: string | null;
   theme_color?: string;
   copy_label?: string;
+  company_name?: string | null;
+  company_address?: string | null;
+  udyam_no?: string | null;
+  phone?: string | null;
+  email?: string | null;
 };
 
 function SalesSettings() {
@@ -54,6 +59,7 @@ function SalesSettings() {
         branch_id: branchId, prefix: "PHS/INV/", fy_reset: true, next_seq: 1,
         terms_default: "", notes_default: "", place_of_supply_default: "",
         theme_color: "#000000", copy_label: "Original Copy",
+        company_name: "", company_address: "", udyam_no: "", phone: "", email: "",
       });
     });
   }, [branchId, branches]);
