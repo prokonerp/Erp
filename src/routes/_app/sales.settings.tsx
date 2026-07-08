@@ -148,6 +148,26 @@ function SalesSettings() {
       {settings && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Invoice Numbering</CardTitle></CardHeader>
+          <div style={{ display: "none" }} />
+        </Card>
+      )}
+      {settings && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Company Header (shown on Invoice PDF)</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2"><Label className="text-xs">Company Name</Label><Input value={settings.company_name || ""} placeholder="Prokon Hi-Tech Systems" onChange={(e) => setSettings({ ...settings, company_name: e.target.value })} /></div>
+            <div><Label className="text-xs">Udyam No</Label><Input value={settings.udyam_no || ""} onChange={(e) => setSettings({ ...settings, udyam_no: e.target.value })} /></div>
+            <div className="md:col-span-3"><Label className="text-xs">Company Address</Label><Textarea rows={2} value={settings.company_address || ""} placeholder="3C-58, BP, NIT-3, Faridabad-121001" onChange={(e) => setSettings({ ...settings, company_address: e.target.value })} /></div>
+            <div><Label className="text-xs">Phone</Label><Input value={settings.phone || ""} onChange={(e) => setSettings({ ...settings, phone: e.target.value })} /></div>
+            <div className="md:col-span-2"><Label className="text-xs">Email</Label><Input value={settings.email || ""} onChange={(e) => setSettings({ ...settings, email: e.target.value })} /></div>
+            <div className="md:col-span-3 text-xs text-muted-foreground">Leave blank to fall back to the Seller (Branch) details above. GSTIN always comes from the Seller/Branch.</div>
+            <div className="md:col-span-3 flex justify-end"><Button size="sm" onClick={saveSettings}>Save Company Header</Button></div>
+          </CardContent>
+        </Card>
+      )}
+      {settings && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Invoice Numbering</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div><Label className="text-xs">Prefix</Label><Input value={settings.prefix} onChange={(e) => setSettings({ ...settings, prefix: e.target.value })} /></div>
             <div><Label className="text-xs">Next Sequence</Label><Input type="number" value={settings.next_seq} onChange={(e) => setSettings({ ...settings, next_seq: Number(e.target.value) })} /></div>
