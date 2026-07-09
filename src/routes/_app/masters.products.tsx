@@ -500,6 +500,7 @@ export function ProductMasterPage() {
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="serials">Serial &amp; Warranty</TabsTrigger>
+              <TabsTrigger value="bundle">Bundle</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-4">
             <div className="grid md:grid-cols-2 gap-4">
