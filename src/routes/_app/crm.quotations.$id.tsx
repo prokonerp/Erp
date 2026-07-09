@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
+import { CustomerPicker } from "@/components/CustomerPicker";
 import { UpsSmartPanel } from "@/components/UpsSmartPanel";
 import { waOpen } from "@/lib/tickets";
 import {
@@ -79,9 +80,23 @@ function QuoteEditor() {
     if (t && q) setQ({ ...q, terms: t.body });
   };
 
+  const applyCustomer = (id: string | null, c: Customer | null) => {
+    if (!q) return;
+    setCustomer(c);
+    setQ({
+      ...q,
+      customer_id: id || (q as any).customer_id,
+      // Snapshot party fields — user can still edit before saving
+      billing_address: c?.billing_address || q.billing_address || "",
+      shipping_address: c?.shipping_address || c?.billing_address || q.shipping_address || "",
+      place_of_supply: c?.state || q.place_of_supply,
+    } as Quotation);
+  };
+
   const save = async () => {
     if (!q) return;
     const { error } = await supabase.from("quotations").update({
+      customer_id: (q as any).customer_id,
       reference_no: q.reference_no, subject: q.subject,
       quote_date: q.quote_date, expiry_date: q.expiry_date, validity_days: q.validity_days,
       salesperson: q.salesperson, project_name: q.project_name,
@@ -158,6 +173,18 @@ function QuoteEditor() {
       <Card className="print:hidden">
         <CardHeader><CardTitle className="text-base">{q.quote_no}</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-3">
+          <div className="md:col-span-3">
+            <Label>Customer <span className="text-muted-foreground font-normal">(from Customer Master)</span></Label>
+            <CustomerPicker value={(q as any).customer_id || null} onChange={applyCustomer} />
+            {customer && (
+              <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                {customer.gst && <span>GSTIN: <span className="font-mono">{customer.gst}</span></span>}
+                {customer.phone && <span>· {customer.phone}</span>}
+                {customer.email && <span>· {customer.email}</span>}
+                {customer.state && <span>· {customer.state}</span>}
+              </div>
+            )}
+          </div>
           <div><Label>Reference #</Label><Input value={q.reference_no || ""} onChange={(e) => setQ({ ...q, reference_no: e.target.value })} /></div>
           <div><Label>Quote date</Label><Input type="date" value={q.quote_date} onChange={(e) => setQ({ ...q, quote_date: e.target.value })} /></div>
           <div><Label>Expiry date</Label><Input type="date" value={q.expiry_date || ""} onChange={(e) => setQ({ ...q, expiry_date: e.target.value })} /></div>
@@ -202,6 +229,7 @@ function QuoteEditor() {
                     value={(it as any).product_id || ""}
                     onChange={(id, p) => setItem(i, {
                       product_id: id || "",
+                      product_name: p?.name || undefined,
                       description: p?.name || it.description,
                       hsn: p?.hsn || it.hsn,
                       unit: p?.unit || it.unit,
