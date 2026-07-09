@@ -43,19 +43,40 @@ function BundlesSettings() {
   }, []);
 
   // ---- Bundle CRUD ----
-  async function addBundle() {
-    const { data, error } = await supabase
-      .from("ups_bundles" as any)
-      .insert({ parent_product_id: null, label: "", items: [], ups_load_watts: null, active: true } as any)
-      .select("*")
-      .single();
-    if (error) return toast.error(error.message);
-    setBundles([{ ...(data as any), items: [] }, ...bundles]);
+  function addBundle() {
+    // Local draft — inserted on Save once a parent product is picked (NOT NULL column).
+    const draft: UpsBundle = {
+      id: `draft-${Date.now()}`,
+      parent_product_id: "",
+      label: "",
+      ups_load_watts: null,
+      items: [],
+      active: true,
+    } as any;
+    setBundles([draft, ...bundles]);
   }
   const updBundle = (id: string, patch: Partial<UpsBundle>) =>
     setBundles((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
   async function saveBundle(b: UpsBundle) {
     if (!b.parent_product_id) return toast.error("Select the UPS product first");
+    const isDraft = String(b.id).startsWith("draft-");
+    if (isDraft) {
+      const { data, error } = await supabase
+        .from("ups_bundles" as any)
+        .insert({
+          parent_product_id: b.parent_product_id,
+          label: b.label,
+          ups_load_watts: b.ups_load_watts,
+          items: b.items as any,
+          active: b.active,
+        } as any)
+        .select("*")
+        .single();
+      if (error) return toast.error(error.message);
+      setBundles((prev) => prev.map((x) => (x.id === b.id ? { ...(data as any), items: Array.isArray((data as any).items) ? (data as any).items : [] } : x)));
+      toast.success("Bundle saved");
+      return;
+    }
     const { error } = await supabase
       .from("ups_bundles" as any)
       .update({
@@ -71,6 +92,10 @@ function BundlesSettings() {
   }
   async function delBundle(id: string) {
     if (!confirm("Delete this bundle?")) return;
+    if (String(id).startsWith("draft-")) {
+      setBundles((prev) => prev.filter((b) => b.id !== id));
+      return;
+    }
     const { error } = await supabase.from("ups_bundles" as any).delete().eq("id", id);
     if (error) return toast.error(error.message);
     setBundles((prev) => prev.filter((b) => b.id !== id));
