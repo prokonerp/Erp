@@ -384,16 +384,33 @@ function QuoteEditor() {
         <style>{`@media print { @page { size: A4; margin: 12mm; } body { font-family: Arial, Helvetica, sans-serif; color:#000; } .zh-th{background:#374151;color:#fff;padding:6px;font-size:11px;text-align:left} .zh-td{border-bottom:1px solid #e5e7eb;padding:6px;font-size:11px;vertical-align:top} }`}</style>
 
         {/* Header */}
-        <div className="flex items-start justify-between border-b-2 border-gray-700 pb-3 mb-4">
+        <div
+          className="flex items-start justify-between border-b-2 pb-3 mb-4"
+          style={{ borderColor: invSettings?.theme_color || "#374151" }}
+        >
           <div>
-            <div className="text-2xl font-bold tracking-tight">Prokon Hi-Tech Systems</div>
-            <div className="text-[11px] mt-0.5">Picasso Centre, Sector-61, Gurgaon, Haryana</div>
-            <div className="text-[11px]">info@prokonhitech.com · +91-9810000000</div>
-            <div className="text-[11px]">GSTIN: {settings.business_gstin || "—"}</div>
+            <div className="text-2xl font-bold tracking-tight">
+              {invSettings?.company_name || branch?.name || "Prokon Hi-Tech Systems"}
+            </div>
+            <div className="text-[11px] mt-0.5 whitespace-pre-line">
+              {invSettings?.company_address || branch?.address || ""}
+            </div>
+            {branch?.address && invSettings?.company_address && branch.address !== invSettings.company_address && (
+              <div className="text-[11px] italic">Warehouse: {branch.address}</div>
+            )}
+            <div className="text-[11px]">
+              {[invSettings?.email || branch?.email, invSettings?.phone || branch?.phone].filter(Boolean).join(" · ")}
+            </div>
+            <div className="text-[11px]">
+              {[
+                branch?.gstin ? `GSTIN: ${branch.gstin}` : (settings.business_gstin ? `GSTIN: ${settings.business_gstin}` : null),
+                invSettings?.udyam_no ? `UDYAM: ${invSettings.udyam_no}` : null,
+              ].filter(Boolean).join(" · ") || "—"}
+            </div>
             <div className="text-[11px] italic mt-1">Authorized APC by Schneider Electric Channel Partner</div>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold text-gray-700">QUOTE</div>
+            <div className="text-2xl font-bold" style={{ color: invSettings?.theme_color || "#374151" }}>QUOTE</div>
             <div className="text-[11px] mt-1"># <b>{q.quote_no}</b></div>
             {q.reference_no && <div className="text-[11px]">Ref: {q.reference_no}</div>}
           </div>
@@ -406,6 +423,13 @@ function QuoteEditor() {
             <div className="font-semibold text-sm">{customer?.company}</div>
             <div className="whitespace-pre-line">{q.billing_address || customer?.address || ""}</div>
             {customer?.gst && <div className="mt-1">GSTIN: {customer.gst}</div>}
+            {(q.contact_name || q.contact_email || q.contact_phone) && (
+              <div className="mt-1">
+                {q.contact_name && <div>Attn: {q.contact_name}</div>}
+                {q.contact_phone && <div>{q.contact_phone}</div>}
+                {q.contact_email && <div>{q.contact_email}</div>}
+              </div>
+            )}
           </div>
           <div>
             <div className="font-semibold text-gray-600 uppercase text-[10px] mb-1">Ship To</div>
@@ -420,6 +444,8 @@ function QuoteEditor() {
                 {q.place_of_supply && <tr><td className="pr-2 text-gray-600">Place of Supply</td><td className="font-semibold">{q.place_of_supply}</td></tr>}
                 {q.salesperson && <tr><td className="pr-2 text-gray-600">Salesperson</td><td className="font-semibold">{q.salesperson}</td></tr>}
                 {q.project_name && <tr><td className="pr-2 text-gray-600">Project</td><td className="font-semibold">{q.project_name}</td></tr>}
+                {q.payment_terms && <tr><td className="pr-2 text-gray-600">Payment Terms</td><td className="font-semibold">{q.payment_terms}</td></tr>}
+                {q.delivery_timeline && <tr><td className="pr-2 text-gray-600">Delivery</td><td className="font-semibold">{q.delivery_timeline}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -489,7 +515,10 @@ function QuoteEditor() {
 
         <div className="grid grid-cols-2 gap-8 mt-12 text-[11px]">
           <div className="border-t border-gray-700 pt-1 text-center">Customer Signature</div>
-          <div className="border-t border-gray-700 pt-1 text-center">For Prokon Hi-Tech Systems</div>
+          <div className="border-t border-gray-700 pt-1 text-center">
+            For {invSettings?.company_name || branch?.name || "Prokon Hi-Tech Systems"}
+            <div className="mt-6 text-gray-600">Authorised Signatory</div>
+          </div>
         </div>
       </div>
     </div>
