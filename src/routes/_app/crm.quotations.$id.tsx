@@ -231,6 +231,23 @@ function QuoteEditor() {
         <CardHeader><CardTitle className="text-base">{q.quote_no}</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-3">
           <div className="md:col-span-3">
+            <Label>Branch / Warehouse <span className="text-muted-foreground font-normal">(company header source)</span></Label>
+            <Select value={q.branch_id || ""} onValueChange={(v) => setQ({ ...q, branch_id: v })}>
+              <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+              <SelectContent>{branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+            </Select>
+            {branch && (
+              <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                <span>{invSettings?.company_name || branch.name}</span>
+                {(invSettings?.company_address || branch.address) && <span>· {invSettings?.company_address || branch.address}</span>}
+                {branch.gstin && <span>· GSTIN: <span className="font-mono">{branch.gstin}</span></span>}
+                {invSettings?.udyam_no && <span>· UDYAM: {invSettings.udyam_no}</span>}
+                {(invSettings?.phone || branch.phone) && <span>· {invSettings?.phone || branch.phone}</span>}
+                {(invSettings?.email || branch.email) && <span>· {invSettings?.email || branch.email}</span>}
+              </div>
+            )}
+          </div>
+          <div className="md:col-span-3">
             <Label>Customer <span className="text-muted-foreground font-normal">(from Customer Master)</span></Label>
             <CustomerPicker value={(q as any).customer_id || null} onChange={applyCustomer} />
             {customer && (
@@ -256,6 +273,12 @@ function QuoteEditor() {
             </Select>
             <div className="text-xs text-muted-foreground mt-1">Business state: {settings.business_state} → {(q.place_of_supply || "").toLowerCase() === settings.business_state.toLowerCase() ? "CGST + SGST" : "IGST"}</div>
           </div>
+          <div><Label>Payment terms</Label><Input value={q.payment_terms || ""} onChange={(e) => setQ({ ...q, payment_terms: e.target.value })} placeholder="e.g. 50% advance, balance before dispatch" /></div>
+          <div><Label>Delivery timeline</Label><Input value={q.delivery_timeline || ""} onChange={(e) => setQ({ ...q, delivery_timeline: e.target.value })} placeholder="e.g. 2–3 weeks from PO" /></div>
+          <div><Label>Validity (days)</Label><Input type="number" value={q.validity_days || 0} onChange={(e) => setQ({ ...q, validity_days: Number(e.target.value) })} /></div>
+          <div><Label>Contact person</Label><Input value={q.contact_name || ""} onChange={(e) => setQ({ ...q, contact_name: e.target.value })} /></div>
+          <div><Label>Contact email</Label><Input value={q.contact_email || ""} onChange={(e) => setQ({ ...q, contact_email: e.target.value })} /></div>
+          <div><Label>Contact mobile</Label><Input value={q.contact_phone || ""} onChange={(e) => setQ({ ...q, contact_phone: e.target.value })} /></div>
           <div className="md:col-span-3 grid md:grid-cols-2 gap-3">
             <div><Label>Billing address</Label><Textarea rows={3} value={q.billing_address || ""} onChange={(e) => setQ({ ...q, billing_address: e.target.value })} /></div>
             <div>
