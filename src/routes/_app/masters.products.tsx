@@ -740,6 +740,97 @@ export function ProductMasterPage() {
                 )}
               </section>
             </TabsContent>
+
+            <TabsContent value="bundle" className="space-y-3 mt-4">
+              <div>
+                <h3 className="font-medium flex items-center gap-2">Bundle</h3>
+                <p className="text-xs text-muted-foreground">
+                  When this product is added to a Quotation or Invoice, the items below are suggested automatically.
+                  Mark rows as mandatory to prevent removal; disable "editable qty" to lock the default quantity.
+                </p>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">{bundle.length} child item{bundle.length === 1 ? "" : "s"}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!editingId}
+                  onClick={() => setBundleChildPickerOpen(true)}
+                >
+                  <Plus className="h-4 w-4 mr-1" />Add child products
+                </Button>
+              </div>
+              {!editingId && (
+                <div className="text-xs text-muted-foreground italic">Save the product first, then add bundle children.</div>
+              )}
+              {bundle.length > 0 && (
+                <div className="border rounded-md overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Child product</TableHead>
+                        <TableHead className="w-24 text-right">Default Qty</TableHead>
+                        <TableHead className="w-20 text-center">Mandatory</TableHead>
+                        <TableHead className="w-20 text-center">Editable Qty</TableHead>
+                        <TableHead>Note</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bundle.map((b, i) => {
+                        const c = rows.find((r) => r.id === b.child_product_id);
+                        return (
+                          <TableRow key={b.child_product_id}>
+                            <TableCell>
+                              <div className="font-medium">{c?.model || c?.name || "—"}</div>
+                              <div className="text-[11px] text-muted-foreground">{[c?.brand, c?.category].filter(Boolean).join(" · ")}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.001"
+                                className="h-8 text-right"
+                                value={b.default_qty}
+                                onChange={(e) => {
+                                  const next = [...bundle]; next[i] = { ...next[i], default_qty: Number(e.target.value) }; setBundle(next);
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Checkbox
+                                checked={b.mandatory}
+                                onCheckedChange={(v) => { const next = [...bundle]; next[i] = { ...next[i], mandatory: !!v }; setBundle(next); }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Checkbox
+                                checked={b.editable_qty}
+                                onCheckedChange={(v) => { const next = [...bundle]; next[i] = { ...next[i], editable_qty: !!v }; setBundle(next); }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                className="h-8 text-xs"
+                                placeholder="Optional note"
+                                value={b.note || ""}
+                                onChange={(e) => { const next = [...bundle]; next[i] = { ...next[i], note: e.target.value || null }; setBundle(next); }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button size="icon" variant="ghost" onClick={() => setBundle(bundle.filter((_, x) => x !== i))}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
           </Tabs>
 
           <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30 sticky bottom-0">
