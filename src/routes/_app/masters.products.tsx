@@ -107,7 +107,7 @@ export function ProductMasterPage() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
-  const [tab, setTab] = useState<"details" | "serials">("details");
+  const [tab, setTab] = useState<"details" | "serials" | "bundle">("details");
   const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dbCategories, setDbCategories] = useState<string[]>([]);
@@ -218,6 +218,7 @@ export function ProductMasterPage() {
   function resetForm() {
     setForm(empty); setEditingId(null); setTab("details");
     setParentIds([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
+    setBundle([]); setBundleChildSearch("");
   }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(p: ProductFull) {
