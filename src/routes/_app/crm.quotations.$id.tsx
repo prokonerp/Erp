@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
 import type { ProductMaster } from "@/components/ProductPicker";
@@ -19,6 +19,7 @@ import { fetchBundleChildrenRaw } from "@/lib/productBundles";
 import { waOpen } from "@/lib/tickets";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
+import { ShareQuotationDialog } from "@/components/ShareQuotationDialog";
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
@@ -52,6 +53,7 @@ function QuoteEditor() {
   const [bundleFor, setBundleFor] = useState<ProductMaster | null>(null);
   const [bundleOpen, setBundleOpen] = useState(false);
   const [bundleParentQty, setBundleParentQty] = useState(1);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from("quotations").select("*").eq("id", id).single();
@@ -243,10 +245,23 @@ function QuoteEditor() {
           <Button size="sm" variant="outline" onClick={sendEmail}><Mail className="h-4 w-4 mr-1" />Email</Button>
           <Button size="sm" variant="outline" onClick={sendWA}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
           <Button size="sm" variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print / PDF</Button>
+          <Button size="sm" onClick={() => setShareOpen(true)}><Share2 className="h-4 w-4 mr-1" />Share</Button>
           <Button size="sm" variant="outline" onClick={convertToSo}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
           <Button size="sm" onClick={save}><Save className="h-4 w-4 mr-1" />Save</Button>
         </div>
       </div>
+
+      <ShareQuotationDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        customerName={customer?.contact_name || customer?.company || "Customer"}
+        customerPhone={customer?.phone || null}
+        customerEmail={customer?.email || null}
+        companyName={invSettings?.company_name || branch?.name || "Prokon Hi-Tech Systems"}
+        quoteNo={q.quote_no}
+        subject={q.subject}
+        onGeneratePdf={() => window.print()}
+      />
 
       <Card className="print:hidden">
         <CardHeader><CardTitle className="text-base">{q.quote_no}</CardTitle></CardHeader>
