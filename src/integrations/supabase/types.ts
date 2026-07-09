@@ -2532,6 +2532,60 @@ export type Database = {
           },
         ]
       }
+      product_bundles: {
+        Row: {
+          child_product_id: string
+          created_at: string
+          default_qty: number
+          editable_qty: boolean
+          id: string
+          mandatory: boolean
+          note: string | null
+          parent_product_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          child_product_id: string
+          created_at?: string
+          default_qty?: number
+          editable_qty?: boolean
+          id?: string
+          mandatory?: boolean
+          note?: string | null
+          parent_product_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          child_product_id?: string
+          created_at?: string
+          default_qty?: number
+          editable_qty?: boolean
+          id?: string
+          mandatory?: boolean
+          note?: string | null
+          parent_product_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_bundles_child_product_id_fkey"
+            columns: ["child_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_bundles_parent_product_id_fkey"
+            columns: ["parent_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_categories: {
         Row: {
           created_at: string

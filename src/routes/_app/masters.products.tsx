@@ -21,6 +21,7 @@ import { parseCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import type { ProductMaster } from "@/components/ProductPicker";
 import { SerialsManager } from "@/components/SerialsManager";
+import { fetchBundleChildrenRaw, saveBundleForParent, type BundleChildRow } from "@/lib/productBundles";
 
 export const Route = createFileRoute("/_app/masters/products")({
   component: ProductMasterPage,
@@ -106,7 +107,7 @@ export function ProductMasterPage() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
-  const [tab, setTab] = useState<"details" | "serials">("details");
+  const [tab, setTab] = useState<"details" | "serials" | "bundle">("details");
   const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dbCategories, setDbCategories] = useState<string[]>([]);
@@ -117,6 +118,9 @@ export function ProductMasterPage() {
   const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentSearch, setParentSearch] = useState("");
+  const [bundle, setBundle] = useState<Array<{ child_product_id: string; default_qty: number; mandatory: boolean; editable_qty: boolean; note: string | null }>>([]);
+  const [bundleChildPickerOpen, setBundleChildPickerOpen] = useState(false);
+  const [bundleChildSearch, setBundleChildSearch] = useState("");
   void linkedParents; // reserved for future UI
 
   const load = async () => {
@@ -168,6 +172,7 @@ export function ProductMasterPage() {
     setParentIds([]);
     setLinkedSpares([]);
     setLinkedParents([]);
+    setBundle([]);
     const hasParentTagging = !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY;
     if (hasParentTagging) {
       const { data } = await supabase
@@ -186,6 +191,17 @@ export function ProductMasterPage() {
       const ids = ((data || []) as unknown as { spare_part_id: string }[]).map((r) => r.spare_part_id);
       setLinkedSpares(rows.filter((r) => ids.includes(r.id)));
     }
+    // Load bundle configuration where this product is the parent.
+    try {
+      const rowsB: BundleChildRow[] = await fetchBundleChildrenRaw(p.id);
+      setBundle(rowsB.map((r) => ({
+        child_product_id: r.child_product_id,
+        default_qty: Number(r.default_qty) || 1,
+        mandatory: !!r.mandatory,
+        editable_qty: r.editable_qty !== false,
+        note: r.note ?? null,
+      })));
+    } catch { /* ignore */ }
   }
 
   const categories = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[], [rows]);
@@ -202,6 +218,7 @@ export function ProductMasterPage() {
   function resetForm() {
     setForm(empty); setEditingId(null); setTab("details");
     setParentIds([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
+    setBundle([]); setBundleChildSearch("");
   }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(p: ProductFull) {
@@ -308,6 +325,15 @@ export function ProductMasterPage() {
     } else if (!requireParents && productId && editingId) {
       // Parent tagging disabled — remove any existing parent links where this product was a child.
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
+    }
+
+    // Persist bundle (replace-all) for this product as parent.
+    if (productId) {
+      try {
+        await saveBundleForParent(productId, bundle.map((b, i) => ({ ...b, sort_order: i })));
+      } catch (e: any) {
+        toast.error(`Product saved but bundle failed: ${e?.message || e}`);
+      }
     }
 
     await load();
@@ -474,6 +500,7 @@ export function ProductMasterPage() {
             <TabsList>
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="serials">Serial &amp; Warranty</TabsTrigger>
+              <TabsTrigger value="bundle">Bundle</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-4">
             <div className="grid md:grid-cols-2 gap-4">
@@ -713,6 +740,97 @@ export function ProductMasterPage() {
                 )}
               </section>
             </TabsContent>
+
+            <TabsContent value="bundle" className="space-y-3 mt-4">
+              <div>
+                <h3 className="font-medium flex items-center gap-2">Bundle</h3>
+                <p className="text-xs text-muted-foreground">
+                  When this product is added to a Quotation or Invoice, the items below are suggested automatically.
+                  Mark rows as mandatory to prevent removal; disable "editable qty" to lock the default quantity.
+                </p>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">{bundle.length} child item{bundle.length === 1 ? "" : "s"}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!editingId}
+                  onClick={() => setBundleChildPickerOpen(true)}
+                >
+                  <Plus className="h-4 w-4 mr-1" />Add child products
+                </Button>
+              </div>
+              {!editingId && (
+                <div className="text-xs text-muted-foreground italic">Save the product first, then add bundle children.</div>
+              )}
+              {bundle.length > 0 && (
+                <div className="border rounded-md overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Child product</TableHead>
+                        <TableHead className="w-24 text-right">Default Qty</TableHead>
+                        <TableHead className="w-20 text-center">Mandatory</TableHead>
+                        <TableHead className="w-20 text-center">Editable Qty</TableHead>
+                        <TableHead>Note</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bundle.map((b, i) => {
+                        const c = rows.find((r) => r.id === b.child_product_id);
+                        return (
+                          <TableRow key={b.child_product_id}>
+                            <TableCell>
+                              <div className="font-medium">{c?.model || c?.name || "—"}</div>
+                              <div className="text-[11px] text-muted-foreground">{[c?.brand, c?.category].filter(Boolean).join(" · ")}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.001"
+                                className="h-8 text-right"
+                                value={b.default_qty}
+                                onChange={(e) => {
+                                  const next = [...bundle]; next[i] = { ...next[i], default_qty: Number(e.target.value) }; setBundle(next);
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Checkbox
+                                checked={b.mandatory}
+                                onCheckedChange={(v) => { const next = [...bundle]; next[i] = { ...next[i], mandatory: !!v }; setBundle(next); }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Checkbox
+                                checked={b.editable_qty}
+                                onCheckedChange={(v) => { const next = [...bundle]; next[i] = { ...next[i], editable_qty: !!v }; setBundle(next); }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                className="h-8 text-xs"
+                                placeholder="Optional note"
+                                value={b.note || ""}
+                                onChange={(e) => { const next = [...bundle]; next[i] = { ...next[i], note: e.target.value || null }; setBundle(next); }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button size="icon" variant="ghost" onClick={() => setBundle(bundle.filter((_, x) => x !== i))}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
           </Tabs>
 
           <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30 sticky bottom-0">
@@ -790,6 +908,51 @@ export function ProductMasterPage() {
           <div className="flex justify-between items-center pt-2">
             <span className="text-sm text-muted-foreground">{parentIds.length} selected</span>
             <Button size="sm" onClick={() => setParentPickerOpen(false)}>Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bundleChildPickerOpen} onOpenChange={setBundleChildPickerOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader><DialogTitle>Add Bundle Child Products</DialogTitle></DialogHeader>
+          <Input
+            placeholder="Search by model, brand or category…"
+            value={bundleChildSearch}
+            onChange={(e) => setBundleChildSearch(e.target.value)}
+          />
+          <div className="overflow-y-auto border rounded-md">
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead className="w-10"></TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Brand</TableHead>
+                <TableHead>Category</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {rows
+                  .filter((p) => p.active !== false && p.id !== editingId && !bundle.some((b) => b.child_product_id === p.id))
+                  .filter((p) => {
+                    const s = bundleChildSearch.trim().toLowerCase();
+                    if (!s) return true;
+                    return [p.name, p.model, p.brand, p.category].some((v) => (v || "").toLowerCase().includes(s));
+                  })
+                  .map((p) => (
+                    <TableRow
+                      key={p.id}
+                      className="cursor-pointer"
+                      onClick={() => setBundle([...bundle, { child_product_id: p.id, default_qty: 1, mandatory: false, editable_qty: true, note: null }])}
+                    >
+                      <TableCell><Plus className="h-4 w-4 text-primary" /></TableCell>
+                      <TableCell className="font-mono">{p.model || p.name}</TableCell>
+                      <TableCell>{p.brand || "—"}</TableCell>
+                      <TableCell>{p.category || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button size="sm" onClick={() => setBundleChildPickerOpen(false)}>Done</Button>
           </div>
         </DialogContent>
       </Dialog>

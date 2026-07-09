@@ -10,6 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trash2, Plus, Save, Zap } from "lucide-react";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
+import type { ProductMaster } from "@/components/ProductPicker";
+import { BundleApplyDialog } from "@/components/BundleApplyDialog";
+import { fetchBundleChildrenRaw } from "@/lib/productBundles";
 import { SerialMultiPicker } from "@/components/SerialMultiPicker";
 import type { Customer } from "@/lib/crm";
 import {
@@ -54,6 +57,9 @@ function NewInvoice() {
   const [serialPickerIdx, setSerialPickerIdx] = useState<number | null>(null);
   const [sameAsBilling, setSameAsBilling] = useState(true);
   const [termsTouched, setTermsTouched] = useState(false);
+  const [bundleFor, setBundleFor] = useState<ProductMaster | null>(null);
+  const [bundleOpen, setBundleOpen] = useState(false);
+  const [bundleParentQty, setBundleParentQty] = useState(1);
 
   useEffect(() => {
     fetchBranches().then((bs) => {
@@ -353,7 +359,8 @@ function NewInvoice() {
                       <td className="p-2 space-y-1">
                         <ProductMasterPicker
                           value={it.product_id}
-                          onPick={(p) => setItem(idx, {
+                          onPick={(p) => {
+                            setItem(idx, {
                             product_id: p.id,
                             description: p.name,
                             hsn: p.hsn || "",
@@ -363,7 +370,15 @@ function NewInvoice() {
                             part_model_no: p.model,
                             part_name: p.name,
                             serial_numbers: [],
-                          })}
+                            });
+                            fetchBundleChildrenRaw(p.id).then((rowsB) => {
+                              if (rowsB.length > 0) {
+                                setBundleParentQty(Number(it.qty) || 1);
+                                setBundleFor(p as any);
+                                setBundleOpen(true);
+                              }
+                            }).catch(() => {});
+                          }}
                         />
                         <Input className="h-8 text-xs" placeholder="Description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
                         {it.is_serialized && (
@@ -484,6 +499,33 @@ function NewInvoice() {
           </CardContent>
         </Card>
       </div>
+
+      <BundleApplyDialog
+        parent={bundleFor}
+        parentQty={bundleParentQty}
+        open={bundleOpen}
+        onOpenChange={setBundleOpen}
+        onConfirm={(picks) => {
+          setItems((arr) => [
+            ...arr,
+            ...picks.map((pk) => ({
+              product_id: pk.product.id,
+              description: pk.product.name + (pk.note ? ` — ${pk.note}` : ""),
+              hsn: pk.product.hsn || "",
+              qty: pk.qty,
+              unit: pk.product.unit || "Nos",
+              rate: pk.product.default_price != null ? Number(pk.product.default_price) : 0,
+              discount_pct: 0,
+              gst_rate: (pk.product as any).gst_rate ?? 18,
+              warehouse_id: null,
+              serial_numbers: [],
+              is_serialized: !!(pk.product as any).serial_tracking,
+              part_model_no: pk.product.model ?? null,
+              part_name: pk.product.name ?? null,
+            })),
+          ]);
+        }}
+      />
     </div>
   );
 }

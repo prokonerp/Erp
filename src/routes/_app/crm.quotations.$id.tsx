@@ -11,8 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
+import type { ProductMaster } from "@/components/ProductPicker";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { UpsSmartPanel } from "@/components/UpsSmartPanel";
+import { BundleApplyDialog } from "@/components/BundleApplyDialog";
+import { fetchBundleChildrenRaw } from "@/lib/productBundles";
 import { waOpen } from "@/lib/tickets";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import {
@@ -44,6 +47,9 @@ function QuoteEditor() {
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [invSettings, setInvSettings] = useState<InvoiceSettingsRow | null>(null);
   const [termsTouched, setTermsTouched] = useState(false);
+  const [bundleFor, setBundleFor] = useState<ProductMaster | null>(null);
+  const [bundleOpen, setBundleOpen] = useState(false);
+  const [bundleParentQty, setBundleParentQty] = useState(1);
 
   const load = async () => {
     const { data } = await supabase.from("quotations").select("*").eq("id", id).single();
@@ -307,14 +313,27 @@ function QuoteEditor() {
                   <Label className="text-xs">Item / Description <span className="text-muted-foreground font-normal">(from Product Master)</span></Label>
                   <ProductPicker
                     value={(it as any).product_id || ""}
-                    onChange={(id, p) => setItem(i, {
+                    onChange={(id, p) => {
+                      setItem(i, {
                       product_id: id || "",
                       product_name: p?.name || undefined,
                       description: p?.name || it.description,
                       hsn: p?.hsn || it.hsn,
                       unit: p?.unit || it.unit,
                       rate: p?.default_price != null ? Number(p.default_price) : it.rate,
-                    } as Partial<QuoteItem>)}
+                      } as Partial<QuoteItem>);
+                      // Fire-and-forget bundle check: if this product has bundle children,
+                      // open the dialog to let the user accept/adjust suggestions.
+                      if (id && p) {
+                        fetchBundleChildrenRaw(id).then((rows) => {
+                          if (rows.length > 0) {
+                            setBundleParentQty(Number(it.qty) || 1);
+                            setBundleFor(p);
+                            setBundleOpen(true);
+                          }
+                        }).catch(() => {});
+                      }
+                    }}
                   />
                 </div>
                 <div className="col-span-3 md:col-span-1"><Label className="text-xs">HSN</Label><Input value={it.hsn || ""} onChange={(e) => setItem(i, { hsn: e.target.value })} /></div>
@@ -521,6 +540,27 @@ function QuoteEditor() {
           </div>
         </div>
       </div>
+
+      <BundleApplyDialog
+        parent={bundleFor}
+        parentQty={bundleParentQty}
+        open={bundleOpen}
+        onOpenChange={setBundleOpen}
+        onConfirm={(picks) => {
+          addItems(picks.map((pk) => ({
+            product_id: pk.product.id,
+            product_name: pk.product.name,
+            description: pk.product.name + (pk.note ? ` — ${pk.note}` : ""),
+            hsn: pk.product.hsn || undefined,
+            unit: pk.product.unit || "Nos",
+            qty: pk.qty,
+            rate: pk.product.default_price != null ? Number(pk.product.default_price) : 0,
+            discount_percent: 0,
+            tax_percent: 18,
+            amount: 0,
+          } as QuoteItem)));
+        }}
+      />
     </div>
   );
 }
