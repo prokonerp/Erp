@@ -67,11 +67,17 @@ export type Quotation = {
   lead_id: string | null;
   customer_id: string | null;
   owner_id: string;
+  branch_id: string | null;
   quote_date: string;
   expiry_date: string | null;
   validity_days: number;
   salesperson: string | null;
   project_name: string | null;
+  payment_terms: string | null;
+  delivery_timeline: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
   billing_address: string | null;
   shipping_address: string | null;
   place_of_supply: string | null;
