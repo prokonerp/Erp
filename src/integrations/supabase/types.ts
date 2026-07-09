@@ -706,7 +706,9 @@ export type Database = {
           party_code: string | null
           party_name: string | null
           prepared_by: string | null
+          quotation_id: string | null
           reference_no: string | null
+          sales_order_id: string | null
           sales_order_no: string | null
           status: string
           total_weight: string | null
@@ -745,7 +747,9 @@ export type Database = {
           party_code?: string | null
           party_name?: string | null
           prepared_by?: string | null
+          quotation_id?: string | null
           reference_no?: string | null
+          sales_order_id?: string | null
           sales_order_no?: string | null
           status?: string
           total_weight?: string | null
@@ -784,7 +788,9 @@ export type Database = {
           party_code?: string | null
           party_name?: string | null
           prepared_by?: string | null
+          quotation_id?: string | null
           reference_no?: string | null
+          sales_order_id?: string | null
           sales_order_no?: string | null
           status?: string
           total_weight?: string | null
@@ -792,7 +798,22 @@ export type Database = {
           updated_at?: string
           vehicle_number?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "delivery_challans_quotation_id_fkey"
+            columns: ["quotation_id"]
+            isOneToOne: false
+            referencedRelation: "quotations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_challans_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       employees: {
         Row: {
@@ -2046,6 +2067,7 @@ export type Database = {
           qr_payload: string | null
           reverse_charge: boolean
           round_off: number
+          sales_order_id: string | null
           seller_address: string | null
           seller_gstin: string | null
           seller_name: string | null
@@ -2105,6 +2127,7 @@ export type Database = {
           qr_payload?: string | null
           reverse_charge?: boolean
           round_off?: number
+          sales_order_id?: string | null
           seller_address?: string | null
           seller_gstin?: string | null
           seller_name?: string | null
@@ -2164,6 +2187,7 @@ export type Database = {
           qr_payload?: string | null
           reverse_charge?: boolean
           round_off?: number
+          sales_order_id?: string | null
           seller_address?: string | null
           seller_gstin?: string | null
           seller_name?: string | null
@@ -2200,6 +2224,13 @@ export type Database = {
             columns: ["linked_quote_id"]
             isOneToOne: false
             referencedRelation: "quotations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -2990,6 +3021,8 @@ export type Database = {
           contact_email: string | null
           contact_name: string | null
           contact_phone: string | null
+          converted_at: string | null
+          converted_to_so_id: string | null
           created_at: string
           customer_id: string | null
           customer_notes: string | null
@@ -3034,6 +3067,8 @@ export type Database = {
           contact_email?: string | null
           contact_name?: string | null
           contact_phone?: string | null
+          converted_at?: string | null
+          converted_to_so_id?: string | null
           created_at?: string
           customer_id?: string | null
           customer_notes?: string | null
@@ -3078,6 +3113,8 @@ export type Database = {
           contact_email?: string | null
           contact_name?: string | null
           contact_phone?: string | null
+          converted_at?: string | null
+          converted_to_so_id?: string | null
           created_at?: string
           customer_id?: string | null
           customer_notes?: string | null
@@ -3119,6 +3156,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotations_converted_to_so_id_fkey"
+            columns: ["converted_to_so_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
             referencedColumns: ["id"]
           },
           {
@@ -3216,6 +3260,200 @@ export type Database = {
             columns: ["role_id"]
             isOneToOne: false
             referencedRelation: "app_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_order_settings: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          current_fy: string | null
+          fy_reset: boolean
+          id: string
+          next_seq: number
+          prefix: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          current_fy?: string | null
+          fy_reset?: boolean
+          id?: string
+          next_seq?: number
+          prefix?: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          current_fy?: string | null
+          fy_reset?: boolean
+          id?: string
+          next_seq?: number
+          prefix?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sales_orders: {
+        Row: {
+          billing_address: string | null
+          branch_id: string | null
+          buyer_gstin: string | null
+          buyer_name: string | null
+          buyer_state: string | null
+          buyer_state_code: string | null
+          cess: number | null
+          cgst: number | null
+          contact_email: string | null
+          contact_mobile: string | null
+          contact_person: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          delivery_timeline: string | null
+          discount: number | null
+          expected_delivery: string | null
+          id: string
+          igst: number | null
+          is_interstate: boolean | null
+          items: Json
+          linked_quote_id: string | null
+          notes: string | null
+          payment_terms: string | null
+          place_of_supply: string | null
+          place_of_supply_code: string | null
+          po_date: string | null
+          po_number: string | null
+          reverse_charge: boolean | null
+          round_off: number | null
+          salesperson: string | null
+          seller_address: string | null
+          seller_gstin: string | null
+          seller_name: string | null
+          seller_state: string | null
+          seller_state_code: string | null
+          sgst: number | null
+          shipping_address: string | null
+          so_date: string
+          so_no: string | null
+          status: string
+          subtotal: number | null
+          taxable_value: number | null
+          terms: string | null
+          total: number | null
+          total_in_words: string | null
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          billing_address?: string | null
+          branch_id?: string | null
+          buyer_gstin?: string | null
+          buyer_name?: string | null
+          buyer_state?: string | null
+          buyer_state_code?: string | null
+          cess?: number | null
+          cgst?: number | null
+          contact_email?: string | null
+          contact_mobile?: string | null
+          contact_person?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          delivery_timeline?: string | null
+          discount?: number | null
+          expected_delivery?: string | null
+          id?: string
+          igst?: number | null
+          is_interstate?: boolean | null
+          items?: Json
+          linked_quote_id?: string | null
+          notes?: string | null
+          payment_terms?: string | null
+          place_of_supply?: string | null
+          place_of_supply_code?: string | null
+          po_date?: string | null
+          po_number?: string | null
+          reverse_charge?: boolean | null
+          round_off?: number | null
+          salesperson?: string | null
+          seller_address?: string | null
+          seller_gstin?: string | null
+          seller_name?: string | null
+          seller_state?: string | null
+          seller_state_code?: string | null
+          sgst?: number | null
+          shipping_address?: string | null
+          so_date?: string
+          so_no?: string | null
+          status?: string
+          subtotal?: number | null
+          taxable_value?: number | null
+          terms?: string | null
+          total?: number | null
+          total_in_words?: string | null
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          billing_address?: string | null
+          branch_id?: string | null
+          buyer_gstin?: string | null
+          buyer_name?: string | null
+          buyer_state?: string | null
+          buyer_state_code?: string | null
+          cess?: number | null
+          cgst?: number | null
+          contact_email?: string | null
+          contact_mobile?: string | null
+          contact_person?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          delivery_timeline?: string | null
+          discount?: number | null
+          expected_delivery?: string | null
+          id?: string
+          igst?: number | null
+          is_interstate?: boolean | null
+          items?: Json
+          linked_quote_id?: string | null
+          notes?: string | null
+          payment_terms?: string | null
+          place_of_supply?: string | null
+          place_of_supply_code?: string | null
+          po_date?: string | null
+          po_number?: string | null
+          reverse_charge?: boolean | null
+          round_off?: number | null
+          salesperson?: string | null
+          seller_address?: string | null
+          seller_gstin?: string | null
+          seller_name?: string | null
+          seller_state?: string | null
+          seller_state_code?: string | null
+          sgst?: number | null
+          shipping_address?: string | null
+          so_date?: string
+          so_no?: string | null
+          status?: string
+          subtotal?: number | null
+          taxable_value?: number | null
+          terms?: string | null
+          total?: number | null
+          total_in_words?: string | null
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_orders_linked_quote_id_fkey"
+            columns: ["linked_quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotations"
             referencedColumns: ["id"]
           },
         ]
