@@ -540,6 +540,27 @@ function QuoteEditor() {
           </div>
         </div>
       </div>
+
+      <BundleApplyDialog
+        parent={bundleFor}
+        parentQty={bundleParentQty}
+        open={bundleOpen}
+        onOpenChange={setBundleOpen}
+        onConfirm={(picks) => {
+          addItems(picks.map((pk) => ({
+            product_id: pk.product.id,
+            product_name: pk.product.name,
+            description: pk.product.name + (pk.note ? ` — ${pk.note}` : ""),
+            hsn: pk.product.hsn || undefined,
+            unit: pk.product.unit || "Nos",
+            qty: pk.qty,
+            rate: pk.product.default_price != null ? Number(pk.product.default_price) : 0,
+            discount_percent: 0,
+            tax_percent: 18,
+            amount: 0,
+          } as QuoteItem)));
+        }}
+      />
     </div>
   );
 }
