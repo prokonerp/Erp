@@ -1,86 +1,91 @@
-# Sales Document Flow: Quote → Sales Order → Delivery Challan → Invoice
+# Sales Module — Incremental Hardening
 
-Each document keeps its own snapshot; parent references are stored but never used to hydrate the child at read time. Existing Invoice numbering, payments, GST engine, ProductPicker, and CustomerPicker are reused untouched.
+Scope: `crm.*` and `sales.*` routes plus `src/lib/{crm,sales,gst,documentFlow,salesOrders,invoicePdf}.ts`.
 
-## 1. Database (single migration)
+Guardrails (unchanged): GST engine (`gst.ts`), invoice/quote/SO numbering triggers, Invoice PDF renderer, Customer + Product masters. Business rules stay identical.
 
-**New table** `public.sales_orders` — mirrors the shape of `quotations`/`invoices` for a consistent snapshot:
+## Findings
 
-```text
-id, so_no (auto), so_date, valid_until, expected_delivery,
-branch_id, customer_id,
-seller/buyer name, gstin, state, state_code, address,
-billing_address, shipping_address, place_of_supply(_code), is_interstate,
-salesperson, payment_terms, delivery_timeline,
-subtotal, discount, taxable_value, cgst, sgst, igst, cess, round_off, total, total_in_words,
-status ('draft'|'confirmed'|'partial'|'delivered'|'invoiced'|'cancelled'),
-notes, terms,
-linked_quote_id (uuid, FK quotations),
-items jsonb,
-created_by, created_at, updated_at
-```
+1. **No server-side pagination.** Every list uses `.limit(500 – 5000)` and filters in JS (`sales.invoices.index`, `sales.payments.index`, `crm.quotations`, `sales.orders`).
+2. **No debounce.** Search inputs re-render immediately; big lists re-filter on every keystroke.
+3. **No query cache.** Sales pages don't use TanStack Query — every mount refetches. `usePermissions()` is called per page and refetches on every mount.
+4. **Weak validation.** Payment amount, quotation totals, and quote/invoice metadata are inserted without zod parsing. No cap on notes/subject length.
+5. **Role checks missing on Sales routes.** New Invoice, Record Payment, Convert to SO rely on RLS alone; UI shows the buttons regardless of `can("Sales","create")`.
+6. **Duplicate submissions possible.** `Save`, `Create quote`, and `Convert to SO` don't lock during in-flight calls in a few places (`crm.quotations.tsx#create`, `crm.quotations.$id.tsx#convertToSo` locks partly, `sales.payments.new` locks OK).
+7. **No audit trail** for status transitions (quote sent → accepted, invoice cancelled, payment recorded).
+8. **Duplicate customer fetch.** `crm.quotations.tsx` prefetches every customer just to render the picker inside its own dialog; `CustomerPicker` already exists.
+9. **Optimistic UI absent** for status changes (safe places: quote status, invoice status change with rollback on error).
 
-- `so_no` generator = new trigger `set_so_no` using an `sales_order_settings` row (`PHS/SO/<FY>/<seq>`, FY-reset like quote/invoice).
-- `updated_at` trigger via existing `touch_updated_at`.
-- GRANTs + RLS: authenticated CRUD, service_role all — matching the existing sales tables.
+## Deliverables (incremental, ship-in-order)
 
-**Parent references added to existing tables**:
+### 1. Shared primitives (`src/lib/sales.hooks.ts`, `src/lib/sales.schemas.ts`)
+- `useDebounced(value, ms)` hook.
+- `usePagedQuery<T>({ table, select, order, filters, page, pageSize, search })` — thin wrapper over Supabase `.range()` returning `{ rows, count, isLoading }`, keyed and cached via TanStack Query with `keepPreviousData`.
+- Zod schemas: `paymentInputSchema`, `quotationCreateSchema`, `invoiceHeaderSchema` — bounded strings (`.max(...)`), amounts non-negative, dates ISO. Import at insert/update sites only; do not touch existing computed totals.
 
-- `quotations`: `converted_to_so_id uuid`, `converted_at timestamptz`.
-- `delivery_challans`: `sales_order_id uuid`, `quotation_id uuid` (nullable; existing `sales_order_no` text stays untouched).
-- `invoices`: `sales_order_id uuid` (existing `linked_quote_id` and `linked_dc_ids` remain the source of truth for those links — no rename).
+### 2. Server-side pagination + debounced search
+Wire `usePagedQuery` into:
+- `sales.invoices.index.tsx` — server-side status filter (already there) + `ilike` on `invoice_no`/`buyer_name` + `.range()`. Add page controls at footer.
+- `sales.payments.index.tsx` — same shape.
+- `crm.quotations.tsx` — server-side search + status filter; stop prefetching all customers (dialog uses existing `CustomerPicker`).
+- `sales.orders.tsx` — server-side pagination.
 
-No CHECK constraints on times; use triggers where needed. No data mutation of existing rows.
+No visible UX change beyond a pagination footer and instant "Loading…" hint.
 
-## 2. Pure conversion engine
+### 3. Permission gates
+Read `usePermissions()` once via a lightweight `PermGate` component; keep existing hook. Add `can("Sales","create")` / `"edit"` / `"delete"` gating on:
+- New Invoice, New Quote, Record Payment, Convert to SO, Delete/Cancel buttons.
+Buttons render disabled with tooltip when denied. RLS remains the source of truth.
 
-New `src/lib/documentFlow.ts` exports pure functions:
+Cache `usePermissions()` result in a module-level promise so it fetches once per session instead of per-mount (backwards compatible — same public API).
 
-- `quoteToSalesOrder(quote)` → `NewSalesOrder` payload (deep copy of items, addresses, taxes, terms, salesperson, GST metadata).
-- `salesOrderToDeliveryChallan(so)` → `NewDeliveryChallan` (party snapshot, items with qty, addresses; `sales_order_no` populated from `so.so_no`).
-- `salesOrderToInvoice(so, opts?)` → `NewInvoice` (full items + tax snapshot; `linked_quote_id` propagated).
-- `deliveryChallanToInvoice(dc, opts?)` → `NewInvoice` (items snapshot; `linked_dc_ids: [dc.id]`).
-- Helper `mergeInvoiceFromDCs(dcs)` for combining multiple DCs into one invoice.
+### 4. Duplicate submission guard
+Introduce `useSubmitOnce()` (returns `[submit, submitting]`) and apply to:
+- `crm.quotations.tsx#create` and `#duplicate`
+- `crm.quotations.$id.tsx#save`, `#convertToSo`, `#setStatus`
+- `sales.invoices.new.tsx#save`
+- `sales.payments.new.tsx#save` (already guarded — align pattern).
 
-All helpers are pure — no Supabase calls — so unit-testable and reusable by any surface.
+Buttons disable + show a spinner while in-flight.
 
-## 3. Server-safe writers
+### 5. Optimistic status updates (safe places only)
+`crm.quotations.$id.tsx#setStatus` and invoice status transitions in `sales.invoices.$id.tsx`: update local state immediately, rollback on server error. Cache-side invalidations use `queryClient.invalidateQueries(["quotations"])` etc.
 
-`src/lib/documentFlow.writers.ts` (client module, uses browser `supabase`):
+### 6. Audit logging
+Add table `public.sales_audit_log` (id, entity, entity_id, action, before, after, actor, created_at) with:
+- INSERT-only RLS: `authenticated` can insert their own rows; `admin` / users with `Sales.export` (report) can SELECT.
+- Server function `logSalesEvent(entity, entity_id, action, before, after)` using `requireSupabaseAuth`, called from status transitions and payment recording.
+- No triggers on existing tables — pure application-side logs, safe additive change.
 
-- `convertQuoteToSO(quoteId)` → inserts SO, sets `quotations.converted_to_so_id`, returns new SO row.
-- `convertSOToDC(soId)` → inserts DC with `sales_order_id` + `sales_order_no`, bumps SO status to `partial`/`delivered` based on qty coverage.
-- `convertSOToInvoice(soId)` / `convertDCToInvoice(dcId)` → inserts invoice; existing invoice trigger keeps numbering intact.
+### 7. Client hardening
+- All external strings that go into `mailto:` / `wa.me` / share dialogs run through `encodeURIComponent` (already the case for mail; verify WhatsApp helpers).
+- Enforce `.max(...)` on subject/notes at the schema layer before insert.
+- Trim + normalize phone/GSTIN at insert.
 
-Each writer is wrapped in a single Supabase call sequence with idempotency guard (skip if child already exists) so re-clicks don't duplicate.
+### 8. Small refactors (code hygiene, no logic change)
+- Extract `PaginationFooter` and `SalesFilterBar` reusable components (used by the four lists).
+- Move `usePermissions` result into a `QueryClient` cache under key `["auth","perm"]` with 5-min staleTime.
 
-## 4. UI
+## What we won't touch
 
-- **New route** `src/routes/_app/sales.orders.tsx` (list) and `sales.orders.$id.tsx` (edit) — modelled on the quotation form; reuses `CustomerPicker`, `ProductPicker`, `computeInvoiceTotals`.
-- **Add tab** "Sales Orders" under `sales.tsx` (or `crm.tsx` matching current placement of Quotations/Invoices — I'll confirm and put it next to Quotations & Invoices).
-- **Conversion buttons**:
-  - `crm.quotations.$id.tsx` → "Convert to Sales Order".
-  - `sales.orders.$id.tsx` → "Create Delivery Challan" and "Create Invoice".
-  - `challan.$id.tsx` → "Create Invoice from DC".
-  - Invoice screen shows read-only "From: SO / DC / Quote" chips linking back.
-- Each button confirms, calls the writer, then navigates to the new document. Disabled + tooltipped when already converted.
+- `src/lib/gst.ts` (GST engine) — no signature/logic changes.
+- `src/lib/invoicePdf.ts` and `purchaseOrderPdf.ts` — renderer untouched.
+- DB triggers `set_invoice_no`, `set_quote_no`, `set_so_no`, `set_payment_no`, and serial-sync triggers — untouched.
+- Customer & Product master schemas — pickers stay canonical.
 
-## 5. Status separation
+## Technical Details
 
-Every stage carries its own `status` — none overrides another. Parent status auto-advances only through explicit triggers on convert (never silently by trigger on child updates), keeping the audit trail clean.
+- **Files added:** `src/lib/sales.hooks.ts`, `src/lib/sales.schemas.ts`, `src/components/PaginationFooter.tsx`, `src/components/PermGate.tsx`, `src/lib/salesAudit.functions.ts`.
+- **Files edited (list only):** the four list routes, three detail routes, `crm.quotations.tsx`, `usePermissions.ts` (cache-only), `sales.payments.new.tsx` (schema).
+- **DB migrations:** one migration creating `sales_audit_log` with GRANTs, RLS enabled, insert/select policies, plus `updated_at` skipped (append-only).
+- **Query keys:** `["invoices", {page,status,q}]`, `["quotations", {...}]`, `["sales-orders", {...}]`, `["payments", {...}]`, `["auth","perm"]`.
+- **Backward compatibility:** every existing call site keeps its exports. New hooks are additive.
 
-## 6. Out of scope (per your notes)
+## Rollout order
 
-- Invoice numbering unchanged.
-- Payment tables / flows untouched.
-- No refactor of GST engine or PDF templates — existing `computeInvoiceTotals`, `invoicePdf.ts`, `purchaseOrderPdf.ts` continue as-is.
-- Existing `linked_quote_id` / `linked_dc_ids` columns on invoices are kept for backward compat.
-
-## Technical notes
-
-- Snapshots live in each document's own columns/`items` JSON — no join needed to render historical data.
-- Parent references are UUID FKs with `ON DELETE SET NULL` so deleting a parent never orphans a child's data.
-- Idempotency: writers check `quotations.converted_to_so_id`, `sales_orders.status = 'invoiced'`, and `invoices.linked_dc_ids` before inserting; a second click surfaces a toast rather than creating a duplicate.
-- `sales_orders.items` mirrors `invoice_items` fields (product_id, description, hsn, qty, unit, rate, discount_pct, taxable_value, gst_rate, cgst, sgst, igst, cess, line_total) so `computeInvoiceTotals` can consume it directly.
-- Delivery Challan already stores items as jsonb — SO→DC copy reshapes to the DC item shape without hitting inventory serials (DC remains stock-neutral, matching current behaviour).
-- All new writes use the authenticated browser client and rely on existing RLS on those tables; the new `sales_orders` table uses the same policy shape as `quotations`.
+Ship in five patches — each one buildable and testable independently:
+1. Schemas + `useDebounced` + `useSubmitOnce` + `PaginationFooter` + `PermGate`.
+2. `sales.invoices.index` migration to server-side paged query.
+3. `sales.payments.index`, `sales.orders`, `crm.quotations` list migrations.
+4. Permission gating + duplicate-submit guards on detail pages.
+5. `sales_audit_log` migration + status-change audit calls + optimistic UI.

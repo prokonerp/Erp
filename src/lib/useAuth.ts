@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
+import { resetPermissionsCache } from "@/lib/usePermissions";
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((e, s) => {
       setSession(s);
+      if (e === "SIGNED_OUT" || e === "SIGNED_IN" || e === "USER_UPDATED") {
+        resetPermissionsCache();
+      }
     });
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
