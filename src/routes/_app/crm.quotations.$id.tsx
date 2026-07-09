@@ -214,6 +214,18 @@ function QuoteEditor() {
     toast.success("Opening WhatsApp…");
   };
 
+  const convertToSo = async () => {
+    if (!q) return;
+    try {
+      await save();
+      const r = await createSalesOrderFromQuote(q);
+      toast.success(`Sales Order ${r.so_no || ""} created`);
+      nav({ to: "/sales/orders/$id", params: { id: r.id } });
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to convert");
+    }
+  };
+
   if (!q || !settings) return <div className="text-muted-foreground">Loading…</div>;
 
   const STATUSES: QuoteStatus[] = ["draft", "sent", "accepted", "declined", "expired", "invoiced"];
@@ -231,6 +243,7 @@ function QuoteEditor() {
           <Button size="sm" variant="outline" onClick={sendEmail}><Mail className="h-4 w-4 mr-1" />Email</Button>
           <Button size="sm" variant="outline" onClick={sendWA}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
           <Button size="sm" variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print / PDF</Button>
+          <Button size="sm" variant="outline" onClick={convertToSo}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
           <Button size="sm" onClick={save}><Save className="h-4 w-4 mr-1" />Save</Button>
         </div>
       </div>
