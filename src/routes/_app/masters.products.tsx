@@ -327,6 +327,15 @@ export function ProductMasterPage() {
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
     }
 
+    // Persist bundle (replace-all) for this product as parent.
+    if (productId) {
+      try {
+        await saveBundleForParent(productId, bundle.map((b, i) => ({ ...b, sort_order: i })));
+      } catch (e: any) {
+        toast.error(`Product saved but bundle failed: ${e?.message || e}`);
+      }
+    }
+
     await load();
     if (addAnother) resetForm();
     else { setOpen(false); resetForm(); }
