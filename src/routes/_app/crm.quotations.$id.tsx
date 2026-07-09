@@ -374,7 +374,7 @@ function QuoteEditor() {
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-3">
           <div><Label>Customer notes (printed)</Label><Textarea rows={5} value={q.customer_notes || ""} onChange={(e) => setQ({ ...q, customer_notes: e.target.value })} placeholder="Thanks for your business." /></div>
-          <div><Label>Terms & conditions</Label><Textarea rows={5} value={q.terms || ""} onChange={(e) => setQ({ ...q, terms: e.target.value })} placeholder="Payment, delivery, warranty…" /></div>
+          <div><Label>Terms & conditions</Label><Textarea rows={5} value={q.terms || ""} onChange={(e) => { setTermsTouched(true); setQ({ ...q, terms: e.target.value }); }} placeholder="Payment, delivery, warranty…" /></div>
           <div className="md:col-span-2"><Label>Internal remarks (not printed)</Label><Textarea rows={2} value={q.remarks || ""} onChange={(e) => setQ({ ...q, remarks: e.target.value })} /></div>
         </CardContent>
       </Card>
