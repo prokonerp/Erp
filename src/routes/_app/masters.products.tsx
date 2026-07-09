@@ -911,6 +911,51 @@ export function ProductMasterPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={bundleChildPickerOpen} onOpenChange={setBundleChildPickerOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader><DialogTitle>Add Bundle Child Products</DialogTitle></DialogHeader>
+          <Input
+            placeholder="Search by model, brand or category…"
+            value={bundleChildSearch}
+            onChange={(e) => setBundleChildSearch(e.target.value)}
+          />
+          <div className="overflow-y-auto border rounded-md">
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead className="w-10"></TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Brand</TableHead>
+                <TableHead>Category</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {rows
+                  .filter((p) => p.active !== false && p.id !== editingId && !bundle.some((b) => b.child_product_id === p.id))
+                  .filter((p) => {
+                    const s = bundleChildSearch.trim().toLowerCase();
+                    if (!s) return true;
+                    return [p.name, p.model, p.brand, p.category].some((v) => (v || "").toLowerCase().includes(s));
+                  })
+                  .map((p) => (
+                    <TableRow
+                      key={p.id}
+                      className="cursor-pointer"
+                      onClick={() => setBundle([...bundle, { child_product_id: p.id, default_qty: 1, mandatory: false, editable_qty: true, note: null }])}
+                    >
+                      <TableCell><Plus className="h-4 w-4 text-primary" /></TableCell>
+                      <TableCell className="font-mono">{p.model || p.name}</TableCell>
+                      <TableCell>{p.brand || "—"}</TableCell>
+                      <TableCell>{p.category || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button size="sm" onClick={() => setBundleChildPickerOpen(false)}>Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
