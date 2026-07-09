@@ -499,6 +499,33 @@ function NewInvoice() {
           </CardContent>
         </Card>
       </div>
+
+      <BundleApplyDialog
+        parent={bundleFor}
+        parentQty={bundleParentQty}
+        open={bundleOpen}
+        onOpenChange={setBundleOpen}
+        onConfirm={(picks) => {
+          setItems((arr) => [
+            ...arr,
+            ...picks.map((pk) => ({
+              product_id: pk.product.id,
+              description: pk.product.name + (pk.note ? ` — ${pk.note}` : ""),
+              hsn: pk.product.hsn || "",
+              qty: pk.qty,
+              unit: pk.product.unit || "Nos",
+              rate: pk.product.default_price != null ? Number(pk.product.default_price) : 0,
+              discount_pct: 0,
+              gst_rate: (pk.product as any).gst_rate ?? 18,
+              warehouse_id: null,
+              serial_numbers: [],
+              is_serialized: !!(pk.product as any).serial_tracking,
+              part_model_no: pk.product.model,
+              part_name: pk.product.name,
+            })),
+          ]);
+        }}
+      />
     </div>
   );
 }
