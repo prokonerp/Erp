@@ -1,165 +1,86 @@
+# Sales Document Flow: Quote → Sales Order → Delivery Challan → Invoice
 
-# HEAD SALES — GST Accounting & Invoicing Module
+Each document keeps its own snapshot; parent references are stored but never used to hydrate the child at read time. Existing Invoice numbering, payments, GST engine, ProductPicker, and CustomerPicker are reused untouched.
 
-Large module. Building end-to-end in one pass per your choice. Splitting into clear layers so each is testable. External APIs (IRN, e-Way) stay stubbed with a clean provider interface — flip a switch + secrets later to go live.
+## 1. Database (single migration)
 
-## 1. Data model (single migration)
+**New table** `public.sales_orders` — mirrors the shape of `quotations`/`invoices` for a consistent snapshot:
 
-New tables (all with RLS, GRANTs, updated_at triggers):
-
-- `company_branches_gst` — extends existing `branches`: adds `gstin`, `state_code`, `state_name`, `pan`, `cin`, `bank_name`, `bank_account`, `bank_ifsc`, `upi_id`, `invoice_footer`, `logo_url`. (If cleaner, add columns to `branches` instead — decision at implementation.)
-- `invoice_settings` — per branch: `prefix`, `suffix`, `fy_reset` (bool), `next_seq`, `terms_default`, `notes_default`, `place_of_supply_default`.
-- `invoices` — header: `invoice_no` (unique), `invoice_date`, `branch_id` (seller), `customer_id`, `billing_addr`, `shipping_addr`, `place_of_supply`, `is_interstate`, `reverse_charge`, `linked_quote_id`, `linked_dc_ids[]`, `subtotal`, `discount`, `taxable_value`, `cgst`, `sgst`, `igst`, `cess`, `round_off`, `total`, `total_in_words`, `status` (draft/issued/paid/partial/cancelled), `irn`, `ack_no`, `ack_date`, `qr_payload`, `ewaybill_no`, `ewaybill_date`, `notes`, `terms`, `pdf_url`.
-- `invoice_items` — `invoice_id`, `product_id`, `description`, `hsn`, `qty`, `unit`, `rate`, `discount_pct`, `taxable_value`, `gst_rate`, `cgst`, `sgst`, `igst`, `cess`.
-- `payments_received` — `payment_no`, `date`, `customer_id`, `mode` (bank/cash/upi/cheque/neft), `reference`, `amount`, `notes`.
-- `payment_allocations` — `payment_id`, `invoice_id`, `amount` (many-to-many; supports part-payments and over-allocation prevention via trigger).
-- `eway_bills` — `invoice_id`, `transporter_name`, `transporter_id`, `vehicle_no`, `distance_km`, `mode`, `doc_type`, `ewb_no`, `ewb_date`, `valid_till`, `status`, `payload`, `response`.
-- `hsn_summary` view — GSTR-1 style HSN roll-up per invoice.
-
-Sequence functions per branch (mirrors existing `set_amc_agreement_no` pattern) using `invoice_settings.prefix` + FY or YYYY.
-
-Reuses:
-- `customers` (has `gst`, `gst_status`, state) — add `state_code` if missing.
-- `products` (has `hsn`, GST rate — verify; add `gst_rate` if not present).
-- `delivery_challans`, `quotations` — link via FKs.
-
-## 2. GST engine (`src/lib/gst.ts`)
-
-- `stateFromGSTIN`, `isValidGSTIN` (extend `src/lib/india.ts`).
-- `computeInvoiceTotals({sellerStateCode, buyerStateCode, items[], discount, roundOff})` → line-level + header totals; picks CGST+SGST vs IGST; handles cess.
-- `amountInWords(n)` — Indian numbering (lakh/crore).
-- `hsnSummary(items[])` — for invoice PDF + GSTR-1.
-- Pure functions, unit-testable.
-
-## 3. Provider interface (stubs, API-ready)
-
-`src/lib/einvoice.ts` and `src/lib/eway.ts` — provider-agnostic:
-
-```ts
-export interface EInvoiceProvider {
-  generateIrn(invoice): Promise<{irn, ackNo, ackDate, qrPayload}>;
-  cancelIrn(irn, reason): Promise<void>;
-}
+```text
+id, so_no (auto), so_date, valid_until, expected_delivery,
+branch_id, customer_id,
+seller/buyer name, gstin, state, state_code, address,
+billing_address, shipping_address, place_of_supply(_code), is_interstate,
+salesperson, payment_terms, delivery_timeline,
+subtotal, discount, taxable_value, cgst, sgst, igst, cess, round_off, total, total_in_words,
+status ('draft'|'confirmed'|'partial'|'delivered'|'invoiced'|'cancelled'),
+notes, terms,
+linked_quote_id (uuid, FK quotations),
+items jsonb,
+created_by, created_at, updated_at
 ```
 
-Ships with `MockProvider` that fills fake IRN/AckNo/QR so the flow is end-to-end demoable. Real providers (ClearTax/NIC) drop in later behind the same interface with credentials via `add_secret`.
+- `so_no` generator = new trigger `set_so_no` using an `sales_order_settings` row (`PHS/SO/<FY>/<seq>`, FY-reset like quote/invoice).
+- `updated_at` trigger via existing `touch_updated_at`.
+- GRANTs + RLS: authenticated CRUD, service_role all — matching the existing sales tables.
 
-Server functions in `src/lib/einvoice.functions.ts` / `eway.functions.ts` — `requireSupabaseAuth`, callable from the UI.
+**Parent references added to existing tables**:
 
-## 4. Sales module UI
+- `quotations`: `converted_to_so_id uuid`, `converted_at timestamptz`.
+- `delivery_challans`: `sales_order_id uuid`, `quotation_id uuid` (nullable; existing `sales_order_no` text stays untouched).
+- `invoices`: `sales_order_id uuid` (existing `linked_quote_id` and `linked_dc_ids` remain the source of truth for those links — no rename).
 
-New route tree under `_app/sales/`:
+No CHECK constraints on times; use triggers where needed. No data mutation of existing rows.
 
-```
-sales.tsx                 — layout w/ sub-nav
-sales.index.tsx           — HEAD SALES dashboard
-sales.quotations.*        — reuses existing /crm/quotations, adds "Convert to Invoice"
-sales.invoices.index.tsx  — list w/ filters (status, customer, date, branch)
-sales.invoices.new.tsx    — fast entry form (keyboard-first)
-sales.invoices.$id.tsx    — view/edit/print/IRN/e-Way actions
-sales.payments.index.tsx  — payments list
-sales.payments.new.tsx    — record payment + allocate to invoices
-sales.eway.index.tsx      — e-Way bills list + generator
-sales.settings.tsx        — per-branch invoice settings, prefix, bank/UPI, GSTIN
-```
+## 2. Pure conversion engine
 
-Existing modules linked:
-- `/challan` gets "Convert to Invoice" action + "Pending invoicing" filter.
-- `/crm/quotations/$id` gets "Convert to Invoice".
+New `src/lib/documentFlow.ts` exports pure functions:
 
-### Invoice entry UX
-- Branch picker (defaults to user's branch) → drives seller GSTIN + state.
-- Customer picker (existing `CustomerPicker`) → auto-fills billing/shipping, buyer state, GSTIN.
-- Item rows via `ProductMasterPicker` → auto HSN, rate, GST%.
-- Live tax panel: shows CGST+SGST vs IGST based on state comparison.
-- Keyboard: Enter = next field, Ctrl+S = save, Ctrl+P = print.
+- `quoteToSalesOrder(quote)` → `NewSalesOrder` payload (deep copy of items, addresses, taxes, terms, salesperson, GST metadata).
+- `salesOrderToDeliveryChallan(so)` → `NewDeliveryChallan` (party snapshot, items with qty, addresses; `sales_order_no` populated from `so.so_no`).
+- `salesOrderToInvoice(so, opts?)` → `NewInvoice` (full items + tax snapshot; `linked_quote_id` propagated).
+- `deliveryChallanToInvoice(dc, opts?)` → `NewInvoice` (items snapshot; `linked_dc_ids: [dc.id]`).
+- Helper `mergeInvoiceFromDCs(dcs)` for combining multiple DCs into one invoice.
 
-## 5. HEAD SALES Dashboard
+All helpers are pure — no Supabase calls — so unit-testable and reusable by any surface.
 
-`sales.index.tsx`:
-- KPIs (today/MTD): Total Sales, Outstanding Receivables, Total Invoices, Pending Payments, e-Invoices generated.
-- Quick actions: New Quote, New Invoice, Record Payment, Generate e-Way.
-- Recent invoices, top customers by outstanding, aging bucket (0-30/31-60/61-90/90+).
+## 3. Server-safe writers
 
-Also surfaces as a widget on the main `/dashboard` respecting `sales` module permission.
+`src/lib/documentFlow.writers.ts` (client module, uses browser `supabase`):
 
-## 6. Invoice PDF (BUSY-style)
+- `convertQuoteToSO(quoteId)` → inserts SO, sets `quotations.converted_to_so_id`, returns new SO row.
+- `convertSOToDC(soId)` → inserts DC with `sales_order_id` + `sales_order_no`, bumps SO status to `partial`/`delivered` based on qty coverage.
+- `convertSOToInvoice(soId)` / `convertDCToInvoice(dcId)` → inserts invoice; existing invoice trigger keeps numbering intact.
 
-`src/lib/invoicePdf.ts` using existing jsPDF stack:
-- Header: company logo, name, GSTIN, address, CIN.
-- Buyer + Ship-to blocks with GSTIN, State + code.
-- Items table: Sr, Description, HSN, Qty, Unit, Rate, Disc, Taxable, GST%, CGST/SGST or IGST, Amount.
-- HSN summary table.
-- Tax summary block.
-- Total in words.
-- Bank details + IFSC + UPI ID.
-- Two QRs: GST e-Invoice QR (from `qr_payload`) and UPI Payment QR (`upi://pay?pa=…&pn=…&am=…&tn=INV/…`).
-- Terms + signature block.
+Each writer is wrapped in a single Supabase call sequence with idempotency guard (skip if child already exists) so re-clicks don't duplicate.
 
-Uses `qrcode` npm package (add via `bun add qrcode`).
+## 4. UI
 
-## 7. Inventory linkage
+- **New route** `src/routes/_app/sales.orders.tsx` (list) and `sales.orders.$id.tsx` (edit) — modelled on the quotation form; reuses `CustomerPicker`, `ProductPicker`, `computeInvoiceTotals`.
+- **Add tab** "Sales Orders" under `sales.tsx` (or `crm.tsx` matching current placement of Quotations/Invoices — I'll confirm and put it next to Quotations & Invoices).
+- **Conversion buttons**:
+  - `crm.quotations.$id.tsx` → "Convert to Sales Order".
+  - `sales.orders.$id.tsx` → "Create Delivery Challan" and "Create Invoice".
+  - `challan.$id.tsx` → "Create Invoice from DC".
+  - Invoice screen shows read-only "From: SO / DC / Quote" chips linking back.
+- Each button confirms, calls the writer, then navigates to the new document. Disabled + tooltipped when already converted.
 
-On invoice `issued`:
-- Trigger deducts stock from `ims_stock_items` (serial-tracked) or `inventory` (qty-tracked) based on product type.
-- On invoice cancel → reverse.
-- Low-stock alert query already exists in IMS module; reuse.
+## 5. Status separation
 
-## 8. Reports
+Every stage carries its own `status` — none overrides another. Parent status auto-advances only through explicit triggers on convert (never silently by trigger on child updates), keeping the audit trail clean.
 
-`sales.reports.tsx` with tabs:
-- Sales Register (date range, branch, customer).
-- GSTR-1 (invoice-wise + HSN-wise + rate-wise; CSV export in GSTN offline-tool format).
-- Outstanding / Aging.
-- Payments Received.
-- Item Ledger (from IMS).
-- Stock Summary (from IMS).
+## 6. Out of scope (per your notes)
 
-Exports: CSV + PDF using existing `src/lib/exports.ts`.
+- Invoice numbering unchanged.
+- Payment tables / flows untouched.
+- No refactor of GST engine or PDF templates — existing `computeInvoiceTotals`, `invoicePdf.ts`, `purchaseOrderPdf.ts` continue as-is.
+- Existing `linked_quote_id` / `linked_dc_ids` columns on invoices are kept for backward compat.
 
-## 9. Validations
+## Technical notes
 
-- GSTIN regex + checksum (extend `src/lib/india.ts`).
-- HSN mandatory on every line where GST > 0.
-- Invoice number unique (DB constraint + pre-save check).
-- Invoice date not in future beyond FY end; not before branch creation.
-- Prevent editing after `issued` unless admin; require Credit Note flow for corrections (Phase 1.1 — noted).
-- Prevent duplicate submission (idempotency key on server fn).
-- Tax mismatch guard: server recomputes totals from items, rejects if client total differs by >₹1.
-
-## 10. Permissions
-
-Adds `sales` module to `app_modules` with actions: read, create, edit, delete, export. Sub-permissions handled via existing `role_module_permissions` custom flags (`can_issue_invoice`, `can_generate_irn`, `can_record_payment`, `can_cancel_invoice`).
-
-## 11. Rollout order (single build, staged commits)
-
-1. Migration: tables, RLS, GRANTs, sequences, triggers.
-2. GST engine + India helpers.
-3. Server functions (invoices CRUD, totals recompute, payments allocation, IRN/e-Way stub providers).
-4. Sales module routes + layout + sidebar entry.
-5. Invoice entry form + live tax panel.
-6. Payments form + allocation.
-7. Invoice PDF + QR codes.
-8. e-Invoice & e-Way stubs wired in.
-9. Reports (Sales register, GSTR-1, Outstanding).
-10. HEAD SALES dashboard KPIs.
-11. Inventory deduction hooks.
-12. Permissions module registration.
-
-## Out of scope (call out)
-
-- **Credit Notes / Debit Notes**: not in your spec; needed for real GSTR-1. I'll leave hooks but not build UI unless you confirm.
-- **Purchases / Purchase invoices / GSTR-2/3B**: your spec says "future-ready" for purchases — I won't build the purchase UI now.
-- **Real GSP integration**: stubs only. To go live: pick a GSP, share sandbox credentials, ~1–2 days per API.
-- **Bank statement reconciliation import**: manual payment entry only.
-- **Multi-currency / export invoices with LUT**: domestic INR only.
-- **TCS/TDS**: not included.
-- **Recurring invoices, subscriptions**: not included.
-
-## Risks
-
-- Scope is very large. If we hit build time limits, phases 8–11 may land in a follow-up commit. Everything in phases 1–7 is fully usable on its own.
-- `products.gst_rate` column may not exist yet — I'll verify and add in the migration.
-- Stock deduction interacts with existing IMS serial flow; I'll gate it behind a per-product `track_stock_on_invoice` flag to avoid breaking service tickets that already move stock.
-
-Reply "go" to build. Any "not this / skip that / add this" adjustments before I start save a lot of rework.
+- Snapshots live in each document's own columns/`items` JSON — no join needed to render historical data.
+- Parent references are UUID FKs with `ON DELETE SET NULL` so deleting a parent never orphans a child's data.
+- Idempotency: writers check `quotations.converted_to_so_id`, `sales_orders.status = 'invoiced'`, and `invoices.linked_dc_ids` before inserting; a second click surfaces a toast rather than creating a duplicate.
+- `sales_orders.items` mirrors `invoice_items` fields (product_id, description, hsn, qty, unit, rate, discount_pct, taxable_value, gst_rate, cgst, sgst, igst, cess, line_total) so `computeInvoiceTotals` can consume it directly.
+- Delivery Challan already stores items as jsonb — SO→DC copy reshapes to the DC item shape without hitting inventory serials (DC remains stock-neutral, matching current behaviour).
+- All new writes use the authenticated browser client and rely on existing RLS on those tables; the new `sales_orders` table uses the same policy shape as `quotations`.
