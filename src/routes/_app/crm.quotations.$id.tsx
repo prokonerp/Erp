@@ -14,6 +14,7 @@ import { ProductPicker } from "@/components/ProductPicker";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { UpsSmartPanel } from "@/components/UpsSmartPanel";
 import { waOpen } from "@/lib/tickets";
+import { fetchBranches, type BranchRow } from "@/lib/sales";
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
@@ -21,12 +22,28 @@ import {
 
 export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
 
+type InvoiceSettingsRow = {
+  branch_id: string;
+  company_name: string | null;
+  company_address: string | null;
+  udyam_no: string | null;
+  phone: string | null;
+  email: string | null;
+  theme_color: string;
+  terms_default: string | null;
+  notes_default: string | null;
+  place_of_supply_default: string | null;
+};
+
 function QuoteEditor() {
   const { id } = Route.useParams();
   const [q, setQ] = useState<Quotation | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [templates, setTemplates] = useState<QuoteTermsTemplate[]>([]);
   const [settings, setSettings] = useState<CrmSettings | null>(null);
+  const [branches, setBranches] = useState<BranchRow[]>([]);
+  const [invSettings, setInvSettings] = useState<InvoiceSettingsRow | null>(null);
+  const [termsTouched, setTermsTouched] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from("quotations").select("*").eq("id", id).single();
@@ -43,7 +60,37 @@ function QuoteEditor() {
     load();
     supabase.from("quote_terms_templates").select("*").order("sort_order").then(({ data }) => setTemplates((data || []) as any));
     supabase.from("crm_settings").select("*").eq("id", 1).single().then(({ data }) => setSettings((data as any) || { id: 1, business_state: "Haryana", business_gstin: null, default_terms: "", default_customer_notes: "Thanks for your business." }));
+    fetchBranches().then((bs) => setBranches(bs)).catch(() => {});
   }, [id]);
+
+  // Default branch on first load
+  useEffect(() => {
+    if (!q || q.branch_id || branches.length === 0) return;
+    const def = branches.find((b) => b.is_default) || branches[0];
+    if (def) setQ({ ...q, branch_id: def.id });
+  }, [branches, q?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const branch = useMemo(() => branches.find((b) => b.id === q?.branch_id) || null, [branches, q?.branch_id]);
+
+  // Load invoice_settings for the chosen branch → company header + defaults
+  useEffect(() => {
+    if (!q?.branch_id) { setInvSettings(null); return; }
+    supabase
+      .from("invoice_settings")
+      .select("branch_id,company_name,company_address,udyam_no,phone,email,theme_color,terms_default,notes_default,place_of_supply_default")
+      .eq("branch_id", q.branch_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const s = (data as InvoiceSettingsRow | null) || null;
+        setInvSettings(s);
+        if (!q) return;
+        const patch: Partial<Quotation> = {};
+        if (!termsTouched && !q.terms && s?.terms_default) patch.terms = s.terms_default;
+        if (!q.customer_notes && s?.notes_default) patch.customer_notes = s.notes_default;
+        if (!q.place_of_supply && s?.place_of_supply_default) patch.place_of_supply = s.place_of_supply_default;
+        if (Object.keys(patch).length) setQ({ ...q, ...patch });
+      });
+  }, [q?.branch_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totals = useMemo(() => {
     if (!q || !settings) return { subtotal: 0, total_tax: 0, cgst_amount: 0, sgst_amount: 0, igst_amount: 0, tcs_amount: 0, total: 0 };
@@ -90,6 +137,10 @@ function QuoteEditor() {
       billing_address: c?.billing_address || q.billing_address || "",
       shipping_address: c?.shipping_address || c?.billing_address || q.shipping_address || "",
       place_of_supply: c?.state || q.place_of_supply,
+      contact_name: c?.contact_name || q.contact_name || null,
+      contact_email: c?.email || q.contact_email || null,
+      contact_phone: c?.phone || q.contact_phone || null,
+      payment_terms: q.payment_terms || (c as any)?.payment_terms || null,
     } as Quotation);
   };
 
@@ -97,9 +148,15 @@ function QuoteEditor() {
     if (!q) return;
     const { error } = await supabase.from("quotations").update({
       customer_id: (q as any).customer_id,
+      branch_id: q.branch_id,
       reference_no: q.reference_no, subject: q.subject,
       quote_date: q.quote_date, expiry_date: q.expiry_date, validity_days: q.validity_days,
       salesperson: q.salesperson, project_name: q.project_name,
+      payment_terms: q.payment_terms,
+      delivery_timeline: q.delivery_timeline,
+      contact_name: q.contact_name,
+      contact_email: q.contact_email,
+      contact_phone: q.contact_phone,
       billing_address: q.billing_address, shipping_address: q.shipping_address,
       place_of_supply: q.place_of_supply,
       items: q.items as any,
@@ -174,6 +231,23 @@ function QuoteEditor() {
         <CardHeader><CardTitle className="text-base">{q.quote_no}</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-3">
           <div className="md:col-span-3">
+            <Label>Branch / Warehouse <span className="text-muted-foreground font-normal">(company header source)</span></Label>
+            <Select value={q.branch_id || ""} onValueChange={(v) => setQ({ ...q, branch_id: v })}>
+              <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+              <SelectContent>{branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
+            </Select>
+            {branch && (
+              <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                <span>{invSettings?.company_name || branch.name}</span>
+                {(invSettings?.company_address || branch.address) && <span>· {invSettings?.company_address || branch.address}</span>}
+                {branch.gstin && <span>· GSTIN: <span className="font-mono">{branch.gstin}</span></span>}
+                {invSettings?.udyam_no && <span>· UDYAM: {invSettings.udyam_no}</span>}
+                {(invSettings?.phone || branch.phone) && <span>· {invSettings?.phone || branch.phone}</span>}
+                {(invSettings?.email || branch.email) && <span>· {invSettings?.email || branch.email}</span>}
+              </div>
+            )}
+          </div>
+          <div className="md:col-span-3">
             <Label>Customer <span className="text-muted-foreground font-normal">(from Customer Master)</span></Label>
             <CustomerPicker value={(q as any).customer_id || null} onChange={applyCustomer} />
             {customer && (
@@ -199,6 +273,12 @@ function QuoteEditor() {
             </Select>
             <div className="text-xs text-muted-foreground mt-1">Business state: {settings.business_state} → {(q.place_of_supply || "").toLowerCase() === settings.business_state.toLowerCase() ? "CGST + SGST" : "IGST"}</div>
           </div>
+          <div><Label>Payment terms</Label><Input value={q.payment_terms || ""} onChange={(e) => setQ({ ...q, payment_terms: e.target.value })} placeholder="e.g. 50% advance, balance before dispatch" /></div>
+          <div><Label>Delivery timeline</Label><Input value={q.delivery_timeline || ""} onChange={(e) => setQ({ ...q, delivery_timeline: e.target.value })} placeholder="e.g. 2–3 weeks from PO" /></div>
+          <div><Label>Validity (days)</Label><Input type="number" value={q.validity_days || 0} onChange={(e) => setQ({ ...q, validity_days: Number(e.target.value) })} /></div>
+          <div><Label>Contact person</Label><Input value={q.contact_name || ""} onChange={(e) => setQ({ ...q, contact_name: e.target.value })} /></div>
+          <div><Label>Contact email</Label><Input value={q.contact_email || ""} onChange={(e) => setQ({ ...q, contact_email: e.target.value })} /></div>
+          <div><Label>Contact mobile</Label><Input value={q.contact_phone || ""} onChange={(e) => setQ({ ...q, contact_phone: e.target.value })} /></div>
           <div className="md:col-span-3 grid md:grid-cols-2 gap-3">
             <div><Label>Billing address</Label><Textarea rows={3} value={q.billing_address || ""} onChange={(e) => setQ({ ...q, billing_address: e.target.value })} /></div>
             <div>
@@ -294,7 +374,7 @@ function QuoteEditor() {
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-3">
           <div><Label>Customer notes (printed)</Label><Textarea rows={5} value={q.customer_notes || ""} onChange={(e) => setQ({ ...q, customer_notes: e.target.value })} placeholder="Thanks for your business." /></div>
-          <div><Label>Terms & conditions</Label><Textarea rows={5} value={q.terms || ""} onChange={(e) => setQ({ ...q, terms: e.target.value })} placeholder="Payment, delivery, warranty…" /></div>
+          <div><Label>Terms & conditions</Label><Textarea rows={5} value={q.terms || ""} onChange={(e) => { setTermsTouched(true); setQ({ ...q, terms: e.target.value }); }} placeholder="Payment, delivery, warranty…" /></div>
           <div className="md:col-span-2"><Label>Internal remarks (not printed)</Label><Textarea rows={2} value={q.remarks || ""} onChange={(e) => setQ({ ...q, remarks: e.target.value })} /></div>
         </CardContent>
       </Card>
@@ -304,16 +384,33 @@ function QuoteEditor() {
         <style>{`@media print { @page { size: A4; margin: 12mm; } body { font-family: Arial, Helvetica, sans-serif; color:#000; } .zh-th{background:#374151;color:#fff;padding:6px;font-size:11px;text-align:left} .zh-td{border-bottom:1px solid #e5e7eb;padding:6px;font-size:11px;vertical-align:top} }`}</style>
 
         {/* Header */}
-        <div className="flex items-start justify-between border-b-2 border-gray-700 pb-3 mb-4">
+        <div
+          className="flex items-start justify-between border-b-2 pb-3 mb-4"
+          style={{ borderColor: invSettings?.theme_color || "#374151" }}
+        >
           <div>
-            <div className="text-2xl font-bold tracking-tight">Prokon Hi-Tech Systems</div>
-            <div className="text-[11px] mt-0.5">Picasso Centre, Sector-61, Gurgaon, Haryana</div>
-            <div className="text-[11px]">info@prokonhitech.com · +91-9810000000</div>
-            <div className="text-[11px]">GSTIN: {settings.business_gstin || "—"}</div>
+            <div className="text-2xl font-bold tracking-tight">
+              {invSettings?.company_name || branch?.name || "Prokon Hi-Tech Systems"}
+            </div>
+            <div className="text-[11px] mt-0.5 whitespace-pre-line">
+              {invSettings?.company_address || branch?.address || ""}
+            </div>
+            {branch?.address && invSettings?.company_address && branch.address !== invSettings.company_address && (
+              <div className="text-[11px] italic">Warehouse: {branch.address}</div>
+            )}
+            <div className="text-[11px]">
+              {[invSettings?.email || branch?.email, invSettings?.phone || branch?.phone].filter(Boolean).join(" · ")}
+            </div>
+            <div className="text-[11px]">
+              {[
+                branch?.gstin ? `GSTIN: ${branch.gstin}` : (settings.business_gstin ? `GSTIN: ${settings.business_gstin}` : null),
+                invSettings?.udyam_no ? `UDYAM: ${invSettings.udyam_no}` : null,
+              ].filter(Boolean).join(" · ") || "—"}
+            </div>
             <div className="text-[11px] italic mt-1">Authorized APC by Schneider Electric Channel Partner</div>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold text-gray-700">QUOTE</div>
+            <div className="text-2xl font-bold" style={{ color: invSettings?.theme_color || "#374151" }}>QUOTE</div>
             <div className="text-[11px] mt-1"># <b>{q.quote_no}</b></div>
             {q.reference_no && <div className="text-[11px]">Ref: {q.reference_no}</div>}
           </div>
@@ -326,6 +423,13 @@ function QuoteEditor() {
             <div className="font-semibold text-sm">{customer?.company}</div>
             <div className="whitespace-pre-line">{q.billing_address || customer?.address || ""}</div>
             {customer?.gst && <div className="mt-1">GSTIN: {customer.gst}</div>}
+            {(q.contact_name || q.contact_email || q.contact_phone) && (
+              <div className="mt-1">
+                {q.contact_name && <div>Attn: {q.contact_name}</div>}
+                {q.contact_phone && <div>{q.contact_phone}</div>}
+                {q.contact_email && <div>{q.contact_email}</div>}
+              </div>
+            )}
           </div>
           <div>
             <div className="font-semibold text-gray-600 uppercase text-[10px] mb-1">Ship To</div>
@@ -340,6 +444,8 @@ function QuoteEditor() {
                 {q.place_of_supply && <tr><td className="pr-2 text-gray-600">Place of Supply</td><td className="font-semibold">{q.place_of_supply}</td></tr>}
                 {q.salesperson && <tr><td className="pr-2 text-gray-600">Salesperson</td><td className="font-semibold">{q.salesperson}</td></tr>}
                 {q.project_name && <tr><td className="pr-2 text-gray-600">Project</td><td className="font-semibold">{q.project_name}</td></tr>}
+                {q.payment_terms && <tr><td className="pr-2 text-gray-600">Payment Terms</td><td className="font-semibold">{q.payment_terms}</td></tr>}
+                {q.delivery_timeline && <tr><td className="pr-2 text-gray-600">Delivery</td><td className="font-semibold">{q.delivery_timeline}</td></tr>}
               </tbody>
             </table>
           </div>
@@ -409,7 +515,10 @@ function QuoteEditor() {
 
         <div className="grid grid-cols-2 gap-8 mt-12 text-[11px]">
           <div className="border-t border-gray-700 pt-1 text-center">Customer Signature</div>
-          <div className="border-t border-gray-700 pt-1 text-center">For Prokon Hi-Tech Systems</div>
+          <div className="border-t border-gray-700 pt-1 text-center">
+            For {invSettings?.company_name || branch?.name || "Prokon Hi-Tech Systems"}
+            <div className="mt-6 text-gray-600">Authorised Signatory</div>
+          </div>
         </div>
       </div>
     </div>

@@ -2931,10 +2931,15 @@ export type Database = {
           adjustment: number
           attachments: Json
           billing_address: string | null
+          branch_id: string | null
           cgst_amount: number
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
           created_at: string
           customer_id: string | null
           customer_notes: string | null
+          delivery_timeline: string | null
           discount_amount: number
           expiry_date: string | null
           gst_amount: number
@@ -2944,6 +2949,7 @@ export type Database = {
           items: Json
           lead_id: string | null
           owner_id: string
+          payment_terms: string | null
           place_of_supply: string | null
           project_name: string | null
           quote_date: string
@@ -2969,10 +2975,15 @@ export type Database = {
           adjustment?: number
           attachments?: Json
           billing_address?: string | null
+          branch_id?: string | null
           cgst_amount?: number
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
           created_at?: string
           customer_id?: string | null
           customer_notes?: string | null
+          delivery_timeline?: string | null
           discount_amount?: number
           expiry_date?: string | null
           gst_amount?: number
@@ -2982,6 +2993,7 @@ export type Database = {
           items?: Json
           lead_id?: string | null
           owner_id: string
+          payment_terms?: string | null
           place_of_supply?: string | null
           project_name?: string | null
           quote_date?: string
@@ -3007,10 +3019,15 @@ export type Database = {
           adjustment?: number
           attachments?: Json
           billing_address?: string | null
+          branch_id?: string | null
           cgst_amount?: number
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
           created_at?: string
           customer_id?: string | null
           customer_notes?: string | null
+          delivery_timeline?: string | null
           discount_amount?: number
           expiry_date?: string | null
           gst_amount?: number
@@ -3020,6 +3037,7 @@ export type Database = {
           items?: Json
           lead_id?: string | null
           owner_id?: string
+          payment_terms?: string | null
           place_of_supply?: string | null
           project_name?: string | null
           quote_date?: string
@@ -3042,6 +3060,13 @@ export type Database = {
           validity_days?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "quotations_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "quotations_customer_id_fkey"
             columns: ["customer_id"]
