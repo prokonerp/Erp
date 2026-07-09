@@ -1,10 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Plus, Search } from "lucide-react";
 import { inr, type PaymentRow } from "@/lib/sales";
+import { useDebounced, pageRange } from "@/lib/sales.hooks";
+import { PaginationFooter } from "@/components/PaginationFooter";
+import { PermButton } from "@/components/PermGate";
 
 export const Route = createFileRoute("/_app/sales/payments/")({
   component: PaymentList,
@@ -14,29 +18,55 @@ export const Route = createFileRoute("/_app/sales/payments/")({
 type Row = PaymentRow & { customer?: { company: string } };
 
 function PaymentList() {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
+  const debouncedQ = useDebounced(q.trim(), 300);
+  useMemo(() => setPage(0), [debouncedQ]);
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
+  const query = useQuery({
+    queryKey: ["payments_received", { q: debouncedQ, page, pageSize }],
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { from, to } = pageRange(page, pageSize);
+      let sel = supabase
         .from("payments_received")
-        .select("*, customer:customers(company)")
+        .select("*, customer:customers(company)", { count: "exact" })
         .order("payment_date", { ascending: false })
-        .limit(500);
-      setRows(((data ?? []) as unknown as Row[]));
-      setLoading(false);
-    })();
-  }, []);
+        .range(from, to);
+      if (debouncedQ) {
+        const safe = debouncedQ.replace(/[%_]/g, "\\$&");
+        sel = sel.or(`payment_no.ilike.%${safe}%,reference.ilike.%${safe}%`);
+      }
+      const { data, count, error } = await sel;
+      if (error) throw error;
+      return { rows: ((data ?? []) as unknown as Row[]), count: count ?? 0 };
+    },
+  });
+
+  const rows = query.data?.rows ?? [];
+  const total = query.data?.count ?? null;
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold">Payments Received</h2>
-        <Button asChild size="sm"><Link to="/sales/payments/new"><Plus className="h-4 w-4 mr-1" />Record Payment</Link></Button>
+        <PermButton module="sales" action="create" size="sm" asChild reason="You don't have permission to record payments.">
+          <Link to="/sales/payments/new"><Plus className="h-4 w-4 mr-1" />Record Payment</Link>
+        </PermButton>
       </div>
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-3 flex flex-wrap items-center gap-2">
+          <div className="relative w-64">
+            <Search className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search receipt / reference…" className="pl-8 h-9" />
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto max-h-[65vh]">
           <table className="w-full text-sm">
             <thead className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
@@ -50,7 +80,7 @@ function PaymentList() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {query.isLoading ? (
                 <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">Loading…</td></tr>
               ) : rows.length === 0 ? (
                 <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">No payments recorded yet.</td></tr>
@@ -67,6 +97,8 @@ function PaymentList() {
               ))}
             </tbody>
           </table>
+          </div>
+          <PaginationFooter page={page} pageSize={pageSize} total={total} onPage={setPage} isFetching={query.isFetching && !query.isLoading} />
         </CardContent>
       </Card>
     </div>
