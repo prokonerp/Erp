@@ -520,8 +520,8 @@ function NewInvoice() {
               warehouse_id: null,
               serial_numbers: [],
               is_serialized: !!(pk.product as any).serial_tracking,
-              part_model_no: pk.product.model,
-              part_name: pk.product.name,
+              part_model_no: pk.product.model ?? null,
+              part_name: pk.product.name ?? null,
             })),
           ]);
         }}
