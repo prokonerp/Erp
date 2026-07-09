@@ -41,6 +41,7 @@ type InvoiceSettingsRow = {
 
 function QuoteEditor() {
   const { id } = Route.useParams();
+  const nav = useNavigate();
   const [q, setQ] = useState<Quotation | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [templates, setTemplates] = useState<QuoteTermsTemplate[]>([]);
