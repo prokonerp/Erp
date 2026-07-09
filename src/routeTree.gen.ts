@@ -92,6 +92,7 @@ import { Route as AppGrnCustomerIndexRouteImport } from './routes/_app/grn.custo
 import { Route as AppChallanOemIndexRouteImport } from './routes/_app/challan.oem.index'
 import { Route as AppChallanCustomerIndexRouteImport } from './routes/_app/challan.customer.index'
 import { Route as AppSalesPaymentsNewRouteImport } from './routes/_app/sales.payments.new'
+import { Route as AppSalesOrdersIdRouteImport } from './routes/_app/sales.orders.$id'
 import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.invoices.new'
 import { Route as AppSalesInvoicesIdRouteImport } from './routes/_app/sales.invoices.$id'
 import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
@@ -518,6 +519,11 @@ const AppSalesPaymentsNewRoute = AppSalesPaymentsNewRouteImport.update({
   path: '/payments/new',
   getParentRoute: () => AppSalesRoute,
 } as any)
+const AppSalesOrdersIdRoute = AppSalesOrdersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppSalesOrdersRoute,
+} as any)
 const AppSalesInvoicesNewRoute = AppSalesInvoicesNewRouteImport.update({
   id: '/invoices/new',
   path: '/invoices/new',
@@ -630,7 +636,7 @@ export interface FileRoutesByFullPath {
   '/po/$id': typeof AppPoIdRoute
   '/po/new': typeof AppPoNewRoute
   '/po/settings': typeof AppPoSettingsRoute
-  '/sales/orders': typeof AppSalesOrdersRoute
+  '/sales/orders': typeof AppSalesOrdersRouteWithChildren
   '/sales/quotations': typeof AppSalesQuotationsRoute
   '/sales/settings': typeof AppSalesSettingsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
@@ -658,6 +664,7 @@ export interface FileRoutesByFullPath {
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
+  '/sales/orders/$id': typeof AppSalesOrdersIdRoute
   '/sales/payments/new': typeof AppSalesPaymentsNewRoute
   '/challan/customer/': typeof AppChallanCustomerIndexRoute
   '/challan/oem/': typeof AppChallanOemIndexRoute
@@ -710,7 +717,7 @@ export interface FileRoutesByTo {
   '/po/$id': typeof AppPoIdRoute
   '/po/new': typeof AppPoNewRoute
   '/po/settings': typeof AppPoSettingsRoute
-  '/sales/orders': typeof AppSalesOrdersRoute
+  '/sales/orders': typeof AppSalesOrdersRouteWithChildren
   '/sales/quotations': typeof AppSalesQuotationsRoute
   '/sales/settings': typeof AppSalesSettingsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
@@ -738,6 +745,7 @@ export interface FileRoutesByTo {
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
+  '/sales/orders/$id': typeof AppSalesOrdersIdRoute
   '/sales/payments/new': typeof AppSalesPaymentsNewRoute
   '/challan/customer': typeof AppChallanCustomerIndexRoute
   '/challan/oem': typeof AppChallanOemIndexRoute
@@ -807,7 +815,7 @@ export interface FileRoutesById {
   '/_app/po/$id': typeof AppPoIdRoute
   '/_app/po/new': typeof AppPoNewRoute
   '/_app/po/settings': typeof AppPoSettingsRoute
-  '/_app/sales/orders': typeof AppSalesOrdersRoute
+  '/_app/sales/orders': typeof AppSalesOrdersRouteWithChildren
   '/_app/sales/quotations': typeof AppSalesQuotationsRoute
   '/_app/sales/settings': typeof AppSalesSettingsRoute
   '/_app/tickets/$id': typeof AppTicketsIdRoute
@@ -835,6 +843,7 @@ export interface FileRoutesById {
   '/_app/ims/transfers/new': typeof AppImsTransfersNewRoute
   '/_app/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/_app/sales/invoices/new': typeof AppSalesInvoicesNewRoute
+  '/_app/sales/orders/$id': typeof AppSalesOrdersIdRoute
   '/_app/sales/payments/new': typeof AppSalesPaymentsNewRoute
   '/_app/challan/customer/': typeof AppChallanCustomerIndexRoute
   '/_app/challan/oem/': typeof AppChallanOemIndexRoute
@@ -932,6 +941,7 @@ export interface FileRouteTypes {
     | '/ims/transfers/new'
     | '/sales/invoices/$id'
     | '/sales/invoices/new'
+    | '/sales/orders/$id'
     | '/sales/payments/new'
     | '/challan/customer/'
     | '/challan/oem/'
@@ -1012,6 +1022,7 @@ export interface FileRouteTypes {
     | '/ims/transfers/new'
     | '/sales/invoices/$id'
     | '/sales/invoices/new'
+    | '/sales/orders/$id'
     | '/sales/payments/new'
     | '/challan/customer'
     | '/challan/oem'
@@ -1108,6 +1119,7 @@ export interface FileRouteTypes {
     | '/_app/ims/transfers/new'
     | '/_app/sales/invoices/$id'
     | '/_app/sales/invoices/new'
+    | '/_app/sales/orders/$id'
     | '/_app/sales/payments/new'
     | '/_app/challan/customer/'
     | '/_app/challan/oem/'
@@ -1710,6 +1722,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSalesPaymentsNewRouteImport
       parentRoute: typeof AppSalesRoute
     }
+    '/_app/sales/orders/$id': {
+      id: '/_app/sales/orders/$id'
+      path: '/$id'
+      fullPath: '/sales/orders/$id'
+      preLoaderRoute: typeof AppSalesOrdersIdRouteImport
+      parentRoute: typeof AppSalesOrdersRoute
+    }
     '/_app/sales/invoices/new': {
       id: '/_app/sales/invoices/new'
       path: '/invoices/new'
@@ -2054,8 +2073,20 @@ const AppPoRouteChildren: AppPoRouteChildren = {
 
 const AppPoRouteWithChildren = AppPoRoute._addFileChildren(AppPoRouteChildren)
 
+interface AppSalesOrdersRouteChildren {
+  AppSalesOrdersIdRoute: typeof AppSalesOrdersIdRoute
+}
+
+const AppSalesOrdersRouteChildren: AppSalesOrdersRouteChildren = {
+  AppSalesOrdersIdRoute: AppSalesOrdersIdRoute,
+}
+
+const AppSalesOrdersRouteWithChildren = AppSalesOrdersRoute._addFileChildren(
+  AppSalesOrdersRouteChildren,
+)
+
 interface AppSalesRouteChildren {
-  AppSalesOrdersRoute: typeof AppSalesOrdersRoute
+  AppSalesOrdersRoute: typeof AppSalesOrdersRouteWithChildren
   AppSalesQuotationsRoute: typeof AppSalesQuotationsRoute
   AppSalesSettingsRoute: typeof AppSalesSettingsRoute
   AppSalesIndexRoute: typeof AppSalesIndexRoute
@@ -2068,7 +2099,7 @@ interface AppSalesRouteChildren {
 }
 
 const AppSalesRouteChildren: AppSalesRouteChildren = {
-  AppSalesOrdersRoute: AppSalesOrdersRoute,
+  AppSalesOrdersRoute: AppSalesOrdersRouteWithChildren,
   AppSalesQuotationsRoute: AppSalesQuotationsRoute,
   AppSalesSettingsRoute: AppSalesSettingsRoute,
   AppSalesIndexRoute: AppSalesIndexRoute,

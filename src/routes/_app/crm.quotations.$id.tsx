@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
 import type { ProductMaster } from "@/components/ProductPicker";
@@ -18,6 +18,7 @@ import { BundleApplyDialog } from "@/components/BundleApplyDialog";
 import { fetchBundleChildrenRaw } from "@/lib/productBundles";
 import { waOpen } from "@/lib/tickets";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
+import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
