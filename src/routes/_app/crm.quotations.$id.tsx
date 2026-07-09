@@ -11,8 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
+import type { ProductMaster } from "@/components/ProductPicker";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { UpsSmartPanel } from "@/components/UpsSmartPanel";
+import { BundleApplyDialog } from "@/components/BundleApplyDialog";
+import { fetchBundleChildrenRaw } from "@/lib/productBundles";
 import { waOpen } from "@/lib/tickets";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import {
@@ -44,6 +47,9 @@ function QuoteEditor() {
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [invSettings, setInvSettings] = useState<InvoiceSettingsRow | null>(null);
   const [termsTouched, setTermsTouched] = useState(false);
+  const [bundleFor, setBundleFor] = useState<ProductMaster | null>(null);
+  const [bundleOpen, setBundleOpen] = useState(false);
+  const [bundleParentQty, setBundleParentQty] = useState(1);
 
   const load = async () => {
     const { data } = await supabase.from("quotations").select("*").eq("id", id).single();
