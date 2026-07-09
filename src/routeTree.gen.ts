@@ -46,6 +46,7 @@ import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.d
 import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
 import { Route as AppSalesSettingsRouteImport } from './routes/_app/sales.settings'
 import { Route as AppSalesQuotationsRouteImport } from './routes/_app/sales.quotations'
+import { Route as AppSalesOrdersRouteImport } from './routes/_app/sales.orders'
 import { Route as AppPoSettingsRouteImport } from './routes/_app/po.settings'
 import { Route as AppPoNewRouteImport } from './routes/_app/po.new'
 import { Route as AppPoIdRouteImport } from './routes/_app/po.$id'
@@ -285,6 +286,11 @@ const AppSalesSettingsRoute = AppSalesSettingsRouteImport.update({
 const AppSalesQuotationsRoute = AppSalesQuotationsRouteImport.update({
   id: '/quotations',
   path: '/quotations',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesOrdersRoute = AppSalesOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
   getParentRoute: () => AppSalesRoute,
 } as any)
 const AppPoSettingsRoute = AppPoSettingsRouteImport.update({
@@ -624,6 +630,7 @@ export interface FileRoutesByFullPath {
   '/po/$id': typeof AppPoIdRoute
   '/po/new': typeof AppPoNewRoute
   '/po/settings': typeof AppPoSettingsRoute
+  '/sales/orders': typeof AppSalesOrdersRoute
   '/sales/quotations': typeof AppSalesQuotationsRoute
   '/sales/settings': typeof AppSalesSettingsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
@@ -703,6 +710,7 @@ export interface FileRoutesByTo {
   '/po/$id': typeof AppPoIdRoute
   '/po/new': typeof AppPoNewRoute
   '/po/settings': typeof AppPoSettingsRoute
+  '/sales/orders': typeof AppSalesOrdersRoute
   '/sales/quotations': typeof AppSalesQuotationsRoute
   '/sales/settings': typeof AppSalesSettingsRoute
   '/tickets/$id': typeof AppTicketsIdRoute
@@ -799,6 +807,7 @@ export interface FileRoutesById {
   '/_app/po/$id': typeof AppPoIdRoute
   '/_app/po/new': typeof AppPoNewRoute
   '/_app/po/settings': typeof AppPoSettingsRoute
+  '/_app/sales/orders': typeof AppSalesOrdersRoute
   '/_app/sales/quotations': typeof AppSalesQuotationsRoute
   '/_app/sales/settings': typeof AppSalesSettingsRoute
   '/_app/tickets/$id': typeof AppTicketsIdRoute
@@ -895,6 +904,7 @@ export interface FileRouteTypes {
     | '/po/$id'
     | '/po/new'
     | '/po/settings'
+    | '/sales/orders'
     | '/sales/quotations'
     | '/sales/settings'
     | '/tickets/$id'
@@ -974,6 +984,7 @@ export interface FileRouteTypes {
     | '/po/$id'
     | '/po/new'
     | '/po/settings'
+    | '/sales/orders'
     | '/sales/quotations'
     | '/sales/settings'
     | '/tickets/$id'
@@ -1069,6 +1080,7 @@ export interface FileRouteTypes {
     | '/_app/po/$id'
     | '/_app/po/new'
     | '/_app/po/settings'
+    | '/_app/sales/orders'
     | '/_app/sales/quotations'
     | '/_app/sales/settings'
     | '/_app/tickets/$id'
@@ -1374,6 +1386,13 @@ declare module '@tanstack/react-router' {
       path: '/quotations'
       fullPath: '/sales/quotations'
       preLoaderRoute: typeof AppSalesQuotationsRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/orders': {
+      id: '/_app/sales/orders'
+      path: '/orders'
+      fullPath: '/sales/orders'
+      preLoaderRoute: typeof AppSalesOrdersRouteImport
       parentRoute: typeof AppSalesRoute
     }
     '/_app/po/settings': {
@@ -2036,6 +2055,7 @@ const AppPoRouteChildren: AppPoRouteChildren = {
 const AppPoRouteWithChildren = AppPoRoute._addFileChildren(AppPoRouteChildren)
 
 interface AppSalesRouteChildren {
+  AppSalesOrdersRoute: typeof AppSalesOrdersRoute
   AppSalesQuotationsRoute: typeof AppSalesQuotationsRoute
   AppSalesSettingsRoute: typeof AppSalesSettingsRoute
   AppSalesIndexRoute: typeof AppSalesIndexRoute
@@ -2048,6 +2068,7 @@ interface AppSalesRouteChildren {
 }
 
 const AppSalesRouteChildren: AppSalesRouteChildren = {
+  AppSalesOrdersRoute: AppSalesOrdersRoute,
   AppSalesQuotationsRoute: AppSalesQuotationsRoute,
   AppSalesSettingsRoute: AppSalesSettingsRoute,
   AppSalesIndexRoute: AppSalesIndexRoute,
