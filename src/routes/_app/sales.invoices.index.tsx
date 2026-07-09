@@ -1,11 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search } from "lucide-react";
 import { inr, statusMeta, INVOICE_STATUSES, type InvoiceRow, type InvoiceStatus } from "@/lib/sales";
+import { useDebounced, pageRange } from "@/lib/sales.hooks";
+import { PaginationFooter } from "@/components/PaginationFooter";
+import { PermButton } from "@/components/PermGate";
 
 export const Route = createFileRoute("/_app/sales/invoices/")({
   component: InvoiceList,
@@ -13,41 +16,50 @@ export const Route = createFileRoute("/_app/sales/invoices/")({
 });
 
 function InvoiceList() {
-  const [rows, setRows] = useState<InvoiceRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<InvoiceStatus | "all">("all");
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
+  const debouncedQ = useDebounced(q.trim(), 300);
+  // Reset paging when filters change.
+  useMemo(() => setPage(0), [debouncedQ, status]);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      let query = supabase.from("invoices").select("*").order("invoice_date", { ascending: false }).limit(500);
-      if (status !== "all") query = query.eq("status", status);
-      const { data } = await query;
-      setRows(((data ?? []) as unknown as InvoiceRow[]));
-      setLoading(false);
-    })();
-  }, [status]);
+  const query = useQuery({
+    queryKey: ["invoices", { status, q: debouncedQ, page, pageSize }],
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { from, to } = pageRange(page, pageSize);
+      let sel = supabase.from("invoices").select("*", { count: "exact" })
+        .order("invoice_date", { ascending: false }).range(from, to);
+      if (status !== "all") sel = sel.eq("status", status);
+      if (debouncedQ) {
+        // Sanitize %/_ so search input can't broaden the LIKE pattern.
+        const safe = debouncedQ.replace(/[%_]/g, "\\$&");
+        sel = sel.or(`invoice_no.ilike.%${safe}%,buyer_name.ilike.%${safe}%,buyer_gstin.ilike.%${safe}%`);
+      }
+      const { data, count, error } = await sel;
+      if (error) throw error;
+      return { rows: (data ?? []) as unknown as InvoiceRow[], count: count ?? 0 };
+    },
+  });
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) =>
-      [r.invoice_no, r.buyer_name, r.buyer_gstin].filter(Boolean).some((v) => String(v).toLowerCase().includes(s)),
-    );
-  }, [rows, q]);
+  const rows = query.data?.rows ?? [];
+  const total = query.data?.count ?? null;
 
   const totals = useMemo(() => {
-    const total = filtered.reduce((s, r) => s + Number(r.total || 0), 0);
-    const paid = filtered.reduce((s, r) => s + Number(r.total_paid || 0), 0);
-    return { total, paid, due: total - paid };
-  }, [filtered]);
+    const tot = rows.reduce((s, r) => s + Number(r.total || 0), 0);
+    const paid = rows.reduce((s, r) => s + Number(r.total_paid || 0), 0);
+    return { total: tot, paid, due: tot - paid };
+  }, [rows]);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-bold">Invoices</h2>
-        <Button asChild size="sm"><Link to="/sales/invoices/new"><Plus className="h-4 w-4 mr-1" />New Invoice</Link></Button>
+        <PermButton module="sales" action="create" size="sm" asChild reason="You don't have permission to create invoices.">
+          <Link to="/sales/invoices/new"><Plus className="h-4 w-4 mr-1" />New Invoice</Link>
+        </PermButton>
       </div>
 
       <Card>
@@ -61,14 +73,15 @@ function InvoiceList() {
             {INVOICE_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
           <div className="ml-auto text-xs text-muted-foreground">
-            <span className="mr-3">Total: <b>{inr(totals.total)}</b></span>
+            <span className="mr-3">Page total: <b>{inr(totals.total)}</b></span>
             <span className="mr-3">Paid: <b className="text-emerald-700">{inr(totals.paid)}</b></span>
             <span>Due: <b className="text-amber-700">{inr(totals.due)}</b></span>
           </div>
         </CardContent>
       </Card>
 
-      <div className="border rounded-md overflow-auto max-h-[70vh]">
+      <div className="border rounded-md overflow-hidden">
+        <div className="overflow-auto max-h-[65vh]">
         <table className="w-full text-sm">
           <thead className="bg-muted sticky top-0 z-10 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
@@ -84,11 +97,11 @@ function InvoiceList() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {query.isLoading ? (
               <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">Loading…</td></tr>
-            ) : filtered.length === 0 ? (
+            ) : rows.length === 0 ? (
               <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">No invoices.</td></tr>
-            ) : filtered.map((r) => {
+            ) : rows.map((r) => {
               const s = statusMeta(r.status);
               const due = Math.max(0, Number(r.total) - Number(r.total_paid));
               return (
@@ -111,6 +124,8 @@ function InvoiceList() {
             })}
           </tbody>
         </table>
+        </div>
+        <PaginationFooter page={page} pageSize={pageSize} total={total} onPage={setPage} isFetching={query.isFetching && !query.isLoading} />
       </div>
     </div>
   );
