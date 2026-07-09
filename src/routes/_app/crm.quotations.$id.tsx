@@ -313,14 +313,27 @@ function QuoteEditor() {
                   <Label className="text-xs">Item / Description <span className="text-muted-foreground font-normal">(from Product Master)</span></Label>
                   <ProductPicker
                     value={(it as any).product_id || ""}
-                    onChange={(id, p) => setItem(i, {
+                    onChange={(id, p) => {
+                      setItem(i, {
                       product_id: id || "",
                       product_name: p?.name || undefined,
                       description: p?.name || it.description,
                       hsn: p?.hsn || it.hsn,
                       unit: p?.unit || it.unit,
                       rate: p?.default_price != null ? Number(p.default_price) : it.rate,
-                    } as Partial<QuoteItem>)}
+                      } as Partial<QuoteItem>);
+                      // Fire-and-forget bundle check: if this product has bundle children,
+                      // open the dialog to let the user accept/adjust suggestions.
+                      if (id && p) {
+                        fetchBundleChildrenRaw(id).then((rows) => {
+                          if (rows.length > 0) {
+                            setBundleParentQty(Number(it.qty) || 1);
+                            setBundleFor(p);
+                            setBundleOpen(true);
+                          }
+                        }).catch(() => {});
+                      }
+                    }}
                   />
                 </div>
                 <div className="col-span-3 md:col-span-1"><Label className="text-xs">HSN</Label><Input value={it.hsn || ""} onChange={(e) => setItem(i, { hsn: e.target.value })} /></div>
