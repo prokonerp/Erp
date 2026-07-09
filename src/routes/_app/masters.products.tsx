@@ -21,6 +21,7 @@ import { parseCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import type { ProductMaster } from "@/components/ProductPicker";
 import { SerialsManager } from "@/components/SerialsManager";
+import { fetchBundleChildrenRaw, saveBundleForParent, type BundleChildRow } from "@/lib/productBundles";
 
 export const Route = createFileRoute("/_app/masters/products")({
   component: ProductMasterPage,
@@ -117,6 +118,9 @@ export function ProductMasterPage() {
   const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentSearch, setParentSearch] = useState("");
+  const [bundle, setBundle] = useState<Array<{ child_product_id: string; default_qty: number; mandatory: boolean; editable_qty: boolean; note: string | null }>>([]);
+  const [bundleChildPickerOpen, setBundleChildPickerOpen] = useState(false);
+  const [bundleChildSearch, setBundleChildSearch] = useState("");
   void linkedParents; // reserved for future UI
 
   const load = async () => {
@@ -168,6 +172,7 @@ export function ProductMasterPage() {
     setParentIds([]);
     setLinkedSpares([]);
     setLinkedParents([]);
+    setBundle([]);
     const hasParentTagging = !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY;
     if (hasParentTagging) {
       const { data } = await supabase
@@ -186,6 +191,17 @@ export function ProductMasterPage() {
       const ids = ((data || []) as unknown as { spare_part_id: string }[]).map((r) => r.spare_part_id);
       setLinkedSpares(rows.filter((r) => ids.includes(r.id)));
     }
+    // Load bundle configuration where this product is the parent.
+    try {
+      const rowsB: BundleChildRow[] = await fetchBundleChildrenRaw(p.id);
+      setBundle(rowsB.map((r) => ({
+        child_product_id: r.child_product_id,
+        default_qty: Number(r.default_qty) || 1,
+        mandatory: !!r.mandatory,
+        editable_qty: r.editable_qty !== false,
+        note: r.note ?? null,
+      })));
+    } catch { /* ignore */ }
   }
 
   const categories = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[], [rows]);
