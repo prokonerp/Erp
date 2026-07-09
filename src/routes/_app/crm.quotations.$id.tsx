@@ -96,6 +96,7 @@ function QuoteEditor() {
   const save = async () => {
     if (!q) return;
     const { error } = await supabase.from("quotations").update({
+      customer_id: (q as any).customer_id,
       reference_no: q.reference_no, subject: q.subject,
       quote_date: q.quote_date, expiry_date: q.expiry_date, validity_days: q.validity_days,
       salesperson: q.salesperson, project_name: q.project_name,
