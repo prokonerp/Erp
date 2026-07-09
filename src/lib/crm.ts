@@ -44,6 +44,8 @@ export type LeadActivity = {
 
 // Zoho-style line item
 export type QuoteItem = {
+  product_id?: string;         // reference to products master (optional)
+  product_name?: string;       // snapshot of master name at time of save
   description: string;
   item_details?: string;      // extra notes line under description
   hsn?: string;
