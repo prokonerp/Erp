@@ -14,6 +14,7 @@ import { ProductPicker } from "@/components/ProductPicker";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { UpsSmartPanel } from "@/components/UpsSmartPanel";
 import { waOpen } from "@/lib/tickets";
+import { fetchBranches, type BranchRow } from "@/lib/sales";
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
@@ -21,12 +22,28 @@ import {
 
 export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
 
+type InvoiceSettingsRow = {
+  branch_id: string;
+  company_name: string | null;
+  company_address: string | null;
+  udyam_no: string | null;
+  phone: string | null;
+  email: string | null;
+  theme_color: string;
+  terms_default: string | null;
+  notes_default: string | null;
+  place_of_supply_default: string | null;
+};
+
 function QuoteEditor() {
   const { id } = Route.useParams();
   const [q, setQ] = useState<Quotation | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [templates, setTemplates] = useState<QuoteTermsTemplate[]>([]);
   const [settings, setSettings] = useState<CrmSettings | null>(null);
+  const [branches, setBranches] = useState<BranchRow[]>([]);
+  const [invSettings, setInvSettings] = useState<InvoiceSettingsRow | null>(null);
+  const [termsTouched, setTermsTouched] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from("quotations").select("*").eq("id", id).single();
@@ -43,7 +60,37 @@ function QuoteEditor() {
     load();
     supabase.from("quote_terms_templates").select("*").order("sort_order").then(({ data }) => setTemplates((data || []) as any));
     supabase.from("crm_settings").select("*").eq("id", 1).single().then(({ data }) => setSettings((data as any) || { id: 1, business_state: "Haryana", business_gstin: null, default_terms: "", default_customer_notes: "Thanks for your business." }));
+    fetchBranches().then((bs) => setBranches(bs)).catch(() => {});
   }, [id]);
+
+  // Default branch on first load
+  useEffect(() => {
+    if (!q || q.branch_id || branches.length === 0) return;
+    const def = branches.find((b) => b.is_default) || branches[0];
+    if (def) setQ({ ...q, branch_id: def.id });
+  }, [branches, q?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const branch = useMemo(() => branches.find((b) => b.id === q?.branch_id) || null, [branches, q?.branch_id]);
+
+  // Load invoice_settings for the chosen branch → company header + defaults
+  useEffect(() => {
+    if (!q?.branch_id) { setInvSettings(null); return; }
+    supabase
+      .from("invoice_settings")
+      .select("branch_id,company_name,company_address,udyam_no,phone,email,theme_color,terms_default,notes_default,place_of_supply_default")
+      .eq("branch_id", q.branch_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        const s = (data as InvoiceSettingsRow | null) || null;
+        setInvSettings(s);
+        if (!q) return;
+        const patch: Partial<Quotation> = {};
+        if (!termsTouched && !q.terms && s?.terms_default) patch.terms = s.terms_default;
+        if (!q.customer_notes && s?.notes_default) patch.customer_notes = s.notes_default;
+        if (!q.place_of_supply && s?.place_of_supply_default) patch.place_of_supply = s.place_of_supply_default;
+        if (Object.keys(patch).length) setQ({ ...q, ...patch });
+      });
+  }, [q?.branch_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const totals = useMemo(() => {
     if (!q || !settings) return { subtotal: 0, total_tax: 0, cgst_amount: 0, sgst_amount: 0, igst_amount: 0, tcs_amount: 0, total: 0 };
@@ -90,6 +137,10 @@ function QuoteEditor() {
       billing_address: c?.billing_address || q.billing_address || "",
       shipping_address: c?.shipping_address || c?.billing_address || q.shipping_address || "",
       place_of_supply: c?.state || q.place_of_supply,
+      contact_name: c?.contact_name || q.contact_name || null,
+      contact_email: c?.email || q.contact_email || null,
+      contact_phone: c?.phone || q.contact_phone || null,
+      payment_terms: q.payment_terms || (c as any)?.payment_terms || null,
     } as Quotation);
   };
 
@@ -97,9 +148,15 @@ function QuoteEditor() {
     if (!q) return;
     const { error } = await supabase.from("quotations").update({
       customer_id: (q as any).customer_id,
+      branch_id: q.branch_id,
       reference_no: q.reference_no, subject: q.subject,
       quote_date: q.quote_date, expiry_date: q.expiry_date, validity_days: q.validity_days,
       salesperson: q.salesperson, project_name: q.project_name,
+      payment_terms: q.payment_terms,
+      delivery_timeline: q.delivery_timeline,
+      contact_name: q.contact_name,
+      contact_email: q.contact_email,
+      contact_phone: q.contact_phone,
       billing_address: q.billing_address, shipping_address: q.shipping_address,
       place_of_supply: q.place_of_supply,
       items: q.items as any,
