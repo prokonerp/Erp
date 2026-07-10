@@ -52,6 +52,22 @@ import { Badge } from "@/components/ui/badge";
 import { computeActivityStatus, type ActivityStatus } from "@/lib/useActivityTracker";
 import { ArrowUpDown } from "lucide-react";
 
+function ActivityBadge({ status }: { status: ActivityStatus }) {
+  const map: Record<ActivityStatus, { label: string; dot: string; cls: string }> = {
+    active:  { label: "Active",  dot: "bg-emerald-500", cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
+    idle:    { label: "Idle",    dot: "bg-amber-500",   cls: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300" },
+    offline: { label: "Offline", dot: "bg-zinc-500",    cls: "border-zinc-500/40 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300" },
+    never:   { label: "Never",   dot: "bg-zinc-300",    cls: "border-zinc-300/60 bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400" },
+  };
+  const m = map[status];
+  return (
+    <Badge variant="outline" className={`gap-1.5 ${m.cls}`}>
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${m.dot}`} />
+      {m.label}
+    </Badge>
+  );
+}
+
 type Role = { id: string; name: string; description: string | null; is_system: boolean };
 type Perm = {
   id: string;
