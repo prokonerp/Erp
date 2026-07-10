@@ -41,6 +41,16 @@ import { Trash2, Plus, KeyRound, Pencil, ShieldAlert, Boxes } from "lucide-react
 import { toast } from "sonner";
 import { ModuleKey, ModulePerm, EMPTY_PERM } from "@/lib/permissions";
 import { useModules, type AppModule } from "@/lib/useModules";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { computeActivityStatus, type ActivityStatus } from "@/lib/useActivityTracker";
+import { ArrowUpDown } from "lucide-react";
 
 type Role = { id: string; name: string; description: string | null; is_system: boolean };
 type Perm = {
@@ -63,6 +73,10 @@ type AppUser = {
   role_id: string | null;
   status: string;
   custom_permissions: any;
+  last_login?: string | null;
+  last_activity?: string | null;
+  last_logout?: string | null;
+  login_count?: number | null;
 };
 
 export function RolesAndUsersPanel({ isAdmin }: { isAdmin: boolean }) {
