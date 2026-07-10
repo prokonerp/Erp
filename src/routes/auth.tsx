@@ -1,5 +1,5 @@
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,17 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem("idle-session-expired")) {
+      sessionStorage.removeItem("idle-session-expired");
+      toast.info(
+        "Your session has expired due to 30 minutes of inactivity. Please sign in again.",
+        { duration: 8000 },
+      );
+    }
+  }, []);
 
   if (loading) return <div className="p-8">Loading…</div>;
   if (session) return <Navigate to="/dashboard" />;
