@@ -39,6 +39,7 @@ import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { getMyProfile } from "@/lib/admin-users.functions";
 import { UserProfileMenu, type ProfileInfo } from "@/components/UserProfileMenu";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
+import { IdleTimeout } from "@/components/IdleTimeout";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app")({
@@ -372,6 +373,7 @@ function AppLayout() {
           loadProfile();
         }}
       />
+      <IdleTimeout />
     </div>
   );
 }
