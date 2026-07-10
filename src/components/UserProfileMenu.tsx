@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { KeyRound, LogOut, ShieldCheck } from "lucide-react";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
+import { recordLogout } from "@/lib/useActivityTracker";
 
 export type ProfileInfo = {
   name: string | null;
@@ -42,6 +43,7 @@ export function UserProfileMenu({
   const [pwdOpen, setPwdOpen] = useState(false);
 
   async function signOut() {
+    await recordLogout();
     await supabase.auth.signOut();
     navigate({ to: "/auth" });
   }

@@ -41,6 +41,32 @@ import { Trash2, Plus, KeyRound, Pencil, ShieldAlert, Boxes } from "lucide-react
 import { toast } from "sonner";
 import { ModuleKey, ModulePerm, EMPTY_PERM } from "@/lib/permissions";
 import { useModules, type AppModule } from "@/lib/useModules";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { computeActivityStatus, type ActivityStatus } from "@/lib/useActivityTracker";
+import { ArrowUpDown } from "lucide-react";
+
+function ActivityBadge({ status }: { status: ActivityStatus }) {
+  const map: Record<ActivityStatus, { label: string; dot: string; cls: string }> = {
+    active:  { label: "Active",  dot: "bg-emerald-500", cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
+    idle:    { label: "Idle",    dot: "bg-amber-500",   cls: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300" },
+    offline: { label: "Offline", dot: "bg-zinc-500",    cls: "border-zinc-500/40 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300" },
+    never:   { label: "Never",   dot: "bg-zinc-300",    cls: "border-zinc-300/60 bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400" },
+  };
+  const m = map[status];
+  return (
+    <Badge variant="outline" className={`gap-1.5 ${m.cls}`}>
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${m.dot}`} />
+      {m.label}
+    </Badge>
+  );
+}
 
 type Role = { id: string; name: string; description: string | null; is_system: boolean };
 type Perm = {
@@ -63,6 +89,10 @@ type AppUser = {
   role_id: string | null;
   status: string;
   custom_permissions: any;
+  last_login?: string | null;
+  last_activity?: string | null;
+  last_logout?: string | null;
+  login_count?: number | null;
 };
 
 export function RolesAndUsersPanel({ isAdmin }: { isAdmin: boolean }) {
@@ -358,6 +388,14 @@ function UsersSection() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
   const [pwdFor, setPwdFor] = useState<AppUser | null>(null);
+  const [activityFilter, setActivityFilter] = useState<ActivityStatus | "all">("all");
+  const [sortBy, setSortBy] = useState<"activity" | "last_login" | "last_activity" | "login_count" | "name">("activity");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const callListAuth = useServerFn(listAuthUsers);
   const callCreate = useServerFn(createAppUser);
@@ -398,37 +436,111 @@ function UsersSection() {
     return m;
   }, [authUsers]);
 
+  const rows = useMemo(() => {
+    const nowMs = Date.now();
+    void tick; // recompute periodically
+    const withStatus = appUsers.map((u) => ({
+      u,
+      status: computeActivityStatus({
+        last_login: u.last_login ?? null,
+        last_activity: u.last_activity ?? null,
+        last_logout: u.last_logout ?? null,
+      }, nowMs),
+    }));
+    const filtered = activityFilter === "all" ? withStatus : withStatus.filter((r) => r.status === activityFilter);
+    const cmp = (a: typeof filtered[number], b: typeof filtered[number]) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      const g = (v: string | null | undefined) => (v ? Date.parse(v) : 0);
+      switch (sortBy) {
+        case "name": return dir * ((a.u.name ?? "").localeCompare(b.u.name ?? ""));
+        case "last_login": return dir * (g(a.u.last_login) - g(b.u.last_login));
+        case "last_activity": return dir * (g(a.u.last_activity) - g(b.u.last_activity));
+        case "login_count": return dir * ((a.u.login_count ?? 0) - (b.u.login_count ?? 0));
+        case "activity":
+        default: {
+          const order: Record<ActivityStatus, number> = { active: 3, idle: 2, offline: 1, never: 0 };
+          return dir * (order[a.status] - order[b.status]);
+        }
+      }
+    };
+    return [...filtered].sort(cmp);
+  }, [appUsers, activityFilter, sortBy, sortDir, tick]);
+
+  const toggleSort = (key: typeof sortBy) => {
+    if (sortBy === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortBy(key); setSortDir("desc"); }
+  };
+  const fmt = (v: string | null | undefined) => (v ? new Date(v).toLocaleString() : "—");
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Users</CardTitle>
-        <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
-          <Plus className="h-4 w-4 mr-1" /> New user
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={activityFilter} onValueChange={(v) => setActivityFilter(v as any)}>
+            <SelectTrigger className="h-8 w-[170px]">
+              <SelectValue placeholder="Activity" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All activity</SelectItem>
+              <SelectItem value="active">🟢 Active</SelectItem>
+              <SelectItem value="idle">🟡 Idle</SelectItem>
+              <SelectItem value="offline">⚫ Offline</SelectItem>
+              <SelectItem value="never">⚪ Never Logged In</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
+            <Plus className="h-4 w-4 mr-1" /> New user
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead>
+                  <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort("name")}>
+                    Name <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Last sign-in</TableHead>
+                <TableHead>
+                  <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort("activity")}>
+                    Activity <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort("last_login")}>
+                    Last Login <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort("last_activity")}>
+                    Last Activity <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
+                <TableHead>Last Logout</TableHead>
+                <TableHead>
+                  <button className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort("login_count")}>
+                    Logins <ArrowUpDown className="h-3 w-3" />
+                  </button>
+                </TableHead>
                 <TableHead className="w-32">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {appUsers.length === 0 ? (
+              {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-sm text-muted-foreground">
+                  <TableCell colSpan={11} className="text-sm text-muted-foreground">
                     No users yet.
                   </TableCell>
                 </TableRow>
               ) : (
-                appUsers.map((u) => {
+                rows.map(({ u, status }) => {
                   const a = authMap.get(u.user_id);
                   const admin = adminIds.has(u.user_id);
                   return (
@@ -442,13 +554,13 @@ function UsersSection() {
                           {u.status}
                         </span>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {a?.last_sign_in_at
-                          ? new Date(a.last_sign_in_at).toLocaleString()
-                          : authLoading
-                            ? "Loading…"
-                            : "Never"}
+                      <TableCell><ActivityBadge status={status} /></TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {u.last_login ? fmt(u.last_login) : (a?.last_sign_in_at ? fmt(a.last_sign_in_at) : (authLoading ? "Loading…" : "—"))}
                       </TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{fmt(u.last_activity)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{fmt(u.last_logout)}</TableCell>
+                      <TableCell className="text-xs tabular-nums">{u.login_count ?? 0}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button size="icon" variant="ghost" onClick={() => { setEditing(u); setOpen(true); }}>

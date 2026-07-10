@@ -40,6 +40,7 @@ import { getMyProfile } from "@/lib/admin-users.functions";
 import { UserProfileMenu, type ProfileInfo } from "@/components/UserProfileMenu";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { IdleTimeout } from "@/components/IdleTimeout";
+import { useActivityTracker } from "@/lib/useActivityTracker";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app")({
@@ -48,6 +49,7 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   const { session, loading } = useAuth();
+  useActivityTracker(!!session);
   const location = useLocation();
   const { can, isAdmin, loading: permLoading } = usePermissions();
   const [profile, setProfile] = useState<ProfileInfo | null>(null);

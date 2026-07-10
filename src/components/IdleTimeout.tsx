@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { recordLogout } from "@/lib/useActivityTracker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +50,7 @@ export function IdleTimeout() {
       if (typeof window !== "undefined") {
         sessionStorage.setItem(EXPIRED_KEY, "1");
       }
+      await recordLogout();
       await supabase.auth.signOut();
     } catch {
       // ignore

@@ -256,6 +256,10 @@ export type Database = {
           created_at: string
           custom_permissions: Json | null
           email: string | null
+          last_activity: string | null
+          last_login: string | null
+          last_logout: string | null
+          login_count: number
           must_change_password: boolean
           name: string | null
           password_changed_at: string
@@ -269,6 +273,10 @@ export type Database = {
           created_at?: string
           custom_permissions?: Json | null
           email?: string | null
+          last_activity?: string | null
+          last_login?: string | null
+          last_logout?: string | null
+          login_count?: number
           must_change_password?: boolean
           name?: string | null
           password_changed_at?: string
@@ -282,6 +290,10 @@ export type Database = {
           created_at?: string
           custom_permissions?: Json | null
           email?: string | null
+          last_activity?: string | null
+          last_login?: string | null
+          last_logout?: string | null
+          login_count?: number
           must_change_password?: boolean
           name?: string | null
           password_changed_at?: string
@@ -4038,6 +4050,9 @@ export type Database = {
           tickets_deleted: number
         }[]
       }
+      record_user_activity: { Args: never; Returns: undefined }
+      record_user_login: { Args: never; Returns: undefined }
+      record_user_logout: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user"
