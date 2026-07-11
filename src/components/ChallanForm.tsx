@@ -162,7 +162,6 @@ export function ChallanForm({ docType }: Props) {
       dispatch_date: form.dispatch_date || null,
       items: cleanItems,
       created_by: userData.user?.id ?? null,
-      ...(sourceRef?.indent_id ? { source_indent_id: sourceRef.indent_id, source_indent_no: sourceRef.indent_no ?? null } : {}),
     };
     const { data, error } = await supabase
       .from("delivery_challans" as never)
