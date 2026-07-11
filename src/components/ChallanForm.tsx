@@ -25,7 +25,6 @@ export function ChallanForm({ docType }: Props) {
   const isOem = docType === "oem";
   const [items, setItems] = useState<ChallanItem[]>([emptyItem()]);
   const [partyId, setPartyId] = useState<string | null>(null);
-  const [sourceRef, setSourceRef] = useState<{ indent_id?: string; indent_no?: string | null } | null>(null);
   const [form, setForm] = useState({
     status: "Draft",
     challan_date: new Date().toISOString().slice(0, 10),
@@ -80,10 +79,6 @@ export function ChallanForm({ docType }: Props) {
       reference_no: (payload.reference_no as string) || f.reference_no,
       internal_remarks: (payload.internal_remarks as string) || f.internal_remarks,
     }));
-    setSourceRef({
-      indent_id: payload.indent_id as string | undefined,
-      indent_no: (payload.indent_no as string | null | undefined) ?? null,
-    });
     // Fetch and apply the customer so the picker + party fields are populated.
     if (customerId) {
       (async () => {
