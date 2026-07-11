@@ -9,7 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Eye, Copy } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Eye, Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
@@ -33,6 +37,7 @@ function QuotesList() {
   const [open, setOpen] = useState(false);
   const [custId, setCustId] = useState("");
   const [subject, setSubject] = useState("");
+  const [delId, setDelId] = useState<string | null>(null);
 
   const load = async () => {
     const [a, c] = await Promise.all([
@@ -66,17 +71,25 @@ function QuotesList() {
     nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
   };
 
-  const duplicate = async (r: Quotation) => {
-    const { data: u } = await supabase.auth.getUser();
-    const copy: any = { ...r };
-    delete copy.id; delete copy.created_at; delete copy.updated_at; delete copy.quote_no;
-    copy.owner_id = u.user!.id;
-    copy.status = "draft";
-    copy.quote_date = new Date().toISOString().slice(0, 10);
-    const { data, error } = await supabase.from("quotations").insert(copy).select().single();
-    if (error) return toast.error(error.message);
-    toast.success("Duplicated");
-    nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
+  const duplicate = (r: Quotation) => {
+    // Stash the source id; the editor opens an unsaved working copy
+    // that only persists when the user clicks Save.
+    try {
+      sessionStorage.setItem("quote_clone_source", r.id);
+    } catch {}
+    nav({ to: "/crm/quotations/$id", params: { id: "new" } });
+  };
+
+  const confirmDelete = async () => {
+    if (!delId) return;
+    const { error } = await supabase.from("quotations").delete().eq("id", delId);
+    if (error) {
+      toast.error(error.message || "Failed to delete quotation");
+      return;
+    }
+    setRows((prev) => prev.filter((r) => r.id !== delId));
+    setDelId(null);
+    toast.success("Quotation deleted successfully.");
   };
 
   const filtered = rows.filter((r) => {
@@ -162,12 +175,28 @@ function QuotesList() {
                 <TableCell className="text-right whitespace-nowrap">
                   <Link to="/crm/quotations/$id" params={{ id: r.id }}><Button size="sm" variant="ghost"><Eye className="h-4 w-4" /></Button></Link>
                   <Button size="sm" variant="ghost" onClick={() => duplicate(r)} title="Duplicate"><Copy className="h-4 w-4" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => setDelId(r.id)} title="Delete"><Trash2 className="h-4 w-4 text-red-600" /></Button>
                 </TableCell>
               </TableRow>
             ))}
             {filtered.length === 0 && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">No quotations</TableCell></TableRow>}
           </TableBody>
         </Table>
+
+        <AlertDialog open={!!delId} onOpenChange={(o) => !o && setDelId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Quotation</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this quotation? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
