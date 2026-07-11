@@ -43,6 +43,7 @@ type InvoiceSettingsRow = {
 function QuoteEditor() {
   const { id } = Route.useParams();
   const nav = useNavigate();
+  const isClone = id === "new";
   const [q, setQ] = useState<Quotation | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [templates, setTemplates] = useState<QuoteTermsTemplate[]>([]);
@@ -56,10 +57,29 @@ function QuoteEditor() {
   const [shareOpen, setShareOpen] = useState(false);
 
   const load = async () => {
-    const { data } = await supabase.from("quotations").select("*").eq("id", id).single();
+    let sourceId = id;
+    if (isClone) {
+      const src = (typeof sessionStorage !== "undefined" && sessionStorage.getItem("quote_clone_source")) || "";
+      if (!src) {
+        toast.error("No quotation to clone.");
+        nav({ to: "/crm/quotations" });
+        return;
+      }
+      sourceId = src;
+    }
+    const { data } = await supabase.from("quotations").select("*").eq("id", sourceId).single();
     if (!data) return;
     const quote = data as unknown as Quotation;
     quote.items = Array.isArray(quote.items) ? quote.items : [];
+    if (isClone) {
+      // Prepare an unsaved working copy — do not persist until user clicks Save.
+      (quote as any).id = "";
+      quote.quote_no = "";
+      quote.reference_no = null;
+      quote.status = "draft";
+      quote.quote_date = new Date().toISOString().slice(0, 10);
+      quote.expiry_date = new Date(Date.now() + (quote.validity_days || 15) * 86400000).toISOString().slice(0, 10);
+    }
     setQ(quote);
     if (quote.customer_id) {
       const { data: c } = await supabase.from("customers").select("*").eq("id", quote.customer_id).single();
@@ -156,7 +176,7 @@ function QuoteEditor() {
 
   const save = async () => {
     if (!q) return;
-    const { error } = await supabase.from("quotations").update({
+    const payload: any = {
       customer_id: (q as any).customer_id,
       branch_id: q.branch_id,
       reference_no: q.reference_no, subject: q.subject,
@@ -187,7 +207,18 @@ function QuoteEditor() {
       terms: q.terms,
       customer_notes: q.customer_notes,
       remarks: q.remarks,
-    } as any).eq("id", id);
+    };
+    if (isClone) {
+      const { data: u } = await supabase.auth.getUser();
+      payload.owner_id = u.user!.id;
+      const { data, error } = await supabase.from("quotations").insert(payload).select().single();
+      if (error) return toast.error(error.message);
+      try { sessionStorage.removeItem("quote_clone_source"); } catch {}
+      toast.success("Saved");
+      nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
+      return;
+    }
+    const { error } = await supabase.from("quotations").update(payload).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Saved");
     load();
@@ -196,6 +227,7 @@ function QuoteEditor() {
   const setStatus = async (s: QuoteStatus) => {
     if (!q) return;
     setQ({ ...q, status: s });
+    if (isClone) return; // clone is unsaved; just update local state
     await supabase.from("quotations").update({ status: s } as any).eq("id", id);
     toast.success("Status: " + s);
   };
@@ -237,16 +269,16 @@ function QuoteEditor() {
       <div className="flex items-center justify-between print:hidden flex-wrap gap-2">
         <Link to="/crm/quotations"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
         <div className="flex gap-2 flex-wrap">
-          <Badge variant="outline" className={quoteStatusClass[q.status]}>{q.status}</Badge>
+          <Badge variant="outline" className={quoteStatusClass[q.status]}>{isClone ? "unsaved copy" : q.status}</Badge>
           <Select value={q.status} onValueChange={(v: any) => setStatus(v)}>
             <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
             <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
           </Select>
-          <Button size="sm" variant="outline" onClick={sendEmail}><Mail className="h-4 w-4 mr-1" />Email</Button>
-          <Button size="sm" variant="outline" onClick={sendWA}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
-          <Button size="sm" variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print / PDF</Button>
-          <Button size="sm" onClick={() => setShareOpen(true)}><Share2 className="h-4 w-4 mr-1" />Share</Button>
-          <Button size="sm" variant="outline" onClick={convertToSo}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
+          <Button size="sm" variant="outline" onClick={sendEmail} disabled={isClone}><Mail className="h-4 w-4 mr-1" />Email</Button>
+          <Button size="sm" variant="outline" onClick={sendWA} disabled={isClone}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
+          <Button size="sm" variant="outline" onClick={() => window.print()} disabled={isClone}><Printer className="h-4 w-4 mr-1" />Print / PDF</Button>
+          <Button size="sm" onClick={() => setShareOpen(true)} disabled={isClone}><Share2 className="h-4 w-4 mr-1" />Share</Button>
+          <Button size="sm" variant="outline" onClick={convertToSo} disabled={isClone}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
           <Button size="sm" onClick={save}><Save className="h-4 w-4 mr-1" />Save</Button>
         </div>
       </div>
@@ -264,7 +296,7 @@ function QuoteEditor() {
       />
 
       <Card className="print:hidden">
-        <CardHeader><CardTitle className="text-base">{q.quote_no}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{q.quote_no || (isClone ? "New quotation (unsaved copy)" : "Quotation")}</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-3">
           <div className="md:col-span-3">
             <Label>Branch / Warehouse <span className="text-muted-foreground font-normal">(company header source)</span></Label>
