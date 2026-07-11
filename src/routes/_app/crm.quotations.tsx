@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Eye, Copy, Trash2 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, MoreVertical, Eye, Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
@@ -173,9 +176,24 @@ function QuotesList() {
                 <TableCell><Badge variant="outline" className={quoteStatusClass[r.status]}>{r.status}</Badge></TableCell>
                 <TableCell className="text-right">{fmtMoney(r.total)}</TableCell>
                 <TableCell className="text-right whitespace-nowrap">
-                  <Link to="/crm/quotations/$id" params={{ id: r.id }}><Button size="sm" variant="ghost"><Eye className="h-4 w-4" /></Button></Link>
-                  <Button size="sm" variant="ghost" onClick={() => duplicate(r)} title="Duplicate"><Copy className="h-4 w-4" /></Button>
-                  <Button size="sm" variant="ghost" onClick={() => setDelId(r.id)} title="Delete"><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="ghost" aria-label="More actions">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id } })} className="gap-2 cursor-pointer">
+                        <Eye className="h-4 w-4" /> View
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => duplicate(r)} className="gap-2 cursor-pointer">
+                        <Copy className="h-4 w-4" /> Clone
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setDelId(r.id)} className="gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950">
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             ))}
