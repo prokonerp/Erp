@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
+import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer, ChevronsDownUp, ChevronsUpDown, FileOutput } from "lucide-react";
 import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
@@ -129,6 +129,68 @@ function IndentDetail() {
     navigate({ to: "/indent" });
   };
 
+  const generateChallan = async () => {
+    if (!i) return;
+    // Aggregate exchange rows across all oracles as the material being sent to the customer.
+    const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
+    const oracles = i.oracles_data || [];
+    const items: Array<{
+      part_no: string; part_name: string; description: string;
+      uom: string; qty: string; batch_no: string; model_no?: string; serial_no?: string;
+    }> = [];
+    for (const o of oracles) {
+      const rows = (o.exchange_rows && o.exchange_rows.length)
+        ? o.exchange_rows
+        : (o.exchange ? [o.exchange] : []);
+      for (const ex of rows) {
+        const model = cleanModel(ex?.model_no);
+        const serial = (ex?.serial_no || "").trim();
+        const qty = (ex?.qty || "").trim();
+        if (!model && !serial && !qty) continue;
+        const [maybeName, maybeModel] = (ex?.model_no || "").split("||");
+        items.push({
+          part_no: maybeModel || model,
+          part_name: maybeName || model,
+          description: "",
+          uom: "Nos",
+          qty: qty || "1",
+          batch_no: "",
+          model_no: model,
+          serial_no: serial,
+        });
+      }
+    }
+    if (items.length === 0) {
+      toast.error("No exchange items to dispatch. Fill Material Exchange rows in at least one Oracle first.");
+      return;
+    }
+    // Fetch linked ticket to derive the customer.
+    let customerId: string | null = null;
+    if (i.ticket_id) {
+      const { data: t } = await supabase.from("tickets").select("customer_id").eq("id", i.ticket_id).maybeSingle();
+      customerId = (t as { customer_id?: string | null } | null)?.customer_id || null;
+    }
+    if (!customerId) {
+      toast.error("Linked ticket is missing a customer. Set the customer on the ticket first.");
+      return;
+    }
+    const prefill = {
+      source: "indent",
+      indent_id: i.id,
+      indent_no: i.indent_no,
+      indent_date: i.indent_date,
+      customer_id: customerId,
+      reference_no: i.indent_no || "",
+      internal_remarks: [
+        i.indent_no ? `From Indent ${i.indent_no}` : "",
+        i.remarks || "",
+      ].filter(Boolean).join(" · "),
+      items,
+    };
+    try { sessionStorage.setItem("challan:prefill:new-customer", JSON.stringify(prefill)); } catch { /* noop */ }
+    navigate({ to: "/challan/customer/new" });
+  };
+
   if (!i) return <div className="text-sm text-muted-foreground">Loading…</div>;
   const oem = getOemLogo(i.company);
   const indStatus = indentStatusFromOracles(i.oracles_data);
@@ -168,6 +230,9 @@ function IndentDetail() {
           </Link>
           <Button variant="outline" size="sm" onClick={resyncFromTicket}>
             <RefreshCw className="h-4 w-4 mr-1" />Resync from Ticket
+          </Button>
+          <Button variant="outline" size="sm" onClick={generateChallan}>
+            <FileOutput className="h-4 w-4 mr-1" />Generate Delivery Challan
           </Button>
           <Button onClick={save} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
