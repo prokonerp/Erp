@@ -272,43 +272,42 @@ button[role="combobox"][name*="uom" i],
 
 :root {
   --radius: 0.625rem;
-  /* Zoho Books inspired palette: clean white surfaces, navy header, red accent */
-  --background: oklch(0.985 0.003 247);
-  --foreground: oklch(0.22 0.03 250);
+  /* Enterprise indigo palette: neutral surfaces, indigo accent (Zoho-style clarity) */
+  --background: oklch(0.985 0.004 270);
+  --foreground: oklch(0.19 0.03 265);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.03 250);
+  --card-foreground: oklch(0.19 0.03 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.03 250);
-  /* Primary = Sky blue */
-  --primary: oklch(0.62 0.16 235);
+  --popover-foreground: oklch(0.19 0.03 265);
+  /* Primary = Indigo (#4f46e5) */
+  --primary: oklch(0.545 0.235 277);
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.96 0.02 235);
-  --secondary-foreground: oklch(0.25 0.05 240);
-  --muted: oklch(0.965 0.012 235);
-  --muted-foreground: oklch(0.52 0.04 240);
-  --accent: oklch(0.93 0.04 235);
-  --accent-foreground: oklch(0.25 0.05 240);
+  --secondary: oklch(0.965 0.01 265);
+  --secondary-foreground: oklch(0.25 0.04 265);
+  --muted: oklch(0.968 0.008 265);
+  --muted-foreground: oklch(0.5 0.03 265);
+  --accent: oklch(0.955 0.03 277);
+  --accent-foreground: oklch(0.35 0.15 277);
   --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.91 0.015 235);
-  --input: oklch(0.92 0.015 235);
-  --ring: oklch(0.62 0.16 235);
-  /* Sky blue header surface */
-  --header: oklch(0.42 0.13 235);
-  --header-foreground: oklch(0.99 0.005 235);
-  --chart-1: oklch(0.62 0.16 235);
+  --border: oklch(0.925 0.008 265);
+  --input: oklch(0.925 0.008 265);
+  --ring: oklch(0.545 0.235 277);
+  --header: oklch(1 0 0);
+  --header-foreground: oklch(0.19 0.03 265);
+  --chart-1: oklch(0.545 0.235 277);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.28 0.03 265);
+  --sidebar-primary: oklch(0.545 0.235 277);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.955 0.03 277);
+  --sidebar-accent-foreground: oklch(0.35 0.15 277);
+  --sidebar-border: oklch(0.925 0.008 265);
+  --sidebar-ring: oklch(0.545 0.235 277);
 }
 
 .dark {
@@ -354,10 +353,15 @@ button[role="combobox"][name*="uom" i],
   body {
     background-color: transparent;
     color: var(--color-foreground);
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   html {
     background-color: var(--color-background);
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
 }
 

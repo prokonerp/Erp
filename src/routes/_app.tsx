@@ -157,8 +157,10 @@ function AppLayout() {
     return currentSearchTab === tab;
   };
   const navLinkCls = (active: boolean) =>
-    `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-      active ? "bg-accent text-accent-foreground font-medium" : "text-foreground/80 hover:bg-muted hover:text-foreground"
+    `relative flex items-center gap-2.5 pl-4 pr-3 py-1.5 rounded-md text-[13px] transition-colors ${
+      active
+        ? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-full before:bg-primary"
+        : "text-foreground/75 hover:bg-muted hover:text-foreground"
     }`;
 
   const groupOrder = ["Masters", "Service Desk", "Customers", "Sales", "Procurement", "Material Movement", "Inventory", "Intelligence", "System"];
@@ -176,6 +178,15 @@ function AppLayout() {
 
   const showMm = permLoading || can("gatepass", "read");
 
+  // Derive current page title from active nav item for the header
+  const currentNav = navItems.find((n) => {
+    if (n.to === "/masters" && location.pathname === "/masters") {
+      return isMasterTabActive(n.to, n.matchSearchTab);
+    }
+    return location.pathname === n.to || location.pathname.startsWith(n.to + "/");
+  });
+  const pageTitle = currentNav?.label ?? "Dashboard";
+
   return (
     <div className="min-h-screen bg-muted/20 flex">
       {/* Mobile overlay */}
@@ -189,12 +200,12 @@ function AppLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:relative inset-y-0 left-0 z-50 bg-background border-r flex flex-col overflow-hidden transition-all duration-200 ${
+        className={`fixed lg:relative inset-y-0 left-0 z-50 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden transition-all duration-200 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${sidebarHidden ? "lg:w-0 lg:border-r-0" : "lg:w-60 shrink-0"} w-60`}
       >
         {/* Logo */}
-        <div className="h-14 border-b flex items-center justify-between px-4">
+        <div className="h-14 border-b border-sidebar-border flex items-center justify-between px-4">
           <Link to="/dashboard" className="leading-none">
             <img
               src={prokonLogo.url}
@@ -214,7 +225,7 @@ function AppLayout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 min-h-0 overflow-y-auto p-3 space-y-5" aria-label="Primary">
+        <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-4" aria-label="Primary">
           {/* Ungrouped items */}
           {ungrouped.length > 0 && (
             <div className="space-y-0.5">
@@ -238,7 +249,7 @@ function AppLayout() {
                   <button
                     type="button"
                     onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
-                    className="w-full flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground"
+                    className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-[0.08em] px-3 py-1.5 hover:text-foreground"
                   >
                     {isOpen ? (
                       <ChevronDown className="h-4 w-4 shrink-0" />
@@ -297,7 +308,7 @@ function AppLayout() {
                 <button
                   type="button"
                   onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
-                  className="w-full flex items-center gap-1.5 text-sm font-semibold text-muted-foreground uppercase tracking-wider px-3 py-1.5 hover:text-foreground"
+                    className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-[0.08em] px-3 py-1.5 hover:text-foreground"
                 >
                   {isOpen ? (
                     <ChevronDown className="h-4 w-4 shrink-0" />
@@ -335,7 +346,7 @@ function AppLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <header
-          className="h-14 border-b flex items-center justify-between px-4 sticky top-0 z-30 bg-background/95 backdrop-blur print:hidden"
+          className="h-14 border-b flex items-center gap-3 px-4 md:px-6 sticky top-0 z-30 bg-background/95 backdrop-blur shadow-[0_1px_0_rgba(15,23,42,0.03)] print:hidden"
         >
           <Button
             variant="ghost"
@@ -349,19 +360,28 @@ function AppLayout() {
           <Button
             variant="ghost"
             size="icon"
-            className="hidden lg:inline-flex"
+            className="hidden lg:inline-flex text-muted-foreground"
             onClick={() => setSidebarHidden((v) => !v)}
             aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
             title={sidebarHidden ? "Show menu" : "Hide menu"}
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <div className="flex-1" />
+          <div className="flex-1 min-w-0">
+            <h1 className="truncate text-[15px] font-semibold text-foreground leading-tight">
+              {pageTitle}
+            </h1>
+            {currentNav?.group && (
+              <p className="truncate text-[11px] text-muted-foreground leading-tight">
+                {currentNav.group}
+              </p>
+            )}
+          </div>
           <UserProfileMenu profile={profile} onProfileChange={loadProfile} />
         </header>
 
         {/* Content */}
-        <main className="p-4 md:p-6">
+        <main className="p-4 md:p-6 max-w-[1600px] w-full mx-auto">
           <Outlet />
         </main>
       </div>
