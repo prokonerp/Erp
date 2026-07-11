@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ export function ChallanForm({ docType }: Props) {
   const isOem = docType === "oem";
   const [items, setItems] = useState<ChallanItem[]>([emptyItem()]);
   const [partyId, setPartyId] = useState<string | null>(null);
+  const [sourceRef, setSourceRef] = useState<{ indent_id?: string; indent_no?: string | null } | null>(null);
   const [form, setForm] = useState({
     status: "Draft",
     challan_date: new Date().toISOString().slice(0, 10),
@@ -59,6 +60,39 @@ export function ChallanForm({ docType }: Props) {
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+
+  // Prefill from a source document (e.g. Indent → Generate Delivery Challan).
+  useEffect(() => {
+    if (isOem) return;
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem("challan:prefill:new-customer"); } catch { /* noop */ }
+    if (!raw) return;
+    try { sessionStorage.removeItem("challan:prefill:new-customer"); } catch { /* noop */ }
+    let payload: Record<string, unknown>;
+    try { payload = JSON.parse(raw); } catch { return; }
+    const customerId = (payload.customer_id as string | undefined) || null;
+    const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<ChallanItem>>) : [];
+    if (prefillItems.length > 0) {
+      setItems(prefillItems.map((it) => ({ ...emptyItem(), ...it })) as ChallanItem[]);
+    }
+    setForm((f) => ({
+      ...f,
+      reference_no: (payload.reference_no as string) || f.reference_no,
+      internal_remarks: (payload.internal_remarks as string) || f.internal_remarks,
+    }));
+    setSourceRef({
+      indent_id: payload.indent_id as string | undefined,
+      indent_no: (payload.indent_no as string | null | undefined) ?? null,
+    });
+    // Fetch and apply the customer so the picker + party fields are populated.
+    if (customerId) {
+      (async () => {
+        const { data } = await supabase.from("customers").select("*").eq("id", customerId).maybeSingle();
+        if (data) applyCustomer(customerId, data as unknown as Customer);
+      })();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -128,6 +162,7 @@ export function ChallanForm({ docType }: Props) {
       dispatch_date: form.dispatch_date || null,
       items: cleanItems,
       created_by: userData.user?.id ?? null,
+      ...(sourceRef?.indent_id ? { source_indent_id: sourceRef.indent_id, source_indent_no: sourceRef.indent_no ?? null } : {}),
     };
     const { data, error } = await supabase
       .from("delivery_challans" as never)
