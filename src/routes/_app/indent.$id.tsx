@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer, ChevronsDownUp, ChevronsUpDown, FileOutput } from "lucide-react";
+import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer, ChevronsDownUp, ChevronsUpDown, FileOutput, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
@@ -191,6 +191,76 @@ function IndentDetail() {
     navigate({ to: "/challan/customer/new" });
   };
 
+  const generateGrn = async () => {
+    if (!i) return;
+    // Aggregate received rows across all oracles — defective units taken back from the customer.
+    const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
+    const oracles = i.oracles_data || [];
+    const items: Array<{
+      part_no: string; part_name: string; description: string; uom: string;
+      qty_received: string; qty_accepted: string; qty_rejected: string;
+      batch_no: string; model_no?: string; serial_no?: string; condition?: string; remarks?: string;
+    }> = [];
+    for (const o of oracles) {
+      const rows = (o.received_rows && o.received_rows.length)
+        ? o.received_rows
+        : (o.received ? [o.received] : []);
+      for (const rv of rows) {
+        const model = cleanModel(rv?.model_no);
+        const serial = (rv?.serial_no || "").trim();
+        const qty = (rv?.qty || "").trim();
+        if (!model && !serial && !qty) continue;
+        const [maybeName, maybeModel] = (rv?.model_no || "").split("||");
+        items.push({
+          part_no: maybeModel || model,
+          part_name: maybeName || model,
+          description: "",
+          uom: "Nos",
+          qty_received: qty || "1",
+          qty_accepted: qty || "1",
+          qty_rejected: "0",
+          batch_no: "",
+          model_no: model,
+          serial_no: serial,
+          condition: "Defective",
+          remarks: rv?.remarks || "",
+        });
+      }
+    }
+    if (items.length === 0) {
+      toast.error("No received items yet. Fill Material Received rows in at least one Oracle first.");
+      return;
+    }
+    let customerId: string | null = null;
+    if (i.ticket_id) {
+      const { data: t } = await supabase.from("tickets").select("customer_id").eq("id", i.ticket_id).maybeSingle();
+      customerId = (t as { customer_id?: string | null } | null)?.customer_id || null;
+    }
+    if (!customerId) {
+      toast.error("Linked ticket is missing a customer. Set the customer on the ticket first.");
+      return;
+    }
+    const prefill = {
+      source: "indent",
+      indent_id: i.id,
+      indent_no: i.indent_no,
+      indent_date: i.indent_date,
+      customer_id: customerId,
+      ticket_no: i.case_id || i.oem_case_id || "",
+      reference_no: i.indent_no || "",
+      source_doc_type: "Return Note",
+      source_doc_no: i.indent_no || "",
+      source_doc_date: i.indent_date || "",
+      internal_remarks: [
+        i.indent_no ? `From Indent ${i.indent_no}` : "",
+        i.remarks || "",
+      ].filter(Boolean).join(" · "),
+      items,
+    };
+    try { sessionStorage.setItem("grn:prefill:new-customer", JSON.stringify(prefill)); } catch { /* noop */ }
+    navigate({ to: "/grn/customer/new" });
+  };
+
   if (!i) return <div className="text-sm text-muted-foreground">Loading…</div>;
   const oem = getOemLogo(i.company);
   const indStatus = indentStatusFromOracles(i.oracles_data);
@@ -233,6 +303,9 @@ function IndentDetail() {
           </Button>
           <Button variant="outline" size="sm" onClick={generateChallan}>
             <FileOutput className="h-4 w-4 mr-1" />Generate Delivery Challan
+          </Button>
+          <Button variant="outline" size="sm" onClick={generateGrn}>
+            <PackageCheck className="h-4 w-4 mr-1" />Generate GRN
           </Button>
           <Button onClick={save} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>

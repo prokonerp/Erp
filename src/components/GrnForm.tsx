@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -71,6 +71,38 @@ export function GrnForm({ category }: Props) {
   const [reviewOpen, setReviewOpen] = useState(false);
 
   const sourceLabel = isCust ? "Customer" : isOem ? "OEM" : "Vendor / Source";
+
+  // Prefill from a source document (e.g. Indent → Generate GRN).
+  useEffect(() => {
+    if (!isCust) return;
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem("grn:prefill:new-customer"); } catch { /* noop */ }
+    if (!raw) return;
+    try { sessionStorage.removeItem("grn:prefill:new-customer"); } catch { /* noop */ }
+    let payload: Record<string, unknown>;
+    try { payload = JSON.parse(raw); } catch { return; }
+    const customerId = (payload.customer_id as string | undefined) || null;
+    const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<GrnItem>>) : [];
+    if (prefillItems.length > 0) {
+      setItems(prefillItems.map((it) => ({ ...emptyGrnItem(), ...it })) as GrnItem[]);
+    }
+    setForm((f) => ({
+      ...f,
+      reference_no: (payload.reference_no as string) || f.reference_no,
+      source_doc_type: (payload.source_doc_type as string) || f.source_doc_type,
+      source_doc_no: (payload.source_doc_no as string) || f.source_doc_no,
+      source_doc_date: (payload.source_doc_date as string) || f.source_doc_date,
+      ticket_no: (payload.ticket_no as string) || f.ticket_no,
+      internal_remarks: (payload.internal_remarks as string) || f.internal_remarks,
+    }));
+    if (customerId) {
+      (async () => {
+        const { data } = await supabase.from("customers").select("*").eq("id", customerId).maybeSingle();
+        if (data) applyCustomer(customerId, data as unknown as Customer);
+      })();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateItem = (i: number, patch: Partial<GrnItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
