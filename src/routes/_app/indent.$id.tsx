@@ -258,7 +258,7 @@ function IndentDetail() {
       items,
     };
     try { sessionStorage.setItem("grn:prefill:new-customer", JSON.stringify(prefill)); } catch { /* noop */ }
-    navigate({ to: "/grn" });
+    navigate({ to: "/grn/customer/new" });
   };
 
   if (!i) return <div className="text-sm text-muted-foreground">Loading…</div>;
