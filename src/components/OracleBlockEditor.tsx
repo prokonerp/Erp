@@ -21,7 +21,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
-  collapsed = false, onToggleCollapse,
+  collapsed = false, onToggleCollapse, onGenerateChallan,
 }: {
   index: number;
   value: OracleBlock;
@@ -31,6 +31,7 @@ export function OracleBlockEditor({
   isAdmin?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  onGenerateChallan?: () => void;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -253,9 +254,16 @@ export function OracleBlockEditor({
         <div className="rounded-md border p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">B. Material Exchange (from IMS)</div>
-            <Button variant="outline" size="sm" onClick={() => toast.info("Delivery Challan generation coming soon")}>
-              <FileText className="h-4 w-4 mr-1" />Generate Delivery Challan
-            </Button>
+            {onGenerateChallan && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onGenerateChallan}
+                title="Create a new Delivery Challan prefilled from this Indent"
+              >
+                <FileText className="h-4 w-4 mr-1" />Generate Delivery Challan
+              </Button>
+            )}
           </div>
           {value.exchange_rows.map((ex, i) => {
             const stock = exchStockByRow[i] || [];
