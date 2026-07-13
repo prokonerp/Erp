@@ -383,17 +383,34 @@ export function ChallanForm({ docType: initialDocType }: Props) {
         }
       >
         <div className="overflow-x-auto -mx-2 sm:mx-0">
-          <table className="w-full text-sm border-separate border-spacing-0 min-w-[720px]">
+          <table className="w-full text-sm border-separate border-spacing-0 min-w-[1100px]">
             <thead className="sticky top-0 z-10 bg-muted/60">
               <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="px-2 py-1.5 w-10">#</th>
                 <th className="px-2 py-1.5 min-w-[220px]">Product</th>
-                <th className="px-2 py-1.5">Description</th>
-                {isOem && <th className="px-2 py-1.5 w-32">Model No</th>}
-                {isOem && <th className="px-2 py-1.5 w-32">Serial No</th>}
+                <th className="px-2 py-1.5 w-32">OEM Ref ID</th>
+                {isOem ? (
+                  <>
+                    <th className="px-2 py-1.5 w-32">Model</th>
+                    <th className="px-2 py-1.5 w-40">Good/Defective Sr No</th>
+                    <th className="px-2 py-1.5 w-28">Oracle #</th>
+                    <th className="px-2 py-1.5 w-28">Stock Type</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-2 py-1.5 w-32">Defective Model</th>
+                    <th className="px-2 py-1.5 w-32">Defective Sr No</th>
+                    <th className="px-2 py-1.5 w-28">Oracle #</th>
+                    <th className="px-2 py-1.5 w-32">Good Model</th>
+                    <th className="px-2 py-1.5 w-32">Good Sr No</th>
+                  </>
+                )}
                 <th className="px-2 py-1.5 w-20">UOM</th>
                 <th className="px-2 py-1.5 w-20">Qty</th>
-                <th className="px-2 py-1.5 w-28">Batch</th>
+                <th className="px-2 py-1.5 w-20">HSN</th>
+                <th className="px-2 py-1.5 w-24">Unit Price</th>
+                <th className="px-2 py-1.5 w-24">Weight (KG)</th>
+                {isOem && <th className="px-2 py-1.5 w-40">Good Return Reason</th>}
                 <th className="px-2 py-1.5 w-10"></th>
               </tr>
             </thead>
@@ -409,6 +426,7 @@ export function ChallanForm({ docType: initialDocType }: Props) {
                         description: p.description || "",
                         uom: p.unit || it.uom || "Nos",
                         model_no: p.model || "",
+                        hsn: (p as any).hsn || it.hsn || "",
                       })}
                     />
                     {(it.part_no || it.part_name) && (
@@ -418,17 +436,47 @@ export function ChallanForm({ docType: initialDocType }: Props) {
                     )}
                   </td>
                   <td className="px-2 py-1.5 border-t border-border/60">
-                    <Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} />
+                    <Input value={it.oem_ref_id || ""} onChange={(e) => updateItem(i, { oem_ref_id: e.target.value })} />
                   </td>
-                  {isOem && (
-                    <td className="px-2 py-1.5 border-t border-border/60">
-                      <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
-                    </td>
-                  )}
-                  {isOem && (
-                    <td className="px-2 py-1.5 border-t border-border/60">
-                      <Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} />
-                    </td>
+                  {isOem ? (
+                    <>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Select value={it.stock_type || ""} onValueChange={(v) => updateItem(i, { stock_type: v })}>
+                          <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Good">Good</SelectItem>
+                            <SelectItem value="Defective">Defective</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.defective_model || ""} onChange={(e) => updateItem(i, { defective_model: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.defective_serial || ""} onChange={(e) => updateItem(i, { defective_serial: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.good_model || ""} onChange={(e) => updateItem(i, { good_model: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value })} />
+                      </td>
+                    </>
                   )}
                   <td className="px-2 py-1.5 border-t border-border/60">
                     <Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} />
@@ -437,8 +485,19 @@ export function ChallanForm({ docType: initialDocType }: Props) {
                     <Input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
                   </td>
                   <td className="px-2 py-1.5 border-t border-border/60">
-                    <Input value={it.batch_no} onChange={(e) => updateItem(i, { batch_no: e.target.value })} />
+                    <Input value={it.hsn || ""} onChange={(e) => updateItem(i, { hsn: e.target.value })} />
                   </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input type="number" min="0" value={it.unit_price || ""} onChange={(e) => updateItem(i, { unit_price: e.target.value })} />
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input type="number" min="0" value={it.weight_kg || ""} onChange={(e) => updateItem(i, { weight_kg: e.target.value })} />
+                  </td>
+                  {isOem && (
+                    <td className="px-2 py-1.5 border-t border-border/60">
+                      <Input value={it.good_return_reason || ""} onChange={(e) => updateItem(i, { good_return_reason: e.target.value })} />
+                    </td>
+                  )}
                   <td className="px-2 py-1.5 border-t border-border/60 text-right">
                     <Button
                       type="button"
