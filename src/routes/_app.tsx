@@ -69,6 +69,7 @@ function AppLayout() {
     System: false,
   });
   const [challanOpen, setChallanOpen] = useState(false);
+  const [grnOpen, setGrnOpen] = useState(false);
   const fetchProfile = useServerFn(getMyProfile);
 
   async function loadProfile() {
