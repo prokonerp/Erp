@@ -15,6 +15,7 @@ import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
+import { BranchPicker } from "@/components/BranchPicker";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
@@ -27,6 +28,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   const isCust = category === "customer";
   const [items, setItems] = useState<GrnItem[]>([emptyGrnItem()]);
   const [sourceId, setSourceId] = useState<string | null>(null);
+  const [branchId, setBranchId] = useState<string | null>(null);
   const [form, setForm] = useState({
     status: "Draft",
     grn_date: new Date().toISOString().slice(0, 10),
@@ -154,6 +156,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         }
         return next;
       });
+      setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
     })();
   }, [editId]);
 
@@ -207,6 +210,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   );
 
   const validate = () => {
+    if (!editId && !branchId) { toast.error("Please select a Prokon Branch"); return false; }
     if (!form.source_name.trim()) { toast.error(`${sourceLabel} name is required`); return false; }
     const clean = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     if (clean.length === 0) { toast.error("Add at least one material row"); return false; }
@@ -228,6 +232,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         accepted_qty: totals.accepted,
         rejected_qty: totals.rejected,
         items: clean,
+        branch_id: branchId,
       };
       const { error } = await supabase
         .from("grns" as never)
@@ -253,6 +258,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       rejected_qty: totals.rejected,
       items: clean,
       attachments: [],
+      branch_id: branchId,
       created_by: userData.user?.id ?? null,
     };
     const { data, error } = await supabase
@@ -302,6 +308,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         <p className="mt-2 text-xs text-muted-foreground">
           Choose the GRN type — the form fields and item columns update automatically.
         </p>
+        <div className="mt-3 max-w-md">
+          <BranchPicker value={branchId} onChange={(id) => setBranchId(id)} required />
+        </div>
       </FormSection>
 
       <FormSection title="GRN Information" defaultOpen>

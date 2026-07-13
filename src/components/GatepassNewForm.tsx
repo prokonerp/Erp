@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { ProductPicker } from "@/components/ProductPicker";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
+import { BranchPicker } from "@/components/BranchPicker";
 
 type Item = { product_id: string; product: string; serial_no: string; quantity: string; unit: string; remarks: string };
 
@@ -18,6 +19,7 @@ const empty = (): Item => ({ product_id: "", product: "", serial_no: "", quantit
 export function GatepassNewForm() {
   const navigate = useNavigate();
   const [items, setItems] = useState<Item[]>([empty()]);
+  const [branchId, setBranchId] = useState<string | null>(null);
   const [form, setForm] = useState({
     person_name: "", person_company: "", contact_no: "", vehicle_no: "",
     destination: "", purpose: "", return_type: "Non-Returnable",
@@ -31,6 +33,7 @@ export function GatepassNewForm() {
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
 
   const submit = async () => {
+    if (!branchId) return toast.error("Please select a Prokon Branch");
     if (!form.person_name.trim()) return toast.error("Person name is required");
     const cleanItems = items.filter((it) => it.product.trim());
     if (cleanItems.length === 0) return toast.error("Select at least one product from Product Master");
@@ -51,6 +54,7 @@ export function GatepassNewForm() {
     const { data, error } = await supabase.from("gatepasses").insert({
       ...cased,
       challan_no: "", // trigger fills it
+      branch_id: branchId,
       items: cleanItems.map((it) => ({
         ...it,
         product: toTitleCaseSmart(it.product),
@@ -79,6 +83,9 @@ export function GatepassNewForm() {
     >
       <FormSection title="Gatepass Details" defaultOpen>
         <FormGrid>
+          <FormField size="md" label="Prokon Branch" required>
+            <BranchPicker value={branchId} onChange={(id) => setBranchId(id)} required label="" />
+          </FormField>
           <FormField size="sm" label="Date">
             <Input type="date" value={form.gatepass_date} onChange={(e) => setForm({ ...form, gatepass_date: e.target.value })} />
           </FormField>

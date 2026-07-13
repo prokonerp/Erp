@@ -365,12 +365,15 @@ export type Database = {
       }
       branches: {
         Row: {
+          active: boolean
           address: string | null
           bank_account: string | null
           bank_branch: string | null
           bank_ifsc: string | null
           bank_name: string | null
           cin: string | null
+          city: string | null
+          code: string | null
           company_id: string | null
           created_at: string
           email: string | null
@@ -382,18 +385,22 @@ export type Database = {
           name: string
           pan: string | null
           phone: string | null
+          pin_code: string | null
           state_code: string | null
           state_name: string | null
           updated_at: string
           upi_id: string | null
         }
         Insert: {
+          active?: boolean
           address?: string | null
           bank_account?: string | null
           bank_branch?: string | null
           bank_ifsc?: string | null
           bank_name?: string | null
           cin?: string | null
+          city?: string | null
+          code?: string | null
           company_id?: string | null
           created_at?: string
           email?: string | null
@@ -405,18 +412,22 @@ export type Database = {
           name: string
           pan?: string | null
           phone?: string | null
+          pin_code?: string | null
           state_code?: string | null
           state_name?: string | null
           updated_at?: string
           upi_id?: string | null
         }
         Update: {
+          active?: boolean
           address?: string | null
           bank_account?: string | null
           bank_branch?: string | null
           bank_ifsc?: string | null
           bank_name?: string | null
           cin?: string | null
+          city?: string | null
+          code?: string | null
           company_id?: string | null
           created_at?: string
           email?: string | null
@@ -428,6 +439,7 @@ export type Database = {
           name?: string
           pan?: string | null
           phone?: string | null
+          pin_code?: string | null
           state_code?: string | null
           state_name?: string | null
           updated_at?: string
@@ -689,6 +701,7 @@ export type Database = {
       delivery_challans: {
         Row: {
           approved_by: string | null
+          branch_id: string | null
           challan_date: string
           challan_no: string
           checked_by: string | null
@@ -733,6 +746,7 @@ export type Database = {
         }
         Insert: {
           approved_by?: string | null
+          branch_id?: string | null
           challan_date?: string
           challan_no: string
           checked_by?: string | null
@@ -777,6 +791,7 @@ export type Database = {
         }
         Update: {
           approved_by?: string | null
+          branch_id?: string | null
           challan_date?: string
           challan_no?: string
           checked_by?: string | null
@@ -820,6 +835,13 @@ export type Database = {
           vehicle_number?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "delivery_challans_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "delivery_challans_quotation_id_fkey"
             columns: ["quotation_id"]
@@ -952,6 +974,7 @@ export type Database = {
       gatepasses: {
         Row: {
           authorised_by: string | null
+          branch_id: string | null
           challan_no: string
           contact_no: string | null
           created_at: string
@@ -971,6 +994,7 @@ export type Database = {
         }
         Insert: {
           authorised_by?: string | null
+          branch_id?: string | null
           challan_no: string
           contact_no?: string | null
           created_at?: string
@@ -990,6 +1014,7 @@ export type Database = {
         }
         Update: {
           authorised_by?: string | null
+          branch_id?: string | null
           challan_no?: string
           contact_no?: string | null
           created_at?: string
@@ -1007,7 +1032,15 @@ export type Database = {
           return_type?: string
           vehicle_no?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gatepasses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       grns: {
         Row: {
@@ -1015,6 +1048,7 @@ export type Database = {
           approved_by: string | null
           attachments: Json | null
           bin_no: string | null
+          branch_id: string | null
           category: string
           checked_by: string | null
           created_at: string
@@ -1068,6 +1102,7 @@ export type Database = {
           approved_by?: string | null
           attachments?: Json | null
           bin_no?: string | null
+          branch_id?: string | null
           category: string
           checked_by?: string | null
           created_at?: string
@@ -1121,6 +1156,7 @@ export type Database = {
           approved_by?: string | null
           attachments?: Json | null
           bin_no?: string | null
+          branch_id?: string | null
           category?: string
           checked_by?: string | null
           created_at?: string
@@ -1169,7 +1205,15 @@ export type Database = {
           warehouse_id?: string | null
           warehouse_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "grns_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ims_audit_log: {
         Row: {

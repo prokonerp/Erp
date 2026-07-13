@@ -108,10 +108,18 @@ function MastersPage() {
             title="Branches"
             canEdit={isAdmin}
             fields={[
+              { key: "company_id", label: "Company", type: "select", required: true, optionsFrom: { table: "companies", valueKey: "id", labelKey: "name" } },
               { key: "name", label: "Branch Name", type: "title", required: true },
+              { key: "code", label: "Branch Code", type: "upper" },
+              { key: "address", label: "Address", type: "textarea" },
+              { key: "city", label: "City", type: "title" },
+              { key: "state_name", label: "State", type: "title" },
+              { key: "state_code", label: "State Code", type: "upper", showInList: false },
+              { key: "pin_code", label: "Pin Code", type: "text" },
               { key: "gstin", label: "GSTIN", type: "upper" },
               { key: "phone", label: "Phone", type: "phone" },
-              { key: "address", label: "Address", type: "textarea" },
+              { key: "email", label: "Email", type: "email" },
+              { key: "active", label: "Active", type: "boolean" },
             ]}
           />
         </TabsContent>
