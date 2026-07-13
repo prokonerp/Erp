@@ -21,7 +21,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
-  collapsed = false, onToggleCollapse, onGenerateChallan,
+  collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
 }: {
   index: number;
   value: OracleBlock;
@@ -32,6 +32,7 @@ export function OracleBlockEditor({
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   onGenerateChallan?: () => void;
+  onGenerateGrn?: () => void;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -324,9 +325,16 @@ export function OracleBlockEditor({
         <div className="rounded-md border p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">C. Material Received (from IMS)</div>
-            <Button variant="outline" size="sm" onClick={() => toast.info("GRN generation coming soon")}>
-              <Receipt className="h-4 w-4 mr-1" />Generate GRN
-            </Button>
+            {onGenerateGrn && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onGenerateGrn}
+                title="Create a new GRN prefilled from this Indent"
+              >
+                <Receipt className="h-4 w-4 mr-1" />Generate GRN
+              </Button>
+            )}
           </div>
           {value.received_rows.map((rcv, i) => {
             const stock = recvStockByRow[i] || [];

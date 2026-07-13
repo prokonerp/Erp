@@ -69,6 +69,7 @@ function AppLayout() {
     System: false,
   });
   const [challanOpen, setChallanOpen] = useState(false);
+  const [grnOpen, setGrnOpen] = useState(false);
   const fetchProfile = useServerFn(getMyProfile);
 
   async function loadProfile() {
@@ -304,22 +305,40 @@ function AppLayout() {
                           </div>
                         )}
                       </div>
-                      <Link to="/grn" className={navLinkCls(isActive("/grn"))}>
-                        <PackageCheck className="h-4 w-4 shrink-0" />
-                        All GRNs
-                      </Link>
-                      <Link to="/grn/customer/new" className={navLinkCls(isActive("/grn/customer/new"))}>
-                        <PackageCheck className="h-4 w-4 shrink-0" />
-                        New: From Customer
-                      </Link>
-                      <Link to="/grn/oem/new" className={navLinkCls(isActive("/grn/oem/new"))}>
-                        <PackageCheck className="h-4 w-4 shrink-0" />
-                        New: From OEM
-                      </Link>
-                      <Link to="/grn/general/new" className={navLinkCls(isActive("/grn/general/new"))}>
-                        <PackageCheck className="h-4 w-4 shrink-0" />
-                        New: General
-                      </Link>
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setGrnOpen((v) => !v)}
+                          className={`w-full ${navLinkCls(isActive("/grn"))}`}
+                          aria-expanded={grnOpen}
+                        >
+                          <PackageCheck className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 text-left">GRNs</span>
+                          {grnOpen ? (
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                        </button>
+                        {grnOpen && (
+                          <div className="ml-5 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
+                            <Link
+                              to="/grn"
+                              className={navLinkCls(
+                                location.pathname === "/grn" ||
+                                  (isActive("/grn") && !isActive("/grn/new"))
+                              )}
+                            >
+                              <ListChecks className="h-4 w-4 shrink-0" />
+                              View All GRNs
+                            </Link>
+                            <Link to="/grn/new" className={navLinkCls(isActive("/grn/new"))}>
+                              <Plus className="h-4 w-4 shrink-0" />
+                              Create New GRN
+                            </Link>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

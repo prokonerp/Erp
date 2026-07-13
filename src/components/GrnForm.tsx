@@ -17,10 +17,11 @@ import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
-type Props = { category: GrnCategory };
+type Props = { category?: GrnCategory };
 
-export function GrnForm({ category }: Props) {
+export function GrnForm({ category: initialCategory = "customer" }: Props) {
   const navigate = useNavigate();
+  const [category, setCategory] = useState<GrnCategory>(initialCategory);
   const isOem = category === "oem";
   const isCust = category === "customer";
   const [items, setItems] = useState<GrnItem[]>([emptyGrnItem()]);
@@ -30,7 +31,8 @@ export function GrnForm({ category }: Props) {
     grn_date: new Date().toISOString().slice(0, 10),
     receipt_date: "",
     reference_no: "",
-    source_doc_type: isCust ? "Return Note" : isOem ? "OEM Dispatch" : "Vendor DC",
+    source_doc_type:
+      initialCategory === "customer" ? "Return Note" : initialCategory === "oem" ? "OEM Dispatch" : "Vendor DC",
     source_doc_no: "",
     source_doc_date: "",
     po_no: "",
@@ -72,15 +74,38 @@ export function GrnForm({ category }: Props) {
 
   const sourceLabel = isCust ? "Customer" : isOem ? "OEM" : "Vendor / Source";
 
+  const handleCategoryChange = (next: GrnCategory) => {
+    if (next === category) return;
+    setCategory(next);
+    setSourceId(null);
+    setForm((f) => ({
+      ...f,
+      source_doc_type:
+        next === "customer" ? "Return Note" : next === "oem" ? "OEM Dispatch" : "Vendor DC",
+      source_name: "",
+      source_code: "",
+      source_gstin: "",
+      source_contact_person: "",
+      source_contact_number: "",
+      source_email: "",
+      source_address: "",
+      oem_plant: "",
+      po_no: next === "customer" ? "" : f.po_no,
+      invoice_no: next === "customer" ? "" : f.invoice_no,
+      invoice_date: next === "customer" ? "" : f.invoice_date,
+      ticket_no: next === "customer" ? f.ticket_no : "",
+    }));
+  };
+
   // Prefill from a source document (e.g. Indent → Generate GRN).
   useEffect(() => {
-    if (!isCust) return;
     let raw: string | null = null;
     try { raw = sessionStorage.getItem("grn:prefill:new-customer"); } catch { /* noop */ }
     if (!raw) return;
     try { sessionStorage.removeItem("grn:prefill:new-customer"); } catch { /* noop */ }
     let payload: Record<string, unknown>;
     try { payload = JSON.parse(raw); } catch { return; }
+    setCategory("customer");
     const customerId = (payload.customer_id as string | undefined) || null;
     const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<GrnItem>>) : [];
     if (prefillItems.length > 0) {
@@ -209,6 +234,25 @@ export function GrnForm({ category }: Props) {
       description="Capture receipt details, source, transport, items, QC and storage."
       actions={actions}
     >
+      <FormSection title="GRN Type" defaultOpen>
+        <div className="flex flex-wrap gap-2">
+          {(["customer", "oem", "general"] as GrnCategory[]).map((c) => (
+            <Button
+              key={c}
+              type="button"
+              size="sm"
+              variant={category === c ? "default" : "outline"}
+              onClick={() => handleCategoryChange(c)}
+            >
+              {CATEGORY_LABEL[c]}
+            </Button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Choose the GRN type — the form fields and item columns update automatically.
+        </p>
+      </FormSection>
+
       <FormSection title="GRN Information" defaultOpen>
         <FormGrid>
           <FormField size="sm" label="GRN Date" required>

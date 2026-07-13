@@ -87,7 +87,7 @@ function QuickActions({ can, isAdmin }: { can: (m: ModuleKey, a?: any) => boolea
     { label: "New Quotation", to: "/crm/quotations", module: "quotations", icon: Briefcase },
     { label: "New Gatepass", to: "/new", module: "gatepass", icon: FileText },
     { label: "New Delivery Challan", to: "/challan/new", module: "gatepass", icon: Send },
-    { label: "New GRN", to: "/grn/customer/new", module: "gatepass", icon: PackageCheck },
+    { label: "New GRN", to: "/grn/new", module: "gatepass", icon: PackageCheck },
   ];
   const visible = actions.filter((a) => isAdmin || a.module === "*" || can(a.module as ModuleKey, "create"));
   if (!visible.length) return null;
