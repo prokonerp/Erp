@@ -18,11 +18,12 @@ import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
-type Props = { docType: DocType };
+type Props = { docType?: DocType };
 
-export function ChallanForm({ docType }: Props) {
+export function ChallanForm({ docType: initialDocType }: Props) {
   const navigate = useNavigate();
-  const isOem = docType === "oem";
+  const [dcType, setDcType] = useState<DocType>(initialDocType ?? "customer");
+  const isOem = dcType === "oem";
   const [items, setItems] = useState<ChallanItem[]>([emptyItem()]);
   const [partyId, setPartyId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -50,6 +51,9 @@ export function ChallanForm({ docType }: Props) {
     mode_of_transport: "Road",
     num_packages: "",
     total_weight: "",
+    city: "",
+    state: "",
+    pin_code: "",
     internal_remarks: "",
     dispatch_remarks: "",
     prepared_by: "",
@@ -128,6 +132,24 @@ export function ChallanForm({ docType }: Props) {
     }));
   };
 
+  // Reset party when DC Type changes (Customer master vs Vendor/OEM master).
+  const changeDcType = (t: DocType) => {
+    if (t === dcType) return;
+    setDcType(t);
+    setPartyId(null);
+    setForm((f) => ({
+      ...f,
+      party_name: "",
+      party_code: "",
+      gstin: "",
+      oem_plant: "",
+      contact_person: "",
+      contact_number: "",
+      email: "",
+      delivery_address: "",
+    }));
+  };
+
   const validate = () => {
     if (!form.party_name.trim()) {
       toast.error(`${isOem ? "OEM" : "Customer"} name is required`);
@@ -152,7 +174,7 @@ export function ChallanForm({ docType }: Props) {
     const { data: userData } = await supabase.auth.getUser();
     const payload = {
       ...form,
-      doc_type: docType,
+      doc_type: dcType,
       challan_no: "",
       dispatch_date: form.dispatch_date || null,
       items: cleanItems,
@@ -187,10 +209,38 @@ export function ChallanForm({ docType }: Props) {
 
   return (
     <FormShell
-      title={`New Delivery Challan — ${isOem ? "To OEM" : "To Customer"}`}
+      title="New Delivery Challan"
       description="Capture document, party, transport, material and authorization details."
       actions={actions}
     >
+      <FormSection title="DC Type" defaultOpen>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="dc_type"
+              className="accent-primary"
+              checked={dcType === "customer"}
+              onChange={() => changeDcType("customer")}
+            />
+            <span className="text-sm font-medium">To Customer</span>
+          </label>
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="dc_type"
+              className="accent-primary"
+              checked={dcType === "oem"}
+              onChange={() => changeDcType("oem")}
+            />
+            <span className="text-sm font-medium">To OEM</span>
+          </label>
+          <span className="text-xs text-muted-foreground">
+            Switching type resets recipient details; other fields are preserved.
+          </span>
+        </div>
+      </FormSection>
+
       <FormSection title="Document Information" defaultOpen>
         <FormGrid>
           <FormField size="sm" label="Challan Date" required>
@@ -255,11 +305,22 @@ export function ChallanForm({ docType }: Props) {
           <FormField size="md" label="Contact Person">
             <Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} />
           </FormField>
-          <FormField size="md" label="Contact Number">
+          <FormField size="md" label={isOem ? "Contact" : "Contact Number"}>
             <Input value={form.contact_number} onChange={(e) => setForm({ ...form, contact_number: e.target.value })} />
           </FormField>
           <FormField size="md" label="Email">
             <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </FormField>
+          {isOem && (
+            <FormField size="md" label="City">
+              <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+            </FormField>
+          )}
+          <FormField size="sm" label="State">
+            <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Pin Code">
+            <Input value={form.pin_code} onChange={(e) => setForm({ ...form, pin_code: e.target.value })} />
           </FormField>
           {isOem && (
             <FormField size="md" label="OEM Logo URL (optional)">
@@ -272,15 +333,18 @@ export function ChallanForm({ docType }: Props) {
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Transport Details">
+      <FormSection title="Shipment & Transport Details">
         <FormGrid>
-          <FormField size="md" label="Transporter Name">
+          <FormField size="md" label="Courier / Transporter">
             <Input value={form.transporter_name} onChange={(e) => setForm({ ...form, transporter_name: e.target.value })} />
           </FormField>
-          <FormField size="sm" label="Vehicle Number">
-            <Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} />
+          <FormField size="sm" label="Docket #">
+            <Input value={form.lr_number} onChange={(e) => setForm({ ...form, lr_number: e.target.value })} />
           </FormField>
-          <FormField size="sm" label="Mode of Transport">
+          <FormField size="sm" label="Expected Date">
+            <Input type="date" value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Shipment Mode">
             <Select value={form.mode_of_transport} onValueChange={(v) => setForm({ ...form, mode_of_transport: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -290,16 +354,16 @@ export function ChallanForm({ docType }: Props) {
               </SelectContent>
             </Select>
           </FormField>
-          <FormField size="md" label="Driver Name">
+          <FormField size="sm" label="Vehicle Number">
+            <Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} />
+          </FormField>
+          <FormField size="md" label={isOem ? "Driver Name" : "Engineer Name"}>
             <Input value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} />
           </FormField>
-          <FormField size="sm" label="Driver Mobile">
+          <FormField size="sm" label={isOem ? "Driver Mobile" : "Engineer Contact"}>
             <Input value={form.driver_mobile} onChange={(e) => setForm({ ...form, driver_mobile: e.target.value })} />
           </FormField>
-          <FormField size="sm" label="LR / Consignment No.">
-            <Input value={form.lr_number} onChange={(e) => setForm({ ...form, lr_number: e.target.value })} />
-          </FormField>
-          <FormField size="sm" label="No. of Packages">
+          <FormField size="sm" label="No. of Packs">
             <Input value={form.num_packages} onChange={(e) => setForm({ ...form, num_packages: e.target.value })} />
           </FormField>
           <FormField size="sm" label="Total Weight">
@@ -319,17 +383,34 @@ export function ChallanForm({ docType }: Props) {
         }
       >
         <div className="overflow-x-auto -mx-2 sm:mx-0">
-          <table className="w-full text-sm border-separate border-spacing-0 min-w-[720px]">
+          <table className="w-full text-sm border-separate border-spacing-0 min-w-[1100px]">
             <thead className="sticky top-0 z-10 bg-muted/60">
               <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="px-2 py-1.5 w-10">#</th>
                 <th className="px-2 py-1.5 min-w-[220px]">Product</th>
-                <th className="px-2 py-1.5">Description</th>
-                {isOem && <th className="px-2 py-1.5 w-32">Model No</th>}
-                {isOem && <th className="px-2 py-1.5 w-32">Serial No</th>}
+                <th className="px-2 py-1.5 w-32">OEM Ref ID</th>
+                {isOem ? (
+                  <>
+                    <th className="px-2 py-1.5 w-32">Model</th>
+                    <th className="px-2 py-1.5 w-40">Good/Defective Sr No</th>
+                    <th className="px-2 py-1.5 w-28">Oracle #</th>
+                    <th className="px-2 py-1.5 w-28">Stock Type</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-2 py-1.5 w-32">Defective Model</th>
+                    <th className="px-2 py-1.5 w-32">Defective Sr No</th>
+                    <th className="px-2 py-1.5 w-28">Oracle #</th>
+                    <th className="px-2 py-1.5 w-32">Good Model</th>
+                    <th className="px-2 py-1.5 w-32">Good Sr No</th>
+                  </>
+                )}
                 <th className="px-2 py-1.5 w-20">UOM</th>
                 <th className="px-2 py-1.5 w-20">Qty</th>
-                <th className="px-2 py-1.5 w-28">Batch</th>
+                <th className="px-2 py-1.5 w-20">HSN</th>
+                <th className="px-2 py-1.5 w-24">Unit Price</th>
+                <th className="px-2 py-1.5 w-24">Weight (KG)</th>
+                {isOem && <th className="px-2 py-1.5 w-40">Good Return Reason</th>}
                 <th className="px-2 py-1.5 w-10"></th>
               </tr>
             </thead>
@@ -345,6 +426,7 @@ export function ChallanForm({ docType }: Props) {
                         description: p.description || "",
                         uom: p.unit || it.uom || "Nos",
                         model_no: p.model || "",
+                        hsn: (p as any).hsn || it.hsn || "",
                       })}
                     />
                     {(it.part_no || it.part_name) && (
@@ -354,17 +436,47 @@ export function ChallanForm({ docType }: Props) {
                     )}
                   </td>
                   <td className="px-2 py-1.5 border-t border-border/60">
-                    <Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} />
+                    <Input value={it.oem_ref_id || ""} onChange={(e) => updateItem(i, { oem_ref_id: e.target.value })} />
                   </td>
-                  {isOem && (
-                    <td className="px-2 py-1.5 border-t border-border/60">
-                      <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
-                    </td>
-                  )}
-                  {isOem && (
-                    <td className="px-2 py-1.5 border-t border-border/60">
-                      <Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} />
-                    </td>
+                  {isOem ? (
+                    <>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Select value={it.stock_type || ""} onValueChange={(v) => updateItem(i, { stock_type: v })}>
+                          <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Good">Good</SelectItem>
+                            <SelectItem value="Defective">Defective</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.defective_model || ""} onChange={(e) => updateItem(i, { defective_model: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.defective_serial || ""} onChange={(e) => updateItem(i, { defective_serial: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.good_model || ""} onChange={(e) => updateItem(i, { good_model: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value })} />
+                      </td>
+                    </>
                   )}
                   <td className="px-2 py-1.5 border-t border-border/60">
                     <Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} />
@@ -373,8 +485,19 @@ export function ChallanForm({ docType }: Props) {
                     <Input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
                   </td>
                   <td className="px-2 py-1.5 border-t border-border/60">
-                    <Input value={it.batch_no} onChange={(e) => updateItem(i, { batch_no: e.target.value })} />
+                    <Input value={it.hsn || ""} onChange={(e) => updateItem(i, { hsn: e.target.value })} />
                   </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input type="number" min="0" value={it.unit_price || ""} onChange={(e) => updateItem(i, { unit_price: e.target.value })} />
+                  </td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Input type="number" min="0" value={it.weight_kg || ""} onChange={(e) => updateItem(i, { weight_kg: e.target.value })} />
+                  </td>
+                  {isOem && (
+                    <td className="px-2 py-1.5 border-t border-border/60">
+                      <Input value={it.good_return_reason || ""} onChange={(e) => updateItem(i, { good_return_reason: e.target.value })} />
+                    </td>
+                  )}
                   <td className="px-2 py-1.5 border-t border-border/60 text-right">
                     <Button
                       type="button"

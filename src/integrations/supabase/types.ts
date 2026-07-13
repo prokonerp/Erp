@@ -692,6 +692,7 @@ export type Database = {
           challan_date: string
           challan_no: string
           checked_by: string | null
+          city: string | null
           contact_number: string | null
           contact_person: string | null
           created_at: string
@@ -717,11 +718,13 @@ export type Database = {
           oem_plant: string | null
           party_code: string | null
           party_name: string | null
+          pin_code: string | null
           prepared_by: string | null
           quotation_id: string | null
           reference_no: string | null
           sales_order_id: string | null
           sales_order_no: string | null
+          state: string | null
           status: string
           total_weight: string | null
           transporter_name: string | null
@@ -733,6 +736,7 @@ export type Database = {
           challan_date?: string
           challan_no: string
           checked_by?: string | null
+          city?: string | null
           contact_number?: string | null
           contact_person?: string | null
           created_at?: string
@@ -758,11 +762,13 @@ export type Database = {
           oem_plant?: string | null
           party_code?: string | null
           party_name?: string | null
+          pin_code?: string | null
           prepared_by?: string | null
           quotation_id?: string | null
           reference_no?: string | null
           sales_order_id?: string | null
           sales_order_no?: string | null
+          state?: string | null
           status?: string
           total_weight?: string | null
           transporter_name?: string | null
@@ -774,6 +780,7 @@ export type Database = {
           challan_date?: string
           challan_no?: string
           checked_by?: string | null
+          city?: string | null
           contact_number?: string | null
           contact_person?: string | null
           created_at?: string
@@ -799,11 +806,13 @@ export type Database = {
           oem_plant?: string | null
           party_code?: string | null
           party_name?: string | null
+          pin_code?: string | null
           prepared_by?: string | null
           quotation_id?: string | null
           reference_no?: string | null
           sales_order_id?: string | null
           sales_order_no?: string | null
+          state?: string | null
           status?: string
           total_weight?: string | null
           transporter_name?: string | null

@@ -272,13 +272,9 @@ function AppLayout() {
                         <Send className="h-4 w-4 shrink-0" />
                         All Delivery Challans
                       </Link>
-                      <Link to="/challan/customer/new" className={navLinkCls(isActive("/challan/customer/new"))}>
+                      <Link to="/challan/new" className={navLinkCls(isActive("/challan/new"))}>
                         <Send className="h-4 w-4 shrink-0" />
-                        New: To Customer
-                      </Link>
-                      <Link to="/challan/oem/new" className={navLinkCls(isActive("/challan/oem/new"))}>
-                        <Send className="h-4 w-4 shrink-0" />
-                        New: To OEM
+                        New Delivery Challan
                       </Link>
                       <Link to="/grn" className={navLinkCls(isActive("/grn"))}>
                         <PackageCheck className="h-4 w-4 shrink-0" />
