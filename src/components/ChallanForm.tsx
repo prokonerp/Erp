@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BranchPicker } from "@/components/BranchPicker";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const isOem = dcType === "oem";
   const [items, setItems] = useState<ChallanItem[]>([emptyItem()]);
   const [partyId, setPartyId] = useState<string | null>(null);
+  const [branchId, setBranchId] = useState<string | null>(null);
   const [form, setForm] = useState({
     status: "Draft",
     challan_date: new Date().toISOString().slice(0, 10),
@@ -146,6 +148,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         approved_by: (r.approved_by as string) || "",
         oem_logo_url: (r.oem_logo_url as string) || "",
       }));
+      setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
     })();
   }, [editId]);
 
@@ -207,6 +210,10 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   };
 
   const validate = () => {
+    if (!editId && !branchId) {
+      toast.error("Please select a Prokon Branch");
+      return false;
+    }
     if (!form.party_name.trim()) {
       toast.error(`${isOem ? "OEM" : "Customer"} name is required`);
       return false;
@@ -233,6 +240,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         doc_type: dcType,
         dispatch_date: form.dispatch_date || null,
         items: cleanItems,
+        branch_id: branchId,
       };
       const { error } = await supabase
         .from("delivery_challans" as never)
@@ -252,6 +260,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       challan_no: "",
       dispatch_date: form.dispatch_date || null,
       items: cleanItems,
+      branch_id: branchId,
       created_by: userData.user?.id ?? null,
     };
     const { data, error } = await supabase
