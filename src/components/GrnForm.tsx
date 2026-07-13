@@ -74,15 +74,38 @@ export function GrnForm({ category: initialCategory = "customer" }: Props) {
 
   const sourceLabel = isCust ? "Customer" : isOem ? "OEM" : "Vendor / Source";
 
+  const handleCategoryChange = (next: GrnCategory) => {
+    if (next === category) return;
+    setCategory(next);
+    setSourceId(null);
+    setForm((f) => ({
+      ...f,
+      source_doc_type:
+        next === "customer" ? "Return Note" : next === "oem" ? "OEM Dispatch" : "Vendor DC",
+      source_name: "",
+      source_code: "",
+      source_gstin: "",
+      source_contact_person: "",
+      source_contact_number: "",
+      source_email: "",
+      source_address: "",
+      oem_plant: "",
+      po_no: next === "customer" ? "" : f.po_no,
+      invoice_no: next === "customer" ? "" : f.invoice_no,
+      invoice_date: next === "customer" ? "" : f.invoice_date,
+      ticket_no: next === "customer" ? f.ticket_no : "",
+    }));
+  };
+
   // Prefill from a source document (e.g. Indent → Generate GRN).
   useEffect(() => {
-    if (!isCust) return;
     let raw: string | null = null;
     try { raw = sessionStorage.getItem("grn:prefill:new-customer"); } catch { /* noop */ }
     if (!raw) return;
     try { sessionStorage.removeItem("grn:prefill:new-customer"); } catch { /* noop */ }
     let payload: Record<string, unknown>;
     try { payload = JSON.parse(raw); } catch { return; }
+    setCategory("customer");
     const customerId = (payload.customer_id as string | undefined) || null;
     const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<GrnItem>>) : [];
     if (prefillItems.length > 0) {
