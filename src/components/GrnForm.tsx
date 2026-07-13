@@ -441,7 +441,6 @@ export function GrnForm({ category: initialCategory = "customer" }: Props) {
                         description: p.description || "",
                         uom: p.unit || it.uom || "Nos",
                         model_no: p.model || "",
-                        hsn: (p.hsn as string | null) || (it as any).hsn || "",
                       })}
                     />
                     {(it.part_no || it.part_name) && (
