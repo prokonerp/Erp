@@ -13,6 +13,7 @@ import { emptyItem } from "@/lib/challan";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
+import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 
@@ -303,6 +304,19 @@ export function ChallanForm({ docType: initialDocType }: Props) {
             </FormField>
           )}
           <FormField size="md" label="Contact Person">
+            {dcType === "customer" && (
+              <div className="mb-1.5">
+                <ContactPersonPicker
+                  customerId={partyId}
+                  onPick={(c) => setForm((f) => ({
+                    ...f,
+                    contact_person: c.name,
+                    contact_number: c.phone || f.contact_number,
+                    email: c.email || f.email,
+                  }))}
+                />
+              </div>
+            )}
             <Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} />
           </FormField>
           <FormField size="md" label={isOem ? "Contact" : "Contact Number"}>
@@ -427,6 +441,8 @@ export function ChallanForm({ docType: initialDocType }: Props) {
                         uom: p.unit || it.uom || "Nos",
                         model_no: p.model || "",
                         hsn: (p as any).hsn || it.hsn || "",
+                        unit_price: it.unit_price || (p.default_price != null ? String(p.default_price) : ""),
+                        weight_kg: it.weight_kg || (p.weight_kg != null ? String(p.weight_kg) : ""),
                       })}
                     />
                     {(it.part_no || it.part_name) && (
