@@ -264,14 +264,48 @@ function AppLayout() {
                   </button>
                   {isOpen && (
                     <div className="space-y-0.5">
-                      <Link to="/new" className={navLinkCls(isActive("/new"))}>
-                        <FileText className="h-4 w-4 shrink-0" />
-                        New Gate Pass
-                      </Link>
-                      <Link to="/records" className={navLinkCls(isActive("/records"))}>
-                        <ListChecks className="h-4 w-4 shrink-0" />
-                        History
-                      </Link>
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setGatepassOpen((v) => !v)}
+                          className={`w-full ${navLinkCls(isActive("/gatepass"))}`}
+                          aria-expanded={gatepassOpen}
+                        >
+                          <FileText className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 text-left">Gate Passes</span>
+                          {gatepassOpen ? (
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                        </button>
+                        {gatepassOpen && (
+                          <div className="ml-5 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
+                            <Link
+                              to="/gatepass"
+                              className={navLinkCls(
+                                location.pathname === "/gatepass" ||
+                                  location.pathname === "/records"
+                              )}
+                            >
+                              <ListChecks className="h-4 w-4 shrink-0" />
+                              View Gate Pass History
+                            </Link>
+                            {can("gatepass", "create") && (
+                              <Link
+                                to="/gatepass/new"
+                                className={navLinkCls(
+                                  location.pathname === "/gatepass/new" ||
+                                    location.pathname === "/new"
+                                )}
+                              >
+                                <Plus className="h-4 w-4 shrink-0" />
+                                Create New Gate Pass
+                              </Link>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <div>
                         <button
                           type="button"
