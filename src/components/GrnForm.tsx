@@ -234,6 +234,25 @@ export function GrnForm({ category: initialCategory = "customer" }: Props) {
       description="Capture receipt details, source, transport, items, QC and storage."
       actions={actions}
     >
+      <FormSection title="GRN Type" defaultOpen>
+        <div className="flex flex-wrap gap-2">
+          {(["customer", "oem", "general"] as GrnCategory[]).map((c) => (
+            <Button
+              key={c}
+              type="button"
+              size="sm"
+              variant={category === c ? "default" : "outline"}
+              onClick={() => handleCategoryChange(c)}
+            >
+              {CATEGORY_LABEL[c]}
+            </Button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Choose the GRN type — the form fields and item columns update automatically.
+        </p>
+      </FormSection>
+
       <FormSection title="GRN Information" defaultOpen>
         <FormGrid>
           <FormField size="sm" label="GRN Date" required>
