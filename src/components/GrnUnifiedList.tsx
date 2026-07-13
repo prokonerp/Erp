@@ -131,14 +131,8 @@ export function GrnUnifiedList() {
           </div>
           <div className="flex gap-2 items-center flex-wrap">
             <ExportButtons name="GRNs" title="Goods Receipt Notes" rows={filtered} columns={cols} />
-            <Link to="/grn/customer/new">
-              <Button size="sm" style={{ backgroundColor: "#059669" }}><Plus className="h-4 w-4 mr-1" />Customer</Button>
-            </Link>
-            <Link to="/grn/oem/new">
-              <Button size="sm" style={{ backgroundColor: "#EA580C" }}><Plus className="h-4 w-4 mr-1" />OEM</Button>
-            </Link>
-            <Link to="/grn/general/new">
-              <Button size="sm" style={{ backgroundColor: "#475569" }}><Plus className="h-4 w-4 mr-1" />General</Button>
+            <Link to="/grn/new">
+              <Button size="sm"><Plus className="h-4 w-4 mr-1" />New GRN</Button>
             </Link>
           </div>
         </CardHeader>
