@@ -460,9 +460,9 @@ function AppLayout() {
             <h1 className="truncate text-[15px] font-semibold text-foreground leading-tight">
               {pageTitle}
             </h1>
-            {currentNav?.group && (
+            {pageGroup && (
               <p className="truncate text-[11px] text-muted-foreground leading-tight">
-                {currentNav.group}
+                {pageGroup}
               </p>
             )}
           </div>
