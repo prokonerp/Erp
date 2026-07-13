@@ -10,7 +10,7 @@ import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { toTitleCaseSmart, upperTrim } from "@/lib/text";
 
-export type FieldType = "text" | "textarea" | "email" | "phone" | "number" | "date" | "boolean" | "upper" | "title";
+export type FieldType = "text" | "textarea" | "email" | "phone" | "number" | "date" | "boolean" | "upper" | "title" | "select";
 
 export interface FieldDef {
   key: string;
@@ -18,6 +18,9 @@ export interface FieldDef {
   type?: FieldType;
   required?: boolean;
   showInList?: boolean;
+  /** For type: "select" — options loader (async) or static list. Returns [{value,label}]. */
+  optionsFrom?: { table: string; valueKey?: string; labelKey?: string; orderBy?: string };
+  options?: { value: string; label: string }[];
 }
 
 interface Props {
@@ -33,6 +36,26 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
+  const [optionMap, setOptionMap] = useState<Record<string, { value: string; label: string }[]>>({});
+
+  useEffect(() => {
+    (async () => {
+      const map: Record<string, { value: string; label: string }[]> = {};
+      for (const f of fields) {
+        if (f.type === "select") {
+          if (f.options) { map[f.key] = f.options; continue; }
+          if (f.optionsFrom) {
+            const vk = f.optionsFrom.valueKey ?? "id";
+            const lk = f.optionsFrom.labelKey ?? "name";
+            const ob = f.optionsFrom.orderBy ?? lk;
+            const { data } = await supabase.from(f.optionsFrom.table as any).select(`${vk},${lk}`).order(ob, { ascending: true });
+            map[f.key] = (data as any[] ?? []).map((r) => ({ value: r[vk], label: r[lk] }));
+          }
+        }
+      }
+      setOptionMap(map);
+    })();
+  }, [table]);
 
   async function load() {
     setLoading(true);
@@ -125,6 +148,17 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
                       <option value="true">Yes</option>
                       <option value="false">No</option>
                     </select>
+                  ) : f.type === "select" ? (
+                    <select
+                      className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                      value={form[f.key] ?? ""}
+                      onChange={(e) => setForm({ ...form, [f.key]: e.target.value || null })}
+                    >
+                      <option value="">— Select —</option>
+                      {(optionMap[f.key] ?? []).map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
                   ) : (
                     <Input
                       type={f.type === "date" ? "date" : f.type === "number" ? "number" : f.type === "email" ? "email" : "text"}
@@ -160,7 +194,11 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
                   <TableRow key={r.id}>
                     {listFields.map((f) => (
                       <TableCell key={f.key} className="text-sm">
-                        {f.type === "boolean" ? (r[f.key] ? "Yes" : "No") : (r[f.key] ?? "—")}
+                        {f.type === "boolean"
+                          ? (r[f.key] ? "Yes" : "No")
+                          : f.type === "select"
+                            ? ((optionMap[f.key] ?? []).find((o) => o.value === r[f.key])?.label ?? "—")
+                            : (r[f.key] ?? "—")}
                       </TableCell>
                     ))}
                     {canEdit && (
