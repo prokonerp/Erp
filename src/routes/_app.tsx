@@ -70,7 +70,6 @@ function AppLayout() {
   });
   const [challanOpen, setChallanOpen] = useState(false);
   const [grnOpen, setGrnOpen] = useState(false);
-  const [gatepassOpen, setGatepassOpen] = useState(isActive("/gatepass"));
   const fetchProfile = useServerFn(getMyProfile);
 
   async function loadProfile() {
