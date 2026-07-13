@@ -148,6 +148,7 @@ function AppLayout() {
       });
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + "/");
+  const [gatepassOpen, setGatepassOpen] = useState(isActive("/gatepass"));
   const currentSearchTab = (() => {
     if (typeof window === "undefined") return undefined;
     const sp = new URLSearchParams(window.location.search);
