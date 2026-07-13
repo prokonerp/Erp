@@ -305,11 +305,22 @@ export function ChallanForm({ docType: initialDocType }: Props) {
           <FormField size="md" label="Contact Person">
             <Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} />
           </FormField>
-          <FormField size="md" label="Contact Number">
+          <FormField size="md" label={isOem ? "Contact" : "Contact Number"}>
             <Input value={form.contact_number} onChange={(e) => setForm({ ...form, contact_number: e.target.value })} />
           </FormField>
           <FormField size="md" label="Email">
             <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </FormField>
+          {isOem && (
+            <FormField size="md" label="City">
+              <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+            </FormField>
+          )}
+          <FormField size="sm" label="State">
+            <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Pin Code">
+            <Input value={form.pin_code} onChange={(e) => setForm({ ...form, pin_code: e.target.value })} />
           </FormField>
           {isOem && (
             <FormField size="md" label="OEM Logo URL (optional)">
@@ -322,15 +333,18 @@ export function ChallanForm({ docType: initialDocType }: Props) {
         </FormGrid>
       </FormSection>
 
-      <FormSection title="Transport Details">
+      <FormSection title="Shipment & Transport Details">
         <FormGrid>
-          <FormField size="md" label="Transporter Name">
+          <FormField size="md" label="Courier / Transporter">
             <Input value={form.transporter_name} onChange={(e) => setForm({ ...form, transporter_name: e.target.value })} />
           </FormField>
-          <FormField size="sm" label="Vehicle Number">
-            <Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} />
+          <FormField size="sm" label="Docket #">
+            <Input value={form.lr_number} onChange={(e) => setForm({ ...form, lr_number: e.target.value })} />
           </FormField>
-          <FormField size="sm" label="Mode of Transport">
+          <FormField size="sm" label="Expected Date">
+            <Input type="date" value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} />
+          </FormField>
+          <FormField size="sm" label="Shipment Mode">
             <Select value={form.mode_of_transport} onValueChange={(v) => setForm({ ...form, mode_of_transport: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -340,16 +354,16 @@ export function ChallanForm({ docType: initialDocType }: Props) {
               </SelectContent>
             </Select>
           </FormField>
-          <FormField size="md" label="Driver Name">
+          <FormField size="sm" label="Vehicle Number">
+            <Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} />
+          </FormField>
+          <FormField size="md" label={isOem ? "Driver Name" : "Engineer Name"}>
             <Input value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} />
           </FormField>
-          <FormField size="sm" label="Driver Mobile">
+          <FormField size="sm" label={isOem ? "Driver Mobile" : "Engineer Contact"}>
             <Input value={form.driver_mobile} onChange={(e) => setForm({ ...form, driver_mobile: e.target.value })} />
           </FormField>
-          <FormField size="sm" label="LR / Consignment No.">
-            <Input value={form.lr_number} onChange={(e) => setForm({ ...form, lr_number: e.target.value })} />
-          </FormField>
-          <FormField size="sm" label="No. of Packages">
+          <FormField size="sm" label="No. of Packs">
             <Input value={form.num_packages} onChange={(e) => setForm({ ...form, num_packages: e.target.value })} />
           </FormField>
           <FormField size="sm" label="Total Weight">
