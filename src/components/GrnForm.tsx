@@ -18,9 +18,9 @@ import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
-type Props = { category?: GrnCategory };
+type Props = { category?: GrnCategory; editId?: string };
 
-export function GrnForm({ category: initialCategory = "customer" }: Props) {
+export function GrnForm({ category: initialCategory = "customer", editId }: Props) {
   const navigate = useNavigate();
   const [category, setCategory] = useState<GrnCategory>(initialCategory);
   const isOem = category === "oem";
@@ -100,6 +100,7 @@ export function GrnForm({ category: initialCategory = "customer" }: Props) {
 
   // Prefill from a source document (e.g. Indent → Generate GRN).
   useEffect(() => {
+    if (editId) return; // do not run session prefill in edit mode
     let raw: string | null = null;
     try { raw = sessionStorage.getItem("grn:prefill:new-customer"); } catch { /* noop */ }
     if (!raw) return;
@@ -129,6 +130,32 @@ export function GrnForm({ category: initialCategory = "customer" }: Props) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load existing GRN for edit mode.
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("grns" as never)
+        .select("*").eq("id", editId).maybeSingle();
+      if (error || !data) {
+        toast.error(error?.message || "GRN not found");
+        return;
+      }
+      const r = data as Record<string, unknown>;
+      setCategory((r.category as GrnCategory) || "customer");
+      const arr = Array.isArray(r.items) ? (r.items as GrnItem[]) : [];
+      setItems(arr.length > 0 ? arr.map((it) => ({ ...emptyGrnItem(), ...it })) : [emptyGrnItem()]);
+      setForm((f) => {
+        const next: typeof f = { ...f };
+        for (const k of Object.keys(f) as (keyof typeof f)[]) {
+          const v = r[k as string];
+          if (v !== undefined && v !== null) (next as any)[k] = String(v);
+        }
+        return next;
+      });
+    })();
+  }, [editId]);
 
   const updateItem = (i: number, patch: Partial<GrnItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -190,6 +217,29 @@ export function GrnForm({ category: initialCategory = "customer" }: Props) {
     if (!validate()) return;
     const clean = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     setBusy(true);
+    if (editId) {
+      const updatePayload = {
+        ...form,
+        category,
+        receipt_date: form.receipt_date || null,
+        source_doc_date: form.source_doc_date || null,
+        invoice_date: form.invoice_date || null,
+        qc_date: form.qc_date || null,
+        accepted_qty: totals.accepted,
+        rejected_qty: totals.rejected,
+        items: clean,
+      };
+      const { error } = await supabase
+        .from("grns" as never)
+        .update(updatePayload as never)
+        .eq("id", editId);
+      setBusy(false);
+      if (error) return toast.error(error.message);
+      setReviewOpen(false);
+      toast.success("GRN updated");
+      navigate({ to: "/grn/$id", params: { id: editId } });
+      return;
+    }
     const { data: userData } = await supabase.auth.getUser();
     const payload = {
       ...form,
@@ -231,7 +281,7 @@ export function GrnForm({ category: initialCategory = "customer" }: Props) {
 
   return (
     <FormShell
-      title={`New GRN — ${CATEGORY_LABEL[category]}`}
+      title={`${editId ? "Edit" : "New"} GRN — ${CATEGORY_LABEL[category]}`}
       description="Capture receipt details, source, transport, items, QC and storage."
       actions={actions}
     >
