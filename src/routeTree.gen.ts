@@ -104,10 +104,12 @@ import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfe
 import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
 import { Route as AppGrnGeneralNewRouteImport } from './routes/_app/grn.general.new'
 import { Route as AppGrnCustomerNewRouteImport } from './routes/_app/grn.customer.new'
+import { Route as AppGrnIdEditRouteImport } from './routes/_app/grn.$id.edit'
 import { Route as AppCrmQuotationsIdRouteImport } from './routes/_app/crm.quotations.$id'
 import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
 import { Route as AppChallanOemNewRouteImport } from './routes/_app/challan.oem.new'
 import { Route as AppChallanCustomerNewRouteImport } from './routes/_app/challan.customer.new'
+import { Route as AppChallanIdEditRouteImport } from './routes/_app/challan.$id.edit'
 
 const RaiseTicketRoute = RaiseTicketRouteImport.update({
   id: '/raise-ticket',
@@ -583,6 +585,11 @@ const AppGrnCustomerNewRoute = AppGrnCustomerNewRouteImport.update({
   path: '/new',
   getParentRoute: () => AppGrnCustomerRoute,
 } as any)
+const AppGrnIdEditRoute = AppGrnIdEditRouteImport.update({
+  id: '/edit',
+  path: '/edit',
+  getParentRoute: () => AppGrnIdRoute,
+} as any)
 const AppCrmQuotationsIdRoute = AppCrmQuotationsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -602,6 +609,11 @@ const AppChallanCustomerNewRoute = AppChallanCustomerNewRouteImport.update({
   id: '/new',
   path: '/new',
   getParentRoute: () => AppChallanCustomerRoute,
+} as any)
+const AppChallanIdEditRoute = AppChallanIdEditRouteImport.update({
+  id: '/edit',
+  path: '/edit',
+  getParentRoute: () => AppChallanIdRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -630,7 +642,7 @@ export interface FileRoutesByFullPath {
   '/amc/oem': typeof AppAmcOemRoute
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
-  '/challan/$id': typeof AppChallanIdRoute
+  '/challan/$id': typeof AppChallanIdRouteWithChildren
   '/challan/customer': typeof AppChallanCustomerRouteWithChildren
   '/challan/new': typeof AppChallanNewRoute
   '/challan/oem': typeof AppChallanOemRouteWithChildren
@@ -643,7 +655,7 @@ export interface FileRoutesByFullPath {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
-  '/grn/$id': typeof AppGrnIdRoute
+  '/grn/$id': typeof AppGrnIdRouteWithChildren
   '/grn/customer': typeof AppGrnCustomerRouteWithChildren
   '/grn/general': typeof AppGrnGeneralRouteWithChildren
   '/grn/new': typeof AppGrnNewRoute
@@ -681,10 +693,12 @@ export interface FileRoutesByFullPath {
   '/po/': typeof AppPoIndexRoute
   '/sales/': typeof AppSalesIndexRoute
   '/tickets/': typeof AppTicketsIndexRoute
+  '/challan/$id/edit': typeof AppChallanIdEditRoute
   '/challan/customer/new': typeof AppChallanCustomerNewRoute
   '/challan/oem/new': typeof AppChallanOemNewRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
+  '/grn/$id/edit': typeof AppGrnIdEditRoute
   '/grn/customer/new': typeof AppGrnCustomerNewRoute
   '/grn/general/new': typeof AppGrnGeneralNewRoute
   '/grn/oem/new': typeof AppGrnOemNewRoute
@@ -721,7 +735,7 @@ export interface FileRoutesByTo {
   '/amc/oem': typeof AppAmcOemRoute
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
-  '/challan/$id': typeof AppChallanIdRoute
+  '/challan/$id': typeof AppChallanIdRouteWithChildren
   '/challan/new': typeof AppChallanNewRoute
   '/crm/ai-recommend': typeof AppCrmAiRecommendRoute
   '/crm/bundles': typeof AppCrmBundlesRoute
@@ -732,7 +746,7 @@ export interface FileRoutesByTo {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
-  '/grn/$id': typeof AppGrnIdRoute
+  '/grn/$id': typeof AppGrnIdRouteWithChildren
   '/grn/new': typeof AppGrnNewRoute
   '/ims/audit': typeof AppImsAuditRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
@@ -766,10 +780,12 @@ export interface FileRoutesByTo {
   '/po': typeof AppPoIndexRoute
   '/sales': typeof AppSalesIndexRoute
   '/tickets': typeof AppTicketsIndexRoute
+  '/challan/$id/edit': typeof AppChallanIdEditRoute
   '/challan/customer/new': typeof AppChallanCustomerNewRoute
   '/challan/oem/new': typeof AppChallanOemNewRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
+  '/grn/$id/edit': typeof AppGrnIdEditRoute
   '/grn/customer/new': typeof AppGrnCustomerNewRoute
   '/grn/general/new': typeof AppGrnGeneralNewRoute
   '/grn/oem/new': typeof AppGrnOemNewRoute
@@ -817,7 +833,7 @@ export interface FileRoutesById {
   '/_app/amc/oem': typeof AppAmcOemRoute
   '/_app/amc/pm': typeof AppAmcPmRoute
   '/_app/amc/settings': typeof AppAmcSettingsRoute
-  '/_app/challan/$id': typeof AppChallanIdRoute
+  '/_app/challan/$id': typeof AppChallanIdRouteWithChildren
   '/_app/challan/customer': typeof AppChallanCustomerRouteWithChildren
   '/_app/challan/new': typeof AppChallanNewRoute
   '/_app/challan/oem': typeof AppChallanOemRouteWithChildren
@@ -830,7 +846,7 @@ export interface FileRoutesById {
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/gatepass/new': typeof AppGatepassNewRoute
-  '/_app/grn/$id': typeof AppGrnIdRoute
+  '/_app/grn/$id': typeof AppGrnIdRouteWithChildren
   '/_app/grn/customer': typeof AppGrnCustomerRouteWithChildren
   '/_app/grn/general': typeof AppGrnGeneralRouteWithChildren
   '/_app/grn/new': typeof AppGrnNewRoute
@@ -868,10 +884,12 @@ export interface FileRoutesById {
   '/_app/po/': typeof AppPoIndexRoute
   '/_app/sales/': typeof AppSalesIndexRoute
   '/_app/tickets/': typeof AppTicketsIndexRoute
+  '/_app/challan/$id/edit': typeof AppChallanIdEditRoute
   '/_app/challan/customer/new': typeof AppChallanCustomerNewRoute
   '/_app/challan/oem/new': typeof AppChallanOemNewRoute
   '/_app/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/_app/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
+  '/_app/grn/$id/edit': typeof AppGrnIdEditRoute
   '/_app/grn/customer/new': typeof AppGrnCustomerNewRoute
   '/_app/grn/general/new': typeof AppGrnGeneralNewRoute
   '/_app/grn/oem/new': typeof AppGrnOemNewRoute
@@ -970,10 +988,12 @@ export interface FileRouteTypes {
     | '/po/'
     | '/sales/'
     | '/tickets/'
+    | '/challan/$id/edit'
     | '/challan/customer/new'
     | '/challan/oem/new'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
+    | '/grn/$id/edit'
     | '/grn/customer/new'
     | '/grn/general/new'
     | '/grn/oem/new'
@@ -1055,10 +1075,12 @@ export interface FileRouteTypes {
     | '/po'
     | '/sales'
     | '/tickets'
+    | '/challan/$id/edit'
     | '/challan/customer/new'
     | '/challan/oem/new'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
+    | '/grn/$id/edit'
     | '/grn/customer/new'
     | '/grn/general/new'
     | '/grn/oem/new'
@@ -1156,10 +1178,12 @@ export interface FileRouteTypes {
     | '/_app/po/'
     | '/_app/sales/'
     | '/_app/tickets/'
+    | '/_app/challan/$id/edit'
     | '/_app/challan/customer/new'
     | '/_app/challan/oem/new'
     | '/_app/crm/leads/$id'
     | '/_app/crm/quotations/$id'
+    | '/_app/grn/$id/edit'
     | '/_app/grn/customer/new'
     | '/_app/grn/general/new'
     | '/_app/grn/oem/new'
@@ -1854,6 +1878,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGrnCustomerNewRouteImport
       parentRoute: typeof AppGrnCustomerRoute
     }
+    '/_app/grn/$id/edit': {
+      id: '/_app/grn/$id/edit'
+      path: '/edit'
+      fullPath: '/grn/$id/edit'
+      preLoaderRoute: typeof AppGrnIdEditRouteImport
+      parentRoute: typeof AppGrnIdRoute
+    }
     '/_app/crm/quotations/$id': {
       id: '/_app/crm/quotations/$id'
       path: '/$id'
@@ -1882,6 +1913,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChallanCustomerNewRouteImport
       parentRoute: typeof AppChallanCustomerRoute
     }
+    '/_app/challan/$id/edit': {
+      id: '/_app/challan/$id/edit'
+      path: '/edit'
+      fullPath: '/challan/$id/edit'
+      preLoaderRoute: typeof AppChallanIdEditRouteImport
+      parentRoute: typeof AppChallanIdRoute
+    }
   }
 }
 
@@ -1905,6 +1943,18 @@ const AppAmcRouteChildren: AppAmcRouteChildren = {
 
 const AppAmcRouteWithChildren =
   AppAmcRoute._addFileChildren(AppAmcRouteChildren)
+
+interface AppChallanIdRouteChildren {
+  AppChallanIdEditRoute: typeof AppChallanIdEditRoute
+}
+
+const AppChallanIdRouteChildren: AppChallanIdRouteChildren = {
+  AppChallanIdEditRoute: AppChallanIdEditRoute,
+}
+
+const AppChallanIdRouteWithChildren = AppChallanIdRoute._addFileChildren(
+  AppChallanIdRouteChildren,
+)
 
 interface AppChallanCustomerRouteChildren {
   AppChallanCustomerNewRoute: typeof AppChallanCustomerNewRoute
@@ -1934,7 +1984,7 @@ const AppChallanOemRouteWithChildren = AppChallanOemRoute._addFileChildren(
 )
 
 interface AppChallanRouteChildren {
-  AppChallanIdRoute: typeof AppChallanIdRoute
+  AppChallanIdRoute: typeof AppChallanIdRouteWithChildren
   AppChallanCustomerRoute: typeof AppChallanCustomerRouteWithChildren
   AppChallanNewRoute: typeof AppChallanNewRoute
   AppChallanOemRoute: typeof AppChallanOemRouteWithChildren
@@ -1942,7 +1992,7 @@ interface AppChallanRouteChildren {
 }
 
 const AppChallanRouteChildren: AppChallanRouteChildren = {
-  AppChallanIdRoute: AppChallanIdRoute,
+  AppChallanIdRoute: AppChallanIdRouteWithChildren,
   AppChallanCustomerRoute: AppChallanCustomerRouteWithChildren,
   AppChallanNewRoute: AppChallanNewRoute,
   AppChallanOemRoute: AppChallanOemRouteWithChildren,
@@ -2001,6 +2051,18 @@ const AppCrmRouteChildren: AppCrmRouteChildren = {
 const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
+interface AppGrnIdRouteChildren {
+  AppGrnIdEditRoute: typeof AppGrnIdEditRoute
+}
+
+const AppGrnIdRouteChildren: AppGrnIdRouteChildren = {
+  AppGrnIdEditRoute: AppGrnIdEditRoute,
+}
+
+const AppGrnIdRouteWithChildren = AppGrnIdRoute._addFileChildren(
+  AppGrnIdRouteChildren,
+)
+
 interface AppGrnCustomerRouteChildren {
   AppGrnCustomerNewRoute: typeof AppGrnCustomerNewRoute
   AppGrnCustomerIndexRoute: typeof AppGrnCustomerIndexRoute
@@ -2044,7 +2106,7 @@ const AppGrnOemRouteWithChildren = AppGrnOemRoute._addFileChildren(
 )
 
 interface AppGrnRouteChildren {
-  AppGrnIdRoute: typeof AppGrnIdRoute
+  AppGrnIdRoute: typeof AppGrnIdRouteWithChildren
   AppGrnCustomerRoute: typeof AppGrnCustomerRouteWithChildren
   AppGrnGeneralRoute: typeof AppGrnGeneralRouteWithChildren
   AppGrnNewRoute: typeof AppGrnNewRoute
@@ -2053,7 +2115,7 @@ interface AppGrnRouteChildren {
 }
 
 const AppGrnRouteChildren: AppGrnRouteChildren = {
-  AppGrnIdRoute: AppGrnIdRoute,
+  AppGrnIdRoute: AppGrnIdRouteWithChildren,
   AppGrnCustomerRoute: AppGrnCustomerRouteWithChildren,
   AppGrnGeneralRoute: AppGrnGeneralRouteWithChildren,
   AppGrnNewRoute: AppGrnNewRoute,

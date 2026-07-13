@@ -19,9 +19,9 @@ import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
-type Props = { docType?: DocType };
+type Props = { docType?: DocType; editId?: string };
 
-export function ChallanForm({ docType: initialDocType }: Props) {
+export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const navigate = useNavigate();
   const [dcType, setDcType] = useState<DocType>(initialDocType ?? "customer");
   const isOem = dcType === "oem";
@@ -67,6 +67,7 @@ export function ChallanForm({ docType: initialDocType }: Props) {
 
   // Prefill from a source document (e.g. Indent → Generate Delivery Challan).
   useEffect(() => {
+    if (editId) return; // do not run session prefill in edit mode
     if (isOem) return;
     let raw: string | null = null;
     try { raw = sessionStorage.getItem("challan:prefill:new-customer"); } catch { /* noop */ }
@@ -93,6 +94,60 @@ export function ChallanForm({ docType: initialDocType }: Props) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load existing record for edit mode.
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("delivery_challans" as never)
+        .select("*").eq("id", editId).maybeSingle();
+      if (error || !data) {
+        toast.error(error?.message || "Delivery Challan not found");
+        return;
+      }
+      const r = data as Record<string, unknown>;
+      setDcType((r.doc_type as DocType) || "customer");
+      const arr = Array.isArray(r.items) ? (r.items as ChallanItem[]) : [];
+      setItems(arr.length > 0 ? arr.map((it) => ({ ...emptyItem(), ...it })) : [emptyItem()]);
+      setForm((f) => ({
+        ...f,
+        status: (r.status as string) || f.status,
+        challan_date: (r.challan_date as string) || f.challan_date,
+        dispatch_date: (r.dispatch_date as string) || "",
+        reference_no: (r.reference_no as string) || "",
+        gate_pass_no: (r.gate_pass_no as string) || "",
+        sales_order_no: (r.sales_order_no as string) || "",
+        customer_po_no: (r.customer_po_no as string) || "",
+        invoice_no: (r.invoice_no as string) || "",
+        party_name: (r.party_name as string) || "",
+        party_code: (r.party_code as string) || "",
+        gstin: (r.gstin as string) || "",
+        oem_plant: (r.oem_plant as string) || "",
+        contact_person: (r.contact_person as string) || "",
+        contact_number: (r.contact_number as string) || "",
+        email: (r.email as string) || "",
+        delivery_address: (r.delivery_address as string) || "",
+        transporter_name: (r.transporter_name as string) || "",
+        vehicle_number: (r.vehicle_number as string) || "",
+        driver_name: (r.driver_name as string) || "",
+        driver_mobile: (r.driver_mobile as string) || "",
+        lr_number: (r.lr_number as string) || "",
+        mode_of_transport: (r.mode_of_transport as string) || "Road",
+        num_packages: (r.num_packages as string) || "",
+        total_weight: (r.total_weight as string) || "",
+        city: (r.city as string) || "",
+        state: (r.state as string) || "",
+        pin_code: (r.pin_code as string) || "",
+        internal_remarks: (r.internal_remarks as string) || "",
+        dispatch_remarks: (r.dispatch_remarks as string) || "",
+        prepared_by: (r.prepared_by as string) || "",
+        checked_by: (r.checked_by as string) || "",
+        approved_by: (r.approved_by as string) || "",
+        oem_logo_url: (r.oem_logo_url as string) || "",
+      }));
+    })();
+  }, [editId]);
 
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -172,6 +227,24 @@ export function ChallanForm({ docType: initialDocType }: Props) {
     if (!validate()) return;
     const cleanItems = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     setBusy(true);
+    if (editId) {
+      const updatePayload = {
+        ...form,
+        doc_type: dcType,
+        dispatch_date: form.dispatch_date || null,
+        items: cleanItems,
+      };
+      const { error } = await supabase
+        .from("delivery_challans" as never)
+        .update(updatePayload as never)
+        .eq("id", editId);
+      setBusy(false);
+      if (error) return toast.error(error.message);
+      setReviewOpen(false);
+      toast.success("Delivery Challan updated");
+      navigate({ to: "/challan/$id", params: { id: editId } });
+      return;
+    }
     const { data: userData } = await supabase.auth.getUser();
     const payload = {
       ...form,
@@ -210,7 +283,7 @@ export function ChallanForm({ docType: initialDocType }: Props) {
 
   return (
     <FormShell
-      title="New Delivery Challan"
+      title={editId ? "Edit Delivery Challan" : "New Delivery Challan"}
       description="Capture document, party, transport, material and authorization details."
       actions={actions}
     >
