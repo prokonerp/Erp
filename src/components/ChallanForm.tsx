@@ -18,11 +18,12 @@ import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
-type Props = { docType: DocType };
+type Props = { docType?: DocType };
 
-export function ChallanForm({ docType }: Props) {
+export function ChallanForm({ docType: initialDocType }: Props) {
   const navigate = useNavigate();
-  const isOem = docType === "oem";
+  const [dcType, setDcType] = useState<DocType>(initialDocType ?? "customer");
+  const isOem = dcType === "oem";
   const [items, setItems] = useState<ChallanItem[]>([emptyItem()]);
   const [partyId, setPartyId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -50,6 +51,9 @@ export function ChallanForm({ docType }: Props) {
     mode_of_transport: "Road",
     num_packages: "",
     total_weight: "",
+    city: "",
+    state: "",
+    pin_code: "",
     internal_remarks: "",
     dispatch_remarks: "",
     prepared_by: "",
@@ -128,6 +132,24 @@ export function ChallanForm({ docType }: Props) {
     }));
   };
 
+  // Reset party when DC Type changes (Customer master vs Vendor/OEM master).
+  const changeDcType = (t: DocType) => {
+    if (t === dcType) return;
+    setDcType(t);
+    setPartyId(null);
+    setForm((f) => ({
+      ...f,
+      party_name: "",
+      party_code: "",
+      gstin: "",
+      oem_plant: "",
+      contact_person: "",
+      contact_number: "",
+      email: "",
+      delivery_address: "",
+    }));
+  };
+
   const validate = () => {
     if (!form.party_name.trim()) {
       toast.error(`${isOem ? "OEM" : "Customer"} name is required`);
@@ -152,7 +174,7 @@ export function ChallanForm({ docType }: Props) {
     const { data: userData } = await supabase.auth.getUser();
     const payload = {
       ...form,
-      doc_type: docType,
+      doc_type: dcType,
       challan_no: "",
       dispatch_date: form.dispatch_date || null,
       items: cleanItems,
