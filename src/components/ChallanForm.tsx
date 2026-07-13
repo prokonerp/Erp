@@ -209,10 +209,38 @@ export function ChallanForm({ docType: initialDocType }: Props) {
 
   return (
     <FormShell
-      title={`New Delivery Challan — ${isOem ? "To OEM" : "To Customer"}`}
+      title="New Delivery Challan"
       description="Capture document, party, transport, material and authorization details."
       actions={actions}
     >
+      <FormSection title="DC Type" defaultOpen>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="dc_type"
+              className="accent-primary"
+              checked={dcType === "customer"}
+              onChange={() => changeDcType("customer")}
+            />
+            <span className="text-sm font-medium">To Customer</span>
+          </label>
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="dc_type"
+              className="accent-primary"
+              checked={dcType === "oem"}
+              onChange={() => changeDcType("oem")}
+            />
+            <span className="text-sm font-medium">To OEM</span>
+          </label>
+          <span className="text-xs text-muted-foreground">
+            Switching type resets recipient details; other fields are preserved.
+          </span>
+        </div>
+      </FormSection>
+
       <FormSection title="Document Information" defaultOpen>
         <FormGrid>
           <FormField size="sm" label="Challan Date" required>
