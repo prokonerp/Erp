@@ -125,14 +125,9 @@ export function ChallanUnifiedList() {
           </div>
           <div className="flex gap-2 items-center flex-wrap">
             <ExportButtons name="DeliveryChallans" title="Delivery Challans" rows={filtered} columns={cols} />
-            <Link to="/challan/customer/new">
-              <Button size="sm" style={{ backgroundColor: "#2563EB" }}>
-                <Plus className="h-4 w-4 mr-1" />New DC — Customer
-              </Button>
-            </Link>
-            <Link to="/challan/oem/new">
-              <Button size="sm" style={{ backgroundColor: "#7C3AED" }}>
-                <Plus className="h-4 w-4 mr-1" />New DC — OEM
+            <Link to="/challan/new">
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-1" />New Delivery Challan
               </Button>
             </Link>
           </div>
