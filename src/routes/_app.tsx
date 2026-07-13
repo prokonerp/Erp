@@ -189,7 +189,18 @@ function AppLayout() {
     }
     return location.pathname === n.to || location.pathname.startsWith(n.to + "/");
   });
-  const pageTitle = currentNav?.label ?? "Dashboard";
+  let pageTitle = currentNav?.label ?? "Dashboard";
+  let pageGroup = currentNav?.group;
+  if (isActive("/gatepass")) {
+    pageGroup = "Gate Passes";
+    if (location.pathname === "/gatepass/new" || location.pathname === "/new") {
+      pageTitle = "Create New Gate Pass";
+    } else if (location.pathname === "/gatepass" || location.pathname === "/records") {
+      pageTitle = "View Gate Pass History";
+    } else if (location.pathname.startsWith("/gatepass/")) {
+      pageTitle = "Gate Pass Detail";
+    }
+  }
 
   return (
     <div className="min-h-screen bg-muted/20 flex">
