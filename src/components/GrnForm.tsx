@@ -17,10 +17,11 @@ import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
-type Props = { category: GrnCategory };
+type Props = { category?: GrnCategory };
 
-export function GrnForm({ category }: Props) {
+export function GrnForm({ category: initialCategory = "customer" }: Props) {
   const navigate = useNavigate();
+  const [category, setCategory] = useState<GrnCategory>(initialCategory);
   const isOem = category === "oem";
   const isCust = category === "customer";
   const [items, setItems] = useState<GrnItem[]>([emptyGrnItem()]);
@@ -30,7 +31,8 @@ export function GrnForm({ category }: Props) {
     grn_date: new Date().toISOString().slice(0, 10),
     receipt_date: "",
     reference_no: "",
-    source_doc_type: isCust ? "Return Note" : isOem ? "OEM Dispatch" : "Vendor DC",
+    source_doc_type:
+      initialCategory === "customer" ? "Return Note" : initialCategory === "oem" ? "OEM Dispatch" : "Vendor DC",
     source_doc_no: "",
     source_doc_date: "",
     po_no: "",
