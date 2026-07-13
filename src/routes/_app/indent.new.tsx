@@ -276,6 +276,7 @@ function NewIndent() {
           onChange={(v) => set({ oracles_data: form.oracles_data.map((x, i) => (i === idx ? v : x)) })}
           onRemove={() => set({ oracles_data: form.oracles_data.filter((_, i) => i !== idx) })}
           onGenerateChallan={() => toast.info("Save the Indent first, then open it to generate a Delivery Challan.")}
+          onGenerateGrn={() => toast.info("Save the Indent first, then open it to generate a GRN.")}
         />
       ))}
 
