@@ -12,6 +12,7 @@ import { emptyGrnItem, CATEGORY_LABEL, type GrnCategory, type GrnItem } from "@/
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
+import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 
@@ -333,6 +334,19 @@ export function GrnForm({ category: initialCategory = "customer" }: Props) {
             </FormField>
           )}
           <FormField size="md" label="Contact Person">
+            {isCust && (
+              <div className="mb-1.5">
+                <ContactPersonPicker
+                  customerId={sourceId}
+                  onPick={(c) => setForm((f) => ({
+                    ...f,
+                    source_contact_person: c.name,
+                    source_contact_number: c.phone || f.source_contact_number,
+                    source_email: c.email || f.source_email,
+                  }))}
+                />
+              </div>
+            )}
             <Input value={form.source_contact_person} onChange={(e) => setForm({ ...form, source_contact_person: e.target.value })} />
           </FormField>
           <FormField size="md" label="Contact Number">
