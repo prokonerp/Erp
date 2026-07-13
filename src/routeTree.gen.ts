@@ -36,6 +36,7 @@ import { Route as AppPoIndexRouteImport } from './routes/_app/po.index'
 import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
 import { Route as AppImsIndexRouteImport } from './routes/_app/ims.index'
 import { Route as AppGrnIndexRouteImport } from './routes/_app/grn.index'
+import { Route as AppGatepassIndexRouteImport } from './routes/_app/gatepass.index'
 import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
 import { Route as AppChallanIndexRouteImport } from './routes/_app/challan.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
@@ -67,6 +68,7 @@ import { Route as AppGrnNewRouteImport } from './routes/_app/grn.new'
 import { Route as AppGrnGeneralRouteImport } from './routes/_app/grn.general'
 import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
 import { Route as AppGrnIdRouteImport } from './routes/_app/grn.$id'
+import { Route as AppGatepassNewRouteImport } from './routes/_app/gatepass.new'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
@@ -241,6 +243,11 @@ const AppGrnIndexRoute = AppGrnIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppGrnRoute,
 } as any)
+const AppGatepassIndexRoute = AppGatepassIndexRouteImport.update({
+  id: '/gatepass/',
+  path: '/gatepass/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -395,6 +402,11 @@ const AppGrnIdRoute = AppGrnIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => AppGrnRoute,
+} as any)
+const AppGatepassNewRoute = AppGatepassNewRouteImport.update({
+  id: '/gatepass/new',
+  path: '/gatepass/new',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   id: '/gatepass/$id',
@@ -630,6 +642,7 @@ export interface FileRoutesByFullPath {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
   '/grn/customer': typeof AppGrnCustomerRouteWithChildren
   '/grn/general': typeof AppGrnGeneralRouteWithChildren
@@ -661,6 +674,7 @@ export interface FileRoutesByFullPath {
   '/amc/': typeof AppAmcIndexRoute
   '/challan/': typeof AppChallanIndexRoute
   '/crm/': typeof AppCrmIndexRoute
+  '/gatepass/': typeof AppGatepassIndexRoute
   '/grn/': typeof AppGrnIndexRoute
   '/ims/': typeof AppImsIndexRoute
   '/indent/': typeof AppIndentIndexRoute
@@ -717,6 +731,7 @@ export interface FileRoutesByTo {
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
+  '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
   '/grn/new': typeof AppGrnNewRoute
   '/ims/audit': typeof AppImsAuditRoute
@@ -744,6 +759,7 @@ export interface FileRoutesByTo {
   '/amc': typeof AppAmcIndexRoute
   '/challan': typeof AppChallanIndexRoute
   '/crm': typeof AppCrmIndexRoute
+  '/gatepass': typeof AppGatepassIndexRoute
   '/grn': typeof AppGrnIndexRoute
   '/ims': typeof AppImsIndexRoute
   '/indent': typeof AppIndentIndexRoute
@@ -813,6 +829,7 @@ export interface FileRoutesById {
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
+  '/_app/gatepass/new': typeof AppGatepassNewRoute
   '/_app/grn/$id': typeof AppGrnIdRoute
   '/_app/grn/customer': typeof AppGrnCustomerRouteWithChildren
   '/_app/grn/general': typeof AppGrnGeneralRouteWithChildren
@@ -844,6 +861,7 @@ export interface FileRoutesById {
   '/_app/amc/': typeof AppAmcIndexRoute
   '/_app/challan/': typeof AppChallanIndexRoute
   '/_app/crm/': typeof AppCrmIndexRoute
+  '/_app/gatepass/': typeof AppGatepassIndexRoute
   '/_app/grn/': typeof AppGrnIndexRoute
   '/_app/ims/': typeof AppImsIndexRoute
   '/_app/indent/': typeof AppIndentIndexRoute
@@ -913,6 +931,7 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/gatepass/new'
     | '/grn/$id'
     | '/grn/customer'
     | '/grn/general'
@@ -944,6 +963,7 @@ export interface FileRouteTypes {
     | '/amc/'
     | '/challan/'
     | '/crm/'
+    | '/gatepass/'
     | '/grn/'
     | '/ims/'
     | '/indent/'
@@ -1000,6 +1020,7 @@ export interface FileRouteTypes {
     | '/crm/quotations'
     | '/crm/settings'
     | '/gatepass/$id'
+    | '/gatepass/new'
     | '/grn/$id'
     | '/grn/new'
     | '/ims/audit'
@@ -1027,6 +1048,7 @@ export interface FileRouteTypes {
     | '/amc'
     | '/challan'
     | '/crm'
+    | '/gatepass'
     | '/grn'
     | '/ims'
     | '/indent'
@@ -1095,6 +1117,7 @@ export interface FileRouteTypes {
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
     | '/_app/gatepass/$id'
+    | '/_app/gatepass/new'
     | '/_app/grn/$id'
     | '/_app/grn/customer'
     | '/_app/grn/general'
@@ -1126,6 +1149,7 @@ export interface FileRouteTypes {
     | '/_app/amc/'
     | '/_app/challan/'
     | '/_app/crm/'
+    | '/_app/gatepass/'
     | '/_app/grn/'
     | '/_app/ims/'
     | '/_app/indent/'
@@ -1354,6 +1378,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGrnIndexRouteImport
       parentRoute: typeof AppGrnRoute
     }
+    '/_app/gatepass/': {
+      id: '/_app/gatepass/'
+      path: '/gatepass'
+      fullPath: '/gatepass/'
+      preLoaderRoute: typeof AppGatepassIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/crm/': {
       id: '/_app/crm/'
       path: '/'
@@ -1570,6 +1601,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/grn/$id'
       preLoaderRoute: typeof AppGrnIdRouteImport
       parentRoute: typeof AppGrnRoute
+    }
+    '/_app/gatepass/new': {
+      id: '/_app/gatepass/new'
+      path: '/gatepass/new'
+      fullPath: '/gatepass/new'
+      preLoaderRoute: typeof AppGatepassNewRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/gatepass/$id': {
       id: '/_app/gatepass/$id'
@@ -2198,6 +2236,8 @@ interface AppRouteChildren {
   AppSalesRoute: typeof AppSalesRouteWithChildren
   AppTicketsRoute: typeof AppTicketsRouteWithChildren
   AppGatepassIdRoute: typeof AppGatepassIdRoute
+  AppGatepassNewRoute: typeof AppGatepassNewRoute
+  AppGatepassIndexRoute: typeof AppGatepassIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -2219,6 +2259,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppSalesRoute: AppSalesRouteWithChildren,
   AppTicketsRoute: AppTicketsRouteWithChildren,
   AppGatepassIdRoute: AppGatepassIdRoute,
+  AppGatepassNewRoute: AppGatepassNewRoute,
+  AppGatepassIndexRoute: AppGatepassIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
