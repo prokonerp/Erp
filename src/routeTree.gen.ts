@@ -63,6 +63,7 @@ import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-retu
 import { Route as AppImsIndentHistoryRouteImport } from './routes/_app/ims.indent-history'
 import { Route as AppImsAuditRouteImport } from './routes/_app/ims.audit'
 import { Route as AppGrnOemRouteImport } from './routes/_app/grn.oem'
+import { Route as AppGrnNewRouteImport } from './routes/_app/grn.new'
 import { Route as AppGrnGeneralRouteImport } from './routes/_app/grn.general'
 import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
 import { Route as AppGrnIdRouteImport } from './routes/_app/grn.$id'
@@ -375,6 +376,11 @@ const AppGrnOemRoute = AppGrnOemRouteImport.update({
   path: '/oem',
   getParentRoute: () => AppGrnRoute,
 } as any)
+const AppGrnNewRoute = AppGrnNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppGrnRoute,
+} as any)
 const AppGrnGeneralRoute = AppGrnGeneralRouteImport.update({
   id: '/general',
   path: '/general',
@@ -627,6 +633,7 @@ export interface FileRoutesByFullPath {
   '/grn/$id': typeof AppGrnIdRoute
   '/grn/customer': typeof AppGrnCustomerRouteWithChildren
   '/grn/general': typeof AppGrnGeneralRouteWithChildren
+  '/grn/new': typeof AppGrnNewRoute
   '/grn/oem': typeof AppGrnOemRouteWithChildren
   '/ims/audit': typeof AppImsAuditRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
@@ -711,6 +718,7 @@ export interface FileRoutesByTo {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/grn/$id': typeof AppGrnIdRoute
+  '/grn/new': typeof AppGrnNewRoute
   '/ims/audit': typeof AppImsAuditRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -808,6 +816,7 @@ export interface FileRoutesById {
   '/_app/grn/$id': typeof AppGrnIdRoute
   '/_app/grn/customer': typeof AppGrnCustomerRouteWithChildren
   '/_app/grn/general': typeof AppGrnGeneralRouteWithChildren
+  '/_app/grn/new': typeof AppGrnNewRoute
   '/_app/grn/oem': typeof AppGrnOemRouteWithChildren
   '/_app/ims/audit': typeof AppImsAuditRoute
   '/_app/ims/indent-history': typeof AppImsIndentHistoryRoute
@@ -907,6 +916,7 @@ export interface FileRouteTypes {
     | '/grn/$id'
     | '/grn/customer'
     | '/grn/general'
+    | '/grn/new'
     | '/grn/oem'
     | '/ims/audit'
     | '/ims/indent-history'
@@ -991,6 +1001,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/gatepass/$id'
     | '/grn/$id'
+    | '/grn/new'
     | '/ims/audit'
     | '/ims/indent-history'
     | '/ims/oem-returns'
@@ -1087,6 +1098,7 @@ export interface FileRouteTypes {
     | '/_app/grn/$id'
     | '/_app/grn/customer'
     | '/_app/grn/general'
+    | '/_app/grn/new'
     | '/_app/grn/oem'
     | '/_app/ims/audit'
     | '/_app/ims/indent-history'
@@ -1529,6 +1541,13 @@ declare module '@tanstack/react-router' {
       path: '/oem'
       fullPath: '/grn/oem'
       preLoaderRoute: typeof AppGrnOemRouteImport
+      parentRoute: typeof AppGrnRoute
+    }
+    '/_app/grn/new': {
+      id: '/_app/grn/new'
+      path: '/new'
+      fullPath: '/grn/new'
+      preLoaderRoute: typeof AppGrnNewRouteImport
       parentRoute: typeof AppGrnRoute
     }
     '/_app/grn/general': {
@@ -1990,6 +2009,7 @@ interface AppGrnRouteChildren {
   AppGrnIdRoute: typeof AppGrnIdRoute
   AppGrnCustomerRoute: typeof AppGrnCustomerRouteWithChildren
   AppGrnGeneralRoute: typeof AppGrnGeneralRouteWithChildren
+  AppGrnNewRoute: typeof AppGrnNewRoute
   AppGrnOemRoute: typeof AppGrnOemRouteWithChildren
   AppGrnIndexRoute: typeof AppGrnIndexRoute
 }
@@ -1998,6 +2018,7 @@ const AppGrnRouteChildren: AppGrnRouteChildren = {
   AppGrnIdRoute: AppGrnIdRoute,
   AppGrnCustomerRoute: AppGrnCustomerRouteWithChildren,
   AppGrnGeneralRoute: AppGrnGeneralRouteWithChildren,
+  AppGrnNewRoute: AppGrnNewRoute,
   AppGrnOemRoute: AppGrnOemRouteWithChildren,
   AppGrnIndexRoute: AppGrnIndexRoute,
 }
