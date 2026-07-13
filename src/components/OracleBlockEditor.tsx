@@ -21,7 +21,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
-  collapsed = false, onToggleCollapse,
+  collapsed = false, onToggleCollapse, onGenerateChallan,
 }: {
   index: number;
   value: OracleBlock;
@@ -31,6 +31,7 @@ export function OracleBlockEditor({
   isAdmin?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  onGenerateChallan?: () => void;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
