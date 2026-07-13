@@ -2,6 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Printer, ArrowLeft } from "lucide-react";
 
 export const Route = createFileRoute("/_app/gatepass/$id")({
@@ -109,10 +117,31 @@ function GatepassView() {
   );
 
   return (
-    <div>
-      <div className="flex justify-between mb-4 print:hidden">
-        <Link to="/records"><Button variant="outline" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
-        <Button onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print Challan</Button>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-4 print:hidden">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link to="/gatepass">Gate Passes</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link to="/gatepass">View Gate Pass History</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Gate Pass {g.challan_no}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <div className="flex justify-between">
+          <Link to="/gatepass"><Button variant="outline" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+          <Button onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print Challan</Button>
+        </div>
       </div>
 
       <div id="challan" className="space-y-4 print:space-y-0">
