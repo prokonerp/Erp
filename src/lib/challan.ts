@@ -9,6 +9,21 @@ export type ChallanItem = {
   batch_no: string;
   model_no?: string;
   serial_no?: string;
+  // Unified DC fields (optional; used depending on DC Type)
+  oem_ref_id?: string;
+  oracle_no?: string;
+  hsn?: string;
+  unit_price?: string;
+  weight_kg?: string;
+  // OEM-specific
+  stock_type?: string; // Good / Defective
+  good_defective_serial?: string;
+  good_return_reason?: string;
+  // Customer-specific
+  defective_model?: string;
+  defective_serial?: string;
+  good_model?: string;
+  good_serial?: string;
 };
 
 export type DocType = "customer" | "oem";
@@ -42,6 +57,9 @@ export type DeliveryChallan = {
   mode_of_transport: string | null;
   num_packages: string | null;
   total_weight: string | null;
+  city: string | null;
+  state: string | null;
+  pin_code: string | null;
   items: ChallanItem[];
   internal_remarks: string | null;
   dispatch_remarks: string | null;
