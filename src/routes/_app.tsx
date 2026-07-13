@@ -67,6 +67,7 @@ function AppLayout() {
     Intelligence: false,
     System: false,
   });
+  const [challanOpen, setChallanOpen] = useState(false);
   const fetchProfile = useServerFn(getMyProfile);
 
   async function loadProfile() {
@@ -268,14 +269,40 @@ function AppLayout() {
                         <ListChecks className="h-4 w-4 shrink-0" />
                         History
                       </Link>
-                      <Link to="/challan" className={navLinkCls(isActive("/challan"))}>
-                        <Send className="h-4 w-4 shrink-0" />
-                        All Delivery Challans
-                      </Link>
-                      <Link to="/challan/new" className={navLinkCls(isActive("/challan/new"))}>
-                        <Send className="h-4 w-4 shrink-0" />
-                        New Delivery Challan
-                      </Link>
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setChallanOpen((v) => !v)}
+                          className={`w-full ${navLinkCls(isActive("/challan"))}`}
+                          aria-expanded={challanOpen}
+                        >
+                          <Send className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 text-left">Delivery Challans</span>
+                          {challanOpen ? (
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                        </button>
+                        {challanOpen && (
+                          <div className="ml-5 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
+                            <Link
+                              to="/challan"
+                              className={navLinkCls(
+                                location.pathname === "/challan" ||
+                                  (isActive("/challan") && !isActive("/challan/new"))
+                              )}
+                            >
+                              <ListChecks className="h-4 w-4 shrink-0" />
+                              View All Delivery Challans
+                            </Link>
+                            <Link to="/challan/new" className={navLinkCls(isActive("/challan/new"))}>
+                              <Plus className="h-4 w-4 shrink-0" />
+                              Create New Delivery Challan
+                            </Link>
+                          </div>
+                        )}
+                      </div>
                       <Link to="/grn" className={navLinkCls(isActive("/grn"))}>
                         <PackageCheck className="h-4 w-4 shrink-0" />
                         All GRNs
