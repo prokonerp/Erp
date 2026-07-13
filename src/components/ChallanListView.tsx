@@ -11,7 +11,7 @@ import type { DeliveryChallan, DocType } from "@/lib/challan";
 import { fetchChallans } from "@/lib/challan";
 import { toast } from "sonner";
 
-type Props = { docType: DocType; newTo: "/challan/customer/new" | "/challan/oem/new" };
+type Props = { docType: DocType; newTo: "/challan/new" };
 
 const STATUS_COLOR: Record<string, string> = {
   Draft: "bg-muted text-muted-foreground",
