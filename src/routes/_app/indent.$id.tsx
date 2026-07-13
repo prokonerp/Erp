@@ -258,7 +258,7 @@ function IndentDetail() {
       items,
     };
     try { sessionStorage.setItem("grn:prefill:new-customer", JSON.stringify(prefill)); } catch { /* noop */ }
-    navigate({ to: "/grn/customer/new" });
+    navigate({ to: "/grn/new" });
   };
 
   if (!i) return <div className="text-sm text-muted-foreground">Loading…</div>;
@@ -371,6 +371,7 @@ function IndentDetail() {
           onChange={(v) => update({ oracles_data: (i.oracles_data || []).map((x, ix) => (ix === idx ? v : x)) })}
           onRemove={() => update({ oracles_data: (i.oracles_data || []).filter((_, ix) => ix !== idx) })}
           onGenerateChallan={generateChallan}
+          onGenerateGrn={generateGrn}
         />
       ))}
     </div>
