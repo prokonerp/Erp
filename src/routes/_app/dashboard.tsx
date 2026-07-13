@@ -85,7 +85,7 @@ function QuickActions({ can, isAdmin }: { can: (m: ModuleKey, a?: any) => boolea
     { label: "New AMC", to: "/amc/new", module: "amc", icon: ShieldCheck },
     { label: "New Indent", to: "/indent/new", module: "indent", icon: ClipboardList },
     { label: "New Quotation", to: "/crm/quotations", module: "quotations", icon: Briefcase },
-    { label: "New Gatepass", to: "/new", module: "gatepass", icon: FileText },
+    { label: "New Gatepass", to: "/gatepass/new", module: "gatepass", icon: FileText },
     { label: "New Delivery Challan", to: "/challan/new", module: "gatepass", icon: Send },
     { label: "New GRN", to: "/grn/new", module: "gatepass", icon: PackageCheck },
   ];
