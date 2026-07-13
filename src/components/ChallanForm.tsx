@@ -322,6 +322,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             Switching type resets recipient details; other fields are preserved.
           </span>
         </div>
+        <div className="mt-3 max-w-md">
+          <BranchPicker value={branchId} onChange={(id) => setBranchId(id)} required />
+        </div>
       </FormSection>
 
       <FormSection title="Document Information" defaultOpen>
