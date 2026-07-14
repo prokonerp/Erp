@@ -510,7 +510,8 @@ function TicketsList() {
               ))}
             </div>
           ) : (
-          <div className="overflow-auto border rounded-md max-h-[60vh]">
+          <TooltipProvider delayDuration={200}>
+            <div className="overflow-auto border rounded-md max-h-[60vh]">
             <table className="w-full text-sm">
               <thead className="bg-muted sticky top-0 z-10">
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
