@@ -465,7 +465,7 @@ export function ProductMasterPage() {
         for (const tok of p.parentTokens) {
           const parentId = lookup.get(tok);
           if (parentId && parentId !== childId) {
-            mappings.push({ spare_part_id: childId, parent_product_id: parentId, active: false });
+            mappings.push({ spare_part_id: childId, parent_product_id: parentId, active: true });
           } else {
             unresolved++;
           }
