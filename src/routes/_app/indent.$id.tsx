@@ -143,16 +143,20 @@ function IndentDetail() {
       const rows = (o.exchange_rows && o.exchange_rows.length)
         ? o.exchange_rows
         : (o.exchange ? [o.exchange] : []);
-      for (const ex of rows) {
+      for (let ix = 0; ix < rows.length; ix++) {
+        const ex = rows[ix];
         const model = cleanModel(ex?.model_no);
         const serial = (ex?.serial_no || "").trim();
         const qty = (ex?.qty || "").trim();
         if (!model && !serial && !qty) continue;
         const [maybeName, maybeModel] = (ex?.model_no || "").split("||");
+        const defRow = o.defective_rows?.[ix];
+        const partName = maybeName || defRow?.part_name || model;
+        const desc = defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "";
         items.push({
           part_no: maybeModel || model,
-          part_name: maybeName || model,
-          description: "",
+          part_name: partName,
+          description: desc,
           uom: "Nos",
           qty: qty || "1",
           batch_no: "",
@@ -206,16 +210,20 @@ function IndentDetail() {
       const rows = (o.received_rows && o.received_rows.length)
         ? o.received_rows
         : (o.received ? [o.received] : []);
-      for (const rv of rows) {
+      for (let ix = 0; ix < rows.length; ix++) {
+        const rv = rows[ix];
         const model = cleanModel(rv?.model_no);
         const serial = (rv?.serial_no || "").trim();
         const qty = (rv?.qty || "").trim();
         if (!model && !serial && !qty) continue;
         const [maybeName, maybeModel] = (rv?.model_no || "").split("||");
+        const defRow = o.defective_rows?.[ix];
+        const partName = maybeName || defRow?.part_name || model;
+        const desc = rv?.remarks || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
         items.push({
           part_no: maybeModel || model,
-          part_name: maybeName || model,
-          description: "",
+          part_name: partName,
+          description: desc,
           uom: "Nos",
           qty_received: qty || "1",
           qty_accepted: qty || "1",
