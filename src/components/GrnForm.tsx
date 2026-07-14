@@ -642,8 +642,21 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
 
       <FormSection title="Storage & Remarks">
         <FormGrid>
-          <FormField size="sm" label="Warehouse">
-            <Input value={form.warehouse_name} onChange={(e) => setForm({ ...form, warehouse_name: e.target.value })} />
+          <FormField size="md" label="Warehouse" required>
+            <Select value={warehouseId ?? ""} onValueChange={(v) => {
+              setWarehouseId(v);
+              const wh = warehouses.find((w) => w.id === v);
+              setForm((f) => ({ ...f, warehouse_name: wh?.name || "" }));
+            }}>
+              <SelectTrigger><SelectValue placeholder={warehouses.length ? "Select warehouse…" : "No active warehouses"} /></SelectTrigger>
+              <SelectContent>
+                {warehouses.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.name}{w.type ? ` (${w.type})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FormField>
           <FormField size="sm" label="Storage Location">
             <Input value={form.storage_location} onChange={(e) => setForm({ ...form, storage_location: e.target.value })} />
@@ -720,10 +733,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                     <th className="border p-1">Part No</th>
                     <th className="border p-1">Part Name</th>
                     <th className="border p-1">UOM</th>
-                    <th className="border p-1">Recv</th>
-                    <th className="border p-1">Acc</th>
-                    <th className="border p-1">Rej</th>
-                    <th className="border p-1">Batch</th>
+                    <th className="border p-1">Qty</th>
+                    <th className="border p-1">Condition</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -734,16 +745,12 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       <td className="border p-1">{it.part_name}</td>
                       <td className="border p-1">{it.uom}</td>
                       <td className="border p-1 text-right">{it.qty_received}</td>
-                      <td className="border p-1 text-right">{it.qty_accepted}</td>
-                      <td className="border p-1 text-right">{it.qty_rejected}</td>
-                      <td className="border p-1">{it.batch_no}</td>
+                      <td className="border p-1">{it.condition || "Good"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div className="text-xs text-muted-foreground mt-1">
-                Recv {totals.received} • Acc {totals.accepted} • Rej {totals.rejected}
-              </div>
+              <div className="text-xs text-muted-foreground mt-1">Total Qty {totals.received}</div>
             </div>
             <Section title="Quality Inspection">
               <F label="QC Status" v={form.qc_status} />
