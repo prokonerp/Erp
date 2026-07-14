@@ -925,7 +925,7 @@ export function ProductMasterPage() {
               <TableBody>
                 {filteredParents.map((p) => (
                   <TableRow key={p.id} className="cursor-pointer" onClick={() => toggleParent(p.id)}>
-                    <TableCell><Checkbox checked={parentIds.includes(p.id)} onCheckedChange={() => toggleParent(p.id)} /></TableCell>
+                    <TableCell><Checkbox checked={parentLinks.some((l) => l.parent_product_id === p.id)} onCheckedChange={() => toggleParent(p.id)} /></TableCell>
                     <TableCell className="font-mono">{p.model || p.name}</TableCell>
                     <TableCell>{p.brand || "—"}</TableCell>
                     <TableCell>{p.category || "—"}</TableCell>
@@ -938,7 +938,7 @@ export function ProductMasterPage() {
             </Table>
           </div>
           <div className="flex justify-between items-center pt-2">
-            <span className="text-sm text-muted-foreground">{parentIds.length} selected</span>
+            <span className="text-sm text-muted-foreground">{parentLinks.length} selected</span>
             <Button size="sm" onClick={() => setParentPickerOpen(false)}>Done</Button>
           </div>
         </DialogContent>
