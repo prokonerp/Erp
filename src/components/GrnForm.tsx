@@ -16,6 +16,7 @@ import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { BranchPicker } from "@/components/BranchPicker";
+import { listWarehouses, type WarehouseLite } from "@/lib/ims";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
@@ -29,6 +30,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   const [items, setItems] = useState<GrnItem[]>([emptyGrnItem()]);
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
+  const [warehouseId, setWarehouseId] = useState<string | null>(null);
   const [form, setForm] = useState({
     status: "Draft",
     grn_date: new Date().toISOString().slice(0, 10),
@@ -74,6 +77,18 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+
+  // Load active warehouses for the dropdown.
+  useEffect(() => {
+    (async () => {
+      try {
+        const rows = await listWarehouses();
+        const active = (rows as unknown as Array<WarehouseLite & { status?: string | null }>)
+          .filter((w) => !w.status || String(w.status).toLowerCase() === "active");
+        setWarehouses(active);
+      } catch { /* noop */ }
+    })();
+  }, []);
 
   const sourceLabel = isCust ? "Customer" : isOem ? "OEM" : "Vendor / Source";
 
@@ -157,6 +172,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         return next;
       });
       setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
+      const wid = (r as { warehouse_id?: string | null }).warehouse_id ?? null;
+      setWarehouseId(wid);
     })();
   }, [editId]);
 
