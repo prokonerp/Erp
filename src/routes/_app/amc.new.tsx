@@ -372,7 +372,12 @@ function ProductRow({ unit, categories, products, serials, onChange, onRemove, c
           <SelectTrigger><SelectValue placeholder={unit.category ? "Select model" : "Pick category first"} /></SelectTrigger>
           <SelectContent>
             {filteredProducts.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{[p.name, p.model].filter(Boolean).join(" · ") || p.description || "—"}</SelectItem>
+              <SelectItem key={p.id} value={p.id}>
+                <div className="flex flex-col">
+                  <span className="truncate">{p.model || "—"}</span>
+                  <span className="text-xs text-muted-foreground truncate">{p.description || "—"}</span>
+                </div>
+              </SelectItem>
             ))}
             {filteredProducts.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No products in this category</div>}
           </SelectContent>

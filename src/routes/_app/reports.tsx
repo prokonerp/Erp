@@ -117,7 +117,14 @@ function ReportsPage() {
               <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all">All products</SelectItem>
-                {products.filter((p) => p.serial_tracking).map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                {products.filter((p) => p.serial_tracking).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <div className="flex flex-col">
+                      <span className="truncate">{p.model || "—"}</span>
+                      <span className="text-xs text-muted-foreground truncate">{p.description || "—"}</span>
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

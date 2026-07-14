@@ -610,7 +610,14 @@ function TicketDetail() {
                   <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
                   <SelectContent>{products.map((p) => {
                     const label = p.model || p.name;
-                    return <SelectItem key={p.id} value={label}>{label}</SelectItem>;
+                    return (
+                      <SelectItem key={p.id} value={label}>
+                        <div className="flex flex-col">
+                          <span className="truncate">{p.model || "—"}</span>
+                          <span className="text-xs text-muted-foreground truncate">{p.description || "—"}</span>
+                        </div>
+                      </SelectItem>
+                    );
                   })}</SelectContent>
                 </Select>
               </div>
