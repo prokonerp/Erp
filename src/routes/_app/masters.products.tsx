@@ -224,7 +224,7 @@ export function ProductMasterPage() {
 
   function resetForm() {
     setForm(empty); setEditingId(null); setTab("details");
-    setParentLinks([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
+    setParentLinks([]); setLinkedSpares([]); setSpareLinks([]); setLinkedParents([]); setParentSearch("");
     setBundle([]); setBundleChildSearch("");
   }
   function startNew() { resetForm(); setOpen(true); }
