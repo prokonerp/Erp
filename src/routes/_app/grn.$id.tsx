@@ -26,11 +26,13 @@ function GrnView() {
   const backTo = `/grn/${g.category}` as "/grn/customer" | "/grn/oem" | "/grn/general";
 
   const totals = (g.items || []).reduce((acc, it) => {
-    acc.r += parseFloat(it.qty_received) || 0;
-    acc.a += parseFloat(it.qty_accepted) || 0;
-    acc.j += parseFloat(it.qty_rejected) || 0;
+    const q = parseFloat(it.qty_received ?? it.qty_accepted ?? it.qty) || 0;
+    acc.q += q;
+    const cond = String(it.condition || "").toLowerCase();
+    if (cond === "bad" || cond === "defective") acc.j += q;
+    else acc.a += q;
     return acc;
-  }, { r: 0, a: 0, j: 0 });
+  }, { q: 0, a: 0, j: 0 });
 
   return (
     <>
@@ -136,10 +138,8 @@ function GrnView() {
               {!isCustomerCat(g.category) && <th>Model</th>}
               {!isCustomerCat(g.category) && <th>Serial</th>}
               <th style={{ width: 50 }}>UOM</th>
-              <th style={{ width: 50 }}>Recv</th>
-              <th style={{ width: 50 }}>Acc</th>
-              <th style={{ width: 50 }}>Rej</th>
-              <th style={{ width: 80 }}>Batch</th>
+              <th style={{ width: 60 }}>Qty</th>
+              <th style={{ width: 70 }}>Condition</th>
             </tr>
           </thead>
           <tbody>
@@ -147,24 +147,28 @@ function GrnView() {
               <tr key={i}>
                 <td style={{ textAlign: "center" }}>{i + 1}</td>
                 <td>{it.part_no}</td>
-                <td>{it.part_name}{it.description ? ` — ${it.description}` : ""}{it.condition ? ` [${it.condition}]` : ""}</td>
+                <td>{it.part_name}{it.description ? ` — ${it.description}` : ""}</td>
                 {!isCustomerCat(g.category) && <td>{it.model_no || ""}</td>}
                 {!isCustomerCat(g.category) && <td>{it.serial_no || ""}</td>}
                 <td style={{ textAlign: "center" }}>{it.uom}</td>
-                <td style={{ textAlign: "right" }}>{it.qty_received}</td>
-                <td style={{ textAlign: "right" }}>{it.qty_accepted}</td>
-                <td style={{ textAlign: "right" }}>{it.qty_rejected}</td>
-                <td>{it.batch_no}</td>
+                <td style={{ textAlign: "right" }}>{it.qty_received ?? it.qty_accepted ?? it.qty ?? ""}</td>
+                <td style={{ textAlign: "center", textTransform: "capitalize" }}>
+                  {(() => {
+                    const c = String(it.condition || "").toLowerCase();
+                    if (!c) return "-";
+                    if (c === "defective" || c === "bad") return "Bad";
+                    if (c === "good") return "Good";
+                    return it.condition;
+                  })()}
+                </td>
               </tr>
             ))}
             {Array.from({ length: Math.max(0, 3 - (g.items?.length || 0)) }).map((_, i) => (
-              <tr key={`e${i}`}><td>&nbsp;</td><td></td><td></td>{!isCustomerCat(g.category) && <td></td>}{!isCustomerCat(g.category) && <td></td>}<td></td><td></td><td></td><td></td><td></td></tr>
+              <tr key={`e${i}`}><td>&nbsp;</td><td></td><td></td>{!isCustomerCat(g.category) && <td></td>}{!isCustomerCat(g.category) && <td></td>}<td></td><td></td><td></td></tr>
             ))}
             <tr style={{ fontWeight: 700, background: "#f8fafc" }}>
-              <td colSpan={isCustomerCat(g.category) ? 5 : 7} style={{ textAlign: "right" }}>Totals</td>
-              <td style={{ textAlign: "right" }}>{totals.r}</td>
-              <td style={{ textAlign: "right" }}>{totals.a}</td>
-              <td style={{ textAlign: "right" }}>{totals.j}</td>
+              <td colSpan={isCustomerCat(g.category) ? 5 : 7} style={{ textAlign: "right" }}>Total Qty</td>
+              <td style={{ textAlign: "right" }}>{totals.q}</td>
               <td></td>
             </tr>
           </tbody>
