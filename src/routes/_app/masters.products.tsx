@@ -265,8 +265,11 @@ export function ProductMasterPage() {
     }
     if (!form.category) { toast.error("Category is required"); return; }
     const isSparePart = form.category === SPARE_PARTS_CATEGORY;
-    const requireParents = form.parent_tagging_required || isSparePart;
-    if (requireParents && parentLinks.length === 0) {
+    // Only enforce parent selection for Spare Parts. Non-spare products may
+    // have the "parent tagging" toggle enabled to allow optional tagging, but
+    // must not be forced to pick parents (they can themselves be parents with
+    // spare parts linked to them).
+    if (isSparePart && parentLinks.length === 0) {
       toast.error("At least one compatible parent product must be selected.");
       return;
     }
