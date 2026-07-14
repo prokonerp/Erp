@@ -362,6 +362,18 @@ export function ProductMasterPage() {
   function setParentActive(id: string, active: boolean) {
     setParentLinks((prev) => prev.map((l) => (l.parent_product_id === id ? { ...l, active } : l)));
   }
+  async function setSpareLinkActive(sparePartId: string, parentId: string, active: boolean) {
+    setSpareLinks((prev) => prev.map((l) => (l.spare_part_id === sparePartId ? { ...l, active } : l)));
+    const { error } = await supabase
+      .from("product_spare_parts" as any)
+      .update({ active } as any)
+      .eq("parent_product_id", parentId)
+      .eq("spare_part_id", sparePartId);
+    if (error) {
+      toast.error(`Failed to update status: ${error.message}`);
+      setSpareLinks((prev) => prev.map((l) => (l.spare_part_id === sparePartId ? { ...l, active: !active } : l)));
+    }
+  }
 
   async function downloadCompatibilityReport() {
     const { data } = await supabase
