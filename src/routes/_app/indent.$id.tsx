@@ -94,6 +94,7 @@ function IndentDetail() {
 
   const save = async () => {
     if (!i) return;
+    if (!i.indent_type) { toast.error("Please select an Indent Type before saving"); return; }
     setBusy(true);
     const { error } = await supabase.from("indents" as never).update({
       indent_date: i.indent_date,
@@ -331,9 +332,9 @@ function IndentDetail() {
           <div><Label>Indent City</Label><Input value={i.indent_city || ""} onChange={(e) => update({ indent_city: e.target.value })} /></div>
           <div><Label>Indent Date</Label><Input type="date" value={i.indent_date} onChange={(e) => update({ indent_date: e.target.value })} /></div>
           <div>
-            <Label>Indent Type</Label>
+            <Label>Indent Type <span className="text-destructive">*</span></Label>
             <Select value={i.indent_type || ""} onValueChange={(v) => update({ indent_type: v as IndentType })}>
-              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectTrigger aria-required="true"><SelectValue placeholder="Select type (required)" /></SelectTrigger>
               <SelectContent>{INDENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
