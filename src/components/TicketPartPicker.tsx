@@ -93,7 +93,7 @@ export function TicketPartPicker({ ticketProduct, value, onSelect, className, di
           <span className="truncate flex items-center gap-2">
             {selected ? (
               <>
-                <span className="font-medium">{[selected.name, selected.model].filter(Boolean).join(" · ") || selected.description}</span>
+                <span className="font-medium">{selected.model || selected.description || "—"}</span>
                 <Badge variant="outline" className="text-[10px]">{selected.productType}</Badge>
               </>
             ) : (loading ? "Loading…" : (value || "Select Part / Item…"))}
@@ -126,7 +126,7 @@ export function TicketPartPicker({ ticketProduct, value, onSelect, className, di
                     <Check className={cn("mr-2 h-4 w-4", selected?.id === p.id ? "opacity-100" : "opacity-0")} />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">
-                        {[p.name, p.model].filter(Boolean).join(" · ") || "—"}
+                        {p.model || "—"}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {p.description || "—"}
