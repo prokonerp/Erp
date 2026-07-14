@@ -4,13 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
 import { format } from "date-fns";
-import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
+import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
 import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
@@ -19,11 +18,28 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger,
   DropdownMenuSubContent, DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 import { FormPageHeader } from "@/components/FormPageHeader";
 import { softDelete as softDeleteRow, useRealtimeRefetch } from "@/lib/softDelete";
 import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
+
+const PRIORITY_DOT: Record<string, string> = {
+  P1: "bg-red-500",
+  P2: "bg-orange-500",
+  P3: "bg-amber-500",
+  P4: "bg-blue-500",
+  P5: "bg-zinc-300",
+};
+
+const PRIORITY_LABEL: Record<string, string> = {
+  P1: "Critical",
+  P2: "High",
+  P3: "Medium",
+  P4: "Low",
+  P5: "Very Low",
+};
 
 export const Route = createFileRoute("/_app/tickets/")({
   validateSearch: (s: Record<string, unknown>) => ({
