@@ -130,6 +130,7 @@ function NewIndent() {
 
   const save = async () => {
     if (!form.ticket_id) return toast.error("Linked Ticket is required");
+    if (!form.indent_type) return toast.error("Please select an Indent Type before saving");
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
     const payload = {
@@ -233,9 +234,9 @@ function NewIndent() {
           <FormField label="Indent Date" name="indent_date">
             <Input type="date" value={form.indent_date} onChange={(e) => set({ indent_date: e.target.value })} />
           </FormField>
-          <FormField label="Indent Type" name="indent_type" size="sm">
+          <FormField label={<span>Indent Type <span className="text-destructive">*</span></span>} name="indent_type" size="sm">
             <Select value={form.indent_type} onValueChange={(v) => set({ indent_type: v as IndentType })}>
-              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectTrigger aria-required="true"><SelectValue placeholder="Select type (required)" /></SelectTrigger>
               <SelectContent>
                 {INDENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
