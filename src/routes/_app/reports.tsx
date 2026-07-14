@@ -20,7 +20,7 @@ type Serial = {
   warranty_start_date: string | null; purchase_date: string | null;
   sale_invoice_no: string | null; customer_id: string | null; installation_date: string | null;
 };
-type Product = { id: string; name: string; brand: string | null; model: string | null; serial_tracking: boolean; warranty_applicable: boolean };
+type Product = { id: string; name: string; brand: string | null; model: string | null; description: string | null; serial_tracking: boolean; warranty_applicable: boolean };
 type Warehouse = { id: string; name: string; code: string };
 type Customer = { id: string; company: string | null; contact_name: string | null };
 
