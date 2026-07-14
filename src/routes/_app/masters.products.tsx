@@ -265,8 +265,11 @@ export function ProductMasterPage() {
     }
     if (!form.category) { toast.error("Category is required"); return; }
     const isSparePart = form.category === SPARE_PARTS_CATEGORY;
-    const requireParents = form.parent_tagging_required || isSparePart;
-    if (requireParents && parentLinks.length === 0) {
+    // Only enforce parent selection for Spare Parts. Non-spare products may
+    // have the "parent tagging" toggle enabled to allow optional tagging, but
+    // must not be forced to pick parents (they can themselves be parents with
+    // spare parts linked to them).
+    if (isSparePart && parentLinks.length === 0) {
       toast.error("At least one compatible parent product must be selected.");
       return;
     }
@@ -321,8 +324,9 @@ export function ProductMasterPage() {
       toast.success("Product added");
     }
 
-    // Sync spare-part links when category is Spare Parts.
-    if (requireParents && productId) {
+    // Sync parent links whenever tagging is enabled (spare-part category or opt-in).
+    const syncParentLinks = isSparePart || form.parent_tagging_required;
+    if (syncParentLinks && productId) {
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
       if (parentLinks.length) {
         const linkRows = parentLinks.map((l) => ({
@@ -333,7 +337,7 @@ export function ProductMasterPage() {
         const { error: linkErr } = await supabase.from("product_spare_parts" as any).insert(linkRows as any);
         if (linkErr) toast.error(`Saved product but failed to link parents: ${linkErr.message}`);
       }
-    } else if (!requireParents && productId && editingId) {
+    } else if (!syncParentLinks && productId && editingId) {
       // Parent tagging disabled — remove any existing parent links where this product was a child.
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
     }
