@@ -845,10 +845,7 @@ function TicketCard({ r, employees, isAdmin, onReassign, onStatusChange, onNotif
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Select value={r.priority || "P3"} onValueChange={(v) => onPriority(r.id, v)}>
-            <SelectTrigger className={`h-6 w-11 px-1 text-[10px] font-bold ${PRIORITY_COLOR[r.priority || "P3"] || ""}`}><SelectValue /></SelectTrigger>
-            <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-          </Select>
+          <PrioritySelect value={r.priority || "P3"} onChange={(v) => onPriority(r.id, v)} size="sm" />
           <RowActions r={r} employees={employees} isAdmin={isAdmin} onReassign={onReassign} onStatusChange={onStatusChange} onNotifyCustomer={onNotifyCustomer} onNotifyEngineer={onNotifyEngineer} onSoftDelete={onSoftDelete} />
         </div>
       </div>
