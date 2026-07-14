@@ -74,7 +74,7 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
           <span className="truncate flex items-center gap-2">
             {selected ? (
               <>
-                <span className="font-medium">{[selected.name, selected.model].filter(Boolean).join(" · ") || (selected as any).description}</span>
+                <span className="font-medium">{selected.model || (selected as any).description || "—"}</span>
                 <Badge variant="outline" className="text-[10px]">{selected.productType}</Badge>
               </>
             ) : (loading ? "Loading…" : placeholder)}
@@ -108,7 +108,7 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
                     <Check className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">
-                        {[p.name, p.model].filter(Boolean).join(" · ") || "—"}
+                        {p.model || "—"}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {(p as any).description || "—"}

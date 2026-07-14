@@ -140,7 +140,7 @@ function TicketDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const [t, setT] = useState<Ticket | null>(null);
-  const [products, setProducts] = useState<{ id: string; name: string; model?: string | null; brand?: string | null }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string; model?: string | null; brand?: string | null; description?: string | null }[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [busy, setBusy] = useState(false);
   const [noteText, setNoteText] = useState("");
@@ -157,7 +157,7 @@ function TicketDetail() {
   const load = async () => {
     const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
       supabase.from("tickets").select("*").eq("id", id).single(),
-      supabase.from("products").select("id,name,model,brand").order("name"),
+      supabase.from("products").select("id,name,model,brand,description").order("name"),
       supabase.from("ticket_activities").select("*").eq("ticket_id", id).order("created_at", { ascending: false }),
       supabase.from("wa_templates").select("id,body"),
       supabase.from("employees").select("id,name,phone,department,role,active").eq("active", true).order("name"),
@@ -610,7 +610,14 @@ function TicketDetail() {
                   <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
                   <SelectContent>{products.map((p) => {
                     const label = p.model || p.name;
-                    return <SelectItem key={p.id} value={label}>{label}</SelectItem>;
+                    return (
+                      <SelectItem key={p.id} value={label}>
+                        <div className="flex flex-col">
+                          <span className="truncate">{p.model || "—"}</span>
+                          <span className="text-xs text-muted-foreground truncate">{p.description || "—"}</span>
+                        </div>
+                      </SelectItem>
+                    );
                   })}</SelectContent>
                 </Select>
               </div>

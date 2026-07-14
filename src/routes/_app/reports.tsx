@@ -20,7 +20,7 @@ type Serial = {
   warranty_start_date: string | null; purchase_date: string | null;
   sale_invoice_no: string | null; customer_id: string | null; installation_date: string | null;
 };
-type Product = { id: string; name: string; brand: string | null; model: string | null; serial_tracking: boolean; warranty_applicable: boolean };
+type Product = { id: string; name: string; brand: string | null; model: string | null; description: string | null; serial_tracking: boolean; warranty_applicable: boolean };
 type Warehouse = { id: string; name: string; code: string };
 type Customer = { id: string; company: string | null; contact_name: string | null };
 
@@ -38,7 +38,7 @@ function ReportsPage() {
     (async () => {
       const [s, p, w, c] = await Promise.all([
         supabase.from("serials").select("*"),
-        supabase.from("products").select("id,name,brand,model,serial_tracking,warranty_applicable"),
+        supabase.from("products").select("id,name,brand,model,description,serial_tracking,warranty_applicable"),
         supabase.from("warehouses").select("id,name,code").order("name"),
         supabase.from("customers").select("id,company,contact_name"),
       ]);
@@ -117,7 +117,14 @@ function ReportsPage() {
               <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all">All products</SelectItem>
-                {products.filter((p) => p.serial_tracking).map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                {products.filter((p) => p.serial_tracking).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <div className="flex flex-col">
+                      <span className="truncate">{p.model || "—"}</span>
+                      <span className="text-xs text-muted-foreground truncate">{p.description || "—"}</span>
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
