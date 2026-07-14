@@ -324,8 +324,9 @@ export function ProductMasterPage() {
       toast.success("Product added");
     }
 
-    // Sync spare-part links when category is Spare Parts.
-    if (requireParents && productId) {
+    // Sync parent links whenever tagging is enabled (spare-part category or opt-in).
+    const syncParentLinks = isSparePart || form.parent_tagging_required;
+    if (syncParentLinks && productId) {
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
       if (parentLinks.length) {
         const linkRows = parentLinks.map((l) => ({
@@ -336,7 +337,7 @@ export function ProductMasterPage() {
         const { error: linkErr } = await supabase.from("product_spare_parts" as any).insert(linkRows as any);
         if (linkErr) toast.error(`Saved product but failed to link parents: ${linkErr.message}`);
       }
-    } else if (!requireParents && productId && editingId) {
+    } else if (!syncParentLinks && productId && editingId) {
       // Parent tagging disabled — remove any existing parent links where this product was a child.
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
     }
