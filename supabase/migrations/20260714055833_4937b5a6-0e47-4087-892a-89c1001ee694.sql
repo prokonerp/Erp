@@ -1,0 +1,1 @@
+ALTER TABLE public.product_spare_parts ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
