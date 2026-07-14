@@ -16,6 +16,7 @@ import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { BranchPicker } from "@/components/BranchPicker";
+import { listWarehouses, type WarehouseLite } from "@/lib/ims";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
@@ -29,6 +30,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   const [items, setItems] = useState<GrnItem[]>([emptyGrnItem()]);
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
+  const [warehouseId, setWarehouseId] = useState<string | null>(null);
   const [form, setForm] = useState({
     status: "Draft",
     grn_date: new Date().toISOString().slice(0, 10),
@@ -74,6 +77,18 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+
+  // Load active warehouses for the dropdown.
+  useEffect(() => {
+    (async () => {
+      try {
+        const rows = await listWarehouses();
+        const active = (rows as unknown as Array<WarehouseLite & { status?: string | null }>)
+          .filter((w) => !w.status || String(w.status).toLowerCase() === "active");
+        setWarehouses(active);
+      } catch { /* noop */ }
+    })();
+  }, []);
 
   const sourceLabel = isCust ? "Customer" : isOem ? "OEM" : "Vendor / Source";
 
@@ -157,6 +172,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         return next;
       });
       setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
+      const wid = (r as { warehouse_id?: string | null }).warehouse_id ?? null;
+      setWarehouseId(wid);
     })();
   }, [editId]);
 
@@ -211,6 +228,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
 
   const validate = () => {
     if (!editId && !branchId) { toast.error("Please select a Prokon Branch"); return false; }
+    if (!warehouseId) { toast.error("Please select a Warehouse"); return false; }
     if (!form.source_name.trim()) { toast.error(`${sourceLabel} name is required`); return false; }
     const clean = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     if (clean.length === 0) { toast.error("Add at least one material row"); return false; }
@@ -219,20 +237,35 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
 
   const submit = async () => {
     if (!validate()) return;
-    const clean = items.filter((it) => it.part_name.trim() || it.part_no.trim());
+    // Derive accepted/rejected qty from Condition so downstream views keep working.
+    const clean = items
+      .filter((it) => it.part_name.trim() || it.part_no.trim())
+      .map((it) => {
+        const qty = parseFloat(it.qty_received) || 0;
+        const good = (it.condition || "Good") === "Good";
+        return {
+          ...it,
+          qty_accepted: good ? String(qty) : "0",
+          qty_rejected: good ? "0" : String(qty),
+        };
+      });
+    const selectedWarehouse = warehouses.find((w) => w.id === warehouseId) || null;
+    const warehouseName = selectedWarehouse?.name || form.warehouse_name || "";
     setBusy(true);
     if (editId) {
       const updatePayload = {
         ...form,
+        warehouse_name: warehouseName,
         category,
         receipt_date: form.receipt_date || null,
         source_doc_date: form.source_doc_date || null,
         invoice_date: form.invoice_date || null,
         qc_date: form.qc_date || null,
-        accepted_qty: totals.accepted,
-        rejected_qty: totals.rejected,
+        accepted_qty: clean.reduce((s, it) => s + (parseFloat(it.qty_accepted) || 0), 0),
+        rejected_qty: clean.reduce((s, it) => s + (parseFloat(it.qty_rejected) || 0), 0),
         items: clean,
         branch_id: branchId,
+        warehouse_id: warehouseId,
       };
       const { error } = await supabase
         .from("grns" as never)
@@ -248,24 +281,66 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     const { data: userData } = await supabase.auth.getUser();
     const payload = {
       ...form,
+      warehouse_name: warehouseName,
       category,
       grn_no: "",
       receipt_date: form.receipt_date || null,
       source_doc_date: form.source_doc_date || null,
       invoice_date: form.invoice_date || null,
       qc_date: form.qc_date || null,
-      accepted_qty: totals.accepted,
-      rejected_qty: totals.rejected,
+      accepted_qty: clean.reduce((s, it) => s + (parseFloat(it.qty_accepted) || 0), 0),
+      rejected_qty: clean.reduce((s, it) => s + (parseFloat(it.qty_rejected) || 0), 0),
       items: clean,
       attachments: [],
       branch_id: branchId,
+      warehouse_id: warehouseId,
       created_by: userData.user?.id ?? null,
     };
     const { data, error } = await supabase
       .from("grns" as never)
       .insert(payload as never).select("id").single();
+    if (error) { setBusy(false); return toast.error(error.message); }
+    // Push received items into Inventory Management, tagged by warehouse & condition.
+    try {
+      const grnId = (data as { id: string }).id;
+      const uid = userData.user?.id ?? null;
+      const sb = supabase as unknown as { from: (t: string) => any };
+      for (const it of clean) {
+        const qty = parseFloat(it.qty_received) || 0;
+        if (qty <= 0) continue;
+        const good = (it.condition || "Good") === "Good";
+        const stockType = good ? "good" : "defective";
+        const stockRow: Record<string, unknown> = {
+          part_name: it.part_name || it.part_no || "Item",
+          part_model_no: it.model_no || null,
+          part_serial_no: it.serial_no || null,
+          warehouse_id: warehouseId,
+          stock_type: stockType,
+          stock_status: "available",
+          transaction_ref: `GRN ${grnId}`,
+          notes: `Received via GRN (qty ${qty}) — condition ${good ? "Good" : "Bad"}`,
+          created_by: uid,
+        };
+        const { data: stockIns } = await sb.from("ims_stock_items").insert(stockRow).select("id").maybeSingle();
+        await sb.from("ims_transactions").insert({
+          txn_type: good ? "good_in" : "defective_in",
+          stock_item_id: (stockIns as { id?: string } | null)?.id ?? null,
+          part_name: stockRow.part_name,
+          part_model_no: stockRow.part_model_no,
+          part_serial_no: stockRow.part_serial_no,
+          to_warehouse_id: warehouseId,
+          from_party: form.source_name || null,
+          qty,
+          reference: `GRN ${grnId}`,
+          notes: `Auto-created from GRN (condition ${good ? "Good" : "Bad"})`,
+          created_by: uid,
+        });
+      }
+    } catch (e) {
+      // Non-fatal: GRN saved, but inventory sync failed.
+      toast.warning("GRN saved, but inventory sync had an issue. Please review IMS.");
+    }
     setBusy(false);
-    if (error) return toast.error(error.message);
     setReviewOpen(false);
     toast.success("GRN created");
     navigate({ to: "/grn/$id", params: { id: (data as { id: string }).id } });
@@ -461,7 +536,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
 
       <FormSection
         title="Material Receipt Details"
-        description={`Recv ${totals.received} • Acc ${totals.accepted} • Rej ${totals.rejected} • ${items.length} row(s)`}
+        description={`Total Qty ${totals.received} • ${items.length} row(s)`}
         defaultOpen
         right={
           <Button type="button" size="sm" variant="outline" onClick={() => setItems([...items, emptyGrnItem()])} className="gap-1.5">
@@ -477,10 +552,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 <th className="px-2 py-1.5 min-w-[200px]">Product</th>
                 <th className="px-2 py-1.5">Description</th>
                 <th className="px-2 py-1.5 w-20">UOM</th>
-                <th className="px-2 py-1.5 w-20">Recv</th>
-                <th className="px-2 py-1.5 w-20">Acc</th>
-                <th className="px-2 py-1.5 w-20">Rej</th>
-                <th className="px-2 py-1.5 w-28">Batch</th>
+                <th className="px-2 py-1.5 w-20">Qty</th>
                 {!isCust && <th className="px-2 py-1.5 w-28">Model</th>}
                 {!isCust && <th className="px-2 py-1.5 w-28">Serial</th>}
                 <th className="px-2 py-1.5 w-28">Condition</th>
@@ -511,16 +583,21 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                   <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_accepted} onChange={(e) => updateItem(i, { qty_accepted: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_rejected} onChange={(e) => updateItem(i, { qty_rejected: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.batch_no} onChange={(e) => updateItem(i, { batch_no: e.target.value })} /></td>
                   {!isCust && (
                     <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
                   )}
                   {!isCust && (
                     <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
                   )}
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.condition || ""} onChange={(e) => updateItem(i, { condition: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Good">Good</SelectItem>
+                        <SelectItem value="Bad">Bad</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
                   <td className="px-2 py-1.5 border-t border-border/60 text-right">
                     <Button
@@ -565,8 +642,21 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
 
       <FormSection title="Storage & Remarks">
         <FormGrid>
-          <FormField size="sm" label="Warehouse">
-            <Input value={form.warehouse_name} onChange={(e) => setForm({ ...form, warehouse_name: e.target.value })} />
+          <FormField size="md" label="Warehouse" required>
+            <Select value={warehouseId ?? ""} onValueChange={(v) => {
+              setWarehouseId(v);
+              const wh = warehouses.find((w) => w.id === v);
+              setForm((f) => ({ ...f, warehouse_name: wh?.name || "" }));
+            }}>
+              <SelectTrigger><SelectValue placeholder={warehouses.length ? "Select warehouse…" : "No active warehouses"} /></SelectTrigger>
+              <SelectContent>
+                {warehouses.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.name}{w.type ? ` (${w.type})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </FormField>
           <FormField size="sm" label="Storage Location">
             <Input value={form.storage_location} onChange={(e) => setForm({ ...form, storage_location: e.target.value })} />
@@ -643,10 +733,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                     <th className="border p-1">Part No</th>
                     <th className="border p-1">Part Name</th>
                     <th className="border p-1">UOM</th>
-                    <th className="border p-1">Recv</th>
-                    <th className="border p-1">Acc</th>
-                    <th className="border p-1">Rej</th>
-                    <th className="border p-1">Batch</th>
+                    <th className="border p-1">Qty</th>
+                    <th className="border p-1">Condition</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -657,16 +745,12 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       <td className="border p-1">{it.part_name}</td>
                       <td className="border p-1">{it.uom}</td>
                       <td className="border p-1 text-right">{it.qty_received}</td>
-                      <td className="border p-1 text-right">{it.qty_accepted}</td>
-                      <td className="border p-1 text-right">{it.qty_rejected}</td>
-                      <td className="border p-1">{it.batch_no}</td>
+                      <td className="border p-1">{it.condition || "Good"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div className="text-xs text-muted-foreground mt-1">
-                Recv {totals.received} • Acc {totals.accepted} • Rej {totals.rejected}
-              </div>
+              <div className="text-xs text-muted-foreground mt-1">Total Qty {totals.received}</div>
             </div>
             <Section title="Quality Inspection">
               <F label="QC Status" v={form.qc_status} />
