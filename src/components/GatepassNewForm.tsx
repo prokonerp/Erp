@@ -11,6 +11,8 @@ import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { ProductPicker } from "@/components/ProductPicker";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { BranchPicker } from "@/components/BranchPicker";
+import { useEffect } from "react";
+import { getCurrentUserName } from "@/lib/currentUser";
 
 type Item = { product_id: string; product: string; serial_no: string; quantity: string; unit: string; remarks: string };
 
@@ -28,6 +30,15 @@ export function GatepassNewForm() {
     gatepass_time: new Date().toTimeString().slice(0, 5),
   });
   const [busy, setBusy] = useState(false);
+
+  // Auto-populate Prepared By with the current logged-in user's name.
+  useEffect(() => {
+    (async () => {
+      const name = await getCurrentUserName();
+      if (!name) return;
+      setForm((f) => (f.prepared_by ? f : { ...f, prepared_by: name }));
+    })();
+  }, []);
 
   const updateItem = (i: number, patch: Partial<Item>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
