@@ -115,6 +115,7 @@ export function ProductMasterPage() {
   const [newCatName, setNewCatName] = useState("");
   const [parentLinks, setParentLinks] = useState<Array<{ parent_product_id: string; active: boolean }>>([]);
   const [linkedSpares, setLinkedSpares] = useState<ProductFull[]>([]);
+  const [spareLinks, setSpareLinks] = useState<Array<{ spare_part_id: string; active: boolean }>>([]);
   const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentSearch, setParentSearch] = useState("");
@@ -188,9 +189,12 @@ export function ProductMasterPage() {
     if (!hasParentTagging || (p.category || "") !== SPARE_PARTS_CATEGORY) {
       const { data } = await supabase
         .from("product_spare_parts" as any)
-        .select("spare_part_id")
+        .select("spare_part_id, active")
         .eq("parent_product_id", p.id);
-      const ids = ((data || []) as unknown as { spare_part_id: string }[]).map((r) => r.spare_part_id);
+      const links = ((data || []) as unknown as { spare_part_id: string; active: boolean | null }[])
+        .map((r) => ({ spare_part_id: r.spare_part_id, active: r.active !== false }));
+      setSpareLinks(links);
+      const ids = links.map((l) => l.spare_part_id);
       setLinkedSpares(rows.filter((r) => ids.includes(r.id)));
     }
     // Load bundle configuration where this product is the parent.
