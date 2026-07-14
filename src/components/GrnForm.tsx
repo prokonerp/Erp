@@ -17,6 +17,7 @@ import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { BranchPicker } from "@/components/BranchPicker";
 import { listWarehouses, type WarehouseLite } from "@/lib/ims";
+import { getCurrentUserName } from "@/lib/currentUser";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
@@ -77,6 +78,16 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+
+  // Auto-populate Received By with the current logged-in user's name (new records only).
+  useEffect(() => {
+    if (editId) return;
+    (async () => {
+      const name = await getCurrentUserName();
+      if (!name) return;
+      setForm((f) => (f.received_by ? f : { ...f, received_by: name }));
+    })();
+  }, [editId]);
 
   // Load active warehouses for the dropdown.
   useEffect(() => {

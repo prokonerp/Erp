@@ -94,6 +94,7 @@ function IndentDetail() {
 
   const save = async () => {
     if (!i) return;
+    if (!i.indent_type) { toast.error("Please select an Indent Type before saving"); return; }
     setBusy(true);
     const { error } = await supabase.from("indents" as never).update({
       indent_date: i.indent_date,
@@ -142,16 +143,20 @@ function IndentDetail() {
       const rows = (o.exchange_rows && o.exchange_rows.length)
         ? o.exchange_rows
         : (o.exchange ? [o.exchange] : []);
-      for (const ex of rows) {
+      for (let ix = 0; ix < rows.length; ix++) {
+        const ex = rows[ix];
         const model = cleanModel(ex?.model_no);
         const serial = (ex?.serial_no || "").trim();
         const qty = (ex?.qty || "").trim();
         if (!model && !serial && !qty) continue;
         const [maybeName, maybeModel] = (ex?.model_no || "").split("||");
+        const defRow = o.defective_rows?.[ix];
+        const partName = maybeName || defRow?.part_name || model;
+        const desc = defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "";
         items.push({
           part_no: maybeModel || model,
-          part_name: maybeName || model,
-          description: "",
+          part_name: partName,
+          description: desc,
           uom: "Nos",
           qty: qty || "1",
           batch_no: "",
@@ -205,16 +210,20 @@ function IndentDetail() {
       const rows = (o.received_rows && o.received_rows.length)
         ? o.received_rows
         : (o.received ? [o.received] : []);
-      for (const rv of rows) {
+      for (let ix = 0; ix < rows.length; ix++) {
+        const rv = rows[ix];
         const model = cleanModel(rv?.model_no);
         const serial = (rv?.serial_no || "").trim();
         const qty = (rv?.qty || "").trim();
         if (!model && !serial && !qty) continue;
         const [maybeName, maybeModel] = (rv?.model_no || "").split("||");
+        const defRow = o.defective_rows?.[ix];
+        const partName = maybeName || defRow?.part_name || model;
+        const desc = rv?.remarks || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
         items.push({
           part_no: maybeModel || model,
-          part_name: maybeName || model,
-          description: "",
+          part_name: partName,
+          description: desc,
           uom: "Nos",
           qty_received: qty || "1",
           qty_accepted: qty || "1",
@@ -331,9 +340,9 @@ function IndentDetail() {
           <div><Label>Indent City</Label><Input value={i.indent_city || ""} onChange={(e) => update({ indent_city: e.target.value })} /></div>
           <div><Label>Indent Date</Label><Input type="date" value={i.indent_date} onChange={(e) => update({ indent_date: e.target.value })} /></div>
           <div>
-            <Label>Indent Type</Label>
+            <Label>Indent Type <span className="text-destructive">*</span></Label>
             <Select value={i.indent_type || ""} onValueChange={(v) => update({ indent_type: v as IndentType })}>
-              <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+              <SelectTrigger aria-required="true"><SelectValue placeholder="Select type (required)" /></SelectTrigger>
               <SelectContent>{INDENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>

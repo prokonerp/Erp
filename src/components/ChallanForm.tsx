@@ -17,6 +17,7 @@ import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
+import { getCurrentUserName } from "@/lib/currentUser";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
@@ -66,6 +67,16 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+
+  // Auto-populate Prepared By with the current logged-in user's name (new records only).
+  useEffect(() => {
+    if (editId) return;
+    (async () => {
+      const name = await getCurrentUserName();
+      if (!name) return;
+      setForm((f) => (f.prepared_by ? f : { ...f, prepared_by: name }));
+    })();
+  }, [editId]);
 
   // Prefill from a source document (e.g. Indent → Generate Delivery Challan).
   useEffect(() => {
