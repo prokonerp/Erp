@@ -41,6 +41,42 @@ const PRIORITY_LABEL: Record<string, string> = {
   P5: "Very Low",
 };
 
+function PrioritySelect({ value, onChange, size = "md" }: { value: string; onChange: (v: string) => void; size?: "sm" | "md" }) {
+  const p = value || "P3";
+  const dotSize = size === "sm" ? "h-2.5 w-2.5" : "h-3 w-3";
+  const btnSize = size === "sm" ? "h-6 w-6" : "h-7 w-7";
+  return (
+    <Tooltip>
+      <DropdownMenu>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={`inline-flex items-center justify-center rounded-full border border-transparent ${btnSize} hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring`}
+              aria-label={`Priority ${p} - ${PRIORITY_LABEL[p]}`}
+            >
+              <span className={`inline-block rounded-full ${dotSize} ${PRIORITY_DOT[p]}`} />
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <DropdownMenuContent align="start" className="min-w-[7rem]">
+          <DropdownMenuLabel className="text-xs">Set priority</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {PRIORITIES.map((pr) => (
+            <DropdownMenuItem key={pr} onClick={() => onChange(pr)} className="text-xs gap-2">
+              <span className={`inline-block rounded-full h-2.5 w-2.5 ${PRIORITY_DOT[pr]}`} />
+              {pr} <span className="text-muted-foreground">· {PRIORITY_LABEL[pr]}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <TooltipContent side="top">
+        <p>{p} - {PRIORITY_LABEL[p]}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 export const Route = createFileRoute("/_app/tickets/")({
   validateSearch: (s: Record<string, unknown>) => ({
     engineer: typeof s.engineer === "string" ? s.engineer : undefined,
