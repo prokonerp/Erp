@@ -68,7 +68,7 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
         >
           <span className="truncate text-xs">
             {selected
-              ? `${selected.sku || selected.model || "—"} · ${selected.name}`
+              ? (selected.description || selected.name)
               : (loading ? "Loading…" : placeholder)}
           </span>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
@@ -98,11 +98,11 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
                     <Check className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        <span className="font-mono">{p.sku || p.model || "—"}</span>
-                        <span className="ml-2">{p.name}</span>
+                        {p.description || p.name}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {p.description || "—"}
+                        <span className="font-mono">{p.sku || p.model || "—"}</span>
+                        <span className="ml-2">{p.name}</span>
                       </div>
                     </div>
                   </CommandItem>
