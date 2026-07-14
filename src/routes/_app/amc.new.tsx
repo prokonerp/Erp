@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_app/amc/new")({
 
 const emptyUnit = (): AmcUnit => ({ model: "", serial_no: "", category: "", product_id: "" });
 
-type ProductLite = { id: string; name: string | null; model: string | null; category: string | null; brand: string | null };
+type ProductLite = { id: string; name: string | null; model: string | null; category: string | null; brand: string | null; description: string | null };
 type SerialLite = { id: string; serial_number: string; product_id: string };
 
 function NewAmc() {
@@ -63,7 +63,7 @@ function NewAmc() {
       const [settings, cats, prods, sers, brands] = await Promise.all([
         supabase.from("amc_settings").select("terms_template,prefix").eq("id", 1).maybeSingle(),
         supabase.from("product_categories").select("name").order("name"),
-        supabase.from("products").select("id,name,model,category,brand").eq("active", true).order("name"),
+        supabase.from("products").select("id,name,model,category,brand,description").eq("active", true).order("name"),
         supabase.from("serials").select("id,serial_number,product_id").order("serial_number"),
         supabase.from("oem_brand_master").select("name").order("name"),
       ]);
@@ -372,7 +372,7 @@ function ProductRow({ unit, categories, products, serials, onChange, onRemove, c
           <SelectTrigger><SelectValue placeholder={unit.category ? "Select model" : "Pick category first"} /></SelectTrigger>
           <SelectContent>
             {filteredProducts.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{p.model || p.name} {p.brand ? `· ${p.brand}` : ""}</SelectItem>
+              <SelectItem key={p.id} value={p.id}>{p.description || p.model || p.name}</SelectItem>
             ))}
             {filteredProducts.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No products in this category</div>}
           </SelectContent>
