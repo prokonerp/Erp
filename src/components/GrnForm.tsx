@@ -228,6 +228,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
 
   const validate = () => {
     if (!editId && !branchId) { toast.error("Please select a Prokon Branch"); return false; }
+    if (!warehouseId) { toast.error("Please select a Warehouse"); return false; }
     if (!form.source_name.trim()) { toast.error(`${sourceLabel} name is required`); return false; }
     const clean = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     if (clean.length === 0) { toast.error("Add at least one material row"); return false; }
@@ -236,20 +237,35 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
 
   const submit = async () => {
     if (!validate()) return;
-    const clean = items.filter((it) => it.part_name.trim() || it.part_no.trim());
+    // Derive accepted/rejected qty from Condition so downstream views keep working.
+    const clean = items
+      .filter((it) => it.part_name.trim() || it.part_no.trim())
+      .map((it) => {
+        const qty = parseFloat(it.qty_received) || 0;
+        const good = (it.condition || "Good") === "Good";
+        return {
+          ...it,
+          qty_accepted: good ? String(qty) : "0",
+          qty_rejected: good ? "0" : String(qty),
+        };
+      });
+    const selectedWarehouse = warehouses.find((w) => w.id === warehouseId) || null;
+    const warehouseName = selectedWarehouse?.name || form.warehouse_name || "";
     setBusy(true);
     if (editId) {
       const updatePayload = {
         ...form,
+        warehouse_name: warehouseName,
         category,
         receipt_date: form.receipt_date || null,
         source_doc_date: form.source_doc_date || null,
         invoice_date: form.invoice_date || null,
         qc_date: form.qc_date || null,
-        accepted_qty: totals.accepted,
-        rejected_qty: totals.rejected,
+        accepted_qty: clean.reduce((s, it) => s + (parseFloat(it.qty_accepted) || 0), 0),
+        rejected_qty: clean.reduce((s, it) => s + (parseFloat(it.qty_rejected) || 0), 0),
         items: clean,
         branch_id: branchId,
+        warehouse_id: warehouseId,
       };
       const { error } = await supabase
         .from("grns" as never)
@@ -265,24 +281,66 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     const { data: userData } = await supabase.auth.getUser();
     const payload = {
       ...form,
+      warehouse_name: warehouseName,
       category,
       grn_no: "",
       receipt_date: form.receipt_date || null,
       source_doc_date: form.source_doc_date || null,
       invoice_date: form.invoice_date || null,
       qc_date: form.qc_date || null,
-      accepted_qty: totals.accepted,
-      rejected_qty: totals.rejected,
+      accepted_qty: clean.reduce((s, it) => s + (parseFloat(it.qty_accepted) || 0), 0),
+      rejected_qty: clean.reduce((s, it) => s + (parseFloat(it.qty_rejected) || 0), 0),
       items: clean,
       attachments: [],
       branch_id: branchId,
+      warehouse_id: warehouseId,
       created_by: userData.user?.id ?? null,
     };
     const { data, error } = await supabase
       .from("grns" as never)
       .insert(payload as never).select("id").single();
+    if (error) { setBusy(false); return toast.error(error.message); }
+    // Push received items into Inventory Management, tagged by warehouse & condition.
+    try {
+      const grnId = (data as { id: string }).id;
+      const uid = userData.user?.id ?? null;
+      const sb = supabase as unknown as { from: (t: string) => any };
+      for (const it of clean) {
+        const qty = parseFloat(it.qty_received) || 0;
+        if (qty <= 0) continue;
+        const good = (it.condition || "Good") === "Good";
+        const stockType = good ? "good" : "defective";
+        const stockRow: Record<string, unknown> = {
+          part_name: it.part_name || it.part_no || "Item",
+          part_model_no: it.model_no || null,
+          part_serial_no: it.serial_no || null,
+          warehouse_id: warehouseId,
+          stock_type: stockType,
+          stock_status: "available",
+          transaction_ref: `GRN ${grnId}`,
+          notes: `Received via GRN (qty ${qty}) — condition ${good ? "Good" : "Bad"}`,
+          created_by: uid,
+        };
+        const { data: stockIns } = await sb.from("ims_stock_items").insert(stockRow).select("id").maybeSingle();
+        await sb.from("ims_transactions").insert({
+          txn_type: good ? "good_in" : "defective_in",
+          stock_item_id: (stockIns as { id?: string } | null)?.id ?? null,
+          part_name: stockRow.part_name,
+          part_model_no: stockRow.part_model_no,
+          part_serial_no: stockRow.part_serial_no,
+          to_warehouse_id: warehouseId,
+          from_party: form.source_name || null,
+          qty,
+          reference: `GRN ${grnId}`,
+          notes: `Auto-created from GRN (condition ${good ? "Good" : "Bad"})`,
+          created_by: uid,
+        });
+      }
+    } catch (e) {
+      // Non-fatal: GRN saved, but inventory sync failed.
+      toast.warning("GRN saved, but inventory sync had an issue. Please review IMS.");
+    }
     setBusy(false);
-    if (error) return toast.error(error.message);
     setReviewOpen(false);
     toast.success("GRN created");
     navigate({ to: "/grn/$id", params: { id: (data as { id: string }).id } });
