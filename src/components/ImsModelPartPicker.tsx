@@ -37,11 +37,11 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
   useEffect(() => {
     let alive = true;
     fetchAll<any>("products", (q) =>
-      q.select("id,name,model,brand,category,active").order("name"),
+      q.select("id,name,model,brand,category,description,active").order("name"),
     )
       .then((data) => {
         if (!alive) return;
-        const mapped: ImsModelPart[] = data
+        const mapped: (ImsModelPart & { description?: string | null })[] = data
           .filter((p) => p.active !== false)
           .map((p) => ({
             id: p.id,
@@ -49,9 +49,10 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
             model: p.model || null,
             brand: p.brand || null,
             category: p.category || null,
+            description: p.description || null,
             productType: (p.category || "").toLowerCase().includes("spare") ? "Spare Part" : "Product",
           }));
-        setRows(mapped);
+        setRows(mapped as ImsModelPart[]);
         setLoading(false);
       })
       .catch(() => { if (alive) setLoading(false); });
@@ -108,7 +109,7 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{p.model || p.name}</div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {[p.brand, p.category].filter(Boolean).join(" · ") || "—"}
+                        {(p as any).description || "—"}
                       </div>
                     </div>
                     <Badge variant={p.productType === "Spare Part" ? "secondary" : "default"} className="ml-2 text-[10px]">

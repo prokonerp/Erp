@@ -14,6 +14,7 @@ export type TicketPart = {
   model: string | null;
   brand: string | null;
   category: string | null;
+  description?: string | null;
   productType: "Product" | "Spare Part";
 };
 
@@ -43,10 +44,10 @@ export function TicketPartPicker({ ticketProduct, value, onSelect, className, di
     (async () => {
       setLoading(true);
       const all = await fetchAll<any>("products", (q) =>
-        q.select("id,name,model,brand,category,active").eq("active", true),
+        q.select("id,name,model,brand,category,description,active").eq("active", true),
       ).catch(() => [] as any[]);
       const toPart = (p: any): TicketPart => ({
-        id: p.id, name: p.name, model: p.model, brand: p.brand, category: p.category,
+        id: p.id, name: p.name, model: p.model, brand: p.brand, category: p.category, description: p.description,
         productType: (p.category || "").toLowerCase().includes("spare") ? "Spare Part" : "Product",
       });
 
@@ -126,7 +127,7 @@ export function TicketPartPicker({ ticketProduct, value, onSelect, className, di
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{p.model || p.name}</div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {[p.brand, p.category].filter(Boolean).join(" · ") || "—"}
+                        {p.description || "—"}
                       </div>
                     </div>
                     <Badge variant={p.productType === "Spare Part" ? "secondary" : "default"} className="ml-2 text-[10px]">

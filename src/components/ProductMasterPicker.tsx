@@ -102,7 +102,7 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
                         <span className="ml-2">{p.name}</span>
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {[p.category, p.brand, p.hsn ? `HSN ${p.hsn}` : null, p.unit].filter(Boolean).join(" · ")}
+                        {p.description || "—"}
                       </div>
                     </div>
                   </CommandItem>

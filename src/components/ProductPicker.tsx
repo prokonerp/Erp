@@ -97,6 +97,9 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
                     <Check className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{p.model || p.name}</div>
+                      {p.description ? (
+                        <div className="text-xs text-muted-foreground truncate">{p.description}</div>
+                      ) : null}
                     </div>
                   </CommandItem>
                 );
