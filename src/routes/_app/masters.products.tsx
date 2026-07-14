@@ -113,7 +113,7 @@ export function ProductMasterPage() {
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
-  const [parentIds, setParentIds] = useState<string[]>([]);
+  const [parentLinks, setParentLinks] = useState<Array<{ parent_product_id: string; active: boolean }>>([]);
   const [linkedSpares, setLinkedSpares] = useState<ProductFull[]>([]);
   const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
@@ -169,7 +169,7 @@ export function ProductMasterPage() {
   }
 
   async function loadLinksForEdit(p: ProductFull) {
-    setParentIds([]);
+    setParentLinks([]);
     setLinkedSpares([]);
     setLinkedParents([]);
     setBundle([]);
@@ -177,10 +177,12 @@ export function ProductMasterPage() {
     if (hasParentTagging) {
       const { data } = await supabase
         .from("product_spare_parts" as any)
-        .select("parent_product_id")
+        .select("parent_product_id, active")
         .eq("spare_part_id", p.id);
-      const ids = ((data || []) as unknown as { parent_product_id: string }[]).map((r) => r.parent_product_id);
-      setParentIds(ids);
+      const links = ((data || []) as unknown as { parent_product_id: string; active: boolean | null }[])
+        .map((r) => ({ parent_product_id: r.parent_product_id, active: r.active !== false }));
+      setParentLinks(links);
+      const ids = links.map((l) => l.parent_product_id);
       setLinkedParents(rows.filter((r) => ids.includes(r.id)));
     }
     if (!hasParentTagging || (p.category || "") !== SPARE_PARTS_CATEGORY) {
@@ -217,7 +219,7 @@ export function ProductMasterPage() {
 
   function resetForm() {
     setForm(empty); setEditingId(null); setTab("details");
-    setParentIds([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
+    setParentLinks([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
     setBundle([]); setBundleChildSearch("");
   }
   function startNew() { resetForm(); setOpen(true); }
@@ -259,7 +261,7 @@ export function ProductMasterPage() {
     if (!form.category) { toast.error("Category is required"); return; }
     const isSparePart = form.category === SPARE_PARTS_CATEGORY;
     const requireParents = form.parent_tagging_required || isSparePart;
-    if (requireParents && parentIds.length === 0) {
+    if (requireParents && parentLinks.length === 0) {
       toast.error("At least one compatible parent product must be selected.");
       return;
     }
@@ -317,8 +319,12 @@ export function ProductMasterPage() {
     // Sync spare-part links when category is Spare Parts.
     if (requireParents && productId) {
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
-      if (parentIds.length) {
-        const linkRows = parentIds.map((pid) => ({ spare_part_id: productId, parent_product_id: pid }));
+      if (parentLinks.length) {
+        const linkRows = parentLinks.map((l) => ({
+          spare_part_id: productId,
+          parent_product_id: l.parent_product_id,
+          active: l.active,
+        }));
         const { error: linkErr } = await supabase.from("product_spare_parts" as any).insert(linkRows as any);
         if (linkErr) toast.error(`Saved product but failed to link parents: ${linkErr.message}`);
       }
@@ -342,7 +348,14 @@ export function ProductMasterPage() {
   }
 
   function toggleParent(id: string) {
-    setParentIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setParentLinks((prev) => {
+      const found = prev.find((l) => l.parent_product_id === id);
+      if (found) return prev.filter((l) => l.parent_product_id !== id);
+      return [...prev, { parent_product_id: id, active: true }];
+    });
+  }
+  function setParentActive(id: string, active: boolean) {
+    setParentLinks((prev) => prev.map((l) => (l.parent_product_id === id ? { ...l, active } : l)));
   }
 
   async function downloadCompatibilityReport() {
@@ -385,22 +398,72 @@ export function ProductMasterPage() {
       const text = await file.text();
       const rowsCsv = parseCSV(text);
       if (!rowsCsv.length) return toast.error("Empty CSV");
-      const payload = rowsCsv.map((r) => ({
-        name: toTitleCaseSmart(r["Name"] || r["Product"] || r["Product Name"] || ""),
-        category: toTitleCaseSmart(r["Category"] || "") || null,
-        brand: upperTrim(r["Brand"] || "") || null,
-        model: upperTrim(r["Model"] || "") || null,
-        unit: r["Unit"] || "Nos",
-        hsn: upperTrim(r["HSN"] || "") || null,
-        default_price: r["Price"] || r["Default Price"] ? Number(r["Price"] || r["Default Price"]) : null,
-        description: r["Description"] || null,
-        weight_kg: r["Weight"] || r["Weight (kg)"] ? Number(r["Weight"] || r["Weight (kg)"]) : null,
-        active: true,
-      })).filter((p) => p.name);
-      if (!payload.length) return toast.error("No valid rows. Required: Name");
-      const { error } = await supabase.from("products").insert(payload as any);
+      // Extract raw parent tokens per row (accept several column aliases).
+      const parseTokens = (s: string) => s.split(/[|,;]/).map((x) => x.trim()).filter(Boolean);
+      const prepared = rowsCsv.map((r) => {
+        const rawParents =
+          r["Parent Model"] || r["Parent Models"] || r["Parent SKU"] || r["Parent SKUs"] ||
+          r["Parent"] || r["Parents"] || r["Parent Product"] || r["Parent Products"] || "";
+        const parentTokens = parseTokens(rawParents).map((t) => upperTrim(t));
+        return {
+          row: {
+            name: toTitleCaseSmart(r["Name"] || r["Product"] || r["Product Name"] || ""),
+            category: toTitleCaseSmart(r["Category"] || "") || null,
+            brand: upperTrim(r["Brand"] || "") || null,
+            model: upperTrim(r["Model"] || "") || null,
+            unit: r["Unit"] || "Nos",
+            hsn: upperTrim(r["HSN"] || "") || null,
+            default_price: r["Price"] || r["Default Price"] ? Number(r["Price"] || r["Default Price"]) : null,
+            description: r["Description"] || null,
+            weight_kg: r["Weight"] || r["Weight (kg)"] ? Number(r["Weight"] || r["Weight (kg)"]) : null,
+            active: true,
+            parent_tagging_required: parentTokens.length > 0,
+          },
+          parentTokens,
+        };
+      }).filter((p) => p.row.name);
+      if (!prepared.length) return toast.error("No valid rows. Required: Name");
+
+      const payload = prepared.map((p) => p.row);
+      const { data: inserted, error } = await supabase
+        .from("products")
+        .insert(payload as any)
+        .select("id, model, name");
       if (error) return toast.error(error.message);
-      toast.success(`Imported ${payload.length} product(s)`);
+
+      // Resolve parent tokens to product IDs and create mappings (default inactive).
+      const insertedRows = (inserted || []) as unknown as { id: string; model: string | null; name: string | null }[];
+      const { data: allProducts } = await supabase.from("products").select("id, model, name");
+      const lookup = new Map<string, string>();
+      for (const p of ((allProducts || []) as unknown as { id: string; model: string | null; name: string | null }[])) {
+        if (p.model) lookup.set(upperTrim(p.model), p.id);
+        if (p.name) lookup.set(upperTrim(p.name), p.id);
+      }
+
+      const mappings: Array<{ spare_part_id: string; parent_product_id: string; active: boolean }> = [];
+      let unresolved = 0;
+      prepared.forEach((p, idx) => {
+        const childId = insertedRows[idx]?.id;
+        if (!childId || !p.parentTokens.length) return;
+        for (const tok of p.parentTokens) {
+          const parentId = lookup.get(tok);
+          if (parentId && parentId !== childId) {
+            mappings.push({ spare_part_id: childId, parent_product_id: parentId, active: false });
+          } else {
+            unresolved++;
+          }
+        }
+      });
+
+      if (mappings.length) {
+        const { error: mapErr } = await supabase.from("product_spare_parts" as any).insert(mappings as any);
+        if (mapErr) toast.error(`Products imported but parent mappings failed: ${mapErr.message}`);
+      }
+
+      const parts = [`Imported ${payload.length} product(s)`];
+      if (mappings.length) parts.push(`${mappings.length} parent mapping(s) added (inactive by default — activate on edit)`);
+      if (unresolved) parts.push(`${unresolved} parent reference(s) could not be matched`);
+      toast.success(parts.join(" · "));
       load();
     } catch (e: any) { toast.error(e?.message || "Import failed"); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
@@ -619,20 +682,39 @@ export function ProductMasterPage() {
                       <Plus className="h-4 w-4 mr-1" />Add Products
                     </Button>
                   </div>
-                  {parentIds.length === 0 ? (
+                  {parentLinks.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">No parent products selected yet.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {parentIds.map((id) => {
-                        const p = rows.find((r) => r.id === id);
+                    <div className="rounded-md border divide-y">
+                      {parentLinks.map((link) => {
+                        const p = rows.find((r) => r.id === link.parent_product_id);
                         if (!p) return null;
                         return (
-                          <Badge key={id} variant="secondary" className="gap-1">
-                            <span className="font-mono">{p.model || p.name}</span>
-                            <button type="button" onClick={() => toggleParent(id)} className="ml-1 hover:text-destructive" aria-label="Remove">
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
+                          <div key={link.parent_product_id} className="flex items-center justify-between gap-2 px-3 py-2">
+                            <div className="min-w-0">
+                              <div className="text-sm font-mono truncate">{p.model || p.name}</div>
+                              <div className="text-[11px] text-muted-foreground truncate">{[p.brand, p.category].filter(Boolean).join(" · ")}</div>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex items-center gap-1.5">
+                                <Switch
+                                  checked={link.active}
+                                  onCheckedChange={(v) => setParentActive(link.parent_product_id, !!v)}
+                                />
+                                <span className={cn("text-[11px] font-medium", link.active ? "text-primary" : "text-muted-foreground")}>
+                                  {link.active ? "Active" : "Inactive"}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleParent(link.parent_product_id)}
+                                className="text-muted-foreground hover:text-destructive"
+                                aria-label="Remove"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
@@ -893,7 +975,7 @@ export function ProductMasterPage() {
               <TableBody>
                 {filteredParents.map((p) => (
                   <TableRow key={p.id} className="cursor-pointer" onClick={() => toggleParent(p.id)}>
-                    <TableCell><Checkbox checked={parentIds.includes(p.id)} onCheckedChange={() => toggleParent(p.id)} /></TableCell>
+                    <TableCell><Checkbox checked={parentLinks.some((l) => l.parent_product_id === p.id)} onCheckedChange={() => toggleParent(p.id)} /></TableCell>
                     <TableCell className="font-mono">{p.model || p.name}</TableCell>
                     <TableCell>{p.brand || "—"}</TableCell>
                     <TableCell>{p.category || "—"}</TableCell>
@@ -906,7 +988,7 @@ export function ProductMasterPage() {
             </Table>
           </div>
           <div className="flex justify-between items-center pt-2">
-            <span className="text-sm text-muted-foreground">{parentIds.length} selected</span>
+            <span className="text-sm text-muted-foreground">{parentLinks.length} selected</span>
             <Button size="sm" onClick={() => setParentPickerOpen(false)}>Done</Button>
           </div>
         </DialogContent>
