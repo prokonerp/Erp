@@ -27,7 +27,7 @@ function AmcDetail() {
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
-  const [products, setProducts] = useState<Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>>([]);
+  const [products, setProducts] = useState<Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null; description: string | null }>>([]);
   const [serials, setSerials] = useState<Array<{ id: string; serial_number: string; product_id: string }>>([]);
   const [oemBrands, setOemBrands] = useState<string[]>([]);
   const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null>(null);
@@ -40,8 +40,8 @@ function AmcDetail() {
     supabase.from("product_categories").select("name").order("name").then(({ data }) => {
       setCategories(((data || []) as { name: string }[]).map((c) => c.name));
     });
-    supabase.from("products").select("id,name,model,category,brand").eq("active", true).order("name").then(({ data }) => {
-      setProducts((data || []) as Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>);
+    supabase.from("products").select("id,name,model,category,brand,description").eq("active", true).order("name").then(({ data }) => {
+      setProducts((data || []) as Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null; description: string | null }>);
     });
     supabase.from("serials").select("id,serial_number,product_id").order("serial_number").then(({ data }) => {
       setSerials((data || []) as Array<{ id: string; serial_number: string; product_id: string }>);
@@ -517,7 +517,7 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
 function EditProductRow({ unit, categories, products, serials, onChange, onRemove, canRemove }: {
   unit: AmcUnit;
   categories: string[];
-  products: Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>;
+  products: Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null; description: string | null }>;
   serials: Array<{ id: string; serial_number: string; product_id: string }>;
   onChange: (patch: Partial<AmcUnit>) => void;
   onRemove: () => void;
@@ -549,7 +549,7 @@ function EditProductRow({ unit, categories, products, serials, onChange, onRemov
           <SelectTrigger><SelectValue placeholder={unit.category ? "Select model" : "Pick category first"} /></SelectTrigger>
           <SelectContent>
             {filteredProducts.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{p.model || p.name} {p.brand ? `· ${p.brand}` : ""}</SelectItem>
+              <SelectItem key={p.id} value={p.id}>{p.description || p.model || p.name}</SelectItem>
             ))}
             {filteredProducts.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No products in this category</div>}
           </SelectContent>
