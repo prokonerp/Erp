@@ -172,6 +172,7 @@ export function ProductMasterPage() {
   async function loadLinksForEdit(p: ProductFull) {
     setParentLinks([]);
     setLinkedSpares([]);
+    setSpareLinks([]);
     setLinkedParents([]);
     setBundle([]);
     const hasParentTagging = !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY;
