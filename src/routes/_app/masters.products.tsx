@@ -747,17 +747,29 @@ export function ProductMasterPage() {
                       <TableHead>Spare Part</TableHead>
                       <TableHead>Model No</TableHead>
                       <TableHead>OEM</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead className="w-32">Status</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
-                      {linkedSpares.map((sp) => (
-                        <TableRow key={sp.id}>
-                          <TableCell>{sp.name}</TableCell>
-                          <TableCell className="font-mono">{sp.model || "—"}</TableCell>
-                          <TableCell>{sp.brand || "—"}</TableCell>
-                          <TableCell>{sp.active === false ? <Badge variant="outline">Inactive</Badge> : <Badge>Active</Badge>}</TableCell>
-                        </TableRow>
-                      ))}
+                      {linkedSpares.map((sp) => {
+                        const link = spareLinks.find((l) => l.spare_part_id === sp.id);
+                        const isActive = link?.active !== false;
+                        return (
+                          <TableRow key={sp.id}>
+                            <TableCell>{sp.name}</TableCell>
+                            <TableCell className="font-mono">{sp.model || "—"}</TableCell>
+                            <TableCell>{sp.brand || "—"}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={isActive}
+                                  onCheckedChange={(v) => editingId && setSpareLinkActive(sp.id, editingId, !!v)}
+                                />
+                                <span className="text-xs text-muted-foreground">{isActive ? "Active" : "Inactive"}</span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
