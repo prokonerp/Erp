@@ -398,22 +398,72 @@ export function ProductMasterPage() {
       const text = await file.text();
       const rowsCsv = parseCSV(text);
       if (!rowsCsv.length) return toast.error("Empty CSV");
-      const payload = rowsCsv.map((r) => ({
-        name: toTitleCaseSmart(r["Name"] || r["Product"] || r["Product Name"] || ""),
-        category: toTitleCaseSmart(r["Category"] || "") || null,
-        brand: upperTrim(r["Brand"] || "") || null,
-        model: upperTrim(r["Model"] || "") || null,
-        unit: r["Unit"] || "Nos",
-        hsn: upperTrim(r["HSN"] || "") || null,
-        default_price: r["Price"] || r["Default Price"] ? Number(r["Price"] || r["Default Price"]) : null,
-        description: r["Description"] || null,
-        weight_kg: r["Weight"] || r["Weight (kg)"] ? Number(r["Weight"] || r["Weight (kg)"]) : null,
-        active: true,
-      })).filter((p) => p.name);
-      if (!payload.length) return toast.error("No valid rows. Required: Name");
-      const { error } = await supabase.from("products").insert(payload as any);
+      // Extract raw parent tokens per row (accept several column aliases).
+      const parseTokens = (s: string) => s.split(/[|,;]/).map((x) => x.trim()).filter(Boolean);
+      const prepared = rowsCsv.map((r) => {
+        const rawParents =
+          r["Parent Model"] || r["Parent Models"] || r["Parent SKU"] || r["Parent SKUs"] ||
+          r["Parent"] || r["Parents"] || r["Parent Product"] || r["Parent Products"] || "";
+        const parentTokens = parseTokens(rawParents).map((t) => upperTrim(t));
+        return {
+          row: {
+            name: toTitleCaseSmart(r["Name"] || r["Product"] || r["Product Name"] || ""),
+            category: toTitleCaseSmart(r["Category"] || "") || null,
+            brand: upperTrim(r["Brand"] || "") || null,
+            model: upperTrim(r["Model"] || "") || null,
+            unit: r["Unit"] || "Nos",
+            hsn: upperTrim(r["HSN"] || "") || null,
+            default_price: r["Price"] || r["Default Price"] ? Number(r["Price"] || r["Default Price"]) : null,
+            description: r["Description"] || null,
+            weight_kg: r["Weight"] || r["Weight (kg)"] ? Number(r["Weight"] || r["Weight (kg)"]) : null,
+            active: true,
+            parent_tagging_required: parentTokens.length > 0,
+          },
+          parentTokens,
+        };
+      }).filter((p) => p.row.name);
+      if (!prepared.length) return toast.error("No valid rows. Required: Name");
+
+      const payload = prepared.map((p) => p.row);
+      const { data: inserted, error } = await supabase
+        .from("products")
+        .insert(payload as any)
+        .select("id, model, name");
       if (error) return toast.error(error.message);
-      toast.success(`Imported ${payload.length} product(s)`);
+
+      // Resolve parent tokens to product IDs and create mappings (default inactive).
+      const insertedRows = (inserted || []) as unknown as { id: string; model: string | null; name: string | null }[];
+      const { data: allProducts } = await supabase.from("products").select("id, model, name");
+      const lookup = new Map<string, string>();
+      for (const p of ((allProducts || []) as unknown as { id: string; model: string | null; name: string | null }[])) {
+        if (p.model) lookup.set(upperTrim(p.model), p.id);
+        if (p.name) lookup.set(upperTrim(p.name), p.id);
+      }
+
+      const mappings: Array<{ spare_part_id: string; parent_product_id: string; active: boolean }> = [];
+      let unresolved = 0;
+      prepared.forEach((p, idx) => {
+        const childId = insertedRows[idx]?.id;
+        if (!childId || !p.parentTokens.length) return;
+        for (const tok of p.parentTokens) {
+          const parentId = lookup.get(tok);
+          if (parentId && parentId !== childId) {
+            mappings.push({ spare_part_id: childId, parent_product_id: parentId, active: false });
+          } else {
+            unresolved++;
+          }
+        }
+      });
+
+      if (mappings.length) {
+        const { error: mapErr } = await supabase.from("product_spare_parts" as any).insert(mappings as any);
+        if (mapErr) toast.error(`Products imported but parent mappings failed: ${mapErr.message}`);
+      }
+
+      const parts = [`Imported ${payload.length} product(s)`];
+      if (mappings.length) parts.push(`${mappings.length} parent mapping(s) added (inactive by default — activate on edit)`);
+      if (unresolved) parts.push(`${unresolved} parent reference(s) could not be matched`);
+      toast.success(parts.join(" · "));
       load();
     } catch (e: any) { toast.error(e?.message || "Import failed"); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
