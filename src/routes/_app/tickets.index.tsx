@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
 import { format } from "date-fns";
-import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, PRIORITY_COLOR, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
+import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
 import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
@@ -19,11 +19,64 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger,
   DropdownMenuSubContent, DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 import { FormPageHeader } from "@/components/FormPageHeader";
 import { softDelete as softDeleteRow, useRealtimeRefetch } from "@/lib/softDelete";
 import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
+
+const PRIORITY_DOT: Record<string, string> = {
+  P1: "bg-red-500",
+  P2: "bg-orange-500",
+  P3: "bg-amber-500",
+  P4: "bg-blue-500",
+  P5: "bg-zinc-300",
+};
+
+const PRIORITY_LABEL: Record<string, string> = {
+  P1: "Critical",
+  P2: "High",
+  P3: "Medium",
+  P4: "Low",
+  P5: "Very Low",
+};
+
+function PrioritySelect({ value, onChange, size = "md" }: { value: string; onChange: (v: string) => void; size?: "sm" | "md" }) {
+  const p = value || "P3";
+  const dotSize = size === "sm" ? "h-2.5 w-2.5" : "h-3 w-3";
+  const btnSize = size === "sm" ? "h-6 w-6" : "h-7 w-7";
+  return (
+    <Tooltip>
+      <DropdownMenu>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={`inline-flex items-center justify-center rounded-full border border-transparent ${btnSize} hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring`}
+              aria-label={`Priority ${p} - ${PRIORITY_LABEL[p]}`}
+            >
+              <span className={`inline-block rounded-full ${dotSize} ${PRIORITY_DOT[p]}`} />
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <DropdownMenuContent align="start" className="min-w-[7rem]">
+          <DropdownMenuLabel className="text-xs">Set priority</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {PRIORITIES.map((pr) => (
+            <DropdownMenuItem key={pr} onClick={() => onChange(pr)} className="text-xs gap-2">
+              <span className={`inline-block rounded-full h-2.5 w-2.5 ${PRIORITY_DOT[pr]}`} />
+              {pr} <span className="text-muted-foreground">· {PRIORITY_LABEL[pr]}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <TooltipContent side="top">
+        <p>{p} - {PRIORITY_LABEL[p]}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 export const Route = createFileRoute("/_app/tickets/")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -457,14 +510,14 @@ function TicketsList() {
               ))}
             </div>
           ) : (
-          <div className="overflow-auto border rounded-md max-h-[60vh]">
+          <TooltipProvider delayDuration={200}>
+            <div className="overflow-auto border rounded-md max-h-[60vh]">
             <table className="w-full text-sm">
               <thead className="bg-muted sticky top-0 z-10">
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="p-2">Case ID</th>
-                  <th className="p-2">Type</th>
-                  <th className="p-2 w-14">Tag</th>
-                  <th className="p-2 w-14">Pr.</th>
+                  <th className="p-2 w-14 text-center">Tag</th>
+                  <th className="p-2 w-10 text-center">Pr.</th>
                   <th className="p-2 w-20">Timer</th>
                   <th className="p-2">Customer</th>
                   <th className="p-2">Model / Serial</th>
@@ -478,9 +531,9 @@ function TicketsList() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={13} className="p-4 text-muted-foreground">Loading…</td></tr>
+                  <tr><td colSpan={12} className="p-4 text-muted-foreground">Loading…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={13} className="p-4 text-muted-foreground">No tickets.</td></tr>
+                  <tr><td colSpan={12} className="p-4 text-muted-foreground">No tickets.</td></tr>
                 ) : filtered.map((r) => (
                   <tr key={r.id} className="border-t align-top hover:bg-muted/30">
                     <td className="p-2 font-mono text-xs whitespace-nowrap">
@@ -496,20 +549,17 @@ function TicketsList() {
                         )
                       )}
                       <div className="font-semibold text-foreground">{r.case_id}</div>
+                      <div className="text-[10px] text-muted-foreground leading-tight">{r.call_type}</div>
                     </td>
-                    <td className="p-2 text-xs whitespace-nowrap">{r.call_type}</td>
-                    <td className="p-2">
+                    <td className="p-2 text-center">
                       {r.oem_call ? (
                         <Badge className="bg-purple-100 text-purple-800" variant="secondary">OEM</Badge>
                       ) : (
                         <Badge variant="outline">PHS</Badge>
                       )}
                     </td>
-                    <td className="p-2">
-                      <Select value={r.priority || "P3"} onValueChange={(v) => setPriority(r.id, v)}>
-                        <SelectTrigger className={`h-7 w-14 px-2 ${PRIORITY_COLOR[r.priority || "P3"] || ""}`}><SelectValue /></SelectTrigger>
-                        <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-                      </Select>
+                    <td className="p-2 text-center">
+                      <PrioritySelect value={r.priority || "P3"} onChange={(v) => setPriority(r.id, v)} />
                     </td>
                     <td className="p-2">
                       {(() => {
@@ -562,6 +612,7 @@ function TicketsList() {
               </tbody>
             </table>
           </div>
+          </TooltipProvider>
           )}
         </CardContent>
       </Card>
@@ -796,10 +847,7 @@ function TicketCard({ r, employees, isAdmin, onReassign, onStatusChange, onNotif
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Select value={r.priority || "P3"} onValueChange={(v) => onPriority(r.id, v)}>
-            <SelectTrigger className={`h-6 w-11 px-1 text-[10px] font-bold ${PRIORITY_COLOR[r.priority || "P3"] || ""}`}><SelectValue /></SelectTrigger>
-            <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-          </Select>
+          <PrioritySelect value={r.priority || "P3"} onChange={(v) => onPriority(r.id, v)} size="sm" />
           <RowActions r={r} employees={employees} isAdmin={isAdmin} onReassign={onReassign} onStatusChange={onStatusChange} onNotifyCustomer={onNotifyCustomer} onNotifyEngineer={onNotifyEngineer} onSoftDelete={onSoftDelete} />
         </div>
       </div>
