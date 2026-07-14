@@ -632,20 +632,39 @@ export function ProductMasterPage() {
                       <Plus className="h-4 w-4 mr-1" />Add Products
                     </Button>
                   </div>
-                  {parentIds.length === 0 ? (
+                  {parentLinks.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">No parent products selected yet.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {parentIds.map((id) => {
-                        const p = rows.find((r) => r.id === id);
+                    <div className="rounded-md border divide-y">
+                      {parentLinks.map((link) => {
+                        const p = rows.find((r) => r.id === link.parent_product_id);
                         if (!p) return null;
                         return (
-                          <Badge key={id} variant="secondary" className="gap-1">
-                            <span className="font-mono">{p.model || p.name}</span>
-                            <button type="button" onClick={() => toggleParent(id)} className="ml-1 hover:text-destructive" aria-label="Remove">
-                              <X className="h-3 w-3" />
-                            </button>
-                          </Badge>
+                          <div key={link.parent_product_id} className="flex items-center justify-between gap-2 px-3 py-2">
+                            <div className="min-w-0">
+                              <div className="text-sm font-mono truncate">{p.model || p.name}</div>
+                              <div className="text-[11px] text-muted-foreground truncate">{[p.brand, p.category].filter(Boolean).join(" · ")}</div>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="flex items-center gap-1.5">
+                                <Switch
+                                  checked={link.active}
+                                  onCheckedChange={(v) => setParentActive(link.parent_product_id, !!v)}
+                                />
+                                <span className={cn("text-[11px] font-medium", link.active ? "text-primary" : "text-muted-foreground")}>
+                                  {link.active ? "Active" : "Inactive"}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleParent(link.parent_product_id)}
+                                className="text-muted-foreground hover:text-destructive"
+                                aria-label="Remove"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
