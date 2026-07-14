@@ -38,7 +38,7 @@ function ReportsPage() {
     (async () => {
       const [s, p, w, c] = await Promise.all([
         supabase.from("serials").select("*"),
-        supabase.from("products").select("id,name,brand,model,serial_tracking,warranty_applicable"),
+        supabase.from("products").select("id,name,brand,model,description,serial_tracking,warranty_applicable"),
         supabase.from("warehouses").select("id,name,code").order("name"),
         supabase.from("customers").select("id,company,contact_name"),
       ]);
