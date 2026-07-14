@@ -59,7 +59,7 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
         >
           <span className="truncate">
             {selected ? (
-              <span className="font-medium">{selected.description || selected.name}</span>
+              <span className="font-medium">{[selected.name, selected.model].filter(Boolean).join(" · ") || selected.description}</span>
             ) : (loading ? "Loading models…" : placeholder)}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -96,9 +96,11 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
                   >
                     <Check className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{p.description || p.name}</div>
+                      <div className="font-medium truncate">
+                        {[p.name, p.model].filter(Boolean).join(" · ") || "—"}
+                      </div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {[p.model, p.name].filter(Boolean).join(" · ") || "—"}
+                        {p.description || "—"}
                       </div>
                     </div>
                   </CommandItem>
