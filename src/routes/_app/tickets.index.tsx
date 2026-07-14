@@ -529,9 +529,9 @@ function TicketsList() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={13} className="p-4 text-muted-foreground">Loading…</td></tr>
+                  <tr><td colSpan={12} className="p-4 text-muted-foreground">Loading…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={13} className="p-4 text-muted-foreground">No tickets.</td></tr>
+                  <tr><td colSpan={12} className="p-4 text-muted-foreground">No tickets.</td></tr>
                 ) : filtered.map((r) => (
                   <tr key={r.id} className="border-t align-top hover:bg-muted/30">
                     <td className="p-2 font-mono text-xs whitespace-nowrap">
@@ -547,20 +547,17 @@ function TicketsList() {
                         )
                       )}
                       <div className="font-semibold text-foreground">{r.case_id}</div>
+                      <div className="text-[10px] text-muted-foreground leading-tight">{r.call_type}</div>
                     </td>
-                    <td className="p-2 text-xs whitespace-nowrap">{r.call_type}</td>
-                    <td className="p-2">
+                    <td className="p-2 text-center">
                       {r.oem_call ? (
                         <Badge className="bg-purple-100 text-purple-800" variant="secondary">OEM</Badge>
                       ) : (
                         <Badge variant="outline">PHS</Badge>
                       )}
                     </td>
-                    <td className="p-2">
-                      <Select value={r.priority || "P3"} onValueChange={(v) => setPriority(r.id, v)}>
-                        <SelectTrigger className={`h-7 w-14 px-2 ${PRIORITY_COLOR[r.priority || "P3"] || ""}`}><SelectValue /></SelectTrigger>
-                        <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-                      </Select>
+                    <td className="p-2 text-center">
+                      <PrioritySelect value={r.priority || "P3"} onChange={(v) => setPriority(r.id, v)} />
                     </td>
                     <td className="p-2">
                       {(() => {
