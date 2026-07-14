@@ -612,6 +612,7 @@ function TicketsList() {
               </tbody>
             </table>
           </div>
+          </TooltipProvider>
           )}
         </CardContent>
       </Card>
