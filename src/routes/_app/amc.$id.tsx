@@ -27,7 +27,7 @@ function AmcDetail() {
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
-  const [products, setProducts] = useState<Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>>([]);
+  const [products, setProducts] = useState<Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null; description: string | null }>>([]);
   const [serials, setSerials] = useState<Array<{ id: string; serial_number: string; product_id: string }>>([]);
   const [oemBrands, setOemBrands] = useState<string[]>([]);
   const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null>(null);
@@ -517,7 +517,7 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
 function EditProductRow({ unit, categories, products, serials, onChange, onRemove, canRemove }: {
   unit: AmcUnit;
   categories: string[];
-  products: Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null }>;
+  products: Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null; description: string | null }>;
   serials: Array<{ id: string; serial_number: string; product_id: string }>;
   onChange: (patch: Partial<AmcUnit>) => void;
   onRemove: () => void;
