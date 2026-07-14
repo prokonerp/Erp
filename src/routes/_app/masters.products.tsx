@@ -113,7 +113,7 @@ export function ProductMasterPage() {
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
-  const [parentIds, setParentIds] = useState<string[]>([]);
+  const [parentLinks, setParentLinks] = useState<Array<{ parent_product_id: string; active: boolean }>>([]);
   const [linkedSpares, setLinkedSpares] = useState<ProductFull[]>([]);
   const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
@@ -169,7 +169,7 @@ export function ProductMasterPage() {
   }
 
   async function loadLinksForEdit(p: ProductFull) {
-    setParentIds([]);
+    setParentLinks([]);
     setLinkedSpares([]);
     setLinkedParents([]);
     setBundle([]);
@@ -177,10 +177,12 @@ export function ProductMasterPage() {
     if (hasParentTagging) {
       const { data } = await supabase
         .from("product_spare_parts" as any)
-        .select("parent_product_id")
+        .select("parent_product_id, active")
         .eq("spare_part_id", p.id);
-      const ids = ((data || []) as unknown as { parent_product_id: string }[]).map((r) => r.parent_product_id);
-      setParentIds(ids);
+      const links = ((data || []) as unknown as { parent_product_id: string; active: boolean | null }[])
+        .map((r) => ({ parent_product_id: r.parent_product_id, active: r.active !== false }));
+      setParentLinks(links);
+      const ids = links.map((l) => l.parent_product_id);
       setLinkedParents(rows.filter((r) => ids.includes(r.id)));
     }
     if (!hasParentTagging || (p.category || "") !== SPARE_PARTS_CATEGORY) {
@@ -217,7 +219,7 @@ export function ProductMasterPage() {
 
   function resetForm() {
     setForm(empty); setEditingId(null); setTab("details");
-    setParentIds([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
+    setParentLinks([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
     setBundle([]); setBundleChildSearch("");
   }
   function startNew() { resetForm(); setOpen(true); }
@@ -259,7 +261,7 @@ export function ProductMasterPage() {
     if (!form.category) { toast.error("Category is required"); return; }
     const isSparePart = form.category === SPARE_PARTS_CATEGORY;
     const requireParents = form.parent_tagging_required || isSparePart;
-    if (requireParents && parentIds.length === 0) {
+    if (requireParents && parentLinks.length === 0) {
       toast.error("At least one compatible parent product must be selected.");
       return;
     }
@@ -317,8 +319,12 @@ export function ProductMasterPage() {
     // Sync spare-part links when category is Spare Parts.
     if (requireParents && productId) {
       await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
-      if (parentIds.length) {
-        const linkRows = parentIds.map((pid) => ({ spare_part_id: productId, parent_product_id: pid }));
+      if (parentLinks.length) {
+        const linkRows = parentLinks.map((l) => ({
+          spare_part_id: productId,
+          parent_product_id: l.parent_product_id,
+          active: l.active,
+        }));
         const { error: linkErr } = await supabase.from("product_spare_parts" as any).insert(linkRows as any);
         if (linkErr) toast.error(`Saved product but failed to link parents: ${linkErr.message}`);
       }
@@ -342,7 +348,14 @@ export function ProductMasterPage() {
   }
 
   function toggleParent(id: string) {
-    setParentIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setParentLinks((prev) => {
+      const found = prev.find((l) => l.parent_product_id === id);
+      if (found) return prev.filter((l) => l.parent_product_id !== id);
+      return [...prev, { parent_product_id: id, active: true }];
+    });
+  }
+  function setParentActive(id: string, active: boolean) {
+    setParentLinks((prev) => prev.map((l) => (l.parent_product_id === id ? { ...l, active } : l)));
   }
 
   async function downloadCompatibilityReport() {
