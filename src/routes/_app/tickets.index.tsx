@@ -514,9 +514,8 @@ function TicketsList() {
               <thead className="bg-muted sticky top-0 z-10">
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="p-2">Case ID</th>
-                  <th className="p-2">Type</th>
-                  <th className="p-2 w-14">Tag</th>
-                  <th className="p-2 w-14">Pr.</th>
+                  <th className="p-2 w-14 text-center">Tag</th>
+                  <th className="p-2 w-10 text-center">Pr.</th>
                   <th className="p-2 w-20">Timer</th>
                   <th className="p-2">Customer</th>
                   <th className="p-2">Model / Serial</th>
