@@ -115,6 +115,7 @@ export function ProductMasterPage() {
   const [newCatName, setNewCatName] = useState("");
   const [parentLinks, setParentLinks] = useState<Array<{ parent_product_id: string; active: boolean }>>([]);
   const [linkedSpares, setLinkedSpares] = useState<ProductFull[]>([]);
+  const [spareLinks, setSpareLinks] = useState<Array<{ spare_part_id: string; active: boolean }>>([]);
   const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentSearch, setParentSearch] = useState("");
@@ -171,6 +172,7 @@ export function ProductMasterPage() {
   async function loadLinksForEdit(p: ProductFull) {
     setParentLinks([]);
     setLinkedSpares([]);
+    setSpareLinks([]);
     setLinkedParents([]);
     setBundle([]);
     const hasParentTagging = !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY;
@@ -188,9 +190,12 @@ export function ProductMasterPage() {
     if (!hasParentTagging || (p.category || "") !== SPARE_PARTS_CATEGORY) {
       const { data } = await supabase
         .from("product_spare_parts" as any)
-        .select("spare_part_id")
+        .select("spare_part_id, active")
         .eq("parent_product_id", p.id);
-      const ids = ((data || []) as unknown as { spare_part_id: string }[]).map((r) => r.spare_part_id);
+      const links = ((data || []) as unknown as { spare_part_id: string; active: boolean | null }[])
+        .map((r) => ({ spare_part_id: r.spare_part_id, active: r.active !== false }));
+      setSpareLinks(links);
+      const ids = links.map((l) => l.spare_part_id);
       setLinkedSpares(rows.filter((r) => ids.includes(r.id)));
     }
     // Load bundle configuration where this product is the parent.
@@ -219,7 +224,7 @@ export function ProductMasterPage() {
 
   function resetForm() {
     setForm(empty); setEditingId(null); setTab("details");
-    setParentLinks([]); setLinkedSpares([]); setLinkedParents([]); setParentSearch("");
+    setParentLinks([]); setLinkedSpares([]); setSpareLinks([]); setLinkedParents([]); setParentSearch("");
     setBundle([]); setBundleChildSearch("");
   }
   function startNew() { resetForm(); setOpen(true); }
@@ -357,6 +362,18 @@ export function ProductMasterPage() {
   function setParentActive(id: string, active: boolean) {
     setParentLinks((prev) => prev.map((l) => (l.parent_product_id === id ? { ...l, active } : l)));
   }
+  async function setSpareLinkActive(sparePartId: string, parentId: string, active: boolean) {
+    setSpareLinks((prev) => prev.map((l) => (l.spare_part_id === sparePartId ? { ...l, active } : l)));
+    const { error } = await supabase
+      .from("product_spare_parts" as any)
+      .update({ active } as any)
+      .eq("parent_product_id", parentId)
+      .eq("spare_part_id", sparePartId);
+    if (error) {
+      toast.error(`Failed to update status: ${error.message}`);
+      setSpareLinks((prev) => prev.map((l) => (l.spare_part_id === sparePartId ? { ...l, active: !active } : l)));
+    }
+  }
 
   async function downloadCompatibilityReport() {
     const { data } = await supabase
@@ -448,7 +465,7 @@ export function ProductMasterPage() {
         for (const tok of p.parentTokens) {
           const parentId = lookup.get(tok);
           if (parentId && parentId !== childId) {
-            mappings.push({ spare_part_id: childId, parent_product_id: parentId, active: false });
+            mappings.push({ spare_part_id: childId, parent_product_id: parentId, active: true });
           } else {
             unresolved++;
           }
@@ -730,17 +747,29 @@ export function ProductMasterPage() {
                       <TableHead>Spare Part</TableHead>
                       <TableHead>Model No</TableHead>
                       <TableHead>OEM</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead className="w-32">Status</TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
-                      {linkedSpares.map((sp) => (
-                        <TableRow key={sp.id}>
-                          <TableCell>{sp.name}</TableCell>
-                          <TableCell className="font-mono">{sp.model || "—"}</TableCell>
-                          <TableCell>{sp.brand || "—"}</TableCell>
-                          <TableCell>{sp.active === false ? <Badge variant="outline">Inactive</Badge> : <Badge>Active</Badge>}</TableCell>
-                        </TableRow>
-                      ))}
+                      {linkedSpares.map((sp) => {
+                        const link = spareLinks.find((l) => l.spare_part_id === sp.id);
+                        const isActive = link?.active !== false;
+                        return (
+                          <TableRow key={sp.id}>
+                            <TableCell>{sp.name}</TableCell>
+                            <TableCell className="font-mono">{sp.model || "—"}</TableCell>
+                            <TableCell>{sp.brand || "—"}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={isActive}
+                                  onCheckedChange={(v) => editingId && setSpareLinkActive(sp.id, editingId, !!v)}
+                                />
+                                <span className="text-xs text-muted-foreground">{isActive ? "Active" : "Inactive"}</span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
