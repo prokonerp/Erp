@@ -536,7 +536,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
 
       <FormSection
         title="Material Receipt Details"
-        description={`Recv ${totals.received} • Acc ${totals.accepted} • Rej ${totals.rejected} • ${items.length} row(s)`}
+        description={`Total Qty ${totals.received} • ${items.length} row(s)`}
         defaultOpen
         right={
           <Button type="button" size="sm" variant="outline" onClick={() => setItems([...items, emptyGrnItem()])} className="gap-1.5">
@@ -552,10 +552,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 <th className="px-2 py-1.5 min-w-[200px]">Product</th>
                 <th className="px-2 py-1.5">Description</th>
                 <th className="px-2 py-1.5 w-20">UOM</th>
-                <th className="px-2 py-1.5 w-20">Recv</th>
-                <th className="px-2 py-1.5 w-20">Acc</th>
-                <th className="px-2 py-1.5 w-20">Rej</th>
-                <th className="px-2 py-1.5 w-28">Batch</th>
+                <th className="px-2 py-1.5 w-20">Qty</th>
                 {!isCust && <th className="px-2 py-1.5 w-28">Model</th>}
                 {!isCust && <th className="px-2 py-1.5 w-28">Serial</th>}
                 <th className="px-2 py-1.5 w-28">Condition</th>
@@ -586,16 +583,21 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                   <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_accepted} onChange={(e) => updateItem(i, { qty_accepted: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_rejected} onChange={(e) => updateItem(i, { qty_rejected: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.batch_no} onChange={(e) => updateItem(i, { batch_no: e.target.value })} /></td>
                   {!isCust && (
                     <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
                   )}
                   {!isCust && (
                     <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
                   )}
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.condition || ""} onChange={(e) => updateItem(i, { condition: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Good">Good</SelectItem>
+                        <SelectItem value="Bad">Bad</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
                   <td className="px-2 py-1.5 border-t border-border/60 text-right">
                     <Button
