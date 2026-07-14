@@ -457,6 +457,9 @@ function TicketsList() {
             <FilterChip icon={<Tag className="h-3.5 w-3.5" />} label="Status" value={status !== "all" ? status : ""} active={status !== "all"} onClear={() => setStatus("all")}>
               <ChipMenu options={[{v:"all",l:"All statuses"},...TICKET_STATUSES.map((s)=>({v:s,l:s}))]} value={status} onChange={setStatus} />
             </FilterChip>
+            <FilterChip icon={<ClipboardList className="h-3.5 w-3.5" />} label="Type" value={type !== "all" ? type : ""} active={type !== "all"} onClear={() => setType("all")}>
+              <ChipMenu searchable options={[{v:"all",l:"All types"},...CALL_TYPES.map((s)=>({v:s,l:s}))]} value={type} onChange={setType} />
+            </FilterChip>
             <FilterChip icon={<Zap className="h-3.5 w-3.5" />} label="Priority" value={priorityFilter !== "all" ? priorityFilter : ""} active={priorityFilter !== "all"} onClear={() => setPriorityFilter("all")}>
               <ChipMenu options={[{v:"all",l:"All priorities"},...PRIORITIES.map((p)=>({v:p,l:p}))]} value={priorityFilter} onChange={setPriorityFilter} />
             </FilterChip>
@@ -468,7 +471,6 @@ function TicketsList() {
                 <Button size="sm" variant="outline" className="h-9 gap-1.5"><SlidersHorizontal className="h-3.5 w-3.5" />More</Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-72 space-y-3">
-                <MoreField label="Call type" value={type} onChange={setType} options={[{v:"all",l:"All call types"},...CALL_TYPES.map((s)=>({v:s,l:s}))]} />
                 <MoreField label="OEM / PHS" value={oemFilter} onChange={setOemFilter} options={[{v:"all",l:"All"},{v:"oem",l:"OEM only"},{v:"phs",l:"PHS only"}]} />
                 <MoreField label="Parts" value={partsFilter} onChange={setPartsFilter} options={[{v:"all",l:"All"},{v:"with",l:"With parts"},{v:"without",l:"Without parts"}]} />
                 <MoreField label="Execution bucket" value={bucket} onChange={setBucket} options={[{v:"all",l:"All"},{v:"lt24",l:"< 24h"},{v:"24-48",l:"24–48h"},{v:"48-72",l:"48–72h"},{v:"gt72",l:"> 72h"}]} />
