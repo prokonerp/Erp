@@ -26,7 +26,7 @@ function GrnView() {
   const backTo = `/grn/${g.category}` as "/grn/customer" | "/grn/oem" | "/grn/general";
 
   const totals = (g.items || []).reduce((acc, it) => {
-    const q = parseFloat(it.qty_received ?? it.qty_accepted ?? it.qty) || 0;
+    const q = parseFloat(it.qty_received ?? it.qty_accepted ?? "") || 0;
     acc.q += q;
     const cond = String(it.condition || "").toLowerCase();
     if (cond === "bad" || cond === "defective") acc.j += q;
@@ -151,7 +151,7 @@ function GrnView() {
                 {!isCustomerCat(g.category) && <td>{it.model_no || ""}</td>}
                 {!isCustomerCat(g.category) && <td>{it.serial_no || ""}</td>}
                 <td style={{ textAlign: "center" }}>{it.uom}</td>
-                <td style={{ textAlign: "right" }}>{it.qty_received ?? it.qty_accepted ?? it.qty ?? ""}</td>
+                <td style={{ textAlign: "right" }}>{it.qty_received ?? it.qty_accepted ?? ""}</td>
                 <td style={{ textAlign: "center", textTransform: "capitalize" }}>
                   {(() => {
                     const c = String(it.condition || "").toLowerCase();
