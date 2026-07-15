@@ -367,10 +367,10 @@ function IndentDetail() {
           <Button variant="outline" size="sm" onClick={resyncFromTicket}>
             <RefreshCw className="h-4 w-4 mr-1" />Resync from Ticket
           </Button>
-          <Button variant="outline" size="sm" onClick={generateChallan}>
+          <Button variant="outline" size="sm" onClick={() => generateChallan()}>
             <FileOutput className="h-4 w-4 mr-1" />Generate Delivery Challan
           </Button>
-          <Button variant="outline" size="sm" onClick={generateGrn}>
+          <Button variant="outline" size="sm" onClick={() => generateGrn()}>
             <PackageCheck className="h-4 w-4 mr-1" />Generate GRN
           </Button>
           <Button onClick={save} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
