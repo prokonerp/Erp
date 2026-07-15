@@ -138,7 +138,26 @@ function IndentDetail() {
     const items: Array<{
       part_no: string; part_name: string; description: string;
       uom: string; qty: string; batch_no: string; model_no?: string; serial_no?: string;
+      oracle_no?: string; hsn?: string; unit_price?: string; weight_kg?: string;
     }> = [];
+    // Collect models so we can enrich rows with product master details in one query.
+    const modelSet = new Set<string>();
+    for (const o of oracles) {
+      const rows = (o.exchange_rows && o.exchange_rows.length) ? o.exchange_rows : (o.exchange ? [o.exchange] : []);
+      for (const ex of rows) {
+        const m = cleanModel(ex?.model_no);
+        if (m) modelSet.add(m);
+      }
+    }
+    let prodByModel: Record<string, { name?: string; model?: string; description?: string; unit?: string; hsn?: string; default_price?: number | null; weight_kg?: number | null }> = {};
+    if (modelSet.size > 0) {
+      const { data: prods } = await supabase.from("products")
+        .select("name,model,description,unit,hsn,default_price,weight_kg")
+        .in("model", Array.from(modelSet));
+      for (const p of (prods || []) as any[]) {
+        if (p?.model) prodByModel[p.model as string] = p;
+      }
+    }
     for (const o of oracles) {
       const rows = (o.exchange_rows && o.exchange_rows.length)
         ? o.exchange_rows
@@ -151,17 +170,22 @@ function IndentDetail() {
         if (!model && !serial && !qty) continue;
         const [maybeName, maybeModel] = (ex?.model_no || "").split("||");
         const defRow = o.defective_rows?.[ix];
-        const partName = maybeName || defRow?.part_name || model;
-        const desc = defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "";
+        const prod = model ? prodByModel[model] : undefined;
+        const partName = maybeName || prod?.name || defRow?.part_name || model;
+        const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
         items.push({
           part_no: maybeModel || model,
           part_name: partName,
           description: desc,
-          uom: "Nos",
+          uom: prod?.unit || "Nos",
           qty: qty || "1",
           batch_no: "",
           model_no: model,
           serial_no: serial,
+          oracle_no: (o.oracle_no || "").trim() || undefined,
+          hsn: prod?.hsn || undefined,
+          unit_price: prod?.default_price != null ? String(prod.default_price) : undefined,
+          weight_kg: prod?.weight_kg != null ? String(prod.weight_kg) : undefined,
         });
       }
     }
@@ -206,6 +230,29 @@ function IndentDetail() {
       qty_received: string; qty_accepted: string; qty_rejected: string;
       batch_no: string; model_no?: string; serial_no?: string; condition?: string; remarks?: string;
     }> = [];
+    let warehouseIdPrefill: string | null = null;
+    let warehouseNamePrefill = "";
+    const modelSet = new Set<string>();
+    for (const o of oracles) {
+      const rows = (o.received_rows && o.received_rows.length) ? o.received_rows : (o.received ? [o.received] : []);
+      for (const rv of rows) {
+        const m = cleanModel(rv?.model_no);
+        if (m) modelSet.add(m);
+        if (!warehouseIdPrefill && rv?.warehouse_id) {
+          warehouseIdPrefill = rv.warehouse_id;
+          warehouseNamePrefill = rv.warehouse_name || "";
+        }
+      }
+    }
+    let prodByModel: Record<string, { name?: string; description?: string; unit?: string; hsn?: string }> = {};
+    if (modelSet.size > 0) {
+      const { data: prods } = await supabase.from("products")
+        .select("name,model,description,unit,hsn")
+        .in("model", Array.from(modelSet));
+      for (const p of (prods || []) as any[]) {
+        if (p?.model) prodByModel[p.model as string] = p;
+      }
+    }
     for (const o of oracles) {
       const rows = (o.received_rows && o.received_rows.length)
         ? o.received_rows
@@ -218,20 +265,21 @@ function IndentDetail() {
         if (!model && !serial && !qty) continue;
         const [maybeName, maybeModel] = (rv?.model_no || "").split("||");
         const defRow = o.defective_rows?.[ix];
-        const partName = maybeName || defRow?.part_name || model;
-        const desc = rv?.remarks || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
+        const prod = model ? prodByModel[model] : undefined;
+        const partName = maybeName || prod?.name || defRow?.part_name || model;
+        const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
         items.push({
           part_no: maybeModel || model,
           part_name: partName,
           description: desc,
-          uom: "Nos",
+          uom: prod?.unit || "Nos",
           qty_received: qty || "1",
           qty_accepted: qty || "1",
           qty_rejected: "0",
           batch_no: "",
           model_no: model,
           serial_no: serial,
-          condition: "Defective",
+          condition: "Bad",
           remarks: rv?.remarks || "",
         });
       }
@@ -260,6 +308,8 @@ function IndentDetail() {
       source_doc_type: "Return Note",
       source_doc_no: i.indent_no || "",
       source_doc_date: i.indent_date || "",
+      warehouse_id: warehouseIdPrefill,
+      storage_location: warehouseNamePrefill,
       internal_remarks: [
         i.indent_no ? `From Indent ${i.indent_no}` : "",
         i.remarks || "",
