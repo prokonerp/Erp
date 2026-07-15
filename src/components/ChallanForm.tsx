@@ -539,7 +539,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           uom: p.unit || it.uom || "Nos",
                           model_no: p.model || "",
                           hsn: (p as any).hsn || it.hsn || "",
-                          unit_price: it.unit_price || (p.default_price != null ? String(p.default_price) : ""),
+                          // Always refresh unit price from the latest Goods Master value
+                          // whenever the product (Goods Model) is picked or changed.
+                          unit_price: p.default_price != null ? String(p.default_price) : "",
                           weight_kg: it.weight_kg || (p.weight_kg != null ? String(p.weight_kg) : ""),
                         })}
                       />
@@ -623,7 +625,13 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           </div>
                           <div className="min-w-[160px]">
                             <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Unit Price</label>
-                            <Input type="number" min="0" value={it.unit_price || ""} onChange={(e) => updateItem(i, { unit_price: e.target.value })} />
+                            <Input
+                              type="number"
+                              min="0"
+                              value={it.unit_price || ""}
+                              placeholder={it.product_id ? "No price set in Goods Master" : "Select product first"}
+                              onChange={(e) => updateItem(i, { unit_price: e.target.value })}
+                            />
                           </div>
                           <div className="min-w-[120px]">
                             <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Weight (KG)</label>
@@ -652,7 +660,13 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           </div>
                           <div className="min-w-[160px]">
                             <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Unit Price</label>
-                            <Input type="number" min="0" value={it.unit_price || ""} onChange={(e) => updateItem(i, { unit_price: e.target.value })} />
+                            <Input
+                              type="number"
+                              min="0"
+                              value={it.unit_price || ""}
+                              placeholder={it.product_id ? "No price set in Goods Master" : "Select product first"}
+                              onChange={(e) => updateItem(i, { unit_price: e.target.value })}
+                            />
                           </div>
                           <div className="min-w-[120px]">
                             <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Weight (KG)</label>
