@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type ChallanItem = {
+  product_id?: string;
   part_no: string;
   part_name: string;
   description: string;
