@@ -130,15 +130,16 @@ function IndentDetail() {
     navigate({ to: "/indent" });
   };
 
-  const generateChallan = async () => {
+  const generateChallan = async (only?: OracleBlock) => {
     if (!i) return;
     // Aggregate exchange rows across all oracles as the material being sent to the customer.
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
-    const oracles = i.oracles_data || [];
+    const oracles = only ? [only] : (i.oracles_data || []);
     const items: Array<{
       product_id?: string; part_no: string; part_name: string; description: string;
       uom: string; qty: string; batch_no: string; model_no?: string; serial_no?: string;
       oracle_no?: string; hsn?: string; unit_price?: string; weight_kg?: string;
+      defective_model?: string; defective_serial?: string; good_model?: string; good_serial?: string;
     }> = [];
     // Collect models so we can enrich rows with product master details in one query.
     const modelSet = new Set<string>();
@@ -187,6 +188,10 @@ function IndentDetail() {
           hsn: prod?.hsn || undefined,
           unit_price: prod?.default_price != null ? String(prod.default_price) : undefined,
           weight_kg: prod?.weight_kg != null ? String(prod.weight_kg) : undefined,
+          good_model: model,
+          good_serial: serial,
+          defective_model: defRow?.def_model_no || undefined,
+          defective_serial: defRow?.def_serial_no || undefined,
         });
       }
     }
@@ -221,11 +226,11 @@ function IndentDetail() {
     navigate({ to: "/challan/customer/new" });
   };
 
-  const generateGrn = async () => {
+  const generateGrn = async (only?: OracleBlock) => {
     if (!i) return;
     // Aggregate received rows across all oracles — defective units taken back from the customer.
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
-    const oracles = i.oracles_data || [];
+    const oracles = only ? [only] : (i.oracles_data || []);
     const items: Array<{
       product_id?: string; part_no: string; part_name: string; description: string; uom: string;
       qty_received: string; qty_accepted: string; qty_rejected: string;
