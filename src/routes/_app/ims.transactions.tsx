@@ -5,28 +5,35 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import {
-  listTransactions, createTransaction, listWarehouses,
+  listTransactions, createTransaction, deleteTransaction, listWarehouses,
   TXN_TYPE_LABEL, type Transaction, type WarehouseLite, type TxnType,
 } from "@/lib/ims";
 import { ImsModelPartPicker } from "@/components/ImsModelPartPicker";
 import { ImsSerialPicker } from "@/components/ImsSerialPicker";
+import { useIsAdmin } from "@/lib/useRole";
 
 export const Route = createFileRoute("/_app/ims/transactions")({
   component: TransactionsList,
 });
 
 function TransactionsList() {
+  const { isAdmin } = useIsAdmin();
   const [rows, setRows] = useState<Transaction[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [q, setQ] = useState("");
   const [type, setType] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [openNew, setOpenNew] = useState(false);
+  const [deleting, setDeleting] = useState<Transaction | null>(null);
 
   async function load() {
     setLoading(true);
@@ -51,6 +58,16 @@ function TransactionsList() {
     const w = warehouses.find((x) => x.id === id);
     return w ? (w.type ? `${w.name} (${w.type})` : w.name) : "—";
   };
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    try {
+      await deleteTransaction(deleting.id);
+      toast.success("Transaction deleted");
+      setDeleting(null);
+      load();
+    } catch (e: any) { toast.error(e?.message || "Delete failed"); }
+  }
 
   return (
     <div className="space-y-4">
@@ -88,13 +105,14 @@ function TransactionsList() {
                 <th className="p-2">Qty</th>
                 <th className="p-2">Indent / Case</th>
                 <th className="p-2">Ref</th>
+                {isAdmin && <th className="p-2 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={9}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={isAdmin ? 10 : 9}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={9}>No transactions.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={isAdmin ? 10 : 9}>No transactions.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2 font-mono">{r.txn_no}</td>
@@ -110,6 +128,11 @@ function TransactionsList() {
                     {!r.indent_id && !r.oem_case_id ? "—" : null}
                   </td>
                   <td className="p-2 text-xs">{r.reference || "—"}</td>
+                  {isAdmin && (
+                    <td className="p-2 text-right whitespace-nowrap">
+                      <Button variant="ghost" size="icon" onClick={() => setDeleting(r)} title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -118,6 +141,20 @@ function TransactionsList() {
       </Card>
 
       <NewTxnDialog open={openNew} onOpenChange={setOpenNew} warehouses={warehouses} onSaved={load} />
+      <AlertDialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this transaction?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove transaction <span className="font-mono">{deleting?.txn_no}</span>. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
