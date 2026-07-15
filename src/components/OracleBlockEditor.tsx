@@ -31,8 +31,8 @@ export function OracleBlockEditor({
   isAdmin?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
-  onGenerateChallan?: () => void;
-  onGenerateGrn?: () => void;
+  onGenerateChallan?: (oracle: OracleBlock) => void;
+  onGenerateGrn?: (oracle: OracleBlock) => void;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -259,8 +259,8 @@ export function OracleBlockEditor({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={onGenerateChallan}
-                title="Create a new Delivery Challan prefilled from this Indent"
+                onClick={() => onGenerateChallan(value)}
+                title="Create a new Delivery Challan prefilled from this Oracle"
               >
                 <FileText className="h-4 w-4 mr-1" />Generate Delivery Challan
               </Button>
@@ -329,8 +329,8 @@ export function OracleBlockEditor({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={onGenerateGrn}
-                title="Create a new GRN prefilled from this Indent"
+                onClick={() => onGenerateGrn(value)}
+                title="Create a new GRN prefilled from this Oracle"
               >
                 <Receipt className="h-4 w-4 mr-1" />Generate GRN
               </Button>
