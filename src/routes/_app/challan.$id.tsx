@@ -174,7 +174,6 @@ function ChallanView() {
               <th style={{ width: 60 }}>HSN</th>
               <th style={{ width: 60 }}>Unit Price</th>
               <th style={{ width: 60 }}>Weight (Kg)</th>
-              {!isOem && <th style={{ width: 70 }}>Batch No</th>}
             </tr>
           </thead>
           <tbody>
@@ -210,13 +209,12 @@ function ChallanView() {
                   <td>{it.hsn || ""}</td>
                   <td style={{ textAlign: "right" }}>{it.unit_price || ""}</td>
                   <td style={{ textAlign: "right" }}>{it.weight_kg || ""}</td>
-                  {!isOem && <td>{it.batch_no || ""}</td>}
                 </tr>
               );
             })}
             {(() => {
               const totalCols = isOem ? 12 : 13;
-              const qtyColIndex = isOem ? 9 : 10; // 0-based index of Qty column
+              const qtyColIndex = isOem ? 8 : 9; // 0-based index of Qty column
               return (
                 <tr style={{ fontWeight: 700, background: "#f8fafc" }}>
                   <td colSpan={qtyColIndex} style={{ textAlign: "right" }}>Total Qty</td>
