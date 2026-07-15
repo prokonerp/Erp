@@ -152,6 +152,8 @@ function IndentDetail() {
       }
     }
     let prodByModel: Record<string, { id?: string; name?: string; model?: string; description?: string; unit?: string; hsn?: string; default_price?: number | null; weight_kg?: number | null }> = {};
+    const ticketModel = cleanModel(i.product_model || "");
+    if (ticketModel) modelSet.add(ticketModel);
     if (modelSet.size > 0) {
       const { data: prods } = await supabase.from("products")
         .select("id,name,model,description,unit,hsn,default_price,weight_kg")
@@ -160,6 +162,7 @@ function IndentDetail() {
         if (p?.model) prodByModel[p.model as string] = p;
       }
     }
+    const ticketProd = ticketModel ? prodByModel[ticketModel] : undefined;
     for (const o of oracles) {
       const rows = (o.exchange_rows && o.exchange_rows.length)
         ? o.exchange_rows
@@ -172,8 +175,10 @@ function IndentDetail() {
         if (!model && !serial && !qty) continue;
         const [maybeName, maybeModel] = (ex?.model_no || "").split("||");
         const defRow = o.defective_rows?.[ix];
-        const prod = model ? prodByModel[model] : undefined;
-        const partName = maybeName || prod?.name || defRow?.part_name || model;
+        // Product on the Challan should reflect the ticket's Product Model
+        // (from the Linked Ticket section), not the spare exchange model.
+        const prod = ticketProd || (model ? prodByModel[model] : undefined);
+        const partName = prod?.name || maybeName || defRow?.part_name || model;
         const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
         items.push({
           product_id: prod?.id,
