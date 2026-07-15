@@ -7,7 +7,6 @@ export type ChallanItem = {
   description: string;
   uom: string;
   qty: string;
-  batch_no: string;
   model_no?: string;
   serial_no?: string;
   // Unified DC fields (optional; used depending on DC Type)
@@ -73,7 +72,7 @@ export type DeliveryChallan = {
 };
 
 export const emptyItem = (): ChallanItem => ({
-  part_no: "", part_name: "", description: "", uom: "Nos", qty: "1", batch_no: "",
+  part_no: "", part_name: "", description: "", uom: "Nos", qty: "1",
   model_no: "", serial_no: "",
 });
 

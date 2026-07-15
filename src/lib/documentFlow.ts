@@ -87,7 +87,6 @@ function soItemToChallanItem(it: SoItem): ChallanItem {
     description: it.description || "",
     uom: it.unit || "Nos",
     qty: String(it.qty ?? ""),
-    batch_no: "",
     model_no: "",
     serial_no: "",
   };
