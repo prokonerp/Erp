@@ -166,6 +166,26 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
 
+  // Fetch Unit Price from Goods Master based on the entered Good Model.
+  // Matches products.model case-insensitively; falls back to sku.
+  const applyPriceFromModel = async (i: number, model: string) => {
+    const m = (model || "").trim();
+    if (!m) return;
+    const { data } = await supabase
+      .from("products")
+      .select("id,model,sku,default_price")
+      .or(`model.ilike.${m},sku.ilike.${m}`)
+      .limit(1)
+      .maybeSingle();
+    const row = data as { default_price?: number | null } | null;
+    if (row && row.default_price != null) {
+      updateItem(i, { unit_price: String(row.default_price) });
+    } else {
+      updateItem(i, { unit_price: "" });
+      toast.message(`No Unit Price set in Goods Master for model "${m}"`);
+    }
+  };
+
   const applyCustomer = (id: string | null, c: Customer | null) => {
     setPartyId(id);
     if (!c) {
