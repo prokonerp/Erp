@@ -149,7 +149,10 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       source_doc_date: (payload.source_doc_date as string) || f.source_doc_date,
       ticket_no: (payload.ticket_no as string) || f.ticket_no,
       internal_remarks: (payload.internal_remarks as string) || f.internal_remarks,
+      storage_location: (payload.storage_location as string) || f.storage_location,
     }));
+    const preWh = (payload.warehouse_id as string | null | undefined) || null;
+    if (preWh) setWarehouseId(preWh);
     if (customerId) {
       (async () => {
         const { data } = await supabase.from("customers").select("*").eq("id", customerId).maybeSingle();
