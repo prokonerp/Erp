@@ -7,7 +7,6 @@ export type ChallanItem = {
   description: string;
   uom: string;
   qty: string;
-  batch_no: string;
   model_no?: string;
   serial_no?: string;
   // Unified DC fields (optional; used depending on DC Type)
