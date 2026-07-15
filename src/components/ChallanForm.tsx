@@ -166,6 +166,26 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
 
+  // Fetch Unit Price from Goods Master based on the entered Good Model.
+  // Matches products.model case-insensitively; falls back to sku.
+  const applyPriceFromModel = async (i: number, model: string) => {
+    const m = (model || "").trim();
+    if (!m) return;
+    const { data } = await supabase
+      .from("products")
+      .select("id,model,sku,default_price")
+      .or(`model.ilike.${m},sku.ilike.${m}`)
+      .limit(1)
+      .maybeSingle();
+    const row = data as { default_price?: number | null } | null;
+    if (row && row.default_price != null) {
+      updateItem(i, { unit_price: String(row.default_price) });
+    } else {
+      updateItem(i, { unit_price: "" });
+      toast.message(`No Unit Price set in Goods Master for model "${m}"`);
+    }
+  };
+
   const applyCustomer = (id: string | null, c: Customer | null) => {
     setPartyId(id);
     if (!c) {
@@ -539,9 +559,8 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           uom: p.unit || it.uom || "Nos",
                           model_no: p.model || "",
                           hsn: (p as any).hsn || it.hsn || "",
-                          // Always refresh unit price from the latest Goods Master value
-                          // whenever the product (Goods Model) is picked or changed.
-                          unit_price: p.default_price != null ? String(p.default_price) : "",
+                          // Note: Unit Price is derived from the "Good Model" field below,
+                          // not from the Product picker.
                           weight_kg: it.weight_kg || (p.weight_kg != null ? String(p.weight_kg) : ""),
                         })}
                       />
@@ -557,7 +576,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                     {isOem ? (
                       <>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                          <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
+                          <Input
+                            value={it.model_no || ""}
+                            onChange={(e) => updateItem(i, { model_no: e.target.value })}
+                            onBlur={(e) => applyPriceFromModel(i, e.target.value)}
+                          />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[180px]">
                           <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
@@ -587,7 +610,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                          <Input value={it.good_model || ""} onChange={(e) => updateItem(i, { good_model: e.target.value })} />
+                          <Input
+                            value={it.good_model || ""}
+                            onChange={(e) => updateItem(i, { good_model: e.target.value })}
+                            onBlur={(e) => applyPriceFromModel(i, e.target.value)}
+                          />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
                           <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value })} />
@@ -629,7 +656,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                               type="number"
                               min="0"
                               value={it.unit_price || ""}
-                              placeholder={it.product_id ? "No price set in Goods Master" : "Select product first"}
+                              placeholder={(it.model_no || "").trim() ? "No price set in Goods Master" : "Enter Model No first"}
                               onChange={(e) => updateItem(i, { unit_price: e.target.value })}
                             />
                           </div>
@@ -664,7 +691,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                               type="number"
                               min="0"
                               value={it.unit_price || ""}
-                              placeholder={it.product_id ? "No price set in Goods Master" : "Select product first"}
+                              placeholder={(it.good_model || "").trim() ? "No price set in Goods Master" : "Enter Good Model first"}
                               onChange={(e) => updateItem(i, { unit_price: e.target.value })}
                             />
                           </div>
