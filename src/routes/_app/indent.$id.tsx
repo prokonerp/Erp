@@ -192,6 +192,7 @@ function IndentDetail() {
           good_serial: serial,
           defective_model: defRow?.def_model_no || undefined,
           defective_serial: defRow?.def_serial_no || undefined,
+          oem_ref_id: i.oem_case_id || undefined,
         });
       }
     }
