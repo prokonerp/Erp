@@ -5,22 +5,29 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import {
-  listStock, createStock, listWarehouses,
+  listStock, createStock, updateStock, deleteStock, listWarehouses,
   STOCK_STATUS_LABEL, STOCK_TYPE_LABEL,
   type StockItem, type WarehouseLite,
 } from "@/lib/ims";
 import { ImsModelPartPicker } from "@/components/ImsModelPartPicker";
+import { useIsAdmin } from "@/lib/useRole";
 
 export const Route = createFileRoute("/_app/ims/stock")({
   component: StockLedger,
 });
 
 function StockLedger() {
+  const { isAdmin } = useIsAdmin();
   const [rows, setRows] = useState<StockItem[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [q, setQ] = useState("");
@@ -28,6 +35,8 @@ function StockLedger() {
   const [status, setStatus] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [openNew, setOpenNew] = useState(false);
+  const [editing, setEditing] = useState<StockItem | null>(null);
+  const [deleting, setDeleting] = useState<StockItem | null>(null);
 
   async function load() {
     setLoading(true);
@@ -50,6 +59,18 @@ function StockLedger() {
   }, [rows, q, type, status]);
 
   const whName = (id: string | null) => warehouses.find((w) => w.id === id)?.name || "—";
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    try {
+      await deleteStock(deleting.id);
+      toast.success("Stock item deleted");
+      setDeleting(null);
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || "Delete failed");
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -94,27 +115,38 @@ function StockLedger() {
                 <th className="p-2">Model / Part Name</th>
                 <th className="p-2">Model / Part No</th>
                 <th className="p-2">Model / Part Serial No</th>
+                <th className="p-2">Qty</th>
                 <th className="p-2">Warehouse</th>
                 <th className="p-2">Type</th>
                 <th className="p-2">Status</th>
+                <th className="p-2">Opening</th>
                 <th className="p-2">Ticket / Indent</th>
+                {isAdmin && <th className="p-2 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={8}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={isAdmin ? 11 : 10}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={8}>No stock items.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={isAdmin ? 11 : 10}>No stock items.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.id} className="border-t">
                   <td className="p-2">{r.oem || "—"}</td>
                   <td className="p-2">{r.part_name}</td>
                   <td className="p-2">{r.part_model_no || "—"}</td>
                   <td className="p-2 font-mono">{r.part_serial_no || "—"}</td>
+                  <td className="p-2">{r.qty ?? 1}</td>
                   <td className="p-2">{whName(r.warehouse_id)}</td>
                   <td className="p-2"><Badge variant={r.stock_type === "good" ? "default" : "secondary"}>{STOCK_TYPE_LABEL[r.stock_type]}</Badge></td>
                   <td className="p-2"><Badge variant="outline">{STOCK_STATUS_LABEL[r.stock_status]}</Badge></td>
+                  <td className="p-2">{r.opening_stock ? <Badge>Opening</Badge> : <span className="text-muted-foreground">—</span>}</td>
                   <td className="p-2 font-mono text-xs">{r.ticket_id || r.indent_id || "—"}</td>
+                  {isAdmin && (
+                    <td className="p-2 text-right whitespace-nowrap">
+                      <Button variant="ghost" size="icon" onClick={() => setEditing(r)} title="Edit"><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => setDeleting(r)} title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -122,27 +154,74 @@ function StockLedger() {
         </CardContent>
       </Card>
 
-      <NewStockDialog open={openNew} onOpenChange={setOpenNew} warehouses={warehouses} onSaved={load} />
+      <StockDialog open={openNew} onOpenChange={setOpenNew} warehouses={warehouses} onSaved={load} />
+      <StockDialog
+        open={!!editing}
+        onOpenChange={(v) => { if (!v) setEditing(null); }}
+        warehouses={warehouses}
+        onSaved={load}
+        editItem={editing}
+      />
+      <AlertDialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this stock item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <span className="font-medium">{deleting?.part_name}</span>
+              {deleting?.part_serial_no ? ` (SN: ${deleting.part_serial_no})` : ""} from inventory. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-function NewStockDialog({ open, onOpenChange, warehouses, onSaved }: {
-  open: boolean; onOpenChange: (v: boolean) => void; warehouses: WarehouseLite[]; onSaved: () => void;
+function StockDialog({ open, onOpenChange, warehouses, onSaved, editItem }: {
+  open: boolean; onOpenChange: (v: boolean) => void; warehouses: WarehouseLite[]; onSaved: () => void; editItem?: StockItem | null;
 }) {
-  const [form, setForm] = useState({
-    product_id: "", product_type: "", oem: "", category: "", part_name: "", part_model_no: "", part_serial_no: "",
-    warehouse_id: "", stock_type: "good", oem_case_id: "", customer_name: "", notes: "",
-  });
+  const emptyForm = {
+    product_id: "", product_type: "", oem: "", category: "", part_name: "",
+    part_model_no: "", part_serial_no: "", warehouse_id: "", stock_type: "good",
+    qty: "1", opening_stock: false,
+  };
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const isEdit = !!editItem;
 
-  function set<K extends keyof typeof form>(k: K, v: string) { setForm((f) => ({ ...f, [k]: v })); }
+  useEffect(() => {
+    if (open) {
+      if (editItem) {
+        setForm({
+          product_id: "", product_type: "",
+          oem: editItem.oem || "",
+          category: editItem.category || "",
+          part_name: editItem.part_name || "",
+          part_model_no: editItem.part_model_no || "",
+          part_serial_no: editItem.part_serial_no || "",
+          warehouse_id: editItem.warehouse_id || "",
+          stock_type: editItem.stock_type,
+          qty: String(editItem.qty ?? 1),
+          opening_stock: !!editItem.opening_stock,
+        });
+      } else {
+        setForm(emptyForm);
+      }
+    }
+  }, [open, editItem]);
+
+  function set<K extends keyof typeof form>(k: K, v: any) { setForm((f) => ({ ...f, [k]: v })); }
 
   async function save() {
     if (!form.part_name.trim()) { toast.error("Model / Part Name is required"); return; }
+    const qtyNum = Math.max(1, Math.floor(Number(form.qty) || 1));
     setSaving(true);
     try {
-      await createStock({
+      const payload: Partial<StockItem> = {
         oem: form.oem || null,
         category: form.category || null,
         part_name: form.part_name.trim(),
@@ -150,24 +229,28 @@ function NewStockDialog({ open, onOpenChange, warehouses, onSaved }: {
         part_serial_no: form.part_serial_no || null,
         warehouse_id: form.warehouse_id || null,
         stock_type: form.stock_type as "good" | "defective",
-        oem_case_id: form.oem_case_id || null,
-        customer_name: form.customer_name || null,
-        notes: form.notes || null,
-      });
-      toast.success("Stock item created");
+        qty: qtyNum,
+        opening_stock: form.opening_stock,
+      };
+      if (isEdit && editItem) {
+        await updateStock(editItem.id, payload);
+        toast.success("Stock item updated");
+      } else {
+        await createStock(payload);
+        toast.success("Stock item created");
+      }
       onOpenChange(false);
-      setForm({ product_id: "", product_type: "", oem: "", category: "", part_name: "", part_model_no: "", part_serial_no: "",
-        warehouse_id: "", stock_type: "good", oem_case_id: "", customer_name: "", notes: "" });
+      setForm(emptyForm);
       onSaved();
     } catch (e: any) {
-      toast.error(e?.message || "Failed to create");
+      toast.error(e?.message || "Failed to save");
     } finally { setSaving(false); }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>New Stock Entry</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{isEdit ? "Edit Stock Entry" : "New Stock Entry"}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <Label>Model / Part *</Label>
@@ -215,13 +298,18 @@ function NewStockDialog({ open, onOpenChange, warehouses, onSaved }: {
               </SelectContent>
             </Select>
           </div>
-          <div><Label>OEM Case ID</Label><Input value={form.oem_case_id} onChange={(e) => set("oem_case_id", e.target.value)} /></div>
-          <div><Label>Customer Name</Label><Input value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} /></div>
-          <div className="col-span-2"><Label>Notes</Label><Input value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+          <div>
+            <Label>Qty *</Label>
+            <Input type="number" min={1} step={1} value={form.qty} onChange={(e) => set("qty", e.target.value)} />
+          </div>
+          <div className="flex items-center gap-3 pt-6">
+            <Switch id="opening-stock" checked={form.opening_stock} onCheckedChange={(v) => set("opening_stock", v)} />
+            <Label htmlFor="opening-stock" className="cursor-pointer">Opening Stock</Label>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+          <Button onClick={save} disabled={saving}>{saving ? "Saving…" : (isEdit ? "Update" : "Save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
