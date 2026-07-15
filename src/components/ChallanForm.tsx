@@ -493,12 +493,12 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         }
       >
         <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
-          <table className="w-full text-sm border-separate border-spacing-0 min-w-[1500px]">
+          <table className="w-full text-sm border-separate border-spacing-0 min-w-[1400px]">
             <thead className="bg-muted/70">
               <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                <th className="px-3 py-2 w-10 text-center">#</th>
-                <th className="px-3 py-2 min-w-[260px]">Product</th>
-                <th className="px-3 py-2 min-w-[140px]">OEM Ref ID</th>
+                <th rowSpan={2} className="px-3 py-2 w-10 text-center align-middle">#</th>
+                <th rowSpan={2} className="px-3 py-2 min-w-[260px] align-middle">Product</th>
+                <th rowSpan={2} className="px-3 py-2 min-w-[140px] align-middle">OEM Ref ID</th>
                 {isOem ? (
                   <>
                     <th className="px-3 py-2 min-w-[160px]">Model</th>
@@ -515,116 +515,154 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                     <th className="px-3 py-2 min-w-[160px]">Good Sr No</th>
                   </>
                 )}
-                <th className="px-3 py-2 w-20">UOM</th>
-                <th className="px-3 py-2 w-20">Qty</th>
-                <th className="px-3 py-2 w-24">HSN</th>
-                <th className="px-3 py-2 w-28">Unit Price</th>
-                <th className="px-3 py-2 w-24">Weight (KG)</th>
-                {isOem && <th className="px-3 py-2 min-w-[180px]">Good Return Reason</th>}
-                <th className="px-3 py-2 w-10"></th>
+                <th rowSpan={2} className="px-3 py-2 w-10 align-middle"></th>
+              </tr>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                <th colSpan={isOem ? 4 : 5} className="px-3 py-1.5 bg-muted/50 text-center text-[10px] text-muted-foreground/70">
+                  Line details
+                </th>
               </tr>
             </thead>
             <tbody>
               {items.map((it, i) => (
-                <tr key={i} className="border-t border-border/60 transition-colors hover:bg-muted/25">
-                  <td className="px-3 py-2 text-center text-xs text-muted-foreground border-t border-border/60 align-top">{i + 1}</td>
-                  <td className="px-3 py-2 align-top border-t border-border/60 min-w-[260px]">
-                    <ProductMasterPicker
-                      value={it.product_id}
-                      onPick={(p) => updateItem(i, {
-                        product_id: p.id,
-                        part_no: p.sku || p.model || "",
-                        part_name: p.name,
-                        description: p.description || "",
-                        uom: p.unit || it.uom || "Nos",
-                        model_no: p.model || "",
-                        hsn: (p as any).hsn || it.hsn || "",
-                        unit_price: it.unit_price || (p.default_price != null ? String(p.default_price) : ""),
-                        weight_kg: it.weight_kg || (p.weight_kg != null ? String(p.weight_kg) : ""),
-                      })}
-                    />
-                    {!it.product_id && (it.part_no || it.part_name) && (
-                      <div className="mt-1 text-[11px] text-muted-foreground truncate">
-                        {[it.part_no, it.part_name].filter(Boolean).join(" — ")}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
-                    <Input value={it.oem_ref_id || ""} onChange={(e) => updateItem(i, { oem_ref_id: e.target.value })} />
-                  </td>
-                  {isOem ? (
-                    <>
-                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                        <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[180px]">
-                        <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
-                        <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2 border-t border-border/60 align-top w-28">
-                        <Select value={it.stock_type || ""} onValueChange={(v) => updateItem(i, { stock_type: v })}>
-                          <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Good">Good</SelectItem>
-                            <SelectItem value="Defective">Defective</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                        <Input value={it.defective_model || ""} onChange={(e) => updateItem(i, { defective_model: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                        <Input value={it.defective_serial || ""} onChange={(e) => updateItem(i, { defective_serial: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
-                        <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                        <Input value={it.good_model || ""} onChange={(e) => updateItem(i, { good_model: e.target.value })} />
-                      </td>
-                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                        <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value })} />
-                      </td>
-                    </>
-                  )}
-                  <td className="px-3 py-2 border-t border-border/60 align-top w-20">
-                    <Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} />
-                  </td>
-                  <td className="px-3 py-2 border-t border-border/60 align-top w-20">
-                    <Input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
-                  </td>
-                  <td className="px-3 py-2 border-t border-border/60 align-top w-24">
-                    <Input value={it.hsn || ""} onChange={(e) => updateItem(i, { hsn: e.target.value })} />
-                  </td>
-                  <td className="px-3 py-2 border-t border-border/60 align-top w-28">
-                    <Input type="number" min="0" value={it.unit_price || ""} onChange={(e) => updateItem(i, { unit_price: e.target.value })} />
-                  </td>
-                  <td className="px-3 py-2 border-t border-border/60 align-top w-24">
-                    <Input type="number" min="0" value={it.weight_kg || ""} onChange={(e) => updateItem(i, { weight_kg: e.target.value })} />
-                  </td>
-                  {isOem && (
-                    <td className="px-3 py-2 border-t border-border/60 align-top min-w-[180px]">
-                      <Input value={it.good_return_reason || ""} onChange={(e) => updateItem(i, { good_return_reason: e.target.value })} />
+                <>
+                  <tr key={`${i}-top`} className="border-t border-border/60 transition-colors hover:bg-muted/25">
+                    <td rowSpan={2} className="px-3 py-2 text-center text-xs text-muted-foreground border-t border-border/60 align-middle w-10">{i + 1}</td>
+                    <td className="px-3 py-2 align-top border-t border-border/60 min-w-[260px]">
+                      <ProductMasterPicker
+                        value={it.product_id}
+                        onPick={(p) => updateItem(i, {
+                          product_id: p.id,
+                          part_no: p.sku || p.model || "",
+                          part_name: p.name,
+                          description: p.description || "",
+                          uom: p.unit || it.uom || "Nos",
+                          model_no: p.model || "",
+                          hsn: (p as any).hsn || it.hsn || "",
+                          unit_price: it.unit_price || (p.default_price != null ? String(p.default_price) : ""),
+                          weight_kg: it.weight_kg || (p.weight_kg != null ? String(p.weight_kg) : ""),
+                        })}
+                      />
+                      {!it.product_id && (it.part_no || it.part_name) && (
+                        <div className="mt-1 text-[11px] text-muted-foreground truncate">
+                          {[it.part_no, it.part_name].filter(Boolean).join(" — ")}
+                        </div>
+                      )}
                     </td>
-                  )}
-                  <td className="px-3 py-2 border-t border-border/60 align-top text-right w-10">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setItems(items.filter((_, idx) => idx !== i))}
-                      disabled={items.length === 1}
-                      aria-label="Remove row"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </td>
-                </tr>
+                    <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
+                      <Input value={it.oem_ref_id || ""} onChange={(e) => updateItem(i, { oem_ref_id: e.target.value })} />
+                    </td>
+                    {isOem ? (
+                      <>
+                        <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
+                          <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
+                        </td>
+                        <td className="px-3 py-2 border-t border-border/60 align-top min-w-[180px]">
+                          <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
+                        </td>
+                        <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
+                          <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
+                        </td>
+                        <td className="px-3 py-2 border-t border-border/60 align-top w-28">
+                          <Select value={it.stock_type || ""} onValueChange={(v) => updateItem(i, { stock_type: v })}>
+                            <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Good">Good</SelectItem>
+                              <SelectItem value="Defective">Defective</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
+                          <Input value={it.defective_model || ""} onChange={(e) => updateItem(i, { defective_model: e.target.value })} />
+                        </td>
+                        <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
+                          <Input value={it.defective_serial || ""} onChange={(e) => updateItem(i, { defective_serial: e.target.value })} />
+                        </td>
+                        <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
+                          <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
+                        </td>
+                        <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
+                          <Input value={it.good_model || ""} onChange={(e) => updateItem(i, { good_model: e.target.value })} />
+                        </td>
+                        <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
+                          <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value })} />
+                        </td>
+                      </>
+                    )}
+                    <td rowSpan={2} className="px-3 py-2 border-t border-border/60 align-middle text-right w-10">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setItems(items.filter((_, idx) => idx !== i))}
+                        disabled={items.length === 1}
+                        aria-label="Remove row"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </td>
+                  </tr>
+                  <tr key={`${i}-bottom`} className="transition-colors hover:bg-muted/25">
+                    {isOem ? (
+                      <td colSpan={4} className="px-3 py-2 border-t border-dashed border-border/40 align-top bg-muted/15">
+                        <div className="grid grid-cols-6 gap-3">
+                          <div className="min-w-[120px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">UOM</label>
+                            <Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} />
+                          </div>
+                          <div className="min-w-[120px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Qty</label>
+                            <Input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
+                          </div>
+                          <div className="min-w-[140px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">HSN</label>
+                            <Input value={it.hsn || ""} onChange={(e) => updateItem(i, { hsn: e.target.value })} />
+                          </div>
+                          <div className="min-w-[160px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Unit Price</label>
+                            <Input type="number" min="0" value={it.unit_price || ""} onChange={(e) => updateItem(i, { unit_price: e.target.value })} />
+                          </div>
+                          <div className="min-w-[120px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Weight (KG)</label>
+                            <Input type="number" min="0" value={it.weight_kg || ""} onChange={(e) => updateItem(i, { weight_kg: e.target.value })} />
+                          </div>
+                          <div className="min-w-[180px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Good Return Reason</label>
+                            <Input value={it.good_return_reason || ""} onChange={(e) => updateItem(i, { good_return_reason: e.target.value })} />
+                          </div>
+                        </div>
+                      </td>
+                    ) : (
+                      <td colSpan={5} className="px-3 py-2 border-t border-dashed border-border/40 align-top bg-muted/15">
+                        <div className="grid grid-cols-5 gap-3">
+                          <div className="min-w-[120px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">UOM</label>
+                            <Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} />
+                          </div>
+                          <div className="min-w-[120px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Qty</label>
+                            <Input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
+                          </div>
+                          <div className="min-w-[140px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">HSN</label>
+                            <Input value={it.hsn || ""} onChange={(e) => updateItem(i, { hsn: e.target.value })} />
+                          </div>
+                          <div className="min-w-[160px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Unit Price</label>
+                            <Input type="number" min="0" value={it.unit_price || ""} onChange={(e) => updateItem(i, { unit_price: e.target.value })} />
+                          </div>
+                          <div className="min-w-[120px]">
+                            <label className="block text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Weight (KG)</label>
+                            <Input type="number" min="0" value={it.weight_kg || ""} onChange={(e) => updateItem(i, { weight_kg: e.target.value })} />
+                          </div>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                </>
               ))}
             </tbody>
           </table>
