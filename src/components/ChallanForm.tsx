@@ -559,9 +559,8 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           uom: p.unit || it.uom || "Nos",
                           model_no: p.model || "",
                           hsn: (p as any).hsn || it.hsn || "",
-                          // Always refresh unit price from the latest Goods Master value
-                          // whenever the product (Goods Model) is picked or changed.
-                          unit_price: p.default_price != null ? String(p.default_price) : "",
+                          // Note: Unit Price is derived from the "Good Model" field below,
+                          // not from the Product picker.
                           weight_kg: it.weight_kg || (p.weight_kg != null ? String(p.weight_kg) : ""),
                         })}
                       />
@@ -577,7 +576,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                     {isOem ? (
                       <>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                          <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
+                          <Input
+                            value={it.model_no || ""}
+                            onChange={(e) => updateItem(i, { model_no: e.target.value })}
+                            onBlur={(e) => applyPriceFromModel(i, e.target.value)}
+                          />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[180px]">
                           <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
@@ -607,7 +610,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                          <Input value={it.good_model || ""} onChange={(e) => updateItem(i, { good_model: e.target.value })} />
+                          <Input
+                            value={it.good_model || ""}
+                            onChange={(e) => updateItem(i, { good_model: e.target.value })}
+                            onBlur={(e) => applyPriceFromModel(i, e.target.value)}
+                          />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
                           <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value })} />
