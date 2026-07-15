@@ -56,9 +56,23 @@ function AuthPage() {
           <CardDescription>Sign in to continue</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 pt-2">
-          <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-          <Button className="w-full" onClick={signIn} disabled={busy}>Sign in</Button>
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              signIn();
+            }}
+          >
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+            <Button className="w-full" type="submit" disabled={busy}>Sign in</Button>
+          </form>
         </CardContent>
       </Card>
     </div>
