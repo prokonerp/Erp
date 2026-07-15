@@ -50,6 +50,8 @@ export type StockItem = {
   customer_name: string | null;
   transaction_ref: string | null;
   notes: string | null;
+  qty: number;
+  opening_stock: boolean;
   created_by: string | null;
   modified_by: string | null;
   created_at: string;
@@ -198,6 +200,11 @@ export async function updateStock(id: string, patch: Partial<StockItem>): Promis
   if (error) throw error;
 }
 
+export async function deleteStock(id: string): Promise<void> {
+  const { error } = await sb.from("ims_stock_items").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function listTransactions(): Promise<Transaction[]> {
   const { data, error } = await sb.from("ims_transactions").select("*").order("txn_date", { ascending: false }).limit(500);
   if (error) throw error;
@@ -208,6 +215,16 @@ export async function createTransaction(input: Partial<Transaction>): Promise<Tr
   const { data, error } = await sb.from("ims_transactions").insert(input).select("*").single();
   if (error) throw error;
   return data as Transaction;
+}
+
+export async function updateTransaction(id: string, patch: Partial<Transaction>): Promise<void> {
+  const { error } = await sb.from("ims_transactions").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteTransaction(id: string): Promise<void> {
+  const { error } = await sb.from("ims_transactions").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export async function getStockHistory(stockId: string): Promise<Transaction[]> {
@@ -239,6 +256,11 @@ export async function updateTransfer(id: string, patch: Partial<Transfer>): Prom
   if (error) throw error;
 }
 
+export async function deleteTransfer(id: string): Promise<void> {
+  const { error } = await sb.from("ims_transfers").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function listReservations(): Promise<Reservation[]> {
   const { data, error } = await sb.from("ims_reservations").select("*").order("reserved_at", { ascending: false });
   if (error) throw error;
@@ -253,6 +275,11 @@ export async function createReservation(input: Partial<Reservation>): Promise<Re
 
 export async function updateReservation(id: string, patch: Partial<Reservation>): Promise<void> {
   const { error } = await sb.from("ims_reservations").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteReservation(id: string): Promise<void> {
+  const { error } = await sb.from("ims_reservations").delete().eq("id", id);
   if (error) throw error;
 }
 

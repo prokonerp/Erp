@@ -1335,9 +1335,11 @@ export type Database = {
           notes: string | null
           oem: string | null
           oem_case_id: string | null
+          opening_stock: boolean
           part_model_no: string | null
           part_name: string
           part_serial_no: string | null
+          qty: number
           stock_status: Database["public"]["Enums"]["ims_stock_status"]
           stock_type: Database["public"]["Enums"]["ims_stock_type"]
           ticket_id: string | null
@@ -1358,9 +1360,11 @@ export type Database = {
           notes?: string | null
           oem?: string | null
           oem_case_id?: string | null
+          opening_stock?: boolean
           part_model_no?: string | null
           part_name: string
           part_serial_no?: string | null
+          qty?: number
           stock_status?: Database["public"]["Enums"]["ims_stock_status"]
           stock_type?: Database["public"]["Enums"]["ims_stock_type"]
           ticket_id?: string | null
@@ -1381,9 +1385,11 @@ export type Database = {
           notes?: string | null
           oem?: string | null
           oem_case_id?: string | null
+          opening_stock?: boolean
           part_model_no?: string | null
           part_name?: string
           part_serial_no?: string | null
+          qty?: number
           stock_status?: Database["public"]["Enums"]["ims_stock_status"]
           stock_type?: Database["public"]["Enums"]["ims_stock_type"]
           ticket_id?: string | null

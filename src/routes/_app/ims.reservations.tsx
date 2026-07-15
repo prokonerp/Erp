@@ -3,16 +3,24 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { listReservations, updateReservation, type Reservation } from "@/lib/ims";
+import { listReservations, updateReservation, deleteReservation, type Reservation } from "@/lib/ims";
+import { useIsAdmin } from "@/lib/useRole";
 
 export const Route = createFileRoute("/_app/ims/reservations")({
   component: ReservationsList,
 });
 
 function ReservationsList() {
+  const { isAdmin } = useIsAdmin();
   const [rows, setRows] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<Reservation | null>(null);
 
   async function load() {
     setLoading(true);
@@ -28,7 +36,18 @@ function ReservationsList() {
     } catch (e: any) { toast.error(e?.message || "Failed"); }
   }
 
+  async function confirmDelete() {
+    if (!deleting) return;
+    try {
+      await deleteReservation(deleting.id);
+      toast.success("Reservation deleted");
+      setDeleting(null);
+      load();
+    } catch (e: any) { toast.error(e?.message || "Delete failed"); }
+  }
+
   return (
+    <>
     <Card>
       <CardHeader><CardTitle className="text-base">Stock Reservations</CardTitle></CardHeader>
       <CardContent className="p-0 overflow-x-auto">
@@ -60,6 +79,9 @@ function ReservationsList() {
                     <Button size="sm" variant="outline" onClick={() => change(r.id, "issued")}>Issue</Button>
                     <Button size="sm" variant="ghost" onClick={() => change(r.id, "released")}>Release</Button>
                   </>}
+                  {isAdmin && (
+                    <Button size="icon" variant="ghost" onClick={() => setDeleting(r)} title="Delete"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -67,5 +89,18 @@ function ReservationsList() {
         </table>
       </CardContent>
     </Card>
+    <AlertDialog open={!!deleting} onOpenChange={(v) => { if (!v) setDeleting(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this reservation?</AlertDialogTitle>
+          <AlertDialogDescription>This will permanently remove the reservation. This cannot be undone.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
