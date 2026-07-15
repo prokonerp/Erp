@@ -136,7 +136,7 @@ function IndentDetail() {
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
     const oracles = i.oracles_data || [];
     const items: Array<{
-      part_no: string; part_name: string; description: string;
+      product_id?: string; part_no: string; part_name: string; description: string;
       uom: string; qty: string; batch_no: string; model_no?: string; serial_no?: string;
       oracle_no?: string; hsn?: string; unit_price?: string; weight_kg?: string;
     }> = [];
@@ -149,10 +149,10 @@ function IndentDetail() {
         if (m) modelSet.add(m);
       }
     }
-    let prodByModel: Record<string, { name?: string; model?: string; description?: string; unit?: string; hsn?: string; default_price?: number | null; weight_kg?: number | null }> = {};
+    let prodByModel: Record<string, { id?: string; name?: string; model?: string; description?: string; unit?: string; hsn?: string; default_price?: number | null; weight_kg?: number | null }> = {};
     if (modelSet.size > 0) {
       const { data: prods } = await supabase.from("products")
-        .select("name,model,description,unit,hsn,default_price,weight_kg")
+        .select("id,name,model,description,unit,hsn,default_price,weight_kg")
         .in("model", Array.from(modelSet));
       for (const p of (prods || []) as any[]) {
         if (p?.model) prodByModel[p.model as string] = p;
@@ -174,6 +174,7 @@ function IndentDetail() {
         const partName = maybeName || prod?.name || defRow?.part_name || model;
         const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
         items.push({
+          product_id: prod?.id,
           part_no: maybeModel || model,
           part_name: partName,
           description: desc,
@@ -226,7 +227,7 @@ function IndentDetail() {
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
     const oracles = i.oracles_data || [];
     const items: Array<{
-      part_no: string; part_name: string; description: string; uom: string;
+      product_id?: string; part_no: string; part_name: string; description: string; uom: string;
       qty_received: string; qty_accepted: string; qty_rejected: string;
       batch_no: string; model_no?: string; serial_no?: string; condition?: string; remarks?: string;
     }> = [];
@@ -244,10 +245,10 @@ function IndentDetail() {
         }
       }
     }
-    let prodByModel: Record<string, { name?: string; description?: string; unit?: string; hsn?: string }> = {};
+    let prodByModel: Record<string, { id?: string; name?: string; description?: string; unit?: string; hsn?: string }> = {};
     if (modelSet.size > 0) {
       const { data: prods } = await supabase.from("products")
-        .select("name,model,description,unit,hsn")
+        .select("id,name,model,description,unit,hsn")
         .in("model", Array.from(modelSet));
       for (const p of (prods || []) as any[]) {
         if (p?.model) prodByModel[p.model as string] = p;
@@ -269,6 +270,7 @@ function IndentDetail() {
         const partName = maybeName || prod?.name || defRow?.part_name || model;
         const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
         items.push({
+          product_id: prod?.id,
           part_no: maybeModel || model,
           part_name: partName,
           description: desc,

@@ -4,6 +4,7 @@ export type GrnCategory = "customer" | "oem" | "general";
 export type GrnStatus = "Draft" | "Received" | "QC Pending" | "Approved" | "Rejected";
 
 export type GrnItem = {
+  product_id?: string;
   part_no: string;
   part_name: string;
   description: string;
