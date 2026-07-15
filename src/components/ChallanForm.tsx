@@ -656,7 +656,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                               type="number"
                               min="0"
                               value={it.unit_price || ""}
-                              placeholder={it.product_id ? "No price set in Goods Master" : "Select product first"}
+                              placeholder={(it.model_no || "").trim() ? "No price set in Goods Master" : "Enter Model No first"}
                               onChange={(e) => updateItem(i, { unit_price: e.target.value })}
                             />
                           </div>
@@ -691,7 +691,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                               type="number"
                               min="0"
                               value={it.unit_price || ""}
-                              placeholder={it.product_id ? "No price set in Goods Master" : "Select product first"}
+                              placeholder={(it.good_model || "").trim() ? "No price set in Goods Master" : "Enter Good Model first"}
                               onChange={(e) => updateItem(i, { unit_price: e.target.value })}
                             />
                           </div>
