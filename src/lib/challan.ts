@@ -72,7 +72,7 @@ export type DeliveryChallan = {
 };
 
 export const emptyItem = (): ChallanItem => ({
-  part_no: "", part_name: "", description: "", uom: "Nos", qty: "1", batch_no: "",
+  part_no: "", part_name: "", description: "", uom: "Nos", qty: "1",
   model_no: "", serial_no: "",
 });
 

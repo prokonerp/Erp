@@ -763,7 +763,6 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                       {isOem && <th className="border p-1">Serial</th>}
                       <th className="border p-1">UOM</th>
                       <th className="border p-1">Qty</th>
-                      <th className="border p-1">Batch</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -777,7 +776,6 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                         {isOem && <td className="border p-1">{it.serial_no}</td>}
                         <td className="border p-1">{it.uom}</td>
                         <td className="border p-1 text-right">{it.qty}</td>
-                        <td className="border p-1">{it.batch_no}</td>
                       </tr>
                     ))}
                   </tbody>
