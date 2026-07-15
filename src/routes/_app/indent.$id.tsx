@@ -178,6 +178,9 @@ function IndentDetail() {
         // Product on the Challan should reflect the ticket's Product Model
         // (from the Linked Ticket section), not the spare exchange model.
         const prod = ticketProd || (model ? prodByModel[model] : undefined);
+        // Unit price must come from the Material Exchange (Good) Model in the
+        // Product Master, not the ticket's parent product.
+        const exchangeProd = model ? prodByModel[model] : undefined;
         const partName = prod?.name || maybeName || defRow?.part_name || model;
         const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
         items.push({
@@ -192,7 +195,7 @@ function IndentDetail() {
           serial_no: serial,
           oracle_no: (o.oracle_no || "").trim() || undefined,
           hsn: prod?.hsn || undefined,
-          unit_price: prod?.default_price != null ? String(prod.default_price) : undefined,
+          unit_price: exchangeProd?.default_price != null ? String(exchangeProd.default_price) : undefined,
           weight_kg: prod?.weight_kg != null ? String(prod.weight_kg) : undefined,
           good_model: model,
           good_serial: serial,
