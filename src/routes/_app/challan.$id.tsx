@@ -147,43 +147,86 @@ function ChallanView() {
         </table>
 
         {/* Material table */}
-        <table style={{ marginBottom: 6 }}>
+        <table style={{ marginBottom: 6, fontSize: 10 }}>
           <thead style={{ background: "#eef2ff" }}>
             <tr>
-              <th style={{ width: 28 }}>Sr</th>
-              <th>Part Name</th>
-              {isOem ? <th>Model No</th> : <th>Part No</th>}
-              {isOem ? <th>Serial No</th> : <th>Description</th>}
-              <th style={{ width: 60 }}>UOM</th>
-              <th style={{ width: 50 }}>Qty</th>
-              {!isOem && <th style={{ width: 90 }}>Batch No</th>}
+              <th style={{ width: 24 }}>Sr</th>
+              <th>Product</th>
+              <th>OEM Ref ID</th>
+              {isOem ? (
+                <>
+                  <th>Model No</th>
+                  <th>Serial No</th>
+                  <th>Oracle #</th>
+                  <th>Stock Type</th>
+                </>
+              ) : (
+                <>
+                  <th>Defective Model</th>
+                  <th>Defective Sr No</th>
+                  <th>Oracle #</th>
+                  <th>Good Model</th>
+                  <th>Good Sr No</th>
+                </>
+              )}
+              <th style={{ width: 40 }}>UOM</th>
+              <th style={{ width: 40 }}>Qty</th>
+              <th style={{ width: 60 }}>HSN</th>
+              <th style={{ width: 60 }}>Unit Price</th>
+              <th style={{ width: 60 }}>Weight (Kg)</th>
+              {!isOem && <th style={{ width: 70 }}>Batch No</th>}
             </tr>
           </thead>
           <tbody>
-            {(c.items || []).map((it, i) => (
-              <tr key={i}>
-                <td style={{ textAlign: "center" }}>{i + 1}</td>
-                <td>{it.part_name}</td>
-                <td>{isOem ? (it.model_no || it.part_no) : it.part_no}</td>
-                <td>{isOem ? (it.serial_no || "") : it.description}</td>
-                <td style={{ textAlign: "center" }}>{it.uom}</td>
-                <td style={{ textAlign: "center" }}>{it.qty}</td>
-                {!isOem && <td>{it.batch_no}</td>}
-              </tr>
-            ))}
-            {Array.from({ length: Math.max(0, 3 - (c.items?.length || 0)) }).map((_, i) => (
-              <tr key={`e${i}`}>
-                <td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td>
-                {!isOem && <td></td>}
-              </tr>
-            ))}
-            <tr style={{ fontWeight: 700, background: "#f8fafc" }}>
-              <td colSpan={isOem ? 5 : 5} style={{ textAlign: "right" }}>Total Qty</td>
-              <td style={{ textAlign: "center" }}>
-                {(c.items || []).reduce((s, it) => s + (parseFloat(it.qty) || 0), 0)}
-              </td>
-              {!isOem && <td></td>}
-            </tr>
+            {(c.items || []).map((it, i) => {
+              const productLabel = [it.part_name, it.part_no].filter(Boolean).join(" — ");
+              const desc = it.description;
+              return (
+                <tr key={i}>
+                  <td style={{ textAlign: "center" }}>{i + 1}</td>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{productLabel}</div>
+                    {desc && <div style={{ fontSize: 9, color: "#555" }}>{desc}</div>}
+                  </td>
+                  <td>{it.oem_ref_id || ""}</td>
+                  {isOem ? (
+                    <>
+                      <td>{it.model_no || ""}</td>
+                      <td>{it.good_defective_serial || it.serial_no || ""}</td>
+                      <td>{it.oracle_no || ""}</td>
+                      <td>{it.stock_type || ""}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td>{it.defective_model || ""}</td>
+                      <td>{it.defective_serial || ""}</td>
+                      <td>{it.oracle_no || ""}</td>
+                      <td>{it.good_model || ""}</td>
+                      <td>{it.good_serial || ""}</td>
+                    </>
+                  )}
+                  <td style={{ textAlign: "center" }}>{it.uom}</td>
+                  <td style={{ textAlign: "center" }}>{it.qty}</td>
+                  <td>{it.hsn || ""}</td>
+                  <td style={{ textAlign: "right" }}>{it.unit_price || ""}</td>
+                  <td style={{ textAlign: "right" }}>{it.weight_kg || ""}</td>
+                  {!isOem && <td>{it.batch_no || ""}</td>}
+                </tr>
+              );
+            })}
+            {(() => {
+              const totalCols = isOem ? 12 : 13;
+              const qtyColIndex = isOem ? 9 : 10; // 0-based index of Qty column
+              return (
+                <tr style={{ fontWeight: 700, background: "#f8fafc" }}>
+                  <td colSpan={qtyColIndex} style={{ textAlign: "right" }}>Total Qty</td>
+                  <td style={{ textAlign: "center" }}>
+                    {(c.items || []).reduce((s, it) => s + (parseFloat(it.qty) || 0), 0)}
+                  </td>
+                  <td colSpan={totalCols - qtyColIndex - 1}></td>
+                </tr>
+              );
+            })()}
           </tbody>
         </table>
 
