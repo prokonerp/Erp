@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Printer, Download } from "lucide-react";
 import { fetchGrn, CATEGORY_LABEL, type Grn } from "@/lib/grn";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
+import { downloadElementAsPdf } from "@/lib/docPdf";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/grn/$id")({
@@ -24,6 +25,16 @@ function GrnView() {
   const isOem = g.category === "oem";
   const oemLogo = isOem ? (g.oem_logo_url ? { url: g.oem_logo_url, alt: g.source_name || "OEM" } : getOemLogo(g.source_name)) : null;
   const backTo = `/grn/${g.category}` as "/grn/customer" | "/grn/oem" | "/grn/general";
+
+  const handleDownload = async () => {
+    const el = document.getElementById("print-area");
+    if (!el) return;
+    try {
+      await downloadElementAsPdf(el, `GRN_${g.grn_no || g.id}.pdf`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate PDF");
+    }
+  };
 
   const totals = (g.items || []).reduce((acc, it) => {
     const q = parseFloat(it.qty_received ?? it.qty_accepted ?? "") || 0;
@@ -54,7 +65,14 @@ function GrnView() {
         <Link to={backTo}>
           <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
         </Link>
-        <Button onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print / PDF</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleDownload}>
+            <Download className="h-4 w-4 mr-1" />Download PDF
+          </Button>
+          <Button onClick={() => window.print()}>
+            <Printer className="h-4 w-4 mr-1" />Print
+          </Button>
+        </div>
       </div>
 
       <div id="print-area" className="bg-white text-black mx-auto shadow print:shadow-none" style={{ width: "190mm", minHeight: "277mm", padding: 0 }}>

@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Printer, Download } from "lucide-react";
 import { fetchChallan, type DeliveryChallan } from "@/lib/challan";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
+import { downloadElementAsPdf } from "@/lib/docPdf";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/challan/$id")({
@@ -23,6 +24,16 @@ function ChallanView() {
   if (!c) return <div className="text-muted-foreground">Loading…</div>;
   const isOem = c.doc_type === "oem";
   const oemLogo = isOem ? (c.oem_logo_url ? { url: c.oem_logo_url, alt: c.party_name || "OEM" } : getOemLogo(c.party_name)) : null;
+
+  const handleDownload = async () => {
+    const el = document.getElementById("print-area");
+    if (!el) return;
+    try {
+      await downloadElementAsPdf(el, `DC_${c.challan_no || c.id}.pdf`);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate PDF");
+    }
+  };
 
   return (
     <>
@@ -44,7 +55,14 @@ function ChallanView() {
         <Link to={isOem ? "/challan/oem" : "/challan/customer"}>
           <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
         </Link>
-        <Button onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print / PDF</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleDownload}>
+            <Download className="h-4 w-4 mr-1" />Download PDF
+          </Button>
+          <Button onClick={() => window.print()}>
+            <Printer className="h-4 w-4 mr-1" />Print
+          </Button>
+        </div>
       </div>
 
       <div id="print-area" className="bg-white text-black mx-auto shadow print:shadow-none" style={{ width: "190mm", minHeight: "277mm", padding: 0 }}>
