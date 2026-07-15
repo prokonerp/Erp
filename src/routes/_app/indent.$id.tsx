@@ -140,6 +140,7 @@ function IndentDetail() {
       uom: string; qty: string; batch_no: string; model_no?: string; serial_no?: string;
       oracle_no?: string; hsn?: string; unit_price?: string; weight_kg?: string;
       defective_model?: string; defective_serial?: string; good_model?: string; good_serial?: string;
+      oem_ref_id?: string;
     }> = [];
     // Collect models so we can enrich rows with product master details in one query.
     const modelSet = new Set<string>();
@@ -192,6 +193,7 @@ function IndentDetail() {
           good_serial: serial,
           defective_model: defRow?.def_model_no || undefined,
           defective_serial: defRow?.def_serial_no || undefined,
+          oem_ref_id: i.oem_case_id || undefined,
         });
       }
     }
