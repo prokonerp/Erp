@@ -1,0 +1,1 @@
+ALTER TABLE public.ims_stock_items ADD COLUMN IF NOT EXISTS qty integer NOT NULL DEFAULT 1; ALTER TABLE public.ims_stock_items ADD COLUMN IF NOT EXISTS opening_stock boolean NOT NULL DEFAULT false;
