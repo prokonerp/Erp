@@ -530,7 +530,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                   <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
                   <td className="px-2 py-1.5 align-top border-t border-border/60">
                     <ProductMasterPicker
+                      value={it.product_id}
                       onPick={(p) => updateItem(i, {
+                        product_id: p.id,
                         part_no: p.sku || p.model || "",
                         part_name: p.name,
                         description: p.description || "",
@@ -541,7 +543,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                         weight_kg: it.weight_kg || (p.weight_kg != null ? String(p.weight_kg) : ""),
                       })}
                     />
-                    {(it.part_no || it.part_name) && (
+                    {!it.product_id && (it.part_no || it.part_name) && (
                       <div className="mt-1 text-[11px] text-muted-foreground truncate">
                         {[it.part_no, it.part_name].filter(Boolean).join(" — ")}
                       </div>
