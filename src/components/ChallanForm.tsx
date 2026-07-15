@@ -492,43 +492,43 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           </Button>
         }
       >
-        <div className="overflow-x-auto -mx-2 sm:mx-0">
-          <table className="w-full text-sm border-separate border-spacing-0 min-w-[1100px]">
-            <thead className="sticky top-0 z-10 bg-muted/60">
-              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="px-2 py-1.5 w-10">#</th>
-                <th className="px-2 py-1.5 min-w-[220px]">Product</th>
-                <th className="px-2 py-1.5 w-32">OEM Ref ID</th>
+        <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+          <table className="w-full text-sm border-separate border-spacing-0 min-w-[1500px]">
+            <thead className="bg-muted/70">
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                <th className="px-3 py-2 w-10 text-center">#</th>
+                <th className="px-3 py-2 min-w-[260px]">Product</th>
+                <th className="px-3 py-2 min-w-[140px]">OEM Ref ID</th>
                 {isOem ? (
                   <>
-                    <th className="px-2 py-1.5 w-32">Model</th>
-                    <th className="px-2 py-1.5 w-40">Good/Defective Sr No</th>
-                    <th className="px-2 py-1.5 w-28">Oracle #</th>
-                    <th className="px-2 py-1.5 w-28">Stock Type</th>
+                    <th className="px-3 py-2 min-w-[160px]">Model</th>
+                    <th className="px-3 py-2 min-w-[180px]">Good/Defective Sr No</th>
+                    <th className="px-3 py-2 min-w-[140px]">Oracle #</th>
+                    <th className="px-3 py-2 w-28">Stock Type</th>
                   </>
                 ) : (
                   <>
-                    <th className="px-2 py-1.5 w-32">Defective Model</th>
-                    <th className="px-2 py-1.5 w-32">Defective Sr No</th>
-                    <th className="px-2 py-1.5 w-28">Oracle #</th>
-                    <th className="px-2 py-1.5 w-32">Good Model</th>
-                    <th className="px-2 py-1.5 w-32">Good Sr No</th>
+                    <th className="px-3 py-2 min-w-[160px]">Defective Model</th>
+                    <th className="px-3 py-2 min-w-[160px]">Defective Sr No</th>
+                    <th className="px-3 py-2 min-w-[140px]">Oracle #</th>
+                    <th className="px-3 py-2 min-w-[160px]">Good Model</th>
+                    <th className="px-3 py-2 min-w-[160px]">Good Sr No</th>
                   </>
                 )}
-                <th className="px-2 py-1.5 w-20">UOM</th>
-                <th className="px-2 py-1.5 w-20">Qty</th>
-                <th className="px-2 py-1.5 w-20">HSN</th>
-                <th className="px-2 py-1.5 w-24">Unit Price</th>
-                <th className="px-2 py-1.5 w-24">Weight (KG)</th>
-                {isOem && <th className="px-2 py-1.5 w-40">Good Return Reason</th>}
-                <th className="px-2 py-1.5 w-10"></th>
+                <th className="px-3 py-2 w-20">UOM</th>
+                <th className="px-3 py-2 w-20">Qty</th>
+                <th className="px-3 py-2 w-24">HSN</th>
+                <th className="px-3 py-2 w-28">Unit Price</th>
+                <th className="px-3 py-2 w-24">Weight (KG)</th>
+                {isOem && <th className="px-3 py-2 min-w-[180px]">Good Return Reason</th>}
+                <th className="px-3 py-2 w-10"></th>
               </tr>
             </thead>
             <tbody>
               {items.map((it, i) => (
-                <tr key={i} className="border-t border-border/60">
-                  <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
-                  <td className="px-2 py-1.5 align-top border-t border-border/60">
+                <tr key={i} className="border-t border-border/60 transition-colors hover:bg-muted/25">
+                  <td className="px-3 py-2 text-center text-xs text-muted-foreground border-t border-border/60 align-top">{i + 1}</td>
+                  <td className="px-3 py-2 align-top border-t border-border/60 min-w-[260px]">
                     <ProductMasterPicker
                       value={it.product_id}
                       onPick={(p) => updateItem(i, {
@@ -549,21 +549,21 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                       </div>
                     )}
                   </td>
-                  <td className="px-2 py-1.5 border-t border-border/60">
+                  <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
                     <Input value={it.oem_ref_id || ""} onChange={(e) => updateItem(i, { oem_ref_id: e.target.value })} />
                   </td>
                   {isOem ? (
                     <>
-                      <td className="px-2 py-1.5 border-t border-border/60">
+                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
                         <Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} />
                       </td>
-                      <td className="px-2 py-1.5 border-t border-border/60">
+                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[180px]">
                         <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
                       </td>
-                      <td className="px-2 py-1.5 border-t border-border/60">
+                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
                         <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
                       </td>
-                      <td className="px-2 py-1.5 border-t border-border/60">
+                      <td className="px-3 py-2 border-t border-border/60 align-top w-28">
                         <Select value={it.stock_type || ""} onValueChange={(v) => updateItem(i, { stock_type: v })}>
                           <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                           <SelectContent>
@@ -575,44 +575,44 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                     </>
                   ) : (
                     <>
-                      <td className="px-2 py-1.5 border-t border-border/60">
+                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
                         <Input value={it.defective_model || ""} onChange={(e) => updateItem(i, { defective_model: e.target.value })} />
                       </td>
-                      <td className="px-2 py-1.5 border-t border-border/60">
+                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
                         <Input value={it.defective_serial || ""} onChange={(e) => updateItem(i, { defective_serial: e.target.value })} />
                       </td>
-                      <td className="px-2 py-1.5 border-t border-border/60">
+                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
                         <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
                       </td>
-                      <td className="px-2 py-1.5 border-t border-border/60">
+                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
                         <Input value={it.good_model || ""} onChange={(e) => updateItem(i, { good_model: e.target.value })} />
                       </td>
-                      <td className="px-2 py-1.5 border-t border-border/60">
+                      <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
                         <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value })} />
                       </td>
                     </>
                   )}
-                  <td className="px-2 py-1.5 border-t border-border/60">
+                  <td className="px-3 py-2 border-t border-border/60 align-top w-20">
                     <Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} />
                   </td>
-                  <td className="px-2 py-1.5 border-t border-border/60">
+                  <td className="px-3 py-2 border-t border-border/60 align-top w-20">
                     <Input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
                   </td>
-                  <td className="px-2 py-1.5 border-t border-border/60">
+                  <td className="px-3 py-2 border-t border-border/60 align-top w-24">
                     <Input value={it.hsn || ""} onChange={(e) => updateItem(i, { hsn: e.target.value })} />
                   </td>
-                  <td className="px-2 py-1.5 border-t border-border/60">
+                  <td className="px-3 py-2 border-t border-border/60 align-top w-28">
                     <Input type="number" min="0" value={it.unit_price || ""} onChange={(e) => updateItem(i, { unit_price: e.target.value })} />
                   </td>
-                  <td className="px-2 py-1.5 border-t border-border/60">
+                  <td className="px-3 py-2 border-t border-border/60 align-top w-24">
                     <Input type="number" min="0" value={it.weight_kg || ""} onChange={(e) => updateItem(i, { weight_kg: e.target.value })} />
                   </td>
                   {isOem && (
-                    <td className="px-2 py-1.5 border-t border-border/60">
+                    <td className="px-3 py-2 border-t border-border/60 align-top min-w-[180px]">
                       <Input value={it.good_return_reason || ""} onChange={(e) => updateItem(i, { good_return_reason: e.target.value })} />
                     </td>
                   )}
-                  <td className="px-2 py-1.5 border-t border-border/60 text-right">
+                  <td className="px-3 py-2 border-t border-border/60 align-top text-right w-10">
                     <Button
                       type="button"
                       size="icon"
