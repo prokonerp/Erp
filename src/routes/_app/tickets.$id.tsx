@@ -24,6 +24,10 @@ import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { ComplaintPicker } from "@/components/ComplaintPicker";
 import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
+import { listIndentMapForTicket } from "@/lib/indent.functions";
+import { Eye } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
