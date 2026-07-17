@@ -22,7 +22,7 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/_app/indent/new")({
-  validateSearch: (s) => searchSchema.parse(s),
+  validateSearch: (s: unknown) => searchSchema.parse(s),
   component: NewIndent,
 });
 
