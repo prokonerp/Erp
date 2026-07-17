@@ -1,91 +1,86 @@
-# Sales Module — Incremental Hardening
+## Oracle #–Driven Indent Flow
 
-Scope: `crm.*` and `sales.*` routes plus `src/lib/{crm,sales,gst,documentFlow,salesOrders,invoicePdf}.ts`.
+Extend the existing OEM ticket → Indent flow so that each Oracle # on the defective parts grid drives its own action (View existing indent vs. Create), and add a Multi‑Oracle → Single Indent path. Existing backend logic (`buildOraclesFromDefectiveParts`, `set_indent_no`, `validate_indent_oem_ticket`, `syncTicketGoodPartsFromIndent`) stays intact.
 
-Guardrails (unchanged): GST engine (`gst.ts`), invoice/quote/SO numbering triggers, Invoice PDF renderer, Customer + Product masters. Business rules stay identical.
+### What changes for the user
 
-## Findings
+- Defective Parts table on the ticket page gains a **Select** checkbox and a per‑row **Action** column:
+  - Row has Oracle # + indent exists → **View Indent** (opens `/indent/$id`).
+  - Row has Oracle # but no indent → **Create Indent** (prefiltered to that oracle).
+  - Row has no Oracle # → **Create Indent** (blank oracle, manual entry allowed).
+- New **Create Combined Indent** button above the table, enabled when 2+ rows are checked → opens `/indent/new` with those oracles preselected and merged into a single indent.
+- Attempting to create a second indent for an already‑mapped Oracle # is blocked with a toast that offers to open the existing one.
 
-1. **No server-side pagination.** Every list uses `.limit(500 – 5000)` and filters in JS (`sales.invoices.index`, `sales.payments.index`, `crm.quotations`, `sales.orders`).
-2. **No debounce.** Search inputs re-render immediately; big lists re-filter on every keystroke.
-3. **No query cache.** Sales pages don't use TanStack Query — every mount refetches. `usePermissions()` is called per page and refetches on every mount.
-4. **Weak validation.** Payment amount, quotation totals, and quote/invoice metadata are inserted without zod parsing. No cap on notes/subject length.
-5. **Role checks missing on Sales routes.** New Invoice, Record Payment, Convert to SO rely on RLS alone; UI shows the buttons regardless of `can("Sales","create")`.
-6. **Duplicate submissions possible.** `Save`, `Create quote`, and `Convert to SO` don't lock during in-flight calls in a few places (`crm.quotations.tsx#create`, `crm.quotations.$id.tsx#convertToSo` locks partly, `sales.payments.new` locks OK).
-7. **No audit trail** for status transitions (quote sent → accepted, invoice cancelled, payment recorded).
-8. **Duplicate customer fetch.** `crm.quotations.tsx` prefetches every customer just to render the picker inside its own dialog; `CustomerPicker` already exists.
-9. **Optimistic UI absent** for status changes (safe places: quote status, invoice status change with rollback on error).
+### Database
 
-## Deliverables (incremental, ship-in-order)
+New mapping table so lookup is O(1) and multi‑oracle indents are first‑class:
 
-### 1. Shared primitives (`src/lib/sales.hooks.ts`, `src/lib/sales.schemas.ts`)
-- `useDebounced(value, ms)` hook.
-- `usePagedQuery<T>({ table, select, order, filters, page, pageSize, search })` — thin wrapper over Supabase `.range()` returning `{ rows, count, isLoading }`, keyed and cached via TanStack Query with `keepPreviousData`.
-- Zod schemas: `paymentInputSchema`, `quotationCreateSchema`, `invoiceHeaderSchema` — bounded strings (`.max(...)`), amounts non-negative, dates ISO. Import at insert/update sites only; do not touch existing computed totals.
+```text
+indent_oracle_map
+-----------------
+id            uuid PK
+indent_id     uuid  FK indents(id) on delete cascade
+ticket_id     uuid  FK tickets(id) on delete cascade
+oracle_no     text  not null
+created_at    timestamptz default now()
+unique (ticket_id, oracle_no)   -- one oracle per ticket → one indent
+index  (indent_id)
+```
 
-### 2. Server-side pagination + debounced search
-Wire `usePagedQuery` into:
-- `sales.invoices.index.tsx` — server-side status filter (already there) + `ilike` on `invoice_no`/`buyer_name` + `.range()`. Add page controls at footer.
-- `sales.payments.index.tsx` — same shape.
-- `crm.quotations.tsx` — server-side search + status filter; stop prefetching all customers (dialog uses existing `CustomerPicker`).
-- `sales.orders.tsx` — server-side pagination.
+- Backfill from existing `indents.oracles_data` (one row per non‑empty `oracle_no`).
+- Trigger on `indents` (AFTER INSERT/UPDATE of `oracles_data`) rebuilds this indent's rows in the map from its current `oracles_data`, so the map stays authoritative without app‑side bookkeeping.
+- RLS: same policy shape as `indents` (authenticated read/insert; service_role all).
 
-No visible UX change beyond a pagination footer and instant "Loading…" hint.
+### API surface (TanStack server functions in `src/lib/indent.functions.ts`)
 
-### 3. Permission gates
-Read `usePermissions()` once via a lightweight `PermGate` component; keep existing hook. Add `can("Sales","create")` / `"edit"` / `"delete"` gating on:
-- New Invoice, New Quote, Record Payment, Convert to SO, Delete/Cancel buttons.
-Buttons render disabled with tooltip when denied. RLS remains the source of truth.
+- `getIndentByTicketOracle({ ticket_id, oracle_no })` → `{ indent_id, indent_no, status, oracle_no } | null`. Uses `indent_oracle_map` + join to `indents`.
+- `listIndentMapForTicket({ ticket_id })` → `Array<{ oracle_no, indent_id, indent_no, status }>` used to hydrate the whole defective parts table in one call.
+- Both use `requireSupabaseAuth`; RLS enforces access.
 
-Cache `usePermissions()` result in a module-level promise so it fetches once per session instead of per-mount (backwards compatible — same public API).
+### Route changes
 
-### 4. Duplicate submission guard
-Introduce `useSubmitOnce()` (returns `[submit, submitting]`) and apply to:
-- `crm.quotations.tsx#create` and `#duplicate`
-- `crm.quotations.$id.tsx#save`, `#convertToSo`, `#setStatus`
-- `sales.invoices.new.tsx#save`
-- `sales.payments.new.tsx#save` (already guarded — align pattern).
+- `/indent/new` search schema extended:
+  - `ticket_id?: string`
+  - `oracle_no?: string` — single oracle (may be `"NEW"` meaning "blank oracle, allow manual entry")
+  - `oracle_list?: string` — comma‑separated list for combined indent
+- Loader logic in `src/routes/_app/indent.new.tsx`:
+  - When `oracle_list` present → filter defective parts to those oracles, call `buildOraclesFromSelectedList` (see below) to build one OracleBlock per selected oracle.
+  - When `oracle_no` present and not `NEW` → filter to that oracle only.
+  - When `oracle_no === "NEW"` or absent → keep current behavior (all defective parts, empty oracle allowed).
+  - Before render, call `listIndentMapForTicket`; if any requested oracle is already mapped → toast + `navigate` to that indent (prevents duplicates on refresh/back‑nav).
 
-Buttons disable + show a spinner while in-flight.
+### Library changes (`src/lib/indent.ts`)
 
-### 5. Optimistic status updates (safe places only)
-`crm.quotations.$id.tsx#setStatus` and invoice status transitions in `sales.invoices.$id.tsx`: update local state immediately, rollback on server error. Cache-side invalidations use `queryClient.invalidateQueries(["quotations"])` etc.
+- Add `buildOraclesFromSelectedList(parts, oracleList: string[])` — same grouping rules as `buildOraclesFromDefectiveParts` but restricted to the provided oracle numbers (case‑insensitive trim match). Reused by the route loader.
+- `syncTicketGoodPartsFromIndent` unchanged.
 
-### 6. Audit logging
-Add table `public.sales_audit_log` (id, entity, entity_id, action, before, after, actor, created_at) with:
-- INSERT-only RLS: `authenticated` can insert their own rows; `admin` / users with `Sales.export` (report) can SELECT.
-- Server function `logSalesEvent(entity, entity_id, action, before, after)` using `requireSupabaseAuth`, called from status transitions and payment recording.
-- No triggers on existing tables — pure application-side logs, safe additive change.
+### Ticket page (`src/routes/_app/tickets.$id.tsx`)
 
-### 7. Client hardening
-- All external strings that go into `mailto:` / `wa.me` / share dialogs run through `encodeURIComponent` (already the case for mail; verify WhatsApp helpers).
-- Enforce `.max(...)` on subject/notes at the schema layer before insert.
-- Trim + normalize phone/GSTIN at insert.
+- Defective Parts grid:
+  - Add leading checkbox column; disabled when row has no Oracle # (combined indents require an oracle).
+  - Add trailing Action column driven by the map hydrated via `listIndentMapForTicket` (React Query, keyed by `ticket_id`).
+  - "Create Combined Indent" button above the grid; disabled unless ≥2 checked rows with distinct oracle numbers.
+- Existing "Create Indent" toggle/button removed and replaced by the per‑row action + combined button, so entry points are unified.
 
-### 8. Small refactors (code hygiene, no logic change)
-- Extract `PaginationFooter` and `SalesFilterBar` reusable components (used by the four lists).
-- Move `usePermissions` result into a `QueryClient` cache under key `["auth","perm"]` with 5-min staleTime.
+### Validation & edge cases
 
-## What we won't touch
+- DB `unique (ticket_id, oracle_no)` on the map is the ultimate guard against duplicate mapping across concurrent users.
+- Server function `getIndentByTicketOracle` returns `null` on no match so the UI can fall back to Create.
+- Duplicate oracle numbers on the same ticket are normalized (trim + case‑insensitive) before insert; the trigger deduplicates in the map rebuild.
+- Ticket reopened: mapping persists because it lives on `indent_oracle_map`, not on ticket state.
+- Blank oracle rows: allowed in `oracles_data` but never written to the map (map requires non‑empty `oracle_no`).
 
-- `src/lib/gst.ts` (GST engine) — no signature/logic changes.
-- `src/lib/invoicePdf.ts` and `purchaseOrderPdf.ts` — renderer untouched.
-- DB triggers `set_invoice_no`, `set_quote_no`, `set_so_no`, `set_payment_no`, and serial-sync triggers — untouched.
-- Customer & Product master schemas — pickers stay canonical.
+### Testing checklist
 
-## Technical Details
+1. Row with existing Oracle # + indent → View Indent opens `/indent/$id`.
+2. Row with Oracle # and no indent → Create Indent prefills to that oracle only.
+3. Row with blank Oracle # → Create Indent opens with manual entry allowed.
+4. Select 3 rows → Create Combined Indent → single indent with 3 OracleBlocks, all 3 rows in `indent_oracle_map`.
+5. Attempt to create a duplicate for a mapped oracle → blocked, user is redirected to the existing indent.
+6. Refresh the ticket page → View/Create buttons remain correct (map is source of truth).
+7. Closing an oracle still triggers `syncTicketGoodPartsFromIndent` and writes back to `good_parts_details`.
 
-- **Files added:** `src/lib/sales.hooks.ts`, `src/lib/sales.schemas.ts`, `src/components/PaginationFooter.tsx`, `src/components/PermGate.tsx`, `src/lib/salesAudit.functions.ts`.
-- **Files edited (list only):** the four list routes, three detail routes, `crm.quotations.tsx`, `usePermissions.ts` (cache-only), `sales.payments.new.tsx` (schema).
-- **DB migrations:** one migration creating `sales_audit_log` with GRANTs, RLS enabled, insert/select policies, plus `updated_at` skipped (append-only).
-- **Query keys:** `["invoices", {page,status,q}]`, `["quotations", {...}]`, `["sales-orders", {...}]`, `["payments", {...}]`, `["auth","perm"]`.
-- **Backward compatibility:** every existing call site keeps its exports. New hooks are additive.
+### Out of scope
 
-## Rollout order
-
-Ship in five patches — each one buildable and testable independently:
-1. Schemas + `useDebounced` + `useSubmitOnce` + `PaginationFooter` + `PermGate`.
-2. `sales.invoices.index` migration to server-side paged query.
-3. `sales.payments.index`, `sales.orders`, `crm.quotations` list migrations.
-4. Permission gating + duplicate-submit guards on detail pages.
-5. `sales_audit_log` migration + status-change audit calls + optimistic UI.
+- Changes to `set_indent_no`, `validate_indent_oem_ticket`, or the challan/GRN generation flows.
+- Editing the auto‑generated Supabase client/types.
