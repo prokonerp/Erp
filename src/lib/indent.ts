@@ -148,6 +148,25 @@ export function buildOraclesFromDefectiveParts(
   });
 }
 
+/** Build Oracle blocks from a ticket's defective parts, filtered to only the
+ *  supplied oracle numbers. Matching is case-insensitive with trim; a `"NEW"`
+ *  sentinel is treated as "unassigned only" (parts without an oracle_no).
+ *  Delegates to `buildOraclesFromDefectiveParts` after filtering so grouping
+ *  and shape stay identical to the single-indent flow. */
+export function buildOraclesFromSelectedList(
+  parts: Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>,
+  oracleList: string[],
+): OracleBlock[] {
+  const wanted = new Set(oracleList.map((s) => (s || "").trim().toUpperCase()).filter(Boolean));
+  const wantsUnassigned = wanted.has("NEW") || wanted.has("UNASSIGNED");
+  const filtered = (parts || []).filter((p) => {
+    const k = (p.oracle_no || "").trim().toUpperCase();
+    if (!k) return wantsUnassigned;
+    return wanted.has(k);
+  });
+  return buildOraclesFromDefectiveParts(filtered);
+}
+
 export function oracleStatus(o: OracleBlock): "open" | "closed" {
   return o.status === "closed" ? "closed" : "open";
 }

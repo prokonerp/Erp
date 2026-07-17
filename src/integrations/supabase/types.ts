@@ -1756,6 +1756,45 @@ export type Database = {
           },
         ]
       }
+      indent_oracle_map: {
+        Row: {
+          created_at: string
+          id: string
+          indent_id: string
+          oracle_no: string
+          ticket_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          indent_id: string
+          oracle_no: string
+          ticket_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          indent_id?: string
+          oracle_no?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indent_oracle_map_indent_id_fkey"
+            columns: ["indent_id"]
+            isOneToOne: false
+            referencedRelation: "indents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indent_oracle_map_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       indent_sequence: {
         Row: {
           id: number
