@@ -9,13 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, ArrowLeft, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
-import { INDENT_TYPES, buildOraclesFromDefectiveParts, syncTicketGoodPartsFromIndent, type IndentType, type OracleBlock } from "@/lib/indent";
+import { INDENT_TYPES, buildOraclesFromDefectiveParts, buildOraclesFromSelectedList, syncTicketGoodPartsFromIndent, type IndentType, type OracleBlock } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 
-const searchSchema = z.object({ ticket_id: z.string().optional() });
+const searchSchema = z.object({
+  ticket_id: z.string().optional(),
+  oracle_no: z.string().optional(),
+  oracle_list: z.string().optional(),
+});
 
 export const Route = createFileRoute("/_app/indent/new")({
   validateSearch: (s) => searchSchema.parse(s),
@@ -57,7 +61,7 @@ const blank: Form = {
 };
 
 function NewIndent() {
-  const { ticket_id } = Route.useSearch();
+  const { ticket_id, oracle_no, oracle_list } = Route.useSearch();
   const navigate = useNavigate();
   const [form, setForm] = useState<Form>(blank);
   const [busy, setBusy] = useState(false);
@@ -90,6 +94,29 @@ function NewIndent() {
         navigate({ to: "/tickets/$id", params: { id: ticket_id } });
         return;
       }
+      // Build the requested oracle list from search params.
+      const requested: string[] = oracle_list
+        ? oracle_list.split(",").map((s) => s.trim()).filter(Boolean)
+        : oracle_no
+        ? [oracle_no]
+        : [];
+
+      // Block duplicates: if any requested oracle already has an indent, redirect there.
+      const nonNewRequested = requested.filter((o) => o.toUpperCase() !== "NEW");
+      if (nonNewRequested.length > 0) {
+        const { data: mapRows } = await supabase
+          .from("indent_oracle_map" as never)
+          .select("indent_id, oracle_no")
+          .eq("ticket_id", ticket_id) as unknown as { data: Array<{ indent_id: string; oracle_no: string }> | null };
+        const dup = (mapRows || []).find((r) =>
+          nonNewRequested.some((o) => o.toUpperCase() === r.oracle_no.trim().toUpperCase())
+        );
+        if (dup) {
+          toast.info(`Indent already exists for Oracle ${dup.oracle_no} — opening it.`);
+          navigate({ to: "/indent/$id", params: { id: dup.indent_id } });
+          return;
+        }
+      }
       const firstDef = defParts.find((p) => (p?.name || "").trim() || (p?.model_no || "").trim() || (p?.serial || "").trim()) || {};
       // Suppress unused warning — goodParts retained for future Good Parts mapping needs.
       void goodParts;
@@ -108,6 +135,9 @@ function NewIndent() {
         if (m) latestEngineer = m[1].trim();
       }
       void firstDef;
+      const oracles = requested.length > 0
+        ? buildOraclesFromSelectedList(defParts, requested)
+        : buildOraclesFromDefectiveParts(defParts);
       setForm((f) => ({
         ...f,
         ticket_id: data.id,
@@ -120,11 +150,11 @@ function NewIndent() {
         problem_reported: data.complaint || "",
         engineer_name: latestEngineer,
         defective_parts_from_ticket: defParts,
-        oracles_data: buildOraclesFromDefectiveParts(defParts),
+        oracles_data: oracles,
       }));
       setLoading(false);
     })();
-  }, [ticket_id, navigate]);
+  }, [ticket_id, oracle_no, oracle_list, navigate]);
 
   const set = (p: Partial<Form>) => setForm((s) => ({ ...s, ...p }));
 
