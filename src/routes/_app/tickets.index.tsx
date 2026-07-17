@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
 import { format } from "date-fns";
-import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, waOpen, engineerAssignMsg, customerClosedMsg, hoursExcludingSundays, timerBadgeColor, formatHours } from "@/lib/tickets";
+import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, waOpen, engineerAssignMsg, customerClosedMsg, ticketElapsedHours, timerBadgeColor, formatHours } from "@/lib/tickets";
 import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
@@ -241,7 +241,7 @@ function TicketsList() {
         if (r.priority !== "P1" && r.priority !== "P2") return false;
       } else if (scope === "overdue") {
         if (r.status === "Closed" || r.status === "Cancelled") return false;
-        if (hoursExcludingSundays(r.created_at) <= 24) return false;
+        if (ticketElapsedHours(r) <= 24) return false;
       }
       if (dateRange?.from) {
         const from = new Date(dateRange.from); from.setHours(0,0,0,0);
@@ -565,7 +565,7 @@ function TicketsList() {
                     </td>
                     <td className="p-2">
                       {(() => {
-                        const h = hoursExcludingSundays(r.created_at, new Date());
+                        const h = ticketElapsedHours(r);
                         return (
                           <span className={`inline-block px-2 py-0.5 rounded border text-xs font-medium ${timerBadgeColor(h)}`} title={`${h.toFixed(2)}h since creation (excl. Sundays)`}>
                             {formatHours(h)}
@@ -834,7 +834,7 @@ function TicketCard({ r, employees, isAdmin, onReassign, onStatusChange, onNotif
   onSoftDelete: (r: Row) => void;
   onPriority: (id: string, p: string) => void;
 }) {
-  const hours = hoursExcludingSundays(r.created_at, new Date());
+  const hours = ticketElapsedHours(r);
   const isOverdue = hours > 24 && r.status !== "Closed" && r.status !== "Cancelled";
   return (
     <div className="group relative flex flex-col rounded-lg border bg-card p-3 shadow-sm hover:shadow-md hover:border-primary/40 transition">
