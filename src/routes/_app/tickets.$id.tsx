@@ -710,9 +710,46 @@ function TicketDetail() {
               {t.defective_parts_received ? (
                 <div className="space-y-2">
                   {(t.defective_parts_details || []).length === 0 && <p className="text-sm text-muted-foreground">No defective parts added yet.</p>}
+                  {t.oem_call && (t.defective_parts_details || []).length > 0 && (() => {
+                    const checkedOracles = Object.entries(selectedDefRows)
+                      .filter(([, v]) => v)
+                      .map(([i]) => (t.defective_parts_details || [])[Number(i)]?.oracle_no?.trim() || "")
+                      .filter(Boolean);
+                    const uniq = Array.from(new Set(checkedOracles.map((s) => s.toUpperCase())));
+                    const disabled = uniq.length < 2;
+                    return (
+                      <div className="flex items-center justify-between rounded-md border border-dashed p-2 bg-muted/30">
+                        <div className="text-xs text-muted-foreground">
+                          Select 2+ rows with Oracle # to build a single combined Indent.
+                          {uniq.length > 0 && <span className="ml-1 font-medium text-foreground">{uniq.length} selected.</span>}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={disabled}
+                          onClick={() => {
+                            navigate({
+                              to: "/indent/new",
+                              search: { ticket_id: t.id, oracle_list: uniq.join(",") },
+                            });
+                          }}
+                        >
+                          <ClipboardList className="h-4 w-4 mr-1" />Create Combined Indent
+                        </Button>
+                      </div>
+                    );
+                  })()}
                   {(t.defective_parts_details || []).map((p, i) => (
                     <div key={i} className="rounded-md border p-2">
                       <div className="grid grid-cols-12 gap-2 items-end">
+                        <div className="col-span-12 md:col-span-1 flex items-center pb-1">
+                          <Checkbox
+                            checked={!!selectedDefRows[i]}
+                            disabled={!(p.oracle_no && p.oracle_no.trim())}
+                            onCheckedChange={(v) => setSelectedDefRows((m) => ({ ...m, [i]: !!v }))}
+                            aria-label="Select for combined indent"
+                          />
+                        </div>
                         <div className="col-span-12 md:col-span-2">
                           <Label>Oracle #</Label>
                           <Input value={p.oracle_no || ""} onChange={(e) => updDef(i, { oracle_no: e.target.value.toUpperCase() })} placeholder="e.g. ORA-001" className="font-mono" />
@@ -728,8 +765,39 @@ function TicketDetail() {
                         <div className="col-span-12 md:col-span-2"><Label>Model / Part No</Label><Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} /></div>
                         <div className="col-span-12 md:col-span-2"><Label>Serial No</Label><Input value={p.serial || ""} onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })} className="font-mono" /></div>
                         <div className="col-span-4 md:col-span-1"><Label>Qty</Label><Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} /></div>
-                        <div className="col-span-6 md:col-span-2"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} /></div>
-                        <div className="col-span-2 md:col-span-1 flex">
+                        <div className="col-span-6 md:col-span-1"><Label>Remarks</Label><Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} /></div>
+                        <div className="col-span-12 md:col-span-2 flex items-end gap-1">
+                          {t.oem_call && (() => {
+                            const key = (p.oracle_no || "").trim().toUpperCase();
+                            const existing = key ? indentByOracle.get(key) : undefined;
+                            if (existing) {
+                              return (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 px-2 text-xs"
+                                  onClick={() => navigate({ to: "/indent/$id", params: { id: existing.indent_id } })}
+                                  title={`Open ${existing.indent_no || "Indent"}`}
+                                >
+                                  <Eye className="h-3.5 w-3.5 mr-1" />View
+                                </Button>
+                              );
+                            }
+                            return (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2 text-xs"
+                                onClick={() => navigate({
+                                  to: "/indent/new",
+                                  search: { ticket_id: t.id, oracle_no: key || "NEW" },
+                                })}
+                                title="Create Indent for this row"
+                              >
+                                <Plus className="h-3.5 w-3.5 mr-1" />Indent
+                              </Button>
+                            );
+                          })()}
                           <Button size="icon" variant="ghost" onClick={() => delDef(i)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
