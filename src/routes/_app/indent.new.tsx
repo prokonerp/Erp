@@ -96,7 +96,7 @@ function NewIndent() {
       }
       // Build the requested oracle list from search params.
       const requested: string[] = oracle_list
-        ? oracle_list.split(",").map((s) => s.trim()).filter(Boolean)
+        ? oracle_list.split(",").map((s: string) => s.trim()).filter((s: string) => Boolean(s))
         : oracle_no
         ? [oracle_no]
         : [];
