@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, ChevronRight, Users, AlertTriangle, TrendingUp, PieChart as PieIcon, BarChart3 } from "lucide-react";
-import { PRIORITY_COLOR, STATUS_COLOR, hoursExcludingSundays } from "@/lib/tickets";
+import { PRIORITY_COLOR, STATUS_COLOR, hoursExcludingSundays, ticketElapsedHours } from "@/lib/tickets";
 import { useRealtimeRefetch } from "@/lib/softDelete";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
@@ -157,7 +157,7 @@ export function EngineerWorkloadSection() {
 
   const overdue = useMemo(() => {
     return filteredRows
-      .filter((t) => t.status !== "Closed" && t.status !== "Cancelled" && hoursExcludingSundays(t.created_at) > 24)
+      .filter((t) => t.status !== "Closed" && t.status !== "Cancelled" && ticketElapsedHours(t) > 24)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       .slice(0, 8);
   }, [filteredRows]);
@@ -386,7 +386,7 @@ export function EngineerWorkloadSection() {
                     <tr key={t.id} className="border-t hover:bg-muted/30">
                       <td className="p-2"><Link to="/tickets/$id" params={{ id: t.id }} className="font-mono text-xs text-primary hover:underline">{t.case_id}</Link></td>
                       <td className="p-2">{t.assigned_engineer_name || <span className="text-muted-foreground">Unassigned</span>}</td>
-                      <td className="p-2 text-right">{Math.floor(hoursExcludingSundays(t.created_at) / 24)}d</td>
+                      <td className="p-2 text-right">{Math.floor(ticketElapsedHours(t) / 24)}d</td>
                     </tr>
                   ))}
                 </tbody>
@@ -512,7 +512,7 @@ function EngineerDetail({ engineer, tickets }: { engineer: string; tickets: T[] 
             {tickets.map((t) => {
               const at = t.assigned_at || t.created_at;
               const days = daysBetween(new Date(at), now);
-              const hrs = hoursExcludingSundays(t.created_at);
+              const hrs = ticketElapsedHours(t);
               const sla = hrs > 48 ? { text: "Breached", cls: "bg-red-100 text-red-800" } : hrs > 24 ? { text: "At Risk", cls: "bg-amber-100 text-amber-800" } : { text: "On Track", cls: "bg-emerald-100 text-emerald-800" };
               return (
                 <tr key={t.id} className="border-t hover:bg-muted/30">
