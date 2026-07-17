@@ -157,6 +157,16 @@ function TicketDetail() {
   const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
   const [closingOpen, setClosingOpen] = useState(false);
   const { isAdmin } = useIsAdmin();
+  const [selectedDefRows, setSelectedDefRows] = useState<Record<number, boolean>>({});
+  const fetchIndentMap = useServerFn(listIndentMapForTicket);
+  const indentMapQuery = useQuery({
+    queryKey: ["indent-oracle-map", id],
+    queryFn: () => fetchIndentMap({ data: { ticket_id: id } }),
+    enabled: !!id,
+  });
+  const indentByOracle = new Map<string, { indent_id: string; indent_no: string | null; status: string | null }>(
+    (indentMapQuery.data || []).map((r) => [r.oracle_no.trim().toUpperCase(), { indent_id: r.indent_id, indent_no: r.indent_no, status: r.status }]),
+  );
 
   const load = async () => {
     const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
