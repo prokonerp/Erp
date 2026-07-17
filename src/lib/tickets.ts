@@ -54,6 +54,27 @@ export function hoursExcludingSundays(fromISO: string, to: Date = new Date()): n
   return total;
 }
 
+/** Elapsed hours for a ticket, freezing the timer once the ticket is Closed/Cancelled.
+ *  Uses closed_at as the end when the ticket is terminal; falls back to updated_at
+ *  if closed_at is missing on legacy records. Otherwise runs to now(). */
+export function ticketElapsedHours(t: {
+  created_at: string;
+  status?: string | null;
+  closed_at?: string | null;
+  updated_at?: string | null;
+}): number {
+  const terminal = t.status === "Closed" || t.status === "Cancelled";
+  let end: Date = new Date();
+  if (terminal) {
+    const stopISO = t.closed_at || t.updated_at;
+    if (stopISO) {
+      const d = new Date(stopISO);
+      if (!isNaN(d.getTime())) end = d;
+    }
+  }
+  return hoursExcludingSundays(t.created_at, end);
+}
+
 export function timerBadgeColor(hours: number): string {
   if (hours > 24) return "bg-red-100 text-red-800 border-red-200";
   if (hours > 8) return "bg-amber-100 text-amber-800 border-amber-200";
