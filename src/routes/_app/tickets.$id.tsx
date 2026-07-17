@@ -556,15 +556,15 @@ function TicketDetail() {
               ? "Enable OEM Call to create an Indent"
               : !(defOn || goodOn)
               ? "Enable Defective Parts Received or Good Parts Used to create an Indent"
-              : "Create Indent from this OEM ticket";
+              : "Create a blank Indent (no specific Oracle #). Use per-row actions below for Oracle-scoped indents.";
             return (
           <Button
             variant="outline"
             disabled={!canIndent}
             title={title}
-            onClick={() => navigate({ to: "/indent/new", search: { ticket_id: t.id } })}
+            onClick={() => navigate({ to: "/indent/new", search: { ticket_id: t.id, oracle_no: "NEW" } })}
           >
-            <ClipboardList className="h-4 w-4 mr-1" />Create Indent
+            <ClipboardList className="h-4 w-4 mr-1" />New Indent
           </Button>
             );
           })()}
