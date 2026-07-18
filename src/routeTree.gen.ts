@@ -76,7 +76,6 @@ import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
 import { Route as AppCrmIncentivesRouteImport } from './routes/_app/crm.incentives'
 import { Route as AppCrmCustomersRouteImport } from './routes/_app/crm.customers'
 import { Route as AppCrmBundlesRouteImport } from './routes/_app/crm.bundles'
-import { Route as AppCrmAiRecommendRouteImport } from './routes/_app/crm.ai-recommend'
 import { Route as AppChallanOemRouteImport } from './routes/_app/challan.oem'
 import { Route as AppChallanNewRouteImport } from './routes/_app/challan.new'
 import { Route as AppChallanCustomerRouteImport } from './routes/_app/challan.customer'
@@ -445,11 +444,6 @@ const AppCrmBundlesRoute = AppCrmBundlesRouteImport.update({
   path: '/bundles',
   getParentRoute: () => AppCrmRoute,
 } as any)
-const AppCrmAiRecommendRoute = AppCrmAiRecommendRouteImport.update({
-  id: '/ai-recommend',
-  path: '/ai-recommend',
-  getParentRoute: () => AppCrmRoute,
-} as any)
 const AppChallanOemRoute = AppChallanOemRouteImport.update({
   id: '/oem',
   path: '/oem',
@@ -646,7 +640,6 @@ export interface FileRoutesByFullPath {
   '/challan/customer': typeof AppChallanCustomerRouteWithChildren
   '/challan/new': typeof AppChallanNewRoute
   '/challan/oem': typeof AppChallanOemRouteWithChildren
-  '/crm/ai-recommend': typeof AppCrmAiRecommendRoute
   '/crm/bundles': typeof AppCrmBundlesRoute
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
@@ -737,7 +730,6 @@ export interface FileRoutesByTo {
   '/amc/settings': typeof AppAmcSettingsRoute
   '/challan/$id': typeof AppChallanIdRouteWithChildren
   '/challan/new': typeof AppChallanNewRoute
-  '/crm/ai-recommend': typeof AppCrmAiRecommendRoute
   '/crm/bundles': typeof AppCrmBundlesRoute
   '/crm/customers': typeof AppCrmCustomersRoute
   '/crm/incentives': typeof AppCrmIncentivesRoute
@@ -837,7 +829,6 @@ export interface FileRoutesById {
   '/_app/challan/customer': typeof AppChallanCustomerRouteWithChildren
   '/_app/challan/new': typeof AppChallanNewRoute
   '/_app/challan/oem': typeof AppChallanOemRouteWithChildren
-  '/_app/crm/ai-recommend': typeof AppCrmAiRecommendRoute
   '/_app/crm/bundles': typeof AppCrmBundlesRoute
   '/_app/crm/customers': typeof AppCrmCustomersRoute
   '/_app/crm/incentives': typeof AppCrmIncentivesRoute
@@ -941,7 +932,6 @@ export interface FileRouteTypes {
     | '/challan/customer'
     | '/challan/new'
     | '/challan/oem'
-    | '/crm/ai-recommend'
     | '/crm/bundles'
     | '/crm/customers'
     | '/crm/incentives'
@@ -1032,7 +1022,6 @@ export interface FileRouteTypes {
     | '/amc/settings'
     | '/challan/$id'
     | '/challan/new'
-    | '/crm/ai-recommend'
     | '/crm/bundles'
     | '/crm/customers'
     | '/crm/incentives'
@@ -1131,7 +1120,6 @@ export interface FileRouteTypes {
     | '/_app/challan/customer'
     | '/_app/challan/new'
     | '/_app/challan/oem'
-    | '/_app/crm/ai-recommend'
     | '/_app/crm/bundles'
     | '/_app/crm/customers'
     | '/_app/crm/incentives'
@@ -1682,13 +1670,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCrmBundlesRouteImport
       parentRoute: typeof AppCrmRoute
     }
-    '/_app/crm/ai-recommend': {
-      id: '/_app/crm/ai-recommend'
-      path: '/ai-recommend'
-      fullPath: '/crm/ai-recommend'
-      preLoaderRoute: typeof AppCrmAiRecommendRouteImport
-      parentRoute: typeof AppCrmRoute
-    }
     '/_app/challan/oem': {
       id: '/_app/challan/oem'
       path: '/oem'
@@ -2027,7 +2008,6 @@ const AppCrmQuotationsRouteWithChildren =
   AppCrmQuotationsRoute._addFileChildren(AppCrmQuotationsRouteChildren)
 
 interface AppCrmRouteChildren {
-  AppCrmAiRecommendRoute: typeof AppCrmAiRecommendRoute
   AppCrmBundlesRoute: typeof AppCrmBundlesRoute
   AppCrmCustomersRoute: typeof AppCrmCustomersRoute
   AppCrmIncentivesRoute: typeof AppCrmIncentivesRoute
@@ -2038,7 +2018,6 @@ interface AppCrmRouteChildren {
 }
 
 const AppCrmRouteChildren: AppCrmRouteChildren = {
-  AppCrmAiRecommendRoute: AppCrmAiRecommendRoute,
   AppCrmBundlesRoute: AppCrmBundlesRoute,
   AppCrmCustomersRoute: AppCrmCustomersRoute,
   AppCrmIncentivesRoute: AppCrmIncentivesRoute,
