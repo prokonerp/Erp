@@ -473,6 +473,36 @@ export type Database = {
         }
         Relationships: []
       }
+      charger_ah_limits: {
+        Row: {
+          active: boolean
+          charger_current: number
+          created_at: string
+          id: string
+          max_battery_ah: number
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          charger_current: number
+          created_at?: string
+          id?: string
+          max_battery_ah: number
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          charger_current?: number
+          created_at?: string
+          id?: string
+          max_battery_ah?: number
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           address: string | null

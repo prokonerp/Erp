@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { AlertTriangle, Calculator, Zap } from "lucide-react";
+import { AlertTriangle, Calculator, Zap, ShieldCheck } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/crm/ai-recommend")({
   component: UpsBackupCalculatorPage,
@@ -37,6 +38,15 @@ function pickBattery(ah: number): number {
   return BATTERY_RATINGS[BATTERY_RATINGS.length - 1];
 }
 
+type ChargerLimit = { charger_current: number; max_battery_ah: number };
+
+function lookupMaxAh(limits: ChargerLimit[], chargerA: number): number | null {
+  if (!chargerA) return null;
+  const match = limits.find((l) => Number(l.charger_current) === chargerA);
+  if (match) return Number(match.max_battery_ah);
+  return chargerA * 12.5;
+}
+
 function UpsBackupCalculatorPage() {
   const [kva, setKva] = useState<string>("10");
   const [dcBus, setDcBus] = useState<string>("192");
@@ -44,6 +54,14 @@ function UpsBackupCalculatorPage() {
   const [pf, setPf] = useState<string>("0.9");
   const [includeCharger, setIncludeCharger] = useState(false);
   const [chargerAmp, setChargerAmp] = useState<string>("0");
+  const [validateCharger, setValidateCharger] = useState(false);
+  const [strictMode, setStrictMode] = useState(false);
+  const [limits, setLimits] = useState<ChargerLimit[]>([]);
+
+  useEffect(() => {
+    supabase.from("charger_ah_limits" as any).select("charger_current,max_battery_ah").eq("active", true)
+      .then(({ data }) => setLimits(((data as any[]) || []).map((r) => ({ charger_current: Number(r.charger_current), max_battery_ah: Number(r.max_battery_ah) }))));
+  }, []);
 
   const nKva = parseFloat(kva) || 0;
   const nDc = parseFloat(dcBus) || 0;
@@ -78,6 +96,16 @@ function UpsBackupCalculatorPage() {
 
   const maxTotal = rows.reduce((m, r) => Math.max(m, r.total), 0);
   if (maxTotal > 300) warnings.push("Large battery bank – consider alternative solution");
+
+  const maxAllowedAh = validateCharger ? lookupMaxAh(limits, nCharger) : null;
+  const invalidRows = useMemo(() => {
+    if (!validateCharger || !maxAllowedAh) return new Set<string>();
+    return new Set(rows.filter((r) => r.battery > maxAllowedAh).map((r) => r.label));
+  }, [rows, maxAllowedAh, validateCharger]);
+  if (validateCharger && !nCharger) warnings.push("Enter Charger Current to validate battery AH.");
+  if (validateCharger && invalidRows.size > 0) {
+    warnings.push(`Battery AH exceeds recommended limit for selected charger (max ${maxAllowedAh} Ah).`);
+  }
 
   return (
     <div className="space-y-4">
@@ -121,6 +149,37 @@ function UpsBackupCalculatorPage() {
                 <Label className="text-xs">Charger Amp</Label>
                 <Input type="number" value={chargerAmp} onChange={(e) => setChargerAmp(e.target.value)} />
               </div>
+            )}
+
+            <div className="col-span-2 md:col-span-4 flex items-center justify-between rounded border bg-muted/30 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">Charger Impact Validation</span>
+              </div>
+              <Switch checked={validateCharger} onCheckedChange={setValidateCharger} />
+            </div>
+            {validateCharger && (
+              <>
+                {!includeCharger && (
+                  <div className="col-span-2 md:col-span-2">
+                    <Label className="text-xs">Charger Amp</Label>
+                    <Input type="number" value={chargerAmp} onChange={(e) => setChargerAmp(e.target.value)} />
+                  </div>
+                )}
+                <div className="col-span-2 md:col-span-2 flex items-center justify-between rounded border bg-background px-3 py-2">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Strict Mode</div>
+                    <div className="text-xs">Block invalid selections</div>
+                  </div>
+                  <Switch checked={strictMode} onCheckedChange={setStrictMode} />
+                </div>
+                {nCharger > 0 && maxAllowedAh != null && (
+                  <div className="col-span-2 md:col-span-4 text-xs text-muted-foreground">
+                    Max Battery AH allowed for {nCharger} A charger: <span className="font-bold text-foreground">{maxAllowedAh} Ah</span>
+                    {limits.some((l) => l.charger_current === nCharger) ? " (from master)" : " (rule: Charger × 12.5)"}
+                  </div>
+                )}
+              </>
             )}
 
             <div className="col-span-2 md:col-span-4 grid grid-cols-2 md:grid-cols-3 gap-2 pt-2 text-sm">
@@ -176,16 +235,23 @@ function UpsBackupCalculatorPage() {
                 {rows.length === 0 && (
                   <tr><td colSpan={6} className="text-center py-6 text-muted-foreground">Enter KVA and DC BUS Voltage to see results.</td></tr>
                 )}
-                {rows.map((r) => (
-                  <tr key={r.label} className="border-b hover:bg-muted/30">
-                    <td className="px-3 py-2 font-medium">{r.label}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.ah.toFixed(1)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.battery} Ah</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{Math.ceil(seriesBatteries)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{r.parallel}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-bold">{r.total}</td>
-                  </tr>
-                ))}
+                {rows.map((r) => {
+                    const bad = invalidRows.has(r.label);
+                    const blocked = bad && strictMode;
+                    return (
+                      <tr key={r.label} className={`border-b hover:bg-muted/30 ${bad ? "bg-amber-500/5" : ""} ${blocked ? "opacity-50" : ""}`}>
+                        <td className="px-3 py-2 font-medium">{r.label}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{r.ah.toFixed(1)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          <span className={bad ? "text-amber-700 dark:text-amber-400 font-semibold" : ""}>{r.battery} Ah</span>
+                          {bad && <span className="ml-1 text-[10px] uppercase">{blocked ? "blocked" : "over limit"}</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">{Math.ceil(seriesBatteries)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{blocked ? "—" : r.parallel}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-bold">{blocked ? "—" : r.total}</td>
+                      </tr>
+                    );
+                })}
               </tbody>
             </table>
           </div>
