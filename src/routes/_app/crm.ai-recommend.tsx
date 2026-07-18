@@ -166,7 +166,6 @@ function UpsBackupCalculatorPage() {
                 <tr className="bg-muted/60 text-xs uppercase tracking-wide">
                   <th className="text-left px-3 py-2 border-b font-bold">Backup Time</th>
                   <th className="text-right px-3 py-2 border-b font-bold">Ah Required</th>
-                  <th className="text-right px-3 py-2 border-b font-bold">With Factor (×1.25)</th>
                   <th className="text-right px-3 py-2 border-b font-bold">Selected Battery (Ah)</th>
                   <th className="text-right px-3 py-2 border-b font-bold">Series</th>
                   <th className="text-right px-3 py-2 border-b font-bold">Parallel Strings</th>
@@ -175,13 +174,12 @@ function UpsBackupCalculatorPage() {
               </thead>
               <tbody>
                 {rows.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-6 text-muted-foreground">Enter KVA and DC BUS Voltage to see results.</td></tr>
+                  <tr><td colSpan={6} className="text-center py-6 text-muted-foreground">Enter KVA and DC BUS Voltage to see results.</td></tr>
                 )}
                 {rows.map((r) => (
                   <tr key={r.label} className="border-b hover:bg-muted/30">
                     <td className="px-3 py-2 font-medium">{r.label}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.ah.toFixed(1)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">{r.finalAh.toFixed(1)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.battery} Ah</td>
                     <td className="px-3 py-2 text-right tabular-nums">{Math.ceil(seriesBatteries)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{r.parallel}</td>
