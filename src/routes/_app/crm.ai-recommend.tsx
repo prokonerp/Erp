@@ -235,8 +235,7 @@ function UpsBackupCalculatorPage() {
                 {rows.length === 0 && (
                   <tr><td colSpan={6} className="text-center py-6 text-muted-foreground">Enter KVA and DC BUS Voltage to see results.</td></tr>
                 )}
-                {rows.map((r) => (
-                  {
+                {rows.map((r) => {
                     const bad = invalidRows.has(r.label);
                     const blocked = bad && strictMode;
                     return (
@@ -252,7 +251,6 @@ function UpsBackupCalculatorPage() {
                         <td className="px-3 py-2 text-right tabular-nums font-bold">{blocked ? "—" : r.total}</td>
                       </tr>
                     );
-                  }
                 })}
               </tbody>
             </table>
