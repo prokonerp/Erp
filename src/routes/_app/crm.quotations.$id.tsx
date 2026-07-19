@@ -20,6 +20,11 @@ import { waOpen } from "@/lib/tickets";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { ShareQuotationDialog } from "@/components/ShareQuotationDialog";
+import { Switch } from "@/components/ui/switch";
+import {
+  listOemLogos, withSignedUrls, filterLogosForItems,
+  type OemLogoWithUrl, SIZE_PX,
+} from "@/lib/oemLogos.data";
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
@@ -55,6 +60,8 @@ function QuoteEditor() {
   const [bundleOpen, setBundleOpen] = useState(false);
   const [bundleParentQty, setBundleParentQty] = useState(1);
   const [shareOpen, setShareOpen] = useState(false);
+  const [oemLogos, setOemLogos] = useState<OemLogoWithUrl[]>([]);
+  const [logosProductOnly, setLogosProductOnly] = useState(false);
 
   const load = async () => {
     let sourceId = id;
@@ -91,6 +98,7 @@ function QuoteEditor() {
     supabase.from("quote_terms_templates").select("*").order("sort_order").then(({ data }) => setTemplates((data || []) as any));
     supabase.from("crm_settings").select("*").eq("id", 1).single().then(({ data }) => setSettings((data as any) || { id: 1, business_state: "Haryana", business_gstin: null, default_terms: "", default_customer_notes: "Thanks for your business." }));
     fetchBranches().then((bs) => setBranches(bs)).catch(() => {});
+    listOemLogos(true).then(withSignedUrls).then(setOemLogos).catch(() => {});
   }, [id]);
 
   // Default branch on first load
@@ -207,6 +215,7 @@ function QuoteEditor() {
       terms: q.terms,
       customer_notes: q.customer_notes,
       remarks: q.remarks,
+      include_oem_logos: (q as any).include_oem_logos !== false,
     };
     if (isClone) {
       const { data: u } = await supabase.auth.getUser();
@@ -457,6 +466,26 @@ function QuoteEditor() {
           <div><Label>Customer notes (printed)</Label><Textarea rows={5} value={q.customer_notes || ""} onChange={(e) => setQ({ ...q, customer_notes: e.target.value })} placeholder="Thanks for your business." /></div>
           <div><Label>Terms & conditions</Label><Textarea rows={5} value={q.terms || ""} onChange={(e) => { setTermsTouched(true); setQ({ ...q, terms: e.target.value }); }} placeholder="Payment, delivery, warranty…" /></div>
           <div className="md:col-span-2"><Label>Internal remarks (not printed)</Label><Textarea rows={2} value={q.remarks || ""} onChange={(e) => setQ({ ...q, remarks: e.target.value })} /></div>
+          <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-2 border-t">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="include-oem-logos"
+                checked={(q as any).include_oem_logos !== false}
+                onCheckedChange={(v) => setQ({ ...q, ...( { include_oem_logos: v } as any) })}
+              />
+              <Label htmlFor="include-oem-logos" className="cursor-pointer">Include OEM logos in PDF footer</Label>
+              <span className="text-xs text-muted-foreground">({oemLogos.length} active)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="logos-product-only"
+                checked={logosProductOnly}
+                onCheckedChange={setLogosProductOnly}
+                disabled={(q as any).include_oem_logos === false}
+              />
+              <Label htmlFor="logos-product-only" className="cursor-pointer">Show only logos for products in this quote</Label>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -601,6 +630,40 @@ function QuoteEditor() {
             <div className="mt-6 text-gray-600">Authorised Signatory</div>
           </div>
         </div>
+
+        {(() => {
+          if ((q as any).include_oem_logos === false) return null;
+          const pool = logosProductOnly ? filterLogosForItems(oemLogos, q.items) : oemLogos;
+          if (pool.length === 0) return null;
+          const groups = {
+            left: pool.filter((l) => l.position === "left"),
+            center: pool.filter((l) => l.position === "center"),
+            right: pool.filter((l) => l.position === "right"),
+          };
+          const renderGroup = (items: OemLogoWithUrl[], align: "start" | "center" | "end") => (
+            <div className="flex flex-wrap items-center gap-4" style={{ justifyContent: align === "start" ? "flex-start" : align === "end" ? "flex-end" : "center" }}>
+              {items.map((l) => (
+                <img
+                  key={l.id}
+                  src={l.url}
+                  alt={l.oem_name}
+                  style={{ height: SIZE_PX[l.size], maxWidth: 220, objectFit: "contain" }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
+              ))}
+            </div>
+          );
+          return (
+            <div
+              className="mt-10 pt-3 grid grid-cols-3 gap-4 items-center"
+              style={{ borderTop: "0.5px solid #9ca3af", background: "#fafafa", padding: "12px 16px" }}
+            >
+              <div>{renderGroup(groups.left, "start")}</div>
+              <div>{renderGroup(groups.center, "center")}</div>
+              <div>{renderGroup(groups.right, "end")}</div>
+            </div>
+          );
+        })()}
       </div>
 
       <BundleApplyDialog

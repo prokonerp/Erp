@@ -2490,6 +2490,42 @@ export type Database = {
         }
         Relationships: []
       }
+      oem_logos: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          logo_path: string
+          oem_name: string
+          position: string
+          size: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_path: string
+          oem_name: string
+          position?: string
+          size?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          logo_path?: string
+          oem_name?: string
+          position?: string
+          size?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       password_history: {
         Row: {
           created_at: string
@@ -3176,6 +3212,7 @@ export type Database = {
           gst_percent: number
           id: string
           igst_amount: number
+          include_oem_logos: boolean
           items: Json
           lead_id: string | null
           owner_id: string
@@ -3222,6 +3259,7 @@ export type Database = {
           gst_percent?: number
           id?: string
           igst_amount?: number
+          include_oem_logos?: boolean
           items?: Json
           lead_id?: string | null
           owner_id: string
@@ -3268,6 +3306,7 @@ export type Database = {
           gst_percent?: number
           id?: string
           igst_amount?: number
+          include_oem_logos?: boolean
           items?: Json
           lead_id?: string | null
           owner_id?: string
