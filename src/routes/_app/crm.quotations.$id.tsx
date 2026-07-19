@@ -466,6 +466,26 @@ function QuoteEditor() {
           <div><Label>Customer notes (printed)</Label><Textarea rows={5} value={q.customer_notes || ""} onChange={(e) => setQ({ ...q, customer_notes: e.target.value })} placeholder="Thanks for your business." /></div>
           <div><Label>Terms & conditions</Label><Textarea rows={5} value={q.terms || ""} onChange={(e) => { setTermsTouched(true); setQ({ ...q, terms: e.target.value }); }} placeholder="Payment, delivery, warranty…" /></div>
           <div className="md:col-span-2"><Label>Internal remarks (not printed)</Label><Textarea rows={2} value={q.remarks || ""} onChange={(e) => setQ({ ...q, remarks: e.target.value })} /></div>
+          <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-2 border-t">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="include-oem-logos"
+                checked={(q as any).include_oem_logos !== false}
+                onCheckedChange={(v) => setQ({ ...q, ...( { include_oem_logos: v } as any) })}
+              />
+              <Label htmlFor="include-oem-logos" className="cursor-pointer">Include OEM logos in PDF footer</Label>
+              <span className="text-xs text-muted-foreground">({oemLogos.length} active)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="logos-product-only"
+                checked={logosProductOnly}
+                onCheckedChange={setLogosProductOnly}
+                disabled={(q as any).include_oem_logos === false}
+              />
+              <Label htmlFor="logos-product-only" className="cursor-pointer">Show only logos for products in this quote</Label>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
