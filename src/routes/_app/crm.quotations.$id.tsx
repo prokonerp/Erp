@@ -20,6 +20,11 @@ import { waOpen } from "@/lib/tickets";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { ShareQuotationDialog } from "@/components/ShareQuotationDialog";
+import { Switch } from "@/components/ui/switch";
+import {
+  listOemLogos, withSignedUrls, filterLogosForItems,
+  type OemLogoWithUrl, SIZE_PX,
+} from "@/lib/oemLogos.data";
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
@@ -55,6 +60,8 @@ function QuoteEditor() {
   const [bundleOpen, setBundleOpen] = useState(false);
   const [bundleParentQty, setBundleParentQty] = useState(1);
   const [shareOpen, setShareOpen] = useState(false);
+  const [oemLogos, setOemLogos] = useState<OemLogoWithUrl[]>([]);
+  const [logosProductOnly, setLogosProductOnly] = useState(false);
 
   const load = async () => {
     let sourceId = id;
@@ -91,6 +98,7 @@ function QuoteEditor() {
     supabase.from("quote_terms_templates").select("*").order("sort_order").then(({ data }) => setTemplates((data || []) as any));
     supabase.from("crm_settings").select("*").eq("id", 1).single().then(({ data }) => setSettings((data as any) || { id: 1, business_state: "Haryana", business_gstin: null, default_terms: "", default_customer_notes: "Thanks for your business." }));
     fetchBranches().then((bs) => setBranches(bs)).catch(() => {});
+    listOemLogos(true).then(withSignedUrls).then(setOemLogos).catch(() => {});
   }, [id]);
 
   // Default branch on first load
