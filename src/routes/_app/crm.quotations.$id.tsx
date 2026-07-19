@@ -215,6 +215,7 @@ function QuoteEditor() {
       terms: q.terms,
       customer_notes: q.customer_notes,
       remarks: q.remarks,
+      include_oem_logos: (q as any).include_oem_logos !== false,
     };
     if (isClone) {
       const { data: u } = await supabase.auth.getUser();
