@@ -630,6 +630,40 @@ function QuoteEditor() {
             <div className="mt-6 text-gray-600">Authorised Signatory</div>
           </div>
         </div>
+
+        {(() => {
+          if ((q as any).include_oem_logos === false) return null;
+          const pool = logosProductOnly ? filterLogosForItems(oemLogos, q.items) : oemLogos;
+          if (pool.length === 0) return null;
+          const groups = {
+            left: pool.filter((l) => l.position === "left"),
+            center: pool.filter((l) => l.position === "center"),
+            right: pool.filter((l) => l.position === "right"),
+          };
+          const renderGroup = (items: OemLogoWithUrl[], align: "start" | "center" | "end") => (
+            <div className="flex flex-wrap items-center gap-4" style={{ justifyContent: align === "start" ? "flex-start" : align === "end" ? "flex-end" : "center" }}>
+              {items.map((l) => (
+                <img
+                  key={l.id}
+                  src={l.url}
+                  alt={l.oem_name}
+                  style={{ height: SIZE_PX[l.size], maxWidth: 220, objectFit: "contain" }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
+              ))}
+            </div>
+          );
+          return (
+            <div
+              className="mt-10 pt-3 grid grid-cols-3 gap-4 items-center"
+              style={{ borderTop: "0.5px solid #9ca3af", background: "#fafafa", padding: "12px 16px" }}
+            >
+              <div>{renderGroup(groups.left, "start")}</div>
+              <div>{renderGroup(groups.center, "center")}</div>
+              <div>{renderGroup(groups.right, "end")}</div>
+            </div>
+          );
+        })()}
       </div>
 
       <BundleApplyDialog
