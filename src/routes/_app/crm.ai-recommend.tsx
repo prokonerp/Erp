@@ -3,25 +3,26 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Calculator, Clock, AlertTriangle, CheckCircle2, Zap } from "lucide-react";
 
 export const Route = createFileRoute("/_app/crm/ai-recommend")({
   component: UpsBackupCalculatorPage,
   head: () => ({
     meta: [
       { title: "UPS Backup Time Calculator — Prokon" },
-      { name: "description", content: "Calculate UPS backup time for predefined battery sizes." },
+      { name: "description", content: "Calculate UPS backup time across load scenarios for predefined battery sizes." },
     ],
   }),
 });
 
-const BATTERY_RATINGS = [7, 12, 26, 42, 65, 100, 150, 200];
-const UTILIZATION_FACTOR = 0.45;
+const BATTERY_RATINGS = [7, 9, 12, 26, 42, 65, 76, 80, 100, 120, 150, 200];
+const LOAD_LEVELS = [25, 50, 75, 100] as const;
+type LoadLevel = typeof LOAD_LEVELS[number];
 
 type Row = {
   ah: number;
-  backupMin: number;
-  backupHours: number;
+  backup: Record<LoadLevel, number>;   // minutes (rounded); -1 = charger supports load
   recommended: boolean;
 };
 
@@ -30,31 +31,46 @@ function UpsBackupCalculatorPage() {
   const [pf, setPf] = useState("0.9");
   const [dcBus, setDcBus] = useState("192");
   const [efficiency, setEfficiency] = useState("0.9");
+  const [utilization, setUtilization] = useState("0.70");
   const [requiredMin, setRequiredMin] = useState("");
+  const [includeCharger, setIncludeCharger] = useState(false);
+  const [chargerAmp, setChargerAmp] = useState("10");
 
   const nKva = parseFloat(kva) || 0;
   const nPf = parseFloat(pf) || 0;
   const nDc = parseFloat(dcBus) || 0;
   const nEff = parseFloat(efficiency) || 0;
+  const nUf = parseFloat(utilization) || 0;
   const nRequiredMin = parseFloat(requiredMin) || 0;
+  const nCharger = parseFloat(chargerAmp) || 0;
 
-  const loadW = nKva * 1000 * nPf;
+  const load100 = nKva * 1000 * nPf;
+  const loadFor = (lvl: LoadLevel) => load100 * (lvl / 100);
 
   const rows: Row[] = useMemo(() => {
-    if (loadW <= 0 || nDc <= 0 || nEff <= 0) return [];
+    if (load100 <= 0 || nDc <= 0 || nEff <= 0 || nUf <= 0) return [];
+
+    const calc = (ah: number, lvl: LoadLevel): number => {
+      const load = loadFor(lvl);
+      if (load <= 0) return 0;
+      if (includeCharger) {
+        const dcCurrent = load / (nDc * nEff);
+        const effCurrent = dcCurrent - nCharger;
+        if (effCurrent <= 0) return -1;
+        return Math.round((ah * nUf * 60) / effCurrent);
+      }
+      return Math.round((ah * nUf * nDc * nEff * 60) / load);
+    };
 
     const calculated = BATTERY_RATINGS.map((ah) => {
-      const backupMin = (ah * UTILIZATION_FACTOR * nDc * nEff * 60) / loadW;
-      return {
-        ah,
-        backupMin: Math.round(backupMin),
-        backupHours: backupMin / 60,
-      };
+      const backup = {} as Record<LoadLevel, number>;
+      for (const lvl of LOAD_LEVELS) backup[lvl] = calc(ah, lvl);
+      return { ah, backup };
     });
 
     let recommendedAh: number | null = null;
     if (nRequiredMin > 0) {
-      const match = calculated.find((r) => r.backupMin >= nRequiredMin);
+      const match = calculated.find((r) => r.backup[100] >= nRequiredMin);
       if (match) recommendedAh = match.ah;
     }
 
@@ -62,12 +78,13 @@ function UpsBackupCalculatorPage() {
       ...r,
       recommended: r.ah === recommendedAh,
     }));
-  }, [loadW, nDc, nEff, nRequiredMin]);
+  }, [load100, nDc, nEff, nUf, nRequiredMin, includeCharger, nCharger]);
 
   const errors: string[] = [];
   if (!nKva) errors.push("UPS Capacity (KVA) is required");
   if (!nDc) errors.push("DC Bus Voltage is required");
   if (nDc > 0 && nDc % 12 !== 0) errors.push("DC Bus Voltage should be a multiple of 12");
+  if (nUf <= 0 || nUf > 1) errors.push("Utilization factor should be between 0 and 1");
 
   return (
     <div className="space-y-4">
@@ -98,16 +115,35 @@ function UpsBackupCalculatorPage() {
               <Label className="text-xs">Efficiency</Label>
               <Input type="number" step="0.01" value={efficiency} onChange={(e) => setEfficiency(e.target.value)} />
             </div>
+            <div>
+              <Label className="text-xs">Utilization Factor</Label>
+              <Input type="number" step="0.01" value={utilization} onChange={(e) => setUtilization(e.target.value)} />
+            </div>
             <div className="col-span-2 md:col-span-4">
               <Label className="text-xs">Required Minimum Backup (minutes) — optional</Label>
               <Input type="number" step="1" value={requiredMin} onChange={(e) => setRequiredMin(e.target.value)} placeholder="e.g. 60" />
             </div>
 
+            <div className="col-span-2 md:col-span-4 border-t pt-3 flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch id="charger-toggle" checked={includeCharger} onCheckedChange={setIncludeCharger} />
+                <Label htmlFor="charger-toggle" className="text-xs cursor-pointer flex items-center gap-1">
+                  <Zap className="h-3.5 w-3.5" /> Include Charger Impact
+                </Label>
+              </div>
+              {includeCharger && (
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">Charger Current (A)</Label>
+                  <Input type="number" step="0.1" value={chargerAmp} onChange={(e) => setChargerAmp(e.target.value)} className="w-28 h-8" />
+                </div>
+              )}
+            </div>
+
             <div className="col-span-2 md:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 text-sm">
-              <Stat label="Load (W)" value={loadW > 0 ? loadW.toFixed(0) : "—"} />
-              <Stat label="DC Bus (V)" value={nDc > 0 ? String(nDc) : "—"} />
-              <Stat label="Efficiency" value={nEff > 0 ? nEff.toFixed(2) : "—"} />
-              <Stat label="Utilization Factor" value={String(UTILIZATION_FACTOR)} highlight />
+              <Stat label="Load 100% (W)" value={load100 > 0 ? load100.toFixed(0) : "—"} />
+              <Stat label="Load 75% (W)" value={load100 > 0 ? loadFor(75).toFixed(0) : "—"} />
+              <Stat label="Load 50% (W)" value={load100 > 0 ? loadFor(50).toFixed(0) : "—"} />
+              <Stat label="Load 25% (W)" value={load100 > 0 ? loadFor(25).toFixed(0) : "—"} highlight />
             </div>
           </CardContent>
         </Card>
@@ -123,8 +159,14 @@ function UpsBackupCalculatorPage() {
               Load (W) = KVA × 1000 × PF
             </div>
             <div className="text-xs text-muted-foreground">
-              Backup (min) = (AH × 0.45 × DC V × Eff × 60) / Load
+              Backup (min) = (AH × UF × DC V × Eff × 60) / Load
             </div>
+            {includeCharger && (
+              <div className="text-xs text-muted-foreground pt-1 border-t">
+                Charger mode: DC Current = Load / (DC V × Eff); Effective = DC Current − Charger A;
+                Backup = (AH × UF × 60) / Effective
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -137,7 +179,9 @@ function UpsBackupCalculatorPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold uppercase tracking-wide">Backup Time Table</CardTitle>
+          <CardTitle className="text-sm font-semibold uppercase tracking-wide">
+            Backup Time (Minutes) — by Load Level
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -145,15 +189,17 @@ function UpsBackupCalculatorPage() {
               <thead>
                 <tr className="bg-muted/60 text-xs uppercase tracking-wide">
                   <th className="text-left px-3 py-2 border-b font-bold">Battery AH</th>
-                  <th className="text-right px-3 py-2 border-b font-bold">Backup Time (Minutes)</th>
-                  <th className="text-right px-3 py-2 border-b font-bold">Backup Time (Hours)</th>
+                  <th className="text-right px-3 py-2 border-b font-bold">25% Load</th>
+                  <th className="text-right px-3 py-2 border-b font-bold">50% Load</th>
+                  <th className="text-right px-3 py-2 border-b font-bold">75% Load</th>
+                  <th className="text-right px-3 py-2 border-b font-bold">100% Load</th>
                   <th className="text-center px-3 py-2 border-b font-bold">Recommendation</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="text-center py-6 text-muted-foreground">
+                    <td colSpan={6} className="text-center py-6 text-muted-foreground">
                       Enter KVA, DC Bus Voltage, and Efficiency to see results.
                     </td>
                   </tr>
@@ -164,12 +210,18 @@ function UpsBackupCalculatorPage() {
                     className={`border-b hover:bg-muted/30 ${r.recommended ? "bg-primary/10" : ""}`}
                   >
                     <td className="px-3 py-2 font-medium">{r.ah} Ah</td>
-                    <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                      {r.backupMin} min
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {r.backupHours.toFixed(2)} h
-                    </td>
+                    {LOAD_LEVELS.map((lvl) => (
+                      <td
+                        key={lvl}
+                        className={`px-3 py-2 text-right tabular-nums ${lvl === 100 ? "font-semibold" : ""}`}
+                      >
+                        {r.backup[lvl] === -1 ? (
+                          <span className="text-[11px] text-emerald-600">charger supports load</span>
+                        ) : (
+                          `${r.backup[lvl]} min`
+                        )}
+                      </td>
+                    ))}
                     <td className="px-3 py-2 text-center">
                       {r.recommended && (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
