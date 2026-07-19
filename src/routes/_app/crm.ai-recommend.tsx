@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_app/crm/ai-recommend")({
   }),
 });
 
-const BATTERY_RATINGS = [7, 9, 12, 26, 42, 65, 76, 80, 100, 120, 150, 200];
+const BATTERY_RATINGS = [7, 9, 12, 26, 42, 65, 75, 80, 100, 120, 150, 200];
 const LOAD_LEVELS = [25, 50, 75, 100] as const;
 type LoadLevel = typeof LOAD_LEVELS[number];
 
