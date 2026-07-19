@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, Save, Star } from "lucide-react";
 import { toast } from "sonner";
 import { INDIAN_STATES, type CrmSettings, type QuoteTermsTemplate } from "@/lib/crm";
+import { OemLogoSettings } from "@/components/OemLogoSettings";
 
 export const Route = createFileRoute("/_app/crm/settings")({
   component: CrmSettingsPage,
@@ -148,6 +149,8 @@ function CrmSettingsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <OemLogoSettings />
     </div>
   );
 }
