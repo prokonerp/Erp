@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import html2canvas from "html2canvas-pro";
 
 /**
  * Convert a rendered DOM element (typically an on-screen A4 document
