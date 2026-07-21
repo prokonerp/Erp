@@ -231,7 +231,10 @@ function TicketDetail() {
 
   if (!t) return <div className="p-6 text-muted-foreground">Loading…</div>;
 
-  const update = (patch: Partial<Ticket>) => setT({ ...t, ...patch });
+  const update = (patch: Partial<Ticket>) => {
+    dirtyRef.current = true;
+    setT({ ...t, ...patch });
+  };
 
   const tplVars = (extra: Record<string, string> = {}) => ({
     case_id: t.case_id,
