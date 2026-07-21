@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Printer, Download, CheckCircle2, Ban } from "lucide-react";
+import { ArrowLeft, Printer, Download, Ban, Pencil } from "lucide-react";
 import { fetchChallan, type DeliveryChallan } from "@/lib/challan";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -27,10 +27,10 @@ function ChallanView() {
   if (!c) return <div className="text-muted-foreground">Loading…</div>;
   const isOem = c.doc_type === "oem";
   const oemLogo = isOem ? (c.oem_logo_url ? { url: c.oem_logo_url, alt: c.party_name || "OEM" } : getOemLogo(c.party_name)) : null;
-  const status = c.status || "Draft";
-  const isDraft = status === "Draft";
-  const isSubmitted = status === "Submitted";
+  const status = c.status || "Challan Generated";
+  // Legacy 'Draft' rows shouldn't exist after migration, but stay defensive.
   const isCancelled = status === "Cancelled";
+  const isActive = !isCancelled;
 
   const handleDownload = async () => {
     const el = document.getElementById("print-area");
@@ -42,25 +42,8 @@ function ChallanView() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!isDraft) return;
-    if (!confirm("Submit this Delivery Challan?\n\nThis will lock the document and update the IMS Stock Ledger. This action cannot be undone except by cancellation.")) return;
-    setBusy(true);
-    const { data: u } = await supabase.auth.getUser();
-    const { data, error } = await supabase
-      .from("delivery_challans" as never)
-      .update({ status: "Submitted", submitted_by: u.user?.id ?? null, submitted_at: new Date().toISOString() } as never)
-      .eq("id", c.id)
-      .select("*")
-      .maybeSingle();
-    setBusy(false);
-    if (error) { toast.error(error.message); return; }
-    if (data) setC(data as unknown as DeliveryChallan);
-    toast.success("Delivery Challan submitted. Stock ledger updated.");
-  };
-
   const handleCancel = async () => {
-    if (!isSubmitted) return;
+    if (!isActive) return;
     if (!confirm("Cancel this submitted Delivery Challan?\n\nRelated stock ledger entries will be reversed.")) return;
     setBusy(true);
     const { error } = await supabase
@@ -107,18 +90,20 @@ function ChallanView() {
             <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
           </Link>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={isSubmitted ? "default" : isCancelled ? "destructive" : "secondary"}>{status}</Badge>
-            {isDraft && (
+            <Badge
+              variant={isCancelled ? "destructive" : "default"}
+              className={isCancelled ? "" : "bg-emerald-600 hover:bg-emerald-600"}
+            >
+              {status}
+            </Badge>
+            {isActive && (
               <Link to="/challan/$id/edit" params={{ id: c.id }}>
-                <Button variant="outline" size="sm">Edit</Button>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Pencil className="h-4 w-4" />Edit
+                </Button>
               </Link>
             )}
-            {isDraft && (
-              <Button size="sm" onClick={handleSubmit} disabled={busy} className="gap-1.5">
-                <CheckCircle2 className="h-4 w-4" />Submit
-              </Button>
-            )}
-            {isSubmitted && (
+            {isActive && (
               <Button size="sm" variant="outline" onClick={handleCancel} disabled={busy} className="gap-1.5">
                 <Ban className="h-4 w-4" />Cancel
               </Button>
@@ -126,15 +111,14 @@ function ChallanView() {
             <Button variant="outline" size="sm" onClick={handleDownload}>
               <Download className="h-4 w-4 mr-1" />Download PDF
             </Button>
-            <Button size="sm" onClick={handlePrint} disabled={isDraft} title={isDraft ? "Submit the document before printing" : ""}>
+            <Button size="sm" onClick={handlePrint}>
               <Printer className="h-4 w-4 mr-1" />Print
             </Button>
           </div>
         </div>
         <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Review &amp; Print Preview</span> — A4 landscape.
-          {isDraft && " This document is in Draft. Click Submit to lock it and post to the IMS Stock Ledger."}
-          {isSubmitted && c.submitted_at && ` Submitted on ${new Date(c.submitted_at).toLocaleString()}.`}
+          {isActive && " Delivery Challan is live in the IMS Stock Ledger."}
           {c.printed_at && ` · Last printed ${new Date(c.printed_at).toLocaleString()}.`}
         </div>
       </div>
