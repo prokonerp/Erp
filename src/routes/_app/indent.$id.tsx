@@ -451,6 +451,9 @@ function IndentDetail() {
           <Button variant="outline" size="sm" onClick={() => generateGrn()}>
             <PackageCheck className="h-4 w-4 mr-1" />Generate GRN
           </Button>
+          <span className="text-xs text-muted-foreground self-center min-w-[70px] text-right">
+            {autoSaveState === "saving" ? "Saving…" : autoSaveState === "saved" ? "Saved" : autoSaveState === "error" ? "Save Failed" : ""}
+          </span>
           <Button onClick={save} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
         </div>
