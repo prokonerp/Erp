@@ -620,6 +620,7 @@ function IndentDetail() {
           onRemove={() => update({ oracles_data: (i.oracles_data || []).filter((_, ix) => ix !== idx) })}
           onGenerateChallan={generateChallan}
           onGenerateGrn={generateGrn}
+          onGenerateCustomerGrn={generateCustomerGrn}
           dcExists={!!dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
           dcInfo={dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
         />
