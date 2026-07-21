@@ -42,7 +42,6 @@ export function OracleBlockEditor({
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   // Per-row stock pools, keyed by row index.
   const [exchStockByRow, setExchStockByRow] = useState<Record<number, StockRow[]>>({});
-  const [recvStockByRow, setRecvStockByRow] = useState<Record<number, StockRow[]>>({});
   const [shortageOpen, setShortageOpen] = useState(false);
   const [shortageMsg, setShortageMsg] = useState<string>("");
   const [shortageHasOther, setShortageHasOther] = useState(false);
@@ -79,22 +78,6 @@ export function OracleBlockEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exchWhKey]);
 
-  const recvWhKey = value.received_rows.map((r) => r.warehouse_id).join("|");
-  useEffect(() => {
-    (async () => {
-      const next: Record<number, StockRow[]> = {};
-      await Promise.all(value.received_rows.map(async (r, i) => {
-        if (!r.warehouse_id) { next[i] = []; return; }
-        const { data } = await supabase.from("ims_stock_items")
-          .select("id,part_name,part_model_no,part_serial_no,warehouse_id")
-          .eq("warehouse_id", r.warehouse_id)
-          .order("part_name");
-        next[i] = (data || []) as StockRow[];
-      }));
-      setRecvStockByRow(next);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recvWhKey]);
 
   const setBlock = (patch: Partial<OracleBlock>) => onChange({ ...value, ...patch });
   const setExchRow = (i: number, patch: Partial<OracleExchangeRow>) =>
