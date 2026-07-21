@@ -8,7 +8,8 @@ export const Route = createFileRoute("/_app/ims")({
 
 const TABS: { to: string; label: string }[] = [
   { to: "/ims", label: "Dashboard" },
-  { to: "/ims/stock", label: "Stock Ledger" },
+  { to: "/ims/ledger", label: "Warehouse Ledger" },
+  { to: "/ims/stock", label: "Stock Items" },
   { to: "/ims/transactions", label: "Transactions" },
   { to: "/ims/transfers", label: "Stock Transfer" },
   { to: "/ims/reservations", label: "Reservations" },

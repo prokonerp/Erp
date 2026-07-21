@@ -21,6 +21,7 @@ import {
 } from "@/lib/ims";
 import { ImsModelPartPicker } from "@/components/ImsModelPartPicker";
 import { useIsAdmin } from "@/lib/useRole";
+import { StockStatusBadge } from "@/components/StockStatusBadge";
 
 export const Route = createFileRoute("/_app/ims/stock")({
   component: StockLedger,
@@ -138,7 +139,7 @@ function StockLedger() {
                   <td className="p-2">{r.qty ?? 1}</td>
                   <td className="p-2">{whName(r.warehouse_id)}</td>
                   <td className="p-2"><Badge variant={r.stock_type === "good" ? "default" : "secondary"}>{STOCK_TYPE_LABEL[r.stock_type]}</Badge></td>
-                  <td className="p-2"><Badge variant="outline">{STOCK_STATUS_LABEL[r.stock_status]}</Badge></td>
+                  <td className="p-2"><StockStatusBadge status={r.stock_status} type={r.stock_type} /></td>
                   <td className="p-2">{r.opening_stock ? <Badge>Opening</Badge> : <span className="text-muted-foreground">—</span>}</td>
                   <td className="p-2 font-mono text-xs">{r.ticket_id || r.indent_id || "—"}</td>
                   {isAdmin && (
