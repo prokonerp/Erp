@@ -64,6 +64,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     checked_by: "",
     approved_by: "",
     oem_logo_url: "",
+    indent_id: "",
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -272,6 +273,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         dispatch_date: form.dispatch_date || null,
         items: cleanItems,
         branch_id: branchId,
+        indent_id: form.indent_id || null,
       };
       const { error } = await supabase
         .from("delivery_challans" as never)
@@ -292,6 +294,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       dispatch_date: form.dispatch_date || null,
       items: cleanItems,
       branch_id: branchId,
+      indent_id: form.indent_id || null,
       created_by: userData.user?.id ?? null,
     };
     const { data, error } = await supabase
