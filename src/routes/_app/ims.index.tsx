@@ -6,11 +6,13 @@ import {
   listTransfers,
   listReservations,
   listWarehouses,
+  listTransactions,
   formatWarehouse,
   type StockItem,
   type Transfer,
   type Reservation,
   type WarehouseLite,
+  type Transaction,
 } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/ims/")({
@@ -22,15 +24,16 @@ function Dashboard() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [resv, setResv] = useState<Reservation[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
+  const [txns, setTxns] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [s, t, r, w] = await Promise.all([
-          listStock(), listTransfers(), listReservations(), listWarehouses(),
+        const [s, t, r, w, x] = await Promise.all([
+          listStock(), listTransfers(), listReservations(), listWarehouses(), listTransactions(),
         ]);
-        setStock(s); setTransfers(t); setResv(r); setWarehouses(w);
+        setStock(s); setTransfers(t); setResv(r); setWarehouses(w); setTxns(x);
       } finally {
         setLoading(false);
       }
