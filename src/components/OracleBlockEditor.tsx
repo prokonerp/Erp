@@ -279,7 +279,16 @@ export function OracleBlockEditor({
         <div className="rounded-md border p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">B. Material Exchange (from IMS)</div>
-            {onGenerateChallan && (
+            {onGenerateChallan && (dcExists ? (
+              <div className="flex items-center gap-2 text-xs">
+                <Badge variant="secondary" className="font-mono">
+                  DC {dcInfo?.challan_no || ""}{dcInfo?.status ? ` · ${dcInfo.status}` : ""}
+                </Badge>
+                <Button variant="outline" size="sm" disabled title="Delivery Challan already generated for this Oracle Number">
+                  <FileText className="h-4 w-4 mr-1" />DC Generated
+                </Button>
+              </div>
+            ) : (
               <Button
                 variant="outline"
                 size="sm"
@@ -288,7 +297,7 @@ export function OracleBlockEditor({
               >
                 <FileText className="h-4 w-4 mr-1" />Generate Delivery Challan
               </Button>
-            )}
+            ))}
           </div>
           {value.exchange_rows.map((ex, i) => {
             const stock = exchStockByRow[i] || [];
