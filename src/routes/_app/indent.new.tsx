@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -67,6 +67,10 @@ function NewIndent() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(Boolean(ticket_id));
   const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>({});
+  const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const draftIdRef = useRef<string | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const creatingRef = useRef(false);
 
   useEffect(() => {
     if (!ticket_id) return;
@@ -158,6 +162,53 @@ function NewIndent() {
 
   const set = (p: Partial<Form>) => setForm((s) => ({ ...s, ...p }));
 
+  /** Debounced auto-save. First save creates the Indent draft (once
+   *  indent_type is chosen), all subsequent saves update the same record
+   *  and never create duplicates. */
+  useEffect(() => {
+    if (loading) return;
+    if (!form.ticket_id || !form.indent_type) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setAutoSaveState("saving");
+    saveTimer.current = setTimeout(async () => {
+      const payload = {
+        indent_date: form.indent_date,
+        ticket_id: form.ticket_id,
+        indent_city: form.indent_city || null,
+        case_id: form.case_id || null,
+        oem_case_id: form.oem_case_id || null,
+        company: form.company || null,
+        problem_reported: form.problem_reported || null,
+        product_model: form.product_model || null,
+        product_serial: form.product_serial || null,
+        indent_type: form.indent_type || null,
+        oracles_data: form.oracles_data,
+        engineer_name: form.engineer_name || null,
+        remarks: form.remarks || null,
+      };
+      if (!draftIdRef.current) {
+        if (creatingRef.current) return;
+        creatingRef.current = true;
+        const { data: u } = await supabase.auth.getUser();
+        const { data, error } = await supabase.from("indents" as never)
+          .insert({ ...payload, created_by: u.user?.id ?? null } as never)
+          .select("id, indent_no").maybeSingle() as unknown as { data: { id: string; indent_no: string | null } | null; error: { message: string } | null };
+        creatingRef.current = false;
+        if (error || !data) { setAutoSaveState("error"); return; }
+        draftIdRef.current = data.id;
+        setAutoSaveState("saved");
+        // Redirect to the detail page — from there auto-save keeps updating
+        // the same record (no duplicates).
+        navigate({ to: "/indent/$id", params: { id: data.id }, replace: true });
+        return;
+      }
+      const { error } = await supabase.from("indents" as never).update(payload as never).eq("id", draftIdRef.current);
+      setAutoSaveState(error ? "error" : "saved");
+    }, 2500);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, loading]);
+
   const save = async () => {
     if (!form.ticket_id) return toast.error("Linked Ticket is required");
     if (!form.indent_type) return toast.error("Please select an Indent Type before saving");
@@ -210,6 +261,9 @@ function NewIndent() {
               <ArrowLeft className="h-4 w-4 mr-1" />Back
             </Button>
           </Link>
+          <span className="text-xs text-muted-foreground self-center min-w-[70px] text-right">
+            {autoSaveState === "saving" ? "Saving…" : autoSaveState === "saved" ? "Saved" : autoSaveState === "error" ? "Save Failed" : ""}
+          </span>
           <Button size="sm" onClick={save} disabled={busy}>
             <Save className="h-4 w-4 mr-1" />{busy ? "Saving…" : "Save Indent"}
           </Button>

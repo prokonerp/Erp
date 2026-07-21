@@ -22,6 +22,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
+  dcExists = false, dcInfo,
 }: {
   index: number;
   value: OracleBlock;
@@ -33,6 +34,8 @@ export function OracleBlockEditor({
   onToggleCollapse?: () => void;
   onGenerateChallan?: (oracle: OracleBlock) => void;
   onGenerateGrn?: (oracle: OracleBlock) => void;
+  dcExists?: boolean;
+  dcInfo?: { challan_no?: string | null; challan_date?: string | null; status?: string | null; id?: string | null };
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -142,6 +145,25 @@ export function OracleBlockEditor({
   const serialsFor = (rows: StockRow[], modelKey: string) => {
     const [pn, mn] = (modelKey || "").split("||");
     return rows.filter((s) => s.part_name === pn && (s.part_model_no || "") === (mn || ""));
+  };
+  /** Ensure the currently-saved model/serial always renders in the Select,
+   *  even if the underlying IMS row is no longer 'available' (e.g. issued
+   *  after a DC was posted). Without this, saved values disappear on reopen. */
+  const modelsWithSaved = (rows: StockRow[], savedKey: string) => {
+    const list = modelsFor(rows);
+    if (savedKey && !list.some((m) => m.key === savedKey)) {
+      const [pn, mn] = savedKey.split("||");
+      list.unshift({ key: savedKey, label: mn ? `${pn} — ${mn}` : pn });
+    }
+    return list;
+  };
+  const serialsWithSaved = (rows: StockRow[], modelKey: string, savedSerial: string) => {
+    const list = serialsFor(rows, modelKey);
+    if (savedSerial && !list.some((s) => (s.part_serial_no || s.id) === savedSerial)) {
+      const [pn, mn] = (modelKey || "").split("||");
+      list.unshift({ id: `saved:${savedSerial}`, part_name: pn || "", part_model_no: mn || null, part_serial_no: savedSerial, warehouse_id: null });
+    }
+    return list;
   };
 
   const checkStockAndValidate = async (rowIdx: number, qtyStr: string) => {
@@ -257,7 +279,16 @@ export function OracleBlockEditor({
         <div className="rounded-md border p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">B. Material Exchange (from IMS)</div>
-            {onGenerateChallan && (
+            {onGenerateChallan && (dcExists ? (
+              <div className="flex items-center gap-2 text-xs">
+                <Badge variant="secondary" className="font-mono">
+                  DC {dcInfo?.challan_no || ""}{dcInfo?.status ? ` · ${dcInfo.status}` : ""}
+                </Badge>
+                <Button variant="outline" size="sm" disabled title="Delivery Challan already generated for this Oracle Number">
+                  <FileText className="h-4 w-4 mr-1" />DC Generated
+                </Button>
+              </div>
+            ) : (
               <Button
                 variant="outline"
                 size="sm"
@@ -266,12 +297,12 @@ export function OracleBlockEditor({
               >
                 <FileText className="h-4 w-4 mr-1" />Generate Delivery Challan
               </Button>
-            )}
+            ))}
           </div>
           {value.exchange_rows.map((ex, i) => {
             const stock = exchStockByRow[i] || [];
-            const models = modelsFor(stock);
-            const serials = serialsFor(stock, ex.model_no);
+            const models = modelsWithSaved(stock, ex.model_no);
+            const serials = serialsWithSaved(stock, ex.model_no, ex.serial_no);
             return (
               <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 border-t first:border-t-0 first:pt-0">
                 <div>
@@ -340,8 +371,8 @@ export function OracleBlockEditor({
           </div>
           {value.received_rows.map((rcv, i) => {
             const stock = recvStockByRow[i] || [];
-            const models = modelsFor(stock);
-            const serials = serialsFor(stock, rcv.model_no);
+            const models = modelsWithSaved(stock, rcv.model_no);
+            const serials = serialsWithSaved(stock, rcv.model_no, rcv.serial_no);
             return (
               <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t first:border-t-0 first:pt-0">
                 <div>

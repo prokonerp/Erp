@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,10 @@ function IndentDetail() {
   const [defParts, setDefParts] = useState<Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>>([]);
   const { isAdmin } = useIsAdmin();
   const [tick, setTick] = useState(0);
+  const [dcByOracle, setDcByOracle] = useState<Record<string, { challan_no: string | null; challan_date: string | null; status: string | null; id: string }>>({});
+  const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const hydratedRef = useRef(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storageKey = `indent:collapsed:${id}`;
   const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>(() => {
     if (typeof window === "undefined") return {};
@@ -57,10 +61,64 @@ function IndentDetail() {
         const raw = (t as { defective_parts_details?: unknown } | null)?.defective_parts_details;
         setDefParts(Array.isArray(raw) ? (raw as Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>) : []);
       }
+      // Load Delivery Challans linked to this indent so we can disable
+      // duplicate DC generation per Oracle Number.
+      const { data: dcs } = await supabase
+        .from("delivery_challans")
+        .select("id, challan_no, challan_date, status, items")
+        .eq("indent_id", id);
+      const map: Record<string, { challan_no: string | null; challan_date: string | null; status: string | null; id: string }> = {};
+      for (const dc of (dcs || []) as Array<{ id: string; challan_no: string | null; challan_date: string | null; status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+        if ((dc.status || "").toLowerCase() === "cancelled") continue;
+        const seen = new Set<string>();
+        for (const it of dc.items || []) {
+          const on = (it?.oracle_no || "").trim();
+          if (!on || seen.has(on)) continue;
+          seen.add(on);
+          const key = on.toUpperCase();
+          if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
+        }
+      }
+      setDcByOracle(map);
+      // Give React one paint before enabling auto-save so we don't save the
+      // freshly-loaded record right back to the DB.
+      setTimeout(() => { hydratedRef.current = true; }, 100);
     })();
   }, [id]);
 
   const update = (p: Partial<Indent>) => setI((s) => (s ? { ...s, ...p } : s));
+
+  /** Debounced auto-save. Skips until the record has hydrated and only fires
+   *  when we have a valid Indent Type (required by DB validation). */
+  useEffect(() => {
+    if (!hydratedRef.current || !i) return;
+    if (!i.indent_type) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setAutoSaveState("saving");
+    saveTimer.current = setTimeout(async () => {
+      const { error } = await supabase.from("indents" as never).update({
+        indent_date: i.indent_date,
+        indent_city: i.indent_city,
+        case_id: i.case_id,
+        oem_case_id: i.oem_case_id,
+        company: i.company,
+        problem_reported: i.problem_reported,
+        indent_type: i.indent_type,
+        oracles_data: i.oracles_data || [],
+        engineer_name: i.engineer_name,
+        remarks: i.remarks,
+        product_model: i.product_model,
+        product_serial: i.product_serial,
+      } as never).eq("id", i.id);
+      if (error) { setAutoSaveState("error"); return; }
+      await syncTicketGoodPartsFromIndent(supabase, {
+        id: i.id, indent_no: i.indent_no, ticket_id: i.ticket_id,
+        oracles_data: i.oracles_data || [],
+      });
+      setAutoSaveState("saved");
+    }, 2500);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [i]);
 
   // Resync oracle blocks from the linked ticket's current defective parts.
   // Existing closed oracles are preserved; open oracles are re-derived from
@@ -132,6 +190,16 @@ function IndentDetail() {
 
   const generateChallan = async (only?: OracleBlock) => {
     if (!i) return;
+    // Duplicate DC guard — block generation when any target Oracle already
+    // has an active (non-Cancelled) Delivery Challan.
+    const targets = only ? [only] : (i.oracles_data || []);
+    for (const o of targets) {
+      const key = (o.oracle_no || "").trim().toUpperCase();
+      if (key && dcByOracle[key]) {
+        toast.error(`DC ${dcByOracle[key].challan_no || ""} already exists for Oracle ${o.oracle_no}`);
+        return;
+      }
+    }
     // Aggregate exchange rows across all oracles as the material being sent to the customer.
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
     const oracles = only ? [only] : (i.oracles_data || []);
@@ -383,6 +451,9 @@ function IndentDetail() {
           <Button variant="outline" size="sm" onClick={() => generateGrn()}>
             <PackageCheck className="h-4 w-4 mr-1" />Generate GRN
           </Button>
+          <span className="text-xs text-muted-foreground self-center min-w-[70px] text-right">
+            {autoSaveState === "saving" ? "Saving…" : autoSaveState === "saved" ? "Saved" : autoSaveState === "error" ? "Save Failed" : ""}
+          </span>
           <Button onClick={save} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
         </div>
@@ -448,6 +519,8 @@ function IndentDetail() {
           onRemove={() => update({ oracles_data: (i.oracles_data || []).filter((_, ix) => ix !== idx) })}
           onGenerateChallan={generateChallan}
           onGenerateGrn={generateGrn}
+          dcExists={!!dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
+          dcInfo={dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
         />
       ))}
     </div>
