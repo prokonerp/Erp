@@ -323,11 +323,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         <Eye className="h-4 w-4" />
         <span className="hidden sm:inline">Review</span>
       </Button>
-      <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
-        <Save className="h-4 w-4" />
-        <span className="hidden sm:inline">Save Draft</span>
-        <span className="sm:hidden">Save</span>
-      </Button>
+      <SaveIndicator state={saveState} at={lastSavedAt} />
     </>
   );
 
@@ -746,9 +742,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         <Button type="button" variant="outline" size="sm" onClick={openReview} disabled={busy} className="flex-1 gap-1.5">
           <Eye className="h-4 w-4" /> Review
         </Button>
-        <Button type="button" size="sm" onClick={submit} disabled={busy} className="flex-1 gap-1.5">
-          <Save className="h-4 w-4" /> Save
-        </Button>
+        <div className="flex-1 flex justify-end">
+          <SaveIndicator state={saveState} at={lastSavedAt} />
+        </div>
       </StickyMobileActions>
 
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
