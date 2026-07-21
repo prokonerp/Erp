@@ -371,15 +371,10 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             <Input type="date" value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} />
           </FormField>
           <FormField size="sm" label="Status">
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Draft">Draft</SelectItem>
-                <SelectItem value="Submitted">Submitted</SelectItem>
-                <SelectItem value="Dispatched">Dispatched</SelectItem>
-                <SelectItem value="Cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
+            <Input value={form.status} readOnly className="bg-muted/40" />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Documents are saved as Draft. Submit from the Review &amp; Print page to update inventory.
+            </p>
           </FormField>
           <FormField size="sm" label="Reference No.">
             <Input value={form.reference_no} onChange={(e) => setForm({ ...form, reference_no: e.target.value })} />
