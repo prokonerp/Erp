@@ -131,14 +131,30 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   // Prefill from a source document (e.g. Indent → Generate GRN).
   useEffect(() => {
     if (editId) return; // do not run session prefill in edit mode
+    // Two prefill flavours:
+    //  - "grn:prefill:new-oem"       → Section C (Material Received from OEM)
+    //  - "grn:prefill:new-customer"  → Section D (Material Received from Customer)
     let raw: string | null = null;
-    try { raw = sessionStorage.getItem("grn:prefill:new-customer"); } catch { /* noop */ }
-    if (!raw) return;
-    try { sessionStorage.removeItem("grn:prefill:new-customer"); } catch { /* noop */ }
+    let kind: "oem" | "customer" | null = null;
+    try {
+      raw = sessionStorage.getItem("grn:prefill:new-oem");
+      if (raw) kind = "oem";
+    } catch { /* noop */ }
+    if (!raw) {
+      try {
+        raw = sessionStorage.getItem("grn:prefill:new-customer");
+        if (raw) kind = "customer";
+      } catch { /* noop */ }
+    }
+    if (!raw || !kind) return;
+    try {
+      sessionStorage.removeItem(kind === "oem" ? "grn:prefill:new-oem" : "grn:prefill:new-customer");
+    } catch { /* noop */ }
     let payload: Record<string, unknown>;
     try { payload = JSON.parse(raw); } catch { return; }
-    setCategory("customer");
+    setCategory(kind === "oem" ? "oem" : "customer");
     const customerId = (payload.customer_id as string | undefined) || null;
+    const oemName = (payload.oem_name as string | undefined) || "";
     const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<GrnItem>>) : [];
     if (prefillItems.length > 0) {
       setItems(prefillItems.map((it) => ({ ...emptyGrnItem(), ...it })) as GrnItem[]);
@@ -152,13 +168,21 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       ticket_no: (payload.ticket_no as string) || f.ticket_no,
       internal_remarks: (payload.internal_remarks as string) || f.internal_remarks,
       storage_location: (payload.storage_location as string) || f.storage_location,
+      source_name: kind === "oem" ? (oemName || f.source_name) : f.source_name,
+      indent_id: (payload.indent_id as string) || f.indent_id,
     }));
     const preWh = (payload.warehouse_id as string | null | undefined) || null;
     if (preWh) setWarehouseId(preWh);
-    if (customerId) {
+    if (kind === "customer" && customerId) {
       (async () => {
         const { data } = await supabase.from("customers").select("*").eq("id", customerId).maybeSingle();
         if (data) applyCustomer(customerId, data as unknown as Customer);
+      })();
+    } else if (kind === "oem" && oemName) {
+      // Best-effort vendor auto-match by OEM name so the vendor picker binds.
+      (async () => {
+        const { data } = await supabase.from("vendors").select("*").ilike("name", oemName).limit(1).maybeSingle();
+        if (data) applyVendor((data as { id: string }).id, data);
       })();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
