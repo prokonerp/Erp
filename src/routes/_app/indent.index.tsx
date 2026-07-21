@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Search } from "lucide-react";
-import { indentTypeLabel, indentStatusFromOracles, indentClosedAt, formatAge, oracleStatus, type Indent } from "@/lib/indent";
+import { indentTypeLabel, indentStatusFromOracles, indentClosedAt, formatAge, oracleStatus, oracleProgress, type Indent } from "@/lib/indent";
 import { useRealtimeRefetch } from "@/lib/softDelete";
 
 export const Route = createFileRoute("/_app/indent/")({
@@ -139,7 +139,9 @@ function IndentList() {
                     ) : (
                       <div className="space-y-2">
                         {oracles.map((o, i) => {
-                          const st2 = oracleStatus(o);
+                          const prog = oracleProgress(o);
+                          const dotCls = prog === "closed" ? "bg-emerald-500" : prog === "in_progress" ? "bg-amber-500" : "bg-rose-500";
+                          const progLabel = prog === "closed" ? "Closed" : prog === "in_progress" ? "In Progress" : "Pending";
                           const defs = (o.defective_rows && o.defective_rows.length)
                             ? o.defective_rows
                             : (o.defective ? [{ def_model_no: o.defective.def_model_no, def_serial_no: o.defective.def_serial_no, qty: o.defective.qty }] : []);
@@ -154,10 +156,10 @@ function IndentList() {
                           return (
                             <div key={i} className="rounded border bg-muted/30 px-2 py-1.5 space-y-1">
                               <div className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
-                                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${st2 === "closed" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotCls}`} />
                                 <span className="font-mono">Oracle {o.oracle_no || `#${i + 1}`}</span>
                                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-normal">
-                                  {st2 === "closed" ? "Closed" : "Open"}
+                                  {progLabel}
                                 </span>
                               </div>
                               {Array.from({ length: rowCount }).map((_, ri) => {
