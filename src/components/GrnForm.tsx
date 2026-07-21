@@ -780,7 +780,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         <Button type="button" variant="outline" size="sm" onClick={() => validate() && setReviewOpen(true)} disabled={busy} className="flex-1 gap-1.5">
           <Eye className="h-4 w-4" /> Review
         </Button>
-        <Button type="button" size="sm" onClick={submit} disabled={busy} className="flex-1 gap-1.5">
+        <Button type="button" size="sm" onClick={() => submit()} disabled={busy} className="flex-1 gap-1.5">
           <Save className="h-4 w-4" /> Save
         </Button>
       </StickyMobileActions>
@@ -863,10 +863,26 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
               <F label="Approved By" v={form.approved_by} />
             </Section>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
             <Button variant="outline" onClick={() => setReviewOpen(false)} disabled={busy}>Back to Edit</Button>
-            <Button onClick={submit} disabled={busy}>{busy ? "Saving..." : "Save Draft & Continue"}</Button>
+            <div className="flex flex-col-reverse sm:flex-row gap-2">
+              <Button variant="secondary" onClick={() => submit()} disabled={busy}>
+                {busy ? "Saving..." : "Save Draft"}
+              </Button>
+              <Button
+                onClick={() => submit({ approve: true })}
+                disabled={busy || !qcReady}
+                title={qcReady ? "Approve and post stock to inventory" : "Set QC Status = Accepted and fill Checked By to enable"}
+              >
+                {busy ? "Posting..." : "Approve & Post GRN"}
+              </Button>
+            </div>
           </DialogFooter>
+          {!qcReady && (
+            <p className="text-xs text-muted-foreground -mt-2 sm:text-right">
+              Complete QC (Status = Accepted, Checked By filled) to enable Approve & Post.
+            </p>
+          )}
         </DialogContent>
       </Dialog>
     </FormShell>
