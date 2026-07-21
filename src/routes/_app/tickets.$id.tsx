@@ -229,6 +229,89 @@ function TicketDetail() {
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
+  // Auto-save on any change to the ticket. Debounces 2s of inactivity, silently
+  // updates the DB, and reports status via `saveStatus`. Skips server round-trip
+  // until the user has actually edited a field this session.
+  useEffect(() => {
+    if (!t) return;
+    if (!dirtyRef.current) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    setSaveStatus("saving");
+    autoSaveTimerRef.current = setTimeout(async () => {
+      // Soft validation: if payload violates a hard rule, pause auto-save
+      // and surface it so the user knows why nothing is being persisted.
+      if (t.oem_call && (!t.oem_brand || !t.oem_ref_id || !t.oem_purchase_date)) {
+        setSaveStatus("error");
+        setSaveError("OEM Brand, Ref ID and Purchase Date are required");
+        return;
+      }
+      if (t.preferred_visit_datetime) {
+        const pv = new Date(t.preferred_visit_datetime).getTime();
+        if (pv < Date.now() - 60000) {
+          setSaveStatus("error");
+          setSaveError("Preferred visit date & time cannot be in the past");
+          return;
+        }
+      }
+      const parts_used = !!t.defective_parts_received || !!t.good_parts_used;
+      const { error } = await supabase.from("tickets").update({
+        case_id: t.case_id,
+        call_type: t.call_type,
+        product: t.product,
+        serial_no: t.serial_no,
+        customer_name: t.customer_name,
+        customer_address: t.customer_address,
+        customer_email: t.customer_email,
+        customer_phone: t.customer_phone,
+        location: t.location,
+        sector: t.sector,
+        priority: t.priority,
+        complaint: t.complaint,
+        status: t.status,
+        assigned_engineer_name: t.assigned_engineer_name,
+        assigned_engineer_phone: t.assigned_engineer_phone,
+        assigned_at: t.assigned_at,
+        parts_used,
+        parts_details: t.parts_details,
+        defective_parts_received: t.defective_parts_received,
+        defective_parts_details: t.defective_parts_received ? t.defective_parts_details : [],
+        good_parts_used: t.good_parts_used,
+        good_parts_details: t.good_parts_used ? t.good_parts_details : [],
+        remarks: t.remarks,
+        oem_call: t.oem_call,
+        oem_brand: t.oem_call ? t.oem_brand : null,
+        oem_ref_id: t.oem_call ? t.oem_ref_id : null,
+        oem_purchase_date: t.oem_call ? t.oem_purchase_date : null,
+        special_instruction: (t.special_instruction ?? "").toString().trim() || null,
+        preferred_visit_datetime: t.preferred_visit_datetime || null,
+      } as never).eq("id", t.id);
+      if (error) {
+        setSaveStatus("error");
+        setSaveError(error.message);
+        return;
+      }
+      dirtyRef.current = false;
+      setSaveError("");
+      setSaveStatus("saved");
+    }, 2000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [t]);
+
+  // Warn on unload while there are pending unsaved changes so users don't
+  // lose in-flight edits mid-debounce.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current || saveStatus === "saving") {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [saveStatus]);
+
   if (!t) return <div className="p-6 text-muted-foreground">Loading…</div>;
 
   const update = (patch: Partial<Ticket>) => {
