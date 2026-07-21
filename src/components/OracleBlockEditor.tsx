@@ -13,7 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { normalizeOracle, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OracleReceivedRow } from "@/lib/indent";
+import { normalizeOracle, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
 
 type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string };
 type Warehouse = { id: string; name: string; code: string };
@@ -42,7 +42,6 @@ export function OracleBlockEditor({
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   // Per-row stock pools, keyed by row index.
   const [exchStockByRow, setExchStockByRow] = useState<Record<number, StockRow[]>>({});
-  const [recvStockByRow, setRecvStockByRow] = useState<Record<number, StockRow[]>>({});
   const [shortageOpen, setShortageOpen] = useState(false);
   const [shortageMsg, setShortageMsg] = useState<string>("");
   const [shortageHasOther, setShortageHasOther] = useState(false);
@@ -79,28 +78,36 @@ export function OracleBlockEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exchWhKey]);
 
-  const recvWhKey = value.received_rows.map((r) => r.warehouse_id).join("|");
-  useEffect(() => {
-    (async () => {
-      const next: Record<number, StockRow[]> = {};
-      await Promise.all(value.received_rows.map(async (r, i) => {
-        if (!r.warehouse_id) { next[i] = []; return; }
-        const { data } = await supabase.from("ims_stock_items")
-          .select("id,part_name,part_model_no,part_serial_no,warehouse_id")
-          .eq("warehouse_id", r.warehouse_id)
-          .order("part_name");
-        next[i] = (data || []) as StockRow[];
-      }));
-      setRecvStockByRow(next);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recvWhKey]);
 
   const setBlock = (patch: Partial<OracleBlock>) => onChange({ ...value, ...patch });
   const setExchRow = (i: number, patch: Partial<OracleExchangeRow>) =>
     setBlock({ exchange_rows: value.exchange_rows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
   const setRecvRow = (i: number, patch: Partial<OracleReceivedRow>) =>
     setBlock({ received_rows: value.received_rows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
+  const custRows = value.customer_received_rows || [];
+  const setCustRow = (i: number, patch: Partial<OracleReceivedRow>) =>
+    setBlock({ customer_received_rows: custRows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
+  const addCustRow = () => {
+    // Seed from the corresponding defective row when available.
+    const idx = custRows.length;
+    const d = value.defective_rows[idx] || value.defective_rows[0];
+    setBlock({
+      customer_received_rows: [
+        ...custRows,
+        {
+          warehouse_id: "", warehouse_name: "",
+          model_no: d?.def_model_no || "",
+          serial_no: d?.def_serial_no || "",
+          qty: d?.qty || "",
+          received_date: "",
+          remarks: "",
+          product_tag: "",
+        },
+      ],
+    });
+  };
+  const removeCustRow = (i: number) =>
+    setBlock({ customer_received_rows: custRows.filter((_, ix) => ix !== i) });
 
   // Auto-close: once every defective/exchange/received row is fully filled,
   // mark the block closed automatically (no manual confirmation).
@@ -357,7 +364,7 @@ export function OracleBlockEditor({
         {/* Received — one row per defective row */}
         <div className="rounded-md border p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">C. Material Received (from IMS)</div>
+            <div className="text-sm font-semibold">C. Material Received (from OEM)</div>
             {onGenerateGrn && (
               <Button
                 variant="outline"
@@ -370,9 +377,7 @@ export function OracleBlockEditor({
             )}
           </div>
           {value.received_rows.map((rcv, i) => {
-            const stock = recvStockByRow[i] || [];
-            const models = modelsWithSaved(stock, rcv.model_no);
-            const serials = serialsWithSaved(stock, rcv.model_no, rcv.serial_no);
+            const def = value.defective_rows[i];
             return (
               <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t first:border-t-0 first:pt-0">
                 <div>
@@ -381,7 +386,7 @@ export function OracleBlockEditor({
                     value={rcv.warehouse_id}
                     onValueChange={(v) => {
                       const w = warehouses.find((x) => x.id === v);
-                      setRecvRow(i, { warehouse_id: v, warehouse_name: w?.name || "", model_no: "", serial_no: "" });
+                      setRecvRow(i, { warehouse_id: v, warehouse_name: w?.name || "" });
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
@@ -390,29 +395,102 @@ export function OracleBlockEditor({
                 </div>
                 <div>
                   <Label>Material Rec Model No</Label>
-                  <Select
+                  <Input
                     value={rcv.model_no}
-                    onValueChange={(v) => setRecvRow(i, { model_no: v, serial_no: "" })}
-                    disabled={!rcv.warehouse_id}
-                  >
-                    <SelectTrigger><SelectValue placeholder={rcv.warehouse_id ? "Select model" : "Pick warehouse first"} /></SelectTrigger>
-                    <SelectContent>{models.map((m) => <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>)}</SelectContent>
-                  </Select>
+                    onChange={(e) => setRecvRow(i, { model_no: e.target.value })}
+                    placeholder={def?.def_model_no || "Model No"}
+                  />
                 </div>
                 <div>
                   <Label>Material Rec Serial No</Label>
-                  <Select
+                  <Input
                     value={rcv.serial_no}
-                    onValueChange={(v) => setRecvRow(i, { serial_no: v })}
-                    disabled={!rcv.model_no}
-                  >
-                    <SelectTrigger><SelectValue placeholder={rcv.model_no ? "Select serial" : "Pick model first"} /></SelectTrigger>
-                    <SelectContent>{serials.map((s) => <SelectItem key={s.id} value={s.part_serial_no || s.id}>{s.part_serial_no || "(no serial)"}</SelectItem>)}</SelectContent>
-                  </Select>
+                    onChange={(e) => setRecvRow(i, { serial_no: e.target.value })}
+                    placeholder={def?.def_serial_no || "Serial No"}
+                    className="font-mono"
+                  />
                 </div>
                 <div><Label>Qty</Label><Input type="number" min={1} value={rcv.qty} onChange={(e) => setRecvRow(i, { qty: e.target.value })} /></div>
                 <div><Label>Material Rec Date</Label><Input type="date" value={rcv.received_date} onChange={(e) => setRecvRow(i, { received_date: e.target.value })} /></div>
                 <div className="md:col-span-3"><Label>Remarks</Label><Textarea rows={2} value={rcv.remarks} onChange={(e) => setRecvRow(i, { remarks: e.target.value })} /></div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Section D — Material Received (from Customer) */}
+        <div className="rounded-md border p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">D. Material Received (from Customer)</div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={addCustRow} disabled={locked}>
+                + Add Row
+              </Button>
+            </div>
+          </div>
+          {custRows.length === 0 && (
+            <div className="text-xs text-muted-foreground">
+              No customer-returned material recorded. Click <b>Add Row</b> to log items returned by the customer.
+            </div>
+          )}
+          {custRows.map((rcv, i) => {
+            const def = value.defective_rows[i] || value.defective_rows[0];
+            return (
+              <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t first:border-t-0 first:pt-0">
+                <div>
+                  <Label>Warehouse <span className="text-muted-foreground text-xs">(Row {i + 1})</span></Label>
+                  <Select
+                    value={rcv.warehouse_id}
+                    onValueChange={(v) => {
+                      const w = warehouses.find((x) => x.id === v);
+                      setCustRow(i, { warehouse_id: v, warehouse_name: w?.name || "" });
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
+                    <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Product Tag / Condition <span className="text-destructive">*</span></Label>
+                  <Select
+                    value={rcv.product_tag || ""}
+                    onValueChange={(v) => setCustRow(i, { product_tag: v as ProductTag })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select condition" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="good">🟢 Good</SelectItem>
+                      <SelectItem value="defective">🔴 Defective</SelectItem>
+                      <SelectItem value="scrap">⚫ Scrap</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Material Rec Model No</Label>
+                  <Input
+                    value={rcv.model_no}
+                    onChange={(e) => setCustRow(i, { model_no: e.target.value })}
+                    placeholder={def?.def_model_no || "Model No"}
+                  />
+                </div>
+                <div>
+                  <Label>Material Rec Serial No</Label>
+                  <Input
+                    value={rcv.serial_no}
+                    onChange={(e) => setCustRow(i, { serial_no: e.target.value })}
+                    placeholder={def?.def_serial_no || "Serial No"}
+                    className="font-mono"
+                  />
+                </div>
+                <div><Label>Qty</Label><Input type="number" min={1} value={rcv.qty} onChange={(e) => setCustRow(i, { qty: e.target.value })} placeholder={def?.qty || "1"} /></div>
+                <div><Label>Material Rec Date</Label><Input type="date" value={rcv.received_date} onChange={(e) => setCustRow(i, { received_date: e.target.value })} /></div>
+                <div className="md:col-span-3 flex gap-2 items-end">
+                  <div className="flex-1"><Label>Remarks</Label><Textarea rows={2} value={rcv.remarks} onChange={(e) => setCustRow(i, { remarks: e.target.value })} /></div>
+                  {!locked && (
+                    <Button variant="ghost" size="icon" onClick={() => removeCustRow(i)} title="Remove row">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}

@@ -36,7 +36,13 @@ export type OracleReceived = {
 
 export type OracleDefectiveRow = OracleDefective & { part_name?: string };
 export type OracleExchangeRow = OracleExchange;
-export type OracleReceivedRow = OracleReceived;
+export type ProductTag = "good" | "defective" | "scrap";
+export type OracleReceivedRow = OracleReceived & {
+  /** Product Tag / Stock Condition — used by the Customer-return section
+   *  to classify inbound stock into Good / Defective / Scrap. Optional on
+   *  the OEM-return section (existing behaviour). */
+  product_tag?: ProductTag | "";
+};
 
 export type OracleBlock = {
   oracle_no: string;
@@ -44,7 +50,11 @@ export type OracleBlock = {
   // exchange/received arrays mirror the defective array length 1:1.
   defective_rows: OracleDefectiveRow[];
   exchange_rows: OracleExchangeRow[];
+  /** Material Received (from OEM) — historically "from IMS". */
   received_rows: OracleReceivedRow[];
+  /** Section D: Material Received (from Customer). Same shape as OEM
+   *  received but with a mandatory `product_tag`. */
+  customer_received_rows?: OracleReceivedRow[];
   // Legacy single-row fields — kept optional for backward compat reads only.
   defective?: OracleDefective;
   exchange?: OracleExchange;
@@ -62,11 +72,25 @@ const blankReceivedRow = (qty = ""): OracleReceivedRow => ({
   warehouse_id: "", warehouse_name: "", model_no: "", serial_no: "", qty, received_date: "", remarks: "",
 });
 
+/** Seed a received/customer-received row from the defective row so that
+ *  model / serial / qty auto-populate (still editable in the UI). */
+const receivedRowFromDefective = (d: OracleDefectiveRow | undefined, isCustomer = false): OracleReceivedRow => ({
+  warehouse_id: "",
+  warehouse_name: "",
+  model_no: d?.def_model_no || "",
+  serial_no: d?.def_serial_no || "",
+  qty: d?.qty || "",
+  received_date: "",
+  remarks: "",
+  ...(isCustomer ? { product_tag: "" as const } : {}),
+});
+
 export const blankOracle = (): OracleBlock => ({
   oracle_no: "",
   defective_rows: [{ def_model_no: "", def_serial_no: "", qty: "" }],
   exchange_rows: [blankExchangeRow()],
   received_rows: [blankReceivedRow()],
+  customer_received_rows: [],
   status: "open",
   closed_by: null,
   closed_by_name: null,
@@ -88,12 +112,21 @@ export function normalizeOracle(o: OracleBlock): OracleBlock {
   if (!Array.isArray(out.received_rows)) {
     out.received_rows = out.received ? [{ ...out.received }] : [];
   }
+  if (!Array.isArray(out.customer_received_rows)) {
+    out.customer_received_rows = [];
+  }
   // Pad exchange/received to defective length
   const n = out.defective_rows.length;
   while (out.exchange_rows.length < n) out.exchange_rows.push(blankExchangeRow(out.defective_rows[out.exchange_rows.length]?.qty || ""));
-  while (out.received_rows.length < n) out.received_rows.push(blankReceivedRow(out.defective_rows[out.received_rows.length]?.qty || ""));
+  while (out.received_rows.length < n) {
+    const idx = out.received_rows.length;
+    out.received_rows.push(receivedRowFromDefective(out.defective_rows[idx]));
+  }
   out.exchange_rows = out.exchange_rows.slice(0, n);
   out.received_rows = out.received_rows.slice(0, n);
+  // customer_received_rows is optional / opt-in; only trim, do NOT auto-pad,
+  // so we don't force customer-return data on OEM-only indents.
+  out.customer_received_rows = out.customer_received_rows.slice(0, n);
   return out;
 }
 
@@ -139,7 +172,8 @@ export function buildOraclesFromDefectiveParts(
       oracle_no: k === "Unassigned" ? "" : k,
       defective_rows: def,
       exchange_rows: def.map((d) => blankExchangeRow(d.qty)),
-      received_rows: def.map((d) => blankReceivedRow(d.qty)),
+      received_rows: def.map((d) => receivedRowFromDefective(d)),
+      customer_received_rows: [],
       status: "open" as const,
       closed_by: null,
       closed_by_name: null,
