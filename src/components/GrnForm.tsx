@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Trash2, Eye, Save } from "lucide-react";
+import { Plus, Trash2, Eye, Save, ArrowLeft, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { emptyGrnItem, CATEGORY_LABEL, type GrnCategory, type GrnItem } from "@/lib/grn";
 import { CustomerPicker } from "@/components/CustomerPicker";
@@ -80,6 +80,10 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  // When GRN is auto-populated from a source document (Indent Section C/D),
+  // material identification fields become read-only to preserve traceability.
+  const [sourceLocked, setSourceLocked] = useState(false);
+  const [sourceKind, setSourceKind] = useState<"oem-section-c" | "customer-section-d" | null>(null);
 
   // Auto-populate Received By with the current logged-in user's name (new records only).
   useEffect(() => {
@@ -158,6 +162,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<GrnItem>>) : [];
     if (prefillItems.length > 0) {
       setItems(prefillItems.map((it) => ({ ...emptyGrnItem(), ...it })) as GrnItem[]);
+      setSourceLocked(true);
+      setSourceKind(kind === "oem" ? "oem-section-c" : "customer-section-d");
     }
     setForm((f) => ({
       ...f,
@@ -203,6 +209,13 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       setCategory((r.category as GrnCategory) || "customer");
       const arr = Array.isArray(r.items) ? (r.items as GrnItem[]) : [];
       setItems(arr.length > 0 ? arr.map((it) => ({ ...emptyGrnItem(), ...it })) : [emptyGrnItem()]);
+      // Lock material identification when GRN is linked to an Indent.
+      const linkedIndent = (r.indent_id as string | null | undefined) || null;
+      if (linkedIndent) {
+        setSourceLocked(true);
+        const cat = (r.category as GrnCategory) || "customer";
+        setSourceKind(cat === "oem" ? "oem-section-c" : "customer-section-d");
+      }
       setForm((f) => {
         const next: typeof f = { ...f };
         for (const k of Object.keys(f) as (keyof typeof f)[]) {
@@ -363,6 +376,11 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         <span className="hidden sm:inline">Save Draft</span>
         <span className="sm:hidden">Save</span>
       </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={() => navigate({ to: "/grn" })} className="gap-1.5">
+        <ArrowLeft className="h-4 w-4" />
+        <span className="hidden sm:inline">Back to All GRN</span>
+        <span className="sm:hidden">Back</span>
+      </Button>
     </>
   );
 
@@ -373,6 +391,24 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       actions={actions}
     >
       <FormSection title="GRN Type" defaultOpen>
+        {sourceLocked && (
+          <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex items-start gap-2">
+            <Lock className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />
+            <div className="space-y-0.5">
+              <div className="font-medium text-foreground">
+                Auto-populated from{" "}
+                {sourceKind === "oem-section-c"
+                  ? "Indent Section C — Material Received (from OEM)"
+                  : "Indent Section D — Material Received (from Customer)"}
+              </div>
+              <div className="text-muted-foreground">
+                Material identification fields are read-only to preserve source traceability.
+                {form.indent_id ? <> Indent Ref: <span className="font-mono">{form.indent_id}</span></> : null}
+                {" "}Edit at the source Indent if corrections are needed.
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {(["customer", "oem", "general"] as GrnCategory[]).map((c) => (
             <Button
@@ -381,6 +417,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
               size="sm"
               variant={category === c ? "default" : "outline"}
               onClick={() => handleCategoryChange(c)}
+              disabled={sourceLocked}
             >
               {CATEGORY_LABEL[c]}
             </Button>
@@ -474,7 +511,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
             label={isCust ? "Customer (from Master)" : isOem ? "OEM (from Vendor Master)" : "Vendor (from Master)"}
             required
           >
-            {isCust ? (
+            {sourceLocked ? (
+              <Input value={form.source_name} readOnly className="bg-muted/40" />
+            ) : isCust ? (
               <CustomerPicker value={sourceId} onChange={applyCustomer} required placeholder="Search customer…" />
             ) : (
               <VendorPicker value={sourceId} onChange={applyVendor} required label={isOem ? "OEM" : "Vendor"} placeholder={`Search ${isOem ? "OEM" : "vendor"}…`} />
@@ -593,29 +632,36 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 <tr key={i} className="border-t border-border/60 align-top">
                   <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
                   <td className="px-2 py-1.5 border-t border-border/60">
-                    <ProductMasterPicker
-                      value={it.product_id}
-                      onPick={(p) => updateItem(i, {
-                        product_id: p.id,
-                        part_no: p.sku || p.model || "",
-                        part_name: p.name,
-                        description: p.description || "",
-                        uom: p.unit || it.uom || "Nos",
-                        model_no: p.model || "",
-                      })}
-                    />
+                    {sourceLocked ? (
+                      <div className="text-xs">
+                        <div className="font-medium truncate">{it.part_name || "—"}</div>
+                        {it.part_no ? <div className="font-mono text-[11px] text-muted-foreground truncate">{it.part_no}</div> : null}
+                      </div>
+                    ) : (
+                      <ProductMasterPicker
+                        value={it.product_id}
+                        onPick={(p) => updateItem(i, {
+                          product_id: p.id,
+                          part_no: p.sku || p.model || "",
+                          part_name: p.name,
+                          description: p.description || "",
+                          uom: p.unit || it.uom || "Nos",
+                          model_no: p.model || "",
+                        })}
+                      />
+                    )}
                   </td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_received} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
                   {!isCust && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
+                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
                   )}
                   {!isCust && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} readOnly={sourceLocked && sourceKind !== "oem-section-c"} className={sourceLocked && sourceKind !== "oem-section-c" ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
                   )}
                   <td className="px-2 py-1.5 border-t border-border/60">
-                    <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })}>
+                    <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceLocked && sourceKind === "customer-section-d"}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Good">Good</SelectItem>
@@ -630,7 +676,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       size="icon"
                       variant="ghost"
                       onClick={() => setItems(items.filter((_, idx) => idx !== i))}
-                      disabled={items.length === 1}
+                      disabled={items.length === 1 || sourceLocked}
                       aria-label="Remove row"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />

@@ -90,8 +90,8 @@ function ChallanView() {
 
       <div className="no-print mb-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Link to={isOem ? "/challan/oem" : "/challan/customer"}>
-            <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
+          <Link to="/challan">
+            <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back to All Delivery Challan</Button>
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <Badge
