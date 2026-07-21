@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,8 @@ import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useIsAdmin } from "@/lib/useRole";
+import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 
 export const Route = createFileRoute("/_app/grn/$id")({
   component: GrnView,
@@ -19,6 +21,8 @@ function GrnView() {
   const { id } = Route.useParams();
   const [g, setG] = useState<Grn | null>(null);
   const [busy, setBusy] = useState(false);
+  const { isAdmin } = useIsAdmin();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchGrn(id).then(setG).catch((e) => toast.error(e.message));
@@ -131,6 +135,14 @@ function GrnView() {
               <Button size="sm" variant="outline" onClick={handleCancel} disabled={busy} className="gap-1.5">
                 <Ban className="h-4 w-4" />Cancel
               </Button>
+            )}
+            {isAdmin && (
+              <AdminDeleteDialog
+                kind="grn"
+                id={g.id}
+                label={`GRN ${g.grn_no}`}
+                onDeleted={() => navigate({ to: backTo })}
+              />
             )}
             <Button variant="outline" size="sm" onClick={handleDownload}>
               <Download className="h-4 w-4 mr-1" />Download PDF

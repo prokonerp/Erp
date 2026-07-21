@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,8 @@ import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useIsAdmin } from "@/lib/useRole";
+import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 
 export const Route = createFileRoute("/_app/challan/$id")({
   component: ChallanView,
@@ -19,6 +21,8 @@ function ChallanView() {
   const { id } = Route.useParams();
   const [c, setC] = useState<DeliveryChallan | null>(null);
   const [busy, setBusy] = useState(false);
+  const { isAdmin } = useIsAdmin();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchChallan(id).then(setC).catch((e) => toast.error(e.message));
@@ -107,6 +111,14 @@ function ChallanView() {
               <Button size="sm" variant="outline" onClick={handleCancel} disabled={busy} className="gap-1.5">
                 <Ban className="h-4 w-4" />Cancel
               </Button>
+            )}
+            {isAdmin && (
+              <AdminDeleteDialog
+                kind="challan"
+                id={c.id}
+                label={`Delivery Challan ${c.challan_no}`}
+                onDeleted={() => navigate({ to: isOem ? "/challan/oem" : "/challan/customer" })}
+              />
             )}
             <Button variant="outline" size="sm" onClick={handleDownload}>
               <Download className="h-4 w-4 mr-1" />Download PDF
