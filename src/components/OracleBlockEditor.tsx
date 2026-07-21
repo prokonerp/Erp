@@ -492,6 +492,48 @@ export function OracleBlockEditor({
       )}
 
       <AlertDialog open={shortageOpen} onOpenChange={setShortageOpen}>
+
+      </AlertDialog>
+      <ControlledActionDialog
+        open={reopenOpen}
+        onOpenChange={setReopenOpen}
+        title={`Reopen Oracle ${value.oracle_no || `#${index + 1}`}?`}
+        description="This will reverse stock and document flow for the selected scope. Affected GRNs move back to Draft, and DCs release their reserved/issued stock. All actions are audited."
+        warning="This will reverse stock & document flow. Reopening is blocked if any linked Invoice exists — use the correction workflow instead."
+        scopes={[
+          { value: "grn", label: "GRN only", hint: "Reverse GRN receipts on this indent." },
+          { value: "dc", label: "DC only", hint: "Release stock issued via Delivery Challans." },
+          { value: "full", label: "Full cycle", hint: "Reverse both GRNs and DCs." },
+        ]}
+        defaultScope="full"
+        confirmLabel="Reopen Oracle"
+        reasonPlaceholder="e.g., Wrong serial dispatched, OEM sent replacement in error…"
+        onConfirm={async ({ reason, scope }) => {
+          if (!indentId) return { error: "Missing indent id" };
+          const { error } = await supabase.rpc("admin_reopen_oracle" as never, {
+            _indent_id: indentId,
+            _oracle_no: value.oracle_no || "",
+            _reason: reason,
+            _scope: scope || "full",
+          } as never);
+          if (error) return { error: error.message };
+          toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} reopened`);
+          onChange({
+            ...value,
+            status: "open",
+            closed_by: null,
+            closed_by_name: null,
+            closed_at: null,
+            reopened: {
+              at: new Date().toISOString(),
+              by: null,
+              reason,
+              scope: (scope as "grn" | "dc" | "full") || "full",
+            },
+          });
+        }}
+      />
+      <AlertDialog open={shortageOpen} onOpenChange={setShortageOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{shortageHasOther ? "Stock shortage in selected warehouse" : "Insufficient stock"}</AlertDialogTitle>
