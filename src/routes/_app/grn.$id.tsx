@@ -116,8 +116,8 @@ function GrnView() {
 
       <div className="no-print mb-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Link to={backTo}>
-            <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
+          <Link to="/grn">
+            <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back to All GRN</Button>
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={isSubmitted ? "default" : isCancelled ? "destructive" : "secondary"}>{status}</Badge>
