@@ -27,7 +27,7 @@ export type ChallanItem = {
 };
 
 export type DocType = "customer" | "oem";
-export type ChallanStatus = "Draft" | "Submitted" | "Dispatched" | "Cancelled";
+export type ChallanStatus = "Draft" | "Submitted" | "Cancelled";
 
 export type DeliveryChallan = {
   id: string;
@@ -69,6 +69,10 @@ export type DeliveryChallan = {
   oem_logo_url: string | null;
   created_at: string;
   created_by: string | null;
+  submitted_at?: string | null;
+  submitted_by?: string | null;
+  printed_at?: string | null;
+  printed_by?: string | null;
 };
 
 export const emptyItem = (): ChallanItem => ({
