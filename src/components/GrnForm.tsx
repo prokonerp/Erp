@@ -511,10 +511,12 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
             label={isCust ? "Customer (from Master)" : isOem ? "OEM (from Vendor Master)" : "Vendor (from Master)"}
             required
           >
-            {isCust ? (
-              <CustomerPicker value={sourceId} onChange={applyCustomer} required placeholder="Search customer…" disabled={sourceLocked} />
+            {sourceLocked ? (
+              <Input value={form.source_name} readOnly className="bg-muted/40" />
+            ) : isCust ? (
+              <CustomerPicker value={sourceId} onChange={applyCustomer} required placeholder="Search customer…" />
             ) : (
-              <VendorPicker value={sourceId} onChange={applyVendor} required label={isOem ? "OEM" : "Vendor"} placeholder={`Search ${isOem ? "OEM" : "vendor"}…`} disabled={sourceLocked} />
+              <VendorPicker value={sourceId} onChange={applyVendor} required label={isOem ? "OEM" : "Vendor"} placeholder={`Search ${isOem ? "OEM" : "vendor"}…`} />
             )}
           </FormField>
           <FormField size="md" label={`${sourceLabel} Name`} required>
@@ -630,23 +632,23 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 <tr key={i} className="border-t border-border/60 align-top">
                   <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
                   <td className="px-2 py-1.5 border-t border-border/60">
-                    <ProductMasterPicker
-                      value={it.product_id}
-                      disabled={sourceLocked}
-                      onPick={(p) => updateItem(i, {
-                        product_id: p.id,
-                        part_no: p.sku || p.model || "",
-                        part_name: p.name,
-                        description: p.description || "",
-                        uom: p.unit || it.uom || "Nos",
-                        model_no: p.model || "",
-                      })}
-                    />
-                    {sourceLocked && (
-                      <div className="mt-1 text-[11px] text-muted-foreground truncate">
-                        {it.part_name || it.part_no}
-                        {it.part_no ? <span className="ml-1 font-mono">({it.part_no})</span> : null}
+                    {sourceLocked ? (
+                      <div className="text-xs">
+                        <div className="font-medium truncate">{it.part_name || "—"}</div>
+                        {it.part_no ? <div className="font-mono text-[11px] text-muted-foreground truncate">{it.part_no}</div> : null}
                       </div>
+                    ) : (
+                      <ProductMasterPicker
+                        value={it.product_id}
+                        onPick={(p) => updateItem(i, {
+                          product_id: p.id,
+                          part_no: p.sku || p.model || "",
+                          part_name: p.name,
+                          description: p.description || "",
+                          uom: p.unit || it.uom || "Nos",
+                          model_no: p.model || "",
+                        })}
+                      />
                     )}
                   </td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
