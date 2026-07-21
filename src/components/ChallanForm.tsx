@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BranchPicker } from "@/components/BranchPicker";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Trash2, Eye, Save } from "lucide-react";
+import { Plus, Trash2, Eye, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ChallanItem, DocType } from "@/lib/challan";
 import { emptyItem } from "@/lib/challan";
@@ -30,8 +30,14 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const [items, setItems] = useState<ChallanItem[]>([emptyItem()]);
   const [partyId, setPartyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
+  // Persistent id for auto-save. Starts from editId; upgraded after first insert.
+  const [recordId, setRecordId] = useState<string | null>(editId ?? null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const savingRef = useRef(false);
+  const lastPayloadRef = useRef<string>("");
   const [form, setForm] = useState({
-    status: "Draft",
+    status: "Challan Generated",
     challan_date: new Date().toISOString().slice(0, 10),
     dispatch_date: "",
     reference_no: "",
