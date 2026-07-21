@@ -139,7 +139,6 @@ function IndentList() {
                     ) : (
                       <div className="space-y-2">
                         {oracles.map((o, i) => {
-                          const st2 = oracleStatus(o);
                           const prog = oracleProgress(o);
                           const dotCls = prog === "closed" ? "bg-emerald-500" : prog === "in_progress" ? "bg-amber-500" : "bg-rose-500";
                           const progLabel = prog === "closed" ? "Closed" : prog === "in_progress" ? "In Progress" : "Pending";
@@ -162,7 +161,6 @@ function IndentList() {
                                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-normal">
                                   {progLabel}
                                 </span>
-                                {void st2}
                               </div>
                               {Array.from({ length: rowCount }).map((_, ri) => {
                                 const d = defs[ri];
