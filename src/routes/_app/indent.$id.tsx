@@ -306,7 +306,8 @@ function IndentDetail() {
 
   const generateGrn = async (only?: OracleBlock) => {
     if (!i) return;
-    // Aggregate received rows across all oracles — defective units taken back from the customer.
+    // Section C — Material Received (from OEM). Aggregates the OEM-received
+    // rows and routes to a **GRN From OEM** prefill (Good stock).
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
     const oracles = only ? [only] : (i.oracles_data || []);
     const items: Array<{
@@ -364,22 +365,13 @@ function IndentDetail() {
           batch_no: "",
           model_no: model,
           serial_no: serial,
-          condition: "Bad",
+          condition: "Good",
           remarks: rv?.remarks || "",
         });
       }
     }
     if (items.length === 0) {
-      toast.error("No received items yet. Fill Material Received rows in at least one Oracle first.");
-      return;
-    }
-    let customerId: string | null = null;
-    if (i.ticket_id) {
-      const { data: t } = await supabase.from("tickets").select("customer_id").eq("id", i.ticket_id).maybeSingle();
-      customerId = (t as { customer_id?: string | null } | null)?.customer_id || null;
-    }
-    if (!customerId) {
-      toast.error("Linked ticket is missing a customer. Set the customer on the ticket first.");
+      toast.error("No OEM-received items yet. Fill Section C rows in at least one Oracle first.");
       return;
     }
     const prefill = {
@@ -387,22 +379,22 @@ function IndentDetail() {
       indent_id: i.id,
       indent_no: i.indent_no,
       indent_date: i.indent_date,
-      customer_id: customerId,
+      oem_name: i.company || "",
       ticket_no: i.case_id || i.oem_case_id || "",
       reference_no: i.indent_no || "",
-      source_doc_type: "Return Note",
+      source_doc_type: "OEM Dispatch",
       source_doc_no: i.indent_no || "",
       source_doc_date: i.indent_date || "",
       warehouse_id: warehouseIdPrefill,
       storage_location: warehouseNamePrefill,
       internal_remarks: [
-        i.indent_no ? `From Indent ${i.indent_no}` : "",
+        i.indent_no ? `OEM receipt from Indent ${i.indent_no}` : "",
         i.remarks || "",
       ].filter(Boolean).join(" · "),
       items,
     };
-    try { sessionStorage.setItem("grn:prefill:new-customer", JSON.stringify(prefill)); } catch { /* noop */ }
-    navigate({ to: "/grn/new" });
+    try { sessionStorage.setItem("grn:prefill:new-oem", JSON.stringify(prefill)); } catch { /* noop */ }
+    navigate({ to: "/grn/oem/new" });
   };
 
   const generateCustomerGrn = async (only?: OracleBlock) => {
@@ -503,7 +495,7 @@ function IndentDetail() {
       items,
     };
     try { sessionStorage.setItem("grn:prefill:new-customer", JSON.stringify(prefill)); } catch { /* noop */ }
-    navigate({ to: "/grn/new" });
+    navigate({ to: "/grn/customer/new" });
   };
 
   if (!i) return <div className="text-sm text-muted-foreground">Loading…</div>;
