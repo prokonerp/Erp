@@ -362,8 +362,8 @@ export function OracleBlockEditor({
           </div>
           {value.received_rows.map((rcv, i) => {
             const stock = recvStockByRow[i] || [];
-            const models = modelsFor(stock);
-            const serials = serialsFor(stock, rcv.model_no);
+            const models = modelsWithSaved(stock, rcv.model_no);
+            const serials = serialsWithSaved(stock, rcv.model_no, rcv.serial_no);
             return (
               <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t first:border-t-0 first:pt-0">
                 <div>
