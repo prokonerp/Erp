@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Trash2, Eye, CheckCircle2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Eye, CheckCircle2, Loader2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import type { ChallanItem, DocType } from "@/lib/challan";
 import { emptyItem } from "@/lib/challan";
@@ -376,6 +376,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         <span className="hidden sm:inline">Review</span>
       </Button>
       <SaveIndicator state={saveState} at={lastSavedAt} />
+      <Button type="button" variant="ghost" size="sm" onClick={() => navigate({ to: "/challan" })} className="gap-1.5">
+        <ArrowLeft className="h-4 w-4" />
+        <span className="hidden sm:inline">Back to All Delivery Challan</span>
+        <span className="sm:hidden">Back</span>
+      </Button>
     </>
   );
 
