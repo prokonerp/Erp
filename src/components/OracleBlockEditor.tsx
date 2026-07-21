@@ -22,6 +22,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
+  dcExists = false, dcInfo,
 }: {
   index: number;
   value: OracleBlock;
@@ -33,6 +34,8 @@ export function OracleBlockEditor({
   onToggleCollapse?: () => void;
   onGenerateChallan?: (oracle: OracleBlock) => void;
   onGenerateGrn?: (oracle: OracleBlock) => void;
+  dcExists?: boolean;
+  dcInfo?: { challan_no?: string | null; challan_date?: string | null; status?: string | null; id?: string | null };
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -142,6 +145,25 @@ export function OracleBlockEditor({
   const serialsFor = (rows: StockRow[], modelKey: string) => {
     const [pn, mn] = (modelKey || "").split("||");
     return rows.filter((s) => s.part_name === pn && (s.part_model_no || "") === (mn || ""));
+  };
+  /** Ensure the currently-saved model/serial always renders in the Select,
+   *  even if the underlying IMS row is no longer 'available' (e.g. issued
+   *  after a DC was posted). Without this, saved values disappear on reopen. */
+  const modelsWithSaved = (rows: StockRow[], savedKey: string) => {
+    const list = modelsFor(rows);
+    if (savedKey && !list.some((m) => m.key === savedKey)) {
+      const [pn, mn] = savedKey.split("||");
+      list.unshift({ key: savedKey, label: mn ? `${pn} — ${mn}` : pn });
+    }
+    return list;
+  };
+  const serialsWithSaved = (rows: StockRow[], modelKey: string, savedSerial: string) => {
+    const list = serialsFor(rows, modelKey);
+    if (savedSerial && !list.some((s) => (s.part_serial_no || s.id) === savedSerial)) {
+      const [pn, mn] = (modelKey || "").split("||");
+      list.unshift({ id: `saved:${savedSerial}`, part_name: pn || "", part_model_no: mn || null, part_serial_no: savedSerial, warehouse_id: null });
+    }
+    return list;
   };
 
   const checkStockAndValidate = async (rowIdx: number, qtyStr: string) => {
