@@ -13,7 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { normalizeOracle, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OracleReceivedRow } from "@/lib/indent";
+import { normalizeOracle, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
 
 type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string };
 type Warehouse = { id: string; name: string; code: string };
@@ -101,6 +101,30 @@ export function OracleBlockEditor({
     setBlock({ exchange_rows: value.exchange_rows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
   const setRecvRow = (i: number, patch: Partial<OracleReceivedRow>) =>
     setBlock({ received_rows: value.received_rows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
+  const custRows = value.customer_received_rows || [];
+  const setCustRow = (i: number, patch: Partial<OracleReceivedRow>) =>
+    setBlock({ customer_received_rows: custRows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
+  const addCustRow = () => {
+    // Seed from the corresponding defective row when available.
+    const idx = custRows.length;
+    const d = value.defective_rows[idx] || value.defective_rows[0];
+    setBlock({
+      customer_received_rows: [
+        ...custRows,
+        {
+          warehouse_id: "", warehouse_name: "",
+          model_no: d?.def_model_no || "",
+          serial_no: d?.def_serial_no || "",
+          qty: d?.qty || "",
+          received_date: "",
+          remarks: "",
+          product_tag: "",
+        },
+      ],
+    });
+  };
+  const removeCustRow = (i: number) =>
+    setBlock({ customer_received_rows: custRows.filter((_, ix) => ix !== i) });
 
   // Auto-close: once every defective/exchange/received row is fully filled,
   // mark the block closed automatically (no manual confirmation).
