@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Trash2, Eye, Save } from "lucide-react";
+import { Plus, Trash2, Eye, Save, ArrowLeft, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { emptyGrnItem, CATEGORY_LABEL, type GrnCategory, type GrnItem } from "@/lib/grn";
 import { CustomerPicker } from "@/components/CustomerPicker";
@@ -80,6 +80,10 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  // When GRN is auto-populated from a source document (Indent Section C/D),
+  // material identification fields become read-only to preserve traceability.
+  const [sourceLocked, setSourceLocked] = useState(false);
+  const [sourceKind, setSourceKind] = useState<"oem-section-c" | "customer-section-d" | null>(null);
 
   // Auto-populate Received By with the current logged-in user's name (new records only).
   useEffect(() => {
@@ -158,6 +162,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<GrnItem>>) : [];
     if (prefillItems.length > 0) {
       setItems(prefillItems.map((it) => ({ ...emptyGrnItem(), ...it })) as GrnItem[]);
+      setSourceLocked(true);
+      setSourceKind(kind === "oem" ? "oem-section-c" : "customer-section-d");
     }
     setForm((f) => ({
       ...f,
@@ -203,6 +209,13 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       setCategory((r.category as GrnCategory) || "customer");
       const arr = Array.isArray(r.items) ? (r.items as GrnItem[]) : [];
       setItems(arr.length > 0 ? arr.map((it) => ({ ...emptyGrnItem(), ...it })) : [emptyGrnItem()]);
+      // Lock material identification when GRN is linked to an Indent.
+      const linkedIndent = (r.indent_id as string | null | undefined) || null;
+      if (linkedIndent) {
+        setSourceLocked(true);
+        const cat = (r.category as GrnCategory) || "customer";
+        setSourceKind(cat === "oem" ? "oem-section-c" : "customer-section-d");
+      }
       setForm((f) => {
         const next: typeof f = { ...f };
         for (const k of Object.keys(f) as (keyof typeof f)[]) {
@@ -363,6 +376,11 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         <span className="hidden sm:inline">Save Draft</span>
         <span className="sm:hidden">Save</span>
       </Button>
+      <Button type="button" variant="ghost" size="sm" onClick={() => navigate({ to: "/grn" })} className="gap-1.5">
+        <ArrowLeft className="h-4 w-4" />
+        <span className="hidden sm:inline">Back to All GRN</span>
+        <span className="sm:hidden">Back</span>
+      </Button>
     </>
   );
 
@@ -373,6 +391,24 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       actions={actions}
     >
       <FormSection title="GRN Type" defaultOpen>
+        {sourceLocked && (
+          <div className="mb-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex items-start gap-2">
+            <Lock className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />
+            <div className="space-y-0.5">
+              <div className="font-medium text-foreground">
+                Auto-populated from{" "}
+                {sourceKind === "oem-section-c"
+                  ? "Indent Section C — Material Received (from OEM)"
+                  : "Indent Section D — Material Received (from Customer)"}
+              </div>
+              <div className="text-muted-foreground">
+                Material identification fields are read-only to preserve source traceability.
+                {form.indent_id ? <> Indent Ref: <span className="font-mono">{form.indent_id}</span></> : null}
+                {" "}Edit at the source Indent if corrections are needed.
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {(["customer", "oem", "general"] as GrnCategory[]).map((c) => (
             <Button
@@ -381,6 +417,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
               size="sm"
               variant={category === c ? "default" : "outline"}
               onClick={() => handleCategoryChange(c)}
+              disabled={sourceLocked}
             >
               {CATEGORY_LABEL[c]}
             </Button>
