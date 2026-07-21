@@ -395,6 +395,13 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           <FormField size="sm" label="Invoice No.">
             <Input value={form.invoice_no} onChange={(e) => setForm({ ...form, invoice_no: e.target.value })} />
           </FormField>
+          <FormField size="md" label="Linked Indent (optional)">
+            <Input
+              placeholder="Paste Indent ID to link to an RMA workflow"
+              value={form.indent_id}
+              onChange={(e) => setForm({ ...form, indent_id: e.target.value })}
+            />
+          </FormField>
         </FormGrid>
       </FormSection>
 
