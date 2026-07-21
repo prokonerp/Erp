@@ -751,6 +751,7 @@ export type Database = {
           gate_pass_no: string | null
           gstin: string | null
           id: string
+          indent_id: string | null
           internal_remarks: string | null
           invoice_no: string | null
           items: Json
@@ -796,6 +797,7 @@ export type Database = {
           gate_pass_no?: string | null
           gstin?: string | null
           id?: string
+          indent_id?: string | null
           internal_remarks?: string | null
           invoice_no?: string | null
           items?: Json
@@ -841,6 +843,7 @@ export type Database = {
           gate_pass_no?: string | null
           gstin?: string | null
           id?: string
+          indent_id?: string | null
           internal_remarks?: string | null
           invoice_no?: string | null
           items?: Json
@@ -870,6 +873,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_challans_indent_id_fkey"
+            columns: ["indent_id"]
+            isOneToOne: false
+            referencedRelation: "indents"
             referencedColumns: ["id"]
           },
           {
@@ -1088,6 +1098,7 @@ export type Database = {
           grn_date: string
           grn_no: string | null
           id: string
+          indent_id: string | null
           internal_remarks: string | null
           invoice_date: string | null
           invoice_no: string | null
@@ -1118,6 +1129,7 @@ export type Database = {
           source_gstin: string | null
           source_name: string | null
           status: string
+          stock_category: string | null
           storage_location: string | null
           ticket_no: string | null
           total_weight: string | null
@@ -1142,6 +1154,7 @@ export type Database = {
           grn_date?: string
           grn_no?: string | null
           id?: string
+          indent_id?: string | null
           internal_remarks?: string | null
           invoice_date?: string | null
           invoice_no?: string | null
@@ -1172,6 +1185,7 @@ export type Database = {
           source_gstin?: string | null
           source_name?: string | null
           status?: string
+          stock_category?: string | null
           storage_location?: string | null
           ticket_no?: string | null
           total_weight?: string | null
@@ -1196,6 +1210,7 @@ export type Database = {
           grn_date?: string
           grn_no?: string | null
           id?: string
+          indent_id?: string | null
           internal_remarks?: string | null
           invoice_date?: string | null
           invoice_no?: string | null
@@ -1226,6 +1241,7 @@ export type Database = {
           source_gstin?: string | null
           source_name?: string | null
           status?: string
+          stock_category?: string | null
           storage_location?: string | null
           ticket_no?: string | null
           total_weight?: string | null
@@ -1241,6 +1257,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grns_indent_id_fkey"
+            columns: ["indent_id"]
+            isOneToOne: false
+            referencedRelation: "indents"
             referencedColumns: ["id"]
           },
         ]
@@ -1869,6 +1892,7 @@ export type Database = {
           product_model: string | null
           product_serial: string | null
           remarks: string | null
+          status: string
           ticket_id: string
           updated_at: string
         }
@@ -1900,6 +1924,7 @@ export type Database = {
           product_model?: string | null
           product_serial?: string | null
           remarks?: string | null
+          status?: string
           ticket_id: string
           updated_at?: string
         }
@@ -1931,6 +1956,7 @@ export type Database = {
           product_model?: string | null
           product_serial?: string | null
           remarks?: string | null
+          status?: string
           ticket_id?: string
           updated_at?: string
         }
@@ -4220,6 +4246,7 @@ export type Database = {
           tickets_deleted: number
         }[]
       }
+      recalc_indent_status: { Args: { _indent_id: string }; Returns: undefined }
       record_user_activity: { Args: never; Returns: undefined }
       record_user_login: { Args: never; Returns: undefined }
       record_user_logout: { Args: never; Returns: undefined }
