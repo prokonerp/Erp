@@ -1,0 +1,2 @@
+ALTER TABLE public.grns DROP CONSTRAINT grns_status_check;
+ALTER TABLE public.grns ADD CONSTRAINT grns_status_check CHECK (status = ANY (ARRAY['Draft','Received','QC Pending','Approved','Rejected','Submitted','Cancelled']));
