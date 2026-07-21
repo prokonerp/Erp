@@ -533,9 +533,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
             label={isCust ? "Customer (from Master)" : isOem ? "OEM (from Vendor Master)" : "Vendor (from Master)"}
             required
           >
-            {sourceLocked ? (
-              <Input value={form.source_name} readOnly className="bg-muted/40" />
-            ) : isCust ? (
+            {isCust ? (
               <CustomerPicker value={sourceId} onChange={applyCustomer} required placeholder="Search customer…" />
             ) : (
               <VendorPicker value={sourceId} onChange={applyVendor} required label={isOem ? "OEM" : "Vendor"} placeholder={`Search ${isOem ? "OEM" : "vendor"}…`} />
