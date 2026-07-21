@@ -75,6 +75,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     checked_by: "",
     approved_by: "",
     oem_logo_url: "",
+    stock_category: "good",
+    indent_id: "",
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -280,6 +282,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         items: clean,
         branch_id: branchId,
         warehouse_id: warehouseId,
+        indent_id: form.indent_id || null,
+        stock_category: category === "general" ? (form.stock_category || "good") : null,
       };
       const { error } = await supabase
         .from("grns" as never)
@@ -308,52 +312,16 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       attachments: [],
       branch_id: branchId,
       warehouse_id: warehouseId,
+      indent_id: form.indent_id || null,
+      stock_category: category === "general" ? (form.stock_category || "good") : null,
       created_by: userData.user?.id ?? null,
     };
     const { data, error } = await supabase
       .from("grns" as never)
       .insert(payload as never).select("id").single();
     if (error) { setBusy(false); return toast.error(error.message); }
-    // Push received items into Inventory Management, tagged by warehouse & condition.
-    try {
-      const grnId = (data as { id: string }).id;
-      const uid = userData.user?.id ?? null;
-      const sb = supabase as unknown as { from: (t: string) => any };
-      for (const it of clean) {
-        const qty = parseFloat(it.qty_received) || 0;
-        if (qty <= 0) continue;
-        const good = (it.condition || "Good") === "Good";
-        const stockType = good ? "good" : "defective";
-        const stockRow: Record<string, unknown> = {
-          part_name: it.part_name || it.part_no || "Item",
-          part_model_no: it.model_no || null,
-          part_serial_no: it.serial_no || null,
-          warehouse_id: warehouseId,
-          stock_type: stockType,
-          stock_status: "available",
-          transaction_ref: `GRN ${grnId}`,
-          notes: `Received via GRN (qty ${qty}) — condition ${good ? "Good" : "Bad"}`,
-          created_by: uid,
-        };
-        const { data: stockIns } = await sb.from("ims_stock_items").insert(stockRow).select("id").maybeSingle();
-        await sb.from("ims_transactions").insert({
-          txn_type: good ? "good_in" : "defective_in",
-          stock_item_id: (stockIns as { id?: string } | null)?.id ?? null,
-          part_name: stockRow.part_name,
-          part_model_no: stockRow.part_model_no,
-          part_serial_no: stockRow.part_serial_no,
-          to_warehouse_id: warehouseId,
-          from_party: form.source_name || null,
-          qty,
-          reference: `GRN ${grnId}`,
-          notes: `Auto-created from GRN (condition ${good ? "Good" : "Bad"})`,
-          created_by: uid,
-        });
-      }
-    } catch (e) {
-      // Non-fatal: GRN saved, but inventory sync failed.
-      toast.warning("GRN saved, but inventory sync had an issue. Please review IMS.");
-    }
+    // Inventory is posted server-side by the grn_post_inventory trigger
+    // when GRN status transitions to "Approved". No client-side stock write.
     setBusy(false);
     setReviewOpen(false);
     toast.success("GRN created");
@@ -448,6 +416,30 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
           {isCust && (
             <FormField size="sm" label="Ticket / Complaint No.">
               <Input value={form.ticket_no} onChange={(e) => setForm({ ...form, ticket_no: e.target.value })} />
+            </FormField>
+          )}
+          {category === "general" && (
+            <FormField size="sm" label="Stock Category" required>
+              <Select
+                value={form.stock_category || "good"}
+                onValueChange={(v) => setForm({ ...form, stock_category: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="good">Good</SelectItem>
+                  <SelectItem value="defective">Defective</SelectItem>
+                  <SelectItem value="quarantine">Quarantine</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+          {category !== "general" && (
+            <FormField size="md" label="Linked Indent (optional)">
+              <Input
+                placeholder="Paste Indent ID to link to an RMA workflow"
+                value={form.indent_id}
+                onChange={(e) => setForm({ ...form, indent_id: e.target.value })}
+              />
             </FormField>
           )}
         </FormGrid>

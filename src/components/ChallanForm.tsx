@@ -64,6 +64,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     checked_by: "",
     approved_by: "",
     oem_logo_url: "",
+    indent_id: "",
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -158,6 +159,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         checked_by: (r.checked_by as string) || "",
         approved_by: (r.approved_by as string) || "",
         oem_logo_url: (r.oem_logo_url as string) || "",
+        indent_id: (r.indent_id as string) || "",
       }));
       setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
     })();
@@ -272,6 +274,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         dispatch_date: form.dispatch_date || null,
         items: cleanItems,
         branch_id: branchId,
+        indent_id: form.indent_id || null,
       };
       const { error } = await supabase
         .from("delivery_challans" as never)
@@ -292,6 +295,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       dispatch_date: form.dispatch_date || null,
       items: cleanItems,
       branch_id: branchId,
+      indent_id: form.indent_id || null,
       created_by: userData.user?.id ?? null,
     };
     const { data, error } = await supabase
@@ -391,6 +395,13 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           </FormField>
           <FormField size="sm" label="Invoice No.">
             <Input value={form.invoice_no} onChange={(e) => setForm({ ...form, invoice_no: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Linked Indent (optional)">
+            <Input
+              placeholder="Paste Indent ID to link to an RMA workflow"
+              value={form.indent_id}
+              onChange={(e) => setForm({ ...form, indent_id: e.target.value })}
+            />
           </FormField>
         </FormGrid>
       </FormSection>
