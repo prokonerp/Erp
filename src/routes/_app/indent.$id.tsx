@@ -188,6 +188,47 @@ function IndentDetail() {
     navigate({ to: "/indent" });
   };
 
+  /** Sum quantities from prior non-cancelled GRNs linked to this Indent so
+   *  the next GRN prefill only shows still-pending items. Keyed by
+   *  `${model}||${serial}` (upper-cased/trimmed); falls back to model-only
+   *  when serial is blank. Draft GRNs are counted too — they represent
+   *  in-flight receipts that shouldn't be duplicated. */
+  const fetchPriorGrnQty = async (
+    indentId: string,
+    category: "oem" | "customer",
+  ): Promise<Map<string, number>> => {
+    const acc = new Map<string, number>();
+    const { data } = await supabase
+      .from("grns" as never)
+      .select("status, items")
+      .eq("indent_id", indentId)
+      .eq("category", category);
+    for (const g of (data || []) as Array<{ status?: string | null; items?: Array<Record<string, unknown>> | null }>) {
+      if ((g.status || "").toLowerCase() === "cancelled") continue;
+      for (const it of g.items || []) {
+        const model = String((it.model_no as string) || "").trim().toUpperCase();
+        const serial = String((it.serial_no as string) || "").trim().toUpperCase();
+        const qty = parseFloat(String(it.qty_received ?? it.qty ?? "0")) || 0;
+        if (!model && !serial) continue;
+        const key = `${model}||${serial}`;
+        acc.set(key, (acc.get(key) || 0) + qty);
+      }
+    }
+    return acc;
+  };
+
+  const remainingQty = (
+    prior: Map<string, number>,
+    model: string,
+    serial: string,
+    qtyStr: string,
+  ): number => {
+    const req = parseFloat(qtyStr || "1") || 1;
+    const key = `${(model || "").trim().toUpperCase()}||${(serial || "").trim().toUpperCase()}`;
+    const done = prior.get(key) || 0;
+    return Math.max(0, req - done);
+  };
+
   const generateChallan = async (only?: OracleBlock) => {
     if (!i) return;
     // Duplicate DC guard — block generation when any target Oracle already
