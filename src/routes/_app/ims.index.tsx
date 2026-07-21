@@ -2,6 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  LineChart, Line,
+} from "recharts";
+import {
   listStock,
   listTransfers,
   listReservations,
@@ -110,6 +115,138 @@ function Dashboard() {
           {stat("Available Stock", good.filter((s) => s.stock_status === "available").length)}
         </div>
       </section>
+
+      {(() => {
+        // Good vs Defective pie
+        const goodQty = good.reduce((a, s) => a + (Number(s.qty) || 1), 0);
+        const defQty = defective.filter((s) => s.stock_status !== "scrapped").reduce((a, s) => a + (Number(s.qty) || 1), 0);
+        const scrapQty = defective.filter((s) => s.stock_status === "scrapped").reduce((a, s) => a + (Number(s.qty) || 1), 0);
+        const pieData = [
+          { name: "Good", value: goodQty, fill: "hsl(142 76% 36%)" },
+          { name: "Defective", value: defQty, fill: "hsl(38 92% 50%)" },
+          { name: "Scrap", value: scrapQty, fill: "hsl(0 72% 51%)" },
+        ].filter((d) => d.value > 0);
+
+        // GRN source split
+        const isGrn = (ref: string | null | undefined) => !!ref && ref.toUpperCase().startsWith("GRN ");
+        let recvOem = 0, recvCust = 0, recvGen = 0;
+        for (const t of txns) {
+          if (!isGrn(t.reference)) continue;
+          if (t.txn_type !== "good_in" && t.txn_type !== "defective_in") continue;
+          const q = Number(t.qty) || 0;
+          const r = (t.reference || "").toUpperCase();
+          if (r.includes("GRN-OEM")) recvOem += q;
+          else if (r.includes("GRN-CUST")) recvCust += q;
+          else if (r.includes("GRN-GEN")) recvGen += q;
+        }
+        const grnData = [
+          { name: "From OEM", value: recvOem, fill: "hsl(160 84% 39%)" },
+          { name: "From Customer", value: recvCust, fill: "hsl(217 91% 60%)" },
+          { name: "General", value: recvGen, fill: "hsl(38 92% 50%)" },
+        ].filter((d) => d.value > 0);
+
+        // 30-day movement trend
+        const days: { key: string; label: string; in: number; out: number }[] = [];
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        for (let i = 29; i >= 0; i--) {
+          const d = new Date(today); d.setDate(today.getDate() - i);
+          const key = d.toISOString().slice(0, 10);
+          days.push({ key, label: `${d.getDate()}/${d.getMonth() + 1}`, in: 0, out: 0 });
+        }
+        const idx = new Map(days.map((d, i) => [d.key, i]));
+        for (const t of txns) {
+          const key = (t.txn_date || "").slice(0, 10);
+          const i = idx.get(key);
+          if (i === undefined) continue;
+          const q = Number(t.qty) || 0;
+          if (t.txn_type === "good_in" || t.txn_type === "defective_in") days[i].in += q;
+          else if (t.txn_type === "good_out" || t.txn_type === "defective_out") days[i].out += q;
+        }
+
+        // Top 6 OEMs by qty
+        const oemMap = new Map<string, number>();
+        for (const s of stock) {
+          if (s.stock_status === "issued" || s.stock_status === "returned_to_oem" || s.stock_status === "scrapped") continue;
+          const k = s.oem || "—";
+          oemMap.set(k, (oemMap.get(k) || 0) + (Number(s.qty) || 1));
+        }
+        const oemData = Array.from(oemMap.entries())
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 6);
+
+        return (
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Stock Composition</CardTitle></CardHeader>
+              <CardContent style={{ height: 260 }}>
+                {pieData.length === 0 ? <div className="text-sm text-muted-foreground">No stock yet.</div> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                        {pieData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-base">Received Stock by Source</CardTitle></CardHeader>
+              <CardContent style={{ height: 260 }}>
+                {grnData.length === 0 ? <div className="text-sm text-muted-foreground">No GRN receipts yet.</div> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={grnData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                        {grnData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader><CardTitle className="text-base">30-Day Stock Movement</CardTitle></CardHeader>
+              <CardContent style={{ height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={days} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={2} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="in" name="Stock In" stroke="hsl(142 76% 36%)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="out" name="Stock Out" stroke="hsl(0 72% 51%)" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader><CardTitle className="text-base">Top OEMs by Available Stock</CardTitle></CardHeader>
+              <CardContent style={{ height: 260 }}>
+                {oemData.length === 0 ? <div className="text-sm text-muted-foreground">No stock yet.</div> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={oemData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="value" name="Qty" fill="hsl(217 91% 60%)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+        );
+      })()}
 
       <Card>
         <CardHeader><CardTitle className="text-base">Warehouse Snapshot</CardTitle></CardHeader>
