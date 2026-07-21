@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BranchPicker } from "@/components/BranchPicker";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Trash2, Eye, Save } from "lucide-react";
+import { Plus, Trash2, Eye, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ChallanItem, DocType } from "@/lib/challan";
 import { emptyItem } from "@/lib/challan";
@@ -30,8 +30,14 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const [items, setItems] = useState<ChallanItem[]>([emptyItem()]);
   const [partyId, setPartyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
+  // Persistent id for auto-save. Starts from editId; upgraded after first insert.
+  const [recordId, setRecordId] = useState<string | null>(editId ?? null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const savingRef = useRef(false);
+  const lastPayloadRef = useRef<string>("");
   const [form, setForm] = useState({
-    status: "Draft",
+    status: "Challan Generated",
     challan_date: new Date().toISOString().slice(0, 10),
     dispatch_date: "",
     reference_no: "",
@@ -112,6 +118,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   // Load existing record for edit mode.
   useEffect(() => {
     if (!editId) return;
+    setRecordId(editId);
     (async () => {
       const { data, error } = await supabase
         .from("delivery_challans" as never)
@@ -164,6 +171,88 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
     })();
   }, [editId]);
+
+  // ---------------------- Auto-save engine ----------------------
+  // Debounced writer: creates on first meaningful save, updates thereafter.
+  const canAutosave = () => {
+    if (!branchId) return false;
+    if (!form.party_name.trim()) return false;
+    const cleanItems = items.filter((it) => it.part_name.trim() || it.part_no.trim());
+    if (cleanItems.length === 0) return false;
+    return true;
+  };
+
+  const buildPayload = () => {
+    const cleanItems = items.filter((it) => it.part_name.trim() || it.part_no.trim());
+    return {
+      ...form,
+      doc_type: dcType,
+      dispatch_date: form.dispatch_date || null,
+      items: cleanItems,
+      branch_id: branchId,
+      indent_id: form.indent_id || null,
+    };
+  };
+
+  const persist = async () => {
+    if (!canAutosave() || savingRef.current) return;
+    const payload = buildPayload();
+    const signature = JSON.stringify({ ...payload, recordId });
+    if (signature === lastPayloadRef.current) return;
+    savingRef.current = true;
+    setSaveState("saving");
+    try {
+      if (recordId) {
+        const { error } = await supabase
+          .from("delivery_challans" as never)
+          .update(payload as never)
+          .eq("id", recordId);
+        if (error) throw error;
+      } else {
+        const { data: userData } = await supabase.auth.getUser();
+        const insertPayload = { ...payload, challan_no: "", created_by: userData.user?.id ?? null };
+        const { data, error } = await supabase
+          .from("delivery_challans" as never)
+          .insert(insertPayload as never)
+          .select("id")
+          .single();
+        if (error) throw error;
+        const newId = (data as { id: string }).id;
+        setRecordId(newId);
+        // Swap URL so refresh/back keeps the same record — no new insert on next save.
+        navigate({ to: "/challan/$id/edit", params: { id: newId }, replace: true });
+      }
+      lastPayloadRef.current = signature;
+      setLastSavedAt(new Date());
+      setSaveState("saved");
+    } catch (e) {
+      setSaveState("error");
+      const msg = e instanceof Error ? e.message : "Auto-save failed";
+      toast.error(msg);
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
+  // Debounced trigger — waits 2.5s of inactivity before flushing.
+  useEffect(() => {
+    if (!canAutosave()) return;
+    const t = setTimeout(() => { void persist(); }, 2500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, items, dcType, branchId]);
+
+  // Flush on tab close if there are pending changes.
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      if (saveState === "saving" || (canAutosave() && lastPayloadRef.current !== JSON.stringify({ ...buildPayload(), recordId }))) {
+        void persist();
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, items, dcType, branchId, recordId, saveState]);
 
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -263,49 +352,18 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     if (validate()) setReviewOpen(true);
   };
 
+  // "Done" button: flush any pending auto-save, then jump to the view page.
   const submit = async () => {
     if (!validate()) return;
-    const cleanItems = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     setBusy(true);
-    if (editId) {
-      const updatePayload = {
-        ...form,
-        doc_type: dcType,
-        dispatch_date: form.dispatch_date || null,
-        items: cleanItems,
-        branch_id: branchId,
-        indent_id: form.indent_id || null,
-      };
-      const { error } = await supabase
-        .from("delivery_challans" as never)
-        .update(updatePayload as never)
-        .eq("id", editId);
-      setBusy(false);
-      if (error) return toast.error(error.message);
-      setReviewOpen(false);
-      toast.success("Delivery Challan updated");
-      navigate({ to: "/challan/$id", params: { id: editId } });
-      return;
-    }
-    const { data: userData } = await supabase.auth.getUser();
-    const payload = {
-      ...form,
-      doc_type: dcType,
-      challan_no: "",
-      dispatch_date: form.dispatch_date || null,
-      items: cleanItems,
-      branch_id: branchId,
-      indent_id: form.indent_id || null,
-      created_by: userData.user?.id ?? null,
-    };
-    const { data, error } = await supabase
-      .from("delivery_challans" as never)
-      .insert(payload as never).select("id").single();
+    await persist();
     setBusy(false);
-    if (error) return toast.error(error.message);
     setReviewOpen(false);
-    toast.success("Delivery Challan created");
-    navigate({ to: "/challan/$id", params: { id: (data as { id: string }).id } });
+    const idToOpen = recordId;
+    if (idToOpen) {
+      toast.success("Delivery Challan saved");
+      navigate({ to: "/challan/$id", params: { id: idToOpen } });
+    }
   };
 
   const totalQty = items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0);
@@ -317,11 +375,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         <Eye className="h-4 w-4" />
         <span className="hidden sm:inline">Review</span>
       </Button>
-      <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
-        <Save className="h-4 w-4" />
-        <span className="hidden sm:inline">Save Draft</span>
-        <span className="sm:hidden">Save</span>
-      </Button>
+      <SaveIndicator state={saveState} at={lastSavedAt} />
     </>
   );
 
@@ -373,7 +427,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           <FormField size="sm" label="Status">
             <Input value={form.status} readOnly className="bg-muted/40" />
             <p className="text-[10px] text-muted-foreground mt-1">
-              Documents are saved as Draft. Submit from the Review &amp; Print page to update inventory.
+              Auto-saved as {form.status}. Every change is persisted to the same record — no duplicates.
             </p>
           </FormField>
           <FormField size="sm" label="Reference No.">
@@ -740,9 +794,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         <Button type="button" variant="outline" size="sm" onClick={openReview} disabled={busy} className="flex-1 gap-1.5">
           <Eye className="h-4 w-4" /> Review
         </Button>
-        <Button type="button" size="sm" onClick={submit} disabled={busy} className="flex-1 gap-1.5">
-          <Save className="h-4 w-4" /> Save
-        </Button>
+        <div className="flex-1 flex justify-end">
+          <SaveIndicator state={saveState} at={lastSavedAt} />
+        </div>
       </StickyMobileActions>
 
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
@@ -857,7 +911,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
               Back to Edit
             </Button>
             <Button onClick={submit} disabled={busy}>
-              {busy ? "Saving..." : "Save Draft & Continue"}
+              {busy ? "Saving..." : "Save & Continue"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -873,4 +927,26 @@ function ReviewField({ label, value, className = "" }: { label: string; value?: 
       <div className="font-medium break-words">{value || "—"}</div>
     </div>
   );
+}
+
+function SaveIndicator({ state, at }: { state: "idle" | "saving" | "saved" | "error"; at: Date | null }) {
+  if (state === "saving") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+      </span>
+    );
+  }
+  if (state === "saved") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Saved{at ? ` · ${at.toLocaleTimeString()}` : ""}
+      </span>
+    );
+  }
+  if (state === "error") {
+    return <span className="text-xs text-destructive">Auto-save failed — retrying on next change.</span>;
+  }
+  return <span className="text-xs text-muted-foreground">Auto-save enabled</span>;
 }
