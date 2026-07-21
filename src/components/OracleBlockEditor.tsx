@@ -43,7 +43,6 @@ export function OracleBlockEditor({
   const [shortageOpen, setShortageOpen] = useState(false);
   const [shortageMsg, setShortageMsg] = useState<string>("");
   const [shortageHasOther, setShortageHasOther] = useState(false);
-  const [closeOpen, setCloseOpen] = useState(false);
 
   const status = oracleStatus(value);
   const closed = status === "closed";
@@ -100,21 +99,29 @@ export function OracleBlockEditor({
   const setRecvRow = (i: number, patch: Partial<OracleReceivedRow>) =>
     setBlock({ received_rows: value.received_rows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
 
-  const confirmClose = async () => {
-    const { data: u } = await supabase.auth.getUser();
-    const uid = u.user?.id || null;
-    const meta = (u.user?.user_metadata || {}) as { full_name?: string; name?: string };
-    const name = meta.full_name || meta.name || u.user?.email || null;
-    onChange({
-      ...value,
-      status: "closed",
-      closed_by: uid,
-      closed_by_name: name,
-      closed_at: new Date().toISOString(),
-    });
-    setCloseOpen(false);
-    toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} closed`);
-  };
+  // Auto-close: once every defective/exchange/received row is fully filled,
+  // mark the block closed automatically (no manual confirmation).
+  useEffect(() => {
+    if (closed || !complete) return;
+    let cancelled = false;
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (cancelled) return;
+      const uid = u.user?.id || null;
+      const meta = (u.user?.user_metadata || {}) as { full_name?: string; name?: string };
+      const name = meta.full_name || meta.name || u.user?.email || null;
+      onChange({
+        ...value,
+        status: "closed",
+        closed_by: uid,
+        closed_by_name: name,
+        closed_at: new Date().toISOString(),
+      });
+      toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} auto-closed`);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complete, closed]);
 
   const reopen = () => {
     onChange({ ...value, status: "open", closed_by: null, closed_by_name: null, closed_at: null });
@@ -206,15 +213,10 @@ export function OracleBlockEditor({
               <span className="text-xs text-muted-foreground inline-flex items-center"><Lock className="h-3 w-3 mr-1" />Locked</span>
             )
           ) : (
-            <Button
-              variant="default"
-              size="sm"
-              disabled={!complete}
-              title={complete ? "Close this Oracle" : "Fill all mandatory fields to enable"}
-              onClick={() => setCloseOpen(true)}
-            >
-              <CheckCircle2 className="h-4 w-4 mr-1" />Close Oracle
-            </Button>
+            <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {complete ? "Closing…" : "Auto-closes when all rows are complete"}
+            </span>
           )}
           {!closed && (
             <Button variant="ghost" size="icon" onClick={onRemove}><Trash2 className="h-4 w-4" /></Button>
@@ -407,20 +409,6 @@ export function OracleBlockEditor({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={closeOpen} onOpenChange={setCloseOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Close Oracle #{index + 1}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              All Oracle activities have been completed. Are you sure you want to close this Oracle? Closed Oracle fields will be locked from further editing.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmClose}>Confirm</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Card>
   );
 }
