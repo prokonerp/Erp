@@ -910,6 +910,51 @@ export type Database = {
           },
         ]
       }
+      document_deletion_audit: {
+        Row: {
+          deleted_at: string
+          deleted_by: string | null
+          deleted_by_name: string | null
+          document_id: string
+          document_no: string
+          document_subtype: string | null
+          document_type: string
+          id: string
+          original_created_at: string | null
+          original_created_by: string | null
+          reason: string
+          snapshot: Json | null
+        }
+        Insert: {
+          deleted_at?: string
+          deleted_by?: string | null
+          deleted_by_name?: string | null
+          document_id: string
+          document_no: string
+          document_subtype?: string | null
+          document_type: string
+          id?: string
+          original_created_at?: string | null
+          original_created_by?: string | null
+          reason: string
+          snapshot?: Json | null
+        }
+        Update: {
+          deleted_at?: string
+          deleted_by?: string | null
+          deleted_by_name?: string | null
+          document_id?: string
+          document_no?: string
+          document_subtype?: string | null
+          document_type?: string
+          id?: string
+          original_created_at?: string | null
+          original_created_by?: string | null
+          reason?: string
+          snapshot?: Json | null
+        }
+        Relationships: []
+      }
       employees: {
         Row: {
           active: boolean
@@ -4248,6 +4293,14 @@ export type Database = {
     Functions: {
       _oracle_block_complete: { Args: { blk: Json }; Returns: boolean }
       _oracle_row_str: { Args: { k: string; v: Json }; Returns: string }
+      admin_delete_challan: {
+        Args: { _id: string; _reason: string }
+        Returns: undefined
+      }
+      admin_delete_grn: {
+        Args: { _id: string; _reason: string }
+        Returns: undefined
+      }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
