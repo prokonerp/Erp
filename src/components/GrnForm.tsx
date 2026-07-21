@@ -379,12 +379,10 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
             <Input type="date" value={form.receipt_date} onChange={(e) => setForm({ ...form, receipt_date: e.target.value })} />
           </FormField>
           <FormField size="sm" label="Status">
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {["Draft","Received","QC Pending","Approved","Rejected"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Input value={form.status} readOnly className="bg-muted/40" />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              GRNs are saved as Draft. Submit from the Review page to post stock to inventory.
+            </p>
           </FormField>
           <FormField size="sm" label="Reference No.">
             <Input value={form.reference_no} onChange={(e) => setForm({ ...form, reference_no: e.target.value })} />
