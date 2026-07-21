@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Printer, Download, CheckCircle2, Ban } from "lucide-react";
+import { ArrowLeft, Printer, Download, CheckCircle2, Ban, Pencil } from "lucide-react";
 import { fetchGrn, CATEGORY_LABEL, type Grn } from "@/lib/grn";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
+import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 
 export const Route = createFileRoute("/_app/grn/$id")({
   component: GrnView,
@@ -23,10 +24,40 @@ function GrnView() {
   const [busy, setBusy] = useState(false);
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
+  const [editOpen, setEditOpen] = useState(false);
+  const [invoiceLinked, setInvoiceLinked] = useState(false);
+  const [wasEdited, setWasEdited] = useState(false);
 
   useEffect(() => {
     fetchGrn(id).then(setG).catch((e) => toast.error(e.message));
   }, [id]);
+
+  useEffect(() => {
+    if (!g?.grn_no) return;
+    (async () => {
+      // "Edited" badge — any audit row of type grn_edit_reverse for this GRN.
+      const { data: audit } = await supabase
+        .from("document_deletion_audit")
+        .select("id")
+        .eq("document_id", g.id)
+        .in("document_type", ["grn_edit_reverse", "grn_reopen"])
+        .limit(1);
+      setWasEdited((audit || []).length > 0);
+
+      // Invoice-linkage guard: any invoice_items row whose serial_numbers
+      // overlaps a serial produced by this GRN.
+      const serials = (g.items || [])
+        .map((it) => (it.serial_no || "").trim())
+        .filter(Boolean);
+      if (serials.length === 0) { setInvoiceLinked(false); return; }
+      const { data: inv } = await supabase
+        .from("invoice_items")
+        .select("id")
+        .overlaps("serial_numbers", serials)
+        .limit(1);
+      setInvoiceLinked((inv || []).length > 0);
+    })();
+  }, [g?.id, g?.grn_no]);
 
   if (!g) return <div className="text-muted-foreground">Loading…</div>;
   const isOem = g.category === "oem";
@@ -121,10 +152,25 @@ function GrnView() {
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={isSubmitted ? "default" : isCancelled ? "destructive" : "secondary"}>{status}</Badge>
+            {wasEdited && (
+              <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">Edited</Badge>
+            )}
             {isDraft && (
               <Link to="/grn/$id/edit" params={{ id: g.id }}>
                 <Button variant="outline" size="sm">Edit</Button>
               </Link>
+            )}
+            {isAdmin && isSubmitted && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => setEditOpen(true)}
+                disabled={busy || invoiceLinked}
+                title={invoiceLinked ? "Invoice exists — create correction entry instead" : "Reverse stock and open for editing"}
+              >
+                <Pencil className="h-4 w-4" />Edit GRN
+              </Button>
             )}
             {isDraft && (
               <Button size="sm" onClick={handleSubmit} disabled={busy} className="gap-1.5">
@@ -157,8 +203,31 @@ function GrnView() {
           {isDraft && " Draft GRN — click Submit to lock it and add stock to the IMS Stock Ledger."}
           {isSubmitted && g.submitted_at && ` Submitted on ${new Date(g.submitted_at).toLocaleString()}.`}
           {g.printed_at && ` · Last printed ${new Date(g.printed_at).toLocaleString()}.`}
+          {invoiceLinked && (
+            <span className="ml-1 text-destructive">
+              · Invoice linked — editing is blocked. Create a correction entry instead.
+            </span>
+          )}
         </div>
       </div>
+
+      <ControlledActionDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        title={`Edit GRN ${g.grn_no}?`}
+        description="Editing will reverse all stock ledger entries created by this GRN, move it back to Draft, and record an audit trail. Serial numbers, quantities, warehouse and QC fields can be corrected before you re-submit."
+        warning="Editing GRN will impact stock and audit trail. Item/Model and Indent linkage cannot be changed."
+        confirmLabel="Reverse stock & open for edit"
+        reasonPlaceholder="e.g., Wrong serial captured, warehouse mismatch, qty correction…"
+        onConfirm={async ({ reason }) => {
+          setBusy(true);
+          const { error } = await supabase.rpc("admin_edit_grn_reverse" as never, { _id: g.id, _reason: reason } as never);
+          setBusy(false);
+          if (error) return { error: error.message };
+          toast.success("Stock reversed. Opening GRN for edit.");
+          navigate({ to: "/grn/$id/edit", params: { id: g.id } });
+        }}
+      />
 
       <div id="print-area" className="bg-white text-black mx-auto shadow print:shadow-none" style={{ width: "190mm", minHeight: "277mm", padding: 0 }}>
         {/* Header */}
