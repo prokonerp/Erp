@@ -118,6 +118,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   // Load existing record for edit mode.
   useEffect(() => {
     if (!editId) return;
+    setRecordId(editId);
     (async () => {
       const { data, error } = await supabase
         .from("delivery_challans" as never)
@@ -170,6 +171,88 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
     })();
   }, [editId]);
+
+  // ---------------------- Auto-save engine ----------------------
+  // Debounced writer: creates on first meaningful save, updates thereafter.
+  const canAutosave = () => {
+    if (!branchId) return false;
+    if (!form.party_name.trim()) return false;
+    const cleanItems = items.filter((it) => it.part_name.trim() || it.part_no.trim());
+    if (cleanItems.length === 0) return false;
+    return true;
+  };
+
+  const buildPayload = () => {
+    const cleanItems = items.filter((it) => it.part_name.trim() || it.part_no.trim());
+    return {
+      ...form,
+      doc_type: dcType,
+      dispatch_date: form.dispatch_date || null,
+      items: cleanItems,
+      branch_id: branchId,
+      indent_id: form.indent_id || null,
+    };
+  };
+
+  const persist = async () => {
+    if (!canAutosave() || savingRef.current) return;
+    const payload = buildPayload();
+    const signature = JSON.stringify({ ...payload, recordId });
+    if (signature === lastPayloadRef.current) return;
+    savingRef.current = true;
+    setSaveState("saving");
+    try {
+      if (recordId) {
+        const { error } = await supabase
+          .from("delivery_challans" as never)
+          .update(payload as never)
+          .eq("id", recordId);
+        if (error) throw error;
+      } else {
+        const { data: userData } = await supabase.auth.getUser();
+        const insertPayload = { ...payload, challan_no: "", created_by: userData.user?.id ?? null };
+        const { data, error } = await supabase
+          .from("delivery_challans" as never)
+          .insert(insertPayload as never)
+          .select("id")
+          .single();
+        if (error) throw error;
+        const newId = (data as { id: string }).id;
+        setRecordId(newId);
+        // Swap URL so refresh/back keeps the same record — no new insert on next save.
+        navigate({ to: "/challan/$id/edit", params: { id: newId }, replace: true });
+      }
+      lastPayloadRef.current = signature;
+      setLastSavedAt(new Date());
+      setSaveState("saved");
+    } catch (e) {
+      setSaveState("error");
+      const msg = e instanceof Error ? e.message : "Auto-save failed";
+      toast.error(msg);
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
+  // Debounced trigger — waits 2.5s of inactivity before flushing.
+  useEffect(() => {
+    if (!canAutosave()) return;
+    const t = setTimeout(() => { void persist(); }, 2500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, items, dcType, branchId]);
+
+  // Flush on tab close if there are pending changes.
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      if (saveState === "saving" || (canAutosave() && lastPayloadRef.current !== JSON.stringify({ ...buildPayload(), recordId }))) {
+        void persist();
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, items, dcType, branchId, recordId, saveState]);
 
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
