@@ -638,26 +638,27 @@ function TicketDetail() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
-          {(() => {
-            const defOn = !!t.defective_parts_received;
-            const goodOn = !!t.good_parts_used;
-            const canIndent = !!t.oem_call && (defOn || goodOn);
-            const title = !t.oem_call
-              ? "Enable OEM Call to create an Indent"
-              : !(defOn || goodOn)
-              ? "Enable Defective Parts Received or Good Parts Used to create an Indent"
-              : "Create a blank Indent (no specific Oracle #). Use per-row actions below for Oracle-scoped indents.";
-            return (
-          <Button
-            variant="outline"
-            disabled={!canIndent}
-            title={title}
-            onClick={() => navigate({ to: "/indent/new", search: { ticket_id: t.id, oracle_no: "NEW" } })}
+          <div
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground min-w-[70px]"
+            aria-live="polite"
+            title={saveStatus === "error" ? saveError : undefined}
           >
-            <ClipboardList className="h-4 w-4 mr-1" />New Indent
-          </Button>
-            );
-          })()}
+            {saveStatus === "saving" && (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</>)}
+            {saveStatus === "saved" && (<><Check className="h-3.5 w-3.5 text-green-600" />Saved</>)}
+            {saveStatus === "error" && (
+              <>
+                <AlertCircle className="h-3.5 w-3.5 text-red-600" />
+                <span className="text-red-600">Save failed</span>
+                <button
+                  type="button"
+                  className="ml-1 underline"
+                  onClick={() => { dirtyRef.current = true; setT((s) => (s ? { ...s } : s)); }}
+                >
+                  Retry
+                </button>
+              </>
+            )}
+          </div>
           <Button onClick={() => save()} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
         </div>
