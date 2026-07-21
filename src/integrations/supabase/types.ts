@@ -4301,6 +4301,19 @@ export type Database = {
         Args: { _id: string; _reason: string }
         Returns: undefined
       }
+      admin_edit_grn_reverse: {
+        Args: { _id: string; _reason: string }
+        Returns: undefined
+      }
+      admin_reopen_oracle: {
+        Args: {
+          _indent_id: string
+          _oracle_no: string
+          _reason: string
+          _scope: string
+        }
+        Returns: undefined
+      }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean

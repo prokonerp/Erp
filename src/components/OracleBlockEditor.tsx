@@ -14,6 +14,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { normalizeOracle, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
+import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 
 type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string };
 type Warehouse = { id: string; name: string; code: string };
@@ -22,7 +23,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
-  onGenerateCustomerGrn, dcExists = false, dcInfo,
+  onGenerateCustomerGrn, dcExists = false, dcInfo, indentId,
 }: {
   index: number;
   value: OracleBlock;
@@ -37,6 +38,8 @@ export function OracleBlockEditor({
   onGenerateCustomerGrn?: (oracle: OracleBlock) => void;
   dcExists?: boolean;
   dcInfo?: { challan_no?: string | null; challan_date?: string | null; status?: string | null; id?: string | null };
+  /** Parent indent id — required for controlled admin reopen. */
+  indentId?: string;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -46,6 +49,7 @@ export function OracleBlockEditor({
   const [shortageOpen, setShortageOpen] = useState(false);
   const [shortageMsg, setShortageMsg] = useState<string>("");
   const [shortageHasOther, setShortageHasOther] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
 
   const status = oracleStatus(value);
   const closed = status === "closed";
@@ -116,6 +120,8 @@ export function OracleBlockEditor({
   }, [complete, closed]);
 
   const reopen = () => {
+    // Local-only reset kept for non-controlled callers (no indentId): flips
+    // block status but performs no stock reversal.
     onChange({ ...value, status: "open", closed_by: null, closed_by_name: null, closed_at: null });
     toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} reopened`);
   };
@@ -200,6 +206,9 @@ export function OracleBlockEditor({
           )}
           <CardTitle className="text-base">Oracle {oracleLabel}</CardTitle>
           <Badge className={closed ? "bg-emerald-600 hover:bg-emerald-600" : "bg-amber-500 hover:bg-amber-500"}>{closed ? "Closed" : "Open"}</Badge>
+          {value.reopened && (
+            <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">Reopened</Badge>
+          )}
           {collapsed && (
             <span className="text-xs text-muted-foreground inline-flex flex-wrap gap-x-3 gap-y-0.5">
               <span>Def: {defCount}</span>
@@ -217,7 +226,7 @@ export function OracleBlockEditor({
         <div className="flex items-center gap-2">
           {closed ? (
             isAdmin ? (
-              <Button variant="outline" size="sm" onClick={reopen}>
+              <Button variant="outline" size="sm" onClick={() => (indentId ? setReopenOpen(true) : reopen())}>
                 <LockOpen className="h-4 w-4 mr-1" />Reopen
               </Button>
             ) : (
@@ -482,6 +491,45 @@ export function OracleBlockEditor({
       </CardContent>
       )}
 
+      <ControlledActionDialog
+        open={reopenOpen}
+        onOpenChange={setReopenOpen}
+        title={`Reopen Oracle ${value.oracle_no || `#${index + 1}`}?`}
+        description="This will reverse stock and document flow for the selected scope. Affected GRNs move back to Draft, and DCs release their reserved/issued stock. All actions are audited."
+        warning="This will reverse stock & document flow. Reopening is blocked if any linked Invoice exists — use the correction workflow instead."
+        scopes={[
+          { value: "grn", label: "GRN only", hint: "Reverse GRN receipts on this indent." },
+          { value: "dc", label: "DC only", hint: "Release stock issued via Delivery Challans." },
+          { value: "full", label: "Full cycle", hint: "Reverse both GRNs and DCs." },
+        ]}
+        defaultScope="full"
+        confirmLabel="Reopen Oracle"
+        reasonPlaceholder="e.g., Wrong serial dispatched, OEM sent replacement in error…"
+        onConfirm={async ({ reason, scope }) => {
+          if (!indentId) return { error: "Missing indent id" };
+          const { error } = await supabase.rpc("admin_reopen_oracle" as never, {
+            _indent_id: indentId,
+            _oracle_no: value.oracle_no || "",
+            _reason: reason,
+            _scope: scope || "full",
+          } as never);
+          if (error) return { error: error.message };
+          toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} reopened`);
+          onChange({
+            ...value,
+            status: "open",
+            closed_by: null,
+            closed_by_name: null,
+            closed_at: null,
+            reopened: {
+              at: new Date().toISOString(),
+              by: null,
+              reason,
+              scope: (scope as "grn" | "dc" | "full") || "full",
+            },
+          });
+        }}
+      />
       <AlertDialog open={shortageOpen} onOpenChange={setShortageOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
