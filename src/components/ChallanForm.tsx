@@ -352,49 +352,18 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     if (validate()) setReviewOpen(true);
   };
 
+  // "Done" button: flush any pending auto-save, then jump to the view page.
   const submit = async () => {
     if (!validate()) return;
-    const cleanItems = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     setBusy(true);
-    if (editId) {
-      const updatePayload = {
-        ...form,
-        doc_type: dcType,
-        dispatch_date: form.dispatch_date || null,
-        items: cleanItems,
-        branch_id: branchId,
-        indent_id: form.indent_id || null,
-      };
-      const { error } = await supabase
-        .from("delivery_challans" as never)
-        .update(updatePayload as never)
-        .eq("id", editId);
-      setBusy(false);
-      if (error) return toast.error(error.message);
-      setReviewOpen(false);
-      toast.success("Delivery Challan updated");
-      navigate({ to: "/challan/$id", params: { id: editId } });
-      return;
-    }
-    const { data: userData } = await supabase.auth.getUser();
-    const payload = {
-      ...form,
-      doc_type: dcType,
-      challan_no: "",
-      dispatch_date: form.dispatch_date || null,
-      items: cleanItems,
-      branch_id: branchId,
-      indent_id: form.indent_id || null,
-      created_by: userData.user?.id ?? null,
-    };
-    const { data, error } = await supabase
-      .from("delivery_challans" as never)
-      .insert(payload as never).select("id").single();
+    await persist();
     setBusy(false);
-    if (error) return toast.error(error.message);
     setReviewOpen(false);
-    toast.success("Delivery Challan created");
-    navigate({ to: "/challan/$id", params: { id: (data as { id: string }).id } });
+    const idToOpen = recordId;
+    if (idToOpen) {
+      toast.success("Delivery Challan saved");
+      navigate({ to: "/challan/$id", params: { id: idToOpen } });
+    }
   };
 
   const totalQty = items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0);
