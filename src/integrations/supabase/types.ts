@@ -4329,6 +4329,8 @@ export type Database = {
       record_user_activity: { Args: never; Returns: undefined }
       record_user_login: { Args: never; Returns: undefined }
       record_user_logout: { Args: never; Returns: undefined }
+      sync_dc_to_ims: { Args: { _dc_id: string }; Returns: number }
+      sync_grn_to_ims: { Args: { _grn_id: string }; Returns: number }
     }
     Enums: {
       app_role: "admin" | "user"
