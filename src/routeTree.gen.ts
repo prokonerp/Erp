@@ -61,6 +61,7 @@ import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
 import { Route as AppImsReservationsRouteImport } from './routes/_app/ims.reservations'
 import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
 import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
+import { Route as AppImsLedgerRouteImport } from './routes/_app/ims.ledger'
 import { Route as AppImsIndentHistoryRouteImport } from './routes/_app/ims.indent-history'
 import { Route as AppImsAuditRouteImport } from './routes/_app/ims.audit'
 import { Route as AppGrnOemRouteImport } from './routes/_app/grn.oem'
@@ -370,6 +371,11 @@ const AppImsOemReturnsRoute = AppImsOemReturnsRouteImport.update({
   path: '/oem-returns',
   getParentRoute: () => AppImsRoute,
 } as any)
+const AppImsLedgerRoute = AppImsLedgerRouteImport.update({
+  id: '/ledger',
+  path: '/ledger',
+  getParentRoute: () => AppImsRoute,
+} as any)
 const AppImsIndentHistoryRoute = AppImsIndentHistoryRouteImport.update({
   id: '/indent-history',
   path: '/indent-history',
@@ -662,6 +668,7 @@ export interface FileRoutesByFullPath {
   '/grn/oem': typeof AppGrnOemRouteWithChildren
   '/ims/audit': typeof AppImsAuditRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
+  '/ims/ledger': typeof AppImsLedgerRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
   '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
@@ -750,6 +757,7 @@ export interface FileRoutesByTo {
   '/grn/new': typeof AppGrnNewRoute
   '/ims/audit': typeof AppImsAuditRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
+  '/ims/ledger': typeof AppImsLedgerRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
   '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
@@ -853,6 +861,7 @@ export interface FileRoutesById {
   '/_app/grn/oem': typeof AppGrnOemRouteWithChildren
   '/_app/ims/audit': typeof AppImsAuditRoute
   '/_app/ims/indent-history': typeof AppImsIndentHistoryRoute
+  '/_app/ims/ledger': typeof AppImsLedgerRoute
   '/_app/ims/oem-returns': typeof AppImsOemReturnsRoute
   '/_app/ims/reports': typeof AppImsReportsRoute
   '/_app/ims/reservations': typeof AppImsReservationsRoute
@@ -957,6 +966,7 @@ export interface FileRouteTypes {
     | '/grn/oem'
     | '/ims/audit'
     | '/ims/indent-history'
+    | '/ims/ledger'
     | '/ims/oem-returns'
     | '/ims/reports'
     | '/ims/reservations'
@@ -1045,6 +1055,7 @@ export interface FileRouteTypes {
     | '/grn/new'
     | '/ims/audit'
     | '/ims/indent-history'
+    | '/ims/ledger'
     | '/ims/oem-returns'
     | '/ims/reports'
     | '/ims/reservations'
@@ -1147,6 +1158,7 @@ export interface FileRouteTypes {
     | '/_app/grn/oem'
     | '/_app/ims/audit'
     | '/_app/ims/indent-history'
+    | '/_app/ims/ledger'
     | '/_app/ims/oem-returns'
     | '/_app/ims/reports'
     | '/_app/ims/reservations'
@@ -1575,6 +1587,13 @@ declare module '@tanstack/react-router' {
       path: '/oem-returns'
       fullPath: '/ims/oem-returns'
       preLoaderRoute: typeof AppImsOemReturnsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/ledger': {
+      id: '/_app/ims/ledger'
+      path: '/ledger'
+      fullPath: '/ims/ledger'
+      preLoaderRoute: typeof AppImsLedgerRouteImport
       parentRoute: typeof AppImsRoute
     }
     '/_app/ims/indent-history': {
@@ -2145,6 +2164,7 @@ const AppImsTransfersRouteWithChildren = AppImsTransfersRoute._addFileChildren(
 interface AppImsRouteChildren {
   AppImsAuditRoute: typeof AppImsAuditRoute
   AppImsIndentHistoryRoute: typeof AppImsIndentHistoryRoute
+  AppImsLedgerRoute: typeof AppImsLedgerRoute
   AppImsOemReturnsRoute: typeof AppImsOemReturnsRoute
   AppImsReportsRoute: typeof AppImsReportsRoute
   AppImsReservationsRoute: typeof AppImsReservationsRoute
@@ -2157,6 +2177,7 @@ interface AppImsRouteChildren {
 const AppImsRouteChildren: AppImsRouteChildren = {
   AppImsAuditRoute: AppImsAuditRoute,
   AppImsIndentHistoryRoute: AppImsIndentHistoryRoute,
+  AppImsLedgerRoute: AppImsLedgerRoute,
   AppImsOemReturnsRoute: AppImsOemReturnsRoute,
   AppImsReportsRoute: AppImsReportsRoute,
   AppImsReservationsRoute: AppImsReservationsRoute,
