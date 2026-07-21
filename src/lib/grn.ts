@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export type GrnCategory = "customer" | "oem" | "general";
-export type GrnStatus = "Draft" | "Received" | "QC Pending" | "Approved" | "Rejected";
+export type GrnStatus = "Draft" | "Submitted" | "Cancelled";
 
 export type GrnItem = {
   product_id?: string;
@@ -71,6 +71,10 @@ export type Grn = {
   oem_logo_url: string | null;
   created_at: string;
   created_by: string | null;
+  submitted_at?: string | null;
+  submitted_by?: string | null;
+  printed_at?: string | null;
+  printed_by?: string | null;
 };
 
 export const emptyGrnItem = (): GrnItem => ({
