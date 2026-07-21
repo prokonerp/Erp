@@ -310,6 +310,9 @@ function IndentDetail() {
     // rows and routes to a **GRN From OEM** prefill (Good stock).
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
     const oracles = only ? [only] : (i.oracles_data || []);
+    // Partial-receipt / duplicate-GRN guard: subtract quantities already
+    // covered by prior non-cancelled GRNs linked to this Indent (OEM category).
+    const priorQty = await fetchPriorGrnQty(i.id, "oem");
     const items: Array<{
       product_id?: string; part_no: string; part_name: string; description: string; uom: string;
       qty_received: string; qty_accepted: string; qty_rejected: string;
@@ -353,14 +356,16 @@ function IndentDetail() {
         const prod = model ? prodByModel[model] : undefined;
         const partName = maybeName || prod?.name || defRow?.part_name || model;
         const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
+        const remaining = remainingQty(priorQty, model, serial, qty);
+        if (remaining <= 0) continue; // already fully GRN'd → skip
         items.push({
           product_id: prod?.id,
           part_no: maybeModel || model,
           part_name: partName,
           description: desc,
           uom: prod?.unit || "Nos",
-          qty_received: qty || "1",
-          qty_accepted: qty || "1",
+          qty_received: String(remaining),
+          qty_accepted: String(remaining),
           qty_rejected: "0",
           batch_no: "",
           model_no: model,
@@ -371,7 +376,7 @@ function IndentDetail() {
       }
     }
     if (items.length === 0) {
-      toast.error("No OEM-received items yet. Fill Section C rows in at least one Oracle first.");
+      toast.error("No pending OEM items — all Section C rows are already covered by existing GRNs.");
       return;
     }
     const prefill = {
@@ -403,6 +408,8 @@ function IndentDetail() {
     // and honours product_tag (good/defective/scrap) for stock condition.
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
     const oracles = only ? [only] : (i.oracles_data || []);
+    // Duplicate-GRN guard (Customer category).
+    const priorQty = await fetchPriorGrnQty(i.id, "customer");
     const items: Array<{
       product_id?: string; part_no: string; part_name: string; description: string; uom: string;
       qty_received: string; qty_accepted: string; qty_rejected: string;
@@ -445,14 +452,16 @@ function IndentDetail() {
         const prod = model ? prodByModel[model] : undefined;
         const partName = maybeName || prod?.name || defRow?.part_name || model;
         const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
+        const remaining = remainingQty(priorQty, model, serial, qty);
+        if (remaining <= 0) continue;
         items.push({
           product_id: prod?.id,
           part_no: maybeModel || model,
           part_name: partName,
           description: desc,
           uom: prod?.unit || "Nos",
-          qty_received: qty || "1",
-          qty_accepted: qty || "1",
+          qty_received: String(remaining),
+          qty_accepted: String(remaining),
           qty_rejected: "0",
           batch_no: "",
           model_no: model,
@@ -463,7 +472,7 @@ function IndentDetail() {
       }
     }
     if (items.length === 0) {
-      toast.error("No customer-received items yet. Fill Section D rows in at least one Oracle first.");
+      toast.error("No pending Customer items — all Section D rows are already covered by existing GRNs.");
       return;
     }
     let customerId: string | null = null;
