@@ -288,8 +288,16 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     return true;
   };
 
-  const submit = async () => {
+  const qcReady =
+    (form.qc_status || "").toLowerCase() === "accepted" && !!form.checked_by.trim();
+
+  const submit = async (opts?: { approve?: boolean }) => {
+    const approve = !!opts?.approve;
     if (!validate()) return;
+    if (approve && !qcReady) {
+      toast.error("Complete QC (Status = Accepted, Checked By filled) before approving");
+      return;
+    }
     // Derive accepted/rejected qty from Condition so downstream views keep working.
     const clean = items
       .filter((it) => it.part_name.trim() || it.part_no.trim())
@@ -305,6 +313,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     const selectedWarehouse = warehouses.find((w) => w.id === warehouseId) || null;
     const warehouseName = selectedWarehouse?.name || form.warehouse_name || "";
     setBusy(true);
+    const approverName = approve ? await getCurrentUserName() : "";
     if (editId) {
       const updatePayload = {
         ...form,
@@ -321,6 +330,13 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         warehouse_id: warehouseId,
         indent_id: form.indent_id || null,
         stock_category: category === "general" ? (form.stock_category || "good") : null,
+        ...(approve
+          ? {
+              status: "Submitted",
+              approved_by: form.approved_by || approverName,
+              submitted_at: new Date().toISOString(),
+            }
+          : {}),
       };
       const { error } = await supabase
         .from("grns" as never)
@@ -329,7 +345,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       setBusy(false);
       if (error) return toast.error(error.message);
       setReviewOpen(false);
-      toast.success("GRN updated");
+      toast.success(approve ? "GRN Approved & Stock Updated Successfully" : "GRN updated");
       navigate({ to: "/grn/$id", params: { id: editId } });
       return;
     }
@@ -352,16 +368,22 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       indent_id: form.indent_id || null,
       stock_category: category === "general" ? (form.stock_category || "good") : null,
       created_by: userData.user?.id ?? null,
+      ...(approve
+        ? {
+            status: "Submitted",
+            approved_by: form.approved_by || approverName,
+            submitted_by: userData.user?.id ?? null,
+            submitted_at: new Date().toISOString(),
+          }
+        : {}),
     };
     const { data, error } = await supabase
       .from("grns" as never)
       .insert(payload as never).select("id").single();
     if (error) { setBusy(false); return toast.error(error.message); }
-    // Inventory is posted server-side by the grn_post_inventory trigger
-    // when GRN status transitions to "Approved". No client-side stock write.
     setBusy(false);
     setReviewOpen(false);
-    toast.success("GRN created");
+    toast.success(approve ? "GRN Approved & Stock Updated Successfully" : "GRN created");
     navigate({ to: "/grn/$id", params: { id: (data as { id: string }).id } });
   };
 
