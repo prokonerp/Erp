@@ -22,7 +22,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
-  dcExists = false, dcInfo,
+  onGenerateCustomerGrn, dcExists = false, dcInfo,
 }: {
   index: number;
   value: OracleBlock;
@@ -34,6 +34,7 @@ export function OracleBlockEditor({
   onToggleCollapse?: () => void;
   onGenerateChallan?: (oracle: OracleBlock) => void;
   onGenerateGrn?: (oracle: OracleBlock) => void;
+  onGenerateCustomerGrn?: (oracle: OracleBlock) => void;
   dcExists?: boolean;
   dcInfo?: { challan_no?: string | null; challan_date?: string | null; status?: string | null; id?: string | null };
 }) {
