@@ -82,7 +82,7 @@ const receivedRowFromDefective = (d: OracleDefectiveRow | undefined, isCustomer 
   qty: d?.qty || "",
   received_date: "",
   remarks: "",
-  ...(isCustomer ? { product_tag: "" as const } : {}),
+  ...(isCustomer ? { product_tag: "defective" as ProductTag } : {}),
 });
 
 export const blankOracle = (): OracleBlock => ({
@@ -124,9 +124,36 @@ export function normalizeOracle(o: OracleBlock): OracleBlock {
   }
   out.exchange_rows = out.exchange_rows.slice(0, n);
   out.received_rows = out.received_rows.slice(0, n);
-  // customer_received_rows is optional / opt-in; only trim, do NOT auto-pad,
-  // so we don't force customer-return data on OEM-only indents.
-  out.customer_received_rows = out.customer_received_rows.slice(0, n);
+  // Backfill any OEM-received row where model/serial/qty are still blank
+  // from the corresponding defective row so saved indents display the
+  // mapped values as editable field content (not placeholders).
+  out.received_rows = out.received_rows.map((r, ix) => {
+    const d = out.defective_rows[ix];
+    if (!d) return r;
+    return {
+      ...r,
+      model_no: r.model_no || d.def_model_no || "",
+      serial_no: r.serial_no || d.def_serial_no || "",
+      qty: r.qty || d.qty || "",
+    };
+  });
+  // customer_received_rows: always visible — pad to defective length,
+  // seeding model/serial/qty from defective rows with product_tag defaulted
+  // to "defective" (still editable).
+  while (out.customer_received_rows.length < n) {
+    const idx = out.customer_received_rows.length;
+    out.customer_received_rows.push(receivedRowFromDefective(out.defective_rows[idx], true));
+  }
+  out.customer_received_rows = out.customer_received_rows.slice(0, n).map((r, ix) => {
+    const d = out.defective_rows[ix];
+    return {
+      ...r,
+      model_no: r.model_no || d?.def_model_no || "",
+      serial_no: r.serial_no || d?.def_serial_no || "",
+      qty: r.qty || d?.qty || "",
+      product_tag: r.product_tag || ("defective" as ProductTag),
+    };
+  });
   return out;
 }
 
