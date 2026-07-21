@@ -4222,6 +4222,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _oracle_block_complete: { Args: { blk: Json }; Returns: boolean }
+      _oracle_row_str: { Args: { k: string; v: Json }; Returns: string }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
