@@ -424,16 +424,21 @@ export function OracleBlockEditor({
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">D. Material Received (from Customer)</div>
             <div className="flex items-center gap-2">
+              {onGenerateCustomerGrn && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onGenerateCustomerGrn(value)}
+                  title="Create a new GRN prefilled from Customer-returned material"
+                >
+                  <Receipt className="h-4 w-4 mr-1" />Generate GRN
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={addCustRow} disabled={locked}>
                 + Add Row
               </Button>
             </div>
           </div>
-          {custRows.length === 0 && (
-            <div className="text-xs text-muted-foreground">
-              No customer-returned material recorded. Click <b>Add Row</b> to log items returned by the customer.
-            </div>
-          )}
           {custRows.map((rcv, i) => {
             const def = value.defective_rows[i] || value.defective_rows[0];
             return (
