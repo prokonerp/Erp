@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import {
   PRIORITIES, PRIORITY_COLOR,
   waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
-import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer, CalendarClock, AlertTriangle, ClipboardList } from "lucide-react";
+import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer, CalendarClock, AlertTriangle, ClipboardList, Check, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getOemLogo } from "@/lib/oemLogos";
