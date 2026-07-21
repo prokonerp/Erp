@@ -319,7 +319,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       </Button>
       <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
         <Save className="h-4 w-4" />
-        <span className="hidden sm:inline">Save &amp; Print</span>
+        <span className="hidden sm:inline">Save Draft</span>
         <span className="sm:hidden">Save</span>
       </Button>
     </>
@@ -857,7 +857,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
               Back to Edit
             </Button>
             <Button onClick={submit} disabled={busy}>
-              {busy ? "Saving..." : "Confirm, Save & Print"}
+              {busy ? "Saving..." : "Save Draft & Continue"}
             </Button>
           </DialogFooter>
         </DialogContent>
