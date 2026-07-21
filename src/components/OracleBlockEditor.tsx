@@ -14,6 +14,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { normalizeOracle, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
+import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 
 type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string };
 type Warehouse = { id: string; name: string; code: string };
@@ -22,7 +23,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
-  onGenerateCustomerGrn, dcExists = false, dcInfo,
+  onGenerateCustomerGrn, dcExists = false, dcInfo, indentId,
 }: {
   index: number;
   value: OracleBlock;
@@ -37,6 +38,8 @@ export function OracleBlockEditor({
   onGenerateCustomerGrn?: (oracle: OracleBlock) => void;
   dcExists?: boolean;
   dcInfo?: { challan_no?: string | null; challan_date?: string | null; status?: string | null; id?: string | null };
+  /** Parent indent id — required for controlled admin reopen. */
+  indentId?: string;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -46,6 +49,7 @@ export function OracleBlockEditor({
   const [shortageOpen, setShortageOpen] = useState(false);
   const [shortageMsg, setShortageMsg] = useState<string>("");
   const [shortageHasOther, setShortageHasOther] = useState(false);
+  const [reopenOpen, setReopenOpen] = useState(false);
 
   const status = oracleStatus(value);
   const closed = status === "closed";
@@ -116,6 +120,8 @@ export function OracleBlockEditor({
   }, [complete, closed]);
 
   const reopen = () => {
+    // Local-only reset kept for non-controlled callers (no indentId): flips
+    // block status but performs no stock reversal.
     onChange({ ...value, status: "open", closed_by: null, closed_by_name: null, closed_at: null });
     toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} reopened`);
   };
