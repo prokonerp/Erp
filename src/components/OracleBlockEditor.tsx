@@ -206,6 +206,9 @@ export function OracleBlockEditor({
           )}
           <CardTitle className="text-base">Oracle {oracleLabel}</CardTitle>
           <Badge className={closed ? "bg-emerald-600 hover:bg-emerald-600" : "bg-amber-500 hover:bg-amber-500"}>{closed ? "Closed" : "Open"}</Badge>
+          {value.reopened && (
+            <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">Reopened</Badge>
+          )}
           {collapsed && (
             <span className="text-xs text-muted-foreground inline-flex flex-wrap gap-x-3 gap-y-0.5">
               <span>Def: {defCount}</span>
@@ -223,7 +226,7 @@ export function OracleBlockEditor({
         <div className="flex items-center gap-2">
           {closed ? (
             isAdmin ? (
-              <Button variant="outline" size="sm" onClick={reopen}>
+              <Button variant="outline" size="sm" onClick={() => (indentId ? setReopenOpen(true) : reopen())}>
                 <LockOpen className="h-4 w-4 mr-1" />Reopen
               </Button>
             ) : (
