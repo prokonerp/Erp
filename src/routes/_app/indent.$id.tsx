@@ -405,6 +405,107 @@ function IndentDetail() {
     navigate({ to: "/grn/new" });
   };
 
+  const generateCustomerGrn = async (only?: OracleBlock) => {
+    if (!i) return;
+    // Section D — Material Received (from Customer). Uses customer_received_rows
+    // and honours product_tag (good/defective/scrap) for stock condition.
+    const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
+    const oracles = only ? [only] : (i.oracles_data || []);
+    const items: Array<{
+      product_id?: string; part_no: string; part_name: string; description: string; uom: string;
+      qty_received: string; qty_accepted: string; qty_rejected: string;
+      batch_no: string; model_no?: string; serial_no?: string; condition?: string; remarks?: string;
+    }> = [];
+    let warehouseIdPrefill: string | null = null;
+    let warehouseNamePrefill = "";
+    const modelSet = new Set<string>();
+    for (const o of oracles) {
+      const rows = o.customer_received_rows || [];
+      for (const rv of rows) {
+        const m = cleanModel(rv?.model_no);
+        if (m) modelSet.add(m);
+        if (!warehouseIdPrefill && rv?.warehouse_id) {
+          warehouseIdPrefill = rv.warehouse_id;
+          warehouseNamePrefill = rv.warehouse_name || "";
+        }
+      }
+    }
+    const prodByModel: Record<string, { id?: string; name?: string; description?: string; unit?: string; hsn?: string }> = {};
+    if (modelSet.size > 0) {
+      const { data: prods } = await supabase.from("products")
+        .select("id,name,model,description,unit,hsn")
+        .in("model", Array.from(modelSet));
+      for (const p of (prods || []) as Array<{ id?: string; name?: string; model?: string; description?: string; unit?: string; hsn?: string }>) {
+        if (p?.model) prodByModel[p.model] = p;
+      }
+    }
+    const tagToCondition = (t?: string) => t === "good" ? "Good" : t === "scrap" ? "Scrap" : "Bad";
+    for (const o of oracles) {
+      const rows = o.customer_received_rows || [];
+      for (let ix = 0; ix < rows.length; ix++) {
+        const rv = rows[ix];
+        const model = cleanModel(rv?.model_no);
+        const serial = (rv?.serial_no || "").trim();
+        const qty = (rv?.qty || "").trim();
+        if (!model && !serial && !qty) continue;
+        const [maybeName, maybeModel] = (rv?.model_no || "").split("||");
+        const defRow = o.defective_rows?.[ix];
+        const prod = model ? prodByModel[model] : undefined;
+        const partName = maybeName || prod?.name || defRow?.part_name || model;
+        const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
+        items.push({
+          product_id: prod?.id,
+          part_no: maybeModel || model,
+          part_name: partName,
+          description: desc,
+          uom: prod?.unit || "Nos",
+          qty_received: qty || "1",
+          qty_accepted: qty || "1",
+          qty_rejected: "0",
+          batch_no: "",
+          model_no: model,
+          serial_no: serial,
+          condition: tagToCondition(rv?.product_tag),
+          remarks: rv?.remarks || "",
+        });
+      }
+    }
+    if (items.length === 0) {
+      toast.error("No customer-received items yet. Fill Section D rows in at least one Oracle first.");
+      return;
+    }
+    let customerId: string | null = null;
+    if (i.ticket_id) {
+      const { data: t } = await supabase.from("tickets").select("customer_id").eq("id", i.ticket_id).maybeSingle();
+      customerId = (t as { customer_id?: string | null } | null)?.customer_id || null;
+    }
+    if (!customerId) {
+      toast.error("Linked ticket is missing a customer. Set the customer on the ticket first.");
+      return;
+    }
+    const prefill = {
+      source: "indent",
+      indent_id: i.id,
+      indent_no: i.indent_no,
+      indent_date: i.indent_date,
+      customer_id: customerId,
+      ticket_no: i.case_id || i.oem_case_id || "",
+      reference_no: i.indent_no || "",
+      source_doc_type: "Customer Return",
+      source_doc_no: i.indent_no || "",
+      source_doc_date: i.indent_date || "",
+      warehouse_id: warehouseIdPrefill,
+      storage_location: warehouseNamePrefill,
+      internal_remarks: [
+        i.indent_no ? `Customer return from Indent ${i.indent_no}` : "",
+        i.remarks || "",
+      ].filter(Boolean).join(" · "),
+      items,
+    };
+    try { sessionStorage.setItem("grn:prefill:new-customer", JSON.stringify(prefill)); } catch { /* noop */ }
+    navigate({ to: "/grn/new" });
+  };
+
   if (!i) return <div className="text-sm text-muted-foreground">Loading…</div>;
   const oem = getOemLogo(i.company);
   const indStatus = indentStatusFromOracles(i.oracles_data);
@@ -519,6 +620,7 @@ function IndentDetail() {
           onRemove={() => update({ oracles_data: (i.oracles_data || []).filter((_, ix) => ix !== idx) })}
           onGenerateChallan={generateChallan}
           onGenerateGrn={generateGrn}
+          onGenerateCustomerGrn={generateCustomerGrn}
           dcExists={!!dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
           dcInfo={dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
         />

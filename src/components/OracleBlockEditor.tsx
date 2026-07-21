@@ -22,7 +22,7 @@ type StockRow = { id: string; part_name: string; part_model_no: string | null; p
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
-  dcExists = false, dcInfo,
+  onGenerateCustomerGrn, dcExists = false, dcInfo,
 }: {
   index: number;
   value: OracleBlock;
@@ -34,6 +34,7 @@ export function OracleBlockEditor({
   onToggleCollapse?: () => void;
   onGenerateChallan?: (oracle: OracleBlock) => void;
   onGenerateGrn?: (oracle: OracleBlock) => void;
+  onGenerateCustomerGrn?: (oracle: OracleBlock) => void;
   dcExists?: boolean;
   dcInfo?: { challan_no?: string | null; challan_date?: string | null; status?: string | null; id?: string | null };
 }) {
@@ -423,16 +424,21 @@ export function OracleBlockEditor({
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">D. Material Received (from Customer)</div>
             <div className="flex items-center gap-2">
+              {onGenerateCustomerGrn && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onGenerateCustomerGrn(value)}
+                  title="Create a new GRN prefilled from Customer-returned material"
+                >
+                  <Receipt className="h-4 w-4 mr-1" />Generate GRN
+                </Button>
+              )}
               <Button variant="outline" size="sm" onClick={addCustRow} disabled={locked}>
                 + Add Row
               </Button>
             </div>
           </div>
-          {custRows.length === 0 && (
-            <div className="text-xs text-muted-foreground">
-              No customer-returned material recorded. Click <b>Add Row</b> to log items returned by the customer.
-            </div>
-          )}
           {custRows.map((rcv, i) => {
             const def = value.defective_rows[i] || value.defective_rows[0];
             return (
