@@ -75,6 +75,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     checked_by: "",
     approved_by: "",
     oem_logo_url: "",
+    stock_category: "good",
+    indent_id: "",
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
