@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +11,7 @@ import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, CalendarClock } from "lucide-react";
+import { Plus, CalendarClock, Check, Loader2, AlertCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { Trash2 } from "lucide-react";
@@ -60,6 +60,12 @@ function NewTicket() {
   const [defectiveParts, setDefectiveParts] = useState<PartLine[]>([]);
   const [goodOn, setGoodOn] = useState(false);
   const [goodParts, setGoodParts] = useState<PartLine[]>([]);
+  const [autoStatus, setAutoStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [autoError, setAutoError] = useState("");
+  const draftIdRef = useRef<string | null>(null);
+  const creatingRef = useRef(false);
+  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     supabase.from("call_type_master").select("name").order("name").then(({ data }) => {
@@ -155,6 +161,105 @@ function NewTicket() {
   };
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+  // Any user change marks the form dirty so the auto-save effect below fires.
+  useEffect(() => { dirtyRef.current = true; }, [form, defectiveOn, defectiveParts, goodOn, goodParts]);
+
+  // Auto-save: as soon as a customer is chosen, persist a draft ticket after
+  // 2s of inactivity and then continue updating that same record. Navigation
+  // to the detail page happens on the FIRST successful save so subsequent
+  // edits use the existing detail-page auto-save.
+  useEffect(() => {
+    if (!dirtyRef.current) return;
+    if (!form.customer_id) return;
+    if (creatingRef.current) return;
+    if (draftIdRef.current) return; // detail page takes over after first save
+    if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
+    setAutoStatus("saving");
+    autoTimerRef.current = setTimeout(async () => {
+      if (form.oem_call && (!form.oem_brand || !form.oem_ref_id.trim() || !form.oem_purchase_date)) {
+        setAutoStatus("error");
+        setAutoError("OEM Brand, Ref ID and Purchase Date are required");
+        return;
+      }
+      if (form.preferred_visit_datetime) {
+        const pv = new Date(form.preferred_visit_datetime).getTime();
+        if (pv < Date.now() - 60000) {
+          setAutoStatus("error");
+          setAutoError("Preferred visit date & time cannot be in the past");
+          return;
+        }
+      }
+      creatingRef.current = true;
+      const { data: u } = await supabase.auth.getUser();
+      let raisedByName: string | null = null;
+      if (u.user?.id) {
+        const { data: au } = await supabase.from("app_users").select("name").eq("user_id", u.user.id).maybeSingle();
+        raisedByName = (au as { name?: string } | null)?.name?.trim() || null;
+      }
+      const payload: Record<string, unknown> = {
+        call_type: form.call_type,
+        customer_id: form.customer_id || null,
+        customer_name: toTitleCaseSmart(form.customer_name),
+        customer_address: titleCaseAddress(form.customer_address),
+        customer_email: (form.customer_email || "").trim().toLowerCase(),
+        customer_phone: form.customer_phone,
+        location: toTitleCaseSmart(form.location),
+        sector: form.sector ? toTitleCaseSmart(form.sector) : null,
+        priority: form.priority || "P3",
+        product: toTitleCaseSmart(form.product),
+        serial_no: upperTrim(form.serial_no),
+        complaint: form.complaint,
+        status: "New",
+        raised_by_type: "internal",
+        raised_by_name: raisedByName,
+        created_by: u.user?.id ?? null,
+        oem_call: form.oem_call,
+        oem_brand: form.oem_call ? form.oem_brand : null,
+        oem_ref_id: form.oem_call ? form.oem_ref_id.trim() : null,
+        oem_purchase_date: form.oem_call ? form.oem_purchase_date : null,
+        special_instruction: form.special_instruction.trim() || null,
+        preferred_visit_datetime: form.preferred_visit_datetime || null,
+        source: sourceMeta?.source ?? null,
+        amc_id: sourceMeta?.amc_id ?? null,
+        pm_visit_id: sourceMeta?.pm_visit_id ?? null,
+        parts_used: defectiveOn || goodOn,
+        parts_details: goodOn ? goodParts : (defectiveOn ? defectiveParts : []),
+        defective_parts_received: defectiveOn,
+        defective_parts_details: defectiveOn ? defectiveParts : [],
+        good_parts_used: goodOn,
+        good_parts_details: goodOn ? goodParts : [],
+      };
+      const { data, error } = await supabase.from("tickets").insert(payload as never).select("id").single();
+      creatingRef.current = false;
+      if (error) {
+        setAutoStatus("error");
+        setAutoError(error.message);
+        return;
+      }
+      const newId = (data as { id: string }).id;
+      draftIdRef.current = newId;
+      dirtyRef.current = false;
+      setAutoStatus("saved");
+      setAutoError("");
+      // Hand off to the detail page — its own auto-save keeps working there.
+      navigate({ to: "/tickets/$id", params: { id: newId } });
+    }, 2000);
+    return () => {
+      if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
+    };
+  }, [form, defectiveOn, defectiveParts, goodOn, goodParts, sourceMeta, navigate]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current && !draftIdRef.current) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
+
   type PartSetter = Dispatch<SetStateAction<PartLine[]>>;
   const mkUpd = (setter: PartSetter) => (i: number, p: Partial<PartLine>) =>
     setter((rows) => rows.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
