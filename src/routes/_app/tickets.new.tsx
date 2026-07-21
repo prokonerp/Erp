@@ -350,9 +350,25 @@ function NewTicket() {
       description="Capture a customer service request"
       storageKey="ticket-form-density"
       actions={
-        <Button size="sm" onClick={submit} disabled={busy}>
-          {busy ? "Saving…" : "Create Ticket"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <div
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground min-w-[70px]"
+            aria-live="polite"
+            title={autoStatus === "error" ? autoError : undefined}
+          >
+            {autoStatus === "saving" && (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</>)}
+            {autoStatus === "saved" && (<><Check className="h-3.5 w-3.5 text-green-600" />Saved</>)}
+            {autoStatus === "error" && (
+              <>
+                <AlertCircle className="h-3.5 w-3.5 text-red-600" />
+                <span className="text-red-600">Save failed</span>
+              </>
+            )}
+          </div>
+          <Button size="sm" onClick={submit} disabled={busy}>
+            {busy ? "Saving…" : "Create Ticket"}
+          </Button>
+        </div>
       }
     >
       {(form.special_instruction.trim() || form.preferred_visit_datetime || sourceMeta?.label) && (
