@@ -57,6 +57,7 @@ import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
 import { Route as AppIndentIdRouteImport } from './routes/_app/indent.$id'
 import { Route as AppImsTransfersRouteImport } from './routes/_app/ims.transfers'
 import { Route as AppImsTransactionsRouteImport } from './routes/_app/ims.transactions'
+import { Route as AppImsStockManagementRouteImport } from './routes/_app/ims.stock-management'
 import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
 import { Route as AppImsReservationsRouteImport } from './routes/_app/ims.reservations'
 import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
@@ -349,6 +350,11 @@ const AppImsTransfersRoute = AppImsTransfersRouteImport.update({
 const AppImsTransactionsRoute = AppImsTransactionsRouteImport.update({
   id: '/transactions',
   path: '/transactions',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsStockManagementRoute = AppImsStockManagementRouteImport.update({
+  id: '/stock-management',
+  path: '/stock-management',
   getParentRoute: () => AppImsRoute,
 } as any)
 const AppImsStockRoute = AppImsStockRouteImport.update({
@@ -673,6 +679,7 @@ export interface FileRoutesByFullPath {
   '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
   '/ims/stock': typeof AppImsStockRoute
+  '/ims/stock-management': typeof AppImsStockManagementRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
   '/ims/transfers': typeof AppImsTransfersRouteWithChildren
   '/indent/$id': typeof AppIndentIdRoute
@@ -762,6 +769,7 @@ export interface FileRoutesByTo {
   '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
   '/ims/stock': typeof AppImsStockRoute
+  '/ims/stock-management': typeof AppImsStockManagementRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
@@ -866,6 +874,7 @@ export interface FileRoutesById {
   '/_app/ims/reports': typeof AppImsReportsRoute
   '/_app/ims/reservations': typeof AppImsReservationsRoute
   '/_app/ims/stock': typeof AppImsStockRoute
+  '/_app/ims/stock-management': typeof AppImsStockManagementRoute
   '/_app/ims/transactions': typeof AppImsTransactionsRoute
   '/_app/ims/transfers': typeof AppImsTransfersRouteWithChildren
   '/_app/indent/$id': typeof AppIndentIdRoute
@@ -971,6 +980,7 @@ export interface FileRouteTypes {
     | '/ims/reports'
     | '/ims/reservations'
     | '/ims/stock'
+    | '/ims/stock-management'
     | '/ims/transactions'
     | '/ims/transfers'
     | '/indent/$id'
@@ -1060,6 +1070,7 @@ export interface FileRouteTypes {
     | '/ims/reports'
     | '/ims/reservations'
     | '/ims/stock'
+    | '/ims/stock-management'
     | '/ims/transactions'
     | '/indent/$id'
     | '/indent/new'
@@ -1163,6 +1174,7 @@ export interface FileRouteTypes {
     | '/_app/ims/reports'
     | '/_app/ims/reservations'
     | '/_app/ims/stock'
+    | '/_app/ims/stock-management'
     | '/_app/ims/transactions'
     | '/_app/ims/transfers'
     | '/_app/indent/$id'
@@ -1559,6 +1571,13 @@ declare module '@tanstack/react-router' {
       path: '/transactions'
       fullPath: '/ims/transactions'
       preLoaderRoute: typeof AppImsTransactionsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/stock-management': {
+      id: '/_app/ims/stock-management'
+      path: '/stock-management'
+      fullPath: '/ims/stock-management'
+      preLoaderRoute: typeof AppImsStockManagementRouteImport
       parentRoute: typeof AppImsRoute
     }
     '/_app/ims/stock': {
@@ -2169,6 +2188,7 @@ interface AppImsRouteChildren {
   AppImsReportsRoute: typeof AppImsReportsRoute
   AppImsReservationsRoute: typeof AppImsReservationsRoute
   AppImsStockRoute: typeof AppImsStockRoute
+  AppImsStockManagementRoute: typeof AppImsStockManagementRoute
   AppImsTransactionsRoute: typeof AppImsTransactionsRoute
   AppImsTransfersRoute: typeof AppImsTransfersRouteWithChildren
   AppImsIndexRoute: typeof AppImsIndexRoute
@@ -2182,6 +2202,7 @@ const AppImsRouteChildren: AppImsRouteChildren = {
   AppImsReportsRoute: AppImsReportsRoute,
   AppImsReservationsRoute: AppImsReservationsRoute,
   AppImsStockRoute: AppImsStockRoute,
+  AppImsStockManagementRoute: AppImsStockManagementRoute,
   AppImsTransactionsRoute: AppImsTransactionsRoute,
   AppImsTransfersRoute: AppImsTransfersRouteWithChildren,
   AppImsIndexRoute: AppImsIndexRoute,
