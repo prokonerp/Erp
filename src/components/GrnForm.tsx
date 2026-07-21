@@ -676,8 +676,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       size="icon"
                       variant="ghost"
                       onClick={() => setItems(items.filter((_, idx) => idx !== i))}
-                      disabled={items.length === 1 || sourceLocked}
+                      disabled={items.length === 1}
                       aria-label="Remove row"
+                      title={sourceLocked ? "Remove this row — remaining rows stay pending under the source Indent for a future GRN" : "Remove row"}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
