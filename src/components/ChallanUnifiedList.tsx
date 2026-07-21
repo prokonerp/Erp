@@ -155,7 +155,7 @@ export function ChallanUnifiedList() {
               <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                {["Draft", "Submitted", "Dispatched", "Cancelled"].map((s) => (
+                {["Draft", "Submitted", "Cancelled"].map((s) => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
