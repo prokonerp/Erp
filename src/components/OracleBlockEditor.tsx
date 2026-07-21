@@ -491,9 +491,6 @@ export function OracleBlockEditor({
       </CardContent>
       )}
 
-      <AlertDialog open={shortageOpen} onOpenChange={setShortageOpen}>
-
-      </AlertDialog>
       <ControlledActionDialog
         open={reopenOpen}
         onOpenChange={setReopenOpen}
