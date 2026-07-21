@@ -73,12 +73,14 @@ const blankReceivedRow = (qty = ""): OracleReceivedRow => ({
 });
 
 /** Seed a received/customer-received row from the defective row so that
- *  model / serial / qty auto-populate (still editable in the UI). */
+ *  model / qty auto-populate (still editable in the UI). For OEM
+ *  received rows the serial is intentionally NOT auto-mapped — the OEM
+ *  ships a fresh unit with its own serial the user enters manually. */
 const receivedRowFromDefective = (d: OracleDefectiveRow | undefined, isCustomer = false): OracleReceivedRow => ({
   warehouse_id: "",
   warehouse_name: "",
   model_no: d?.def_model_no || "",
-  serial_no: d?.def_serial_no || "",
+  serial_no: isCustomer ? (d?.def_serial_no || "") : "",
   qty: d?.qty || "",
   received_date: "",
   remarks: "",
@@ -133,7 +135,8 @@ export function normalizeOracle(o: OracleBlock): OracleBlock {
     return {
       ...r,
       model_no: r.model_no || d.def_model_no || "",
-      serial_no: r.serial_no || d.def_serial_no || "",
+      // OEM received serial stays blank until user enters it manually.
+      serial_no: r.serial_no || "",
       qty: r.qty || d.qty || "",
     };
   });
