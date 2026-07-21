@@ -159,6 +159,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         checked_by: (r.checked_by as string) || "",
         approved_by: (r.approved_by as string) || "",
         oem_logo_url: (r.oem_logo_url as string) || "",
+        indent_id: (r.indent_id as string) || "",
       }));
       setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
     })();
