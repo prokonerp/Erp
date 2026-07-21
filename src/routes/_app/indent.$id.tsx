@@ -653,6 +653,7 @@ function IndentDetail() {
         <OracleBlockEditor
           key={idx}
           index={idx}
+          indentId={i.id}
           value={o}
           defectiveParts={defParts}
           isAdmin={isAdmin}
