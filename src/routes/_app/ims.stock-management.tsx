@@ -455,9 +455,18 @@ function ProductDetailSheet({ product, onClose, whName }: {
             <StatTile label="Defective" value={product.defective} tone="rose" />
           </div>
 
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <StatTile label="Received (Total)" value={product.received.total} tone="blue" />
+            <StatTile label="From OEM" value={product.received.oem} tone="emerald" />
+            <StatTile label="From Customer" value={product.received.customer} tone="blue" />
+            <StatTile label="General GRN" value={product.received.general} tone="amber" />
+            <StatTile label="Scrapped" value={product.scrapped} tone="rose" />
+          </div>
+
           <Tabs defaultValue="warehouses">
             <TabsList>
               <TabsTrigger value="warehouses">Warehouses</TabsTrigger>
+              <TabsTrigger value="received">Received ({product.received.txns.length})</TabsTrigger>
               <TabsTrigger value="serials">Serials ({product.items.length})</TabsTrigger>
               <TabsTrigger value="txns">Transactions ({txns.length})</TabsTrigger>
             </TabsList>
@@ -477,6 +486,60 @@ function ProductDetailSheet({ product, onClose, whName }: {
                     </div>
                   </div>
                 ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="received">
+              <div className="overflow-x-auto border rounded">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/50">
+                    <tr className="text-left">
+                      <th className="p-2">Date</th>
+                      <th className="p-2">GRN No</th>
+                      <th className="p-2">Source</th>
+                      <th className="p-2">From</th>
+                      <th className="p-2">Serial</th>
+                      <th className="p-2">Warehouse</th>
+                      <th className="p-2">Condition</th>
+                      <th className="p-2 text-right">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {product.received.txns.length === 0 ? (
+                      <tr><td colSpan={8} className="p-3 text-muted-foreground">No GRN receipts for this product yet.</td></tr>
+                    ) : [...product.received.txns]
+                        .sort((a, b) => new Date(b.txn_date).getTime() - new Date(a.txn_date).getTime())
+                        .map((t) => {
+                          const src = grnSourceOf(t.reference);
+                          const grnNo = (t.reference || "").replace(/^GRN\s+/i, "");
+                          const cond = t.txn_type === "good_in" ? "Good" : "Defective";
+                          return (
+                            <tr key={t.id} className="border-t">
+                              <td className="p-2">{new Date(t.txn_date).toLocaleDateString()}</td>
+                              <td className="p-2 font-mono">{grnNo || "—"}</td>
+                              <td className="p-2">
+                                <Badge variant="outline" className={
+                                  src === "oem" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  src === "customer" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                  src === "general" ? "bg-amber-50 text-amber-700 border-amber-200" : ""
+                                }>
+                                  {src === "oem" ? "From OEM" : src === "customer" ? "From Customer" : src === "general" ? "General" : "Other"}
+                                </Badge>
+                              </td>
+                              <td className="p-2">{t.from_party || "—"}</td>
+                              <td className="p-2 font-mono">{t.part_serial_no || "—"}</td>
+                              <td className="p-2">{whName(t.to_warehouse_id)}</td>
+                              <td className="p-2">
+                                <Badge variant="outline" className={cond === "Good" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}>
+                                  {cond}
+                                </Badge>
+                              </td>
+                              <td className="p-2 text-right font-medium">{t.qty}</td>
+                            </tr>
+                          );
+                        })}
+                  </tbody>
+                </table>
               </div>
             </TabsContent>
 
