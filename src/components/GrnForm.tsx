@@ -336,7 +336,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       </Button>
       <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
         <Save className="h-4 w-4" />
-        <span className="hidden sm:inline">Save &amp; Print</span>
+        <span className="hidden sm:inline">Save Draft</span>
         <span className="sm:hidden">Save</span>
       </Button>
     </>
@@ -772,7 +772,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setReviewOpen(false)} disabled={busy}>Back to Edit</Button>
-            <Button onClick={submit} disabled={busy}>{busy ? "Saving..." : "Confirm, Save & Print"}</Button>
+            <Button onClick={submit} disabled={busy}>{busy ? "Saving..." : "Save Draft & Continue"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
