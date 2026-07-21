@@ -158,6 +158,10 @@ function TicketDetail() {
   const [closingOpen, setClosingOpen] = useState(false);
   const { isAdmin } = useIsAdmin();
   const [selectedDefRows, setSelectedDefRows] = useState<Record<number, boolean>>({});
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string>("");
+  const dirtyRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchIndentMap = useServerFn(listIndentMapForTicket);
   const indentMapQuery = useQuery({
     queryKey: ["indent-oracle-map", id],
