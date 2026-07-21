@@ -292,8 +292,8 @@ export function OracleBlockEditor({
           </div>
           {value.exchange_rows.map((ex, i) => {
             const stock = exchStockByRow[i] || [];
-            const models = modelsFor(stock);
-            const serials = serialsFor(stock, ex.model_no);
+            const models = modelsWithSaved(stock, ex.model_no);
+            const serials = serialsWithSaved(stock, ex.model_no, ex.serial_no);
             return (
               <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 border-t first:border-t-0 first:pt-0">
                 <div>
