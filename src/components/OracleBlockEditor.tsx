@@ -434,9 +434,6 @@ export function OracleBlockEditor({
                   <Receipt className="h-4 w-4 mr-1" />Generate GRN
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={addCustRow} disabled={locked}>
-                + Add Row
-              </Button>
             </div>
           </div>
           {custRows.map((rcv, i) => {
