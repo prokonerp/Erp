@@ -1,86 +1,52 @@
-## Oracle #–Driven Indent Flow
+# Controlled GRN Edit + Oracle Reopen
 
-Extend the existing OEM ticket → Indent flow so that each Oracle # on the defective parts grid drives its own action (View existing indent vs. Create), and add a Multi‑Oracle → Single Indent path. Existing backend logic (`buildOraclesFromDefectiveParts`, `set_indent_no`, `validate_indent_oem_ticket`, `syncTicketGoodPartsFromIndent`) stays intact.
+Both flows are admin-only, require a reason, reverse stock before re-posting, and write to `document_deletion_audit` (repurposed as a general document action audit — no schema change).
 
-### What changes for the user
+## Part 1 — Controlled GRN Edit
 
-- Defective Parts table on the ticket page gains a **Select** checkbox and a per‑row **Action** column:
-  - Row has Oracle # + indent exists → **View Indent** (opens `/indent/$id`).
-  - Row has Oracle # but no indent → **Create Indent** (prefiltered to that oracle).
-  - Row has no Oracle # → **Create Indent** (blank oracle, manual entry allowed).
-- New **Create Combined Indent** button above the table, enabled when 2+ rows are checked → opens `/indent/new` with those oracles preselected and merged into a single indent.
-- Attempting to create a second indent for an already‑mapped Oracle # is blocked with a toast that offers to open the existing one.
+### Backend (single migration)
+- `admin_edit_grn_reverse(_id uuid, _reason text)` — SECURITY DEFINER. Verifies admin + reason. Refuses if the GRN's stock has been consumed downstream (any `ims_stock_items` with `transaction_ref = 'GRN <no>'` in status other than `available`/`scrapped`) — same guard as `admin_delete_grn`. Refuses if any `invoice_items.serial_numbers` overlaps the GRN's serials. Then: deletes `ims_stock_items` + `ims_transactions` where `reference = 'GRN <no>'`, snapshots the row into `document_deletion_audit` with `document_type = 'grn_edit_reverse'`, and flips GRN back to `Draft` (records `submitted_at=null`, keeps history in audit).
+- Re-posting on next Submit already happens via existing `grn_post_inventory` trigger.
 
-### Database
+### Frontend
+- `src/routes/_app/grn.$id.tsx`: add **Edit GRN** button (admin only, status = Submitted, no linked invoice). Opens a reason dialog → calls the RPC → navigates to `/grn/:id/edit`. Shows warning copy. If invoice linked (detected via `invoice_items.serial_numbers` overlap query), disable and show "Create correction entry instead".
+- Add **Edited** badge when `document_deletion_audit` has a `grn_edit_reverse` row for this GRN.
+- `src/components/GrnForm.tsx`: when editing a GRN whose indent link is set, keep existing `sourceLocked` behaviour so Item / Model / Indent link can't change. Serial No, Qty, Warehouse, QC fields remain editable (already the case).
 
-New mapping table so lookup is O(1) and multi‑oracle indents are first‑class:
+## Part 2 — Controlled Oracle Reopen
 
-```text
-indent_oracle_map
------------------
-id            uuid PK
-indent_id     uuid  FK indents(id) on delete cascade
-ticket_id     uuid  FK tickets(id) on delete cascade
-oracle_no     text  not null
-created_at    timestamptz default now()
-unique (ticket_id, oracle_no)   -- one oracle per ticket → one indent
-index  (indent_id)
-```
+Oracle = a block inside `indents.oracles_data`. "Closed" = `_oracle_block_complete = true` (auto-closed logic). "Reopen" = mark a block as manually reopened and reverse its documents.
 
-- Backfill from existing `indents.oracles_data` (one row per non‑empty `oracle_no`).
-- Trigger on `indents` (AFTER INSERT/UPDATE of `oracles_data`) rebuilds this indent's rows in the map from its current `oracles_data`, so the map stays authoritative without app‑side bookkeeping.
-- RLS: same policy shape as `indents` (authenticated read/insert; service_role all).
+### Backend (same migration)
+- `admin_reopen_oracle(_indent_id uuid, _oracle_no text, _reason text, _scope text)` — SECURITY DEFINER, admin-only.
+  - `_scope in ('grn','dc','full')`.
+  - Refuse if any invoice references serials from GRNs tied to this indent (block with "Invoice exists…").
+  - GRN scope: for each Submitted GRN on the indent, run the same reverse logic as Part 1 and flip status to `Draft` (audit type `grn_reopen`).
+  - DC scope: for each Challan-Generated DC on the indent, mark stock items back to `available`, delete `ims_transactions` where `reference = 'DC <no>'`, flip DC to `Draft` (audit type `dc_reopen`).
+  - Full scope: both.
+  - Sets a flag on the oracle block: `oracles_data[i].reopened = { at, by, reason, scope }` (jsonb patch in-place; no schema change).
+  - Recomputes indent status via existing `recalc_indent_status`.
 
-### API surface (TanStack server functions in `src/lib/indent.functions.ts`)
+### Frontend
+- `src/routes/_app/indent.$id.tsx`: in each Oracle block header, if the block is complete AND user is admin, show **Reopen Oracle** button. Dialog captures reason + scope radio (GRN / DC / Full). Confirm → RPC → refresh.
+- Show **Reopened** badge in the block header when `reopened` flag is present. Also list on `indent.index.tsx` grid.
+- Block button when invoice guard triggers (RPC returns a known error string).
 
-- `getIndentByTicketOracle({ ticket_id, oracle_no })` → `{ indent_id, indent_no, status, oracle_no } | null`. Uses `indent_oracle_map` + join to `indents`.
-- `listIndentMapForTicket({ ticket_id })` → `Array<{ oracle_no, indent_id, indent_no, status }>` used to hydrate the whole defective parts table in one call.
-- Both use `requireSupabaseAuth`; RLS enforces access.
+## Audit Trail
+Both RPCs write to `document_deletion_audit` with:
+- `document_type` = `grn_edit_reverse` | `grn_reopen` | `dc_reopen`
+- `document_no`, `document_id`, `reason`, `deleted_by = auth.uid()`, `snapshot = to_jsonb(row)`
 
-### Route changes
+Existing `AdminDeleteDialog` view of audit already surfaces these.
 
-- `/indent/new` search schema extended:
-  - `ticket_id?: string`
-  - `oracle_no?: string` — single oracle (may be `"NEW"` meaning "blank oracle, allow manual entry")
-  - `oracle_list?: string` — comma‑separated list for combined indent
-- Loader logic in `src/routes/_app/indent.new.tsx`:
-  - When `oracle_list` present → filter defective parts to those oracles, call `buildOraclesFromSelectedList` (see below) to build one OracleBlock per selected oracle.
-  - When `oracle_no` present and not `NEW` → filter to that oracle only.
-  - When `oracle_no === "NEW"` or absent → keep current behavior (all defective parts, empty oracle allowed).
-  - Before render, call `listIndentMapForTicket`; if any requested oracle is already mapped → toast + `navigate` to that indent (prevents duplicates on refresh/back‑nav).
+## Files touched
+- 1 new migration (functions only, no schema change).
+- `src/routes/_app/grn.$id.tsx` — Edit GRN button, invoice-lock guard, Edited badge, reason dialog.
+- `src/components/GrnForm.tsx` — no logic change; already supports the constrained edit surface.
+- `src/routes/_app/indent.$id.tsx` — Reopen Oracle button + dialog per block.
+- `src/routes/_app/indent.index.tsx` — Reopened badge.
+- `src/lib/indent.ts` — small helper `isOracleReopened(block)`.
 
-### Library changes (`src/lib/indent.ts`)
-
-- Add `buildOraclesFromSelectedList(parts, oracleList: string[])` — same grouping rules as `buildOraclesFromDefectiveParts` but restricted to the provided oracle numbers (case‑insensitive trim match). Reused by the route loader.
-- `syncTicketGoodPartsFromIndent` unchanged.
-
-### Ticket page (`src/routes/_app/tickets.$id.tsx`)
-
-- Defective Parts grid:
-  - Add leading checkbox column; disabled when row has no Oracle # (combined indents require an oracle).
-  - Add trailing Action column driven by the map hydrated via `listIndentMapForTicket` (React Query, keyed by `ticket_id`).
-  - "Create Combined Indent" button above the grid; disabled unless ≥2 checked rows with distinct oracle numbers.
-- Existing "Create Indent" toggle/button removed and replaced by the per‑row action + combined button, so entry points are unified.
-
-### Validation & edge cases
-
-- DB `unique (ticket_id, oracle_no)` on the map is the ultimate guard against duplicate mapping across concurrent users.
-- Server function `getIndentByTicketOracle` returns `null` on no match so the UI can fall back to Create.
-- Duplicate oracle numbers on the same ticket are normalized (trim + case‑insensitive) before insert; the trigger deduplicates in the map rebuild.
-- Ticket reopened: mapping persists because it lives on `indent_oracle_map`, not on ticket state.
-- Blank oracle rows: allowed in `oracles_data` but never written to the map (map requires non‑empty `oracle_no`).
-
-### Testing checklist
-
-1. Row with existing Oracle # + indent → View Indent opens `/indent/$id`.
-2. Row with Oracle # and no indent → Create Indent prefills to that oracle only.
-3. Row with blank Oracle # → Create Indent opens with manual entry allowed.
-4. Select 3 rows → Create Combined Indent → single indent with 3 OracleBlocks, all 3 rows in `indent_oracle_map`.
-5. Attempt to create a duplicate for a mapped oracle → blocked, user is redirected to the existing indent.
-6. Refresh the ticket page → View/Create buttons remain correct (map is source of truth).
-7. Closing an oracle still triggers `syncTicketGoodPartsFromIndent` and writes back to `good_parts_details`.
-
-### Out of scope
-
-- Changes to `set_indent_no`, `validate_indent_oem_ticket`, or the challan/GRN generation flows.
-- Editing the auto‑generated Supabase client/types.
+## Out of scope
+- No changes to `grn_post_inventory` / `dc_post_inventory` triggers — they already handle the re-submit path correctly once status flips back.
+- No new tables, no column additions.
