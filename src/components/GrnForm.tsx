@@ -393,7 +393,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         <Eye className="h-4 w-4" />
         <span className="hidden sm:inline">Review</span>
       </Button>
-      <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
+      <Button type="button" size="sm" onClick={() => submit()} disabled={busy} className="gap-1.5">
         <Save className="h-4 w-4" />
         <span className="hidden sm:inline">Save Draft</span>
         <span className="sm:hidden">Save</span>
