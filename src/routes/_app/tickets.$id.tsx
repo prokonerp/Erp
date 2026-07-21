@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import {
   PRIORITIES, PRIORITY_COLOR,
   waOpen, engineerAssignMsg, customerClosedMsg, renderTemplate, type PartLine,
 } from "@/lib/tickets";
-import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer, CalendarClock, AlertTriangle, ClipboardList } from "lucide-react";
+import { Save, Trash2, Plus, MessageCircle, FileText, UserPlus, CheckCircle2, ArrowLeft, Printer, CalendarClock, AlertTriangle, ClipboardList, Check, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { getOemLogo } from "@/lib/oemLogos";
@@ -158,6 +158,10 @@ function TicketDetail() {
   const [closingOpen, setClosingOpen] = useState(false);
   const { isAdmin } = useIsAdmin();
   const [selectedDefRows, setSelectedDefRows] = useState<Record<number, boolean>>({});
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string>("");
+  const dirtyRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchIndentMap = useServerFn(listIndentMapForTicket);
   const indentMapQuery = useQuery({
     queryKey: ["indent-oracle-map", id],
@@ -225,9 +229,95 @@ function TicketDetail() {
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
+  // Auto-save on any change to the ticket. Debounces 2s of inactivity, silently
+  // updates the DB, and reports status via `saveStatus`. Skips server round-trip
+  // until the user has actually edited a field this session.
+  useEffect(() => {
+    if (!t) return;
+    if (!dirtyRef.current) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    setSaveStatus("saving");
+    autoSaveTimerRef.current = setTimeout(async () => {
+      // Soft validation: if payload violates a hard rule, pause auto-save
+      // and surface it so the user knows why nothing is being persisted.
+      if (t.oem_call && (!t.oem_brand || !t.oem_ref_id || !t.oem_purchase_date)) {
+        setSaveStatus("error");
+        setSaveError("OEM Brand, Ref ID and Purchase Date are required");
+        return;
+      }
+      if (t.preferred_visit_datetime) {
+        const pv = new Date(t.preferred_visit_datetime).getTime();
+        if (pv < Date.now() - 60000) {
+          setSaveStatus("error");
+          setSaveError("Preferred visit date & time cannot be in the past");
+          return;
+        }
+      }
+      const parts_used = !!t.defective_parts_received || !!t.good_parts_used;
+      const { error } = await supabase.from("tickets").update({
+        case_id: t.case_id,
+        call_type: t.call_type,
+        product: t.product,
+        serial_no: t.serial_no,
+        customer_name: t.customer_name,
+        customer_address: t.customer_address,
+        customer_email: t.customer_email,
+        customer_phone: t.customer_phone,
+        location: t.location,
+        sector: t.sector,
+        priority: t.priority,
+        complaint: t.complaint,
+        status: t.status,
+        assigned_engineer_name: t.assigned_engineer_name,
+        assigned_engineer_phone: t.assigned_engineer_phone,
+        assigned_at: t.assigned_at,
+        parts_used,
+        parts_details: t.parts_details,
+        defective_parts_received: t.defective_parts_received,
+        defective_parts_details: t.defective_parts_received ? t.defective_parts_details : [],
+        good_parts_used: t.good_parts_used,
+        good_parts_details: t.good_parts_used ? t.good_parts_details : [],
+        remarks: t.remarks,
+        oem_call: t.oem_call,
+        oem_brand: t.oem_call ? t.oem_brand : null,
+        oem_ref_id: t.oem_call ? t.oem_ref_id : null,
+        oem_purchase_date: t.oem_call ? t.oem_purchase_date : null,
+        special_instruction: (t.special_instruction ?? "").toString().trim() || null,
+        preferred_visit_datetime: t.preferred_visit_datetime || null,
+      } as never).eq("id", t.id);
+      if (error) {
+        setSaveStatus("error");
+        setSaveError(error.message);
+        return;
+      }
+      dirtyRef.current = false;
+      setSaveError("");
+      setSaveStatus("saved");
+    }, 2000);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [t]);
+
+  // Warn on unload while there are pending unsaved changes so users don't
+  // lose in-flight edits mid-debounce.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current || saveStatus === "saving") {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [saveStatus]);
+
   if (!t) return <div className="p-6 text-muted-foreground">Loading…</div>;
 
-  const update = (patch: Partial<Ticket>) => setT({ ...t, ...patch });
+  const update = (patch: Partial<Ticket>) => {
+    dirtyRef.current = true;
+    setT({ ...t, ...patch });
+  };
 
   const tplVars = (extra: Record<string, string> = {}) => ({
     case_id: t.case_id,
@@ -548,26 +638,27 @@ function TicketDetail() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
-          {(() => {
-            const defOn = !!t.defective_parts_received;
-            const goodOn = !!t.good_parts_used;
-            const canIndent = !!t.oem_call && (defOn || goodOn);
-            const title = !t.oem_call
-              ? "Enable OEM Call to create an Indent"
-              : !(defOn || goodOn)
-              ? "Enable Defective Parts Received or Good Parts Used to create an Indent"
-              : "Create a blank Indent (no specific Oracle #). Use per-row actions below for Oracle-scoped indents.";
-            return (
-          <Button
-            variant="outline"
-            disabled={!canIndent}
-            title={title}
-            onClick={() => navigate({ to: "/indent/new", search: { ticket_id: t.id, oracle_no: "NEW" } })}
+          <div
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground min-w-[70px]"
+            aria-live="polite"
+            title={saveStatus === "error" ? saveError : undefined}
           >
-            <ClipboardList className="h-4 w-4 mr-1" />New Indent
-          </Button>
-            );
-          })()}
+            {saveStatus === "saving" && (<><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</>)}
+            {saveStatus === "saved" && (<><Check className="h-3.5 w-3.5 text-green-600" />Saved</>)}
+            {saveStatus === "error" && (
+              <>
+                <AlertCircle className="h-3.5 w-3.5 text-red-600" />
+                <span className="text-red-600">Save failed</span>
+                <button
+                  type="button"
+                  className="ml-1 underline"
+                  onClick={() => { dirtyRef.current = true; setT((s) => (s ? { ...s } : s)); }}
+                >
+                  Retry
+                </button>
+              </>
+            )}
+          </div>
           <Button onClick={() => save()} disabled={busy}><Save className="h-4 w-4 mr-1" />Save</Button>
           <Button variant="destructive" size="icon" onClick={del}><Trash2 className="h-4 w-4" /></Button>
         </div>
