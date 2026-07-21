@@ -427,7 +427,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           <FormField size="sm" label="Status">
             <Input value={form.status} readOnly className="bg-muted/40" />
             <p className="text-[10px] text-muted-foreground mt-1">
-              Documents are saved as Draft. Submit from the Review &amp; Print page to update inventory.
+              Auto-saved as {form.status}. Every change is persisted to the same record — no duplicates.
             </p>
           </FormField>
           <FormField size="sm" label="Reference No.">
@@ -911,7 +911,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
               Back to Edit
             </Button>
             <Button onClick={submit} disabled={busy}>
-              {busy ? "Saving..." : "Save Draft & Continue"}
+              {busy ? "Saving..." : "Save & Continue"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -927,4 +927,26 @@ function ReviewField({ label, value, className = "" }: { label: string; value?: 
       <div className="font-medium break-words">{value || "—"}</div>
     </div>
   );
+}
+
+function SaveIndicator({ state, at }: { state: "idle" | "saving" | "saved" | "error"; at: Date | null }) {
+  if (state === "saving") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+      </span>
+    );
+  }
+  if (state === "saved") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Saved{at ? ` · ${at.toLocaleTimeString()}` : ""}
+      </span>
+    );
+  }
+  if (state === "error") {
+    return <span className="text-xs text-destructive">Auto-save failed — retrying on next change.</span>;
+  }
+  return <span className="text-xs text-muted-foreground">Auto-save enabled</span>;
 }
