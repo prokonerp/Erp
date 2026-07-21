@@ -11,6 +11,8 @@ import { ExportButtons } from "@/components/ExportButtons";
 import { fetchAllGrns, type Grn, type GrnCategory } from "@/lib/grn";
 import { fetchUserNameMap } from "@/lib/challan";
 import { toast } from "sonner";
+import { useIsAdmin } from "@/lib/useRole";
+import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 
 const STATUS_COLOR: Record<string, string> = {
   Draft: "bg-muted text-muted-foreground",
@@ -55,6 +57,7 @@ function SummaryCard({ label, count, color, icon: Icon }: { label: string; count
 export function GrnUnifiedList() {
   const [rows, setRows] = useState<Grn[]>([]);
   const [users, setUsers] = useState<Record<string, string>>({});
+  const { isAdmin } = useIsAdmin();
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | GrnCategory>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -205,9 +208,19 @@ export function GrnUnifiedList() {
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{users[r.created_by || ""] || "—"}</TableCell>
                     <TableCell className="text-right">
-                      <Link to="/grn/$id" params={{ id: r.id }}>
-                        <Button size="sm" variant="outline"><Printer className="h-4 w-4 mr-1" />View</Button>
-                      </Link>
+                      <div className="flex gap-1.5 justify-end">
+                        <Link to="/grn/$id" params={{ id: r.id }}>
+                          <Button size="sm" variant="outline"><Printer className="h-4 w-4 mr-1" />View</Button>
+                        </Link>
+                        {isAdmin && (
+                          <AdminDeleteDialog
+                            kind="grn"
+                            id={r.id}
+                            label={`GRN ${r.grn_no}`}
+                            onDeleted={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
+                          />
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

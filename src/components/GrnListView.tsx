@@ -5,19 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Printer, Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { Printer, Search, Plus, Pencil } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import type { Grn, GrnCategory } from "@/lib/grn";
 import { CATEGORY_LABEL, fetchGrns } from "@/lib/grn";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/useRole";
 import { Link as RouterLink } from "@tanstack/react-router";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 
 type Props = {
   category: GrnCategory;
@@ -40,13 +35,6 @@ export function GrnListView({ category, newTo }: Props) {
   useEffect(() => {
     fetchGrns(category).then(setRows).catch((e) => toast.error(e.message));
   }, [category]);
-
-  const handleDelete = async (id: string, no: string) => {
-    const { error } = await supabase.from("grns" as never).delete().eq("id", id);
-    if (error) { toast.error(error.message); return; }
-    toast.success(`Deleted ${no}`);
-    setRows((rs) => rs.filter((r) => r.id !== id));
-  };
 
   const filtered = rows.filter((r) => {
     const s = q.toLowerCase();
@@ -118,23 +106,12 @@ export function GrnListView({ category, newTo }: Props) {
                             <RouterLink to="/grn/$id/edit" params={{ id: r.id }}>
                               <Button size="sm" variant="outline"><Pencil className="h-4 w-4" /></Button>
                             </RouterLink>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete {r.grn_no}?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This permanently deletes the GRN. This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDelete(r.id, r.grn_no)}>Delete</AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            <AdminDeleteDialog
+                              kind="grn"
+                              id={r.id}
+                              label={`GRN ${r.grn_no}`}
+                              onDeleted={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
+                            />
                           </>
                         )}
                       </div>
