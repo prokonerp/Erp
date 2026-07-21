@@ -88,25 +88,6 @@ export function OracleBlockEditor({
   const custRows = value.customer_received_rows || [];
   const setCustRow = (i: number, patch: Partial<OracleReceivedRow>) =>
     setBlock({ customer_received_rows: custRows.map((r, ix) => ix === i ? { ...r, ...patch } : r) });
-  const addCustRow = () => {
-    // Seed from the corresponding defective row when available.
-    const idx = custRows.length;
-    const d = value.defective_rows[idx] || value.defective_rows[0];
-    setBlock({
-      customer_received_rows: [
-        ...custRows,
-        {
-          warehouse_id: "", warehouse_name: "",
-          model_no: d?.def_model_no || "",
-          serial_no: d?.def_serial_no || "",
-          qty: d?.qty || "",
-          received_date: "",
-          remarks: "",
-          product_tag: "",
-        },
-      ],
-    });
-  };
   const removeCustRow = (i: number) =>
     setBlock({ customer_received_rows: custRows.filter((_, ix) => ix !== i) });
 
