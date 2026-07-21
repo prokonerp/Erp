@@ -418,6 +418,30 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
               <Input value={form.ticket_no} onChange={(e) => setForm({ ...form, ticket_no: e.target.value })} />
             </FormField>
           )}
+          {category === "general" && (
+            <FormField size="sm" label="Stock Category" required>
+              <Select
+                value={form.stock_category || "good"}
+                onValueChange={(v) => setForm({ ...form, stock_category: v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="good">Good</SelectItem>
+                  <SelectItem value="defective">Defective</SelectItem>
+                  <SelectItem value="quarantine">Quarantine</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+          {category !== "general" && (
+            <FormField size="md" label="Linked Indent (optional)">
+              <Input
+                placeholder="Paste Indent ID to link to an RMA workflow"
+                value={form.indent_id}
+                onChange={(e) => setForm({ ...form, indent_id: e.target.value })}
+              />
+            </FormField>
+          )}
         </FormGrid>
       </FormSection>
 
