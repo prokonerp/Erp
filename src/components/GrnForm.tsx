@@ -512,9 +512,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
             required
           >
             {isCust ? (
-              <CustomerPicker value={sourceId} onChange={applyCustomer} required placeholder="Search customer…" />
+              <CustomerPicker value={sourceId} onChange={applyCustomer} required placeholder="Search customer…" disabled={sourceLocked} />
             ) : (
-              <VendorPicker value={sourceId} onChange={applyVendor} required label={isOem ? "OEM" : "Vendor"} placeholder={`Search ${isOem ? "OEM" : "vendor"}…`} />
+              <VendorPicker value={sourceId} onChange={applyVendor} required label={isOem ? "OEM" : "Vendor"} placeholder={`Search ${isOem ? "OEM" : "vendor"}…`} disabled={sourceLocked} />
             )}
           </FormField>
           <FormField size="md" label={`${sourceLabel} Name`} required>
@@ -632,6 +632,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                   <td className="px-2 py-1.5 border-t border-border/60">
                     <ProductMasterPicker
                       value={it.product_id}
+                      disabled={sourceLocked}
                       onPick={(p) => updateItem(i, {
                         product_id: p.id,
                         part_no: p.sku || p.model || "",
@@ -641,18 +642,24 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         model_no: p.model || "",
                       })}
                     />
+                    {sourceLocked && (
+                      <div className="mt-1 text-[11px] text-muted-foreground truncate">
+                        {it.part_name || it.part_no}
+                        {it.part_no ? <span className="ml-1 font-mono">({it.part_no})</span> : null}
+                      </div>
+                    )}
                   </td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_received} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
                   {!isCust && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
+                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
                   )}
                   {!isCust && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} readOnly={sourceLocked && sourceKind !== "oem-section-c"} className={sourceLocked && sourceKind !== "oem-section-c" ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
                   )}
                   <td className="px-2 py-1.5 border-t border-border/60">
-                    <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })}>
+                    <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceLocked && sourceKind === "customer-section-d"}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Good">Good</SelectItem>
@@ -667,7 +674,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       size="icon"
                       variant="ghost"
                       onClick={() => setItems(items.filter((_, idx) => idx !== i))}
-                      disabled={items.length === 1}
+                      disabled={items.length === 1 || sourceLocked}
                       aria-label="Remove row"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
