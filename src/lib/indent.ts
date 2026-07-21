@@ -169,11 +169,32 @@ export function oracleIsComplete(oIn: OracleBlock): boolean {
     const d = o.defective_rows[i];
     const e = o.exchange_rows[i];
     const r = o.received_rows[i];
+    const c = (o.customer_received_rows || [])[i];
     if (!(nn(d.def_model_no) && nn(d.def_serial_no) && qty(d.qty))) return false;
     if (!e || !(nn(e.warehouse_id) && nn(e.model_no) && nn(e.serial_no) && qty(e.qty))) return false;
     if (!r || !(nn(r.warehouse_id) && nn(r.model_no) && nn(r.serial_no) && qty(r.qty) && nn(r.received_date))) return false;
+    // Section D: Material Received (from Customer). Since normalizeOracle
+    // pads customer_received_rows to defective length by default, every
+    // row must be completed (warehouse, model, serial, qty, date, tag).
+    if (!c || !(nn(c.warehouse_id) && nn(c.model_no) && nn(c.serial_no) && qty(c.qty) && nn(c.received_date) && nn(c.product_tag))) return false;
   }
   return true;
+}
+
+/** Tri-state progress indicator for a single Oracle block:
+ *  - "closed": already marked closed OR every A/B/C/D row is complete.
+ *  - "pending": no material fields filled yet.
+ *  - "in_progress": some rows partially filled but not all complete. */
+export function oracleProgress(oIn: OracleBlock): "closed" | "in_progress" | "pending" {
+  const o = normalizeOracle(oIn);
+  if (o.status === "closed" || oracleIsComplete(o)) return "closed";
+  const nn = (s?: string) => !!(s && String(s).trim());
+  const anyFilled =
+    o.defective_rows.some((d) => nn(d.def_model_no) || nn(d.def_serial_no) || nn(d.qty)) ||
+    o.exchange_rows.some((e) => nn(e.warehouse_id) || nn(e.model_no) || nn(e.serial_no) || nn(e.qty)) ||
+    o.received_rows.some((r) => nn(r.warehouse_id) || nn(r.model_no) || nn(r.serial_no) || nn(r.qty) || nn(r.received_date)) ||
+    (o.customer_received_rows || []).some((r) => nn(r.warehouse_id) || nn(r.model_no) || nn(r.serial_no) || nn(r.qty) || nn(r.received_date));
+  return anyFilled ? "in_progress" : "pending";
 }
 
 /** Build Oracle blocks from a ticket's Defective Parts list. Rows are
