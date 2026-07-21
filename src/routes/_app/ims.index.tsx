@@ -6,11 +6,13 @@ import {
   listTransfers,
   listReservations,
   listWarehouses,
+  listTransactions,
   formatWarehouse,
   type StockItem,
   type Transfer,
   type Reservation,
   type WarehouseLite,
+  type Transaction,
 } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/ims/")({
@@ -22,15 +24,16 @@ function Dashboard() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [resv, setResv] = useState<Reservation[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
+  const [txns, setTxns] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [s, t, r, w] = await Promise.all([
-          listStock(), listTransfers(), listReservations(), listWarehouses(),
+        const [s, t, r, w, x] = await Promise.all([
+          listStock(), listTransfers(), listReservations(), listWarehouses(), listTransactions(),
         ]);
-        setStock(s); setTransfers(t); setResv(r); setWarehouses(w);
+        setStock(s); setTransfers(t); setResv(r); setWarehouses(w); setTxns(x);
       } finally {
         setLoading(false);
       }
@@ -111,41 +114,86 @@ function Dashboard() {
       <Card>
         <CardHeader><CardTitle className="text-base">Warehouse Snapshot</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50"><tr className="text-left"><th className="p-2">Warehouse</th><th className="p-2">Type</th><th className="p-2">Good</th><th className="p-2">Defective</th><th className="p-2">In Transit</th></tr></thead>
-            <tbody>
-              {(() => {
-                const ids = Array.from(new Set(stock.map((s) => s.warehouse_id).filter(Boolean) as string[]));
-                // Include warehouses with zero stock too, for full visibility
-                const allIds = Array.from(new Set([...ids, ...warehouses.map((w) => w.id)]));
-                if (allIds.length === 0) {
-                  return (<tr><td className="p-4 text-muted-foreground" colSpan={5}>No warehouses configured.</td></tr>);
+          {(() => {
+            const ids = Array.from(new Set(stock.map((s) => s.warehouse_id).filter(Boolean) as string[]));
+            const allIds = Array.from(new Set([...ids, ...warehouses.map((w) => w.id)]));
+            const isGrn = (ref: string | null | undefined) => !!ref && ref.toUpperCase().startsWith("GRN ");
+            const grnSrc = (ref: string | null | undefined): "oem" | "customer" | "general" | "other" => {
+              const r = (ref || "").toUpperCase();
+              if (r.includes("GRN-OEM")) return "oem";
+              if (r.includes("GRN-CUST")) return "customer";
+              if (r.includes("GRN-GEN")) return "general";
+              return "other";
+            };
+            const forWh = (wid: string) => {
+              const stockHere = stock.filter((s) => s.warehouse_id === wid);
+              const opening = stockHere.filter((s) => s.opening_stock).reduce((a, s) => a + (Number(s.qty) || 1), 0);
+              const available = stockHere.filter((s) => s.stock_status === "available").reduce((a, s) => a + (Number(s.qty) || 1), 0);
+              const defectiveQ = stockHere.filter((s) => s.stock_type === "defective" && s.stock_status !== "scrapped").reduce((a, s) => a + (Number(s.qty) || 1), 0);
+              const scrap = stockHere.filter((s) => s.stock_status === "scrapped").reduce((a, s) => a + (Number(s.qty) || 1), 0);
+              const balance = stockHere.filter((s) => s.stock_status !== "issued" && s.stock_status !== "returned_to_oem" && s.stock_status !== "scrapped").reduce((a, s) => a + (Number(s.qty) || 1), 0);
+              let recvOem = 0, recvCust = 0, recvGen = 0, issued = 0;
+              for (const t of txns) {
+                const q = Number(t.qty) || 0;
+                if ((t.txn_type === "good_in" || t.txn_type === "defective_in") && t.to_warehouse_id === wid && isGrn(t.reference)) {
+                  const src = grnSrc(t.reference);
+                  if (src === "oem") recvOem += q;
+                  else if (src === "customer") recvCust += q;
+                  else if (src === "general") recvGen += q;
                 }
-                return allIds.map((wid) => {
-                  const wh = warehouses.find((w) => w.id === wid) || null;
-                  return (
-                    <tr key={wid} className="border-t">
-                      <td className="p-2">{wh ? wh.name : "Unassigned"}</td>
-                      <td className="p-2 text-xs text-muted-foreground">{wh?.type || "—"}</td>
-                      <td className="p-2">{good.filter((s) => s.warehouse_id === wid && s.stock_status !== "in_transit").length}</td>
-                      <td className="p-2">{defective.filter((s) => s.warehouse_id === wid && s.stock_status !== "in_transit").length}</td>
-                      <td className="p-2">{stock.filter((s) => s.warehouse_id === wid && s.stock_status === "in_transit").length}</td>
-                    </tr>
-                  );
-                });
-              })()}
-              {stock.some((s) => !s.warehouse_id) && (
-                <tr className="border-t">
-                  <td className="p-2 italic text-muted-foreground">Unassigned</td>
-                  <td className="p-2">—</td>
-                  <td className="p-2">{good.filter((s) => !s.warehouse_id).length}</td>
-                  <td className="p-2">{defective.filter((s) => !s.warehouse_id).length}</td>
-                  <td className="p-2">0</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          <p className="text-xs text-muted-foreground mt-2">Showing warehouse names (type) from Warehouse Master. {formatWarehouse(warehouses[0]) && ""}</p>
+                if ((t.txn_type === "good_out" || t.txn_type === "defective_out") && t.from_warehouse_id === wid) {
+                  issued += q;
+                }
+              }
+              return { opening, recvOem, recvCust, recvGen, recvTotal: recvOem + recvCust + recvGen, issued, available, defectiveQ, scrap, balance };
+            };
+            if (allIds.length === 0) {
+              return <div className="p-4 text-muted-foreground">No warehouses configured.</div>;
+            }
+            return (
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr className="text-left">
+                    <th className="p-2">Warehouse</th>
+                    <th className="p-2">Type</th>
+                    <th className="p-2 text-right">Opening</th>
+                    <th className="p-2 text-right" title="Received (all GRNs)">Received</th>
+                    <th className="p-2 text-right text-emerald-700">OEM</th>
+                    <th className="p-2 text-right text-blue-700">Cust</th>
+                    <th className="p-2 text-right text-amber-700">Gen</th>
+                    <th className="p-2 text-right">Issued</th>
+                    <th className="p-2 text-right">Available</th>
+                    <th className="p-2 text-right">Defective</th>
+                    <th className="p-2 text-right">Scrap</th>
+                    <th className="p-2 text-right font-semibold">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allIds.map((wid) => {
+                    const wh = warehouses.find((w) => w.id === wid) || null;
+                    const m = forWh(wid);
+                    return (
+                      <tr key={wid} className="border-t">
+                        <td className="p-2">{wh ? wh.name : "Unassigned"}</td>
+                        <td className="p-2 text-xs text-muted-foreground">{wh?.type || "—"}</td>
+                        <td className="p-2 text-right">{m.opening}</td>
+                        <td className="p-2 text-right font-medium">{m.recvTotal}</td>
+                        <td className="p-2 text-right text-emerald-700">{m.recvOem}</td>
+                        <td className="p-2 text-right text-blue-700">{m.recvCust}</td>
+                        <td className="p-2 text-right text-amber-700">{m.recvGen}</td>
+                        <td className="p-2 text-right text-rose-700">{m.issued}</td>
+                        <td className="p-2 text-right">{m.available}</td>
+                        <td className="p-2 text-right">{m.defectiveQ}</td>
+                        <td className="p-2 text-right">{m.scrap}</td>
+                        <td className="p-2 text-right font-semibold">{m.balance}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            );
+          })()}
+          <p className="text-xs text-muted-foreground mt-2">Received / Issued totals derive from IMS Stock Ledger transactions ({txns.length} recorded). {formatWarehouse(warehouses[0]) && ""}</p>
         </CardContent>
       </Card>
     </div>
