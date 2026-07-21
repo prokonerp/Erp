@@ -63,6 +63,13 @@ export type OracleBlock = {
   closed_by?: string | null;
   closed_by_name?: string | null;
   closed_at?: string | null;
+  /** Set by admin_reopen_oracle RPC when an admin re-opens a closed oracle. */
+  reopened?: {
+    at?: string | null;
+    by?: string | null;
+    reason?: string | null;
+    scope?: "grn" | "dc" | "full" | null;
+  } | null;
 };
 
 const blankExchangeRow = (qty = ""): OracleExchangeRow => ({
