@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Download } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Printer, Download, CheckCircle2, Ban } from "lucide-react";
 import { fetchGrn, CATEGORY_LABEL, type Grn } from "@/lib/grn";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/grn/$id")({
@@ -16,6 +18,7 @@ export const Route = createFileRoute("/_app/grn/$id")({
 function GrnView() {
   const { id } = Route.useParams();
   const [g, setG] = useState<Grn | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     fetchGrn(id).then(setG).catch((e) => toast.error(e.message));
@@ -25,6 +28,10 @@ function GrnView() {
   const isOem = g.category === "oem";
   const oemLogo = isOem ? (g.oem_logo_url ? { url: g.oem_logo_url, alt: g.source_name || "OEM" } : getOemLogo(g.source_name)) : null;
   const backTo = `/grn/${g.category}` as "/grn/customer" | "/grn/oem" | "/grn/general";
+  const status = g.status || "Draft";
+  const isDraft = status === "Draft";
+  const isSubmitted = status === "Submitted";
+  const isCancelled = status === "Cancelled";
 
   const handleDownload = async () => {
     const el = document.getElementById("print-area");
@@ -34,6 +41,48 @@ function GrnView() {
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to generate PDF");
     }
+  };
+
+  const handleSubmit = async () => {
+    if (!isDraft) return;
+    if (!confirm("Submit this GRN?\n\nThis will lock the document and post the received stock to the IMS Stock Ledger.")) return;
+    setBusy(true);
+    const { data: u } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("grns" as never)
+      .update({ status: "Submitted", submitted_by: u.user?.id ?? null, submitted_at: new Date().toISOString() } as never)
+      .eq("id", g.id)
+      .select("*")
+      .maybeSingle();
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    if (data) setG(data as unknown as Grn);
+    toast.success("GRN submitted. Stock ledger updated.");
+  };
+
+  const handleCancel = async () => {
+    if (!isSubmitted) return;
+    if (!confirm("Cancel this submitted GRN?\n\nRelated stock ledger entries will be reversed.")) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from("grns" as never)
+      .update({ status: "Cancelled" } as never)
+      .eq("id", g.id);
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    setG({ ...g, status: "Cancelled" });
+    toast.success("GRN cancelled. Stock reversed.");
+  };
+
+  const handlePrint = async () => {
+    if (!g.printed_at) {
+      const { data: u } = await supabase.auth.getUser();
+      void supabase
+        .from("grns" as never)
+        .update({ printed_by: u.user?.id ?? null, printed_at: new Date().toISOString() } as never)
+        .eq("id", g.id);
+    }
+    window.print();
   };
 
   const totals = (g.items || []).reduce((acc, it) => {
@@ -61,17 +110,41 @@ function GrnView() {
         #print-area thead { display: table-header-group; }
       `}</style>
 
-      <div className="no-print flex items-center justify-between mb-4">
-        <Link to={backTo}>
-          <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
-        </Link>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleDownload}>
-            <Download className="h-4 w-4 mr-1" />Download PDF
-          </Button>
-          <Button onClick={() => window.print()}>
-            <Printer className="h-4 w-4 mr-1" />Print
-          </Button>
+      <div className="no-print mb-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Link to={backTo}>
+            <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={isSubmitted ? "default" : isCancelled ? "destructive" : "secondary"}>{status}</Badge>
+            {isDraft && (
+              <Link to="/grn/$id/edit" params={{ id: g.id }}>
+                <Button variant="outline" size="sm">Edit</Button>
+              </Link>
+            )}
+            {isDraft && (
+              <Button size="sm" onClick={handleSubmit} disabled={busy} className="gap-1.5">
+                <CheckCircle2 className="h-4 w-4" />Submit
+              </Button>
+            )}
+            {isSubmitted && (
+              <Button size="sm" variant="outline" onClick={handleCancel} disabled={busy} className="gap-1.5">
+                <Ban className="h-4 w-4" />Cancel
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={handleDownload}>
+              <Download className="h-4 w-4 mr-1" />Download PDF
+            </Button>
+            <Button size="sm" onClick={handlePrint} disabled={isDraft} title={isDraft ? "Submit the document before printing" : ""}>
+              <Printer className="h-4 w-4 mr-1" />Print
+            </Button>
+          </div>
+        </div>
+        <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Review &amp; Print Preview</span>.
+          {isDraft && " Draft GRN — click Submit to lock it and add stock to the IMS Stock Ledger."}
+          {isSubmitted && g.submitted_at && ` Submitted on ${new Date(g.submitted_at).toLocaleString()}.`}
+          {g.printed_at && ` · Last printed ${new Date(g.printed_at).toLocaleString()}.`}
         </div>
       </div>
 

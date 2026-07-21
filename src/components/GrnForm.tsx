@@ -336,7 +336,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       </Button>
       <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
         <Save className="h-4 w-4" />
-        <span className="hidden sm:inline">Save &amp; Print</span>
+        <span className="hidden sm:inline">Save Draft</span>
         <span className="sm:hidden">Save</span>
       </Button>
     </>
@@ -379,12 +379,10 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
             <Input type="date" value={form.receipt_date} onChange={(e) => setForm({ ...form, receipt_date: e.target.value })} />
           </FormField>
           <FormField size="sm" label="Status">
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {["Draft","Received","QC Pending","Approved","Rejected"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Input value={form.status} readOnly className="bg-muted/40" />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              GRNs are saved as Draft. Submit from the Review page to post stock to inventory.
+            </p>
           </FormField>
           <FormField size="sm" label="Reference No.">
             <Input value={form.reference_no} onChange={(e) => setForm({ ...form, reference_no: e.target.value })} />
@@ -774,7 +772,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setReviewOpen(false)} disabled={busy}>Back to Edit</Button>
-            <Button onClick={submit} disabled={busy}>{busy ? "Saving..." : "Confirm, Save & Print"}</Button>
+            <Button onClick={submit} disabled={busy}>{busy ? "Saving..." : "Save Draft & Continue"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

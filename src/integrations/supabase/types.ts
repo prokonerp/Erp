@@ -764,12 +764,16 @@ export type Database = {
           party_name: string | null
           pin_code: string | null
           prepared_by: string | null
+          printed_at: string | null
+          printed_by: string | null
           quotation_id: string | null
           reference_no: string | null
           sales_order_id: string | null
           sales_order_no: string | null
           state: string | null
           status: string
+          submitted_at: string | null
+          submitted_by: string | null
           total_weight: string | null
           transporter_name: string | null
           updated_at: string
@@ -810,12 +814,16 @@ export type Database = {
           party_name?: string | null
           pin_code?: string | null
           prepared_by?: string | null
+          printed_at?: string | null
+          printed_by?: string | null
           quotation_id?: string | null
           reference_no?: string | null
           sales_order_id?: string | null
           sales_order_no?: string | null
           state?: string | null
           status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
           total_weight?: string | null
           transporter_name?: string | null
           updated_at?: string
@@ -856,12 +864,16 @@ export type Database = {
           party_name?: string | null
           pin_code?: string | null
           prepared_by?: string | null
+          printed_at?: string | null
+          printed_by?: string | null
           quotation_id?: string | null
           reference_no?: string | null
           sales_order_id?: string | null
           sales_order_no?: string | null
           state?: string | null
           status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
           total_weight?: string | null
           transporter_name?: string | null
           updated_at?: string
@@ -1109,6 +1121,8 @@ export type Database = {
           oem_logo_url: string | null
           oem_plant: string | null
           po_no: string | null
+          printed_at: string | null
+          printed_by: string | null
           qc_date: string | null
           qc_inspector: string | null
           qc_remarks: string | null
@@ -1131,6 +1145,8 @@ export type Database = {
           status: string
           stock_category: string | null
           storage_location: string | null
+          submitted_at: string | null
+          submitted_by: string | null
           ticket_no: string | null
           total_weight: string | null
           transporter_name: string | null
@@ -1165,6 +1181,8 @@ export type Database = {
           oem_logo_url?: string | null
           oem_plant?: string | null
           po_no?: string | null
+          printed_at?: string | null
+          printed_by?: string | null
           qc_date?: string | null
           qc_inspector?: string | null
           qc_remarks?: string | null
@@ -1187,6 +1205,8 @@ export type Database = {
           status?: string
           stock_category?: string | null
           storage_location?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
           ticket_no?: string | null
           total_weight?: string | null
           transporter_name?: string | null
@@ -1221,6 +1241,8 @@ export type Database = {
           oem_logo_url?: string | null
           oem_plant?: string | null
           po_no?: string | null
+          printed_at?: string | null
+          printed_by?: string | null
           qc_date?: string | null
           qc_inspector?: string | null
           qc_remarks?: string | null
@@ -1243,6 +1265,8 @@ export type Database = {
           status?: string
           stock_category?: string | null
           storage_location?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
           ticket_no?: string | null
           total_weight?: string | null
           transporter_name?: string | null

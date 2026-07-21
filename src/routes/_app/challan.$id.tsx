@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Download } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Printer, Download, CheckCircle2, Ban } from "lucide-react";
 import { fetchChallan, type DeliveryChallan } from "@/lib/challan";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/challan/$id")({
@@ -16,6 +18,7 @@ export const Route = createFileRoute("/_app/challan/$id")({
 function ChallanView() {
   const { id } = Route.useParams();
   const [c, setC] = useState<DeliveryChallan | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     fetchChallan(id).then(setC).catch((e) => toast.error(e.message));
@@ -24,6 +27,10 @@ function ChallanView() {
   if (!c) return <div className="text-muted-foreground">Loading…</div>;
   const isOem = c.doc_type === "oem";
   const oemLogo = isOem ? (c.oem_logo_url ? { url: c.oem_logo_url, alt: c.party_name || "OEM" } : getOemLogo(c.party_name)) : null;
+  const status = c.status || "Draft";
+  const isDraft = status === "Draft";
+  const isSubmitted = status === "Submitted";
+  const isCancelled = status === "Cancelled";
 
   const handleDownload = async () => {
     const el = document.getElementById("print-area");
@@ -35,11 +42,54 @@ function ChallanView() {
     }
   };
 
+  const handleSubmit = async () => {
+    if (!isDraft) return;
+    if (!confirm("Submit this Delivery Challan?\n\nThis will lock the document and update the IMS Stock Ledger. This action cannot be undone except by cancellation.")) return;
+    setBusy(true);
+    const { data: u } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("delivery_challans" as never)
+      .update({ status: "Submitted", submitted_by: u.user?.id ?? null, submitted_at: new Date().toISOString() } as never)
+      .eq("id", c.id)
+      .select("*")
+      .maybeSingle();
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    if (data) setC(data as unknown as DeliveryChallan);
+    toast.success("Delivery Challan submitted. Stock ledger updated.");
+  };
+
+  const handleCancel = async () => {
+    if (!isSubmitted) return;
+    if (!confirm("Cancel this submitted Delivery Challan?\n\nRelated stock ledger entries will be reversed.")) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from("delivery_challans" as never)
+      .update({ status: "Cancelled" } as never)
+      .eq("id", c.id);
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    setC({ ...c, status: "Cancelled" });
+    toast.success("Delivery Challan cancelled. Stock reversed.");
+  };
+
+  const handlePrint = async () => {
+    if (!c.printed_at) {
+      // fire-and-forget audit stamp — we don't block the print dialog
+      const { data: u } = await supabase.auth.getUser();
+      void supabase
+        .from("delivery_challans" as never)
+        .update({ printed_by: u.user?.id ?? null, printed_at: new Date().toISOString() } as never)
+        .eq("id", c.id);
+    }
+    window.print();
+  };
+
   return (
     <>
       <style>{`
         @media print {
-          @page { size: A4 portrait; margin: 10mm; }
+          @page { size: A4 landscape; margin: 8mm; }
           body * { visibility: hidden; }
           #print-area, #print-area * { visibility: visible; }
           #print-area { position: absolute; left: 0; top: 0; width: 100%; }
@@ -47,25 +97,49 @@ function ChallanView() {
         }
         #print-area { font-family: Arial, Helvetica, sans-serif; color: #111; }
         #print-area table { border-collapse: collapse; width: 100%; }
-        #print-area th, #print-area td { border: 1px solid #333; padding: 4px 6px; font-size: 11px; vertical-align: top; }
+        #print-area th, #print-area td { border: 1px solid #333; padding: 3px 5px; font-size: 10px; vertical-align: top; }
         #print-area thead { display: table-header-group; }
       `}</style>
 
-      <div className="no-print flex items-center justify-between mb-4">
-        <Link to={isOem ? "/challan/oem" : "/challan/customer"}>
-          <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
-        </Link>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleDownload}>
-            <Download className="h-4 w-4 mr-1" />Download PDF
-          </Button>
-          <Button onClick={() => window.print()}>
-            <Printer className="h-4 w-4 mr-1" />Print
-          </Button>
+      <div className="no-print mb-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Link to={isOem ? "/challan/oem" : "/challan/customer"}>
+            <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={isSubmitted ? "default" : isCancelled ? "destructive" : "secondary"}>{status}</Badge>
+            {isDraft && (
+              <Link to="/challan/$id/edit" params={{ id: c.id }}>
+                <Button variant="outline" size="sm">Edit</Button>
+              </Link>
+            )}
+            {isDraft && (
+              <Button size="sm" onClick={handleSubmit} disabled={busy} className="gap-1.5">
+                <CheckCircle2 className="h-4 w-4" />Submit
+              </Button>
+            )}
+            {isSubmitted && (
+              <Button size="sm" variant="outline" onClick={handleCancel} disabled={busy} className="gap-1.5">
+                <Ban className="h-4 w-4" />Cancel
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={handleDownload}>
+              <Download className="h-4 w-4 mr-1" />Download PDF
+            </Button>
+            <Button size="sm" onClick={handlePrint} disabled={isDraft} title={isDraft ? "Submit the document before printing" : ""}>
+              <Printer className="h-4 w-4 mr-1" />Print
+            </Button>
+          </div>
+        </div>
+        <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Review &amp; Print Preview</span> — A4 landscape.
+          {isDraft && " This document is in Draft. Click Submit to lock it and post to the IMS Stock Ledger."}
+          {isSubmitted && c.submitted_at && ` Submitted on ${new Date(c.submitted_at).toLocaleString()}.`}
+          {c.printed_at && ` · Last printed ${new Date(c.printed_at).toLocaleString()}.`}
         </div>
       </div>
 
-      <div id="print-area" className="bg-white text-black mx-auto shadow print:shadow-none" style={{ width: "190mm", minHeight: "277mm", padding: 0 }}>
+      <div id="print-area" className="bg-white text-black mx-auto shadow print:shadow-none" style={{ width: "281mm", minHeight: "194mm", padding: 0 }}>
         {/* Header */}
         <div style={{ display: "flex", borderBottom: "2px solid #000", paddingBottom: 8 }}>
           <div style={{ width: isOem ? "35%" : "30%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 8 }}>

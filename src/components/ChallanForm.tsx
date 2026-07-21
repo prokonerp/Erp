@@ -319,7 +319,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       </Button>
       <Button type="button" size="sm" onClick={submit} disabled={busy} className="gap-1.5">
         <Save className="h-4 w-4" />
-        <span className="hidden sm:inline">Save &amp; Print</span>
+        <span className="hidden sm:inline">Save Draft</span>
         <span className="sm:hidden">Save</span>
       </Button>
     </>
@@ -371,15 +371,10 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             <Input type="date" value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} />
           </FormField>
           <FormField size="sm" label="Status">
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Draft">Draft</SelectItem>
-                <SelectItem value="Submitted">Submitted</SelectItem>
-                <SelectItem value="Dispatched">Dispatched</SelectItem>
-                <SelectItem value="Cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
+            <Input value={form.status} readOnly className="bg-muted/40" />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Documents are saved as Draft. Submit from the Review &amp; Print page to update inventory.
+            </p>
           </FormField>
           <FormField size="sm" label="Reference No.">
             <Input value={form.reference_no} onChange={(e) => setForm({ ...form, reference_no: e.target.value })} />
@@ -862,7 +857,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
               Back to Edit
             </Button>
             <Button onClick={submit} disabled={busy}>
-              {busy ? "Saving..." : "Confirm, Save & Print"}
+              {busy ? "Saving..." : "Save Draft & Continue"}
             </Button>
           </DialogFooter>
         </DialogContent>
