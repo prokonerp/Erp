@@ -7,7 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight, Package, Search, Warehouse as WarehouseIcon } from "lucide-react";
+import {
+  ChevronDown, ChevronRight, Package, Search, Warehouse as WarehouseIcon,
+  Boxes, CheckCircle2, Clock, Send, ShieldCheck, AlertTriangle, Trash2, Inbox,
+  X, RefreshCw, Layers,
+} from "lucide-react";
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+} from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listStock, listTransactions, listWarehouses,
@@ -193,7 +201,7 @@ function StockManagement() {
   const oems = useMemo(() => Array.from(new Set(items.map((i) => i.oem).filter(Boolean))).sort() as string[], [items]);
 
   const summary = useMemo(() => {
-    let total = 0, available = 0, reserved = 0, issued = 0, good = 0, defective = 0;
+    let total = 0, available = 0, reserved = 0, issued = 0, good = 0, defective = 0, scrap = 0;
     let recvTotal = 0, recvOem = 0, recvCust = 0, recvGen = 0;
     for (const s of filteredItems) {
       const qv = s.qty ?? 1;
@@ -201,6 +209,7 @@ function StockManagement() {
       if (s.stock_status === "available") available += qv;
       if (s.stock_status === "reserved") reserved += qv;
       if (s.stock_status === "issued") issued += qv;
+      if (s.stock_status === "scrapped") scrap += qv;
       if (s.stock_type === "good") good += qv;
       if (s.stock_type === "defective") defective += qv;
     }
@@ -210,166 +219,282 @@ function StockManagement() {
       recvCust += p.received.customer;
       recvGen += p.received.general;
     }
-    return { total, available, reserved, issued, good, defective,
+    return { total, available, reserved, issued, good, defective, scrap,
       products: products.length, recvTotal, recvOem, recvCust, recvGen };
   }, [filteredItems, products]);
+
+  const compositionData = useMemo(() => ([
+    { name: "Good", value: summary.good, color: "#10b981" },
+    { name: "Defective", value: summary.defective, color: "#f43f5e" },
+    { name: "Scrap", value: summary.scrap, color: "#64748b" },
+  ].filter((d) => d.value > 0)), [summary]);
+
+  const warehouseChart = useMemo(() => {
+    const map = new Map<string, { name: string; Available: number; Reserved: number; Issued: number; Defective: number }>();
+    for (const s of filteredItems) {
+      const name = whName(s.warehouse_id);
+      let r = map.get(name);
+      if (!r) { r = { name, Available: 0, Reserved: 0, Issued: 0, Defective: 0 }; map.set(name, r); }
+      const q = s.qty ?? 1;
+      if (s.stock_status === "available") r.Available += q;
+      if (s.stock_status === "reserved") r.Reserved += q;
+      if (s.stock_status === "issued") r.Issued += q;
+      if (s.stock_type === "defective" && s.stock_status !== "issued") r.Defective += q;
+    }
+    return Array.from(map.values())
+      .sort((a, b) => (b.Available + b.Reserved + b.Issued + b.Defective) - (a.Available + a.Reserved + a.Issued + a.Defective))
+      .slice(0, 8);
+  }, [filteredItems, warehouses]);
 
   function toggleExpand(k: string) {
     setExpanded((prev) => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
   }
 
   return (
-    <div className="space-y-4">
-      {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-        <StatTile label="Products" value={summary.products} />
-        <StatTile label="Total Stock" value={summary.total} />
-        <StatTile label="Available" value={summary.available} tone="emerald" />
-        <StatTile label="Reserved" value={summary.reserved} tone="amber" />
-        <StatTile label="Issued" value={summary.issued} tone="blue" />
-        <StatTile label="Good" value={summary.good} tone="emerald" />
-        <StatTile label="Defective" value={summary.defective} tone="rose" />
-        <StatTile label="Received (GRN)" value={summary.recvTotal} tone="blue" />
-      </div>
-      <div className="grid grid-cols-3 gap-2 text-xs">
-        <div className="rounded-md border bg-card px-3 py-1.5 flex justify-between">
-          <span className="text-muted-foreground">Received from OEM</span>
-          <span className="font-semibold text-emerald-700">{summary.recvOem}</span>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" /> Stock Management
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Real-time inventory across warehouses, OEMs and product lines.
+          </p>
         </div>
-        <div className="rounded-md border bg-card px-3 py-1.5 flex justify-between">
-          <span className="text-muted-foreground">Received from Customer</span>
-          <span className="font-semibold text-blue-700">{summary.recvCust}</span>
-        </div>
-        <div className="rounded-md border bg-card px-3 py-1.5 flex justify-between">
-          <span className="text-muted-foreground">General GRN Received</span>
-          <span className="font-semibold text-amber-700">{summary.recvGen}</span>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
         </div>
       </div>
 
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-8 gap-3">
+        <Kpi icon={Boxes} label="Total Inventory" value={summary.total} tone="blue" />
+        <Kpi icon={CheckCircle2} label="Available" value={summary.available} tone="emerald" />
+        <Kpi icon={Clock} label="Reserved" value={summary.reserved} tone="amber" />
+        <Kpi icon={Send} label="Issued" value={summary.issued} tone="violet" />
+        <Kpi icon={ShieldCheck} label="Good Stock" value={summary.good} tone="emerald" />
+        <Kpi icon={AlertTriangle} label="Defective" value={summary.defective} tone="rose" />
+        <Kpi icon={Trash2} label="Scrap" value={summary.scrap ?? 0} tone="slate" />
+        <Kpi icon={Inbox} label="Received (GRN)" value={summary.recvTotal} tone="sky" />
+      </div>
+
+      {/* Charts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <Card className="rounded-xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Inventory Composition</CardTitle>
+          </CardHeader>
+          <CardContent className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={compositionData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={45}
+                  outerRadius={75}
+                  paddingAngle={2}
+                >
+                  {compositionData.map((c, i) => <Cell key={i} fill={c.color} />)}
+                </Pie>
+                <RTooltip />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-xl lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Warehouse Distribution</CardTitle>
+          </CardHeader>
+          <CardContent className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={warehouseChart} layout="vertical" margin={{ left: 8, right: 12 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
+                <RTooltip />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="Available" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="Reserved" stackId="a" fill="#f59e0b" />
+                <Bar dataKey="Issued" stackId="a" fill="#8b5cf6" />
+                <Bar dataKey="Defective" stackId="a" fill="#f43f5e" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Filters */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2"><Package className="h-4 w-4" /> Stock Management</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Card className="rounded-xl">
+        <CardContent className="p-3">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
             <div className="md:col-span-2 relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-8" placeholder="Search product, model, serial, OEM, customer…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-8 h-9"
+                placeholder="Search product, model, serial, OEM, customer…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
             </div>
             <Select value={oemFilter} onValueChange={setOemFilter}>
-              <SelectTrigger><SelectValue placeholder="OEM" /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="OEM" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All OEMs</SelectItem>
                 {oems.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={whFilter} onValueChange={setWhFilter}>
-              <SelectTrigger><SelectValue placeholder="Warehouse" /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Warehouse" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Warehouses</SelectItem>
                 {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 {Object.entries(STOCK_STATUS_LABEL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+
+          {/* Filter chips */}
+          {(q || oemFilter !== "all" || whFilter !== "all" || statusFilter !== "all") && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2.5 border-t">
+              <span className="text-xs text-muted-foreground mr-1">Active filters:</span>
+              {q && <Chip onClear={() => setQ("")}>Search: “{q}”</Chip>}
+              {oemFilter !== "all" && <Chip onClear={() => setOemFilter("all")}>OEM: {oemFilter}</Chip>}
+              {whFilter !== "all" && <Chip onClear={() => setWhFilter("all")}>Warehouse: {whName(whFilter)}</Chip>}
+              {statusFilter !== "all" && <Chip onClear={() => setStatusFilter("all")}>Status: {STOCK_STATUS_LABEL[statusFilter as keyof typeof STOCK_STATUS_LABEL] || statusFilter}</Chip>}
+              <Button
+                variant="ghost" size="sm" className="h-6 px-2 text-xs"
+                onClick={() => { setQ(""); setOemFilter("all"); setWhFilter("all"); setStatusFilter("all"); }}
+              >Clear all</Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Grid */}
-      <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 sticky top-0">
-              <tr className="text-left">
-                <th className="p-2 w-8"></th>
-                <th className="p-2">Product</th>
-                <th className="p-2">Model / Code</th>
-                <th className="p-2">OEM</th>
-                <th className="p-2 text-right">Total</th>
-                <th className="p-2 text-right">Available</th>
-                <th className="p-2 text-right">Reserved</th>
-                <th className="p-2 text-right">Issued</th>
-                <th className="p-2 text-right">Good</th>
-                <th className="p-2 text-right">Defective</th>
-                <th className="p-2 text-right" title="Received via GRN — total">Recv</th>
-                <th className="p-2 text-right" title="Received from OEM">OEM</th>
-                <th className="p-2 text-right" title="Received from Customer">Cust</th>
-                <th className="p-2 text-right" title="General GRN">Gen</th>
-                <th className="p-2">Latest GRN</th>
-                <th className="p-2 text-right">Warehouses</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={16} className="p-4 text-muted-foreground">Loading…</td></tr>
-              ) : products.length === 0 ? (
-                <tr><td colSpan={16} className="p-4 text-muted-foreground">No stock matches your filters.</td></tr>
-              ) : products.map((p) => {
-                const isOpen = expanded.has(p.key);
-                const wh = warehouseBreakdown(p.items, whName);
-                return (
-                  <>
-                    <tr key={p.key} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedProduct(p)}>
-                      <td className="p-2" onClick={(e) => { e.stopPropagation(); toggleExpand(p.key); }}>
-                        {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      </td>
-                      <td className="p-2 font-medium">{p.part_name}</td>
-                      <td className="p-2 font-mono text-xs">{p.part_model_no || "—"}</td>
-                      <td className="p-2">{p.oem || "—"}</td>
-                      <td className="p-2 text-right font-medium">{p.total}</td>
-                      <td className="p-2 text-right"><Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">{p.available}</Badge></td>
-                      <td className="p-2 text-right"><Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">{p.reserved}</Badge></td>
-                      <td className="p-2 text-right"><Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{p.issued}</Badge></td>
-                      <td className="p-2 text-right">{p.good}</td>
-                      <td className="p-2 text-right">{p.defective}</td>
-                      <td className="p-2 text-right font-medium">{p.received.total || "—"}</td>
-                      <td className="p-2 text-right text-emerald-700">{p.received.oem || "—"}</td>
-                      <td className="p-2 text-right text-blue-700">{p.received.customer || "—"}</td>
-                      <td className="p-2 text-right text-amber-700">{p.received.general || "—"}</td>
-                      <td className="p-2 text-xs">
-                        {p.received.latestGrn ? (
-                          <>
-                            <div className="font-mono">{p.received.latestGrn}</div>
-                            {p.received.latestDate && <div className="text-muted-foreground">{new Date(p.received.latestDate).toLocaleDateString()}</div>}
-                          </>
-                        ) : "—"}
-                      </td>
-                      <td className="p-2 text-right">{p.warehouses.size}</td>
-                    </tr>
-                    {isOpen && (
-                      <tr key={p.key + "-exp"} className="bg-muted/20">
-                        <td colSpan={16} className="p-3">
-                          <div className="text-xs font-semibold mb-2 text-muted-foreground flex items-center gap-1"><WarehouseIcon className="h-3.5 w-3.5" /> Warehouse Breakdown</div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {wh.map((w) => (
-                              <div key={w.id} className="rounded border bg-background p-2">
-                                <div className="font-medium text-sm mb-1">{w.name}</div>
-                                <div className="grid grid-cols-3 gap-1 text-xs">
-                                  <Stat label="Available" value={w.available} />
-                                  <Stat label="Reserved" value={w.reserved} />
-                                  <Stat label="Issued" value={w.issued} />
-                                  <Stat label="Good" value={w.good} />
-                                  <Stat label="Defective" value={w.defective} />
-                                  <Stat label="Total" value={w.total} />
-                                </div>
-                              </div>
-                            ))}
+      {/* Product Grid */}
+      <Card className="rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30">
+          <div className="text-sm font-medium flex items-center gap-2">
+            <Layers className="h-4 w-4 text-muted-foreground" />
+            Products <span className="text-muted-foreground font-normal">({products.length})</span>
+          </div>
+          <div className="text-xs text-muted-foreground">Click a row to open details</div>
+        </div>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto max-h-[640px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/60 sticky top-0 z-10 border-b">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <th className="p-2.5 w-8"></th>
+                  <th className="p-2.5">Product</th>
+                  <th className="p-2.5">Model / Code</th>
+                  <th className="p-2.5">OEM</th>
+                  <th className="p-2.5 text-right">Total</th>
+                  <th className="p-2.5 text-right">Available</th>
+                  <th className="p-2.5 text-right">Reserved</th>
+                  <th className="p-2.5 text-right">Issued</th>
+                  <th className="p-2.5 text-right">Good</th>
+                  <th className="p-2.5 text-right">Defective</th>
+                  <th className="p-2.5 text-right" title="Received via GRN — total">Received</th>
+                  <th className="p-2.5">Latest GRN</th>
+                  <th className="p-2.5 text-right">WH</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={13} className="p-6 text-center text-muted-foreground">Loading inventory…</td></tr>
+                ) : products.length === 0 ? (
+                  <tr><td colSpan={13} className="p-6 text-center text-muted-foreground">No stock matches your filters.</td></tr>
+                ) : products.map((p, idx) => {
+                  const isOpen = expanded.has(p.key);
+                  const wh = warehouseBreakdown(p.items, whName);
+                  const zebra = idx % 2 === 1 ? "bg-muted/10" : "";
+                  return (
+                    <>
+                      <tr
+                        key={p.key}
+                        className={`border-t transition-colors hover:bg-primary/5 cursor-pointer ${zebra}`}
+                        onClick={() => setSelectedProduct(p)}
+                      >
+                        <td className="p-2.5" onClick={(e) => { e.stopPropagation(); toggleExpand(p.key); }}>
+                          <button className="p-0.5 rounded hover:bg-muted" title={isOpen ? "Collapse" : "Expand"}>
+                            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
+                        </td>
+                        <td className="p-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 rounded-md bg-primary/10 text-primary grid place-items-center shrink-0">
+                              <Package className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-medium truncate">{p.part_name}</div>
+                              <div className="text-[11px] text-muted-foreground truncate">{p.category || "—"}</div>
+                            </div>
                           </div>
                         </td>
+                        <td className="p-2.5 font-mono text-xs">{p.part_model_no || "—"}</td>
+                        <td className="p-2.5">{p.oem || "—"}</td>
+                        <td className="p-2.5 text-right font-semibold tabular-nums">{p.total}</td>
+                        <td className="p-2.5 text-right"><NumPill value={p.available} tone="emerald" /></td>
+                        <td className="p-2.5 text-right"><NumPill value={p.reserved} tone="amber" /></td>
+                        <td className="p-2.5 text-right"><NumPill value={p.issued} tone="violet" /></td>
+                        <td className="p-2.5 text-right tabular-nums text-emerald-700">{p.good || "—"}</td>
+                        <td className="p-2.5 text-right tabular-nums text-rose-700">{p.defective || "—"}</td>
+                        <td className="p-2.5 text-right font-medium tabular-nums">{p.received.total || "—"}</td>
+                        <td className="p-2.5 text-xs">
+                          {p.received.latestGrn ? (
+                            <>
+                              <div className="font-mono">{p.received.latestGrn}</div>
+                              {p.received.latestDate && <div className="text-muted-foreground">{new Date(p.received.latestDate).toLocaleDateString()}</div>}
+                            </>
+                          ) : "—"}
+                        </td>
+                        <td className="p-2.5 text-right tabular-nums">{p.warehouses.size}</td>
                       </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
+                      {isOpen && (
+                        <tr key={p.key + "-exp"} className="bg-primary/[0.03]">
+                          <td colSpan={13} className="p-3">
+                            <div className="text-[11px] font-semibold mb-2 text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                              <WarehouseIcon className="h-3.5 w-3.5" /> Warehouse Breakdown
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                              {wh.map((w) => (
+                                <div key={w.id} className="rounded-lg border bg-background p-2.5">
+                                  <div className="font-medium text-sm mb-1.5 flex items-center gap-1.5">
+                                    <WarehouseIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                                    {w.name}
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-1 text-xs">
+                                    <Stat label="Available" value={w.available} />
+                                    <Stat label="Reserved" value={w.reserved} />
+                                    <Stat label="Issued" value={w.issued} />
+                                    <Stat label="Good" value={w.good} />
+                                    <Stat label="Defective" value={w.defective} />
+                                    <Stat label="Total" value={w.total} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
 
@@ -404,6 +529,63 @@ function StatTile({ label, value, tone }: { label: string; value: number; tone?:
         <div className={`text-xl font-bold ${cls}`}>{value}</div>
       </CardContent>
     </Card>
+  );
+}
+
+type KpiTone = "blue" | "emerald" | "amber" | "violet" | "rose" | "slate" | "sky";
+const KPI_TONES: Record<KpiTone, { bg: string; fg: string; ring: string; bar: string }> = {
+  blue:    { bg: "bg-blue-50",    fg: "text-blue-700",    ring: "ring-blue-100",    bar: "bg-blue-500" },
+  emerald: { bg: "bg-emerald-50", fg: "text-emerald-700", ring: "ring-emerald-100", bar: "bg-emerald-500" },
+  amber:   { bg: "bg-amber-50",   fg: "text-amber-700",   ring: "ring-amber-100",   bar: "bg-amber-500" },
+  violet:  { bg: "bg-violet-50",  fg: "text-violet-700",  ring: "ring-violet-100",  bar: "bg-violet-500" },
+  rose:    { bg: "bg-rose-50",    fg: "text-rose-700",    ring: "ring-rose-100",    bar: "bg-rose-500" },
+  slate:   { bg: "bg-slate-50",   fg: "text-slate-700",   ring: "ring-slate-100",   bar: "bg-slate-500" },
+  sky:     { bg: "bg-sky-50",     fg: "text-sky-700",     ring: "ring-sky-100",     bar: "bg-sky-500" },
+};
+
+function Kpi({ icon: Icon, label, value, tone }: { icon: any; label: string; value: number; tone: KpiTone }) {
+  const t = KPI_TONES[tone];
+  return (
+    <div className="relative rounded-xl border bg-card p-3 hover:shadow-sm transition overflow-hidden">
+      <div className={`absolute left-0 top-0 h-full w-1 ${t.bar}`} />
+      <div className="flex items-start justify-between">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className={`h-7 w-7 grid place-items-center rounded-lg ring-1 ${t.bg} ${t.fg} ${t.ring}`}>
+          <Icon className="h-3.5 w-3.5" />
+        </div>
+      </div>
+      <div className={`mt-1.5 text-2xl font-bold tabular-nums ${t.fg}`}>{value}</div>
+    </div>
+  );
+}
+
+function NumPill({ value, tone }: { value: number; tone: "emerald" | "amber" | "violet" | "rose" }) {
+  if (!value) return <span className="text-muted-foreground">—</span>;
+  const cls =
+    tone === "emerald" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+    tone === "amber"   ? "bg-amber-50 text-amber-700 border-amber-200" :
+    tone === "violet"  ? "bg-violet-50 text-violet-700 border-violet-200" :
+                         "bg-rose-50 text-rose-700 border-rose-200";
+  return (
+    <span className={`inline-flex items-center justify-center min-w-[28px] px-1.5 py-0.5 rounded-md border text-xs font-medium tabular-nums ${cls}`}>
+      {value}
+    </span>
+  );
+}
+
+function Chip({ children, onClear }: { children: React.ReactNode; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border bg-muted/40 pl-2.5 pr-1 py-0.5 text-xs">
+      {children}
+      <button
+        type="button"
+        onClick={onClear}
+        className="rounded-full h-4 w-4 grid place-items-center hover:bg-muted"
+        aria-label="Remove filter"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </span>
   );
 }
 
