@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, FilePlus2, Search } from "lucide-react";
+import { ArrowLeft, Eye, FilePlus2, Search } from "lucide-react";
 import { fmtDate } from "@/lib/amc";
 
 export const Route = createFileRoute("/_app/amc/oem")({
@@ -53,6 +53,7 @@ function AmcOemData() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "expiring" | "expired">("all");
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => { void load(); }, []);
 
@@ -248,8 +249,16 @@ function AmcOemData() {
                   if (r.product_id) params.set("product", r.product_id);
                   if (r.serial_no) params.set("serial", r.serial_no);
                   if (r.oem_ref_id) params.set("oem_ref", r.oem_ref_id);
+                  const detailSearch: Record<string, string> = {};
+                  if (r.product_id) detailSearch.product = r.product_id;
+                  if (r.serial_no) detailSearch.serial = r.serial_no;
+                  const goDetail = () => navigate({
+                    to: "/amc/oem/$source/$id",
+                    params: { source: r.source, id: r.source_id },
+                    search: detailSearch as never,
+                  });
                   return (
-                    <TableRow key={`${r.source}-${r.source_id}-${i}`}>
+                    <TableRow key={`${r.source}-${r.source_id}-${i}`} onClick={goDetail} className="cursor-pointer">
                       <TableCell className="font-medium">{r.oem_brand || "—"}</TableCell>
                       <TableCell className="font-mono text-xs">{r.oem_ref_id || "—"}</TableCell>
                       <TableCell className="font-mono text-xs">{fmtDate(r.oem_purchase_date)}</TableCell>
@@ -271,10 +280,15 @@ function AmcOemData() {
                       </TableCell>
                       <TableCell className="font-mono text-xs">{r.serial_no || "—"}</TableCell>
                       <TableCell><Badge variant="secondary">{r.source}</Badge></TableCell>
-                      <TableCell className="text-right">
-                        <a href={`/amc/new?${params.toString()}`}>
-                          <Button size="sm"><FilePlus2 className="h-4 w-4 mr-1" />Create AMC</Button>
-                        </a>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); goDetail(); }}>
+                            <Eye className="h-4 w-4 mr-1" />View
+                          </Button>
+                          <a href={`/amc/new?${params.toString()}`} onClick={(e) => e.stopPropagation()}>
+                            <Button size="sm"><FilePlus2 className="h-4 w-4 mr-1" />Create AMC</Button>
+                          </a>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

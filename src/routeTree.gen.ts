@@ -112,6 +112,7 @@ import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
 import { Route as AppChallanOemNewRouteImport } from './routes/_app/challan.oem.new'
 import { Route as AppChallanCustomerNewRouteImport } from './routes/_app/challan.customer.new'
 import { Route as AppChallanIdEditRouteImport } from './routes/_app/challan.$id_.edit'
+import { Route as AppAmcOemSourceIdRouteImport } from './routes/_app/amc.oem.$source.$id'
 
 const RaiseTicketRoute = RaiseTicketRouteImport.update({
   id: '/raise-ticket',
@@ -627,6 +628,11 @@ const AppChallanIdEditRoute = AppChallanIdEditRouteImport.update({
   path: '/$id/edit',
   getParentRoute: () => AppChallanRoute,
 } as any)
+const AppAmcOemSourceIdRoute = AppAmcOemSourceIdRouteImport.update({
+  id: '/$source/$id',
+  path: '/$source/$id',
+  getParentRoute: () => AppAmcOemRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -651,7 +657,7 @@ export interface FileRoutesByFullPath {
   '/tickets': typeof AppTicketsRouteWithChildren
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
-  '/amc/oem': typeof AppAmcOemRoute
+  '/amc/oem': typeof AppAmcOemRouteWithChildren
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
   '/challan/$id': typeof AppChallanIdRoute
@@ -731,6 +737,7 @@ export interface FileRoutesByFullPath {
   '/sales/eway/': typeof AppSalesEwayIndexRoute
   '/sales/invoices/': typeof AppSalesInvoicesIndexRoute
   '/sales/payments/': typeof AppSalesPaymentsIndexRoute
+  '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -746,7 +753,7 @@ export interface FileRoutesByTo {
   '/reports': typeof AppReportsRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
-  '/amc/oem': typeof AppAmcOemRoute
+  '/amc/oem': typeof AppAmcOemRouteWithChildren
   '/amc/pm': typeof AppAmcPmRoute
   '/amc/settings': typeof AppAmcSettingsRoute
   '/challan/$id': typeof AppChallanIdRoute
@@ -820,6 +827,7 @@ export interface FileRoutesByTo {
   '/sales/eway': typeof AppSalesEwayIndexRoute
   '/sales/invoices': typeof AppSalesInvoicesIndexRoute
   '/sales/payments': typeof AppSalesPaymentsIndexRoute
+  '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -846,7 +854,7 @@ export interface FileRoutesById {
   '/_app/tickets': typeof AppTicketsRouteWithChildren
   '/_app/amc/$id': typeof AppAmcIdRoute
   '/_app/amc/new': typeof AppAmcNewRoute
-  '/_app/amc/oem': typeof AppAmcOemRoute
+  '/_app/amc/oem': typeof AppAmcOemRouteWithChildren
   '/_app/amc/pm': typeof AppAmcPmRoute
   '/_app/amc/settings': typeof AppAmcSettingsRoute
   '/_app/challan/$id': typeof AppChallanIdRoute
@@ -926,6 +934,7 @@ export interface FileRoutesById {
   '/_app/sales/eway/': typeof AppSalesEwayIndexRoute
   '/_app/sales/invoices/': typeof AppSalesInvoicesIndexRoute
   '/_app/sales/payments/': typeof AppSalesPaymentsIndexRoute
+  '/_app/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1032,6 +1041,7 @@ export interface FileRouteTypes {
     | '/sales/eway/'
     | '/sales/invoices/'
     | '/sales/payments/'
+    | '/amc/oem/$source/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1121,6 +1131,7 @@ export interface FileRouteTypes {
     | '/sales/eway'
     | '/sales/invoices'
     | '/sales/payments'
+    | '/amc/oem/$source/$id'
   id:
     | '__root__'
     | '/'
@@ -1226,6 +1237,7 @@ export interface FileRouteTypes {
     | '/_app/sales/eway/'
     | '/_app/sales/invoices/'
     | '/_app/sales/payments/'
+    | '/_app/amc/oem/$source/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1958,13 +1970,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChallanIdEditRouteImport
       parentRoute: typeof AppChallanRoute
     }
+    '/_app/amc/oem/$source/$id': {
+      id: '/_app/amc/oem/$source/$id'
+      path: '/$source/$id'
+      fullPath: '/amc/oem/$source/$id'
+      preLoaderRoute: typeof AppAmcOemSourceIdRouteImport
+      parentRoute: typeof AppAmcOemRoute
+    }
   }
 }
+
+interface AppAmcOemRouteChildren {
+  AppAmcOemSourceIdRoute: typeof AppAmcOemSourceIdRoute
+}
+
+const AppAmcOemRouteChildren: AppAmcOemRouteChildren = {
+  AppAmcOemSourceIdRoute: AppAmcOemSourceIdRoute,
+}
+
+const AppAmcOemRouteWithChildren = AppAmcOemRoute._addFileChildren(
+  AppAmcOemRouteChildren,
+)
 
 interface AppAmcRouteChildren {
   AppAmcIdRoute: typeof AppAmcIdRoute
   AppAmcNewRoute: typeof AppAmcNewRoute
-  AppAmcOemRoute: typeof AppAmcOemRoute
+  AppAmcOemRoute: typeof AppAmcOemRouteWithChildren
   AppAmcPmRoute: typeof AppAmcPmRoute
   AppAmcSettingsRoute: typeof AppAmcSettingsRoute
   AppAmcIndexRoute: typeof AppAmcIndexRoute
@@ -1973,7 +2004,7 @@ interface AppAmcRouteChildren {
 const AppAmcRouteChildren: AppAmcRouteChildren = {
   AppAmcIdRoute: AppAmcIdRoute,
   AppAmcNewRoute: AppAmcNewRoute,
-  AppAmcOemRoute: AppAmcOemRoute,
+  AppAmcOemRoute: AppAmcOemRouteWithChildren,
   AppAmcPmRoute: AppAmcPmRoute,
   AppAmcSettingsRoute: AppAmcSettingsRoute,
   AppAmcIndexRoute: AppAmcIndexRoute,
