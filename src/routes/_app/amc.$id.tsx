@@ -234,6 +234,32 @@ ${body}
             <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print Agreement</Button>
             <Button variant="outline" size="sm" onClick={renew} disabled={busy}><RefreshCw className="h-4 w-4 mr-1" />Renew AMC</Button>
             <Button size="sm" onClick={save} disabled={busy}><Save className="h-4 w-4 mr-1" />Save changes</Button>
+            {isAdmin && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" disabled={busy}>
+                    <Trash2 className="h-4 w-4 mr-1" />Delete AMC
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this AMC?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete this AMC? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(e) => { e.preventDefault(); void doDelete(); }}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </div>
 
