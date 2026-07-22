@@ -7,7 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ChevronDown, ChevronRight, Package, Search, Warehouse as WarehouseIcon } from "lucide-react";
+import {
+  ChevronDown, ChevronRight, Package, Search, Warehouse as WarehouseIcon,
+  Boxes, CheckCircle2, Clock, Send, ShieldCheck, AlertTriangle, Trash2, Inbox,
+  X, RefreshCw, Layers,
+} from "lucide-react";
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+} from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listStock, listTransactions, listWarehouses,
