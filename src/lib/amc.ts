@@ -18,6 +18,7 @@ export type Amc = {
   units: AmcUnit[];
   start_date: string;
   end_date: string;
+  bill_date?: string | null;
   duration_years: number;
   amc_value: number | null;
   terms: string | null;
