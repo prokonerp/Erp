@@ -685,7 +685,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Good">Good</SelectItem>
-                        <SelectItem value="Bad">Bad</SelectItem>
+                        <SelectItem value="Defective">Defective</SelectItem>
+                        <SelectItem value="Scrap">Scrap</SelectItem>
                       </SelectContent>
                     </Select>
                   </td>
