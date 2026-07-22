@@ -479,7 +479,7 @@ function IndentDetail() {
         if (p?.model) prodByModel[p.model] = p;
       }
     }
-    const tagToCondition = (t?: string) => t === "good" ? "Good" : t === "scrap" ? "Scrap" : "Bad";
+    const tagToCondition = (t?: string) => t === "good" ? "Good" : t === "scrap" ? "Scrap" : "Defective";
     for (const o of oracles) {
       const rows = o.customer_received_rows || [];
       for (let ix = 0; ix < rows.length; ix++) {
