@@ -90,10 +90,16 @@ export const generatePMDates = (start: string, durationYears: number): string[] 
 
 export const addYears = (date: string, years: number): string => {
   const months = Math.round(years * 12);
-  const d = new Date(addMonths(date, months) + "T00:00:00");
-  // typical AMC end = day before next anniversary
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  const isoAfter = addMonths(date, months); // "YYYY-MM-DD"
+  // Subtract 1 day using UTC math to avoid timezone shifts.
+  // AMC end = Start + duration − 1 day (e.g. 22-Jul-2026 + 1Y = 21-Jul-2027).
+  const [y, m, d] = isoAfter.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 };
 
 export const nextAgreementNo = (existing: string[]): string => {
