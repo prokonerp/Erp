@@ -6,11 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Search, Plus, User, Factory, FileStack } from "lucide-react";
+import { Printer, Search, Plus, User, Factory, FileStack, Pencil } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import { fetchAllChallans, fetchUserNameMap, type DeliveryChallan, type DocType } from "@/lib/challan";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
+import { Link as RouterLink } from "@tanstack/react-router";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -208,6 +209,9 @@ export function ChallanUnifiedList() {
                         <Link to="/challan/$id" params={{ id: r.id }}>
                           <Button size="sm" variant="outline"><Printer className="h-4 w-4 mr-1" />View</Button>
                         </Link>
+                        <RouterLink to="/challan/$id/edit" params={{ id: r.id }}>
+                          <Button size="sm" variant="outline" title="Edit Delivery Challan"><Pencil className="h-4 w-4" /></Button>
+                        </RouterLink>
                         {isAdmin && (
                           <AdminDeleteDialog
                             kind="challan"
