@@ -532,6 +532,63 @@ function StatTile({ label, value, tone }: { label: string; value: number; tone?:
   );
 }
 
+type KpiTone = "blue" | "emerald" | "amber" | "violet" | "rose" | "slate" | "sky";
+const KPI_TONES: Record<KpiTone, { bg: string; fg: string; ring: string; bar: string }> = {
+  blue:    { bg: "bg-blue-50",    fg: "text-blue-700",    ring: "ring-blue-100",    bar: "bg-blue-500" },
+  emerald: { bg: "bg-emerald-50", fg: "text-emerald-700", ring: "ring-emerald-100", bar: "bg-emerald-500" },
+  amber:   { bg: "bg-amber-50",   fg: "text-amber-700",   ring: "ring-amber-100",   bar: "bg-amber-500" },
+  violet:  { bg: "bg-violet-50",  fg: "text-violet-700",  ring: "ring-violet-100",  bar: "bg-violet-500" },
+  rose:    { bg: "bg-rose-50",    fg: "text-rose-700",    ring: "ring-rose-100",    bar: "bg-rose-500" },
+  slate:   { bg: "bg-slate-50",   fg: "text-slate-700",   ring: "ring-slate-100",   bar: "bg-slate-500" },
+  sky:     { bg: "bg-sky-50",     fg: "text-sky-700",     ring: "ring-sky-100",     bar: "bg-sky-500" },
+};
+
+function Kpi({ icon: Icon, label, value, tone }: { icon: any; label: string; value: number; tone: KpiTone }) {
+  const t = KPI_TONES[tone];
+  return (
+    <div className="relative rounded-xl border bg-card p-3 hover:shadow-sm transition overflow-hidden">
+      <div className={`absolute left-0 top-0 h-full w-1 ${t.bar}`} />
+      <div className="flex items-start justify-between">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className={`h-7 w-7 grid place-items-center rounded-lg ring-1 ${t.bg} ${t.fg} ${t.ring}`}>
+          <Icon className="h-3.5 w-3.5" />
+        </div>
+      </div>
+      <div className={`mt-1.5 text-2xl font-bold tabular-nums ${t.fg}`}>{value}</div>
+    </div>
+  );
+}
+
+function NumPill({ value, tone }: { value: number; tone: "emerald" | "amber" | "violet" | "rose" }) {
+  if (!value) return <span className="text-muted-foreground">—</span>;
+  const cls =
+    tone === "emerald" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+    tone === "amber"   ? "bg-amber-50 text-amber-700 border-amber-200" :
+    tone === "violet"  ? "bg-violet-50 text-violet-700 border-violet-200" :
+                         "bg-rose-50 text-rose-700 border-rose-200";
+  return (
+    <span className={`inline-flex items-center justify-center min-w-[28px] px-1.5 py-0.5 rounded-md border text-xs font-medium tabular-nums ${cls}`}>
+      {value}
+    </span>
+  );
+}
+
+function Chip({ children, onClear }: { children: React.ReactNode; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border bg-muted/40 pl-2.5 pr-1 py-0.5 text-xs">
+      {children}
+      <button
+        type="button"
+        onClick={onClear}
+        className="rounded-full h-4 w-4 grid place-items-center hover:bg-muted"
+        aria-label="Remove filter"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
 function ProductDetailSheet({ product, onClose, whName }: {
   product: ProductRow | null;
   onClose: () => void;
