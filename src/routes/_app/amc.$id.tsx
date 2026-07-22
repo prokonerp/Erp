@@ -15,6 +15,13 @@ import { AgreementDocUpload } from "@/components/AgreementDocUpload";
 import { getOemLogo } from "@/lib/oemLogos";
 import { waOpen } from "@/lib/tickets";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
+import { useIsAdmin } from "@/lib/useRole";
+import { softDelete } from "@/lib/softDelete";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_app/amc/$id")({
   component: AmcDetail,
@@ -24,6 +31,7 @@ export const Route = createFileRoute("/_app/amc/$id")({
 function AmcDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const { isAdmin } = useIsAdmin();
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
@@ -116,6 +124,7 @@ function AmcDetail() {
       units: a.units,
       start_date: a.start_date,
       end_date,
+      bill_date: a.bill_date || a.start_date,
       duration_years: a.duration_years,
       amc_value: a.amc_value,
       terms: a.terms,
@@ -132,6 +141,15 @@ function AmcDetail() {
     if (error) return toast.error(error.message);
     toast.success("Saved");
     load();
+  };
+
+  const doDelete = async () => {
+    setBusy(true);
+    const { error } = await softDelete("amcs", a.id);
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    toast.success("AMC deleted");
+    navigate({ to: "/amc" });
   };
 
   const renew = async () => {
@@ -216,6 +234,32 @@ ${body}
             <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print Agreement</Button>
             <Button variant="outline" size="sm" onClick={renew} disabled={busy}><RefreshCw className="h-4 w-4 mr-1" />Renew AMC</Button>
             <Button size="sm" onClick={save} disabled={busy}><Save className="h-4 w-4 mr-1" />Save changes</Button>
+            {isAdmin && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" disabled={busy}>
+                    <Trash2 className="h-4 w-4 mr-1" />Delete AMC
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this AMC?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete this AMC? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(e) => { e.preventDefault(); void doDelete(); }}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </div>
 

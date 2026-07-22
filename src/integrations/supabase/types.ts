@@ -88,6 +88,7 @@ export type Database = {
           agreement_doc_path: string | null
           agreement_no: string
           amc_value: number | null
+          bill_date: string | null
           client_address: string | null
           client_company: string | null
           client_gst: string | null
@@ -119,6 +120,7 @@ export type Database = {
           agreement_doc_path?: string | null
           agreement_no: string
           amc_value?: number | null
+          bill_date?: string | null
           client_address?: string | null
           client_company?: string | null
           client_gst?: string | null
@@ -150,6 +152,7 @@ export type Database = {
           agreement_doc_path?: string | null
           agreement_no?: string
           amc_value?: number | null
+          bill_date?: string | null
           client_address?: string | null
           client_company?: string | null
           client_gst?: string | null
