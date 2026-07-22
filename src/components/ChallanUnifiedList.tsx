@@ -220,7 +220,7 @@ export function ChallanUnifiedList() {
                             <DropdownMenuItem onClick={() => navigate({ to: "/challan/$id", params: { id: r.id } })}>
                               <Eye className="h-4 w-4 mr-2" />View
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => navigate({ to: "/challan/$id_/edit", params: { id: r.id } })}>
+                            <DropdownMenuItem onClick={() => navigate({ to: "/challan/$id/edit", params: { id: r.id } })}>
                               <Pencil className="h-4 w-4 mr-2" />Edit
                             </DropdownMenuItem>
                             {isAdmin && (
