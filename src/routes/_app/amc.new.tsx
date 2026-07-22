@@ -254,6 +254,12 @@ function NewAmc() {
           <FormField label="End Date" name="end_date" size="sm">
             <Input value={fmtDate(end_date)} readOnly className="bg-muted" />
           </FormField>
+          <FormField label="Bill Date" required name="bill_date" size="sm" hint={fmtDate(form.bill_date)}>
+            <DatePicker
+              value={form.bill_date}
+              onChange={(v) => { setBillTouched(true); setForm({ ...form, bill_date: v }); }}
+            />
+          </FormField>
           <FormField label="AMC Value (₹)" name="amc_value" size="md">
             <Input type="number" min="0" value={form.amc_value} onChange={(e) => setForm({ ...form, amc_value: e.target.value })} />
           </FormField>
