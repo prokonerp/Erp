@@ -201,7 +201,7 @@ function StockManagement() {
   const oems = useMemo(() => Array.from(new Set(items.map((i) => i.oem).filter(Boolean))).sort() as string[], [items]);
 
   const summary = useMemo(() => {
-    let total = 0, available = 0, reserved = 0, issued = 0, good = 0, defective = 0;
+    let total = 0, available = 0, reserved = 0, issued = 0, good = 0, defective = 0, scrap = 0;
     let recvTotal = 0, recvOem = 0, recvCust = 0, recvGen = 0;
     for (const s of filteredItems) {
       const qv = s.qty ?? 1;
@@ -209,6 +209,7 @@ function StockManagement() {
       if (s.stock_status === "available") available += qv;
       if (s.stock_status === "reserved") reserved += qv;
       if (s.stock_status === "issued") issued += qv;
+      if (s.stock_status === "scrapped") scrap += qv;
       if (s.stock_type === "good") good += qv;
       if (s.stock_type === "defective") defective += qv;
     }
@@ -218,9 +219,32 @@ function StockManagement() {
       recvCust += p.received.customer;
       recvGen += p.received.general;
     }
-    return { total, available, reserved, issued, good, defective,
+    return { total, available, reserved, issued, good, defective, scrap,
       products: products.length, recvTotal, recvOem, recvCust, recvGen };
   }, [filteredItems, products]);
+
+  const compositionData = useMemo(() => ([
+    { name: "Good", value: summary.good, color: "#10b981" },
+    { name: "Defective", value: summary.defective, color: "#f43f5e" },
+    { name: "Scrap", value: summary.scrap, color: "#64748b" },
+  ].filter((d) => d.value > 0)), [summary]);
+
+  const warehouseChart = useMemo(() => {
+    const map = new Map<string, { name: string; Available: number; Reserved: number; Issued: number; Defective: number }>();
+    for (const s of filteredItems) {
+      const name = whName(s.warehouse_id);
+      let r = map.get(name);
+      if (!r) { r = { name, Available: 0, Reserved: 0, Issued: 0, Defective: 0 }; map.set(name, r); }
+      const q = s.qty ?? 1;
+      if (s.stock_status === "available") r.Available += q;
+      if (s.stock_status === "reserved") r.Reserved += q;
+      if (s.stock_status === "issued") r.Issued += q;
+      if (s.stock_type === "defective" && s.stock_status !== "issued") r.Defective += q;
+    }
+    return Array.from(map.values())
+      .sort((a, b) => (b.Available + b.Reserved + b.Issued + b.Defective) - (a.Available + a.Reserved + a.Issued + a.Defective))
+      .slice(0, 8);
+  }, [filteredItems, warehouses]);
 
   function toggleExpand(k: string) {
     setExpanded((prev) => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
