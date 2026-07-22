@@ -66,14 +66,14 @@ function OemDetail() {
 
     if (source === "Ticket") {
       const { data } = await supabase.from("tickets")
-        .select("id,ticket_no,customer_id,serial_no,product,oem_brand,oem_ref_id,oem_purchase_date")
+        .select("id,case_id,customer_id,serial_no,product,oem_brand,oem_ref_id,oem_purchase_date")
         .eq("id", id).maybeSingle();
       if (data) {
         base = {
           source: "Ticket", source_id: data.id,
           oem_brand: data.oem_brand, oem_ref_id: data.oem_ref_id, oem_purchase_date: data.oem_purchase_date,
           customer_id: data.customer_id, product_id: null, serial_no: data.serial_no,
-          ref_label: data.ticket_no || data.id,
+          ref_label: data.case_id || data.id,
         };
       }
     } else if (source === "AMC") {
