@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Search, Plus, Undo2, Factory, Package, FileStack } from "lucide-react";
+import { Printer, Search, Plus, Undo2, Factory, Package, FileStack, Pencil } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import { fetchAllGrns, type Grn, type GrnCategory } from "@/lib/grn";
 import { fetchUserNameMap } from "@/lib/challan";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
+import { Link as RouterLink } from "@tanstack/react-router";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -212,6 +213,9 @@ export function GrnUnifiedList() {
                         <Link to="/grn/$id" params={{ id: r.id }}>
                           <Button size="sm" variant="outline"><Printer className="h-4 w-4 mr-1" />View</Button>
                         </Link>
+                        <RouterLink to="/grn/$id/edit" params={{ id: r.id }}>
+                          <Button size="sm" variant="outline" title="Edit GRN"><Pencil className="h-4 w-4" /></Button>
+                        </RouterLink>
                         {isAdmin && (
                           <AdminDeleteDialog
                             kind="grn"
