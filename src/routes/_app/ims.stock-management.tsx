@@ -133,16 +133,17 @@ function aggregate(items: StockItem[], txns: Transaction[]): ProductRow[] {
 }
 
 function warehouseBreakdown(items: StockItem[], whName: (id: string | null) => string) {
-  const map = new Map<string, { name: string; total: number; available: number; reserved: number; issued: number; good: number; defective: number }>();
+  const map = new Map<string, { name: string; total: number; available: number; reserved: number; issued: number; good: number; defective: number; scrap: number }>();
   for (const s of items) {
     const id = s.warehouse_id || "—";
     let r = map.get(id);
-    if (!r) { r = { name: whName(s.warehouse_id), total: 0, available: 0, reserved: 0, issued: 0, good: 0, defective: 0 }; map.set(id, r); }
+    if (!r) { r = { name: whName(s.warehouse_id), total: 0, available: 0, reserved: 0, issued: 0, good: 0, defective: 0, scrap: 0 }; map.set(id, r); }
     const q = s.qty ?? 1;
     r.total += q;
     if (s.stock_status === "available") r.available += q;
     if (s.stock_status === "reserved") r.reserved += q;
     if (s.stock_status === "issued") r.issued += q;
+    if (s.stock_status === "scrapped") r.scrap += q;
     if (s.stock_type === "good") r.good += q;
     if (s.stock_type === "defective") r.defective += q;
   }
