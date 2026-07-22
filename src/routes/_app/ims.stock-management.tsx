@@ -10,8 +10,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   ChevronDown, ChevronRight, Package, Search, Warehouse as WarehouseIcon,
   Boxes, CheckCircle2, Clock, Send, ShieldCheck, AlertTriangle, Trash2, Inbox,
-  X, RefreshCw, Layers,
+  X, RefreshCw, Layers, ArrowDownCircle, ArrowUpCircle, TrendingUp, Printer,
+  FileText, ExternalLink, Activity, Hash,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { exportCSV } from "@/lib/exports";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
@@ -133,16 +136,17 @@ function aggregate(items: StockItem[], txns: Transaction[]): ProductRow[] {
 }
 
 function warehouseBreakdown(items: StockItem[], whName: (id: string | null) => string) {
-  const map = new Map<string, { name: string; total: number; available: number; reserved: number; issued: number; good: number; defective: number }>();
+  const map = new Map<string, { name: string; total: number; available: number; reserved: number; issued: number; good: number; defective: number; scrap: number }>();
   for (const s of items) {
     const id = s.warehouse_id || "—";
     let r = map.get(id);
-    if (!r) { r = { name: whName(s.warehouse_id), total: 0, available: 0, reserved: 0, issued: 0, good: 0, defective: 0 }; map.set(id, r); }
+    if (!r) { r = { name: whName(s.warehouse_id), total: 0, available: 0, reserved: 0, issued: 0, good: 0, defective: 0, scrap: 0 }; map.set(id, r); }
     const q = s.qty ?? 1;
     r.total += q;
     if (s.stock_status === "available") r.available += q;
     if (s.stock_status === "reserved") r.reserved += q;
     if (s.stock_status === "issued") r.issued += q;
+    if (s.stock_status === "scrapped") r.scrap += q;
     if (s.stock_type === "good") r.good += q;
     if (s.stock_type === "defective") r.defective += q;
   }
@@ -596,9 +600,14 @@ function ProductDetailSheet({ product, onClose, whName }: {
 }) {
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [loadingTxns, setLoadingTxns] = useState(false);
+  const [serialQ, setSerialQ] = useState("");
+  const [serialWh, setSerialWh] = useState<string>("all");
+  const [serialCond, setSerialCond] = useState<string>("all");
+  const [serialStatus, setSerialStatus] = useState<string>("all");
 
   useEffect(() => {
     if (!product) { setTxns([]); return; }
+    setSerialQ(""); setSerialWh("all"); setSerialCond("all"); setSerialStatus("all");
     setLoadingTxns(true);
     listTransactions().then((all) => {
       const modelKey = (product.part_model_no || "").toLowerCase();
@@ -614,60 +623,270 @@ function ProductDetailSheet({ product, onClose, whName }: {
   if (!product) return null;
   const wh = warehouseBreakdown(product.items, whName);
 
+  const total = product.total || 0;
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  const scrap = product.scrapped || 0;
+  const conditionData = [
+    { name: "Good", value: product.good, color: "#10b981" },
+    { name: "Defective", value: product.defective - scrap > 0 ? product.defective - scrap : 0, color: "#f43f5e" },
+    { name: "Scrap", value: scrap, color: "#64748b" },
+  ].filter((d) => d.value > 0);
+
+  const whChart = wh.map((w) => ({
+    name: w.name,
+    Good: w.good - (w.scrap > w.defective ? w.defective : w.scrap),
+    Defective: Math.max(w.defective - w.scrap, 0),
+    Scrap: w.scrap,
+  }));
+
+  // Health flags
+  const goodPct = pct(product.good);
+  const defectivePct = pct(product.defective);
+  const scrapPct = pct(scrap);
+  const availPct = pct(product.available);
+  const issuedPct = pct(product.issued);
+  const alerts: { tone: "rose" | "amber" | "sky"; msg: string }[] = [];
+  if (defectivePct > 20) alerts.push({ tone: "rose", msg: `High defective share: ${defectivePct}% of total inventory` });
+  if (scrapPct > 10) alerts.push({ tone: "rose", msg: `Scrap exceeds 10%: ${scrapPct}%` });
+  if (total > 0 && availPct < 15) alerts.push({ tone: "amber", msg: `Low available stock: only ${availPct}% available` });
+  if (issuedPct > 60) alerts.push({ tone: "sky", msg: `High issued share: ${issuedPct}% issued to customers` });
+
+  // Merge txns + GRN receipts for a unified movement timeline w/ running balance
+  const allMoves: Array<{ id: string; when: string; type: string; qty: number; dir: 1 | -1 | 0; wh: string; ref: string }> = [];
+  const seen = new Set<string>();
+  for (const t of txns) {
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    const dir: 1 | -1 | 0 =
+      t.txn_type === "good_in" || t.txn_type === "defective_in" || t.txn_type === "transfer_in" || t.txn_type === "oem_replacement_receipt"
+        ? 1
+        : t.txn_type === "good_out" || t.txn_type === "defective_out" || t.txn_type === "transfer_out" || t.txn_type === "oem_return" || t.txn_type === "scrap_adjustment"
+          ? -1
+          : 0;
+    allMoves.push({
+      id: t.id,
+      when: t.txn_date,
+      type: TXN_TYPE_LABEL[t.txn_type] || t.txn_type,
+      qty: Number(t.qty) || 0,
+      dir,
+      wh: dir >= 0 ? whName(t.to_warehouse_id) : whName(t.from_warehouse_id),
+      ref: t.reference || t.txn_no || "—",
+    });
+  }
+  allMoves.sort((a, b) => new Date(a.when).getTime() - new Date(b.when).getTime());
+  let bal = 0;
+  const timeline = allMoves.map((m) => {
+    bal += m.dir * m.qty;
+    return { ...m, balance: bal };
+  }).reverse();
+
+  const serialFiltered = product.items.filter((s) => {
+    if (serialWh !== "all" && (s.warehouse_id || "") !== serialWh) return false;
+    if (serialCond !== "all" && s.stock_type !== serialCond) return false;
+    if (serialStatus !== "all" && s.stock_status !== serialStatus) return false;
+    if (!serialQ) return true;
+    const q = serialQ.toLowerCase();
+    return [s.part_serial_no, s.part_model_no, s.transaction_ref, s.customer_name]
+      .filter(Boolean).some((v) => String(v).toLowerCase().includes(q));
+  });
+
+  function exportSerials() {
+    exportCSV(`${product!.part_name}-serials`, [
+      { header: "Serial", get: (s: StockItem) => s.part_serial_no || "" },
+      { header: "Model", get: (s: StockItem) => s.part_model_no || "" },
+      { header: "Warehouse", get: (s: StockItem) => whName(s.warehouse_id) },
+      { header: "Condition", get: (s: StockItem) => s.stock_type },
+      { header: "Status", get: (s: StockItem) => s.stock_status },
+      { header: "Ref", get: (s: StockItem) => s.transaction_ref || "" },
+      { header: "Received", get: (s: StockItem) => new Date(s.created_at).toLocaleDateString() },
+      { header: "Last Move", get: (s: StockItem) => new Date(s.updated_at).toLocaleDateString() },
+    ], serialFiltered);
+  }
+
   return (
     <Sheet open={!!product} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2"><Package className="h-5 w-5" /> {product.part_name}</SheetTitle>
+      <SheetContent className="w-full sm:max-w-5xl overflow-y-auto">
+        <SheetHeader className="pb-3 border-b">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary grid place-items-center shrink-0">
+                <Package className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <SheetTitle className="truncate">{product.part_name}</SheetTitle>
+                <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span className="font-mono">{product.part_model_no || "—"}</span>
+                  <span>· OEM: {product.oem || "—"}</span>
+                  <span>· {product.category || "Uncategorised"}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+              <Button asChild size="sm" variant="outline">
+                <Link to="/ims/ledger"><FileText className="h-3.5 w-3.5 mr-1" />Ledger</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link to="/grn"><ExternalLink className="h-3.5 w-3.5 mr-1" />GRNs</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link to="/challan"><ExternalLink className="h-3.5 w-3.5 mr-1" />DCs</Link>
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => window.print()}>
+                <Printer className="h-3.5 w-3.5 mr-1" />Print
+              </Button>
+            </div>
+          </div>
         </SheetHeader>
-        <div className="mt-4 space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-            <div><div className="text-xs text-muted-foreground">Model / Code</div><div className="font-mono">{product.part_model_no || "—"}</div></div>
-            <div><div className="text-xs text-muted-foreground">OEM</div><div>{product.oem || "—"}</div></div>
-            <div><div className="text-xs text-muted-foreground">Category</div><div>{product.category || "—"}</div></div>
-            <div><div className="text-xs text-muted-foreground">Warehouses</div><div>{product.warehouses.size}</div></div>
+
+        <div className="mt-4 space-y-5">
+          {/* KPI grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            <MiniKpi icon={Boxes}         label="Total Qty"    value={product.total}       pct={100}         tone="blue" />
+            <MiniKpi icon={CheckCircle2}  label="Available"    value={product.available}   pct={pct(product.available)}  tone="emerald" />
+            <MiniKpi icon={Clock}         label="Reserved"     value={product.reserved}    pct={pct(product.reserved)}   tone="amber" />
+            <MiniKpi icon={Send}          label="Issued"       value={product.issued}      pct={pct(product.issued)}     tone="violet" />
+            <MiniKpi icon={ShieldCheck}   label="Good"         value={product.good}        pct={goodPct}                 tone="emerald" />
+            <MiniKpi icon={AlertTriangle} label="Defective"    value={product.defective}   pct={defectivePct}            tone="rose" />
+            <MiniKpi icon={Trash2}        label="Scrap"        value={scrap}               pct={scrapPct}                tone="slate" />
+            <MiniKpi icon={WarehouseIcon} label="Warehouses"   value={product.warehouses.size} tone="sky" />
+            <MiniKpi icon={Hash}          label="Serial Units" value={product.items.length}    tone="sky" />
+            <MiniKpi icon={Inbox}         label="Received (GRN)" value={product.received.total} tone="sky" />
           </div>
 
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-            <StatTile label="Total" value={product.total} />
-            <StatTile label="Available" value={product.available} tone="emerald" />
-            <StatTile label="Reserved" value={product.reserved} tone="amber" />
-            <StatTile label="Issued" value={product.issued} tone="blue" />
-            <StatTile label="Good" value={product.good} tone="emerald" />
-            <StatTile label="Defective" value={product.defective} tone="rose" />
-          </div>
+          {/* Health alerts */}
+          {alerts.length > 0 && (
+            <div className="space-y-1.5">
+              {alerts.map((a, i) => (
+                <div key={i} className={`flex items-center gap-2 text-xs rounded-lg border px-3 py-2 ${
+                  a.tone === "rose" ? "bg-rose-50 border-rose-200 text-rose-800" :
+                  a.tone === "amber" ? "bg-amber-50 border-amber-200 text-amber-800" :
+                  "bg-sky-50 border-sky-200 text-sky-800"
+                }`}>
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{a.msg}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-            <StatTile label="Received (Total)" value={product.received.total} tone="blue" />
-            <StatTile label="From OEM" value={product.received.oem} tone="emerald" />
-            <StatTile label="From Customer" value={product.received.customer} tone="blue" />
-            <StatTile label="General GRN" value={product.received.general} tone="amber" />
-            <StatTile label="Scrapped" value={product.scrapped} tone="rose" />
+          {/* Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <Card className="rounded-xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Condition Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent className="h-56">
+                {conditionData.length === 0 ? (
+                  <div className="h-full grid place-items-center text-xs text-muted-foreground">No inventory</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={conditionData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={78} paddingAngle={2}>
+                        {conditionData.map((c, i) => <Cell key={i} fill={c.color} />)}
+                      </Pie>
+                      <RTooltip formatter={(v: number, n: string) => [`${v} units (${pct(v)}%)`, n]} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-xl lg:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Warehouse Distribution (by condition)</CardTitle>
+              </CardHeader>
+              <CardContent className="h-56">
+                {whChart.length === 0 ? (
+                  <div className="h-full grid place-items-center text-xs text-muted-foreground">No inventory</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={whChart} layout="vertical" margin={{ left: 8, right: 12 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 11 }} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
+                      <RTooltip />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                      <Bar dataKey="Good" stackId="c" fill="#10b981" />
+                      <Bar dataKey="Defective" stackId="c" fill="#f43f5e" />
+                      <Bar dataKey="Scrap" stackId="c" fill="#64748b" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           <Tabs defaultValue="warehouses">
             <TabsList>
-              <TabsTrigger value="warehouses">Warehouses</TabsTrigger>
+              <TabsTrigger value="warehouses">Warehouses ({wh.length})</TabsTrigger>
+              <TabsTrigger value="timeline">Timeline ({timeline.length})</TabsTrigger>
               <TabsTrigger value="received">Received ({product.received.txns.length})</TabsTrigger>
               <TabsTrigger value="serials">Serials ({product.items.length})</TabsTrigger>
               <TabsTrigger value="txns">Transactions ({txns.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="warehouses">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
                 {wh.map((w) => (
-                  <div key={w.id} className="border rounded p-3">
-                    <div className="font-medium mb-2 flex items-center gap-1"><WarehouseIcon className="h-4 w-4" /> {w.name}</div>
+                  <div key={w.id} className="rounded-xl border p-3 bg-card">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-medium text-sm flex items-center gap-1.5">
+                        <WarehouseIcon className="h-4 w-4 text-muted-foreground" /> {w.name}
+                      </div>
+                      <Badge variant="outline" className="tabular-nums">{w.total}</Badge>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden mb-2 flex">
+                      {w.good > 0 && <div style={{ width: `${(w.good / (w.total || 1)) * 100}%` }} className="bg-emerald-500" />}
+                      {w.defective - w.scrap > 0 && <div style={{ width: `${((w.defective - w.scrap) / (w.total || 1)) * 100}%` }} className="bg-rose-500" />}
+                      {w.scrap > 0 && <div style={{ width: `${(w.scrap / (w.total || 1)) * 100}%` }} className="bg-slate-500" />}
+                    </div>
                     <div className="grid grid-cols-3 gap-1 text-xs">
                       <Stat label="Available" value={w.available} />
                       <Stat label="Reserved" value={w.reserved} />
                       <Stat label="Issued" value={w.issued} />
                       <Stat label="Good" value={w.good} />
                       <Stat label="Defective" value={w.defective} />
-                      <Stat label="Total" value={w.total} />
+                      <Stat label="Scrap" value={w.scrap} />
                     </div>
                   </div>
                 ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="timeline">
+              <div className="rounded-xl border">
+                {timeline.length === 0 ? (
+                  <div className="p-4 text-xs text-muted-foreground text-center">No stock movements recorded yet.</div>
+                ) : (
+                  <ul className="divide-y">
+                    {timeline.map((m) => (
+                      <li key={m.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30">
+                        <div className={`h-8 w-8 rounded-full grid place-items-center shrink-0 ${
+                          m.dir > 0 ? "bg-emerald-50 text-emerald-700" :
+                          m.dir < 0 ? "bg-rose-50 text-rose-700" :
+                          "bg-slate-50 text-slate-700"
+                        }`}>
+                          {m.dir > 0 ? <ArrowDownCircle className="h-4 w-4" /> : m.dir < 0 ? <ArrowUpCircle className="h-4 w-4" /> : <Activity className="h-4 w-4" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{m.type}</div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {new Date(m.when).toLocaleString()} · {m.wh} · <span className="font-mono">{m.ref}</span>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className={`text-sm font-semibold tabular-nums ${m.dir > 0 ? "text-emerald-700" : m.dir < 0 ? "text-rose-700" : ""}`}>
+                            {m.dir > 0 ? "+" : m.dir < 0 ? "−" : ""}{m.qty}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-0.5 justify-end">
+                            <TrendingUp className="h-3 w-3" /> {m.balance}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </TabsContent>
 
@@ -726,7 +945,38 @@ function ProductDetailSheet({ product, onClose, whName }: {
             </TabsContent>
 
             <TabsContent value="serials">
-              <div className="overflow-x-auto border rounded">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input className="h-8 pl-7 text-xs" placeholder="Search serial, model, doc…" value={serialQ} onChange={(e) => setSerialQ(e.target.value)} />
+                </div>
+                <Select value={serialWh} onValueChange={setSerialWh}>
+                  <SelectTrigger className="h-8 w-[160px] text-xs"><SelectValue placeholder="Warehouse" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Warehouses</SelectItem>
+                    {wh.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={serialCond} onValueChange={setSerialCond}>
+                  <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue placeholder="Condition" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Conditions</SelectItem>
+                    <SelectItem value="good">Good</SelectItem>
+                    <SelectItem value="defective">Defective</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={serialStatus} onValueChange={setSerialStatus}>
+                  <SelectTrigger className="h-8 w-[140px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    {Object.entries(STOCK_STATUS_LABEL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="outline" onClick={exportSerials} disabled={serialFiltered.length === 0}>
+                  <FileText className="h-3.5 w-3.5 mr-1" /> Export CSV
+                </Button>
+              </div>
+              <div className="overflow-x-auto border rounded-xl">
                 <table className="w-full text-xs">
                   <thead className="bg-muted/50">
                     <tr className="text-left">
@@ -741,7 +991,9 @@ function ProductDetailSheet({ product, onClose, whName }: {
                     </tr>
                   </thead>
                   <tbody>
-                    {product.items.map((s) => (
+                    {serialFiltered.length === 0 ? (
+                      <tr><td colSpan={8} className="p-3 text-muted-foreground text-center">No serials match these filters.</td></tr>
+                    ) : serialFiltered.map((s) => (
                       <tr key={s.id} className="border-t">
                         <td className="p-2 font-mono">{s.part_serial_no || "—"}</td>
                         <td className="p-2">{whName(s.warehouse_id)}</td>
@@ -802,5 +1054,31 @@ function ProductDetailSheet({ product, onClose, whName }: {
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function MiniKpi({ icon: Icon, label, value, pct, tone }: {
+  icon: any; label: string; value: number; pct?: number; tone: KpiTone;
+}) {
+  const t = KPI_TONES[tone];
+  return (
+    <div className="rounded-xl border bg-card p-2.5 relative overflow-hidden">
+      <div className={`absolute left-0 top-0 h-full w-1 ${t.bar}`} />
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground truncate">{label}</div>
+        <div className={`h-6 w-6 grid place-items-center rounded-md ${t.bg} ${t.fg}`}>
+          <Icon className="h-3 w-3" />
+        </div>
+      </div>
+      <div className={`mt-1 text-xl font-bold leading-none tabular-nums ${t.fg}`}>{value}</div>
+      {typeof pct === "number" && (
+        <div className="mt-1.5">
+          <div className="h-1 rounded-full bg-muted overflow-hidden">
+            <div className={`h-full ${t.bar}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{pct}% of total</div>
+        </div>
+      )}
+    </div>
   );
 }
