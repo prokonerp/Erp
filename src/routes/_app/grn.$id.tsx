@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
+import { DEFAULT_COMPANY_PROFILE, fetchCompanyProfile, type CompanyProfile } from "@/lib/companyProfile";
 
 export const Route = createFileRoute("/_app/grn/$id")({
   component: GrnView,
@@ -27,6 +28,9 @@ function GrnView() {
   const [editOpen, setEditOpen] = useState(false);
   const [invoiceLinked, setInvoiceLinked] = useState(false);
   const [wasEdited, setWasEdited] = useState(false);
+  const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
+
+  useEffect(() => { fetchCompanyProfile().then(setCompany).catch(() => {}); }, []);
 
   useEffect(() => {
     fetchGrn(id).then(setG).catch((e) => toast.error(e.message));
@@ -156,7 +160,7 @@ function GrnView() {
               <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">Edited</Badge>
             )}
             {isDraft && (
-              <Link to="/grn/$id/edit" params={{ id: g.id }}>
+              <Link to="/grn/$id_/edit" params={{ id: g.id }}>
                 <Button variant="outline" size="sm">Edit</Button>
               </Link>
             )}
@@ -225,7 +229,7 @@ function GrnView() {
           setBusy(false);
           if (error) return { error: error.message };
           toast.success("Stock reversed. Opening GRN for edit.");
-          navigate({ to: "/grn/$id/edit", params: { id: g.id } });
+          navigate({ to: "/grn/$id_/edit", params: { id: g.id } });
         }}
       />
 
@@ -233,17 +237,25 @@ function GrnView() {
         {/* Header */}
         <div style={{ display: "flex", borderBottom: "2px solid #000", paddingBottom: 8 }}>
           <div style={{ width: isOem ? "35%" : "30%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 8 }}>
-            <img src={prokonLogo.url} alt="Prokon" style={{ maxHeight: isOem ? 45 : 60, objectFit: "contain" }} />
+            <img src={company.logo_url || prokonLogo.url} alt={company.name} style={{ maxHeight: isOem ? 45 : 60, objectFit: "contain" }} />
             {isOem && oemLogo && (
               <img src={oemLogo.url} alt={oemLogo.alt} style={{ maxHeight: 45, objectFit: "contain" }} />
             )}
           </div>
           <div style={{ width: isOem ? "65%" : "70%", textAlign: "right", fontSize: 11, lineHeight: 1.4 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a8a" }}>PROKON HI-TECH SYSTEMS PVT. LTD.</div>
-            <div>Regd. Office: B-505, Picasso Centre, Sector-61, Gurgaon, Haryana</div>
-            <div>Factory: Plot 12, Industrial Area, Gurgaon</div>
-            <div>GSTIN: 06AAACP1234A1Z5 &nbsp;|&nbsp; Phone: +91-124-0000000</div>
-            <div>Email: info@prokon.in &nbsp;|&nbsp; Web: www.prokon.in</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a8a" }}>{company.name}</div>
+            <div>{company.regd_address}</div>
+            {company.factory_address && <div>{company.factory_address}</div>}
+            <div>
+              {company.gstin && <>GSTIN: {company.gstin}</>}
+              {company.gstin && company.phone && <>&nbsp;|&nbsp;</>}
+              {company.phone && <>Phone: {company.phone}</>}
+            </div>
+            <div>
+              {company.email && <>Email: {company.email}</>}
+              {company.email && company.website && <>&nbsp;|&nbsp;</>}
+              {company.website && <>Web: {company.website}</>}
+            </div>
           </div>
         </div>
 

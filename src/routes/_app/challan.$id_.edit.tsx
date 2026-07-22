@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ChallanForm } from "@/components/ChallanForm";
 
-export const Route = createFileRoute("/_app/challan/$id/edit")({
+export const Route = createFileRoute("/_app/challan/$id_/edit")({
   component: ChallanEditPage,
   head: () => ({ meta: [{ title: "Edit Delivery Challan — Prokon" }] }),
 });

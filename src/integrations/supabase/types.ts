@@ -542,6 +542,51 @@ export type Database = {
         }
         Relationships: []
       }
+      company_profile: {
+        Row: {
+          created_at: string
+          email: string | null
+          factory_address: string | null
+          gstin: string | null
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          phone: string | null
+          regd_address: string
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          factory_address?: string | null
+          gstin?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          phone?: string | null
+          regd_address?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          factory_address?: string | null
+          gstin?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          phone?: string | null
+          regd_address?: string
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       complaint_master: {
         Row: {
           active: boolean

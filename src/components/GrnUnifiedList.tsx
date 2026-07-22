@@ -6,13 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Printer, Search, Plus, Undo2, Factory, Package, FileStack, Pencil } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Search, Plus, Undo2, Factory, Package, FileStack, Pencil, MoreHorizontal, Eye, Trash2 } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import { fetchAllGrns, type Grn, type GrnCategory } from "@/lib/grn";
 import { fetchUserNameMap } from "@/lib/challan";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
-import { Link as RouterLink } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -59,6 +62,7 @@ export function GrnUnifiedList() {
   const [rows, setRows] = useState<Grn[]>([]);
   const [users, setUsers] = useState<Record<string, string>>({});
   const { isAdmin } = useIsAdmin();
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | GrnCategory>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -209,21 +213,41 @@ export function GrnUnifiedList() {
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{users[r.created_by || ""] || "—"}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex gap-1.5 justify-end">
-                        <Link to="/grn/$id" params={{ id: r.id }}>
-                          <Button size="sm" variant="outline"><Printer className="h-4 w-4 mr-1" />View</Button>
-                        </Link>
-                        <RouterLink to="/grn/$id/edit" params={{ id: r.id }}>
-                          <Button size="sm" variant="outline" title="Edit GRN"><Pencil className="h-4 w-4" /></Button>
-                        </RouterLink>
-                        {isAdmin && (
-                          <AdminDeleteDialog
-                            kind="grn"
-                            id={r.id}
-                            label={`GRN ${r.grn_no}`}
-                            onDeleted={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
-                          />
-                        )}
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="Row actions">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onClick={() => navigate({ to: "/grn/$id", params: { id: r.id } })}>
+                              <Eye className="h-4 w-4 mr-2" />View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate({ to: "/grn/$id_/edit", params: { id: r.id } })}>
+                              <Pencil className="h-4 w-4 mr-2" />Edit
+                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <AdminDeleteDialog
+                                  kind="grn"
+                                  id={r.id}
+                                  label={`GRN ${r.grn_no}`}
+                                  onDeleted={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
+                                  renderTrigger={(open) => (
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onSelect={(e) => { e.preventDefault(); open(); }}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />Delete
+                                    </DropdownMenuItem>
+                                  )}
+                                />
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>

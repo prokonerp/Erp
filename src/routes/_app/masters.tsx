@@ -2,6 +2,7 @@ import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-route
 import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MasterCrud } from "@/components/MasterCrud";
+import { CompanyProfileSettings } from "@/components/CompanyProfileSettings";
 import { CustomerMasterPage } from "./masters.customers";
 import { ProductMasterPage } from "./masters.products";
 import { useIsAdmin } from "@/lib/useRole";
@@ -86,6 +87,9 @@ function MastersPage() {
           </TabsList>
 
         <TabsContent value="company" className="mt-4">
+          <div className="mb-4">
+            <CompanyProfileSettings canEdit={isAdmin} />
+          </div>
           <MasterCrud
             table="companies"
             title="Company Master"

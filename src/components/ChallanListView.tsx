@@ -5,13 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Printer, Search, Plus, Pencil } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Search, Plus, Pencil, MoreHorizontal, Eye, Trash2 } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import type { DeliveryChallan, DocType } from "@/lib/challan";
 import { fetchChallans } from "@/lib/challan";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
-import { Link as RouterLink } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 
 type Props = { docType: DocType; newTo: "/challan/new" };
@@ -29,6 +32,7 @@ export function ChallanListView({ docType, newTo }: Props) {
   const [q, setQ] = useState("");
   const isOem = docType === "oem";
   const { isAdmin } = useIsAdmin();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchChallans(docType).then(setRows).catch((e) => toast.error(e.message));
@@ -97,23 +101,41 @@ export function ChallanListView({ docType, newTo }: Props) {
                       <Badge className={STATUS_COLOR[r.status] || ""} variant="secondary">{r.status}</Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1.5 justify-end">
-                        <Link to="/challan/$id" params={{ id: r.id }}>
-                          <Button size="sm" variant="outline"><Printer className="h-4 w-4 mr-1" />View</Button>
-                        </Link>
-                        <RouterLink to="/challan/$id/edit" params={{ id: r.id }}>
-                          <Button size="sm" variant="outline" title="Edit Delivery Challan"><Pencil className="h-4 w-4" /></Button>
-                        </RouterLink>
-                        {isAdmin && (
-                          <>
-                            <AdminDeleteDialog
-                              kind="challan"
-                              id={r.id}
-                              label={`Delivery Challan ${r.challan_no}`}
-                              onDeleted={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
-                            />
-                          </>
-                        )}
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" aria-label="Row actions">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onClick={() => navigate({ to: "/challan/$id", params: { id: r.id } })}>
+                              <Eye className="h-4 w-4 mr-2" />View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate({ to: "/challan/$id_/edit", params: { id: r.id } })}>
+                              <Pencil className="h-4 w-4 mr-2" />Edit
+                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <AdminDeleteDialog
+                                  kind="challan"
+                                  id={r.id}
+                                  label={`Delivery Challan ${r.challan_no}`}
+                                  onDeleted={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
+                                  renderTrigger={(open) => (
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onSelect={(e) => { e.preventDefault(); open(); }}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />Delete
+                                    </DropdownMenuItem>
+                                  )}
+                                />
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
