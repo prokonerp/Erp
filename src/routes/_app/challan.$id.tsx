@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
+import { DEFAULT_COMPANY_PROFILE, fetchCompanyProfile, type CompanyProfile } from "@/lib/companyProfile";
 
 export const Route = createFileRoute("/_app/challan/$id")({
   component: ChallanView,
@@ -23,6 +24,9 @@ function ChallanView() {
   const [busy, setBusy] = useState(false);
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
+  const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
+
+  useEffect(() => { fetchCompanyProfile().then(setCompany).catch(() => {}); }, []);
 
   useEffect(() => {
     fetchChallan(id).then(setC).catch((e) => toast.error(e.message));
@@ -139,17 +143,25 @@ function ChallanView() {
         {/* Header */}
         <div style={{ display: "flex", borderBottom: "2px solid #000", paddingBottom: 8 }}>
           <div style={{ width: isOem ? "35%" : "30%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 8 }}>
-            <img src={prokonLogo.url} alt="Prokon" style={{ maxHeight: isOem ? 45 : 60, objectFit: "contain" }} />
+            <img src={company.logo_url || prokonLogo.url} alt={company.name} style={{ maxHeight: isOem ? 45 : 60, objectFit: "contain" }} />
             {isOem && oemLogo && (
               <img src={oemLogo.url} alt={oemLogo.alt} style={{ maxHeight: 45, objectFit: "contain" }} />
             )}
           </div>
           <div style={{ width: isOem ? "65%" : "70%", textAlign: "right", fontSize: 11, lineHeight: 1.4 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a8a" }}>PROKON HI-TECH SYSTEMS PVT. LTD.</div>
-            <div>Regd. Office: B-505, Picasso Centre, Sector-61, Gurgaon, Haryana</div>
-            <div>Factory: Plot 12, Industrial Area, Gurgaon</div>
-            <div>GSTIN: 06AAACP1234A1Z5 &nbsp;|&nbsp; Phone: +91-124-0000000</div>
-            <div>Email: info@prokon.in &nbsp;|&nbsp; Web: www.prokon.in</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a8a" }}>{company.name}</div>
+            <div>{company.regd_address}</div>
+            {company.factory_address && <div>{company.factory_address}</div>}
+            <div>
+              {company.gstin && <>GSTIN: {company.gstin}</>}
+              {company.gstin && company.phone && <>&nbsp;|&nbsp;</>}
+              {company.phone && <>Phone: {company.phone}</>}
+            </div>
+            <div>
+              {company.email && <>Email: {company.email}</>}
+              {company.email && company.website && <>&nbsp;|&nbsp;</>}
+              {company.website && <>Web: {company.website}</>}
+            </div>
             {isOem && c.party_name && (
               <div style={{ marginTop: 4, fontSize: 10, borderTop: "1px dashed #999", paddingTop: 4 }}>
                 <div><b>OEM:</b> {c.party_name}</div>
