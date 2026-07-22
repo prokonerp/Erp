@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -15,9 +15,10 @@ type Props = {
   id: string;
   label: string; // e.g., "Delivery Challan DC-CUST/2025/0001"
   onDeleted: () => void;
+  renderTrigger?: (open: () => void) => ReactNode;
 };
 
-export function AdminDeleteDialog({ kind, id, label, onDeleted }: Props) {
+export function AdminDeleteDialog({ kind, id, label, onDeleted, renderTrigger }: Props) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,14 +43,16 @@ export function AdminDeleteDialog({ kind, id, label, onDeleted }: Props) {
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setReason(""); }}>
-      <Button
-        size="sm"
-        variant="outline"
-        className="gap-1.5 text-destructive hover:text-destructive"
-        onClick={() => setOpen(true)}
-      >
-        <Trash2 className="h-4 w-4" />Delete
-      </Button>
+      {renderTrigger ? renderTrigger(() => setOpen(true)) : (
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 text-destructive hover:text-destructive"
+          onClick={() => setOpen(true)}
+        >
+          <Trash2 className="h-4 w-4" />Delete
+        </Button>
+      )}
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {label}?</AlertDialogTitle>
