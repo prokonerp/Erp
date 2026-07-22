@@ -39,6 +39,7 @@ function NewAmc() {
     email: "",
     start_date: today,
     duration_years: 1,
+    bill_date: today,
     amc_value: "",
     remarks: "",
     terms: "",
@@ -57,6 +58,13 @@ function NewAmc() {
   const [busy, setBusy] = useState(false);
 
   const end_date = addYears(form.start_date, form.duration_years);
+
+  // Keep Bill Date in sync with Start Date until user edits it explicitly.
+  const [billTouched, setBillTouched] = useState(false);
+  useEffect(() => {
+    if (!billTouched) setForm((f) => ({ ...f, bill_date: f.start_date }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.start_date]);
 
   useEffect(() => {
     (async () => {
@@ -126,6 +134,7 @@ function NewAmc() {
       if (!form.oem_brand.trim()) return toast.error("OEM Brand is required when Registered with OEM");
       if (!form.oem_ref_id.trim()) return toast.error("OEM Agreement Number is required when Registered with OEM");
     }
+    if (!form.bill_date) return toast.error("Bill Date is required");
     setBusy(true);
     const { data: userData } = await supabase.auth.getUser();
     const { data, error } = await supabase.from("amcs").insert({
@@ -145,6 +154,7 @@ function NewAmc() {
       })),
       start_date: form.start_date,
       end_date,
+      bill_date: form.bill_date,
       duration_years: form.duration_years,
       amc_value: form.amc_value ? Number(form.amc_value) : 0,
       terms: form.terms,
