@@ -220,7 +220,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         const newId = (data as { id: string }).id;
         setRecordId(newId);
         // Swap URL so refresh/back keeps the same record — no new insert on next save.
-        navigate({ to: "/challan/$id/edit", params: { id: newId }, replace: true });
+        navigate({ to: "/challan/$id_/edit", params: { id: newId }, replace: true });
       }
       lastPayloadRef.current = signature;
       setLastSavedAt(new Date());

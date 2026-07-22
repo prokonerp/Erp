@@ -209,7 +209,7 @@ export function ChallanUnifiedList() {
                         <Link to="/challan/$id" params={{ id: r.id }}>
                           <Button size="sm" variant="outline"><Printer className="h-4 w-4 mr-1" />View</Button>
                         </Link>
-                        <RouterLink to="/challan/$id/edit" params={{ id: r.id }}>
+                        <RouterLink to="/challan/$id_/edit" params={{ id: r.id }}>
                           <Button size="sm" variant="outline" title="Edit Delivery Challan"><Pencil className="h-4 w-4" /></Button>
                         </RouterLink>
                         {isAdmin && (

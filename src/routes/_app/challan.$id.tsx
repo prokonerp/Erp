@@ -101,7 +101,7 @@ function ChallanView() {
               {status}
             </Badge>
             {isActive && (
-              <Link to="/challan/$id/edit" params={{ id: c.id }}>
+              <Link to="/challan/$id_/edit" params={{ id: c.id }}>
                 <Button variant="outline" size="sm" className="gap-1.5">
                   <Pencil className="h-4 w-4" />Edit
                 </Button>

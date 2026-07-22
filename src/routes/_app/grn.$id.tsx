@@ -156,7 +156,7 @@ function GrnView() {
               <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">Edited</Badge>
             )}
             {isDraft && (
-              <Link to="/grn/$id/edit" params={{ id: g.id }}>
+              <Link to="/grn/$id_/edit" params={{ id: g.id }}>
                 <Button variant="outline" size="sm">Edit</Button>
               </Link>
             )}
@@ -225,7 +225,7 @@ function GrnView() {
           setBusy(false);
           if (error) return { error: error.message };
           toast.success("Stock reversed. Opening GRN for edit.");
-          navigate({ to: "/grn/$id/edit", params: { id: g.id } });
+          navigate({ to: "/grn/$id_/edit", params: { id: g.id } });
         }}
       />
 

@@ -101,7 +101,7 @@ export function GrnListView({ category, newTo }: Props) {
                         <Link to="/grn/$id" params={{ id: r.id }}>
                           <Button size="sm" variant="outline"><Printer className="h-4 w-4 mr-1" />View</Button>
                         </Link>
-                        <RouterLink to="/grn/$id/edit" params={{ id: r.id }}>
+                        <RouterLink to="/grn/$id_/edit" params={{ id: r.id }}>
                           <Button size="sm" variant="outline" title="Edit GRN"><Pencil className="h-4 w-4" /></Button>
                         </RouterLink>
                         {isAdmin && (
