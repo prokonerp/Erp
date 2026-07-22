@@ -10,8 +10,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   ChevronDown, ChevronRight, Package, Search, Warehouse as WarehouseIcon,
   Boxes, CheckCircle2, Clock, Send, ShieldCheck, AlertTriangle, Trash2, Inbox,
-  X, RefreshCw, Layers,
+  X, RefreshCw, Layers, ArrowDownCircle, ArrowUpCircle, TrendingUp, Printer,
+  FileText, ExternalLink, Activity, Hash,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { exportCSV } from "@/lib/exports";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
