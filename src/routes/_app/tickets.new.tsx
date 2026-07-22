@@ -60,12 +60,8 @@ function NewTicket() {
   const [defectiveParts, setDefectiveParts] = useState<PartLine[]>([]);
   const [goodOn, setGoodOn] = useState(false);
   const [goodParts, setGoodParts] = useState<PartLine[]>([]);
-  const [autoStatus, setAutoStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [autoError, setAutoError] = useState("");
-  const draftIdRef = useRef<string | null>(null);
-  const creatingRef = useRef(false);
-  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
+  const submittedRef = useRef(false);
 
   useEffect(() => {
     supabase.from("call_type_master").select("name").order("name").then(({ data }) => {
@@ -169,7 +165,7 @@ function NewTicket() {
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirtyRef.current && !draftIdRef.current) {
+      if (dirtyRef.current && !submittedRef.current) {
         e.preventDefault();
         e.returnValue = "";
       }
