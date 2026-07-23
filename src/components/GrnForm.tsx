@@ -885,8 +885,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 <thead className="bg-muted">
                   <tr>
                     <th className="border p-1">Sr</th>
-                    <th className="border p-1">Part No</th>
-                    <th className="border p-1">Part Name</th>
+                    <th className="border p-1">Model</th>
                     <th className="border p-1">UOM</th>
                     <th className="border p-1">Qty</th>
                     <th className="border p-1">Condition</th>
@@ -896,8 +895,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                   {items.filter((it) => it.part_name.trim() || it.part_no.trim()).map((it, i) => (
                     <tr key={i}>
                       <td className="border p-1 text-center">{i + 1}</td>
-                      <td className="border p-1">{it.part_no}</td>
-                      <td className="border p-1">{it.part_name}</td>
+                      <td className="border p-1">{it.model_no || it.part_name}</td>
                       <td className="border p-1">{it.uom}</td>
                       <td className="border p-1 text-right">{it.qty_received}</td>
                       <td className="border p-1">{it.condition || "Good"}</td>
