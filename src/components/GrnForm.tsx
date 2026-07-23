@@ -628,104 +628,144 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       >
         <div className="overflow-x-auto -mx-2 sm:mx-0">
           <table className="w-full text-sm border-separate border-spacing-0 min-w-[900px]">
-            <thead className="sticky top-0 z-10 bg-muted/60">
-              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                <th className="px-2 py-1.5 w-10">#</th>
-                {sourceLocked && <th className="px-2 py-1.5 w-24">Oracle #</th>}
-                {sourceLocked && <th className="px-2 py-1.5 min-w-[160px]">Warehouse</th>}
-                <th className="px-2 py-1.5 min-w-[200px]">Product</th>
-                {!sourceLocked && <th className="px-2 py-1.5">Description</th>}
-                {!sourceLocked && <th className="px-2 py-1.5 w-20">UOM</th>}
-                {sourceLocked && <th className="px-2 py-1.5 w-28">Model</th>}
-                {sourceLocked && <th className="px-2 py-1.5 w-28">Serial</th>}
-                <th className="px-2 py-1.5 w-20">Qty</th>
-                {sourceLocked && <th className="px-2 py-1.5 w-32">Material Rec Date</th>}
-                {!sourceLocked && !isCust && <th className="px-2 py-1.5 w-28">Model</th>}
-                {!sourceLocked && !isCust && <th className="px-2 py-1.5 w-28">Serial</th>}
-                <th className="px-2 py-1.5 w-28">Condition</th>
-                <th className="px-2 py-1.5 min-w-[140px]">Remarks</th>
-                <th className="px-2 py-1.5 w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it, i) => (
-                <tr key={i} className="border-t border-border/60 align-top">
-                  <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
-                  {sourceLocked && (
-                    <td className="px-2 py-1.5 border-t border-border/60 text-xs font-mono">{it.oracle_no || "—"}</td>
-                  )}
-                  {sourceLocked && (
-                    <td className="px-2 py-1.5 border-t border-border/60 text-xs">{it.warehouse_name || "—"}</td>
-                  )}
-                  <td className="px-2 py-1.5 border-t border-border/60">
-                    {sourceLocked ? (
-                      <div className="text-xs">
-                        <div className="font-medium truncate">{it.part_name || "—"}</div>
-                        {it.part_no ? <div className="font-mono text-[11px] text-muted-foreground truncate">{it.part_no}</div> : null}
-                      </div>
-                    ) : (
-                      <ProductMasterPicker
-                        value={it.product_id}
-                        onPick={(p) => updateItem(i, {
-                          product_id: p.id,
-                          part_no: p.sku || p.model || "",
-                          part_name: p.name,
-                          description: p.description || "",
-                          uom: p.unit || it.uom || "Nos",
-                          model_no: p.model || "",
-                        })}
-                      />
-                    )}
-                  </td>
-                  {!sourceLocked && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
-                  )}
-                  {!sourceLocked && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
-                  )}
-                  {sourceLocked && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} readOnly className="bg-muted/40" /></td>
-                  )}
-                  {sourceLocked && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} readOnly={sourceKind !== "oem-section-c"} className={sourceKind !== "oem-section-c" ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
-                  )}
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_received} readOnly={sourceLocked} className={sourceLocked ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
-                  {sourceLocked && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input type="date" value={it.received_date || ""} readOnly className="bg-muted/40" /></td>
-                  )}
-                  {!sourceLocked && !isCust && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
-                  )}
-                  {!sourceLocked && !isCust && (
-                    <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
-                  )}
-                  <td className="px-2 py-1.5 border-t border-border/60">
-                    <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceLocked && sourceKind === "customer-section-d"}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Good">Good</SelectItem>
-                        <SelectItem value="Defective">Defective</SelectItem>
-                        <SelectItem value="Scrap">Scrap</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
-                  <td className="px-2 py-1.5 border-t border-border/60 text-right">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setItems(items.filter((_, idx) => idx !== i))}
-                      disabled={items.length === 1}
-                      aria-label="Remove row"
-                      title={sourceLocked ? "Remove this row — remaining rows stay pending under the source Indent for a future GRN" : "Remove row"}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+            {sourceLocked ? (
+              <>
+                <thead className="sticky top-0 z-10 bg-muted/60">
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <th rowSpan={2} className="px-2 py-1.5 w-10">#</th>
+                    <th className="px-2 py-1.5 w-24">Oracle #</th>
+                    <th className="px-2 py-1.5 min-w-[160px]">Warehouse</th>
+                    <th className="px-2 py-1.5 min-w-[200px]">Product</th>
+                    <th className="px-2 py-1.5 w-28">Model</th>
+                    <th className="px-2 py-1.5 w-28">Serial</th>
+                    <th rowSpan={2} className="px-2 py-1.5 w-10"></th>
+                  </tr>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <th className="px-2 py-1.5 w-20">Qty</th>
+                    <th className="px-2 py-1.5 w-32">Material Rec Date</th>
+                    <th className="px-2 py-1.5 w-28">Condition</th>
+                    <th colSpan={2} className="px-2 py-1.5 min-w-[140px]">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it, i) => (
+                    <>
+                      <tr key={`${i}-id`} className="align-top">
+                        <td rowSpan={2} className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
+                        <td className="px-2 py-1.5 border-t border-border/60 text-xs font-mono">{it.oracle_no || "—"}</td>
+                        <td className="px-2 py-1.5 border-t border-border/60 text-xs">{it.warehouse_name || "—"}</td>
+                        <td className="px-2 py-1.5 border-t border-border/60">
+                          <div className="text-xs">
+                            <div className="font-medium truncate">{it.part_name || "—"}</div>
+                            {it.part_no ? <div className="font-mono text-[11px] text-muted-foreground truncate">{it.part_no}</div> : null}
+                          </div>
+                        </td>
+                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} readOnly className="bg-muted/40" /></td>
+                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} readOnly={sourceKind !== "oem-section-c"} className={sourceKind !== "oem-section-c" ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                        <td rowSpan={2} className="px-2 py-1.5 border-t border-border/60 text-right align-middle">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setItems(items.filter((_, idx) => idx !== i))}
+                            disabled={items.length === 1}
+                            aria-label="Remove row"
+                            title="Remove this row — remaining rows stay pending under the source Indent for a future GRN"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </td>
+                      </tr>
+                      <tr key={`${i}-ops`} className="align-top">
+                        <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="number" min="0" value={it.qty_received} readOnly className="bg-muted/40" onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
+                        <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="date" value={it.received_date || ""} readOnly className="bg-muted/40" /></td>
+                        <td className="px-2 py-1.5 border-t-0 border-border/60">
+                          <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceKind === "customer-section-d"}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Good">Good</SelectItem>
+                              <SelectItem value="Defective">Defective</SelectItem>
+                              <SelectItem value="Scrap">Scrap</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td colSpan={2} className="px-2 py-1.5 border-t-0 border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
+                      </tr>
+                    </>
+                  ))}
+                </tbody>
+              </>
+            ) : (
+              <>
+                <thead className="sticky top-0 z-10 bg-muted/60">
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <th className="px-2 py-1.5 w-10">#</th>
+                    <th className="px-2 py-1.5 min-w-[200px]">Product</th>
+                    <th className="px-2 py-1.5">Description</th>
+                    <th className="px-2 py-1.5 w-20">UOM</th>
+                    {!isCust && <th className="px-2 py-1.5 w-28">Model</th>}
+                    {!isCust && <th className="px-2 py-1.5 w-28">Serial</th>}
+                    <th className="px-2 py-1.5 w-20">Qty</th>
+                    <th className="px-2 py-1.5 w-28">Condition</th>
+                    <th className="px-2 py-1.5 min-w-[140px]">Remarks</th>
+                    <th className="px-2 py-1.5 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it, i) => (
+                    <tr key={i} className="border-t border-border/60 align-top">
+                      <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <ProductMasterPicker
+                          value={it.product_id}
+                          onPick={(p) => updateItem(i, {
+                            product_id: p.id,
+                            part_no: p.sku || p.model || "",
+                            part_name: p.name,
+                            description: p.description || "",
+                            uom: p.unit || it.uom || "Nos",
+                            model_no: p.model || "",
+                          })}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
+                      <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
+                      {!isCust && (
+                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
+                      )}
+                      {!isCust && (
+                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                      )}
+                      <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
+                      <td className="px-2 py-1.5 border-t border-border/60">
+                        <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Good">Good</SelectItem>
+                            <SelectItem value="Defective">Defective</SelectItem>
+                            <SelectItem value="Scrap">Scrap</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
+                      <td className="px-2 py-1.5 border-t border-border/60 text-right">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setItems(items.filter((_, idx) => idx !== i))}
+                          disabled={items.length === 1}
+                          aria-label="Remove row"
+                          title="Remove row"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </>
+            )}
           </table>
         </div>
       </FormSection>
