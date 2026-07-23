@@ -635,8 +635,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                     <th rowSpan={2} className="px-2 py-1.5 w-10">#</th>
                     <th className="px-2 py-1.5 w-24">Oracle #</th>
                     <th className="px-2 py-1.5 min-w-[160px]">Warehouse</th>
-                    <th className="px-2 py-1.5 min-w-[200px]">Product</th>
-                    <th className="px-2 py-1.5 w-28">Model</th>
+                    <th className="px-2 py-1.5 min-w-[200px]">Model</th>
                     <th className="px-2 py-1.5 w-28">Serial</th>
                     <th rowSpan={2} className="px-2 py-1.5 w-10"></th>
                   </tr>
@@ -644,7 +643,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                     <th className="px-2 py-1.5 w-20">Qty</th>
                     <th className="px-2 py-1.5 w-32">Material Rec Date</th>
                     <th className="px-2 py-1.5 w-28">Condition</th>
-                    <th colSpan={2} className="px-2 py-1.5 min-w-[140px]">Remarks</th>
+                    <th className="px-2 py-1.5 min-w-[140px]">Remarks</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -654,12 +653,6 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         <td rowSpan={2} className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
                         <td className="px-2 py-1.5 border-t border-border/60 text-xs font-mono">{it.oracle_no || "—"}</td>
                         <td className="px-2 py-1.5 border-t border-border/60 text-xs">{it.warehouse_name || "—"}</td>
-                        <td className="px-2 py-1.5 border-t border-border/60">
-                          <div className="text-xs">
-                            <div className="font-medium truncate">{it.part_name || "—"}</div>
-                            {it.part_no ? <div className="font-mono text-[11px] text-muted-foreground truncate">{it.part_no}</div> : null}
-                          </div>
-                        </td>
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} readOnly className="bg-muted/40" /></td>
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} readOnly={sourceKind !== "oem-section-c"} className={sourceKind !== "oem-section-c" ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
                         <td rowSpan={2} className="px-2 py-1.5 border-t border-border/60 text-right align-middle">
@@ -689,7 +682,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                             </SelectContent>
                           </Select>
                         </td>
-                        <td colSpan={2} className="px-2 py-1.5 border-t-0 border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
+                        <td className="px-2 py-1.5 border-t-0 border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
                       </tr>
                     </>
                   ))}
