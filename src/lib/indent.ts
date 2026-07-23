@@ -42,6 +42,9 @@ export type OracleReceivedRow = OracleReceived & {
    *  to classify inbound stock into Good / Defective / Scrap. Optional on
    *  the OEM-return section (existing behaviour). */
   product_tag?: ProductTag | "";
+  /** Product name from Product Master (paired with model_no). Optional
+   *  for backward compat; populated when selected via the Product Master picker. */
+  part_name?: string;
 };
 
 export type OracleBlock = {
