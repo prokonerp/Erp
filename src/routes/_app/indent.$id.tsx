@@ -390,7 +390,11 @@ function IndentDetail() {
       for (let ix = 0; ix < rows.length; ix++) {
         const rv = rows[ix];
         const model = cleanModel(rv?.model_no);
-        const serial = (rv?.serial_no || "").trim();
+        const defRowEarly = o.defective_rows?.[ix];
+        // Ensure Serial Number is always carried into the GRN — fall back to
+        // the matching Defective row's serial when the Section C receipt row
+        // was left blank.
+        const serial = ((rv?.serial_no || defRowEarly?.def_serial_no || "") as string).trim();
         const qty = (rv?.qty || "").trim();
         if (!model && !serial && !qty) continue;
         const [maybeName, maybeModel] = (rv?.model_no || "").split("||");
@@ -491,7 +495,11 @@ function IndentDetail() {
       for (let ix = 0; ix < rows.length; ix++) {
         const rv = rows[ix];
         const model = cleanModel(rv?.model_no);
-        const serial = (rv?.serial_no || "").trim();
+        const defRowEarly = o.defective_rows?.[ix];
+        // Ensure Serial Number is always carried into the GRN — fall back to
+        // the matching Defective row's serial when the Section D receipt row
+        // was left blank.
+        const serial = ((rv?.serial_no || defRowEarly?.def_serial_no || "") as string).trim();
         const qty = (rv?.qty || "").trim();
         if (!model && !serial && !qty) continue;
         const [maybeName, maybeModel] = (rv?.model_no || "").split("||");
