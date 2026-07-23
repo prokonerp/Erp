@@ -693,10 +693,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 <thead className="sticky top-0 z-10 bg-muted/60">
                   <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th rowSpan={2} className="px-2 py-1.5 w-10">#</th>
-                    <th className="px-2 py-1.5 min-w-[200px]">Product</th>
+                    <th className="px-2 py-1.5 min-w-[200px]">Model</th>
                     <th className="px-2 py-1.5">Description</th>
                     <th className="px-2 py-1.5 w-20">UOM</th>
-                    {!isCust && <th className="px-2 py-1.5 w-28">Model</th>}
                     {!isCust && <th className="px-2 py-1.5 w-28">Serial</th>}
                     <th rowSpan={2} className="px-2 py-1.5 w-10"></th>
                   </tr>
@@ -704,7 +703,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                     <th className="px-2 py-1.5 w-20">Qty</th>
                     <th className="px-2 py-1.5 w-28">Condition</th>
                     {!isCust ? (
-                      <th colSpan={3} className="px-2 py-1.5 min-w-[140px]">Remarks</th>
+                      <th colSpan={2} className="px-2 py-1.5 min-w-[140px]">Remarks</th>
                     ) : (
                       <th className="px-2 py-1.5 min-w-[140px]">Remarks</th>
                     )}
@@ -721,7 +720,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                             onPick={(p) => updateItem(i, {
                               product_id: p.id,
                               part_no: p.sku || p.model || "",
-                              part_name: p.name,
+                              part_name: p.model || p.name,
                               description: p.description || "",
                               uom: p.unit || it.uom || "Nos",
                               model_no: p.model || "",
@@ -730,9 +729,6 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         </td>
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
-                        {!isCust && (
-                          <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
-                        )}
                         {!isCust && (
                           <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
                         )}
@@ -763,7 +759,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                           </Select>
                         </td>
                         {!isCust ? (
-                          <td colSpan={3} className="px-2 py-1.5 border-t-0 border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
+                          <td colSpan={2} className="px-2 py-1.5 border-t-0 border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
                         ) : (
                           <td className="px-2 py-1.5 border-t-0 border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
                         )}
