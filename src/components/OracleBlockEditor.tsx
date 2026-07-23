@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { normalizeOracle, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
+import { IndentProductPicker } from "@/components/IndentProductPicker";
 
 type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string };
 type Warehouse = { id: string; name: string; code: string };
@@ -384,12 +385,12 @@ export function OracleBlockEditor({
                     <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label>Material Rec Model No</Label>
-                  <Input
-                    value={rcv.model_no}
-                    onChange={(e) => setRecvRow(i, { model_no: e.target.value })}
-                    placeholder={def?.def_model_no || "Model No"}
+                <div className="md:col-span-2">
+                  <Label>Product / Model <span className="text-muted-foreground text-xs">(from Product Master)</span></Label>
+                  <IndentProductPicker
+                    productValue={rcv.part_name || def?.part_name || ""}
+                    modelValue={rcv.model_no || ""}
+                    onPick={({ name, model }) => setRecvRow(i, { part_name: name, model_no: model })}
                   />
                 </div>
                 <div>
@@ -457,12 +458,12 @@ export function OracleBlockEditor({
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label>Material Rec Model No</Label>
-                  <Input
-                    value={rcv.model_no}
-                    onChange={(e) => setCustRow(i, { model_no: e.target.value })}
-                    placeholder={def?.def_model_no || "Model No"}
+                <div className="md:col-span-3">
+                  <Label>Product / Model <span className="text-muted-foreground text-xs">(from Product Master)</span></Label>
+                  <IndentProductPicker
+                    productValue={rcv.part_name || def?.part_name || ""}
+                    modelValue={rcv.model_no || ""}
+                    onPick={({ name, model }) => setCustRow(i, { part_name: name, model_no: model })}
                   />
                 </div>
                 <div>
