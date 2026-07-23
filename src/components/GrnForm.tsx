@@ -699,69 +699,83 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
               <>
                 <thead className="sticky top-0 z-10 bg-muted/60">
                   <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <th className="px-2 py-1.5 w-10">#</th>
+                    <th rowSpan={2} className="px-2 py-1.5 w-10">#</th>
                     <th className="px-2 py-1.5 min-w-[200px]">Product</th>
                     <th className="px-2 py-1.5">Description</th>
                     <th className="px-2 py-1.5 w-20">UOM</th>
                     {!isCust && <th className="px-2 py-1.5 w-28">Model</th>}
                     {!isCust && <th className="px-2 py-1.5 w-28">Serial</th>}
+                    <th rowSpan={2} className="px-2 py-1.5 w-10"></th>
+                  </tr>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th className="px-2 py-1.5 w-20">Qty</th>
                     <th className="px-2 py-1.5 w-28">Condition</th>
-                    <th className="px-2 py-1.5 min-w-[140px]">Remarks</th>
-                    <th className="px-2 py-1.5 w-10"></th>
+                    {!isCust ? (
+                      <th colSpan={3} className="px-2 py-1.5 min-w-[140px]">Remarks</th>
+                    ) : (
+                      <th className="px-2 py-1.5 min-w-[140px]">Remarks</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((it, i) => (
-                    <tr key={i} className="border-t border-border/60 align-top">
-                      <td className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
-                      <td className="px-2 py-1.5 border-t border-border/60">
-                        <ProductMasterPicker
-                          value={it.product_id}
-                          onPick={(p) => updateItem(i, {
-                            product_id: p.id,
-                            part_no: p.sku || p.model || "",
-                            part_name: p.name,
-                            description: p.description || "",
-                            uom: p.unit || it.uom || "Nos",
-                            model_no: p.model || "",
-                          })}
-                        />
-                      </td>
-                      <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
-                      <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
-                      {!isCust && (
-                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
-                      )}
-                      {!isCust && (
-                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
-                      )}
-                      <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="0" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
-                      <td className="px-2 py-1.5 border-t border-border/60">
-                        <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Good">Good</SelectItem>
-                            <SelectItem value="Defective">Defective</SelectItem>
-                            <SelectItem value="Scrap">Scrap</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
-                      <td className="px-2 py-1.5 border-t border-border/60 text-right">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setItems(items.filter((_, idx) => idx !== i))}
-                          disabled={items.length === 1}
-                          aria-label="Remove row"
-                          title="Remove row"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </td>
-                    </tr>
+                    <>
+                      <tr key={`${i}-id`} className="align-top">
+                        <td rowSpan={2} className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
+                        <td className="px-2 py-1.5 border-t border-border/60">
+                          <ProductMasterPicker
+                            value={it.product_id}
+                            onPick={(p) => updateItem(i, {
+                              product_id: p.id,
+                              part_no: p.sku || p.model || "",
+                              part_name: p.name,
+                              description: p.description || "",
+                              uom: p.unit || it.uom || "Nos",
+                              model_no: p.model || "",
+                            })}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
+                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
+                        {!isCust && (
+                          <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} onChange={(e) => updateItem(i, { model_no: e.target.value })} /></td>
+                        )}
+                        {!isCust && (
+                          <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                        )}
+                        <td rowSpan={2} className="px-2 py-1.5 border-t border-border/60 text-right align-middle">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setItems(items.filter((_, idx) => idx !== i))}
+                            disabled={items.length === 1}
+                            aria-label="Remove row"
+                            title="Remove row"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </td>
+                      </tr>
+                      <tr key={`${i}-ops`} className="align-top">
+                        <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="number" min="0" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
+                        <td className="px-2 py-1.5 border-t-0 border-border/60">
+                          <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Good">Good</SelectItem>
+                              <SelectItem value="Defective">Defective</SelectItem>
+                              <SelectItem value="Scrap">Scrap</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        {!isCust ? (
+                          <td colSpan={3} className="px-2 py-1.5 border-t-0 border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
+                        ) : (
+                          <td className="px-2 py-1.5 border-t-0 border-border/60"><Input value={it.remarks || ""} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>
+                        )}
+                      </tr>
+                    </>
                   ))}
                 </tbody>
               </>
