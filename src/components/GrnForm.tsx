@@ -393,11 +393,6 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         <Eye className="h-4 w-4" />
         <span className="hidden sm:inline">Review</span>
       </Button>
-      <Button type="button" size="sm" onClick={() => submit()} disabled={busy} className="gap-1.5">
-        <Save className="h-4 w-4" />
-        <span className="hidden sm:inline">Save Draft</span>
-        <span className="sm:hidden">Save</span>
-      </Button>
       <Button type="button" variant="ghost" size="sm" onClick={() => navigate({ to: "/grn" })} className="gap-1.5">
         <ArrowLeft className="h-4 w-4" />
         <span className="hidden sm:inline">Back to All GRN</span>
@@ -865,9 +860,6 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
           <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
             <Button variant="outline" onClick={() => setReviewOpen(false)} disabled={busy}>Back to Edit</Button>
             <div className="flex flex-col-reverse sm:flex-row gap-2">
-              <Button variant="secondary" onClick={() => submit()} disabled={busy}>
-                {busy ? "Saving..." : "Save Draft"}
-              </Button>
               <Button
                 onClick={() => submit({ approve: true })}
                 disabled={busy || !qcReady}
