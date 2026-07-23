@@ -358,6 +358,7 @@ function IndentDetail() {
       product_id?: string; part_no: string; part_name: string; description: string; uom: string;
       qty_received: string; qty_accepted: string; qty_rejected: string;
       batch_no: string; model_no?: string; serial_no?: string; condition?: string; remarks?: string;
+      warehouse_id?: string; warehouse_name?: string; received_date?: string; oracle_no?: string;
     }> = [];
     let warehouseIdPrefill: string | null = null;
     let warehouseNamePrefill = "";
@@ -413,6 +414,10 @@ function IndentDetail() {
           serial_no: serial,
           condition: "Good",
           remarks: rv?.remarks || "",
+          warehouse_id: rv?.warehouse_id || undefined,
+          warehouse_name: rv?.warehouse_name || undefined,
+          received_date: rv?.received_date || undefined,
+          oracle_no: (o.oracle_no || "").trim() || undefined,
         });
       }
     }
@@ -455,6 +460,7 @@ function IndentDetail() {
       product_id?: string; part_no: string; part_name: string; description: string; uom: string;
       qty_received: string; qty_accepted: string; qty_rejected: string;
       batch_no: string; model_no?: string; serial_no?: string; condition?: string; remarks?: string;
+      warehouse_id?: string; warehouse_name?: string; received_date?: string; oracle_no?: string;
     }> = [];
     let warehouseIdPrefill: string | null = null;
     let warehouseNamePrefill = "";
@@ -509,6 +515,10 @@ function IndentDetail() {
           serial_no: serial,
           condition: tagToCondition(rv?.product_tag),
           remarks: rv?.remarks || "",
+          warehouse_id: rv?.warehouse_id || undefined,
+          warehouse_name: rv?.warehouse_name || undefined,
+          received_date: rv?.received_date || undefined,
+          oracle_no: (o.oracle_no || "").trim() || undefined,
         });
       }
     }

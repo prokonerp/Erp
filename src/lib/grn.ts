@@ -17,6 +17,16 @@ export type GrnItem = {
   serial_no?: string;
   condition?: string;
   remarks?: string;
+  /** Per-row warehouse mapping — populated when GRN is generated from an
+   *  Indent so that each material row inherits the warehouse chosen on the
+   *  matching Indent Section C / D row. */
+  warehouse_id?: string;
+  warehouse_name?: string;
+  /** Per-row Material Rec Date mirrored from Indent Section C / D. */
+  received_date?: string;
+  /** Oracle # from the source Indent row — primary mapping key that keeps
+   *  each GRN line item linked one-to-one to its Indent record. */
+  oracle_no?: string;
 };
 
 export type GrnAttachment = { name: string; url: string };
