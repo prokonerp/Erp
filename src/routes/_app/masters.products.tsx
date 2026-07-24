@@ -272,6 +272,40 @@ export function ProductMasterPage() {
     setEditingId(p.id);
     setOpen(true);
     loadLinksForEdit(p);
+    loadOpeningStockForEdit(p);
+  }
+
+  async function loadOpeningStockForEdit(p: ProductFull) {
+    setOpening(emptyOpeningStock());
+    setOpeningLocked(false);
+    try {
+      const modelKey = (p.model || "").trim();
+      let q = supabase
+        .from("ims_stock_items")
+        .select("id, warehouse_id, stock_type, part_serial_no, qty, created_at, notes, part_model_no, part_name")
+        .eq("opening_stock", true);
+      if (modelKey) q = q.eq("part_model_no", modelKey);
+      else q = q.eq("part_name", p.name || "");
+      const { data } = await q;
+      const rows = (data || []) as Array<{
+        warehouse_id: string | null; stock_type: "good" | "defective";
+        part_serial_no: string | null; qty: number; created_at: string;
+      }>;
+      if (!rows.length) return;
+      const totalQty = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+      const serials = rows.map((r) => r.part_serial_no || "").filter(Boolean);
+      const first = rows[0];
+      setOpening({
+        enabled: true,
+        date: (first.created_at || "").slice(0, 10),
+        warehouse_id: first.warehouse_id || "",
+        unit_cost: "",
+        stock_type: first.stock_type || "good",
+        qty: String(totalQty),
+        serials,
+      });
+      setOpeningLocked(true);
+    } catch { /* ignore */ }
   }
 
   async function save(addAnother = false) {
