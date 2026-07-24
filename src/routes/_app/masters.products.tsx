@@ -292,17 +292,28 @@ export function ProductMasterPage() {
         part_serial_no: string | null; qty: number; created_at: string;
       }>;
       if (!rows.length) return;
-      const totalQty = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
-      const serials = rows.map((r) => r.part_serial_no || "").filter(Boolean);
+      // Group by warehouse + stock_type into rows.
+      const groups = new Map<string, { warehouse_id: string; stock_type: "good" | "defective"; qty: number; serials: string[] }>();
+      for (const r of rows) {
+        const wh = r.warehouse_id || "";
+        const st: "good" | "defective" = r.stock_type || "good";
+        const key = `${wh}::${st}`;
+        let g = groups.get(key);
+        if (!g) { g = { warehouse_id: wh, stock_type: st, qty: 0, serials: [] }; groups.set(key, g); }
+        g.qty += Number(r.qty) || 0;
+        if (r.part_serial_no) g.serials.push(r.part_serial_no);
+      }
       const first = rows[0];
       setOpening({
         enabled: true,
         date: (first.created_at || "").slice(0, 10),
-        warehouse_id: first.warehouse_id || "",
-        unit_cost: "",
-        stock_type: first.stock_type || "good",
-        qty: String(totalQty),
-        serials,
+        rows: Array.from(groups.values()).map((g) => ({
+          warehouse_id: g.warehouse_id,
+          unit_cost: "",
+          stock_type: g.stock_type,
+          qty: String(g.qty),
+          serials: g.serials,
+        })),
       });
       setOpeningLocked(true);
     } catch { /* ignore */ }
@@ -315,71 +326,79 @@ export function ProductMasterPage() {
     const { data: u } = await supabase.auth.getUser();
     const uid = u.user?.id ?? null;
     const ref = `Opening Stock`;
-    const notes = opening.unit_cost
-      ? `Opening balance · Unit cost ₹${Number(opening.unit_cost).toLocaleString("en-IN")} · Product ${productId}`
-      : `Opening balance · Product ${productId}`;
-    const baseRow = {
-      oem: payload.brand,
-      category: payload.category,
-      part_name: payload.name,
-      part_model_no: payload.model,
-      warehouse_id: opening.warehouse_id,
-      stock_type: opening.stock_type,
-      stock_status: "available",
-      opening_stock: true,
-      transaction_ref: ref,
-      notes,
-      created_by: uid,
-    };
-    const qty = Number(opening.qty) || 0;
-    const txnType = opening.stock_type === "defective" ? "defective_in" : "good_in";
-    if (form.serial_tracking) {
-      const serials = opening.serials.map((s) => s.trim()).filter(Boolean);
-      const stockRows = serials.map((sn) => ({ ...baseRow, part_serial_no: sn, qty: 1 }));
-      const { data: inserted, error } = await supabase
-        .from("ims_stock_items").insert(stockRows as any).select("id, part_serial_no");
-      if (error) throw error;
-      const txnRows = ((inserted || []) as Array<{ id: string; part_serial_no: string | null }>).map((r) => ({
-        txn_type: txnType,
-        stock_item_id: r.id,
+    const txnDate = opening.date
+      ? new Date(opening.date + "T00:00:00Z").toISOString()
+      : new Date().toISOString();
+    let totalQty = 0;
+    for (const row of opening.rows) {
+      const rowQty = Number(row.qty) || 0;
+      if (!rowQty || !row.warehouse_id) continue;
+      const notes = row.unit_cost
+        ? `Opening balance · Unit cost ₹${Number(row.unit_cost).toLocaleString("en-IN")} · Product ${productId}`
+        : `Opening balance · Product ${productId}`;
+      const baseRow = {
+        oem: payload.brand,
+        category: payload.category,
         part_name: payload.name,
         part_model_no: payload.model,
-        part_serial_no: r.part_serial_no,
-        oem: payload.brand,
-        to_warehouse_id: opening.warehouse_id,
-        from_party: "Opening Balance",
-        qty: 1,
-        reference: ref,
+        warehouse_id: row.warehouse_id,
+        stock_type: row.stock_type,
+        stock_status: "available",
+        opening_stock: true,
+        transaction_ref: ref,
         notes,
         created_by: uid,
-        txn_date: opening.date ? new Date(opening.date + "T00:00:00Z").toISOString() : new Date().toISOString(),
-      }));
-      if (txnRows.length) {
-        const { error: tErr } = await supabase.from("ims_transactions").insert(txnRows as any);
+      };
+      const txnType = row.stock_type === "defective" ? "defective_in" : "good_in";
+      if (form.serial_tracking) {
+        const serials = row.serials.map((s) => s.trim()).filter(Boolean);
+        const stockRows = serials.map((sn) => ({ ...baseRow, part_serial_no: sn, qty: 1 }));
+        const { data: inserted, error } = await supabase
+          .from("ims_stock_items").insert(stockRows as any).select("id, part_serial_no");
+        if (error) throw error;
+        const txnRows = ((inserted || []) as Array<{ id: string; part_serial_no: string | null }>).map((r) => ({
+          txn_type: txnType,
+          stock_item_id: r.id,
+          part_name: payload.name,
+          part_model_no: payload.model,
+          part_serial_no: r.part_serial_no,
+          oem: payload.brand,
+          to_warehouse_id: row.warehouse_id,
+          from_party: "Opening Balance",
+          qty: 1,
+          reference: ref,
+          notes,
+          created_by: uid,
+          txn_date: txnDate,
+        }));
+        if (txnRows.length) {
+          const { error: tErr } = await supabase.from("ims_transactions").insert(txnRows as any);
+          if (tErr) throw tErr;
+        }
+      } else {
+        const { data: inserted, error } = await supabase
+          .from("ims_stock_items").insert({ ...baseRow, qty: rowQty } as any).select("id").single();
+        if (error) throw error;
+        const { error: tErr } = await supabase.from("ims_transactions").insert({
+          txn_type: txnType,
+          stock_item_id: (inserted as { id: string } | null)?.id,
+          part_name: payload.name,
+          part_model_no: payload.model,
+          oem: payload.brand,
+          to_warehouse_id: row.warehouse_id,
+          from_party: "Opening Balance",
+          qty: rowQty,
+          reference: ref,
+          notes,
+          created_by: uid,
+          txn_date: txnDate,
+        } as any);
         if (tErr) throw tErr;
       }
-    } else {
-      const { data: inserted, error } = await supabase
-        .from("ims_stock_items").insert({ ...baseRow, qty } as any).select("id").single();
-      if (error) throw error;
-      const { error: tErr } = await supabase.from("ims_transactions").insert({
-        txn_type: txnType,
-        stock_item_id: (inserted as { id: string } | null)?.id,
-        part_name: payload.name,
-        part_model_no: payload.model,
-        oem: payload.brand,
-        to_warehouse_id: opening.warehouse_id,
-        from_party: "Opening Balance",
-        qty,
-        reference: ref,
-        notes,
-        created_by: uid,
-        txn_date: opening.date ? new Date(opening.date + "T00:00:00Z").toISOString() : new Date().toISOString(),
-      } as any);
-      if (tErr) throw tErr;
+      totalQty += rowQty;
     }
     setOpeningLocked(true);
-    toast.success(`Opening stock posted (${qty} unit${qty === 1 ? "" : "s"})`);
+    toast.success(`Opening stock posted (${totalQty} unit${totalQty === 1 ? "" : "s"} across ${opening.rows.length} warehouse${opening.rows.length === 1 ? "" : "s"})`);
   }
 
   async function save(addAnother = false) {
@@ -716,7 +735,7 @@ export function ProductMasterPage() {
               <DialogTitle className="text-xl">{editingId ? "Edit Product" : "New Product"}</DialogTitle>
               <OpeningStockBadge
                 state={opening}
-                warehouseName={warehouseList.find((w) => w.id === opening.warehouse_id)?.name}
+                warehouseNames={opening.rows.map((r) => warehouseList.find((w) => w.id === r.warehouse_id)?.name)}
               />
             </div>
           </DialogHeader>
