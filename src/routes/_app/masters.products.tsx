@@ -712,7 +712,13 @@ export function ProductMasterPage() {
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
         <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-0">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
-            <DialogTitle className="text-xl">{editingId ? "Edit Product" : "New Product"}</DialogTitle>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <DialogTitle className="text-xl">{editingId ? "Edit Product" : "New Product"}</DialogTitle>
+              <OpeningStockBadge
+                state={opening}
+                warehouseName={warehouseList.find((w) => w.id === opening.warehouse_id)?.name}
+              />
+            </div>
           </DialogHeader>
 
           <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="px-6 py-4">
@@ -720,6 +726,7 @@ export function ProductMasterPage() {
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="serials">Serial &amp; Warranty</TabsTrigger>
               <TabsTrigger value="bundle">Bundle</TabsTrigger>
+              <TabsTrigger value="opening">Opening Stock</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-4">
             <div className="grid md:grid-cols-2 gap-4">
