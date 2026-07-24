@@ -22,6 +22,15 @@ import { cn } from "@/lib/utils";
 import type { ProductMaster } from "@/components/ProductPicker";
 import { SerialsManager } from "@/components/SerialsManager";
 import { fetchBundleChildrenRaw, saveBundleForParent, type BundleChildRow } from "@/lib/productBundles";
+import {
+  ProductOpeningStock,
+  OpeningStockBadge,
+  emptyOpeningStock,
+  validateOpeningStock,
+  type OpeningStockState,
+} from "@/components/ProductOpeningStock";
+import { listWarehouses, type WarehouseLite } from "@/lib/ims";
+import { useIsAdmin } from "@/lib/useRole";
 
 export const Route = createFileRoute("/_app/masters/products")({
   component: ProductMasterPage,
@@ -107,7 +116,7 @@ export function ProductMasterPage() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
-  const [tab, setTab] = useState<"details" | "serials" | "bundle">("details");
+  const [tab, setTab] = useState<"details" | "serials" | "bundle" | "opening">("details");
   const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dbCategories, setDbCategories] = useState<string[]>([]);
@@ -123,6 +132,11 @@ export function ProductMasterPage() {
   const [bundleChildPickerOpen, setBundleChildPickerOpen] = useState(false);
   const [bundleChildSearch, setBundleChildSearch] = useState("");
   void linkedParents; // reserved for future UI
+  const [opening, setOpening] = useState<OpeningStockState>(emptyOpeningStock());
+  const [openingLocked, setOpeningLocked] = useState(false);
+  const [warehouseList, setWarehouseList] = useState<WarehouseLite[]>([]);
+  const { isAdmin } = useIsAdmin();
+  useEffect(() => { listWarehouses().then(setWarehouseList).catch(() => {}); }, []);
 
   const load = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
@@ -226,6 +240,7 @@ export function ProductMasterPage() {
     setForm(empty); setEditingId(null); setTab("details");
     setParentLinks([]); setLinkedSpares([]); setSpareLinks([]); setLinkedParents([]); setParentSearch("");
     setBundle([]); setBundleChildSearch("");
+    setOpening(emptyOpeningStock()); setOpeningLocked(false);
   }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(p: ProductFull) {
@@ -257,6 +272,114 @@ export function ProductMasterPage() {
     setEditingId(p.id);
     setOpen(true);
     loadLinksForEdit(p);
+    loadOpeningStockForEdit(p);
+  }
+
+  async function loadOpeningStockForEdit(p: ProductFull) {
+    setOpening(emptyOpeningStock());
+    setOpeningLocked(false);
+    try {
+      const modelKey = (p.model || "").trim();
+      let q = supabase
+        .from("ims_stock_items")
+        .select("id, warehouse_id, stock_type, part_serial_no, qty, created_at, notes, part_model_no, part_name")
+        .eq("opening_stock", true);
+      if (modelKey) q = q.eq("part_model_no", modelKey);
+      else q = q.eq("part_name", p.name || "");
+      const { data } = await q;
+      const rows = (data || []) as Array<{
+        warehouse_id: string | null; stock_type: "good" | "defective";
+        part_serial_no: string | null; qty: number; created_at: string;
+      }>;
+      if (!rows.length) return;
+      const totalQty = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+      const serials = rows.map((r) => r.part_serial_no || "").filter(Boolean);
+      const first = rows[0];
+      setOpening({
+        enabled: true,
+        date: (first.created_at || "").slice(0, 10),
+        warehouse_id: first.warehouse_id || "",
+        unit_cost: "",
+        stock_type: first.stock_type || "good",
+        qty: String(totalQty),
+        serials,
+      });
+      setOpeningLocked(true);
+    } catch { /* ignore */ }
+  }
+
+  async function postOpeningStock(
+    productId: string,
+    payload: { name: string; brand: string | null; model: string | null; category: string | null },
+  ) {
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id ?? null;
+    const ref = `Opening Stock`;
+    const notes = opening.unit_cost
+      ? `Opening balance · Unit cost ₹${Number(opening.unit_cost).toLocaleString("en-IN")} · Product ${productId}`
+      : `Opening balance · Product ${productId}`;
+    const baseRow = {
+      oem: payload.brand,
+      category: payload.category,
+      part_name: payload.name,
+      part_model_no: payload.model,
+      warehouse_id: opening.warehouse_id,
+      stock_type: opening.stock_type,
+      stock_status: "available",
+      opening_stock: true,
+      transaction_ref: ref,
+      notes,
+      created_by: uid,
+    };
+    const qty = Number(opening.qty) || 0;
+    const txnType = opening.stock_type === "defective" ? "defective_in" : "good_in";
+    if (form.serial_tracking) {
+      const serials = opening.serials.map((s) => s.trim()).filter(Boolean);
+      const stockRows = serials.map((sn) => ({ ...baseRow, part_serial_no: sn, qty: 1 }));
+      const { data: inserted, error } = await supabase
+        .from("ims_stock_items").insert(stockRows as any).select("id, part_serial_no");
+      if (error) throw error;
+      const txnRows = ((inserted || []) as Array<{ id: string; part_serial_no: string | null }>).map((r) => ({
+        txn_type: txnType,
+        stock_item_id: r.id,
+        part_name: payload.name,
+        part_model_no: payload.model,
+        part_serial_no: r.part_serial_no,
+        oem: payload.brand,
+        to_warehouse_id: opening.warehouse_id,
+        from_party: "Opening Balance",
+        qty: 1,
+        reference: ref,
+        notes,
+        created_by: uid,
+        txn_date: opening.date ? new Date(opening.date + "T00:00:00Z").toISOString() : new Date().toISOString(),
+      }));
+      if (txnRows.length) {
+        const { error: tErr } = await supabase.from("ims_transactions").insert(txnRows as any);
+        if (tErr) throw tErr;
+      }
+    } else {
+      const { data: inserted, error } = await supabase
+        .from("ims_stock_items").insert({ ...baseRow, qty } as any).select("id").single();
+      if (error) throw error;
+      const { error: tErr } = await supabase.from("ims_transactions").insert({
+        txn_type: txnType,
+        stock_item_id: (inserted as { id: string } | null)?.id,
+        part_name: payload.name,
+        part_model_no: payload.model,
+        oem: payload.brand,
+        to_warehouse_id: opening.warehouse_id,
+        from_party: "Opening Balance",
+        qty,
+        reference: ref,
+        notes,
+        created_by: uid,
+        txn_date: opening.date ? new Date(opening.date + "T00:00:00Z").toISOString() : new Date().toISOString(),
+      } as any);
+      if (tErr) throw tErr;
+    }
+    setOpeningLocked(true);
+    toast.success(`Opening stock posted (${qty} unit${qty === 1 ? "" : "s"})`);
   }
 
   async function save(addAnother = false) {
@@ -281,6 +404,8 @@ export function ProductMasterPage() {
     if (form.description && form.description.length > 200) {
       toast.error("Description must be 200 characters or less"); return;
     }
+    const openingErr = validateOpeningStock(opening, form.serial_tracking);
+    if (openingErr) { toast.error(openingErr); setTab("opening"); return; }
     const derivedName = [form.brand, form.model].filter(Boolean).join(" ").trim() || form.name.trim() || form.category;
     const payload = {
       name: toTitleCaseSmart(derivedName),
@@ -348,6 +473,16 @@ export function ProductMasterPage() {
         await saveBundleForParent(productId, bundle.map((b, i) => ({ ...b, sort_order: i })));
       } catch (e: any) {
         toast.error(`Product saved but bundle failed: ${e?.message || e}`);
+      }
+    }
+
+    // Post opening stock — only on initial creation. Locked records must be
+    // edited via Stock Adjustment or an admin flow.
+    if (productId && opening.enabled && !openingLocked) {
+      try {
+        await postOpeningStock(productId, payload);
+      } catch (e: any) {
+        toast.error(`Product saved but opening stock failed: ${e?.message || e}`);
       }
     }
 
@@ -577,7 +712,13 @@ export function ProductMasterPage() {
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
         <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-0">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
-            <DialogTitle className="text-xl">{editingId ? "Edit Product" : "New Product"}</DialogTitle>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <DialogTitle className="text-xl">{editingId ? "Edit Product" : "New Product"}</DialogTitle>
+              <OpeningStockBadge
+                state={opening}
+                warehouseName={warehouseList.find((w) => w.id === opening.warehouse_id)?.name}
+              />
+            </div>
           </DialogHeader>
 
           <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="px-6 py-4">
@@ -585,6 +726,7 @@ export function ProductMasterPage() {
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="serials">Serial &amp; Warranty</TabsTrigger>
               <TabsTrigger value="bundle">Bundle</TabsTrigger>
+              <TabsTrigger value="opening">Opening Stock</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-4">
             <div className="grid md:grid-cols-2 gap-4">
@@ -945,6 +1087,16 @@ export function ProductMasterPage() {
                   </Table>
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="opening" className="space-y-3 mt-4">
+              <ProductOpeningStock
+                value={opening}
+                onChange={setOpening}
+                serialTracked={form.serial_tracking}
+                productLabel={[form.brand, form.model].filter(Boolean).join(" ") || form.name}
+                readOnly={openingLocked && !isAdmin}
+              />
             </TabsContent>
           </Tabs>
 
