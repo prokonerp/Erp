@@ -1088,6 +1088,16 @@ export function ProductMasterPage() {
                 </div>
               )}
             </TabsContent>
+
+            <TabsContent value="opening" className="space-y-3 mt-4">
+              <ProductOpeningStock
+                value={opening}
+                onChange={setOpening}
+                serialTracked={form.serial_tracking}
+                productLabel={[form.brand, form.model].filter(Boolean).join(" ") || form.name}
+                readOnly={openingLocked && !isAdmin}
+              />
+            </TabsContent>
           </Tabs>
 
           <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30 sticky bottom-0">
