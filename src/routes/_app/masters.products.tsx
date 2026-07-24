@@ -330,6 +330,8 @@ export function ProductMasterPage() {
     if (form.description && form.description.length > 200) {
       toast.error("Description must be 200 characters or less"); return;
     }
+    const openingErr = validateOpeningStock(opening, form.serial_tracking);
+    if (openingErr) { toast.error(openingErr); setTab("opening"); return; }
     const derivedName = [form.brand, form.model].filter(Boolean).join(" ").trim() || form.name.trim() || form.category;
     const payload = {
       name: toTitleCaseSmart(derivedName),
@@ -397,6 +399,16 @@ export function ProductMasterPage() {
         await saveBundleForParent(productId, bundle.map((b, i) => ({ ...b, sort_order: i })));
       } catch (e: any) {
         toast.error(`Product saved but bundle failed: ${e?.message || e}`);
+      }
+    }
+
+    // Post opening stock — only on initial creation. Locked records must be
+    // edited via Stock Adjustment or an admin flow.
+    if (productId && opening.enabled && !openingLocked) {
+      try {
+        await postOpeningStock(productId, payload);
+      } catch (e: any) {
+        toast.error(`Product saved but opening stock failed: ${e?.message || e}`);
       }
     }
 
