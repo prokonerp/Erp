@@ -308,6 +308,80 @@ export function ProductMasterPage() {
     } catch { /* ignore */ }
   }
 
+  async function postOpeningStock(
+    productId: string,
+    payload: { name: string; brand: string | null; model: string | null; category: string | null },
+  ) {
+    const { data: u } = await supabase.auth.getUser();
+    const uid = u.user?.id ?? null;
+    const ref = `Opening Stock`;
+    const notes = opening.unit_cost
+      ? `Opening balance · Unit cost ₹${Number(opening.unit_cost).toLocaleString("en-IN")} · Product ${productId}`
+      : `Opening balance · Product ${productId}`;
+    const baseRow = {
+      oem: payload.brand,
+      category: payload.category,
+      part_name: payload.name,
+      part_model_no: payload.model,
+      warehouse_id: opening.warehouse_id,
+      stock_type: opening.stock_type,
+      stock_status: "available",
+      opening_stock: true,
+      transaction_ref: ref,
+      notes,
+      created_by: uid,
+    };
+    const qty = Number(opening.qty) || 0;
+    const txnType = opening.stock_type === "defective" ? "defective_in" : "good_in";
+    if (form.serial_tracking) {
+      const serials = opening.serials.map((s) => s.trim()).filter(Boolean);
+      const stockRows = serials.map((sn) => ({ ...baseRow, part_serial_no: sn, qty: 1 }));
+      const { data: inserted, error } = await supabase
+        .from("ims_stock_items").insert(stockRows as any).select("id, part_serial_no");
+      if (error) throw error;
+      const txnRows = ((inserted || []) as Array<{ id: string; part_serial_no: string | null }>).map((r) => ({
+        txn_type: txnType,
+        stock_item_id: r.id,
+        part_name: payload.name,
+        part_model_no: payload.model,
+        part_serial_no: r.part_serial_no,
+        oem: payload.brand,
+        to_warehouse_id: opening.warehouse_id,
+        from_party: "Opening Balance",
+        qty: 1,
+        reference: ref,
+        notes,
+        created_by: uid,
+        txn_date: opening.date ? new Date(opening.date + "T00:00:00Z").toISOString() : new Date().toISOString(),
+      }));
+      if (txnRows.length) {
+        const { error: tErr } = await supabase.from("ims_transactions").insert(txnRows as any);
+        if (tErr) throw tErr;
+      }
+    } else {
+      const { data: inserted, error } = await supabase
+        .from("ims_stock_items").insert({ ...baseRow, qty } as any).select("id").single();
+      if (error) throw error;
+      const { error: tErr } = await supabase.from("ims_transactions").insert({
+        txn_type: txnType,
+        stock_item_id: (inserted as { id: string } | null)?.id,
+        part_name: payload.name,
+        part_model_no: payload.model,
+        oem: payload.brand,
+        to_warehouse_id: opening.warehouse_id,
+        from_party: "Opening Balance",
+        qty,
+        reference: ref,
+        notes,
+        created_by: uid,
+        txn_date: opening.date ? new Date(opening.date + "T00:00:00Z").toISOString() : new Date().toISOString(),
+      } as any);
+      if (tErr) throw tErr;
+    }
+    setOpeningLocked(true);
+    toast.success(`Opening stock posted (${qty} unit${qty === 1 ? "" : "s"})`);
+  }
+
   async function save(addAnother = false) {
     if (!form.brand.trim() && !form.model.trim() && !form.name.trim()) {
       toast.error("Enter Brand and Model (used to identify product)"); return;
