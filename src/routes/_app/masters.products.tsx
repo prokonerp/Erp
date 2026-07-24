@@ -22,6 +22,15 @@ import { cn } from "@/lib/utils";
 import type { ProductMaster } from "@/components/ProductPicker";
 import { SerialsManager } from "@/components/SerialsManager";
 import { fetchBundleChildrenRaw, saveBundleForParent, type BundleChildRow } from "@/lib/productBundles";
+import {
+  ProductOpeningStock,
+  OpeningStockBadge,
+  emptyOpeningStock,
+  validateOpeningStock,
+  type OpeningStockState,
+} from "@/components/ProductOpeningStock";
+import { listWarehouses, type WarehouseLite } from "@/lib/ims";
+import { useIsAdmin } from "@/lib/useRole";
 
 export const Route = createFileRoute("/_app/masters/products")({
   component: ProductMasterPage,
@@ -108,6 +117,8 @@ export function ProductMasterPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
   const [tab, setTab] = useState<"details" | "serials" | "bundle">("details");
+  const [tab2, setTab2Placeholder] = useState<null>(null);
+  void tab2; void setTab2Placeholder;
   const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [dbCategories, setDbCategories] = useState<string[]>([]);
@@ -123,6 +134,11 @@ export function ProductMasterPage() {
   const [bundleChildPickerOpen, setBundleChildPickerOpen] = useState(false);
   const [bundleChildSearch, setBundleChildSearch] = useState("");
   void linkedParents; // reserved for future UI
+  const [opening, setOpening] = useState<OpeningStockState>(emptyOpeningStock());
+  const [openingLocked, setOpeningLocked] = useState(false);
+  const [warehouseList, setWarehouseList] = useState<WarehouseLite[]>([]);
+  const { isAdmin } = useIsAdmin();
+  useEffect(() => { listWarehouses().then(setWarehouseList).catch(() => {}); }, []);
 
   const load = async () => {
     const { data } = await supabase.from("products").select("*").order("name");
