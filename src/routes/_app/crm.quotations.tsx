@@ -351,19 +351,18 @@ function QuotesWorkspace() {
     const cached = cacheRef.current.get(selectedId);
     if (cached) { setSelected(cached); return; }
     setSelLoading(true);
-    supabase
-      .from("quotations").select("*").eq("id", selectedId).single()
-      .then(({ data }) => {
-        const quote = data as unknown as Quotation | null;
-        if (quote) {
-          quote.items = Array.isArray(quote.items) ? quote.items : [];
-          cacheRef.current.set(selectedId, quote);
-          setSelected(quote);
-        } else {
-          setSelected(null);
-        }
-      })
-      .finally(() => setSelLoading(false));
+    (async () => {
+      const { data } = await supabase.from("quotations").select("*").eq("id", selectedId).single();
+      const quote = data as unknown as Quotation | null;
+      if (quote) {
+        quote.items = Array.isArray(quote.items) ? quote.items : [];
+        cacheRef.current.set(selectedId, quote);
+        setSelected(quote);
+      } else {
+        setSelected(null);
+      }
+      setSelLoading(false);
+    })();
   }, [selectedId]);
 
   // Keyboard nav (Up / Down) — ignore when typing in inputs.
