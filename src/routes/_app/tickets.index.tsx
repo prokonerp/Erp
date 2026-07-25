@@ -10,10 +10,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
 import { format } from "date-fns";
-import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, waOpen, engineerAssignMsg, customerClosedMsg, ticketElapsedHours, timerBadgeColor, formatHours } from "@/lib/tickets";
-import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone } from "lucide-react";
+import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, waOpen, engineerAssignMsg, customerClosedMsg, ticketElapsedHours, timerBadgeColor, formatHours, statusPriority, isTerminalStatus } from "@/lib/tickets";
+import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone, ArrowUp, ArrowDown } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger,
@@ -146,6 +147,17 @@ function TicketsList() {
   const [, setNowTick] = useState(0);
   const [view, setView] = useState<"table" | "cards">("table");
   const [closingCtx, setClosingCtx] = useState<{ r: Row; notify: boolean } | null>(null);
+  const [showTerminal, setShowTerminal] = useState(false);
+  type SortKey = "created" | "timer" | "priority" | "customer";
+  const [sortKey, setSortKey] = useState<SortKey>("created");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const toggleSort = (k: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === k) { setSortDir((d) => (d === "asc" ? "desc" : "asc")); return prev; }
+      setSortDir(k === "created" ? "desc" : "asc");
+      return k;
+    });
+  };
 
   // sync URL → state when navigating to /tickets?engineer=… from dashboard
   useEffect(() => {
@@ -192,7 +204,7 @@ function TicketsList() {
 
   const cities = useMemo(() => Array.from(new Set(rows.map((r) => (r.location || "").trim()).filter(Boolean))).sort(), [rows]);
 
-  const filtered = useMemo(() => {
+  const { activeRows, terminalRows } = useMemo(() => {
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
     const endOfToday = new Date(startOfToday); endOfToday.setDate(endOfToday.getDate() + 1);
     const inToday = (iso: string | null | undefined) => {
@@ -262,14 +274,54 @@ function TicketsList() {
         (r.sector || "").toLowerCase().includes(s)
       );
     });
-    // Closed tickets to bottom, otherwise keep created_at desc
-    return out.sort((a, b) => {
-      const ac = a.status === "Closed" ? 1 : 0;
-      const bc = b.status === "Closed" ? 1 : 0;
-      if (ac !== bc) return ac - bc;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    // Secondary sort key applied WITHIN each status_priority group.
+    const priorityWeight: Record<string, number> = { P1: 1, P2: 2, P3: 3, P4: 4, P5: 5 };
+    const cmpVal = (r: Row): number | string => {
+      switch (sortKey) {
+        case "timer": return ticketElapsedHours(r);
+        case "priority": return priorityWeight[r.priority || "P3"] ?? 99;
+        case "customer": return (r.customer_name || "").toLowerCase();
+        case "created":
+        default: return new Date(r.created_at).getTime();
+      }
+    };
+    const secondary = (a: Row, b: Row) => {
+      const av = cmpVal(a); const bv = cmpVal(b);
+      let c = 0;
+      if (typeof av === "number" && typeof bv === "number") c = av - bv;
+      else c = String(av).localeCompare(String(bv));
+      return sortDir === "asc" ? c : -c;
+    };
+    // Primary sort: status_priority ASC — ALWAYS. Terminal never sits above active.
+    const sorted = out.sort((a, b) => {
+      const pa = statusPriority(a.status);
+      const pb = statusPriority(b.status);
+      if (pa !== pb) return pa - pb;
+      return secondary(a, b);
     });
-  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter, ageBucket, dateRange]);
+    const active: Row[] = [];
+    const terminal: Row[] = [];
+    for (const r of sorted) (isTerminalStatus(r.status) ? terminal : active).push(r);
+    return { activeRows: active, terminalRows: terminal };
+  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter, ageBucket, dateRange, sortKey, sortDir]);
+
+  // When the user explicitly filters by a terminal status, show only that group
+  // normally — the "sink terminal to bottom" rule only kicks in for mixed views.
+  const explicitTerminalFilter = status === "Closed" || status === "Cancelled";
+  const activeCount = activeRows.length;
+  const terminalCount = terminalRows.length;
+  const showTerminalGroup = explicitTerminalFilter || showTerminal;
+  const filtered = useMemo(
+    () => (showTerminalGroup ? [...activeRows, ...terminalRows] : activeRows),
+    [activeRows, terminalRows, showTerminalGroup],
+  );
+
+  const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
+    <button type="button" onClick={() => toggleSort(k)} className="inline-flex items-center gap-0.5 hover:text-foreground">
+      {label}
+      {sortKey === k && (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+    </button>
+  );
 
   const setPriority = async (id: string, p: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, priority: p } : r)));
@@ -501,15 +553,47 @@ function TicketsList() {
             </div>
           )}
 
-          <div className="text-xs text-muted-foreground">{filtered.length} ticket{filtered.length === 1 ? "" : "s"}</div>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 font-medium">
+              Active <span className="font-semibold">({activeCount})</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200 px-2 py-0.5 font-medium">
+              Closed / Cancelled <span className="font-semibold">({terminalCount})</span>
+            </span>
+            {!explicitTerminalFilter && (
+              <label className="ml-auto inline-flex items-center gap-2 text-muted-foreground">
+                <Switch checked={showTerminal} onCheckedChange={setShowTerminal} />
+                <span>Show Closed / Cancelled</span>
+              </label>
+            )}
+          </div>
 
           {view === "cards" ? (
             loading ? <div className="p-4 text-muted-foreground">Loading…</div> :
             filtered.length === 0 ? <div className="p-8 text-center text-muted-foreground border rounded-md">No tickets match your filters.</div> :
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {filtered.map((r) => (
-                <TicketCard key={r.id} r={r} employees={employees} isAdmin={isAdmin} onReassign={reassign} onStatusChange={updateStatus} onNotifyCustomer={notifyCustomer} onNotifyEngineer={notifyEngineer} onSoftDelete={softDelete} onPriority={setPriority} />
-              ))}
+            <div className="space-y-4">
+              {activeRows.length > 0 && (
+                <div>
+                  {showTerminalGroup && terminalRows.length > 0 && (
+                    <SectionDivider label={`Active Tickets · ${activeRows.length}`} tone="active" />
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {activeRows.map((r) => (
+                      <TicketCard key={r.id} r={r} employees={employees} isAdmin={isAdmin} onReassign={reassign} onStatusChange={updateStatus} onNotifyCustomer={notifyCustomer} onNotifyEngineer={notifyEngineer} onSoftDelete={softDelete} onPriority={setPriority} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {showTerminalGroup && terminalRows.length > 0 && (
+                <div>
+                  <SectionDivider label={`Closed / Cancelled · ${terminalRows.length}`} tone="terminal" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 opacity-80">
+                    {terminalRows.map((r) => (
+                      <TicketCard key={r.id} r={r} employees={employees} isAdmin={isAdmin} onReassign={reassign} onStatusChange={updateStatus} onNotifyCustomer={notifyCustomer} onNotifyEngineer={notifyEngineer} onSoftDelete={softDelete} onPriority={setPriority} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
           <TooltipProvider delayDuration={200}>
@@ -519,9 +603,9 @@ function TicketsList() {
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="p-2">Case ID</th>
                   <th className="p-2 w-14 text-center">Tag</th>
-                  <th className="p-2 w-10 text-center">Pr.</th>
-                  <th className="p-2 w-20">Timer</th>
-                  <th className="p-2">Customer</th>
+                  <th className="p-2 w-10 text-center"><SortBtn k="priority" label="Pr." /></th>
+                  <th className="p-2 w-20"><SortBtn k="timer" label="Timer" /></th>
+                  <th className="p-2"><SortBtn k="customer" label="Customer" /></th>
                   <th className="p-2">Model / Serial</th>
                   <th className="p-2">Sector · City</th>
                   <th className="p-2 max-w-[180px]">Complaint</th>
@@ -536,7 +620,34 @@ function TicketsList() {
                   <tr><td colSpan={12} className="p-4 text-muted-foreground">Loading…</td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={12} className="p-4 text-muted-foreground">No tickets.</td></tr>
-                ) : filtered.map((r) => (
+                ) : (<>
+                  {activeRows.length > 0 && showTerminalGroup && terminalRows.length > 0 && (
+                    <tr className="bg-emerald-50/60"><td colSpan={12} className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-800">— Active Tickets · {activeRows.length} —</td></tr>
+                  )}
+                  {activeRows.map((r) => renderTicketRow(r))}
+                  {showTerminalGroup && terminalRows.length > 0 && (<>
+                    <tr className="bg-zinc-100"><td colSpan={12} className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-700">— Closed / Cancelled · {terminalRows.length} —</td></tr>
+                    {terminalRows.map((r) => renderTicketRow(r, true))}
+                  </>)}
+                </>)}
+              </tbody>
+            </table>
+          </div>
+          </TooltipProvider>
+          )}
+        </CardContent>
+      </Card>
+      <ClosingRemarksDialog
+        open={!!closingCtx}
+        onOpenChange={(v) => { if (!v) setClosingCtx(null); }}
+        caseId={closingCtx?.r.case_id}
+        onConfirm={confirmClose}
+      />
+    </div>
+  );
+
+  function renderTicketRow(r: Row, dim = false) {
+    return (
                   <tr key={r.id} className="border-t align-top hover:bg-muted/30">
                     <td className="p-2 font-mono text-xs whitespace-nowrap">
                       {(r.has_special_activity || (r.special_instruction && r.special_instruction.trim())) && (
@@ -610,21 +721,16 @@ function TicketsList() {
                       />
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          </TooltipProvider>
-          )}
-        </CardContent>
-      </Card>
-      <ClosingRemarksDialog
-        open={!!closingCtx}
-        onOpenChange={(v) => { if (!v) setClosingCtx(null); }}
-        caseId={closingCtx?.r.case_id}
-        onConfirm={confirmClose}
-      />
-    </div>
+    );
+  }
+}
+
+function SectionDivider({ label, tone }: { label: string; tone: "active" | "terminal" }) {
+  const cls = tone === "active"
+    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+    : "bg-zinc-100 text-zinc-700 border-zinc-200";
+  return (
+    <div className={`mb-2 rounded border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ${cls}`}>— {label} —</div>
   );
 }
 

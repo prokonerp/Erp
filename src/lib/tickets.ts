@@ -89,6 +89,26 @@ export function formatHours(hours: number): string {
 
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
+/** Sort weight so terminal statuses always sink to the bottom of any list.
+ *  Any status not listed returns 0 so unknown/legacy values float to the TOP
+ *  and get noticed instead of hiding in the middle. */
+export const STATUS_PRIORITY: Record<string, number> = {
+  "New": 1,
+  "Call Log": 2,
+  "In Progress": 3,
+  "Under Observation": 4,
+  "Waiting for Parts": 5,
+  "Parts Received": 5,
+  "Closed": 6,
+  "Cancelled": 7,
+};
+export function statusPriority(status: string | null | undefined): number {
+  return STATUS_PRIORITY[status || ""] ?? 0;
+}
+export function isTerminalStatus(status: string | null | undefined): boolean {
+  return status === "Closed" || status === "Cancelled";
+}
+
 export type PartLine = {
   name: string;
   qty: string;
