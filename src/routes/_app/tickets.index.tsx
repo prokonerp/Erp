@@ -553,15 +553,47 @@ function TicketsList() {
             </div>
           )}
 
-          <div className="text-xs text-muted-foreground">{filtered.length} ticket{filtered.length === 1 ? "" : "s"}</div>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 font-medium">
+              Active <span className="font-semibold">({activeCount})</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200 px-2 py-0.5 font-medium">
+              Closed / Cancelled <span className="font-semibold">({terminalCount})</span>
+            </span>
+            {!explicitTerminalFilter && (
+              <label className="ml-auto inline-flex items-center gap-2 text-muted-foreground">
+                <Switch checked={showTerminal} onCheckedChange={setShowTerminal} />
+                <span>Show Closed / Cancelled</span>
+              </label>
+            )}
+          </div>
 
           {view === "cards" ? (
             loading ? <div className="p-4 text-muted-foreground">Loading…</div> :
             filtered.length === 0 ? <div className="p-8 text-center text-muted-foreground border rounded-md">No tickets match your filters.</div> :
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {filtered.map((r) => (
-                <TicketCard key={r.id} r={r} employees={employees} isAdmin={isAdmin} onReassign={reassign} onStatusChange={updateStatus} onNotifyCustomer={notifyCustomer} onNotifyEngineer={notifyEngineer} onSoftDelete={softDelete} onPriority={setPriority} />
-              ))}
+            <div className="space-y-4">
+              {activeRows.length > 0 && (
+                <div>
+                  {showTerminalGroup && terminalRows.length > 0 && (
+                    <SectionDivider label={`Active Tickets · ${activeRows.length}`} tone="active" />
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {activeRows.map((r) => (
+                      <TicketCard key={r.id} r={r} employees={employees} isAdmin={isAdmin} onReassign={reassign} onStatusChange={updateStatus} onNotifyCustomer={notifyCustomer} onNotifyEngineer={notifyEngineer} onSoftDelete={softDelete} onPriority={setPriority} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {showTerminalGroup && terminalRows.length > 0 && (
+                <div>
+                  <SectionDivider label={`Closed / Cancelled · ${terminalRows.length}`} tone="terminal" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 opacity-80">
+                    {terminalRows.map((r) => (
+                      <TicketCard key={r.id} r={r} employees={employees} isAdmin={isAdmin} onReassign={reassign} onStatusChange={updateStatus} onNotifyCustomer={notifyCustomer} onNotifyEngineer={notifyEngineer} onSoftDelete={softDelete} onPriority={setPriority} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
           <TooltipProvider delayDuration={200}>
@@ -571,9 +603,9 @@ function TicketsList() {
                 <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="p-2">Case ID</th>
                   <th className="p-2 w-14 text-center">Tag</th>
-                  <th className="p-2 w-10 text-center">Pr.</th>
-                  <th className="p-2 w-20">Timer</th>
-                  <th className="p-2">Customer</th>
+                  <th className="p-2 w-10 text-center"><SortBtn k="priority" label="Pr." /></th>
+                  <th className="p-2 w-20"><SortBtn k="timer" label="Timer" /></th>
+                  <th className="p-2"><SortBtn k="customer" label="Customer" /></th>
                   <th className="p-2">Model / Serial</th>
                   <th className="p-2">Sector · City</th>
                   <th className="p-2 max-w-[180px]">Complaint</th>
@@ -588,7 +620,34 @@ function TicketsList() {
                   <tr><td colSpan={12} className="p-4 text-muted-foreground">Loading…</td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={12} className="p-4 text-muted-foreground">No tickets.</td></tr>
-                ) : filtered.map((r) => (
+                ) : (<>
+                  {activeRows.length > 0 && showTerminalGroup && terminalRows.length > 0 && (
+                    <tr className="bg-emerald-50/60"><td colSpan={12} className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-800">— Active Tickets · {activeRows.length} —</td></tr>
+                  )}
+                  {activeRows.map((r) => renderTicketRow(r))}
+                  {showTerminalGroup && terminalRows.length > 0 && (<>
+                    <tr className="bg-zinc-100"><td colSpan={12} className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-700">— Closed / Cancelled · {terminalRows.length} —</td></tr>
+                    {terminalRows.map((r) => renderTicketRow(r, true))}
+                  </>)}
+                </>)}
+              </tbody>
+            </table>
+          </div>
+          </TooltipProvider>
+          )}
+        </CardContent>
+      </Card>
+      <ClosingRemarksDialog
+        open={!!closingCtx}
+        onOpenChange={(v) => { if (!v) setClosingCtx(null); }}
+        caseId={closingCtx?.r.case_id}
+        onConfirm={confirmClose}
+      />
+    </div>
+  );
+
+  function renderTicketRow(r: Row, dim = false) {
+    return (
                   <tr key={r.id} className="border-t align-top hover:bg-muted/30">
                     <td className="p-2 font-mono text-xs whitespace-nowrap">
                       {(r.has_special_activity || (r.special_instruction && r.special_instruction.trim())) && (
@@ -662,21 +721,16 @@ function TicketsList() {
                       />
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          </TooltipProvider>
-          )}
-        </CardContent>
-      </Card>
-      <ClosingRemarksDialog
-        open={!!closingCtx}
-        onOpenChange={(v) => { if (!v) setClosingCtx(null); }}
-        caseId={closingCtx?.r.case_id}
-        onConfirm={confirmClose}
-      />
-    </div>
+    );
+  }
+}
+
+function SectionDivider({ label, tone }: { label: string; tone: "active" | "terminal" }) {
+  const cls = tone === "active"
+    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+    : "bg-zinc-100 text-zinc-700 border-zinc-200";
+  return (
+    <div className={`mb-2 rounded border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ${cls}`}>— {label} —</div>
   );
 }
 
