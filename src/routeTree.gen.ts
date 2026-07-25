@@ -107,6 +107,7 @@ import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
 import { Route as AppGrnGeneralNewRouteImport } from './routes/_app/grn.general.new'
 import { Route as AppGrnCustomerNewRouteImport } from './routes/_app/grn.customer.new'
 import { Route as AppGrnIdEditRouteImport } from './routes/_app/grn.$id_.edit'
+import { Route as AppCrmQuotationsNewRouteImport } from './routes/_app/crm.quotations.new'
 import { Route as AppCrmQuotationsIdRouteImport } from './routes/_app/crm.quotations.$id'
 import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
 import { Route as AppChallanOemNewRouteImport } from './routes/_app/challan.oem.new'
@@ -603,6 +604,11 @@ const AppGrnIdEditRoute = AppGrnIdEditRouteImport.update({
   path: '/$id/edit',
   getParentRoute: () => AppGrnRoute,
 } as any)
+const AppCrmQuotationsNewRoute = AppCrmQuotationsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppCrmQuotationsRoute,
+} as any)
 const AppCrmQuotationsIdRoute = AppCrmQuotationsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -718,6 +724,7 @@ export interface FileRoutesByFullPath {
   '/challan/oem/new': typeof AppChallanOemNewRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
+  '/crm/quotations/new': typeof AppCrmQuotationsNewRoute
   '/grn/$id/edit': typeof AppGrnIdEditRoute
   '/grn/customer/new': typeof AppGrnCustomerNewRoute
   '/grn/general/new': typeof AppGrnGeneralNewRoute
@@ -808,6 +815,7 @@ export interface FileRoutesByTo {
   '/challan/oem/new': typeof AppChallanOemNewRoute
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
+  '/crm/quotations/new': typeof AppCrmQuotationsNewRoute
   '/grn/$id/edit': typeof AppGrnIdEditRoute
   '/grn/customer/new': typeof AppGrnCustomerNewRoute
   '/grn/general/new': typeof AppGrnGeneralNewRoute
@@ -915,6 +923,7 @@ export interface FileRoutesById {
   '/_app/challan/oem/new': typeof AppChallanOemNewRoute
   '/_app/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/_app/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
+  '/_app/crm/quotations/new': typeof AppCrmQuotationsNewRoute
   '/_app/grn/$id_/edit': typeof AppGrnIdEditRoute
   '/_app/grn/customer/new': typeof AppGrnCustomerNewRoute
   '/_app/grn/general/new': typeof AppGrnGeneralNewRoute
@@ -1022,6 +1031,7 @@ export interface FileRouteTypes {
     | '/challan/oem/new'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
+    | '/crm/quotations/new'
     | '/grn/$id/edit'
     | '/grn/customer/new'
     | '/grn/general/new'
@@ -1112,6 +1122,7 @@ export interface FileRouteTypes {
     | '/challan/oem/new'
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
+    | '/crm/quotations/new'
     | '/grn/$id/edit'
     | '/grn/customer/new'
     | '/grn/general/new'
@@ -1218,6 +1229,7 @@ export interface FileRouteTypes {
     | '/_app/challan/oem/new'
     | '/_app/crm/leads/$id'
     | '/_app/crm/quotations/$id'
+    | '/_app/crm/quotations/new'
     | '/_app/grn/$id_/edit'
     | '/_app/grn/customer/new'
     | '/_app/grn/general/new'
@@ -1935,6 +1947,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGrnIdEditRouteImport
       parentRoute: typeof AppGrnRoute
     }
+    '/_app/crm/quotations/new': {
+      id: '/_app/crm/quotations/new'
+      path: '/new'
+      fullPath: '/crm/quotations/new'
+      preLoaderRoute: typeof AppCrmQuotationsNewRouteImport
+      parentRoute: typeof AppCrmQuotationsRoute
+    }
     '/_app/crm/quotations/$id': {
       id: '/_app/crm/quotations/$id'
       path: '/$id'
@@ -2076,10 +2095,12 @@ const AppCrmLeadsRouteWithChildren = AppCrmLeadsRoute._addFileChildren(
 
 interface AppCrmQuotationsRouteChildren {
   AppCrmQuotationsIdRoute: typeof AppCrmQuotationsIdRoute
+  AppCrmQuotationsNewRoute: typeof AppCrmQuotationsNewRoute
 }
 
 const AppCrmQuotationsRouteChildren: AppCrmQuotationsRouteChildren = {
   AppCrmQuotationsIdRoute: AppCrmQuotationsIdRoute,
+  AppCrmQuotationsNewRoute: AppCrmQuotationsNewRoute,
 }
 
 const AppCrmQuotationsRouteWithChildren =

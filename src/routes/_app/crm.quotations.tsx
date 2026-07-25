@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -138,26 +138,7 @@ function QuotesList() {
             </SelectContent>
           </Select>
           <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} className="w-48" />
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New</Button></DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>New quotation</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <div>
-                  <Label>Customer</Label>
-                  <Select value={custId} onValueChange={setCustId}>
-                    <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
-                    <SelectContent>{customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.company}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Subject (optional)</Label>
-                  <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. UPS supply & installation" />
-                </div>
-              </div>
-              <DialogFooter><Button onClick={create}>Create</Button></DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Link to="/crm/quotations/new"><Button size="sm"><Plus className="h-4 w-4 mr-1" />New</Button></Link>
         </div>
       </CardHeader>
       <CardContent>
@@ -463,28 +444,7 @@ function QuotesWorkspace() {
         <CardHeader className="p-3 space-y-2 border-b">
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-sm">Quotations</CardTitle>
-            <Dialog open={openNew} onOpenChange={setOpenNew}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="h-7"><Plus className="h-3.5 w-3.5 mr-1" />New</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>New quotation</DialogTitle></DialogHeader>
-                <div className="space-y-3">
-                  <div>
-                    <Label>Customer</Label>
-                    <Select value={newCustId} onValueChange={setNewCustId}>
-                      <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
-                      <SelectContent>{customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.company}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Subject (optional)</Label>
-                    <Input value={newSubject} onChange={(e) => setNewSubject(e.target.value)} />
-                  </div>
-                </div>
-                <DialogFooter><Button onClick={createNew}>Create</Button></DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Link to="/crm/quotations/new"><Button size="sm" className="h-7"><Plus className="h-3.5 w-3.5 mr-1" />New</Button></Link>
           </div>
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
