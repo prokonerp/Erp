@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -16,17 +17,20 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Eye, Copy, Trash2 } from "lucide-react";
+import { Plus, MoreVertical, Eye, Copy, Trash2, Search, Pencil, Send, ArrowRightLeft, FileText, Loader2, Clock, CheckCircle2, FilePlus } from "lucide-react";
 import { toast } from "sonner";
 import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
+import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
+import { cn } from "@/lib/utils";
+import { useDebounced } from "@/lib/sales.hooks";
 
 export const Route = createFileRoute("/_app/crm/quotations")({ component: Page });
 
 function Page() {
   const loc = useLocation();
   if (loc.pathname !== "/crm/quotations" && loc.pathname !== "/crm/quotations/") return <Outlet />;
-  return <QuotesList />;
+  return <QuotesWorkspace />;
 }
 
 const STATUSES: QuoteStatus[] = ["draft", "sent", "accepted", "declined", "expired", "invoiced"];
