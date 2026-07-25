@@ -10,10 +10,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
 import { format } from "date-fns";
-import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, waOpen, engineerAssignMsg, customerClosedMsg, ticketElapsedHours, timerBadgeColor, formatHours } from "@/lib/tickets";
-import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone } from "lucide-react";
+import { TICKET_STATUSES, CALL_TYPES, STATUS_COLOR, PRIORITIES, waOpen, engineerAssignMsg, customerClosedMsg, ticketElapsedHours, timerBadgeColor, formatHours, statusPriority, isTerminalStatus } from "@/lib/tickets";
+import { Plus, Eye, Trash2, MoreHorizontal, UserCog, MessageCircle, RefreshCw, ClipboardList, Search, Calendar, User, Zap, Tag, Building2, SlidersHorizontal, X, LayoutGrid, List, Clock, MapPin, Phone, ArrowUp, ArrowDown } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger,
@@ -146,6 +147,17 @@ function TicketsList() {
   const [, setNowTick] = useState(0);
   const [view, setView] = useState<"table" | "cards">("table");
   const [closingCtx, setClosingCtx] = useState<{ r: Row; notify: boolean } | null>(null);
+  const [showTerminal, setShowTerminal] = useState(false);
+  type SortKey = "created" | "timer" | "priority" | "customer";
+  const [sortKey, setSortKey] = useState<SortKey>("created");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const toggleSort = (k: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === k) { setSortDir((d) => (d === "asc" ? "desc" : "asc")); return prev; }
+      setSortDir(k === "created" ? "desc" : "asc");
+      return k;
+    });
+  };
 
   // sync URL → state when navigating to /tickets?engineer=… from dashboard
   useEffect(() => {
@@ -192,7 +204,7 @@ function TicketsList() {
 
   const cities = useMemo(() => Array.from(new Set(rows.map((r) => (r.location || "").trim()).filter(Boolean))).sort(), [rows]);
 
-  const filtered = useMemo(() => {
+  const { activeRows, terminalRows } = useMemo(() => {
     const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
     const endOfToday = new Date(startOfToday); endOfToday.setDate(endOfToday.getDate() + 1);
     const inToday = (iso: string | null | undefined) => {
@@ -262,14 +274,54 @@ function TicketsList() {
         (r.sector || "").toLowerCase().includes(s)
       );
     });
-    // Closed tickets to bottom, otherwise keep created_at desc
-    return out.sort((a, b) => {
-      const ac = a.status === "Closed" ? 1 : 0;
-      const bc = b.status === "Closed" ? 1 : 0;
-      if (ac !== bc) return ac - bc;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    // Secondary sort key applied WITHIN each status_priority group.
+    const priorityWeight: Record<string, number> = { P1: 1, P2: 2, P3: 3, P4: 4, P5: 5 };
+    const cmpVal = (r: Row): number | string => {
+      switch (sortKey) {
+        case "timer": return ticketElapsedHours(r);
+        case "priority": return priorityWeight[r.priority || "P3"] ?? 99;
+        case "customer": return (r.customer_name || "").toLowerCase();
+        case "created":
+        default: return new Date(r.created_at).getTime();
+      }
+    };
+    const secondary = (a: Row, b: Row) => {
+      const av = cmpVal(a); const bv = cmpVal(b);
+      let c = 0;
+      if (typeof av === "number" && typeof bv === "number") c = av - bv;
+      else c = String(av).localeCompare(String(bv));
+      return sortDir === "asc" ? c : -c;
+    };
+    // Primary sort: status_priority ASC — ALWAYS. Terminal never sits above active.
+    const sorted = out.sort((a, b) => {
+      const pa = statusPriority(a.status);
+      const pb = statusPriority(b.status);
+      if (pa !== pb) return pa - pb;
+      return secondary(a, b);
     });
-  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter, ageBucket, dateRange]);
+    const active: Row[] = [];
+    const terminal: Row[] = [];
+    for (const r of sorted) (isTerminalStatus(r.status) ? terminal : active).push(r);
+    return { activeRows: active, terminalRows: terminal };
+  }, [rows, q, cityFilter, engineerFilter, priorityFilter, scope, bucket, oemFilter, partsFilter, ageBucket, dateRange, sortKey, sortDir]);
+
+  // When the user explicitly filters by a terminal status, show only that group
+  // normally — the "sink terminal to bottom" rule only kicks in for mixed views.
+  const explicitTerminalFilter = status === "Closed" || status === "Cancelled";
+  const activeCount = activeRows.length;
+  const terminalCount = terminalRows.length;
+  const showTerminalGroup = explicitTerminalFilter || showTerminal;
+  const filtered = useMemo(
+    () => (showTerminalGroup ? [...activeRows, ...terminalRows] : activeRows),
+    [activeRows, terminalRows, showTerminalGroup],
+  );
+
+  const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
+    <button type="button" onClick={() => toggleSort(k)} className="inline-flex items-center gap-0.5 hover:text-foreground">
+      {label}
+      {sortKey === k && (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+    </button>
+  );
 
   const setPriority = async (id: string, p: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, priority: p } : r)));
