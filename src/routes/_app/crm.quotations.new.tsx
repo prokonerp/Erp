@@ -316,7 +316,7 @@ function NewQuotation() {
           <CardHeader className="py-3"><CardTitle className="text-sm">Quote Info</CardTitle></CardHeader>
           <CardContent className="grid md:grid-cols-3 gap-2">
             <div>
-              <Label className="text-xs">Branch / Warehouse</Label>
+              <Label className="text-xs">Supply From Warehouse</Label>
               <Select value={branchId || ""} onValueChange={setBranchId}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select" /></SelectTrigger>
                 <SelectContent>{branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>

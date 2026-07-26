@@ -11,7 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
-import { DEFAULT_COMPANY_PROFILE, fetchCompanyProfile, type CompanyProfile } from "@/lib/companyProfile";
+import type { CompanyProfile } from "@/lib/companyProfile";
+import { getDocumentHeader } from "@/lib/letterhead";
 
 export const Route = createFileRoute("/_app/challan/$id")({
   component: ChallanView,
@@ -24,21 +25,22 @@ function ChallanView() {
   const [busy, setBusy] = useState(false);
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
-  const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
+  const [company, setCompany] = useState<CompanyProfile | null>(null);
 
-  useEffect(() => { fetchCompanyProfile().then(setCompany).catch(() => {}); }, []);
+  useEffect(() => { getDocumentHeader().then(setCompany).catch(() => {}); }, []);
 
   useEffect(() => {
     fetchChallan(id).then(setC).catch((e) => toast.error(e.message));
   }, [id]);
 
-  if (!c) return <div className="text-muted-foreground">Loading…</div>;
+  if (!c || !company) return <div className="text-muted-foreground">Loading…</div>;
   const isOem = c.doc_type === "oem";
   const oemLogo = isOem ? (c.oem_logo_url ? { url: c.oem_logo_url, alt: c.party_name || "OEM" } : getOemLogo(c.party_name)) : null;
   const status = c.status || "Challan Generated";
   // Legacy 'Draft' rows shouldn't exist after migration, but stay defensive.
   const isCancelled = status === "Cancelled";
   const isActive = !isCancelled;
+  console.log("HEADER DATA:", company);
 
   const handleDownload = async () => {
     const el = document.getElementById("print-area");

@@ -5,6 +5,7 @@ import { amountInWords, hsnSummary, upiPaymentUri } from "@/lib/gst";
 import type { InvoiceRow, InvoiceItemRow, BranchRow } from "@/lib/sales";
 import { inr } from "@/lib/sales";
 import type { CompanyProfile } from "@/lib/companyProfile";
+import { getCompany } from "@/lib/letterhead";
 
 type Customer = {
   company: string;
@@ -71,18 +72,17 @@ export async function renderInvoicePdf(args: {
 
   doc.setDrawColor(tr, tg, tb).setLineWidth(0.6);
 
-  // ============ RESOLVE COMPANY (letterhead > invoice_settings > branch) ============
-  const s = args.settings || {};
-  const co = args.company || null;
-  const companyName = (co?.name || s.company_name || branch?.name || "").toString();
-  const companyAddress = (co?.regd_address || s.company_address || branch?.address || "").toString();
-  const companyGstin = co?.gstin || branch?.gstin || "";
-  const companyUdyam = s.udyam_no || branch?.cin || "";
-  const companyPhone = co?.phone || s.phone || branch?.phone || "";
-  const companyEmail = co?.email || s.email || branch?.email || "";
-  const companyWebsite = co?.website || "";
-  const companyLogo = co?.logo_url || branch?.logo_url || "";
-  if (!companyName) console.error("[invoicePdf] company_name missing in settings/branch");
+  // ============ RESOLVE COMPANY (Company Master only; no branch/settings fallback) ============
+  const company = await getCompany();
+  console.log("HEADER DATA:", company);
+  const companyName = company.name.toString();
+  const companyAddress = company.regd_address.toString();
+  const companyGstin = company.gstin || "";
+  const companyPhone = company.phone || "";
+  const companyEmail = company.email || "";
+  const companyWebsite = company.website || "";
+  const companyLogo = company.logo_url || "";
+  if (!companyName) console.error("[invoicePdf] company_name missing in Company Master");
 
   // ============ HEADER BOX ============
   const headerH = 82;
@@ -138,7 +138,7 @@ export async function renderInvoicePdf(args: {
   if (args.showSupplyFrom && branch?.name) {
     const supplyH = 12;
     doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(90, 90, 90);
-    doc.text(`Supply From: ${branch.name}${branch.address ? " — " + branch.address : ""}`, margin + 4, y + 8);
+    doc.text(`Supply From: ${branch.name}`, margin + 4, y + 8);
     doc.setTextColor(0, 0, 0);
     y += supplyH;
   }
@@ -421,7 +421,7 @@ export async function renderInvoicePdf(args: {
   if (branch?.upi_id) {
     const uri = upiPaymentUri({
       upiId: branch.upi_id,
-      payeeName: branch.name,
+      payeeName: companyName,
       amount: invoice.total,
       note: invoice.invoice_no || "Invoice",
     });

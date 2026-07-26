@@ -10,6 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchSalesOrder, SO_STATUSES, soStatusMeta, type SalesOrder, type SoStatus } from "@/lib/salesOrders";
 import { inr } from "@/lib/sales";
 import { createChallanFromSalesOrder, createInvoiceFromSalesOrder } from "@/lib/documentFlow.writers";
+import { getDocumentHeader } from "@/lib/letterhead";
+import type { CompanyProfile } from "@/lib/companyProfile";
 
 export const Route = createFileRoute("/_app/sales/orders/$id")({ component: SalesOrderDetail });
 
@@ -17,14 +19,16 @@ function SalesOrderDetail() {
   const { id } = Route.useParams();
   const nav = useNavigate();
   const [so, setSo] = useState<SalesOrder | null>(null);
+  const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = () => fetchSalesOrder(id).then(setSo).catch((e) => toast.error(e.message));
-  useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); getDocumentHeader().then(setCompany).catch(() => {}); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!so) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  if (!so || !company) return <div className="text-sm text-muted-foreground">Loading…</div>;
 
   const st = soStatusMeta(so.status);
+  console.log("HEADER DATA:", company);
 
   const setStatus = async (s: SoStatus) => {
     const { error } = await supabase.from("sales_orders" as never).update({ status: s } as never).eq("id", id);
@@ -82,9 +86,9 @@ function SalesOrderDetail() {
         <CardContent className="grid md:grid-cols-3 gap-4 text-sm">
           <div>
             <div className="text-xs uppercase text-muted-foreground mb-1">Seller</div>
-            <div className="font-medium">{so.seller_name || "—"}</div>
-            <div className="text-muted-foreground whitespace-pre-line">{so.seller_address}</div>
-            {so.seller_gstin && <div className="font-mono text-xs mt-1">GSTIN: {so.seller_gstin}</div>}
+            <div className="font-medium">{company.name}</div>
+            <div className="text-muted-foreground whitespace-pre-line">{company.regd_address}</div>
+            {company.gstin && <div className="font-mono text-xs mt-1">GSTIN: {company.gstin}</div>}
           </div>
           <div>
             <div className="text-xs uppercase text-muted-foreground mb-1">Buyer</div>
