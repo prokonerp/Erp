@@ -31,6 +31,7 @@ import {
 } from "@/lib/crm";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
+import { DocumentPrintView, type PrintItem } from "@/components/DocumentPrintView";
 
 export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
 
@@ -65,6 +66,7 @@ function QuoteEditor() {
   const [oemLogos, setOemLogos] = useState<OemLogoWithUrl[]>([]);
   const [logosProductOnly, setLogosProductOnly] = useState(false);
   const [company, setCompany] = useState<CompanyProfile | null>(null);
+  const [warrantyMap, setWarrantyMap] = useState<Record<string, string>>({});
 
   const load = async () => {
     let sourceId = id;
@@ -104,6 +106,26 @@ function QuoteEditor() {
     listOemLogos(true).then(withSignedUrls).then(setOemLogos).catch(() => {});
     getDocumentHeader().then(setCompany).catch(() => {});
   }, [id]);
+
+  // Fetch warranty per product for print (Item Master → warranty_duration + warranty_unit)
+  useEffect(() => {
+    const ids = Array.from(new Set((q?.items || []).map((it) => (it as any).product_id).filter(Boolean))) as string[];
+    if (ids.length === 0) { setWarrantyMap({}); return; }
+    const missing = ids.filter((pid) => !(pid in warrantyMap));
+    if (missing.length === 0) return;
+    supabase.from("products").select("id,warranty_applicable,warranty_duration,warranty_unit")
+      .in("id", missing)
+      .then(({ data }) => {
+        const next = { ...warrantyMap };
+        (data || []).forEach((p: any) => {
+          if (!p.warranty_applicable || !p.warranty_duration) { next[p.id] = ""; return; }
+          const unit = String(p.warranty_unit || "").toLowerCase();
+          const months = unit.startsWith("y") ? Number(p.warranty_duration) * 12 : Number(p.warranty_duration);
+          next[p.id] = months > 0 ? `${months} M` : "";
+        });
+        setWarrantyMap(next);
+      });
+  }, [q?.items]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Default branch on first load
   useEffect(() => {
@@ -491,6 +513,94 @@ function QuoteEditor() {
 
       {/* ============ ZOHO-STYLE PRINT VIEW ============ */}
       <div className="hidden print:block text-black">
+        <DocumentPrintView
+          company={company}
+          doc={{
+            type: "quotation",
+            number: q.quote_no || "",
+            date: q.quote_date,
+            expiry_or_delivery_date: q.expiry_date,
+            reference_no: q.reference_no,
+            subject: q.subject,
+            bill_to: {
+              name: customer?.company || "",
+              address: q.billing_address || customer?.billing_address || customer?.address || "",
+              gstin: customer?.gst || null,
+              state: q.place_of_supply || customer?.state || null,
+              contact_name: q.contact_name,
+              contact_phone: q.contact_phone,
+              contact_email: q.contact_email,
+            },
+            ship_to: {
+              name: customer?.company || "",
+              address: q.shipping_address || q.billing_address || customer?.shipping_address || customer?.address || "",
+            },
+            is_interstate: totals.igst_amount > 0,
+            place_of_supply: q.place_of_supply,
+            sales_person: q.salesperson,
+            payment_terms: q.payment_terms,
+            delivery_terms: q.delivery_timeline,
+            items: q.items.map((it) => {
+              const disc = (Number(it.qty) * Number(it.rate)) * (Number(it.discount_percent || 0) / 100);
+              const amount = +(Number(it.qty) * Number(it.rate) - disc).toFixed(2);
+              return {
+                description: it.description || (it as any).product_name || "—",
+                item_details: it.item_details || null,
+                warranty: (it as any).product_id ? warrantyMap[(it as any).product_id] || null : null,
+                hsn: it.hsn,
+                qty: Number(it.qty || 0),
+                unit: it.unit,
+                rate: Number(it.rate || 0),
+                gst_percent: Number(it.tax_percent || 0),
+                amount,
+              } as PrintItem;
+            }),
+            totals: {
+              subtotal: totals.subtotal,
+              discount: q.discount_amount || 0,
+              shipping: q.shipping_charges || 0,
+              adjustment: q.adjustment || 0,
+              cgst: totals.cgst_amount,
+              sgst: totals.sgst_amount,
+              igst: totals.igst_amount,
+              round_off: q.round_off || 0,
+              grand_total: totals.total,
+            },
+            notes: q.customer_notes,
+            terms: q.terms,
+          }}
+        />
+        {(() => {
+          if ((q as any).include_oem_logos === false) return null;
+          const pool = logosProductOnly ? filterLogosForItems(oemLogos, q.items) : oemLogos;
+          if (pool.length === 0) return null;
+          const groups = {
+            left: pool.filter((l) => l.position === "left"),
+            center: pool.filter((l) => l.position === "center"),
+            right: pool.filter((l) => l.position === "right"),
+          };
+          const renderGroup = (items: OemLogoWithUrl[], align: "start" | "center" | "end") => (
+            <div className="flex flex-wrap items-center gap-4" style={{ justifyContent: align === "start" ? "flex-start" : align === "end" ? "flex-end" : "center" }}>
+              {items.map((l) => (
+                <img key={l.id} src={l.url} alt={l.oem_name}
+                  style={{ height: SIZE_PX[l.size], maxWidth: 220, objectFit: "contain" }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+              ))}
+            </div>
+          );
+          return (
+            <div className="mt-6 pt-3 grid grid-cols-3 gap-4 items-center"
+              style={{ borderTop: "0.5px solid #9ca3af", background: "#fafafa", padding: "12px 16px" }}>
+              <div>{renderGroup(groups.left, "start")}</div>
+              <div>{renderGroup(groups.center, "center")}</div>
+              <div>{renderGroup(groups.right, "end")}</div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Legacy print block (disabled; retained for reference) */}
+      <div className="hidden text-black">
         <style>{`@media print { @page { size: A4; margin: 12mm; } body { font-family: Arial, Helvetica, sans-serif; color:#000; } .zh-th{background:#374151;color:#fff;padding:6px;font-size:11px;text-align:left} .zh-td{border-bottom:1px solid #e5e7eb;padding:6px;font-size:11px;vertical-align:top} }`}</style>
 
         {/* Header */}

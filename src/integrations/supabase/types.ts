@@ -547,6 +547,12 @@ export type Database = {
       }
       company_profile: {
         Row: {
+          accent_color: string | null
+          bank_account_name: string | null
+          bank_account_number: string | null
+          bank_branch: string | null
+          bank_ifsc: string | null
+          bank_name: string | null
           created_at: string
           email: string | null
           factory_address: string | null
@@ -557,10 +563,18 @@ export type Database = {
           name: string
           phone: string | null
           regd_address: string
+          registered_office_address: string | null
+          sales_office_address: string | null
           updated_at: string
           website: string | null
         }
         Insert: {
+          accent_color?: string | null
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           created_at?: string
           email?: string | null
           factory_address?: string | null
@@ -571,10 +585,18 @@ export type Database = {
           name?: string
           phone?: string | null
           regd_address?: string
+          registered_office_address?: string | null
+          sales_office_address?: string | null
           updated_at?: string
           website?: string | null
         }
         Update: {
+          accent_color?: string | null
+          bank_account_name?: string | null
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           created_at?: string
           email?: string | null
           factory_address?: string | null
@@ -585,6 +607,8 @@ export type Database = {
           name?: string
           phone?: string | null
           regd_address?: string
+          registered_office_address?: string | null
+          sales_office_address?: string | null
           updated_at?: string
           website?: string | null
         }
@@ -3217,6 +3241,7 @@ export type Database = {
           delivery_address: string | null
           delivery_address_type: string
           delivery_date: string | null
+          delivery_terms: string | null
           discount: number
           id: string
           igst: number
@@ -3260,6 +3285,7 @@ export type Database = {
           delivery_address?: string | null
           delivery_address_type?: string
           delivery_date?: string | null
+          delivery_terms?: string | null
           discount?: number
           id?: string
           igst?: number
@@ -3303,6 +3329,7 @@ export type Database = {
           delivery_address?: string | null
           delivery_address_type?: string
           delivery_date?: string | null
+          delivery_terms?: string | null
           discount?: number
           id?: string
           igst?: number
