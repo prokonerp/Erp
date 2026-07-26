@@ -1,5 +1,6 @@
 import { amountInWords } from "@/lib/crm";
 import type { CompanyProfile } from "@/lib/companyProfile";
+import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export type PrintParty = {
   name: string;
@@ -76,7 +77,11 @@ const fmtDate = (iso?: string | null) => {
 // trailing commas when line 2 / a segment is empty.
 const cleanAddress = (raw?: string | null) => {
   if (!raw) return "";
-  return raw
+  const stripped = raw.replace(
+    /^\s*(sales\s*office|regd\.?\s*office|registered\s*office)\s*[:\-]\s*/i,
+    "",
+  );
+  return stripped
     .split(/[\n,]+/)
     .map((s) => s.trim())
     .filter(Boolean)
@@ -100,8 +105,27 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
   const t = doc.totals;
   const showCgstSgst = !doc.is_interstate;
 
-  const salesOffice = cleanAddress(company.sales_office_address);
-  const regdOffice = cleanAddress(company.registered_office_address || company.regd_address);
+  // Auto-route addresses to the correct label even if a user typed a
+  // "Sales Office:" prefix into the Regd. Office field (or vice-versa).
+  const detectKind = (raw?: string | null): "sales" | "regd" | null => {
+    if (!raw) return null;
+    const m = raw.match(/^\s*(sales\s*office|regd\.?\s*office|registered\s*office)/i);
+    if (!m) return null;
+    return /sales/i.test(m[1]) ? "sales" : "regd";
+  };
+  const rawSales = company.sales_office_address;
+  const rawRegd = company.registered_office_address || company.regd_address;
+  let salesOffice = cleanAddress(rawSales);
+  let regdOffice = cleanAddress(rawRegd);
+  // Swap if the value in one slot is explicitly prefixed as the other kind
+  // and its target slot is empty.
+  if (!salesOffice && detectKind(rawRegd) === "sales") {
+    salesOffice = regdOffice;
+    regdOffice = "";
+  } else if (!regdOffice && detectKind(rawSales) === "regd") {
+    regdOffice = salesOffice;
+    salesOffice = "";
+  }
   const showBothOffices = !!(salesOffice && regdOffice && salesOffice !== regdOffice);
   const billAddr = cleanAddress(doc.bill_to.address);
   const shipAddr = cleanAddress(doc.ship_to?.address || doc.bill_to.address);
@@ -126,25 +150,31 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
         .doc-print table.items { width: 100%; border-collapse: collapse; border: 1px solid ${accent}; }
         .doc-print table.items th { background: ${accent} !important; color: #ffffff !important; padding: 5px 4px; font-size: 10px; font-weight: 700; border: 1px solid ${accent}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print table.items td { padding: 5px 4px; border: 1px solid #e5e7eb; font-size: 10.5px; vertical-align: top; }
-        .doc-print .lbl { color: #6b7280; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; }
+        .doc-print { border: 1.5px solid ${accent}; padding: 10px 12px; }
+        .doc-print .lbl { color: #374151; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 600; }
         .doc-print .lbl-r { color: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
       `}</style>
 
       {/* Header */}
       <div className="flex items-start justify-between pb-2 mb-3 border-b-2 accent-bd">
         <div className="pr-4">
-          {company.logo_url && (
-            <img src={company.logo_url} alt={company.name} style={{ maxHeight: 56, marginBottom: 4 }} crossOrigin="anonymous" />
-          )}
+          <img
+            src={company.logo_url || prokonLogo.url}
+            alt={company.name}
+            style={{ maxHeight: 56, marginBottom: 4 }}
+            crossOrigin="anonymous"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = prokonLogo.url; }}
+          />
           <div className="text-lg font-bold accent-tx">{company.name}</div>
           {salesOffice && (
-            <div className="text-[10px] mt-0.5"><span className="lbl">Sales Office: </span>{salesOffice}</div>
+            <div className="text-[10px] mt-0.5" style={{ lineHeight: 1.35 }}>
+              <span className="lbl">Sales Office: </span>{salesOffice}
+            </div>
           )}
-          {showBothOffices && (
-            <div className="text-[10px]"><span className="lbl">Regd. Office: </span>{regdOffice}</div>
-          )}
-          {!salesOffice && regdOffice && (
-            <div className="text-[10px] mt-0.5"><span className="lbl">Regd. Office: </span>{regdOffice}</div>
+          {(showBothOffices || (!salesOffice && regdOffice)) && (
+            <div className="text-[10px] mt-0.5" style={{ lineHeight: 1.35 }}>
+              <span className="lbl">Regd. Office: </span>{regdOffice}
+            </div>
           )}
           <div className="text-[10px] mt-0.5">
             {[
