@@ -14,13 +14,13 @@ export type PrintParty = {
 export type PrintItem = {
   description: string;
   item_details?: string | null;
-  warranty?: string | null; // e.g. "24 M"
+  warranty?: string | null; // "24 M"
   hsn?: string | null;
   qty: number;
   unit?: string | null;
   rate: number;
   gst_percent: number;
-  amount: number; // taxable/line total pre-tax
+  amount: number; // pre-tax line total (qty * rate - line discount)
 };
 
 export type PrintTotals = {
@@ -33,6 +33,12 @@ export type PrintTotals = {
   igst?: number;
   round_off?: number;
   grand_total: number;
+};
+
+export type PrintPreparedBy = {
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
 };
 
 export type PrintDoc = {
@@ -53,6 +59,7 @@ export type PrintDoc = {
   totals: PrintTotals;
   notes?: string | null;
   terms?: string | null;
+  prepared_by?: PrintPreparedBy | null;
 };
 
 const fmtMoney = (n: number) =>
@@ -64,20 +71,44 @@ const fmtDate = (iso?: string | null) => {
   return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : iso;
 };
 
+// Rebuild an address from a possibly-messy string: split on commas/newlines,
+// trim, drop blank segments, rejoin with a single ", ". Fixes double or
+// trailing commas when line 2 / a segment is empty.
+const cleanAddress = (raw?: string | null) => {
+  if (!raw) return "";
+  return raw
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(", ");
+};
+
 /**
  * Shared A4 print template for Quotations and Purchase Orders.
- * Parent renders this inside a `hidden print:block` wrapper and calls window.print().
+ * Parent renders this inside a `hidden print:block` wrapper (or invokes
+ * downloadElementAsPdf on the wrapper) and calls window.print().
  */
 export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: CompanyProfile }) {
-  const accent = company.accent_color || "#1f3864";
+  const accent = (company.accent_color && company.accent_color.trim()) || "#14225C";
   const title = doc.type === "quotation" ? "QUOTATION" : "PURCHASE ORDER";
-  const numLabel = doc.type === "quotation" ? "Quote #" : "PO #";
+  const numLabel = doc.type === "quotation" ? "Ref No" : "PO No";
   const billLabel = doc.type === "quotation" ? "Bill To" : "Vendor";
   const shipLabel = doc.type === "quotation" ? "Ship To" : "Deliver To";
-  const dateSecondaryLabel = doc.type === "quotation" ? "Expiry" : "Delivery";
+  const dateLabel = doc.type === "quotation" ? "Quote Date" : "PO Date";
+  const dateSecondaryLabel = doc.type === "quotation" ? "Valid Until" : "Delivery";
 
   const t = doc.totals;
   const showCgstSgst = !doc.is_interstate;
+
+  const salesOffice = cleanAddress(company.sales_office_address);
+  const regdOffice = cleanAddress(company.registered_office_address || company.regd_address);
+  const showBothOffices = !!(salesOffice && regdOffice && salesOffice !== regdOffice);
+  const billAddr = cleanAddress(doc.bill_to.address);
+  const shipAddr = cleanAddress(doc.ship_to?.address || doc.bill_to.address);
+  const billContact = [doc.bill_to.contact_name, doc.bill_to.contact_phone, doc.bill_to.contact_email]
+    .map((s) => (s || "").trim())
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="doc-print text-black">
@@ -87,51 +118,53 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
           body { font-family: Arial, Helvetica, sans-serif; color: #000; }
           .doc-print { font-size: 10.5px; }
           .doc-print thead { display: table-header-group; }
-          .doc-print tfoot { display: table-row-group; }
           .doc-print tr { page-break-inside: avoid; }
         }
-        .doc-print .accent-bar { background: ${accent}; color: #fff; }
+        .doc-print .accent-bar { background: ${accent} !important; color: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print .accent-tx { color: ${accent}; }
         .doc-print .accent-bd { border-color: ${accent}; }
-        .doc-print table.items { width: 100%; border-collapse: collapse; }
-        .doc-print table.items th { background: ${accent}; color: #fff; padding: 6px 5px; font-size: 10px; text-align: left; font-weight: 600; }
-        .doc-print table.items td { padding: 5px; border-bottom: 1px solid #e5e7eb; font-size: 10.5px; vertical-align: top; }
+        .doc-print table.items { width: 100%; border-collapse: collapse; border: 1px solid ${accent}; }
+        .doc-print table.items th { background: ${accent} !important; color: #ffffff !important; padding: 5px 4px; font-size: 10px; font-weight: 700; border: 1px solid ${accent}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .doc-print table.items td { padding: 5px 4px; border: 1px solid #e5e7eb; font-size: 10.5px; vertical-align: top; }
         .doc-print .lbl { color: #6b7280; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; }
+        .doc-print .lbl-r { color: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
       `}</style>
 
       {/* Header */}
       <div className="flex items-start justify-between pb-2 mb-3 border-b-2 accent-bd">
         <div className="pr-4">
           {company.logo_url && (
-            <img src={company.logo_url} alt={company.name} style={{ maxHeight: 48, marginBottom: 4 }} />
+            <img src={company.logo_url} alt={company.name} style={{ maxHeight: 56, marginBottom: 4 }} crossOrigin="anonymous" />
           )}
           <div className="text-lg font-bold accent-tx">{company.name}</div>
-          {company.registered_office_address && (
-            <div className="text-[10px] whitespace-pre-line">{company.registered_office_address}</div>
+          {salesOffice && (
+            <div className="text-[10px] mt-0.5"><span className="lbl">Sales Office: </span>{salesOffice}</div>
           )}
-          {!company.registered_office_address && company.regd_address && (
-            <div className="text-[10px] whitespace-pre-line">{company.regd_address}</div>
+          {showBothOffices && (
+            <div className="text-[10px]"><span className="lbl">Regd. Office: </span>{regdOffice}</div>
           )}
-          {company.sales_office_address && (
-            <div className="text-[10px] whitespace-pre-line mt-0.5">
-              <span className="lbl">Sales Office: </span>{company.sales_office_address}
-            </div>
+          {!salesOffice && regdOffice && (
+            <div className="text-[10px] mt-0.5"><span className="lbl">Regd. Office: </span>{regdOffice}</div>
           )}
           <div className="text-[10px] mt-0.5">
             {[
-              company.phone ? `Ph: ${company.phone}` : null,
-              company.email ? `Email: ${company.email}` : null,
-              company.website ? company.website : null,
-            ].filter(Boolean).join(" · ")}
+              company.gstin ? `GSTIN: ${company.gstin}` : null,
+              company.phone ? `Phone: ${company.phone}` : null,
+            ].filter(Boolean).join(" | ")}
           </div>
-          {company.gstin && <div className="text-[10px] font-semibold">GSTIN: {company.gstin}</div>}
+          <div className="text-[10px]">
+            {[
+              company.email ? `Email: ${company.email}` : null,
+              company.website ? `Web: ${company.website}` : null,
+            ].filter(Boolean).join(" | ")}
+          </div>
         </div>
         <div className="text-right shrink-0">
           <div className="text-xl font-bold accent-tx">{title}</div>
           <table className="ml-auto mt-1 text-[10.5px]">
             <tbody>
               <tr><td className="lbl pr-2">{numLabel}</td><td className="font-semibold">{doc.number || "—"}</td></tr>
-              <tr><td className="lbl pr-2">Date</td><td className="font-semibold">{fmtDate(doc.date)}</td></tr>
+              <tr><td className="lbl pr-2">{dateLabel}</td><td className="font-semibold">{fmtDate(doc.date)}</td></tr>
               {doc.expiry_or_delivery_date && (
                 <tr><td className="lbl pr-2">{dateSecondaryLabel}</td><td className="font-semibold">{fmtDate(doc.expiry_or_delivery_date)}</td></tr>
               )}
@@ -149,70 +182,88 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
           <div className="accent-bar px-2 py-1 text-[10px] font-semibold">{billLabel}</div>
           <div className="p-2 text-[10.5px]">
             <div className="font-semibold">{doc.bill_to.name}</div>
-            {doc.bill_to.address && <div className="whitespace-pre-line">{doc.bill_to.address}</div>}
+            {billAddr && <div>{billAddr}</div>}
             {doc.bill_to.gstin && <div className="mt-0.5">GSTIN: <span className="font-mono">{doc.bill_to.gstin}</span></div>}
             {doc.bill_to.state && <div>State: {doc.bill_to.state}</div>}
-            {(doc.bill_to.contact_name || doc.bill_to.contact_phone || doc.bill_to.contact_email) && (
-              <div className="mt-1 text-[10px]">
-                {doc.bill_to.contact_name && <div>Attn: {doc.bill_to.contact_name}</div>}
-                {[doc.bill_to.contact_phone, doc.bill_to.contact_email].filter(Boolean).join(" · ")}
-              </div>
-            )}
+            {billContact && <div className="mt-1 text-[10px]">{billContact}</div>}
           </div>
         </div>
         <div className="border" style={{ borderColor: "#d1d5db" }}>
           <div className="accent-bar px-2 py-1 text-[10px] font-semibold">{shipLabel}</div>
           <div className="p-2 text-[10.5px]">
             <div className="font-semibold">{doc.ship_to?.name || doc.bill_to.name}</div>
-            {(doc.ship_to?.address || doc.bill_to.address) && (
-              <div className="whitespace-pre-line">{doc.ship_to?.address || doc.bill_to.address}</div>
-            )}
+            {shipAddr && <div>{shipAddr}</div>}
             {doc.ship_to?.gstin && <div className="mt-0.5">GSTIN: <span className="font-mono">{doc.ship_to.gstin}</span></div>}
           </div>
         </div>
       </div>
 
-      {/* Meta row */}
-      <div className="grid grid-cols-4 gap-3 text-[10.5px] mb-3 border" style={{ borderColor: "#e5e7eb", padding: "6px 8px" }}>
-        <div><div className="lbl">Place of Supply</div><div className="font-semibold">{doc.place_of_supply || "—"}</div></div>
-        <div><div className="lbl">Sales Person</div><div className="font-semibold">{doc.sales_person || "—"}</div></div>
-        <div><div className="lbl">Payment Terms</div><div className="font-semibold">{doc.payment_terms || "—"}</div></div>
-        <div><div className="lbl">Delivery Terms</div><div className="font-semibold">{doc.delivery_terms || "—"}</div></div>
+      {/* Meta row: asymmetric — left compact/muted, right bold/wide */}
+      <div className="grid grid-cols-2 text-[10.5px] mb-3 border" style={{ borderColor: "#d1d5db" }}>
+        <div className="p-2" style={{ borderRight: "1px solid #d1d5db" }}>
+          <div className="flex items-baseline">
+            <span className="lbl" style={{ width: 130 }}>Place of Supply</span><span>:</span>
+            <span className="ml-2 font-semibold">{doc.place_of_supply || "—"}</span>
+          </div>
+          <div className="flex items-baseline mt-0.5">
+            <span className="lbl" style={{ width: 130 }}>Sales Person</span><span>:</span>
+            <span className="ml-2 font-semibold">{doc.sales_person || "—"}</span>
+          </div>
+        </div>
+        <div className="p-2">
+          <div className="flex items-baseline">
+            <span className="lbl-r" style={{ width: 170 }}>Payment Terms</span><span>:</span>
+            <span className="ml-4 font-bold">{doc.payment_terms || "—"}</span>
+          </div>
+          <div className="flex items-baseline mt-0.5">
+            <span className="lbl-r" style={{ width: 170 }}>Delivery Terms</span><span>:</span>
+            <span className="ml-4 font-bold">{doc.delivery_terms || "—"}</span>
+          </div>
+        </div>
       </div>
 
       {doc.subject && <div className="text-[11px] mb-2"><b>Subject:</b> {doc.subject}</div>}
 
-      {/* Items */}
+      {/* Items — grouped two-row tax headers */}
       <table className="items">
         <thead>
           <tr>
-            <th style={{ width: "3%" }}>#</th>
-            <th>Product / Description</th>
-            <th style={{ width: "8%" }} className="text-center">Warranty</th>
-            <th style={{ width: "8%" }} className="text-center">HSN</th>
-            <th style={{ width: "7%" }} className="text-right">Qty</th>
-            <th style={{ width: "10%" }} className="text-right">Rate</th>
+            <th rowSpan={2} style={{ width: "3%" }} className="text-center">#</th>
+            <th rowSpan={2}>Product / Description</th>
+            <th rowSpan={2} style={{ width: "8%" }} className="text-center">Warranty</th>
+            <th rowSpan={2} style={{ width: "8%" }} className="text-center">HSN</th>
+            <th rowSpan={2} style={{ width: "7%" }} className="text-right">Qty</th>
+            <th rowSpan={2} style={{ width: "11%" }} className="text-right">Rate</th>
             {showCgstSgst ? (
               <>
-                <th style={{ width: "6%" }} className="text-right">CGST%</th>
-                <th style={{ width: "9%" }} className="text-right">CGST</th>
-                <th style={{ width: "6%" }} className="text-right">SGST%</th>
-                <th style={{ width: "9%" }} className="text-right">SGST</th>
+                <th colSpan={2} className="text-center">CGST</th>
+                <th colSpan={2} className="text-center">SGST</th>
+              </>
+            ) : (
+              <th colSpan={2} className="text-center">IGST</th>
+            )}
+            <th rowSpan={2} style={{ width: "12%" }} className="text-right">Amount</th>
+          </tr>
+          <tr>
+            {showCgstSgst ? (
+              <>
+                <th style={{ width: "5%" }} className="text-center">%</th>
+                <th style={{ width: "8%" }} className="text-right">Amt</th>
+                <th style={{ width: "5%" }} className="text-center">%</th>
+                <th style={{ width: "8%" }} className="text-right">Amt</th>
               </>
             ) : (
               <>
-                <th style={{ width: "8%" }} className="text-right">IGST%</th>
-                <th style={{ width: "10%" }} className="text-right">IGST</th>
+                <th style={{ width: "6%" }} className="text-center">%</th>
+                <th style={{ width: "10%" }} className="text-right">Amt</th>
               </>
             )}
-            <th style={{ width: "12%" }} className="text-right">Amount</th>
           </tr>
         </thead>
         <tbody>
           {doc.items.map((it, i) => {
             const half = +((it.amount * (it.gst_percent || 0)) / 200).toFixed(2);
             const igst = +((it.amount * (it.gst_percent || 0)) / 100).toFixed(2);
-            const line = +(it.amount + (showCgstSgst ? half * 2 : igst)).toFixed(2);
             return (
               <tr key={i}>
                 <td className="text-center">{i + 1}</td>
@@ -237,7 +288,7 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
                     <td className="text-right">{fmtMoney(igst)}</td>
                   </>
                 )}
-                <td className="text-right font-semibold">{fmtMoney(line)}</td>
+                <td className="text-right font-semibold">{fmtMoney(it.amount)}</td>
               </tr>
             );
           })}
@@ -271,22 +322,42 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
       {(company.bank_name || company.bank_account_number) && (
         <div className="mt-4 border" style={{ borderColor: "#e5e7eb" }}>
           <div className="accent-bar px-2 py-1 text-[10px] font-semibold">Bank Details</div>
-          <div className="p-2 grid grid-cols-2 gap-2 text-[10.5px]">
-            {company.bank_name && <div><span className="lbl">Bank</span><div className="font-semibold">{company.bank_name}</div></div>}
-            {company.bank_account_name && <div><span className="lbl">A/C Name</span><div className="font-semibold">{company.bank_account_name}</div></div>}
-            {company.bank_account_number && <div><span className="lbl">A/C No.</span><div className="font-mono font-semibold">{company.bank_account_number}</div></div>}
-            {company.bank_ifsc && <div><span className="lbl">IFSC</span><div className="font-mono font-semibold">{company.bank_ifsc}</div></div>}
-            {company.bank_branch && <div className="col-span-2"><span className="lbl">Branch</span><div>{company.bank_branch}</div></div>}
+          <div className="p-2 grid grid-cols-3 gap-x-4 gap-y-1 text-[10.5px]">
+            {company.bank_name && <div><span className="lbl">Bank: </span><span className="font-semibold">{company.bank_name}</span></div>}
+            {company.bank_account_name && <div><span className="lbl">A/C Name: </span><span className="font-semibold">{company.bank_account_name}</span></div>}
+            {company.bank_account_number && <div><span className="lbl">A/C No.: </span><span className="font-mono font-semibold">{company.bank_account_number}</span></div>}
+            {company.bank_ifsc && <div><span className="lbl">IFSC: </span><span className="font-mono font-semibold">{company.bank_ifsc}</span></div>}
+            {company.bank_branch && <div><span className="lbl">Branch: </span><span className="font-semibold">{company.bank_branch}</span></div>}
           </div>
         </div>
       )}
 
-      {doc.notes && (
-        <div className="mt-3 text-[10.5px]"><div className="font-semibold">Notes</div><div className="whitespace-pre-line">{doc.notes}</div></div>
-      )}
-      {doc.terms && (
-        <div className="mt-2 text-[10.5px]"><div className="font-semibold">Terms &amp; Conditions</div><div className="whitespace-pre-line">{doc.terms}</div></div>
-      )}
+      {/* Terms / Notes (left) + Prepared By (right) */}
+      <div className="grid grid-cols-2 gap-6 mt-4 text-[10.5px]">
+        <div>
+          {doc.terms && (
+            <>
+              <div className="font-semibold accent-tx">Terms &amp; Conditions</div>
+              <div className="whitespace-pre-line">{doc.terms}</div>
+            </>
+          )}
+          {doc.notes && (
+            <div className={doc.terms ? "mt-2" : ""}>
+              <div className="font-semibold accent-tx">Notes</div>
+              <div className="whitespace-pre-line">{doc.notes}</div>
+            </div>
+          )}
+        </div>
+        <div className="text-right">
+          {doc.prepared_by?.name && (
+            <div>
+              <div><span className="lbl">Prepared By: </span><span className="font-semibold">{doc.prepared_by.name}</span></div>
+              {doc.prepared_by.phone && <div><span className="lbl">Mobile: </span>{doc.prepared_by.phone}</div>}
+              {doc.prepared_by.email && <div><span className="lbl">Email: </span>{doc.prepared_by.email}</div>}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Signature */}
       <div className="grid grid-cols-2 gap-8 mt-10 text-[10.5px]">
