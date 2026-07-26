@@ -16,6 +16,8 @@ import {
 } from "@/lib/purchaseOrder";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { downloadPurchaseOrderPdf, printPurchaseOrderPdf } from "@/lib/purchaseOrderPdf";
+import { DocumentPrintView, type PrintDoc } from "@/components/DocumentPrintView";
+import { fetchCompanyProfile, DEFAULT_COMPANY_PROFILE, type CompanyProfile } from "@/lib/companyProfile";
 
 export const Route = createFileRoute("/_app/po/$id")({
   component: POView,
@@ -36,6 +38,7 @@ function POView() {
     phone: string | null;
     email: string | null;
   } | null>(null);
+  const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
 
   async function load() {
     setLoading(true);
@@ -57,6 +60,7 @@ function POView() {
         phone: st.phone ?? null,
         email: st.email ?? null,
       } : null);
+      try { setCompany(await fetchCompanyProfile()); } catch { /* keep default */ }
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -113,6 +117,7 @@ function POView() {
             <Button size="sm" variant="outline" onClick={() => setStatus("cancelled")}><Ban className="h-4 w-4 mr-1" />Cancel</Button>
           )}
           <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => printPurchaseOrderPdf({ po, items, branch, settings: pdfSettings })}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print (A4)</Button>
           <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => downloadPurchaseOrderPdf({ po, items, branch, settings: pdfSettings }, `${po.po_no || "PO"}.pdf`)}><Download className="h-4 w-4 mr-1" />PDF</Button>
           <Button size="sm" variant="ghost" className="text-destructive" onClick={del}>Delete</Button>
         </div>
@@ -216,6 +221,60 @@ function POView() {
           {po.terms && <Card><CardHeader className="pb-2"><CardTitle className="text-base">Terms & Conditions</CardTitle></CardHeader><CardContent className="text-sm whitespace-pre-line">{po.terms}</CardContent></Card>}
         </div>
       )}
+
+      {/* A4 shared print template */}
+      <div className="hidden print:block">
+        <DocumentPrintView
+          company={company}
+          doc={{
+            type: "po",
+            number: po.po_no || "",
+            date: po.po_date,
+            expiry_or_delivery_date: po.delivery_date,
+            reference_no: null,
+            subject: null,
+            bill_to: {
+              name: po.vendor_name || "",
+              address: po.vendor_address,
+              gstin: po.vendor_gstin,
+              state: po.vendor_state_name,
+              contact_name: po.vendor_contact_name,
+              contact_phone: po.vendor_phone,
+              contact_email: po.vendor_email,
+            },
+            ship_to: {
+              name: po.customer_name || (po.delivery_address_type === "org" ? company.name : "Delivery Address"),
+              address: po.delivery_address,
+            },
+            is_interstate: !!po.is_interstate,
+            place_of_supply: po.vendor_state_name,
+            sales_person: null,
+            payment_terms: po.payment_terms,
+            delivery_terms: (po as any).delivery_terms || null,
+            items: items.map((it) => ({
+              description: it.description,
+              warranty: null,
+              hsn: it.hsn,
+              qty: it.qty,
+              unit: it.unit,
+              rate: it.rate,
+              gst_percent: it.gst_rate,
+              amount: it.taxable_value,
+            })),
+            totals: {
+              subtotal: po.subtotal,
+              discount: po.discount || 0,
+              cgst: po.cgst || 0,
+              sgst: po.sgst || 0,
+              igst: po.igst || 0,
+              round_off: po.round_off || 0,
+              grand_total: po.total,
+            },
+            notes: po.notes,
+            terms: po.terms,
+          } as PrintDoc}
+        />
+      </div>
     </div>
   );
 }
