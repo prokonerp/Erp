@@ -1,5 +1,6 @@
 import { amountInWords } from "@/lib/crm";
 import type { CompanyProfile } from "@/lib/companyProfile";
+import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export type PrintParty = {
   name: string;
@@ -76,7 +77,11 @@ const fmtDate = (iso?: string | null) => {
 // trailing commas when line 2 / a segment is empty.
 const cleanAddress = (raw?: string | null) => {
   if (!raw) return "";
-  return raw
+  const stripped = raw.replace(
+    /^\s*(sales\s*office|regd\.?\s*office|registered\s*office)\s*[:\-]\s*/i,
+    "",
+  );
+  return stripped
     .split(/[\n,]+/)
     .map((s) => s.trim())
     .filter(Boolean)
@@ -126,16 +131,21 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
         .doc-print table.items { width: 100%; border-collapse: collapse; border: 1px solid ${accent}; }
         .doc-print table.items th { background: ${accent} !important; color: #ffffff !important; padding: 5px 4px; font-size: 10px; font-weight: 700; border: 1px solid ${accent}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print table.items td { padding: 5px 4px; border: 1px solid #e5e7eb; font-size: 10.5px; vertical-align: top; }
-        .doc-print .lbl { color: #6b7280; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; }
+        .doc-print { border: 1.5px solid ${accent}; padding: 10px 12px; }
+        .doc-print .lbl { color: #374151; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 600; }
         .doc-print .lbl-r { color: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
       `}</style>
 
       {/* Header */}
       <div className="flex items-start justify-between pb-2 mb-3 border-b-2 accent-bd">
         <div className="pr-4">
-          {company.logo_url && (
-            <img src={company.logo_url} alt={company.name} style={{ maxHeight: 56, marginBottom: 4 }} crossOrigin="anonymous" />
-          )}
+          <img
+            src={company.logo_url || prokonLogo.url}
+            alt={company.name}
+            style={{ maxHeight: 56, marginBottom: 4 }}
+            crossOrigin="anonymous"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = prokonLogo.url; }}
+          />
           <div className="text-lg font-bold accent-tx">{company.name}</div>
           {salesOffice && (
             <div className="text-[10px] mt-0.5"><span className="lbl">Sales Office: </span>{salesOffice}</div>
