@@ -627,26 +627,44 @@ function QuoteEditor() {
           if ((q as any).include_oem_logos === false) return null;
           const pool = logosProductOnly ? filterLogosForItems(oemLogos, q.items) : oemLogos;
           if (pool.length === 0) return null;
-          const groups = {
-            left: pool.filter((l) => l.position === "left"),
-            center: pool.filter((l) => l.position === "center"),
-            right: pool.filter((l) => l.position === "right"),
-          };
-          const renderGroup = (items: OemLogoWithUrl[], align: "start" | "center" | "end") => (
-            <div className="flex flex-wrap items-center gap-4" style={{ justifyContent: align === "start" ? "flex-start" : align === "end" ? "flex-end" : "center" }}>
-              {items.map((l) => (
-                <img key={l.id} src={l.url} alt={l.oem_name}
-                  style={{ height: SIZE_PX[l.size], maxWidth: 220, objectFit: "contain" }}
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-              ))}
-            </div>
-          );
+          // Uniform logo strip: fixed height, equal spacing, white plate on
+          // every logo so no single OEM asset stands out with a background.
+          const ordered = [
+            ...pool.filter((l) => l.position === "left"),
+            ...pool.filter((l) => l.position === "center"),
+            ...pool.filter((l) => l.position === "right"),
+          ];
           return (
-            <div className="mt-6 pt-3 grid grid-cols-3 gap-4 items-center"
-              style={{ borderTop: "0.5px solid #9ca3af", background: "#fafafa", padding: "12px 16px" }}>
-              <div>{renderGroup(groups.left, "start")}</div>
-              <div>{renderGroup(groups.center, "center")}</div>
-              <div>{renderGroup(groups.right, "end")}</div>
+            <div
+              className="mt-6 flex items-center"
+              style={{
+                borderTop: "0.5px solid #9ca3af",
+                background: "#ffffff",
+                padding: "10px 16px",
+                justifyContent: "space-evenly",
+                gap: 16,
+              }}
+            >
+              {ordered.map((l) => (
+                <div
+                  key={l.id}
+                  style={{
+                    height: 40,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#ffffff",
+                    padding: "2px 6px",
+                  }}
+                >
+                  <img
+                    src={l.url}
+                    alt={l.oem_name}
+                    style={{ height: 32, maxWidth: 140, objectFit: "contain", display: "block" }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                  />
+                </div>
+              ))}
             </div>
           );
         })()}
