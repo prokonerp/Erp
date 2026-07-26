@@ -123,7 +123,6 @@ export async function renderInvoicePdf(args: {
   addrLines.slice(0, 2).forEach((ln) => { doc.text(ln, cx, ay, { align: "center" }); ay += 9; });
   const idParts: string[] = [];
   if (companyGstin) idParts.push(`GSTIN: ${companyGstin}`);
-  if (companyUdyam) idParts.push(`Udyam No: ${companyUdyam}`);
   if (idParts.length) { doc.setFont("helvetica", "bold"); doc.text(idParts.join("  |  "), cx, ay, { align: "center" }); ay += 9; doc.setFont("helvetica", "normal"); }
   const contact = [
     companyPhone ? `Phone: ${companyPhone}` : "",
