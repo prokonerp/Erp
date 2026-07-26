@@ -193,8 +193,8 @@ function InvoiceView() {
           <Button size="sm" variant="outline" asChild>
             <Link to="/sales/payments/new" search={{ invoice_id: inv.id } as any}><Wallet className="h-4 w-4 mr-1.5" />Record Payment</Link>
           </Button>
-          <Button size="sm" variant="outline" onClick={() => printInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, meta: pdfMeta } as any)}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
-          <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, meta: pdfMeta } as any)}><Download className="h-4 w-4 mr-1.5" />PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => printInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, company, showSupplyFrom, meta: pdfMeta } as any)}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
+          <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, company, showSupplyFrom, meta: pdfMeta } as any)}><Download className="h-4 w-4 mr-1.5" />PDF</Button>
         </div>
       </div>
 
