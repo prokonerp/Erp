@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList, Share2 } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList, Share2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
 import type { ProductMaster } from "@/components/ProductPicker";
@@ -31,7 +31,9 @@ import {
 } from "@/lib/crm";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
-import { DocumentPrintView, type PrintItem } from "@/components/DocumentPrintView";
+import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
+import { downloadElementAsPdf } from "@/lib/docPdf";
+import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
 
@@ -67,6 +69,8 @@ function QuoteEditor() {
   const [logosProductOnly, setLogosProductOnly] = useState(false);
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [warrantyMap, setWarrantyMap] = useState<Record<string, string>>({});
+  const [preparedBy, setPreparedBy] = useState<PrintPreparedBy | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
     let sourceId = id;
@@ -106,6 +110,36 @@ function QuoteEditor() {
     listOemLogos(true).then(withSignedUrls).then(setOemLogos).catch(() => {});
     getDocumentHeader().then(setCompany).catch(() => {});
   }, [id]);
+
+  // Prepared By: current logged-in user's name/phone/email from app_users.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) return;
+        const name = await getCurrentUserName();
+        const { data: au } = await supabase
+          .from("app_users")
+          .select("name,phone,email")
+          .eq("user_id", u.user.id)
+          .maybeSingle();
+        const row = (au as { name?: string | null; phone?: string | null; email?: string | null } | null) || null;
+        setPreparedBy({
+          name: (row?.name || name || u.user.email || "").trim() || null,
+          phone: row?.phone || null,
+          email: row?.email || u.user.email || null,
+        });
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  // Auto-fill Sales Person on first load if empty (do not overwrite a saved value).
+  useEffect(() => {
+    if (!q || q.salesperson) return;
+    getCurrentUserName().then((n) => {
+      if (n) setQ((prev) => (prev && !prev.salesperson ? { ...prev, salesperson: n } : prev));
+    });
+  }, [q?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch warranty per product for print (Item Master → warranty_duration + warranty_unit)
   useEffect(() => {
@@ -312,7 +346,25 @@ function QuoteEditor() {
           </Select>
           <Button size="sm" variant="outline" onClick={sendEmail} disabled={isClone}><Mail className="h-4 w-4 mr-1" />Email</Button>
           <Button size="sm" variant="outline" onClick={sendWA} disabled={isClone}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
-          <Button size="sm" variant="outline" onClick={() => window.print()} disabled={isClone}><Printer className="h-4 w-4 mr-1" />Print / PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => window.print()} disabled={isClone}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button size="sm" variant="outline" disabled={isClone} onClick={async () => {
+            if (!printRef.current) return;
+            printRef.current.classList.remove("hidden");
+            printRef.current.style.position = "fixed";
+            printRef.current.style.left = "-10000px";
+            printRef.current.style.top = "0";
+            printRef.current.style.width = "800px";
+            printRef.current.style.background = "#fff";
+            try {
+              await downloadElementAsPdf(printRef.current, `${q.quote_no || "Quotation"}.pdf`);
+              toast.success("PDF downloaded");
+            } catch (e: any) {
+              toast.error(e?.message || "PDF failed");
+            } finally {
+              printRef.current.removeAttribute("style");
+              printRef.current.classList.add("hidden");
+            }
+          }}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
           <Button size="sm" onClick={() => setShareOpen(true)} disabled={isClone}><Share2 className="h-4 w-4 mr-1" />Share</Button>
           <Button size="sm" variant="outline" onClick={convertToSo} disabled={isClone}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
           <Button size="sm" onClick={save}><Save className="h-4 w-4 mr-1" />Save</Button>
