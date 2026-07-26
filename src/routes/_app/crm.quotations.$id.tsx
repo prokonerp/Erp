@@ -563,8 +563,8 @@ function QuoteEditor() {
         </CardContent>
       </Card>
 
-      {/* ============ ZOHO-STYLE PRINT VIEW ============ */}
-      <div className="hidden print:block text-black">
+      {/* ============ SHARED A4 PRINT VIEW ============ */}
+      <div ref={printRef} className="hidden print:block text-black">
         <DocumentPrintView
           company={company}
           doc={{
@@ -620,6 +620,7 @@ function QuoteEditor() {
             },
             notes: q.customer_notes,
             terms: q.terms,
+            prepared_by: preparedBy,
           }}
         />
         {(() => {
