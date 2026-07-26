@@ -417,7 +417,16 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           </span>
         </div>
         <div className="mt-3 max-w-md">
-          <BranchPicker value={branchId} onChange={(id) => setBranchId(id)} required />
+          <BranchPicker
+            value={branchId}
+            onChange={(id) => setBranchId(id)}
+            required
+            label="Supply From Warehouse (internal — not printed)"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Company (Auto from Letterhead) is used as the document header. Warehouse is stored for
+            stock movement and shown only if "Show Supply From" is enabled in Sales Settings.
+          </p>
         </div>
       </FormSection>
 

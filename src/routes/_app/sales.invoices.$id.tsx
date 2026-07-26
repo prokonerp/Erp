@@ -27,6 +27,8 @@ import {
 } from "@/lib/sales";
 import { mockIrnPayload } from "@/lib/gst";
 import { downloadInvoicePdf, printInvoicePdf } from "@/lib/invoicePdf";
+import { getDocumentHeader, shouldShowSupplyFrom } from "@/lib/letterhead";
+import type { CompanyProfile } from "@/lib/companyProfile";
 
 export const Route = createFileRoute("/_app/sales/invoices/$id")({
   component: InvoiceView,
@@ -42,6 +44,8 @@ function InvoiceView() {
   const [customer, setCustomer] = useState<any>(null);
   const [pdfTheme, setPdfTheme] = useState<{ themeColor: string; copyLabel: string }>({ themeColor: "#000000", copyLabel: "Original Copy" });
   const [pdfSettings, setPdfSettings] = useState<{ company_name: string | null; company_address: string | null; udyam_no: string | null; phone: string | null; email: string | null } | null>(null);
+  const [company, setCompany] = useState<CompanyProfile | null>(null);
+  const [showSupplyFrom, setShowSupplyFrom] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // e-Way form
@@ -61,6 +65,12 @@ function InvoiceView() {
       ]);
       setBranch(bs.find((b) => b.id === r.invoice.branch_id) || null);
       setCustomer(cust);
+      const [co, supply] = await Promise.all([
+        getDocumentHeader("invoice"),
+        shouldShowSupplyFrom("invoice"),
+      ]);
+      setCompany(co);
+      setShowSupplyFrom(supply);
       const { data: st } = await supabase.from("invoice_settings").select("theme_color,copy_label,company_name,company_address,udyam_no,phone,email").eq("branch_id", r.invoice.branch_id).maybeSingle();
       if (st) {
         setPdfTheme({ themeColor: (st as any).theme_color || "#000000", copyLabel: (st as any).copy_label || "Original Copy" });
@@ -183,8 +193,8 @@ function InvoiceView() {
           <Button size="sm" variant="outline" asChild>
             <Link to="/sales/payments/new" search={{ invoice_id: inv.id } as any}><Wallet className="h-4 w-4 mr-1.5" />Record Payment</Link>
           </Button>
-          <Button size="sm" variant="outline" onClick={() => printInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, meta: pdfMeta } as any)}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
-          <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, meta: pdfMeta } as any)}><Download className="h-4 w-4 mr-1.5" />PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => printInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, company, showSupplyFrom, meta: pdfMeta } as any)}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
+          <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, company, showSupplyFrom, meta: pdfMeta } as any)}><Download className="h-4 w-4 mr-1.5" />PDF</Button>
         </div>
       </div>
 

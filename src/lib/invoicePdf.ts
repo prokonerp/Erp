@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import { amountInWords, hsnSummary, upiPaymentUri } from "@/lib/gst";
 import type { InvoiceRow, InvoiceItemRow, BranchRow } from "@/lib/sales";
 import { inr } from "@/lib/sales";
+import type { CompanyProfile } from "@/lib/companyProfile";
 
 type Customer = {
   company: string;
@@ -52,6 +53,10 @@ export async function renderInvoicePdf(args: {
     phone?: string | null;
     email?: string | null;
   } | null;
+  /** Company letterhead (source of truth). When present, takes priority over branch/settings for header. */
+  company?: CompanyProfile | null;
+  /** When true, render a small "Supply From: <warehouse>" line below the letterhead. */
+  showSupplyFrom?: boolean;
   meta?: { vehicle_no?: string | null; po_no?: string | null; po_date?: string | null; payment_terms?: string | null };
 }): Promise<jsPDF> {
   const { invoice, items, branch, customer } = args;
@@ -66,14 +71,17 @@ export async function renderInvoicePdf(args: {
 
   doc.setDrawColor(tr, tg, tb).setLineWidth(0.6);
 
-  // ============ RESOLVE COMPANY (settings override branch) ============
+  // ============ RESOLVE COMPANY (letterhead > invoice_settings > branch) ============
   const s = args.settings || {};
-  const companyName = (s.company_name || branch?.name || "").toString();
-  const companyAddress = (s.company_address || branch?.address || "").toString();
-  const companyGstin = branch?.gstin || "";
+  const co = args.company || null;
+  const companyName = (co?.name || s.company_name || branch?.name || "").toString();
+  const companyAddress = (co?.regd_address || s.company_address || branch?.address || "").toString();
+  const companyGstin = co?.gstin || branch?.gstin || "";
   const companyUdyam = s.udyam_no || branch?.cin || "";
-  const companyPhone = s.phone || branch?.phone || "";
-  const companyEmail = s.email || branch?.email || "";
+  const companyPhone = co?.phone || s.phone || branch?.phone || "";
+  const companyEmail = co?.email || s.email || branch?.email || "";
+  const companyWebsite = co?.website || "";
+  const companyLogo = co?.logo_url || branch?.logo_url || "";
   if (!companyName) console.error("[invoicePdf] company_name missing in settings/branch");
 
   // ============ HEADER BOX ============
@@ -86,8 +94,8 @@ export async function renderInvoicePdf(args: {
   doc.setLineWidth(0.4);
   drawRect(doc, margin, y, logoW, headerH);
   doc.setLineWidth(0.6);
-  if (branch?.logo_url) {
-    try { doc.addImage(branch.logo_url, "JPEG", margin + 6, y + 6, logoW - 12, headerH - 12); } catch { /* ignore */ }
+  if (companyLogo) {
+    try { doc.addImage(companyLogo, "JPEG", margin + 6, y + 6, logoW - 12, headerH - 12); } catch { /* ignore */ }
   } else {
     doc.setFont("helvetica", "bold").setFontSize(16).setTextColor(tr, tg, tb);
     const initials = (companyName.split(/\s+/).map((t) => t[0]).filter(Boolean).slice(0, 2).join("") || "").toUpperCase();
@@ -117,10 +125,23 @@ export async function renderInvoicePdf(args: {
   if (companyGstin) idParts.push(`GSTIN: ${companyGstin}`);
   if (companyUdyam) idParts.push(`Udyam No: ${companyUdyam}`);
   if (idParts.length) { doc.setFont("helvetica", "bold"); doc.text(idParts.join("  |  "), cx, ay, { align: "center" }); ay += 9; doc.setFont("helvetica", "normal"); }
-  const contact = [companyPhone ? `Phone: ${companyPhone}` : "", companyEmail ? `Email: ${companyEmail}` : ""].filter(Boolean).join("  |  ");
+  const contact = [
+    companyPhone ? `Phone: ${companyPhone}` : "",
+    companyEmail ? `Email: ${companyEmail}` : "",
+    companyWebsite ? `Web: ${companyWebsite}` : "",
+  ].filter(Boolean).join("  |  ");
   if (contact) doc.text(contact, cx, ay, { align: "center" });
 
   y += headerH;
+
+  // ============ OPTIONAL: SUPPLY FROM (warehouse/branch, small text) ============
+  if (args.showSupplyFrom && branch?.name) {
+    const supplyH = 12;
+    doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(90, 90, 90);
+    doc.text(`Supply From: ${branch.name}${branch.address ? " — " + branch.address : ""}`, margin + 4, y + 8);
+    doc.setTextColor(0, 0, 0);
+    y += supplyH;
+  }
 
   // ============ META (2 col grid) ============
   const metaH = 62;

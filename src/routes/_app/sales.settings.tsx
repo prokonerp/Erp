@@ -10,6 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { INDIAN_STATES, GSTIN_STATE_CODES } from "@/lib/india";
 import { stateCodeFromGSTIN, stateNameFromCode } from "@/lib/gst";
+import { CompanyProfileSettings } from "@/components/CompanyProfileSettings";
+import { LetterheadSettingsPanel } from "@/components/LetterheadSettingsPanel";
+import { useIsAdmin } from "@/lib/useRole";
 
 export const Route = createFileRoute("/_app/sales/settings")({
   component: SalesSettings,
@@ -35,6 +38,7 @@ type Settings = {
 };
 
 function SalesSettings() {
+  const { isAdmin } = useIsAdmin();
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [branchId, setBranchId] = useState("");
   const [branch, setBranch] = useState<BranchRow | null>(null);
@@ -108,8 +112,11 @@ function SalesSettings() {
     <div className="space-y-4 max-w-5xl">
       <h1 className="text-2xl font-bold">Sales Settings</h1>
 
+      <CompanyProfileSettings canEdit={isAdmin} />
+      <LetterheadSettingsPanel />
+
       <div className="flex items-center gap-2">
-        <Label className="text-xs">Branch:</Label>
+        <Label className="text-xs">Supply From Warehouse (internal only — not printed as header):</Label>
         <select className="h-9 rounded-md border bg-background px-2 text-sm" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
           {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>

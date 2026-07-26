@@ -2615,6 +2615,27 @@ export type Database = {
           },
         ]
       }
+      letterhead_settings: {
+        Row: {
+          document_type: string
+          show_supply_from: boolean
+          updated_at: string
+          use_letterhead: boolean
+        }
+        Insert: {
+          document_type: string
+          show_supply_from?: boolean
+          updated_at?: string
+          use_letterhead?: boolean
+        }
+        Update: {
+          document_type?: string
+          show_supply_from?: boolean
+          updated_at?: string
+          use_letterhead?: boolean
+        }
+        Relationships: []
+      }
       oem_brand_master: {
         Row: {
           created_at: string
