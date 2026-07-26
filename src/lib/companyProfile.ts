@@ -10,6 +10,14 @@ export type CompanyProfile = {
   email: string | null;
   website: string | null;
   logo_url: string | null;
+  sales_office_address: string | null;
+  registered_office_address: string | null;
+  accent_color: string | null;
+  bank_name: string | null;
+  bank_account_name: string | null;
+  bank_account_number: string | null;
+  bank_ifsc: string | null;
+  bank_branch: string | null;
 };
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
@@ -22,6 +30,14 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   email: "info@prokon.in",
   website: "www.prokon.in",
   logo_url: null,
+  sales_office_address: null,
+  registered_office_address: null,
+  accent_color: "#1f3864",
+  bank_name: null,
+  bank_account_name: null,
+  bank_account_number: null,
+  bank_ifsc: null,
+  bank_branch: null,
 };
 
 export async function fetchCompanyProfile(): Promise<CompanyProfile> {
