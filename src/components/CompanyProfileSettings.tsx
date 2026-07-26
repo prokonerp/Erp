@@ -36,6 +36,14 @@ export function CompanyProfileSettings({ canEdit }: Props) {
         email: p.email,
         website: p.website,
         logo_url: p.logo_url,
+        sales_office_address: p.sales_office_address,
+        registered_office_address: p.registered_office_address,
+        accent_color: p.accent_color,
+        bank_name: p.bank_name,
+        bank_account_name: p.bank_account_name,
+        bank_account_number: p.bank_account_number,
+        bank_ifsc: p.bank_ifsc,
+        bank_branch: p.bank_branch,
       });
       toast.success("Company letterhead updated. Prints will use the new details.");
       const fresh = await fetchCompanyProfile();
@@ -69,6 +77,11 @@ export function CompanyProfileSettings({ canEdit }: Props) {
               onChange={(e) => set("regd_address", e.target.value)} />
           </div>
           <div className="sm:col-span-2 space-y-1">
+            <Label>Sales Office Address <span className="text-muted-foreground text-xs">(optional — shown on document header)</span></Label>
+            <Textarea rows={2} value={p.sales_office_address ?? ""} disabled={!canEdit}
+              onChange={(e) => set("sales_office_address", e.target.value)} />
+          </div>
+          <div className="sm:col-span-2 space-y-1">
             <Label>Factory Address</Label>
             <Textarea rows={2} value={p.factory_address ?? ""} disabled={!canEdit}
               onChange={(e) => set("factory_address", e.target.value)} />
@@ -94,6 +107,48 @@ export function CompanyProfileSettings({ canEdit }: Props) {
             <Input value={p.logo_url ?? ""} disabled={!canEdit}
               placeholder="Leave blank to use the default Prokon logo"
               onChange={(e) => set("logo_url", e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Document Accent Color</Label>
+            <div className="flex items-center gap-2">
+              <Input type="color" className="h-9 w-14 p-1"
+                value={p.accent_color ?? "#1f3864"} disabled={!canEdit}
+                onChange={(e) => set("accent_color", e.target.value)} />
+              <Input value={p.accent_color ?? "#1f3864"} disabled={!canEdit}
+                onChange={(e) => set("accent_color", e.target.value)} />
+            </div>
+            <p className="text-xs text-muted-foreground">Used for header bars on printed Quotation & Purchase Order.</p>
+          </div>
+        </div>
+
+        <div className="pt-3 border-t">
+          <div className="text-sm font-semibold mb-2">Bank Details <span className="text-muted-foreground font-normal text-xs">(printed on Quotation & PO)</span></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label>Bank Name</Label>
+              <Input value={p.bank_name ?? ""} disabled={!canEdit}
+                onChange={(e) => set("bank_name", e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Account Name</Label>
+              <Input value={p.bank_account_name ?? ""} disabled={!canEdit}
+                onChange={(e) => set("bank_account_name", e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Account Number</Label>
+              <Input value={p.bank_account_number ?? ""} disabled={!canEdit}
+                onChange={(e) => set("bank_account_number", e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>IFSC Code</Label>
+              <Input value={p.bank_ifsc ?? ""} disabled={!canEdit}
+                onChange={(e) => set("bank_ifsc", e.target.value)} />
+            </div>
+            <div className="sm:col-span-2 space-y-1">
+              <Label>Branch</Label>
+              <Input value={p.bank_branch ?? ""} disabled={!canEdit}
+                onChange={(e) => set("bank_branch", e.target.value)} />
+            </div>
           </div>
         </div>
         {canEdit && (
