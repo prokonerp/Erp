@@ -349,20 +349,20 @@ function QuoteEditor() {
           <Button size="sm" variant="outline" onClick={() => window.print()} disabled={isClone}><Printer className="h-4 w-4 mr-1" />Print</Button>
           <Button size="sm" variant="outline" disabled={isClone} onClick={async () => {
             if (!printRef.current) return;
-            printRef.current.classList.remove("hidden");
-            printRef.current.style.position = "fixed";
-            printRef.current.style.left = "-10000px";
-            printRef.current.style.top = "0";
-            printRef.current.style.width = "800px";
-            printRef.current.style.background = "#fff";
+            const el = printRef.current;
+            el.style.display = "block";
+            el.style.position = "fixed";
+            el.style.left = "-10000px";
+            el.style.top = "0";
+            el.style.width = "794px"; // A4 @ 96dpi
+            el.style.background = "#fff";
             try {
-              await downloadElementAsPdf(printRef.current, `${q.quote_no || "Quotation"}.pdf`);
+              await downloadElementAsPdf(el, `${q.quote_no || "Quotation"}.pdf`);
               toast.success("PDF downloaded");
             } catch (e: any) {
               toast.error(e?.message || "PDF failed");
             } finally {
-              printRef.current.removeAttribute("style");
-              printRef.current.classList.add("hidden");
+              el.removeAttribute("style");
             }
           }}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
           <Button size="sm" onClick={() => setShareOpen(true)} disabled={isClone}><Share2 className="h-4 w-4 mr-1" />Share</Button>
