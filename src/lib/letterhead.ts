@@ -31,17 +31,17 @@ export function getCompany(): Promise<CompanyProfile> {
 
 export function getLetterheadSettings(): Promise<Record<LetterheadDocType, LetterheadSetting>> {
   if (!settingsCache) {
-    settingsCache = supabase
-      .from("letterhead_settings" as never)
-      .select("document_type,use_letterhead,show_supply_from")
-      .then(({ data }) => {
+    settingsCache = (async () => {
+      const { data } = await supabase
+        .from("letterhead_settings" as never)
+        .select("document_type,use_letterhead,show_supply_from");
         const out: Record<string, LetterheadSetting> = {};
         (["quotation", "sales_order", "delivery_challan", "pi", "invoice"] as const).forEach((t) => {
           out[t] = DEFAULT_SETTING(t);
         });
         ((data as LetterheadSetting[] | null) ?? []).forEach((r) => { out[r.document_type] = r; });
         return out as Record<LetterheadDocType, LetterheadSetting>;
-      });
+    })();
   }
   return settingsCache;
 }
