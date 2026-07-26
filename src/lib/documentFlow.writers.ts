@@ -8,6 +8,7 @@ import { computeTotals, stateCodeFromGSTIN, stateNameFromCode, amountInWords } f
 import { fetchBranches, itemDraftFromBreakup, type ItemDraft } from "@/lib/sales";
 import type { Quotation, Customer } from "@/lib/crm";
 import type { SalesOrder } from "@/lib/salesOrders";
+import { getCompany } from "@/lib/letterhead";
 import {
   quoteToSalesOrder,
   salesOrderToDeliveryChallan,
@@ -42,6 +43,7 @@ export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id:
 
   const payload = quoteToSalesOrder(quote);
   const { customer, branch } = await hydrateParties({ branch_id: payload.branch_id, customer_id: payload.customer_id });
+  const company = await getCompany();
 
   const sellerCode = branch?.state_code || stateCodeFromGSTIN(branch?.gstin) || null;
   const buyerCode = (customer as unknown as { state_code?: string })?.state_code || stateCodeFromGSTIN(customer?.gst || null);
@@ -61,11 +63,11 @@ export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id:
   const insert = {
     ...payload,
     branch_id: branch?.id ?? payload.branch_id,
-    seller_name: branch?.name ?? null,
-    seller_gstin: branch?.gstin ?? null,
+    seller_name: company.name,
+    seller_gstin: company.gstin ?? branch?.gstin ?? null,
     seller_state: branch?.state_name ?? stateNameFromCode(sellerCode) ?? null,
     seller_state_code: sellerCode,
-    seller_address: branch?.address ?? null,
+    seller_address: company.regd_address,
     buyer_name: customer?.company ?? null,
     buyer_gstin: customer?.gst ?? null,
     buyer_state: customer?.state ?? stateNameFromCode(buyerCode) ?? null,
@@ -113,6 +115,7 @@ async function insertInvoiceFromPayload(
   if (!branch) throw new Error("No branch configured for invoice");
   if (!branch.gstin) throw new Error("Selected branch has no GSTIN — set it in Sales → Settings");
   if (!customer) throw new Error("Customer required to raise invoice");
+  const company = await getCompany();
 
   const sellerCode = branch.state_code || stateCodeFromGSTIN(branch.gstin) || null;
   const buyerCode = (customer as unknown as { state_code?: string }).state_code || stateCodeFromGSTIN(customer.gst || null);
@@ -146,11 +149,11 @@ async function insertInvoiceFromPayload(
     customer_id: customer.id,
     po_number: payload.po_number,
     po_date: payload.po_date,
-    seller_name: branch.name,
-    seller_gstin: branch.gstin,
+    seller_name: company.name,
+    seller_gstin: company.gstin || branch.gstin,
     seller_state: branch.state_name,
     seller_state_code: sellerCode,
-    seller_address: branch.address,
+    seller_address: company.regd_address,
     buyer_name: customer.company,
     buyer_gstin: customer.gst,
     buyer_state: customer.state ?? stateNameFromCode(buyerCode),

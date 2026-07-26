@@ -27,7 +27,7 @@ import {
 } from "@/lib/sales";
 import { mockIrnPayload } from "@/lib/gst";
 import { downloadInvoicePdf, printInvoicePdf } from "@/lib/invoicePdf";
-import { getDocumentHeader, shouldShowSupplyFrom } from "@/lib/letterhead";
+import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 
 export const Route = createFileRoute("/_app/sales/invoices/$id")({
@@ -65,12 +65,9 @@ function InvoiceView() {
       ]);
       setBranch(bs.find((b) => b.id === r.invoice.branch_id) || null);
       setCustomer(cust);
-      const [co, supply] = await Promise.all([
-        getDocumentHeader("invoice"),
-        shouldShowSupplyFrom("invoice"),
-      ]);
+      const co = await getDocumentHeader();
       setCompany(co);
-      setShowSupplyFrom(supply);
+      setShowSupplyFrom(true);
       const { data: st } = await supabase.from("invoice_settings").select("theme_color,copy_label,company_name,company_address,udyam_no,phone,email").eq("branch_id", r.invoice.branch_id).maybeSingle();
       if (st) {
         setPdfTheme({ themeColor: (st as any).theme_color || "#000000", copyLabel: (st as any).copy_label || "Original Copy" });
@@ -159,7 +156,7 @@ function InvoiceView() {
     load();
   }
 
-  if (loading || !inv) return <div className="p-6 text-muted-foreground">Loading…</div>;
+  if (loading || !inv || !company) return <div className="p-6 text-muted-foreground">Loading…</div>;
 
   const s = statusMeta(inv.status);
   const due = Math.max(0, Number(inv.total) - Number(inv.total_paid));
@@ -169,6 +166,7 @@ function InvoiceView() {
     return y && m && day ? `${day}-${m}-${y}` : d;
   };
   const pdfMeta = { po_no: inv.po_number || "", po_date: fmtDMY(inv.po_date), payment_terms: inv.payment_terms || "" };
+  console.log("HEADER DATA:", company);
 
   return (
     <div className="space-y-4">
@@ -215,9 +213,9 @@ function InvoiceView() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">Seller</CardTitle></CardHeader>
           <CardContent className="text-sm space-y-0.5">
-            <div className="font-semibold">{inv.seller_name}</div>
-            <div className="text-muted-foreground text-xs">{inv.seller_address}</div>
-            <div>GSTIN: <span className="font-mono text-xs">{inv.seller_gstin || "—"}</span></div>
+            <div className="font-semibold">{company.name}</div>
+            <div className="text-muted-foreground text-xs">{company.regd_address}</div>
+            <div>GSTIN: <span className="font-mono text-xs">{company.gstin || "—"}</span></div>
             <div>State: {inv.seller_state} ({inv.seller_state_code})</div>
           </CardContent>
         </Card>

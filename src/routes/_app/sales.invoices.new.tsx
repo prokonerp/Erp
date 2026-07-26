@@ -30,6 +30,7 @@ import {
   stateNameFromCode,
   amountInWords,
 } from "@/lib/gst";
+import { getCompany } from "@/lib/letterhead";
 
 export const Route = createFileRoute("/_app/sales/invoices/new")({
   component: NewInvoice,
@@ -152,6 +153,7 @@ function NewInvoice() {
 
     setSaving(true);
     try {
+      const company = await getCompany();
       const invoicePayload: any = {
         invoice_date: invoiceDate,
         due_date: dueDate || null,
@@ -159,11 +161,11 @@ function NewInvoice() {
         customer_id: customer.id,
         po_number: poNumber || null,
         po_date: poDate || null,
-        seller_name: branch.name,
-        seller_gstin: branch.gstin,
+        seller_name: company.name,
+        seller_gstin: company.gstin || branch.gstin,
         seller_state: sellerState,
         seller_state_code: sellerCode,
-        seller_address: branch.address,
+        seller_address: company.regd_address,
         buyer_name: customer.company,
         buyer_gstin: customer.gst,
         buyer_state: buyerState,

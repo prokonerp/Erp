@@ -29,6 +29,8 @@ import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
 } from "@/lib/crm";
+import { getDocumentHeader } from "@/lib/letterhead";
+import type { CompanyProfile } from "@/lib/companyProfile";
 
 export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
 
@@ -62,6 +64,7 @@ function QuoteEditor() {
   const [shareOpen, setShareOpen] = useState(false);
   const [oemLogos, setOemLogos] = useState<OemLogoWithUrl[]>([]);
   const [logosProductOnly, setLogosProductOnly] = useState(false);
+  const [company, setCompany] = useState<CompanyProfile | null>(null);
 
   const load = async () => {
     let sourceId = id;
@@ -99,6 +102,7 @@ function QuoteEditor() {
     supabase.from("crm_settings").select("*").eq("id", 1).single().then(({ data }) => setSettings((data as any) || { id: 1, business_state: "Haryana", business_gstin: null, default_terms: "", default_customer_notes: "Thanks for your business." }));
     fetchBranches().then((bs) => setBranches(bs)).catch(() => {});
     listOemLogos(true).then(withSignedUrls).then(setOemLogos).catch(() => {});
+    getDocumentHeader().then(setCompany).catch(() => {});
   }, [id]);
 
   // Default branch on first load
@@ -269,9 +273,10 @@ function QuoteEditor() {
     }
   };
 
-  if (!q || !settings) return <div className="text-muted-foreground">Loading…</div>;
+  if (!q || !settings || !company) return <div className="text-muted-foreground">Loading…</div>;
 
   const STATUSES: QuoteStatus[] = ["draft", "sent", "accepted", "declined", "expired", "invoiced"];
+  console.log("HEADER DATA:", company);
 
   return (
     <div className="space-y-4">
@@ -298,7 +303,7 @@ function QuoteEditor() {
         customerName={customer?.contact_name || customer?.company || "Customer"}
         customerPhone={customer?.phone || null}
         customerEmail={customer?.email || null}
-        companyName={invSettings?.company_name || branch?.name || "Prokon Hi-Tech Systems"}
+        companyName={company.name}
         quoteNo={q.quote_no}
         subject={q.subject}
         onGeneratePdf={() => window.print()}
@@ -308,19 +313,14 @@ function QuoteEditor() {
         <CardHeader><CardTitle className="text-base">{q.quote_no || (isClone ? "New quotation (unsaved copy)" : "Quotation")}</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-3">
           <div className="md:col-span-3">
-            <Label>Branch / Warehouse <span className="text-muted-foreground font-normal">(company header source)</span></Label>
+            <Label>Supply From Warehouse <span className="text-muted-foreground font-normal">(internal only)</span></Label>
             <Select value={q.branch_id || ""} onValueChange={(v) => setQ({ ...q, branch_id: v })}>
               <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
               <SelectContent>{branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
             </Select>
             {branch && (
               <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                <span>{invSettings?.company_name || branch.name}</span>
-                {(invSettings?.company_address || branch.address) && <span>· {invSettings?.company_address || branch.address}</span>}
-                {branch.gstin && <span>· GSTIN: <span className="font-mono">{branch.gstin}</span></span>}
-                {invSettings?.udyam_no && <span>· UDYAM: {invSettings.udyam_no}</span>}
-                {(invSettings?.phone || branch.phone) && <span>· {invSettings?.phone || branch.phone}</span>}
-                {(invSettings?.email || branch.email) && <span>· {invSettings?.email || branch.email}</span>}
+                <span>Supply From: {branch.name}</span>
               </div>
             )}
           </div>
@@ -500,23 +500,20 @@ function QuoteEditor() {
         >
           <div>
             <div className="text-2xl font-bold tracking-tight">
-              {invSettings?.company_name || branch?.name || "Prokon Hi-Tech Systems"}
+              {company.name}
             </div>
             <div className="text-[11px] mt-0.5 whitespace-pre-line">
-              {invSettings?.company_address || branch?.address || ""}
+              {company.regd_address}
             </div>
-            {branch?.address && invSettings?.company_address && branch.address !== invSettings.company_address && (
-              <div className="text-[11px] italic">Warehouse: {branch.address}</div>
-            )}
             <div className="text-[11px]">
-              {[invSettings?.email || branch?.email, invSettings?.phone || branch?.phone].filter(Boolean).join(" · ")}
+              {[company.email ? `Email: ${company.email}` : null, company.phone ? `Phone: ${company.phone}` : null].filter(Boolean).join(" · ")}
             </div>
             <div className="text-[11px]">
               {[
-                branch?.gstin ? `GSTIN: ${branch.gstin}` : (settings.business_gstin ? `GSTIN: ${settings.business_gstin}` : null),
-                invSettings?.udyam_no ? `UDYAM: ${invSettings.udyam_no}` : null,
+                company.gstin ? `GSTIN: ${company.gstin}` : null,
               ].filter(Boolean).join(" · ") || "—"}
             </div>
+            {branch?.name && <div className="text-[11px] italic mt-1">Supply From: {branch.name}</div>}
             <div className="text-[11px] italic mt-1">Authorized APC by Schneider Electric Channel Partner</div>
           </div>
           <div className="text-right">
@@ -626,7 +623,7 @@ function QuoteEditor() {
         <div className="grid grid-cols-2 gap-8 mt-12 text-[11px]">
           <div className="border-t border-gray-700 pt-1 text-center">Customer Signature</div>
           <div className="border-t border-gray-700 pt-1 text-center">
-            For {invSettings?.company_name || branch?.name || "Prokon Hi-Tech Systems"}
+            For {company.name}
             <div className="mt-6 text-gray-600">Authorised Signatory</div>
           </div>
         </div>
