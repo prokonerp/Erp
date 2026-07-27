@@ -150,7 +150,8 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
         .doc-print table.items { width: 100%; border-collapse: collapse; border: 1px solid ${accent}; }
         .doc-print table.items th { background: ${accent} !important; color: #ffffff !important; padding: 5px 4px; font-size: 10px; font-weight: 700; border: 1px solid ${accent}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print table.items td { padding: 5px 4px; border: 1px solid #e5e7eb; font-size: 10.5px; vertical-align: top; }
-        .doc-print { border: 1.5px solid ${accent}; padding: 10px 12px; }
+        .doc-print { border: 1.5px solid ${accent}; padding: 10px 12px; display: flex; flex-direction: column; min-height: 272mm; box-sizing: border-box; }
+        .doc-print .doc-spacer { flex: 1 1 auto; min-height: 8px; }
         .doc-print .lbl { color: #374151; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 600; }
         .doc-print .lbl-r { color: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
       `}</style>
