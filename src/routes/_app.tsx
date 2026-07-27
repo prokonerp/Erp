@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  FileSpreadsheet,
   ListChecks,
   ShieldCheck,
   Briefcase,
