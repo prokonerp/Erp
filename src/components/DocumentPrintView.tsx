@@ -390,8 +390,10 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
         </div>
       </div>
 
+      <div className="doc-spacer" />
+
       {/* Signature */}
-      <div className="grid grid-cols-2 gap-8 mt-10 text-[10.5px]">
+      <div className="grid grid-cols-2 gap-8 mt-6 text-[10.5px]">
         <div className="border-t pt-1 text-center" style={{ borderColor: "#6b7280" }}>
           {doc.type === "quotation" ? "Customer Signature" : "Vendor Acknowledgement"}
         </div>
