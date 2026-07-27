@@ -588,7 +588,7 @@ function QuotesWorkspace() {
                     <Field label="Project" value={selected.project_name || "—"} />
                   </div>
 
-                  <div className="border rounded-md overflow-hidden">
+                  <div className="border rounded-md overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
