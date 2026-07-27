@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/crm/quotations/new")({
   component: NewQuotation,
+  validateSearch: (s: Record<string, unknown>) => ({ clone: typeof s.clone === "string" ? s.clone : undefined }),
   head: () => ({
     meta: [
       { title: "New Quotation · Prokon ERP" },
