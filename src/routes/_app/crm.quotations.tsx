@@ -438,9 +438,11 @@ function QuotesWorkspace() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-3">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-8rem)] gap-3">
       {/* Left panel */}
-      <Card className="w-[32%] min-w-[300px] flex flex-col overflow-hidden">
+      <Card
+        className={`w-full md:w-[32%] md:min-w-[300px] flex-1 md:flex-none flex-col overflow-hidden ${selectedId ? "hidden md:flex" : "flex"}`}
+      >
         <CardHeader className="p-3 space-y-2 border-b">
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-sm">Quotations</CardTitle>
@@ -490,7 +492,9 @@ function QuotesWorkspace() {
       </Card>
 
       {/* Right panel */}
-      <Card className="flex-1 flex flex-col overflow-hidden">
+      <Card
+        className={`flex-1 flex-col overflow-hidden ${selectedId ? "flex" : "hidden md:flex"}`}
+      >
         {!selected && !selLoading && (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
             Select a quotation to view details
@@ -505,24 +509,32 @@ function QuotesWorkspace() {
           <>
             {/* Sticky header */}
             <div className="sticky top-0 z-10 bg-background border-b p-3 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-3">
-                <div>
+              <div className="flex min-w-0 items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="md:hidden shrink-0 px-2"
+                  onClick={() => setSelectedId(null)}
+                >
+                  ←
+                </Button>
+                <div className="min-w-0">
                   <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Quotation</div>
-                  <div className="font-semibold text-base flex items-center gap-2">
+                  <div className="font-semibold text-base flex flex-wrap items-center gap-2">
                     {selected.quote_no || "(unsaved)"}
                     <Badge variant="outline" className={quoteStatusClass[selected.status]}>{selected.status}</Badge>
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-xs text-muted-foreground truncate">
                     {cmap[selected.customer_id || ""]?.company || "—"} • {fmtDate(selected.quote_date)}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="text-right">
                   <div className="text-[11px] text-muted-foreground uppercase">Total</div>
                   <div className="font-semibold text-base">{fmtMoney(selected.total)}</div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                   <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id } })}>
                     <Pencil className="h-3.5 w-3.5 mr-1" />Edit
                   </Button>
@@ -576,7 +588,7 @@ function QuotesWorkspace() {
                     <Field label="Project" value={selected.project_name || "—"} />
                   </div>
 
-                  <div className="border rounded-md overflow-hidden">
+                  <div className="border rounded-md overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
