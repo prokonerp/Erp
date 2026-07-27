@@ -434,10 +434,10 @@ function QuotesWorkspace() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-8rem)] gap-3">
+    <div className="flex flex-row h-[calc(100vh-8rem)] gap-2 md:gap-3">
       {/* Left panel */}
       <Card
-        className={`w-full md:w-[32%] md:min-w-[300px] flex-1 md:flex-none flex-col overflow-hidden ${selectedId ? "hidden md:flex" : "flex"}`}
+        className="flex w-[38%] min-w-[150px] md:w-[32%] md:min-w-[300px] shrink-0 flex-col overflow-hidden"
       >
         <CardHeader className="p-3 space-y-2 border-b">
           <div className="flex items-center justify-between gap-2">
@@ -489,7 +489,7 @@ function QuotesWorkspace() {
 
       {/* Right panel */}
       <Card
-        className={`flex-1 flex-col overflow-hidden ${selectedId ? "flex" : "hidden md:flex"}`}
+        className="flex flex-1 min-w-0 flex-col overflow-hidden"
       >
         {!selected && !selLoading && (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
@@ -506,14 +506,6 @@ function QuotesWorkspace() {
             {/* Sticky header */}
             <div className="sticky top-0 z-10 bg-background border-b p-3 flex items-center justify-between gap-3 flex-wrap">
               <div className="flex min-w-0 items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="md:hidden shrink-0 px-2"
-                  onClick={() => setSelectedId(null)}
-                >
-                  ←
-                </Button>
                 <div className="min-w-0">
                   <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Quotation</div>
                   <div className="font-semibold text-base flex flex-wrap items-center gap-2">
