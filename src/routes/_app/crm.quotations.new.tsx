@@ -310,7 +310,7 @@ function NewQuotation() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Link to="/crm/quotations"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
-          <h1 className="text-lg font-semibold">New Quotation</h1>
+          <h1 className="text-lg font-semibold">{cloneId ? "New Quotation (clone)" : "New Quotation"}</h1>
           <Badge variant="outline" className="text-xs">Quote # auto-generated on save</Badge>
         </div>
         <div className="flex gap-2">
