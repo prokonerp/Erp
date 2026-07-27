@@ -7,7 +7,12 @@ import html2canvas from "html2canvas-pro";
  * the same DOM used for on-screen preview and printing, the PDF stays
  * automatically in sync with any form / schema changes.
  */
-export async function downloadElementAsPdf(el: HTMLElement, filename: string) {
+export async function downloadElementAsPdf(
+  el: HTMLElement,
+  filename: string,
+  opts: { fitToOnePage?: boolean } = {},
+) {
+  const { fitToOnePage = true } = opts;
   const canvas = await html2canvas(el, {
     scale: 2,
     useCORS: true,
@@ -20,8 +25,22 @@ export async function downloadElementAsPdf(el: HTMLElement, filename: string) {
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const margin = 5;
-  const imgW = pageW - margin * 2;
-  const imgH = (canvas.height * imgW) / canvas.width;
+  let imgW = pageW - margin * 2;
+  let imgH = (canvas.height * imgW) / canvas.width;
+  const availH = pageH - margin * 2;
+
+  // Shrink-to-fit so a document that only slightly overflows still lands on a
+  // single A4 page instead of spilling a near-empty second page.
+  if (fitToOnePage && imgH > availH) {
+    const scale = availH / imgH;
+    if (scale >= 0.55) {
+      imgH = availH;
+      imgW = imgW * scale;
+      pdf.addImage(imgData, "JPEG", (pageW - imgW) / 2, margin, imgW, imgH);
+      pdf.save(filename);
+      return;
+    }
+  }
 
   let heightLeft = imgH;
   let position = margin;
