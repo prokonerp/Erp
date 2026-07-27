@@ -15,6 +15,8 @@ import { waOpen } from "@/lib/tickets";
 
 export const Route = createFileRoute("/_app/crm/leads/$id")({ component: LeadDetail });
 
+type AssignableUser = { user_id: string; name: string | null; email: string | null };
+
 function LeadDetail() {
   const { id } = Route.useParams();
   const nav = useNavigate();
@@ -23,20 +25,45 @@ function LeadDetail() {
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [act, setAct] = useState<any>({ kind: "note", notes: "", next_followup: "" });
   const [closeVal, setCloseVal] = useState<string>("");
+  const [users, setUsers] = useState<AssignableUser[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
 
   const load = async () => {
     const { data: l } = await supabase.from("leads").select("*").eq("id", id).single();
     if (!l) return;
     setLead(l as unknown as Lead);
-    const [{ data: c }, { data: a }] = await Promise.all([
+    const { data: authUser } = await supabase.auth.getUser();
+    setCurrentUserId(authUser.user?.id || "");
+    const [{ data: c }, { data: a }, { data: us }] = await Promise.all([
       supabase.from("customers").select("*").eq("id", (l as any).customer_id).single(),
       supabase.from("lead_activities").select("*").eq("lead_id", id).order("activity_date", { ascending: false }),
+      supabase.from("app_users").select("user_id,name,email,status").eq("status", "active").order("name"),
     ]);
     setCustomer((c as unknown as Customer) || null);
     setActivities((a || []) as unknown as LeadActivity[]);
+    setUsers(((us || []) as any[]).map((r) => ({ user_id: r.user_id, name: r.name, email: r.email })));
     setCloseVal(String((l as any).closed_value || (l as any).expected_value || ""));
   };
   useEffect(() => { load(); }, [id]);
+
+  const umap = Object.fromEntries(users.map((u) => [u.user_id, u]));
+  const userLabel = (uid?: string | null) => {
+    if (!uid) return "Unassigned";
+    const u = umap[uid];
+    return (u?.name || u?.email || "User").trim();
+  };
+
+  const assign = async (userId: string | null) => {
+    const patch: any = {
+      assigned_to: userId,
+      assigned_at: userId ? new Date().toISOString() : null,
+      assigned_by: userId ? currentUserId || null : null,
+    };
+    const { error } = await supabase.from("leads").update(patch).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success(userId ? "Lead assigned successfully" : "Lead unassigned");
+    load();
+  };
 
   const updateLead = async (patch: Partial<Lead>) => {
     const { error } = await supabase.from("leads").update(patch as any).eq("id", id);
@@ -137,6 +164,32 @@ function LeadDetail() {
             <div>Next follow-up: <span className="font-semibold">{fmtDate(lead.next_followup)}</span></div>
             {lead.status === "won" && <div>Closed: <span className="font-semibold text-green-700">{fmtMoney(lead.closed_value)}</span> on {fmtDate(lead.closed_at)}</div>}
             {lead.remarks && <div className="text-xs text-muted-foreground">{lead.remarks}</div>}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Assignment</CardTitle></CardHeader>
+        <CardContent className="grid md:grid-cols-3 gap-3 text-sm items-end">
+          <div>
+            <Label>Assigned To</Label>
+            <Select value={lead.assigned_to || "__none"} onValueChange={(v) => assign(v === "__none" ? null : v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">Unassigned</SelectItem>
+                {users.map((u) => (
+                  <SelectItem key={u.user_id} value={u.user_id}>{u.name || u.email || "User"}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Assigned On</div>
+            <div className="font-medium">{lead.assigned_at ? new Date(lead.assigned_at).toLocaleString() : "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Assigned By</div>
+            <div className="font-medium">{userLabel(lead.assigned_by)}</div>
           </div>
         </CardContent>
       </Card>

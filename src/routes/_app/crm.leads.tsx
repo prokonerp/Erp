@@ -25,10 +25,15 @@ function LeadsPage() {
   return <LeadsList />;
 }
 
+type AssignableUser = { user_id: string; name: string | null; email: string | null };
+
 function LeadsList() {
   const [rows, setRows] = useState<Lead[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [users, setUsers] = useState<AssignableUser[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [filter, setFilter] = useState<"all" | LeadStatus>("all");
+  const [assignFilter, setAssignFilter] = useState<"all" | "mine" | "unassigned">("all");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>({
@@ -36,16 +41,38 @@ function LeadsList() {
   });
 
   const load = async () => {
-    const [l, c] = await Promise.all([
+    const { data: u } = await supabase.auth.getUser();
+    setCurrentUserId(u.user?.id || "");
+    const [l, c, us] = await Promise.all([
       supabase.from("leads").select("*").order("updated_at", { ascending: false }),
       supabase.from("customers").select("*").order("company"),
+      supabase.from("app_users").select("user_id,name,email,status").eq("status", "active").order("name"),
     ]);
     setRows((l.data || []) as unknown as Lead[]);
     setCustomers((c.data || []) as unknown as Customer[]);
+    setUsers(((us.data || []) as any[]).map((r) => ({ user_id: r.user_id, name: r.name, email: r.email })));
   };
   useEffect(() => { load(); }, []);
 
   const cmap = Object.fromEntries(customers.map((c) => [c.id, c]));
+  const umap = Object.fromEntries(users.map((u) => [u.user_id, u]));
+  const userLabel = (id?: string | null) => {
+    if (!id) return "";
+    const u = umap[id];
+    return (u?.name || u?.email || "").trim() || "User";
+  };
+
+  const assignLead = async (leadId: string, userId: string | null) => {
+    const patch: any = {
+      assigned_to: userId,
+      assigned_at: userId ? new Date().toISOString() : null,
+      assigned_by: userId ? currentUserId || null : null,
+    };
+    const { error } = await supabase.from("leads").update(patch).eq("id", leadId);
+    if (error) return toast.error(error.message);
+    toast.success(userId ? "Lead assigned successfully" : "Lead unassigned");
+    load();
+  };
 
   const create = async () => {
     if (!form.customer_id) return toast.error("Select a customer");
@@ -72,9 +99,11 @@ function LeadsList() {
 
   const filtered = rows.filter((r) => {
     if (filter !== "all" && r.status !== filter) return false;
+    if (assignFilter === "mine" && r.assigned_to !== currentUserId) return false;
+    if (assignFilter === "unassigned" && r.assigned_to) return false;
     const s = q.toLowerCase();
     if (!s) return true;
-    return [r.title, r.source, cmap[r.customer_id]?.company].some((v) => (v || "").toLowerCase().includes(s));
+    return [r.title, r.source, cmap[r.customer_id]?.company, userLabel(r.assigned_to)].some((v) => (v || "").toLowerCase().includes(s));
   });
 
   return (
@@ -92,6 +121,7 @@ function LeadsList() {
               { header: "Title", get: (l) => l.title },
               { header: "Source", get: (l) => l.source || "" },
               { header: "Status", get: (l) => statusLabel[l.status] },
+              { header: "Assigned To", get: (l) => userLabel(l.assigned_to) || "Unassigned" },
               { header: "Next follow-up", get: (l) => l.next_followup || "" },
               { header: "Expected", get: (l) => Number(l.expected_value || 0) },
               { header: "Closed", get: (l) => Number(l.closed_value || 0) },
@@ -99,6 +129,14 @@ function LeadsList() {
               { header: "Remarks", get: (l) => l.remarks || "" },
             ]}
           />
+          <Select value={assignFilter} onValueChange={(v: any) => setAssignFilter(v)}>
+            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Leads</SelectItem>
+              <SelectItem value="mine">My Leads</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+            </SelectContent>
+          </Select>
           <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -140,6 +178,7 @@ function LeadsList() {
         <Table>
           <TableHeader><TableRow>
             <TableHead>Customer</TableHead><TableHead>Lead</TableHead><TableHead>Status</TableHead>
+            <TableHead>Assigned To</TableHead>
             <TableHead>Next follow-up</TableHead><TableHead className="text-right">Expected</TableHead>
             <TableHead className="text-right">Closed</TableHead><TableHead></TableHead>
           </TableRow></TableHeader>
@@ -149,6 +188,34 @@ function LeadsList() {
                 <TableCell>{cmap[l.customer_id]?.company || "—"}</TableCell>
                 <TableCell className="font-medium">{l.title}</TableCell>
                 <TableCell><Badge variant="outline" className={statusClass[l.status]}>{statusLabel[l.status]}</Badge></TableCell>
+                <TableCell>
+                  <Select
+                    value={l.assigned_to || "__none"}
+                    onValueChange={(v) => assignLead(l.id, v === "__none" ? null : v)}
+                  >
+                    <SelectTrigger className="h-8 w-44">
+                      {l.assigned_to ? (
+                        <span className="inline-flex items-center gap-1 text-xs">
+                          <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                          {userLabel(l.assigned_to)}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-red-600">
+                          <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+                          Unassigned
+                        </span>
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Unassigned</SelectItem>
+                      {users.map((u) => (
+                        <SelectItem key={u.user_id} value={u.user_id}>
+                          {u.name || u.email || "User"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
                 <TableCell>{fmtDate(l.next_followup)}</TableCell>
                 <TableCell className="text-right">{fmtMoney(l.expected_value)}</TableCell>
                 <TableCell className="text-right">{l.status === "won" ? fmtMoney(l.closed_value) : "—"}</TableCell>
@@ -157,7 +224,7 @@ function LeadsList() {
                 </TableCell>
               </TableRow>
             ))}
-            {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">No leads</TableCell></TableRow>}
+            {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">No leads</TableCell></TableRow>}
           </TableBody>
         </Table>
       </CardContent>
