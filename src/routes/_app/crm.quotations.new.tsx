@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/crm/quotations/new")({
   component: NewQuotation,
+  validateSearch: (s: Record<string, unknown>) => ({ clone: typeof s.clone === "string" ? s.clone : undefined }),
   head: () => ({
     meta: [
       { title: "New Quotation · Prokon ERP" },
@@ -39,6 +40,7 @@ type StockRow = { product_id: string | null; quantity: number; warehouse: string
 
 function NewQuotation() {
   const nav = useNavigate();
+  const { clone: cloneId } = useSearch({ from: "/_app/crm/quotations/new" });
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [branches, setBranches] = useState<BranchRow[]>([]);
@@ -84,8 +86,8 @@ function NewQuotation() {
     supabase.from("crm_settings").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
       const s = data as { business_state?: string; default_terms?: string; default_customer_notes?: string } | null;
       if (s?.business_state) setBusinessState(s.business_state);
-      if (s?.default_terms) setTerms(s.default_terms);
-      if (s?.default_customer_notes) setNotes(s.default_customer_notes);
+      if (!cloneId && s?.default_terms) setTerms(s.default_terms);
+      if (!cloneId && s?.default_customer_notes) setNotes(s.default_customer_notes);
     });
 
     supabase.from("inventory").select("product_id,quantity,warehouse").then(({ data }) => {
@@ -99,6 +101,52 @@ function NewQuotation() {
 
     getCurrentUserName().then((n) => n && setSalesperson((s) => s || n));
   }, []);
+
+  // Clone: prefill this blank form from an existing quotation. Nothing is
+  // written until the user clicks Save, so the new quote gets its own number.
+  useEffect(() => {
+    if (!cloneId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.from("quotations").select("*").eq("id", cloneId).maybeSingle();
+      if (cancelled) return;
+      const q = data as Record<string, any> | null;
+      if (error || !q) { toast.error("Could not load the quotation to clone."); return; }
+      setCustomerId(q.customer_id ?? null);
+      if (q.customer_id) {
+        const { data: c } = await supabase.from("customers").select("*").eq("id", q.customer_id).maybeSingle();
+        if (!cancelled && c) setCustomer(c as unknown as Customer);
+      }
+      if (cancelled) return;
+      if (q.branch_id) setBranchId(q.branch_id);
+      setSubject(q.subject || "");
+      setRefNo(q.reference_no || "");
+      setSalesperson((s) => q.salesperson || s);
+      setPlaceOfSupply(q.place_of_supply || "");
+      setBilling(q.billing_address || "");
+      setShipping(q.shipping_address || "");
+      setContactName(q.contact_name || "");
+      setContactEmail(q.contact_email || "");
+      setContactPhone(q.contact_phone || "");
+      setPaymentTerms(q.payment_terms || "");
+      setDeliveryTimeline(q.delivery_timeline || "");
+      setDiscountAmount(Number(q.discount_amount) || 0);
+      setShippingCharges(Number(q.shipping_charges) || 0);
+      setAdjustment(Number(q.adjustment) || 0);
+      setTcsPercent(Number(q.tcs_percent) || 0);
+      setRoundOff(Number(q.round_off) || 0);
+      setNotes(q.customer_notes || "");
+      setTerms(q.terms || "");
+      const rows = (Array.isArray(q.items) ? q.items : []) as QuoteItem[];
+      if (rows.length) setItems(rows.map((r) => ({ ...r, amount: lineAmount(r) })));
+      if (q.validity_days) {
+        setValidityDays(Number(q.validity_days));
+        setExpiryDate(addDays(Number(q.validity_days)));
+      }
+      toast.success(`Cloned from ${q.quote_no || "quotation"} — save to create a new quote`);
+    })();
+    return () => { cancelled = true; };
+  }, [cloneId]);
 
   const totals = useMemo(() => computeQuoteTotals({
     items, discount_amount: discountAmount, shipping_charges: shippingCharges,
@@ -262,7 +310,7 @@ function NewQuotation() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Link to="/crm/quotations"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
-          <h1 className="text-lg font-semibold">New Quotation</h1>
+          <h1 className="text-lg font-semibold">{cloneId ? "New Quotation (clone)" : "New Quotation"}</h1>
           <Badge variant="outline" className="text-xs">Quote # auto-generated on save</Badge>
         </div>
         <div className="flex gap-2">

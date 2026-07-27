@@ -79,12 +79,9 @@ function QuotesList() {
   };
 
   const duplicate = (r: Quotation) => {
-    // Stash the source id; the editor opens an unsaved working copy
-    // that only persists when the user clicks Save.
-    try {
-      sessionStorage.setItem("quote_clone_source", r.id);
-    } catch {}
-    nav({ to: "/crm/quotations/$id", params: { id: "new" } });
+    // Open a fresh New Quotation form prefilled from this quote; nothing is
+    // saved until the user clicks Save, so a new quote number is issued.
+    nav({ to: "/crm/quotations/new", search: { clone: r.id } });
   };
 
   const confirmDelete = async () => {
@@ -391,8 +388,7 @@ function QuotesWorkspace() {
   };
 
   const clone = (row: QuoteListRow) => {
-    try { sessionStorage.setItem("quote_clone_source", row.id); } catch {}
-    nav({ to: "/crm/quotations/$id", params: { id: "new" } });
+    nav({ to: "/crm/quotations/new", search: { clone: row.id } });
   };
 
   const changeStatus = async (next: QuoteStatus) => {
