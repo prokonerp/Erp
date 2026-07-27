@@ -29,6 +29,9 @@ export type Lead = {
   remarks: string | null;
   created_at: string;
   updated_at: string;
+  assigned_to: string | null;
+  assigned_at: string | null;
+  assigned_by: string | null;
 };
 
 export type LeadActivity = {
