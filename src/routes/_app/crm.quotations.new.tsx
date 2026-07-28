@@ -83,27 +83,12 @@ function NewQuotation() {
       if (def) setBranchId(def.id);
     }).catch(() => {});
 
-    (async () => {
-      const { data } = await supabase.from("crm_settings").select("*").eq("id", 1).maybeSingle();
+    supabase.from("crm_settings").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
       const s = data as { business_state?: string; default_terms?: string; default_customer_notes?: string } | null;
       if (s?.business_state) setBusinessState(s.business_state);
-      if (cloneId) return;
-      if (s?.default_customer_notes) setNotes(s.default_customer_notes);
-      if (s?.default_terms && s.default_terms.trim()) {
-        setTerms(s.default_terms);
-      } else {
-        // Fallback: use the default quotation terms template if no settings-level terms are set
-        const { data: tpl } = await supabase
-          .from("quote_terms_templates")
-          .select("body")
-          .eq("is_default", true)
-          .order("sort_order")
-          .limit(1)
-          .maybeSingle();
-        const body = (tpl as { body?: string } | null)?.body;
-        if (body) setTerms(body);
-      }
-    })();
+      if (!cloneId && s?.default_terms) setTerms(s.default_terms);
+      if (!cloneId && s?.default_customer_notes) setNotes(s.default_customer_notes);
+    });
 
     supabase.from("inventory").select("product_id,quantity,warehouse").then(({ data }) => {
       const grouped: Record<string, StockRow[]> = {};
