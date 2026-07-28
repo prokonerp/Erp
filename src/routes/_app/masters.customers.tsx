@@ -166,7 +166,7 @@ export function CustomerMasterPage() {
 
   const filtered = useMemo(() => rows.filter((c) => {
     const s = q.toLowerCase();
-    return !s || [c.company, c.contact_name, c.phone, c.email, c.gst, c.state].some((v) => (v || "").toLowerCase().includes(s));
+    return !s || [c.company, c.contact_name, c.phone, c.email, c.gst, c.state, (c as any).customer_code].some((v) => (v || "").toLowerCase().includes(s));
   }), [rows, q]);
 
   function resetForm() { setForm(empty); setEditingId(null); setTab("basic"); setEmailError(""); }
@@ -417,12 +417,13 @@ export function CustomerMasterPage() {
         <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Customer</TableHead><TableHead>Type</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead>
+              <TableHead>Code</TableHead><TableHead>Customer</TableHead><TableHead>Type</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead>
               <TableHead>GSTIN</TableHead><TableHead>State</TableHead><TableHead className="w-24 text-right">Actions</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.map((c) => (
                 <TableRow key={c.id}>
+                  <TableCell className="text-xs font-mono">{(c as any).customer_code || "—"}</TableCell>
                   <TableCell className="font-medium">{c.company}</TableCell>
                   <TableCell className="text-xs">{(c as any).customer_type || "—"}</TableCell>
                   <TableCell>{c.contact_name || "—"}</TableCell>
