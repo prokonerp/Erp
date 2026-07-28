@@ -72,7 +72,6 @@ function LeadDetail() {
   };
 
   const updateLead = async (patch: Partial<Lead>) => {
-    const _unusedGuard = null;
     const { error } = await supabase.from("leads").update(patch as any).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Updated"); load();
