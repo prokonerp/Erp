@@ -22,6 +22,9 @@ import { ExportButtons } from "@/components/ExportButtons";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { parseCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
+import { CustomerSuggestions } from "@/components/CustomerSuggestions";
+import { DuplicateCustomerDialog } from "@/components/DuplicateCustomerDialog";
+import { checkCustomerDuplicate, describeUniqueViolation, loadExistingIdentifierSets, partitionCustomerImportRows, type DuplicateHit } from "@/lib/customerDuplicates";
 
 export const Route = createFileRoute("/_app/masters/customers")({
   component: CustomerMasterPage,
@@ -122,6 +125,7 @@ export function CustomerMasterPage() {
   const [tab, setTab] = useState("basic");
   const [emailError, setEmailError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [dupHit, setDupHit] = useState<DuplicateHit | null>(null);
 
   const load = async () => {
     // Supabase caps a single response at 1000 rows. Page through to load everything.
@@ -148,9 +152,21 @@ export function CustomerMasterPage() {
   };
   useEffect(() => { load(); }, []);
 
+  // Deep-link support: /masters/customers?open=<id> opens that customer.
+  useEffect(() => {
+    if (typeof window === "undefined" || rows.length === 0) return;
+    const id = new URLSearchParams(window.location.search).get("open");
+    if (!id) return;
+    const c = rows.find((r) => r.id === id);
+    if (c) {
+      startEdit(c);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [rows]);
+
   const filtered = useMemo(() => rows.filter((c) => {
     const s = q.toLowerCase();
-    return !s || [c.company, c.contact_name, c.phone, c.email, c.gst, c.state].some((v) => (v || "").toLowerCase().includes(s));
+    return !s || [c.company, c.contact_name, c.phone, c.email, c.gst, c.state, (c as any).customer_code].some((v) => (v || "").toLowerCase().includes(s));
   }), [rows, q]);
 
   function resetForm() { setForm(empty); setEditingId(null); setTab("basic"); setEmailError(""); }
@@ -224,10 +240,10 @@ export function CustomerMasterPage() {
     // Validation
     if (form.customer_type === "Business" && !form.company.trim()) { toast.error("Company Name is required for Business"); setTab("basic"); return; }
     if (!form.first_name.trim()) { toast.error("First name is required"); setTab("basic"); return; }
-    if (!isValidPhone(form.phone)) { toast.error("Enter a valid 10-digit mobile number"); setTab("basic"); return; }
+    if (!isValidPhone(form.phone)) { toast.error(form.customer_type === "Individual" ? "Mobile number is mandatory for Individual customers (10 digits)" : "Enter a valid 10-digit mobile number"); setTab("basic"); return; }
     if (!form.email.trim()) { toast.error("Email is required"); setTab("basic"); return; }
     if (!EMAIL_REGEX.test(form.email.trim())) { toast.error("Enter a valid email address"); setTab("basic"); return; }
-    if (form.customer_type === "Business" && form.gst_status !== "Unregistered" && !form.gst.trim()) { toast.error("GST Number is required for Business"); setTab("gst"); return; }
+    if (form.customer_type === "Business" && form.gst_status !== "Unregistered" && !form.gst.trim()) { toast.error("GSTIN is mandatory for Business customers"); setTab("gst"); return; }
     if (form.gst_status === "Regular" && !isValidGSTIN(form.gst)) { toast.error("Enter a valid 15-character GSTIN"); setTab("gst"); return; }
     if (form.pan && !PAN_REGEX.test(form.pan.toUpperCase().trim())) { toast.error("PAN must be 10 chars (AAAAA9999A)"); setTab("gst"); return; }
     for (let i = 0; i < form.contacts.length; i++) {
@@ -236,6 +252,16 @@ export function CustomerMasterPage() {
       if (c.email && !EMAIL_REGEX.test(c.email.trim())) { toast.error(`Contact #${i + 1}: invalid email`); setTab("contacts"); return; }
       if (c.phone && !isValidPhone(c.phone)) { toast.error(`Contact #${i + 1}: phone must be 10 digits`); setTab("contacts"); return; }
     }
+
+    // Hard duplicate validation — GSTIN for Business, mobile for Individual.
+    const gstForCheck = form.customer_type === "Business" && form.gst_status !== "Unregistered" ? upperTrim(form.gst) : null;
+    const dup = await checkCustomerDuplicate({
+      customerType: form.customer_type,
+      gst: gstForCheck,
+      phone: form.customer_type === "Individual" ? form.phone.trim() : null,
+      currentCustomerId: editingId,
+    });
+    if (dup) { setDupHit(dup); return; }
 
     const billing = { ...form.billing };
     const shipping = form.same_as_billing ? { ...billing } : { ...form.shipping };
@@ -294,11 +320,11 @@ export function CustomerMasterPage() {
     };
     if (editingId) {
       const { error } = await supabase.from("customers").update(payload as any).eq("id", editingId);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(describeUniqueViolation(error.message) || error.message);
       toast.success("Customer updated");
     } else {
       const { error } = await supabase.from("customers").insert(payload as any);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(describeUniqueViolation(error.message) || error.message);
       toast.success("Customer added");
     }
     await load();
@@ -342,9 +368,22 @@ export function CustomerMasterPage() {
         };
       }).filter((p) => p.company);
       if (!payload.length) return toast.error("No valid rows. Required column: Company / Customer Name");
-      const { error } = await supabase.from("customers").insert(payload as any);
-      if (error) return toast.error(error.message);
-      toast.success(`Imported ${payload.length} customer(s)`);
+      // Skip rows duplicating a GSTIN / mobile already present in the file or the database.
+      const sets = await loadExistingIdentifierSets();
+      const { unique, duplicates } = partitionCustomerImportRows(payload as any[], sets);
+      let imported = 0;
+      let failed = 0;
+      if (unique.length) {
+        const { error } = await supabase.from("customers").insert(unique as any);
+        if (error) {
+          // Fall back to row-by-row so one bad row doesn't fail the whole file.
+          for (const row of unique) {
+            const { error: e2 } = await supabase.from("customers").insert(row as any);
+            if (e2) failed++; else imported++;
+          }
+        } else imported = unique.length;
+      }
+      toast.success(`Imported ${imported} · Skipped (duplicate) ${duplicates.length} · Failed ${failed}`);
       load();
     } catch (e: any) { toast.error(e?.message || "Import failed"); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
@@ -391,12 +430,13 @@ export function CustomerMasterPage() {
         <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Customer</TableHead><TableHead>Type</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead>
+              <TableHead>Code</TableHead><TableHead>Customer</TableHead><TableHead>Type</TableHead><TableHead>Contact</TableHead><TableHead>Phone</TableHead>
               <TableHead>GSTIN</TableHead><TableHead>State</TableHead><TableHead className="w-24 text-right">Actions</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.map((c) => (
                 <TableRow key={c.id}>
+                  <TableCell className="text-xs font-mono">{(c as any).customer_code || "—"}</TableCell>
                   <TableCell className="font-medium">{c.company}</TableCell>
                   <TableCell className="text-xs">{(c as any).customer_type || "—"}</TableCell>
                   <TableCell>{c.contact_name || "—"}</TableCell>
@@ -409,7 +449,7 @@ export function CustomerMasterPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No customers. Click <b>New Customer</b> or <b>Import CSV</b>.</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No customers. Click <b>New Customer</b> or <b>Import CSV</b>.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
@@ -454,11 +494,18 @@ export function CustomerMasterPage() {
                   <Input className="col-span-4 text-[#000000]" placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
                   <Input className="col-span-5 text-[#000000]" placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
                 </div>
+                {form.customer_type === "Individual" && (
+                  <CustomerSuggestions
+                    name={[form.first_name, form.last_name].filter(Boolean).join(" ")}
+                    excludeId={editingId}
+                  />
+                )}
               </FieldRow>
 
               {form.customer_type === "Business" && (
                 <FieldRow label="Company Name" required labelClassName="text-[#000000]">
                   <Input className="text-[#000000]" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Legal / billing entity" />
+                  <CustomerSuggestions name={form.company} excludeId={editingId} />
                 </FieldRow>
               )}
 
@@ -602,6 +649,17 @@ export function CustomerMasterPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <DuplicateCustomerDialog
+        hit={dupHit}
+        onCancel={() => setDupHit(null)}
+        onView={(id) => {
+          const c = rows.find((r) => r.id === id);
+          setDupHit(null);
+          if (c) { setOpen(false); setTimeout(() => startEdit(c), 0); }
+          else window.open(`/masters/customers?open=${id}`, "_blank");
+        }}
+      />
     </div>
   );
 }
