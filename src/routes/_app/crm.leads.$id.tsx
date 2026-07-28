@@ -59,10 +59,6 @@ function LeadDetail() {
     return (u?.name || u?.email || "User").trim();
   };
 
-  const assign = async (userId: string | null) => {
-    void 0;
-  };
-
   const currentAssignment = assignments.find((a) => a.is_current) || null;
 
   const doAck = async () => {
@@ -77,7 +73,7 @@ function LeadDetail() {
     } finally { setAcking(false); }
   };
 
-  const assignUser = async (userId: string | null) => {
+  const assign = async (userId: string | null) => {
     const patch: any = {
       assigned_to: userId,
       assigned_at: userId ? new Date().toISOString() : null,
