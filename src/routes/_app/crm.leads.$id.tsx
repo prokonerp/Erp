@@ -12,6 +12,9 @@ import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail 
 import { toast } from "sonner";
 import { type Lead, type LeadActivity, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel } from "@/lib/crm";
 import { waOpen } from "@/lib/tickets";
+import {
+  ackStatusClass, ackStatusLabel, acknowledgeAssignment, fetchLeadAssignments, type LeadAssignment,
+} from "@/lib/leadAcknowledgement";
 
 export const Route = createFileRoute("/_app/crm/leads/$id")({ component: LeadDetail });
 
@@ -27,6 +30,8 @@ function LeadDetail() {
   const [closeVal, setCloseVal] = useState<string>("");
   const [users, setUsers] = useState<AssignableUser[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [assignments, setAssignments] = useState<LeadAssignment[]>([]);
+  const [acking, setAcking] = useState(false);
 
   const load = async () => {
     const { data: l } = await supabase.from("leads").select("*").eq("id", id).single();
@@ -43,6 +48,7 @@ function LeadDetail() {
     setActivities((a || []) as unknown as LeadActivity[]);
     setUsers(((us || []) as any[]).map((r) => ({ user_id: r.user_id, name: r.name, email: r.email })));
     setCloseVal(String((l as any).closed_value || (l as any).expected_value || ""));
+    try { setAssignments(await fetchLeadAssignments(id)); } catch { setAssignments([]); }
   };
   useEffect(() => { load(); }, [id]);
 
@@ -51,6 +57,20 @@ function LeadDetail() {
     if (!uid) return "Unassigned";
     const u = umap[uid];
     return (u?.name || u?.email || "User").trim();
+  };
+
+  const currentAssignment = assignments.find((a) => a.is_current) || null;
+
+  const doAck = async () => {
+    if (!currentAssignment) return;
+    setAcking(true);
+    try {
+      await acknowledgeAssignment(currentAssignment.id);
+      toast.success("Lead assignment acknowledged");
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || "Could not acknowledge");
+    } finally { setAcking(false); }
   };
 
   const assign = async (userId: string | null) => {
@@ -170,7 +190,8 @@ function LeadDetail() {
 
       <Card>
         <CardHeader><CardTitle className="text-base">Assignment</CardTitle></CardHeader>
-        <CardContent className="grid md:grid-cols-3 gap-3 text-sm items-end">
+        <CardContent className="space-y-4 text-sm">
+          <div className="grid md:grid-cols-3 gap-3 items-end">
           <div>
             <Label>Assigned To</Label>
             <Select value={lead.assigned_to || "__none"} onValueChange={(v) => assign(v === "__none" ? null : v)}>
@@ -191,6 +212,57 @@ function LeadDetail() {
             <div className="text-xs text-muted-foreground">Assigned By</div>
             <div className="font-medium">{userLabel(lead.assigned_by)}</div>
           </div>
+          </div>
+          {lead.assigned_to && (
+            <div className="grid md:grid-cols-3 gap-3 items-end border-t pt-3">
+              <div>
+                <div className="text-xs text-muted-foreground">Acknowledgement Status</div>
+                <Badge variant="outline" className={ackStatusClass(lead.assignment_status)}>
+                  {ackStatusLabel(lead.assignment_status)}
+                </Badge>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Acknowledged By</div>
+                <div className="font-medium">{lead.acknowledged_by ? userLabel(lead.acknowledged_by) : "—"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Acknowledged On</div>
+                <div className="font-medium">{lead.acknowledged_at ? new Date(lead.acknowledged_at).toLocaleString() : "—"}</div>
+              </div>
+              {lead.assignment_status !== "acknowledged" && (
+                <div className="md:col-span-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <span>Awaiting acknowledgement from the assigned user.</span>
+                  {currentAssignment && currentAssignment.assigned_to === currentUserId && (
+                    <Button size="sm" disabled={acking} onClick={() => void doAck()}>
+                      {acking ? "Saving…" : "Acknowledge"}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          {assignments.length > 0 && (
+            <div className="border-t pt-3">
+              <div className="text-xs font-medium mb-2">Assignment history</div>
+              <ul className="space-y-1 text-xs">
+                {assignments.map((a) => (
+                  <li key={a.id} className="flex flex-wrap gap-x-3 border-b last:border-0 py-1">
+                    <span className="font-medium">{userLabel(a.assigned_to)}</span>
+                    <span className="text-muted-foreground">by {userLabel(a.assigned_by)}</span>
+                    <span className="text-muted-foreground">{new Date(a.assigned_at).toLocaleString()}</span>
+                    <Badge variant="outline" className={ackStatusClass(a.acknowledgement_status)}>
+                      {ackStatusLabel(a.acknowledgement_status)}
+                    </Badge>
+                    {a.acknowledged_at && (
+                      <span className="text-muted-foreground">
+                        by {a.acknowledged_by_name || userLabel(a.acknowledged_by)} on {new Date(a.acknowledged_at).toLocaleString()}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </CardContent>
       </Card>
 
