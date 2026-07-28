@@ -22,6 +22,9 @@ import { ExportButtons } from "@/components/ExportButtons";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { parseCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
+import { CustomerSuggestions } from "@/components/CustomerSuggestions";
+import { DuplicateCustomerDialog } from "@/components/DuplicateCustomerDialog";
+import { checkCustomerDuplicate, describeUniqueViolation, type DuplicateHit } from "@/lib/customerDuplicates";
 
 export const Route = createFileRoute("/_app/masters/customers")({
   component: CustomerMasterPage,
@@ -122,6 +125,7 @@ export function CustomerMasterPage() {
   const [tab, setTab] = useState("basic");
   const [emailError, setEmailError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [dupHit, setDupHit] = useState<DuplicateHit | null>(null);
 
   const load = async () => {
     // Supabase caps a single response at 1000 rows. Page through to load everything.
@@ -147,6 +151,18 @@ export function CustomerMasterPage() {
     setRows(all as unknown as Customer[]);
   };
   useEffect(() => { load(); }, []);
+
+  // Deep-link support: /masters/customers?open=<id> opens that customer.
+  useEffect(() => {
+    if (typeof window === "undefined" || rows.length === 0) return;
+    const id = new URLSearchParams(window.location.search).get("open");
+    if (!id) return;
+    const c = rows.find((r) => r.id === id);
+    if (c) {
+      startEdit(c);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [rows]);
 
   const filtered = useMemo(() => rows.filter((c) => {
     const s = q.toLowerCase();
