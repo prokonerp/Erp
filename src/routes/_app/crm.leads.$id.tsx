@@ -60,6 +60,7 @@ function LeadDetail() {
   };
 
   const assign = async (userId: string | null) => {
+    void 0;
     const patch: any = {
       assigned_to: userId,
       assigned_at: userId ? new Date().toISOString() : null,
