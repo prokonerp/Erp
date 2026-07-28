@@ -83,11 +83,11 @@ function NewQuotation() {
       if (def) setBranchId(def.id);
     }).catch(() => {});
 
-    supabase.from("crm_settings").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
-      const s = data as { business_state?: string; default_terms?: string; default_customer_notes?: string } | null;
-      if (s?.business_state) setBusinessState(s.business_state);
-      if (!cloneId && s?.default_terms) setTerms(s.default_terms);
-      if (!cloneId && s?.default_customer_notes) setNotes(s.default_customer_notes);
+    getQuoteDefaults().then((d) => {
+      if (d.business_state) setBusinessState(d.business_state);
+      if (cloneId) return;
+      setTerms((prev) => prev || d.terms);
+      setNotes((prev) => prev || d.notes);
     });
 
     supabase.from("inventory").select("product_id,quantity,warehouse").then(({ data }) => {
