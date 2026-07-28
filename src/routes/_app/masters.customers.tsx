@@ -635,6 +635,17 @@ export function CustomerMasterPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <DuplicateCustomerDialog
+        hit={dupHit}
+        onCancel={() => setDupHit(null)}
+        onView={(id) => {
+          const c = rows.find((r) => r.id === id);
+          setDupHit(null);
+          if (c) { setOpen(false); setTimeout(() => startEdit(c), 0); }
+          else window.open(`/masters/customers?open=${id}`, "_blank");
+        }}
+      />
     </div>
   );
 }
