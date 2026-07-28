@@ -29,7 +29,6 @@ import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
 } from "@/lib/crm";
-import { getQuoteDefaults } from "@/lib/quoteDefaults";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
@@ -169,22 +168,17 @@ function QuoteEditor() {
     if (def) setQ({ ...q, branch_id: def.id });
   }, [branches, q?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Customer notes & terms: fill from global defaults whenever the quotation has
-  // none saved. Works for every signed-in user (admin or not) and for existing
-  // quotations created before defaults were configured.
+  // Terms template: preselect the one whose body matches the saved terms,
+  // otherwise apply the default template when the quote has no terms yet.
   useEffect(() => {
-    if (!q) return;
-    if ((q.terms || "").trim() && (q.customer_notes || "").trim()) return;
-    getQuoteDefaults().then((d) => {
-      setQ((prev) => {
-        if (!prev) return prev;
-        const patch: Partial<Quotation> = {};
-        if (!termsTouched && !(prev.terms || "").trim() && d.terms) patch.terms = d.terms;
-        if (!(prev.customer_notes || "").trim() && d.notes) patch.customer_notes = d.notes;
-        return Object.keys(patch).length ? { ...prev, ...patch } : prev;
-      });
-    });
-  }, [q?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!q || templates.length === 0) return;
+    const match = templates.find((t) => (t.body || "").trim() === (q.terms || "").trim());
+    if (match) { setTermsTplId(match.id); return; }
+    if (!termsTouched && !(q.terms || "").trim()) {
+      const def = templates.find((t) => t.is_default) || templates[0];
+      if (def) { setTermsTplId(def.id); setQ((prev) => (prev ? { ...prev, terms: def.body || "" } : prev)); }
+    }
+  }, [templates, q?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const branch = useMemo(() => branches.find((b) => b.id === q?.branch_id) || null, [branches, q?.branch_id]);
 
