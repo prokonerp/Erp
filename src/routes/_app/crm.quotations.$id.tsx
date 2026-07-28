@@ -61,6 +61,7 @@ function QuoteEditor() {
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [invSettings, setInvSettings] = useState<InvoiceSettingsRow | null>(null);
   const [termsTouched, setTermsTouched] = useState(false);
+  const [termsTplId, setTermsTplId] = useState<string>("");
   const [bundleFor, setBundleFor] = useState<ProductMaster | null>(null);
   const [bundleOpen, setBundleOpen] = useState(false);
   const [bundleParentQty, setBundleParentQty] = useState(1);
@@ -234,7 +235,9 @@ function QuoteEditor() {
 
   const applyTemplate = (tplId: string) => {
     const t = templates.find((x) => x.id === tplId);
-    if (t && q) setQ({ ...q, terms: t.body });
+    setTermsTplId(tplId);
+    setTermsTouched(true);
+    if (t && q) setQ({ ...q, terms: t.body || "" });
   };
 
   const applyCustomer = (id: string | null, c: Customer | null) => {
@@ -540,17 +543,18 @@ function QuoteEditor() {
 
       <Card className="print:hidden">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Customer notes & terms</CardTitle>
-          {templates.length > 0 && (
-            <Select onValueChange={applyTemplate}>
-              <SelectTrigger className="w-56 h-8"><SelectValue placeholder="Apply terms template" /></SelectTrigger>
-              <SelectContent>{templates.map((t) => <SelectItem key={t.id} value={t.id}><FileText className="inline h-3 w-3 mr-1" />{t.name}</SelectItem>)}</SelectContent>
-            </Select>
-          )}
+          <CardTitle className="text-base">Customer notes &amp; terms</CardTitle>
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-3">
           <div><Label>Customer notes (printed)</Label><Textarea rows={5} value={q.customer_notes || ""} onChange={(e) => setQ({ ...q, customer_notes: e.target.value })} placeholder="Thanks for your business." /></div>
-          <div><Label>Terms & conditions</Label><Textarea rows={5} value={q.terms || ""} onChange={(e) => { setTermsTouched(true); setQ({ ...q, terms: e.target.value }); }} placeholder="Payment, delivery, warranty…" /></div>
+          <div>
+            <Label>Terms &amp; conditions</Label>
+            <Select value={termsTplId} onValueChange={applyTemplate}>
+              <SelectTrigger className="h-9"><SelectValue placeholder="Select terms template" /></SelectTrigger>
+              <SelectContent>{templates.map((t) => <SelectItem key={t.id} value={t.id}><FileText className="inline h-3 w-3 mr-1" />{t.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <Textarea className="mt-1.5" rows={4} value={q.terms || ""} onChange={(e) => { setTermsTouched(true); setQ({ ...q, terms: e.target.value }); }} placeholder="Select a template above" />
+          </div>
           <div className="md:col-span-2"><Label>Internal remarks (not printed)</Label><Textarea rows={2} value={q.remarks || ""} onChange={(e) => setQ({ ...q, remarks: e.target.value })} /></div>
           <div className="md:col-span-2 flex flex-wrap items-center gap-6 pt-2 border-t">
             <div className="flex items-center gap-2">
