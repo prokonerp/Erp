@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getQuoteDefaults } from "@/lib/quoteDefaults";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,11 +84,11 @@ function NewQuotation() {
       if (def) setBranchId(def.id);
     }).catch(() => {});
 
-    supabase.from("crm_settings").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
-      const s = data as { business_state?: string; default_terms?: string; default_customer_notes?: string } | null;
-      if (s?.business_state) setBusinessState(s.business_state);
-      if (!cloneId && s?.default_terms) setTerms(s.default_terms);
-      if (!cloneId && s?.default_customer_notes) setNotes(s.default_customer_notes);
+    getQuoteDefaults().then((d) => {
+      if (d.business_state) setBusinessState(d.business_state);
+      if (cloneId) return;
+      setTerms((prev) => prev || d.terms);
+      setNotes((prev) => prev || d.notes);
     });
 
     supabase.from("inventory").select("product_id,quantity,warehouse").then(({ data }) => {
