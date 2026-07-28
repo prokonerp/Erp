@@ -480,11 +480,18 @@ export function CustomerMasterPage() {
                   <Input className="col-span-4 text-[#000000]" placeholder="First name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
                   <Input className="col-span-5 text-[#000000]" placeholder="Last name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
                 </div>
+                {form.customer_type === "Individual" && (
+                  <CustomerSuggestions
+                    name={[form.first_name, form.last_name].filter(Boolean).join(" ")}
+                    excludeId={editingId}
+                  />
+                )}
               </FieldRow>
 
               {form.customer_type === "Business" && (
                 <FieldRow label="Company Name" required labelClassName="text-[#000000]">
                   <Input className="text-[#000000]" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Legal / billing entity" />
+                  <CustomerSuggestions name={form.company} excludeId={editingId} />
                 </FieldRow>
               )}
 
