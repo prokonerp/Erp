@@ -33,7 +33,7 @@ export async function downloadElementAsPdf(
   // single A4 page instead of spilling a near-empty second page.
   if (fitToOnePage && imgH > availH) {
     const scale = availH / imgH;
-    if (scale >= 0.55) {
+    if (scale >= 0.3) {
       imgH = availH;
       imgW = imgW * scale;
       pdf.addImage(imgData, "JPEG", (pageW - imgW) / 2, margin, imgW, imgH);
