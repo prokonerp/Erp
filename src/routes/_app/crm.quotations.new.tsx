@@ -90,14 +90,6 @@ function NewQuotation() {
       if (!cloneId && s?.default_customer_notes) setNotes(s.default_customer_notes);
     });
 
-    // Fallback: when CRM settings have no default terms text, use the terms
-    // template marked as default so every quotation still prints T&C.
-    supabase.from("quote_terms_templates").select("body,is_default,sort_order").order("sort_order").then(({ data }) => {
-      const rows = (data || []) as { body: string; is_default: boolean }[];
-      const def = rows.find((t) => t.is_default) || rows[0];
-      if (!cloneId && def?.body) setTerms((t) => t || def.body);
-    });
-
     supabase.from("inventory").select("product_id,quantity,warehouse").then(({ data }) => {
       const grouped: Record<string, StockRow[]> = {};
       (data as StockRow[] | null || []).forEach((r) => {

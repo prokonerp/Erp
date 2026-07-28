@@ -190,20 +190,6 @@ function QuoteEditor() {
       });
   }, [q?.branch_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Final fallback for notes & terms: CRM settings text, else the terms
-  // template marked as default. Applies to every user, not just admins.
-  useEffect(() => {
-    if (!q || termsTouched) return;
-    const patch: Partial<Quotation> = {};
-    if (!q.terms) {
-      const defTpl = templates.find((t) => t.is_default) || templates[0];
-      const fallback = settings?.default_terms || defTpl?.body || "";
-      if (fallback) patch.terms = fallback;
-    }
-    if (!q.customer_notes && settings?.default_customer_notes) patch.customer_notes = settings.default_customer_notes;
-    if (Object.keys(patch).length) setQ({ ...q, ...patch });
-  }, [q?.id, templates, settings]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const totals = useMemo(() => {
     if (!q || !settings) return { subtotal: 0, total_tax: 0, cgst_amount: 0, sgst_amount: 0, igst_amount: 0, tcs_amount: 0, total: 0 };
     return computeQuoteTotals({
