@@ -61,6 +61,23 @@ function LeadDetail() {
 
   const assign = async (userId: string | null) => {
     void 0;
+  };
+
+  const currentAssignment = assignments.find((a) => a.is_current) || null;
+
+  const doAck = async () => {
+    if (!currentAssignment) return;
+    setAcking(true);
+    try {
+      await acknowledgeAssignment(currentAssignment.id);
+      toast.success("Lead assignment acknowledged");
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || "Could not acknowledge");
+    } finally { setAcking(false); }
+  };
+
+  const assignUser = async (userId: string | null) => {
     const patch: any = {
       assigned_to: userId,
       assigned_at: userId ? new Date().toISOString() : null,
