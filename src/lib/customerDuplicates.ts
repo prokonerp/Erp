@@ -62,3 +62,61 @@ export function describeUniqueViolation(message: string): string | null {
   if (message.includes("customers_individual_mobile_uidx")) return "An Individual customer with this mobile number already exists.";
   return null;
 }
+
+export const normGst = (v: string | null | undefined) => (v || "").trim().toUpperCase();
+export const normMobile = (v: string | null | undefined) => (v || "").replace(/\D/g, "");
+
+/** Existing GSTIN (Business) and mobile (Individual) keys, for import de-duplication. */
+export async function loadExistingIdentifierSets(): Promise<{ gstins: Set<string>; mobiles: Set<string> }> {
+  const gstins = new Set<string>();
+  const mobiles = new Set<string>();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("customers")
+      .select("customer_type, gst, phone")
+      .range(from, from + PAGE - 1);
+    if (error || !data) break;
+    for (const r of data as any[]) {
+      if (r.customer_type === "Business") {
+        const g = normGst(r.gst);
+        if (g && g !== "URP") gstins.add(g);
+      } else {
+        const m = normMobile(r.phone);
+        if (m) mobiles.add(m);
+      }
+    }
+    if (data.length < PAGE) break;
+  }
+  return { gstins, mobiles };
+}
+
+/**
+ * Splits candidate import rows into unique vs duplicate, checking both the
+ * file itself and the database. Mutates the provided sets so callers can chain.
+ */
+export function partitionCustomerImportRows<T extends { customer_type?: string; gst?: string | null; phone?: string | null }>(
+  rows: T[],
+  sets: { gstins: Set<string>; mobiles: Set<string> },
+): { unique: T[]; duplicates: { row: T; reason: string }[] } {
+  const unique: T[] = [];
+  const duplicates: { row: T; reason: string }[] = [];
+  for (const row of rows) {
+    const isBiz = (row.customer_type || "Business") === "Business";
+    if (isBiz) {
+      const g = normGst(row.gst);
+      if (g && g !== "URP") {
+        if (sets.gstins.has(g)) { duplicates.push({ row, reason: `Duplicate GSTIN ${g}` }); continue; }
+        sets.gstins.add(g);
+      }
+    } else {
+      const m = normMobile(row.phone);
+      if (m) {
+        if (sets.mobiles.has(m)) { duplicates.push({ row, reason: `Duplicate mobile ${m}` }); continue; }
+        sets.mobiles.add(m);
+      }
+    }
+    unique.push(row);
+  }
+  return { unique, duplicates };
+}
