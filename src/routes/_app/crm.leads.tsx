@@ -230,7 +230,6 @@ function LeadsList() {
                     </SelectContent>
                   </Select>
                 </TableCell>
-                <TableCell>{fmtDate(l.next_followup)}</TableCell>
                 <TableCell>
                   {l.assigned_to ? (
                     <Badge variant="outline" className={ackStatusClass(l.assignment_status)}>
@@ -240,6 +239,7 @@ function LeadsList() {
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </TableCell>
+                <TableCell>{fmtDate(l.next_followup)}</TableCell>
                 <TableCell className="text-right">{fmtMoney(l.expected_value)}</TableCell>
                 <TableCell className="text-right">{l.status === "won" ? fmtMoney(l.closed_value) : "—"}</TableCell>
                 <TableCell className="text-right">
