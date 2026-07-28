@@ -12,6 +12,9 @@ import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail 
 import { toast } from "sonner";
 import { type Lead, type LeadActivity, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel } from "@/lib/crm";
 import { waOpen } from "@/lib/tickets";
+import {
+  ackStatusClass, ackStatusLabel, acknowledgeAssignment, fetchLeadAssignments, type LeadAssignment,
+} from "@/lib/leadAcknowledgement";
 
 export const Route = createFileRoute("/_app/crm/leads/$id")({ component: LeadDetail });
 
@@ -27,6 +30,8 @@ function LeadDetail() {
   const [closeVal, setCloseVal] = useState<string>("");
   const [users, setUsers] = useState<AssignableUser[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [assignments, setAssignments] = useState<LeadAssignment[]>([]);
+  const [acking, setAcking] = useState(false);
 
   const load = async () => {
     const { data: l } = await supabase.from("leads").select("*").eq("id", id).single();
@@ -43,6 +48,7 @@ function LeadDetail() {
     setActivities((a || []) as unknown as LeadActivity[]);
     setUsers(((us || []) as any[]).map((r) => ({ user_id: r.user_id, name: r.name, email: r.email })));
     setCloseVal(String((l as any).closed_value || (l as any).expected_value || ""));
+    try { setAssignments(await fetchLeadAssignments(id)); } catch { setAssignments([]); }
   };
   useEffect(() => { load(); }, [id]);
 
