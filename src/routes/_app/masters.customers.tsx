@@ -240,10 +240,10 @@ export function CustomerMasterPage() {
     // Validation
     if (form.customer_type === "Business" && !form.company.trim()) { toast.error("Company Name is required for Business"); setTab("basic"); return; }
     if (!form.first_name.trim()) { toast.error("First name is required"); setTab("basic"); return; }
-    if (!isValidPhone(form.phone)) { toast.error("Enter a valid 10-digit mobile number"); setTab("basic"); return; }
+    if (!isValidPhone(form.phone)) { toast.error(form.customer_type === "Individual" ? "Mobile number is mandatory for Individual customers (10 digits)" : "Enter a valid 10-digit mobile number"); setTab("basic"); return; }
     if (!form.email.trim()) { toast.error("Email is required"); setTab("basic"); return; }
     if (!EMAIL_REGEX.test(form.email.trim())) { toast.error("Enter a valid email address"); setTab("basic"); return; }
-    if (form.customer_type === "Business" && form.gst_status !== "Unregistered" && !form.gst.trim()) { toast.error("GST Number is required for Business"); setTab("gst"); return; }
+    if (form.customer_type === "Business" && form.gst_status !== "Unregistered" && !form.gst.trim()) { toast.error("GSTIN is mandatory for Business customers"); setTab("gst"); return; }
     if (form.gst_status === "Regular" && !isValidGSTIN(form.gst)) { toast.error("Enter a valid 15-character GSTIN"); setTab("gst"); return; }
     if (form.pan && !PAN_REGEX.test(form.pan.toUpperCase().trim())) { toast.error("PAN must be 10 chars (AAAAA9999A)"); setTab("gst"); return; }
     for (let i = 0; i < form.contacts.length; i++) {
@@ -252,6 +252,16 @@ export function CustomerMasterPage() {
       if (c.email && !EMAIL_REGEX.test(c.email.trim())) { toast.error(`Contact #${i + 1}: invalid email`); setTab("contacts"); return; }
       if (c.phone && !isValidPhone(c.phone)) { toast.error(`Contact #${i + 1}: phone must be 10 digits`); setTab("contacts"); return; }
     }
+
+    // Hard duplicate validation — GSTIN for Business, mobile for Individual.
+    const gstForCheck = form.customer_type === "Business" && form.gst_status !== "Unregistered" ? upperTrim(form.gst) : null;
+    const dup = await checkCustomerDuplicate({
+      customerType: form.customer_type,
+      gst: gstForCheck,
+      phone: form.customer_type === "Individual" ? form.phone.trim() : null,
+      currentCustomerId: editingId,
+    });
+    if (dup) { setDupHit(dup); return; }
 
     const billing = { ...form.billing };
     const shipping = form.same_as_billing ? { ...billing } : { ...form.shipping };
@@ -310,11 +320,11 @@ export function CustomerMasterPage() {
     };
     if (editingId) {
       const { error } = await supabase.from("customers").update(payload as any).eq("id", editingId);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(describeUniqueViolation(error.message) || error.message);
       toast.success("Customer updated");
     } else {
       const { error } = await supabase.from("customers").insert(payload as any);
-      if (error) return toast.error(error.message);
+      if (error) return toast.error(describeUniqueViolation(error.message) || error.message);
       toast.success("Customer added");
     }
     await load();
