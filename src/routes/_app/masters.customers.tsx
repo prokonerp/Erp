@@ -436,7 +436,7 @@ export function CustomerMasterPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No customers. Click <b>New Customer</b> or <b>Import CSV</b>.</TableCell></TableRow>}
+              {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No customers. Click <b>New Customer</b> or <b>Import CSV</b>.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </CardContent>
