@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { type Lead, type LeadStatus, type Customer, statusLabel, statusClass, fmtMoney, fmtDate } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
 import { CustomerPicker } from "@/components/CustomerPicker";
+import { ackStatusClass, ackStatusLabel } from "@/lib/leadAcknowledgement";
 
 export const Route = createFileRoute("/_app/crm/leads")({ component: LeadsPage });
 
@@ -34,6 +35,7 @@ function LeadsList() {
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [filter, setFilter] = useState<"all" | LeadStatus>("all");
   const [assignFilter, setAssignFilter] = useState<"all" | "mine" | "unassigned">("all");
+  const [ackFilter, setAckFilter] = useState<"all" | "pending" | "acknowledged">("all");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<any>({
@@ -101,6 +103,8 @@ function LeadsList() {
     if (filter !== "all" && r.status !== filter) return false;
     if (assignFilter === "mine" && r.assigned_to !== currentUserId) return false;
     if (assignFilter === "unassigned" && r.assigned_to) return false;
+    if (ackFilter === "pending" && !(r.assigned_to && r.assignment_status !== "acknowledged")) return false;
+    if (ackFilter === "acknowledged" && r.assignment_status !== "acknowledged") return false;
     const s = q.toLowerCase();
     if (!s) return true;
     return [r.title, r.source, cmap[r.customer_id]?.company, userLabel(r.assigned_to)].some((v) => (v || "").toLowerCase().includes(s));
@@ -122,6 +126,7 @@ function LeadsList() {
               { header: "Source", get: (l) => l.source || "" },
               { header: "Status", get: (l) => statusLabel[l.status] },
               { header: "Assigned To", get: (l) => userLabel(l.assigned_to) || "Unassigned" },
+              { header: "Acknowledgement", get: (l) => (l.assigned_to ? ackStatusLabel(l.assignment_status) : "") },
               { header: "Next follow-up", get: (l) => l.next_followup || "" },
               { header: "Expected", get: (l) => Number(l.expected_value || 0) },
               { header: "Closed", get: (l) => Number(l.closed_value || 0) },
@@ -135,6 +140,14 @@ function LeadsList() {
               <SelectItem value="all">All Leads</SelectItem>
               <SelectItem value="mine">My Leads</SelectItem>
               <SelectItem value="unassigned">Unassigned</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={ackFilter} onValueChange={(v: any) => setAckFilter(v)}>
+            <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Acknowledgements</SelectItem>
+              <SelectItem value="pending">Pending Acknowledgement</SelectItem>
+              <SelectItem value="acknowledged">Acknowledged</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
@@ -179,6 +192,7 @@ function LeadsList() {
           <TableHeader><TableRow>
             <TableHead>Customer</TableHead><TableHead>Lead</TableHead><TableHead>Status</TableHead>
             <TableHead>Assigned To</TableHead>
+            <TableHead>Acknowledgement</TableHead>
             <TableHead>Next follow-up</TableHead><TableHead className="text-right">Expected</TableHead>
             <TableHead className="text-right">Closed</TableHead><TableHead></TableHead>
           </TableRow></TableHeader>
@@ -217,6 +231,15 @@ function LeadsList() {
                   </Select>
                 </TableCell>
                 <TableCell>{fmtDate(l.next_followup)}</TableCell>
+                <TableCell>
+                  {l.assigned_to ? (
+                    <Badge variant="outline" className={ackStatusClass(l.assignment_status)}>
+                      {ackStatusLabel(l.assignment_status)}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-right">{fmtMoney(l.expected_value)}</TableCell>
                 <TableCell className="text-right">{l.status === "won" ? fmtMoney(l.closed_value) : "—"}</TableCell>
                 <TableCell className="text-right">
@@ -224,7 +247,7 @@ function LeadsList() {
                 </TableCell>
               </TableRow>
             ))}
-            {filtered.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">No leads</TableCell></TableRow>}
+            {filtered.length === 0 && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">No leads</TableCell></TableRow>}
           </TableBody>
         </Table>
       </CardContent>
