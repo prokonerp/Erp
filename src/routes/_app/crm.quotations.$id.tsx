@@ -168,6 +168,23 @@ function QuoteEditor() {
     if (def) setQ({ ...q, branch_id: def.id });
   }, [branches, q?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Customer notes & terms: fill from global defaults whenever the quotation has
+  // none saved. Works for every signed-in user (admin or not) and for existing
+  // quotations created before defaults were configured.
+  useEffect(() => {
+    if (!q) return;
+    if ((q.terms || "").trim() && (q.customer_notes || "").trim()) return;
+    getQuoteDefaults().then((d) => {
+      setQ((prev) => {
+        if (!prev) return prev;
+        const patch: Partial<Quotation> = {};
+        if (!termsTouched && !(prev.terms || "").trim() && d.terms) patch.terms = d.terms;
+        if (!(prev.customer_notes || "").trim() && d.notes) patch.customer_notes = d.notes;
+        return Object.keys(patch).length ? { ...prev, ...patch } : prev;
+      });
+    });
+  }, [q?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const branch = useMemo(() => branches.find((b) => b.id === q?.branch_id) || null, [branches, q?.branch_id]);
 
   // Load invoice_settings for the chosen branch → company header + defaults
