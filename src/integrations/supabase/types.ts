@@ -683,9 +683,7 @@ export type Database = {
           country: string | null
           created_at: string
           created_by: string | null
-          customer_code: string | null
           customer_type: string
-          dup_exempt: boolean
           email: string | null
           first_name: string | null
           gst: string | null
@@ -729,9 +727,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           created_by?: string | null
-          customer_code?: string | null
           customer_type?: string
-          dup_exempt?: boolean
           email?: string | null
           first_name?: string | null
           gst?: string | null
@@ -775,9 +771,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           created_by?: string | null
-          customer_code?: string | null
           customer_type?: string
-          dup_exempt?: boolean
           email?: string | null
           first_name?: string | null
           gst?: string | null
@@ -2589,74 +2583,8 @@ export type Database = {
           },
         ]
       }
-      lead_assignments: {
-        Row: {
-          acknowledged_at: string | null
-          acknowledged_by: string | null
-          acknowledged_by_name: string | null
-          acknowledgement_device: string | null
-          acknowledgement_ip: string | null
-          acknowledgement_status: string
-          assigned_at: string
-          assigned_by: string | null
-          assigned_to: string
-          created_at: string
-          id: string
-          is_current: boolean
-          lead_id: string
-          updated_at: string
-        }
-        Insert: {
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          acknowledged_by_name?: string | null
-          acknowledgement_device?: string | null
-          acknowledgement_ip?: string | null
-          acknowledgement_status?: string
-          assigned_at?: string
-          assigned_by?: string | null
-          assigned_to: string
-          created_at?: string
-          id?: string
-          is_current?: boolean
-          lead_id: string
-          updated_at?: string
-        }
-        Update: {
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          acknowledged_by_name?: string | null
-          acknowledgement_device?: string | null
-          acknowledgement_ip?: string | null
-          acknowledgement_status?: string
-          assigned_at?: string
-          assigned_by?: string | null
-          assigned_to?: string
-          created_at?: string
-          id?: string
-          is_current?: boolean
-          lead_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "lead_assignments_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "leads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       leads: {
         Row: {
-          acknowledged: boolean
-          acknowledged_at: string | null
-          acknowledged_by: string | null
-          assigned_at: string | null
-          assigned_by: string | null
-          assigned_to: string | null
-          assignment_status: string | null
           closed_at: string | null
           closed_value: number | null
           created_at: string
@@ -2672,13 +2600,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          acknowledged?: boolean
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          assigned_at?: string | null
-          assigned_by?: string | null
-          assigned_to?: string | null
-          assignment_status?: string | null
           closed_at?: string | null
           closed_value?: number | null
           created_at?: string
@@ -2694,13 +2615,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          acknowledged?: boolean
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          assigned_at?: string | null
-          assigned_by?: string | null
-          assigned_to?: string | null
-          assignment_status?: string | null
           closed_at?: string | null
           closed_value?: number | null
           created_at?: string
@@ -2743,42 +2657,6 @@ export type Database = {
           show_supply_from?: boolean
           updated_at?: string
           use_letterhead?: boolean
-        }
-        Relationships: []
-      }
-      notifications: {
-        Row: {
-          created_at: string
-          entity_id: string | null
-          entity_type: string | null
-          id: string
-          link: string | null
-          message: string | null
-          read_at: string | null
-          title: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          entity_id?: string | null
-          entity_type?: string | null
-          id?: string
-          link?: string | null
-          message?: string | null
-          read_at?: string | null
-          title: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          entity_id?: string | null
-          entity_type?: string | null
-          id?: string
-          link?: string | null
-          message?: string | null
-          read_at?: string | null
-          title?: string
-          user_id?: string
         }
         Relationships: []
       }
@@ -4511,31 +4389,6 @@ export type Database = {
     Functions: {
       _oracle_block_complete: { Args: { blk: Json }; Returns: boolean }
       _oracle_row_str: { Args: { k: string; v: Json }; Returns: string }
-      acknowledge_lead_assignment: {
-        Args: { _assignment_id: string; _device?: string; _ip?: string }
-        Returns: {
-          acknowledged_at: string | null
-          acknowledged_by: string | null
-          acknowledged_by_name: string | null
-          acknowledgement_device: string | null
-          acknowledgement_ip: string | null
-          acknowledgement_status: string
-          assigned_at: string
-          assigned_by: string | null
-          assigned_to: string
-          created_at: string
-          id: string
-          is_current: boolean
-          lead_id: string
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "lead_assignments"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       admin_delete_challan: {
         Args: { _id: string; _reason: string }
         Returns: undefined
@@ -4557,22 +4410,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      check_customer_duplicate: {
-        Args: {
-          p_current_id?: string
-          p_customer_type: string
-          p_gst?: string
-          p_phone?: string
-        }
-        Returns: {
-          company: string
-          customer_code: string
-          existing_customer_id: string
-          is_duplicate: boolean
-          matched_field: string
-          matched_value: string
-        }[]
-      }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
@@ -4583,21 +4420,6 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
-      }
-      my_pending_lead_acknowledgements: {
-        Args: never
-        Returns: {
-          assigned_at: string
-          assigned_by: string
-          assigned_by_name: string
-          assignment_id: string
-          customer_name: string
-          lead_id: string
-          lead_source: string
-          lead_title: string
-          priority: string
-          remarks: string
-        }[]
       }
       next_amc_seq: { Args: never; Returns: number }
       next_ims_transfer_seq: { Args: never; Returns: number }
@@ -4616,21 +4438,6 @@ export type Database = {
       record_user_activity: { Args: never; Returns: undefined }
       record_user_login: { Args: never; Returns: undefined }
       record_user_logout: { Args: never; Returns: undefined }
-      search_customers_by_name: {
-        Args: { search_text: string }
-        Returns: {
-          city: string
-          company: string
-          customer_code: string
-          customer_type: string
-          gst: string
-          id: string
-          phone: string
-          score: number
-        }[]
-      }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
       sync_dc_to_ims: { Args: { _dc_id: string }; Returns: number }
       sync_grn_to_ims: { Args: { _grn_id: string }; Returns: number }
     }

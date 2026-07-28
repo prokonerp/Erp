@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, Download, FileCheck2 } from "lucide-react";
 import { toast } from "sonner";
 import { parseCSV, buildCSV, downloadCSV } from "@/lib/csv";
-import { loadExistingIdentifierSets, partitionCustomerImportRows } from "@/lib/customerDuplicates";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { stateFromGSTIN } from "@/lib/india";
 import { useIsAdmin } from "@/lib/useRole";
@@ -307,7 +306,7 @@ function ImportPage() {
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: number; skipped: { row: number; reason: string }[]; failed: { row: number; reason: string }[] } | null>(null);
+  const [result, setResult] = useState<{ ok: number; failed: { row: number; reason: string }[] } | null>(null);
 
   const def = MODULES[mod];
   const headers = useMemo(() => def.fields.map((f) => f.key), [def]);
@@ -373,9 +372,6 @@ function ImportPage() {
     const uid = u.user?.id ?? null;
     const failed: { row: number; reason: string }[] = [];
     let ok = 0;
-    const skipped: { row: number; reason: string }[] = [];
-    // Customer imports must not create duplicates (GSTIN for Business, mobile for Individual).
-    const custSets = mod === "customers" ? await loadExistingIdentifierSets() : null;
 
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
@@ -419,14 +415,6 @@ function ImportPage() {
           payload.shipping_address = joinAddr("shipping") || payload.billing_address;
           payload.address = payload.billing_address;
           payload.created_by = uid;
-          if (custSets) {
-            const dupes = partitionCustomerImportRows([{
-              customer_type: isBiz ? "Business" : "Individual",
-              gst: (payload.gst as string) || null,
-              phone: (payload.phone as string) || null,
-            }], custSets).duplicates;
-            if (dupes.length) { skipped.push({ row: i + 2, reason: dupes[0].reason }); continue; }
-          }
           const { error } = await supabase.from("customers").insert(payload as never);
           if (error) throw new Error(error.message);
         } else if (mod === "products") {
@@ -517,11 +505,10 @@ function ImportPage() {
         failed.push({ row: i + 2, reason: e instanceof Error ? e.message : "unknown" });
       }
     }
-    setResult({ ok, skipped, failed });
+    setResult({ ok, failed });
     setBusy(false);
-    const skipNote = skipped.length ? `, skipped ${skipped.length} duplicate(s)` : "";
-    if (failed.length === 0) toast.success(`Imported ${ok} record(s)${skipNote}`);
-    else toast.warning(`Imported ${ok}${skipNote}, failed ${failed.length}`);
+    if (failed.length === 0) toast.success(`Imported ${ok} record(s)`);
+    else toast.warning(`Imported ${ok}, failed ${failed.length}`);
   };
 
   return (
@@ -627,16 +614,7 @@ function ImportPage() {
           </Button>
           {result && (
             <div className="text-sm">
-              <div className="font-medium">
-                Imported: {result.ok}, Skipped (duplicate): {result.skipped.length}, Failed: {result.failed.length}
-              </div>
-              {result.skipped.length > 0 && (
-                <div className="mt-2 max-h-40 overflow-y-auto border rounded-md p-2 bg-amber-50 text-amber-900">
-                  {result.skipped.map((s, i) => (
-                    <div key={i} className="text-xs">Row {s.row}: {s.reason}</div>
-                  ))}
-                </div>
-              )}
+              <div className="font-medium">Imported: {result.ok}, Failed: {result.failed.length}</div>
               {result.failed.length > 0 && (
                 <>
                   <div className="mt-2 max-h-60 overflow-y-auto border rounded-md p-2 bg-red-50 text-red-900">

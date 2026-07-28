@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { QuoteTermsTemplate } from "@/lib/crm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,8 +68,6 @@ function NewQuotation() {
   const [businessState, setBusinessState] = useState("Haryana");
   const [notes, setNotes] = useState("Thanks for your business.");
   const [terms, setTerms] = useState("");
-  const [templates, setTemplates] = useState<QuoteTermsTemplate[]>([]);
-  const [termsTplId, setTermsTplId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -86,18 +83,11 @@ function NewQuotation() {
       if (def) setBranchId(def.id);
     }).catch(() => {});
 
-    supabase.from("crm_settings").select("business_state,default_customer_notes").eq("id", 1).maybeSingle().then(({ data }) => {
-      const s = data as { business_state?: string | null; default_customer_notes?: string | null } | null;
+    supabase.from("crm_settings").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
+      const s = data as { business_state?: string; default_terms?: string; default_customer_notes?: string } | null;
       if (s?.business_state) setBusinessState(s.business_state);
-      if (!cloneId && s?.default_customer_notes) setNotes((prev) => prev || s.default_customer_notes!);
-    });
-
-    supabase.from("quote_terms_templates").select("*").order("sort_order").then(({ data }) => {
-      const list = ((data || []) as unknown as QuoteTermsTemplate[]);
-      setTemplates(list);
-      if (cloneId) return;
-      const def = list.find((t) => t.is_default) || list[0];
-      if (def) { setTermsTplId(def.id); setTerms((prev) => prev || def.body || ""); }
+      if (!cloneId && s?.default_terms) setTerms(s.default_terms);
+      if (!cloneId && s?.default_customer_notes) setNotes(s.default_customer_notes);
     });
 
     supabase.from("inventory").select("product_id,quantity,warehouse").then(({ data }) => {
@@ -493,16 +483,7 @@ function NewQuotation() {
           <CardHeader className="py-3"><CardTitle className="text-sm">Notes & Terms</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             <div><Label className="text-xs">Customer notes (printed)</Label><Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className="text-sm" /></div>
-            <div>
-              <Label className="text-xs">Terms &amp; conditions</Label>
-              <Select value={termsTplId} onValueChange={(v) => { setTermsTplId(v); const t = templates.find((x) => x.id === v); setTerms(t?.body || ""); }}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select terms template" /></SelectTrigger>
-                <SelectContent>
-                  {templates.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Textarea rows={4} value={terms} onChange={(e) => setTerms(e.target.value)} className="text-sm mt-1.5" placeholder="Select a template above" />
-            </div>
+            <div><Label className="text-xs">Terms & conditions</Label><Textarea rows={4} value={terms} onChange={(e) => setTerms(e.target.value)} className="text-sm" /></div>
           </CardContent>
         </Card>
 

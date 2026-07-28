@@ -42,7 +42,6 @@ import { getMyProfile } from "@/lib/admin-users.functions";
 import { UserProfileMenu, type ProfileInfo } from "@/components/UserProfileMenu";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { IdleTimeout } from "@/components/IdleTimeout";
-import { LeadAcknowledgementGate } from "@/components/LeadAcknowledgementGate";
 import { useActivityTracker } from "@/lib/useActivityTracker";
 import { toast } from "sonner";
 
@@ -488,7 +487,6 @@ function AppLayout() {
         }}
       />
       <IdleTimeout />
-      <LeadAcknowledgementGate />
     </div>
   );
 }
