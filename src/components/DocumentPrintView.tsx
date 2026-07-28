@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { amountInWords } from "@/lib/crm";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -134,11 +135,46 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
     .filter(Boolean)
     .join(" · ");
 
+  // Scale the whole document down at print time so it always lands on exactly
+  // one A4 page, regardless of item count. Scale-up never happens (max 1) —
+  // short documents simply fill the page via min-height.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const PX_PER_MM = 96 / 25.4;
+    const target = 277 * PX_PER_MM; // A4 height minus 10mm top/bottom margins
+    const fit = () => {
+      const el = rootRef.current;
+      if (!el) return;
+      el.style.transform = "";
+      el.style.width = "";
+      const h = el.scrollHeight;
+      if (h > target) {
+        const s = Math.max(0.4, target / h);
+        el.style.transformOrigin = "top left";
+        el.style.transform = `scale(${s})`;
+        el.style.width = `${100 / s}%`;
+      }
+    };
+    const reset = () => {
+      const el = rootRef.current;
+      if (!el) return;
+      el.style.transform = "";
+      el.style.width = "";
+    };
+    window.addEventListener("beforeprint", fit);
+    window.addEventListener("afterprint", reset);
+    return () => {
+      window.removeEventListener("beforeprint", fit);
+      window.removeEventListener("afterprint", reset);
+    };
+  }, []);
+
   return (
-    <div className="doc-print text-black">
+    <div className="doc-print text-black" ref={rootRef}>
       <style>{`
         @media print {
           @page { size: A4; margin: 10mm; }
+          html, body { height: auto; }
           body { font-family: Arial, Helvetica, sans-serif; color: #000; }
           .doc-print { font-size: 10.5px; }
           .doc-print thead { display: table-header-group; }
@@ -150,7 +186,7 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
         .doc-print table.items { width: 100%; border-collapse: collapse; border: 1px solid ${accent}; }
         .doc-print table.items th { background: ${accent} !important; color: #ffffff !important; padding: 5px 4px; font-size: 10px; font-weight: 700; border: 1px solid ${accent}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print table.items td { padding: 5px 4px; border: 1px solid #e5e7eb; font-size: 10.5px; vertical-align: top; }
-        .doc-print { border: 1.5px solid ${accent}; padding: 10px 12px; display: flex; flex-direction: column; min-height: 272mm; box-sizing: border-box; }
+        .doc-print { border: 1.5px solid ${accent}; padding: 10px 12px; display: flex; flex-direction: column; min-height: 272mm; box-sizing: border-box; page-break-inside: avoid; break-inside: avoid; overflow: hidden; }
         .doc-print .doc-spacer { flex: 1 1 auto; min-height: 8px; }
         .doc-print .lbl { color: #374151; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 600; }
         .doc-print .lbl-r { color: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
