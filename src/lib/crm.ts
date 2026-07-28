@@ -32,6 +32,10 @@ export type Lead = {
   assigned_to: string | null;
   assigned_at: string | null;
   assigned_by: string | null;
+  assignment_status: string | null;
+  acknowledged: boolean;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
 };
 
 export type LeadActivity = {
