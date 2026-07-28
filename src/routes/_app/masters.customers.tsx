@@ -24,7 +24,7 @@ import { parseCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import { CustomerSuggestions } from "@/components/CustomerSuggestions";
 import { DuplicateCustomerDialog } from "@/components/DuplicateCustomerDialog";
-import { checkCustomerDuplicate, describeUniqueViolation, type DuplicateHit } from "@/lib/customerDuplicates";
+import { checkCustomerDuplicate, describeUniqueViolation, loadExistingIdentifierSets, partitionCustomerImportRows, type DuplicateHit } from "@/lib/customerDuplicates";
 
 export const Route = createFileRoute("/_app/masters/customers")({
   component: CustomerMasterPage,
@@ -368,9 +368,22 @@ export function CustomerMasterPage() {
         };
       }).filter((p) => p.company);
       if (!payload.length) return toast.error("No valid rows. Required column: Company / Customer Name");
-      const { error } = await supabase.from("customers").insert(payload as any);
-      if (error) return toast.error(error.message);
-      toast.success(`Imported ${payload.length} customer(s)`);
+      // Skip rows duplicating a GSTIN / mobile already present in the file or the database.
+      const sets = await loadExistingIdentifierSets();
+      const { unique, duplicates } = partitionCustomerImportRows(payload as any[], sets);
+      let imported = 0;
+      let failed = 0;
+      if (unique.length) {
+        const { error } = await supabase.from("customers").insert(unique as any);
+        if (error) {
+          // Fall back to row-by-row so one bad row doesn't fail the whole file.
+          for (const row of unique) {
+            const { error: e2 } = await supabase.from("customers").insert(row as any);
+            if (e2) failed++; else imported++;
+          }
+        } else imported = unique.length;
+      }
+      toast.success(`Imported ${imported} · Skipped (duplicate) ${duplicates.length} · Failed ${failed}`);
       load();
     } catch (e: any) { toast.error(e?.message || "Import failed"); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
