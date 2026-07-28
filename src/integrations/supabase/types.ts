@@ -683,7 +683,9 @@ export type Database = {
           country: string | null
           created_at: string
           created_by: string | null
+          customer_code: string | null
           customer_type: string
+          dup_exempt: boolean
           email: string | null
           first_name: string | null
           gst: string | null
@@ -727,7 +729,9 @@ export type Database = {
           country?: string | null
           created_at?: string
           created_by?: string | null
+          customer_code?: string | null
           customer_type?: string
+          dup_exempt?: boolean
           email?: string | null
           first_name?: string | null
           gst?: string | null
@@ -771,7 +775,9 @@ export type Database = {
           country?: string | null
           created_at?: string
           created_by?: string | null
+          customer_code?: string | null
           customer_type?: string
+          dup_exempt?: boolean
           email?: string | null
           first_name?: string | null
           gst?: string | null
@@ -4455,6 +4461,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      check_customer_duplicate: {
+        Args: {
+          p_current_id?: string
+          p_customer_type: string
+          p_gst?: string
+          p_phone?: string
+        }
+        Returns: {
+          company: string
+          customer_code: string
+          existing_customer_id: string
+          is_duplicate: boolean
+          matched_field: string
+          matched_value: string
+        }[]
+      }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
@@ -4483,6 +4505,21 @@ export type Database = {
       record_user_activity: { Args: never; Returns: undefined }
       record_user_login: { Args: never; Returns: undefined }
       record_user_logout: { Args: never; Returns: undefined }
+      search_customers_by_name: {
+        Args: { search_text: string }
+        Returns: {
+          city: string
+          company: string
+          customer_code: string
+          customer_type: string
+          gst: string
+          id: string
+          phone: string
+          score: number
+        }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       sync_dc_to_ims: { Args: { _dc_id: string }; Returns: number }
       sync_grn_to_ims: { Args: { _grn_id: string }; Returns: number }
     }
