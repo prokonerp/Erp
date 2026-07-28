@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, Download, FileCheck2 } from "lucide-react";
 import { toast } from "sonner";
 import { parseCSV, buildCSV, downloadCSV } from "@/lib/csv";
+import { loadExistingIdentifierSets, partitionCustomerImportRows } from "@/lib/customerDuplicates";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { stateFromGSTIN } from "@/lib/india";
 import { useIsAdmin } from "@/lib/useRole";
