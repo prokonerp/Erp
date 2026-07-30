@@ -32,7 +32,7 @@ import {
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
-import { downloadElementAsPdf } from "@/lib/docPdf";
+import { printElementToPdf } from "@/lib/docPdf";
 import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
@@ -350,19 +350,11 @@ function QuoteEditor() {
           <Button size="sm" variant="outline" disabled={isClone} onClick={async () => {
             if (!printRef.current) return;
             const el = printRef.current;
-            el.style.display = "block";
-            el.style.position = "fixed";
-            el.style.left = "-10000px";
-            el.style.top = "0";
-            el.style.width = "794px"; // A4 @ 96dpi
-            el.style.background = "#fff";
             try {
-              await downloadElementAsPdf(el, `${q.quote_no || "Quotation"}.pdf`);
-              toast.success("PDF downloaded");
+              await printElementToPdf(el, `${q.quote_no || "Quotation"}.pdf`);
+              toast.info("Choose \"Save as PDF\" in the dialog to download.");
             } catch (e: any) {
               toast.error(e?.message || "PDF failed");
-            } finally {
-              el.removeAttribute("style");
             }
           }}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
           <Button size="sm" onClick={() => setShareOpen(true)} disabled={isClone}><Share2 className="h-4 w-4 mr-1" />Share</Button>
