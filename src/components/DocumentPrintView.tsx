@@ -134,15 +134,16 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
     .filter(Boolean)
     .join(" · ");
 
-  return (
-    <div className="doc-print text-black">
+  const headerBlock = (
+    <>
       <style>{`
         @media print {
           @page { size: A4; margin: 10mm; }
           body { font-family: Arial, Helvetica, sans-serif; color: #000; }
           .doc-print { font-size: 10.5px; }
           .doc-print thead { display: table-header-group; }
-          .doc-print tr { page-break-inside: avoid; }
+          .doc-print tr { page-break-inside: avoid; break-inside: avoid; }
+          .doc-print .no-split { page-break-inside: avoid; break-inside: avoid; }
         }
         .doc-print .accent-bar { background: ${accent} !important; color: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print .accent-tx { color: ${accent}; }
@@ -150,8 +151,10 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
         .doc-print table.items { width: 100%; border-collapse: collapse; border: 1px solid ${accent}; }
         .doc-print table.items th { background: ${accent} !important; color: #ffffff !important; padding: 5px 4px; font-size: 10px; font-weight: 700; border: 1px solid ${accent}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print table.items td { padding: 5px 4px; border: 1px solid #e5e7eb; font-size: 10.5px; vertical-align: top; }
-        .doc-print { border: 1.5px solid ${accent}; padding: 10px 12px; display: flex; flex-direction: column; min-height: 272mm; box-sizing: border-box; }
-        .doc-print .doc-spacer { flex: 1 1 auto; min-height: 8px; }
+        .doc-print { border: 1.5px solid ${accent}; padding: 10px 12px; box-sizing: border-box; }
+        .doc-print table.page-shell { width: 100%; border-collapse: collapse; }
+        .doc-print table.page-shell > thead > tr > td,
+        .doc-print table.page-shell > tbody > tr > td { padding: 0; border: 0; }
         .doc-print .lbl { color: #374151; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 600; }
         .doc-print .lbl-r { color: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
       `}</style>
@@ -208,7 +211,7 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
       </div>
 
       {/* Bill / Ship */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-2 gap-3 mb-3 no-split">
         <div className="border" style={{ borderColor: "#d1d5db" }}>
           <div className="accent-bar px-2 py-1 text-[10px] font-semibold">{billLabel}</div>
           <div className="p-2 text-[10.5px]">
@@ -228,9 +231,13 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
           </div>
         </div>
       </div>
+    </>
+  );
 
+  const bodyBlock = (
+    <>
       {/* Meta row: asymmetric — left compact/muted, right bold/wide */}
-      <div className="grid grid-cols-2 text-[10.5px] mb-3 border" style={{ borderColor: "#d1d5db" }}>
+      <div className="grid grid-cols-2 text-[10.5px] mb-3 border no-split" style={{ borderColor: "#d1d5db" }}>
         <div className="p-2" style={{ borderRight: "1px solid #d1d5db" }}>
           <div className="flex items-baseline">
             <span className="lbl" style={{ width: 130 }}>Place of Supply</span><span>:</span>
