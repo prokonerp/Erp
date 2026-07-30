@@ -358,7 +358,7 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
 
       {/* Bank details */}
       {(company.bank_name || company.bank_account_number) && (
-        <div className="mt-4 border" style={{ borderColor: "#e5e7eb" }}>
+        <div className="mt-3 border no-split" style={{ borderColor: "#e5e7eb" }}>
           <div className="accent-bar px-2 py-1 text-[10px] font-semibold">Bank Details</div>
           <div className="p-2 grid grid-cols-3 gap-x-4 gap-y-1 text-[10.5px]">
             {company.bank_name && <div><span className="lbl">Bank: </span><span className="font-semibold">{company.bank_name}</span></div>}
@@ -371,7 +371,7 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
       )}
 
       {/* Terms / Notes (left) + Prepared By (right) */}
-      <div className="grid grid-cols-2 gap-6 mt-4 text-[10.5px]">
+      <div className="grid grid-cols-2 gap-6 mt-3 text-[10.5px] no-split">
         <div>
           {doc.terms && (
             <>
@@ -397,10 +397,8 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
         </div>
       </div>
 
-      <div className="doc-spacer" />
-
       {/* Signature */}
-      <div className="grid grid-cols-2 gap-8 mt-6 text-[10.5px]">
+      <div className="grid grid-cols-2 gap-8 mt-4 text-[10.5px] no-split">
         <div className="border-t pt-1 text-center" style={{ borderColor: "#6b7280" }}>
           {doc.type === "quotation" ? "Customer Signature" : "Vendor Acknowledgement"}
         </div>
@@ -409,6 +407,19 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
           <div className="mt-6 text-gray-600">Authorised Signatory</div>
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <div className="doc-print text-black">
+      <table className="page-shell">
+        <thead>
+          <tr><td>{headerBlock}</td></tr>
+        </thead>
+        <tbody>
+          <tr><td>{bodyBlock}</td></tr>
+        </tbody>
+      </table>
     </div>
   );
 }
