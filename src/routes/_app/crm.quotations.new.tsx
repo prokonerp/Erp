@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Trash2, Save, Send, ClipboardPaste, AlertTriangle, PackageCheck, PackageX } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { ArrowLeft, Plus, Trash2, Save, Send, ClipboardPaste, AlertTriangle, PackageCheck, PackageX, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
@@ -19,6 +20,7 @@ import {
   type Customer, type QuoteItem,
   fmtMoney, computeQuoteTotals, lineAmount, INDIAN_STATES,
 } from "@/lib/crm";
+import type { QuoteTermsTemplate } from "@/lib/crm";
 import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/crm/quotations/new")({
@@ -68,6 +70,11 @@ function NewQuotation() {
   const [businessState, setBusinessState] = useState("Haryana");
   const [notes, setNotes] = useState("Thanks for your business.");
   const [terms, setTerms] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const [templates, setTemplates] = useState<QuoteTermsTemplate[]>([]);
+  const [oemLogoCount, setOemLogoCount] = useState(0);
+  const [includeOemLogos, setIncludeOemLogos] = useState(true);
+  const [logosProductOnly, setLogosProductOnly] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
@@ -101,6 +108,19 @@ function NewQuotation() {
 
     getCurrentUserName().then((n) => n && setSalesperson((s) => s || n));
   }, []);
+
+  // Terms templates + active OEM logo count for the Notes & Terms card.
+  useEffect(() => {
+    supabase.from("quote_terms_templates").select("*").order("sort_order")
+      .then(({ data }) => setTemplates((data || []) as unknown as QuoteTermsTemplate[]));
+    supabase.from("oem_logos").select("id").eq("is_active", true)
+      .then(({ data }) => setOemLogoCount((data || []).length));
+  }, []);
+
+  const applyTemplate = (id: string) => {
+    const t = templates.find((x) => x.id === id);
+    if (t) setTerms(t.body || "");
+  };
 
   // Clone: prefill this blank form from an existing quotation. Nothing is
   // written until the user clicks Save, so the new quote gets its own number.
@@ -137,6 +157,8 @@ function NewQuotation() {
       setRoundOff(Number(q.round_off) || 0);
       setNotes(q.customer_notes || "");
       setTerms(q.terms || "");
+      setRemarks(q.remarks || "");
+      if (typeof q.include_oem_logos === "boolean") setIncludeOemLogos(q.include_oem_logos);
       const rows = (Array.isArray(q.items) ? q.items : []) as QuoteItem[];
       if (rows.length) setItems(rows.map((r) => ({ ...r, amount: lineAmount(r) })));
       if (q.validity_days) {
@@ -283,6 +305,8 @@ function NewQuotation() {
         status: opts?.andSend ? "sent" : "draft",
         terms: terms || null,
         customer_notes: notes || null,
+        remarks: remarks || null,
+        include_oem_logos: includeOemLogos,
       };
       const { data, error } = await supabase.from("quotations").insert(payload as never).select().single();
       if (error) { toast.error(error.message); return null; }
@@ -480,10 +504,34 @@ function NewQuotation() {
       {/* Totals + Notes */}
       <div className="grid lg:grid-cols-2 gap-3">
         <Card>
-          <CardHeader className="py-3"><CardTitle className="text-sm">Notes & Terms</CardTitle></CardHeader>
+          <CardHeader className="py-3 flex flex-row items-center justify-between gap-2">
+            <CardTitle className="text-sm">Notes &amp; Terms</CardTitle>
+            {templates.length > 0 && (
+              <Select onValueChange={applyTemplate}>
+                <SelectTrigger className="w-52 h-8 text-xs"><SelectValue placeholder="Apply terms template" /></SelectTrigger>
+                <SelectContent>
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}><FileText className="inline h-3 w-3 mr-1" />{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </CardHeader>
           <CardContent className="space-y-2">
             <div><Label className="text-xs">Customer notes (printed)</Label><Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className="text-sm" /></div>
             <div><Label className="text-xs">Terms & conditions</Label><Textarea rows={4} value={terms} onChange={(e) => setTerms(e.target.value)} className="text-sm" /></div>
+            <div><Label className="text-xs">Internal remarks (not printed)</Label><Input value={remarks} onChange={(e) => setRemarks(e.target.value)} className="h-8 text-sm" /></div>
+            <div className="pt-2 border-t space-y-2">
+              <div className="flex items-center gap-2">
+                <Switch id="new-include-oem-logos" checked={includeOemLogos} onCheckedChange={setIncludeOemLogos} />
+                <Label htmlFor="new-include-oem-logos" className="text-xs cursor-pointer">Include OEM logos in PDF footer</Label>
+                <span className="text-[11px] text-muted-foreground">({oemLogoCount} active)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch id="new-logos-product-only" checked={logosProductOnly} onCheckedChange={setLogosProductOnly} disabled={!includeOemLogos} />
+                <Label htmlFor="new-logos-product-only" className="text-xs cursor-pointer">Show only logos for products in this quote</Label>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
