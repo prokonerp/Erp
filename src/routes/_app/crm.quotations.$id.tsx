@@ -386,24 +386,9 @@ function QuoteEditor() {
           </Select>
           <Button size="sm" variant="outline" onClick={sendEmail} disabled={isClone}><Mail className="h-4 w-4 mr-1" />Email</Button>
           <Button size="sm" variant="outline" onClick={sendWA} disabled={isClone}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
-          <Button size="sm" variant="outline" disabled={isClone} onClick={async () => {
-            if (!printRef.current) return;
-            try {
-              await printElementSinglePage(printRef.current, `${q.quote_no || "Quotation"}.pdf`);
-            } catch (e: any) {
-              toast.error(e?.message || "Print failed");
-            }
-          }}><Printer className="h-4 w-4 mr-1" />Print</Button>
-          <Button size="sm" variant="outline" disabled={isClone} onClick={async () => {
-            if (!printRef.current) return;
-            const el = printRef.current;
-            try {
-              toast.info("Preparing PDF…");
-              await saveElementAsPdf(el, `${q.quote_no || "Quotation"}.pdf`);
-            } catch (e: any) {
-              toast.error(e?.message || "PDF failed");
-            }
-          }}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
+          <Button size="sm" variant="outline" disabled={isClone} onClick={doPrint}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button size="sm" variant="outline" disabled={isClone} onClick={doPreview}><Eye className="h-4 w-4 mr-1" />Preview PDF</Button>
+          <Button size="sm" variant="outline" disabled={isClone} onClick={doDownload}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
           <Button size="sm" onClick={() => setShareOpen(true)} disabled={isClone}><Share2 className="h-4 w-4 mr-1" />Share</Button>
           <Button size="sm" variant="outline" onClick={convertToSo} disabled={isClone}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
           <Button size="sm" onClick={save}><Save className="h-4 w-4 mr-1" />Save</Button>
