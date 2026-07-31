@@ -266,6 +266,24 @@ export function oracleStatus(o: OracleBlock): "open" | "closed" {
   return o.status === "closed" ? "closed" : "open";
 }
 
+/** Count of related documents that are not yet Submitted/Closed. */
+export type OraclePendingDocs = { dc: number; grn: number };
+
+/** A document status counts as settled only when Submitted or Closed.
+ *  Cancelled documents are ignored by the callers building these counts. */
+export function docStatusSettled(status?: string | null): boolean {
+  const s = (status || "").trim().toLowerCase();
+  return s === "submitted" || s === "closed";
+}
+
+/** An Oracle may auto-close only when every A–D row is complete AND every
+ *  related Delivery Challan / GRN is Submitted or Closed. */
+export function oracleCanAutoClose(o: OracleBlock, pending?: OraclePendingDocs | null): boolean {
+  if (!oracleIsComplete(o)) return false;
+  if (pending && (pending.dc > 0 || pending.grn > 0)) return false;
+  return true;
+}
+
 export function indentStatusFromOracles(oracles: OracleBlock[] | null | undefined): "open" | "closed" {
   const list = oracles || [];
   if (list.length === 0) return "open";
