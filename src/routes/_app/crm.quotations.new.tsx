@@ -19,6 +19,7 @@ import { fetchBranches, type BranchRow } from "@/lib/sales";
 import {
   type Customer, type QuoteItem,
   fmtMoney, computeQuoteTotals, lineAmount, INDIAN_STATES,
+  computeExpiryDate, DEFAULT_VALIDITY_DAYS,
 } from "@/lib/crm";
 import type { QuoteTermsTemplate } from "@/lib/crm";
 import { getCurrentUserName } from "@/lib/currentUser";
@@ -35,7 +36,6 @@ export const Route = createFileRoute("/_app/crm/quotations/new")({
 });
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
-const addDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 const emptyRow = (): QuoteItem => ({ description: "", qty: 1, unit: "Nos", rate: 0, discount_percent: 0, tax_percent: 18, amount: 0 });
 
 type StockRow = { product_id: string | null; quantity: number; warehouse: string | null };
@@ -51,8 +51,8 @@ function NewQuotation() {
   const [subject, setSubject] = useState("");
   const [refNo, setRefNo] = useState("");
   const [quoteDate, setQuoteDate] = useState(todayIso());
-  const [expiryDate, setExpiryDate] = useState(addDays(7));
-  const [validityDays, setValidityDays] = useState(7);
+  const [expiryDate, setExpiryDate] = useState(computeExpiryDate(todayIso(), DEFAULT_VALIDITY_DAYS));
+  const [validityDays, setValidityDays] = useState(DEFAULT_VALIDITY_DAYS);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [billing, setBilling] = useState("");
   const [shipping, setShipping] = useState("");
@@ -163,7 +163,7 @@ function NewQuotation() {
       if (rows.length) setItems(rows.map((r) => ({ ...r, amount: lineAmount(r) })));
       if (q.validity_days) {
         setValidityDays(Number(q.validity_days));
-        setExpiryDate(addDays(Number(q.validity_days)));
+        setExpiryDate(computeExpiryDate(todayIso(), Number(q.validity_days)));
       }
       toast.success(`Cloned from ${q.quote_no || "quotation"} — save to create a new quote`);
     })();
@@ -398,11 +398,11 @@ function NewQuotation() {
             <div><Label className="text-xs">Reference #</Label><Input value={refNo} onChange={(e) => setRefNo(e.target.value)} className="h-8 text-sm" /></div>
             <div>
               <Label className="text-xs">Quote date</Label>
-              <Input type="date" value={quoteDate} onChange={(e) => { setQuoteDate(e.target.value); }} className="h-8 text-sm" />
+              <Input type="date" value={quoteDate} onChange={(e) => { const d = e.target.value; setQuoteDate(d); setExpiryDate(computeExpiryDate(d, validityDays)); }} className="h-8 text-sm" />
             </div>
             <div>
               <Label className="text-xs">Validity (days)</Label>
-              <Input type="number" value={validityDays} onChange={(e) => { const n = Number(e.target.value) || 0; setValidityDays(n); setExpiryDate(new Date(new Date(quoteDate).getTime() + n * 86400000).toISOString().slice(0, 10)); }} className="h-8 text-sm" />
+              <Input type="number" value={validityDays} onChange={(e) => { const n = Number(e.target.value) || 0; setValidityDays(n); setExpiryDate(computeExpiryDate(quoteDate, n)); }} className="h-8 text-sm" />
             </div>
             <div>
               <Label className="text-xs">Expiry date</Label>

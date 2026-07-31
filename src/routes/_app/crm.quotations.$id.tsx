@@ -28,6 +28,7 @@ import {
 import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
+  computeExpiryDate, DEFAULT_VALIDITY_DAYS,
 } from "@/lib/crm";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
@@ -104,7 +105,7 @@ function QuoteEditor() {
       quote.reference_no = null;
       quote.status = "draft";
       quote.quote_date = new Date().toISOString().slice(0, 10);
-      quote.expiry_date = new Date(Date.now() + (quote.validity_days || 15) * 86400000).toISOString().slice(0, 10);
+      quote.expiry_date = computeExpiryDate(quote.quote_date, quote.validity_days || DEFAULT_VALIDITY_DAYS);
     }
     setQ(quote);
     if (quote.customer_id) {
@@ -438,7 +439,7 @@ function QuoteEditor() {
             )}
           </div>
           <div><Label>Reference #</Label><Input value={q.reference_no || ""} onChange={(e) => setQ({ ...q, reference_no: e.target.value })} /></div>
-          <div><Label>Quote date</Label><Input type="date" value={q.quote_date} onChange={(e) => setQ({ ...q, quote_date: e.target.value })} /></div>
+          <div><Label>Quote date</Label><Input type="date" value={q.quote_date} onChange={(e) => setQ({ ...q, quote_date: e.target.value, expiry_date: computeExpiryDate(e.target.value, q.validity_days || DEFAULT_VALIDITY_DAYS) })} /></div>
           <div><Label>Expiry date</Label><Input type="date" value={q.expiry_date || ""} onChange={(e) => setQ({ ...q, expiry_date: e.target.value })} /></div>
           <div className="md:col-span-3"><Label>Subject</Label><Input value={q.subject || ""} onChange={(e) => setQ({ ...q, subject: e.target.value })} placeholder="Let your customer know what this quote is for" /></div>
           <div><Label>Salesperson</Label><Input value={q.salesperson || ""} onChange={(e) => setQ({ ...q, salesperson: e.target.value })} /></div>
@@ -453,7 +454,7 @@ function QuoteEditor() {
           </div>
           <div><Label>Payment terms</Label><Input value={q.payment_terms || ""} onChange={(e) => setQ({ ...q, payment_terms: e.target.value })} placeholder="e.g. 50% advance, balance before dispatch" /></div>
           <div><Label>Delivery timeline</Label><Input value={q.delivery_timeline || ""} onChange={(e) => setQ({ ...q, delivery_timeline: e.target.value })} placeholder="e.g. 2–3 weeks from PO" /></div>
-          <div><Label>Validity (days)</Label><Input type="number" value={q.validity_days || 0} onChange={(e) => setQ({ ...q, validity_days: Number(e.target.value) })} /></div>
+          <div><Label>Validity (days)</Label><Input type="number" value={q.validity_days || 0} onChange={(e) => { const n = Number(e.target.value) || 0; setQ({ ...q, validity_days: n, expiry_date: computeExpiryDate(q.quote_date, n) }); }} /></div>
           <div><Label>Contact person</Label><Input value={q.contact_name || ""} onChange={(e) => setQ({ ...q, contact_name: e.target.value })} /></div>
           <div><Label>Contact email</Label><Input value={q.contact_email || ""} onChange={(e) => setQ({ ...q, contact_email: e.target.value })} /></div>
           <div><Label>Contact mobile</Label><Input value={q.contact_phone || ""} onChange={(e) => setQ({ ...q, contact_phone: e.target.value })} /></div>

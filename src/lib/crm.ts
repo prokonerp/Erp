@@ -173,6 +173,28 @@ export const fmtDate = (iso: string | null | undefined) => {
   return `${d}-${m}-${y}`;
 };
 
+/** Default quotation validity in days (quote date counts as day 1). */
+export const DEFAULT_VALIDITY_DAYS = 15;
+
+/**
+ * Expiry = quote date + (validity - 1) calendar days, so the quote date is
+ * counted as day 1 (e.g. 01-Aug + 15 days validity → 15-Aug).
+ */
+export function computeExpiryDate(
+  quoteDate: string | null | undefined,
+  validityDays: number = DEFAULT_VALIDITY_DAYS
+): string {
+  if (!quoteDate) return "";
+  const base = new Date(`${quoteDate.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(base.getTime())) return "";
+  const days = Math.max(1, Number(validityDays) || DEFAULT_VALIDITY_DAYS);
+  base.setDate(base.getDate() + days - 1);
+  const y = base.getFullYear();
+  const m = String(base.getMonth() + 1).padStart(2, "0");
+  const d = String(base.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function computeIncentive(rules: IncentiveRule[], closed_value: number) {
   const active = rules.filter((r) => r.active).sort((a, b) => a.min_value - b.min_value);
   let payout = 0;
