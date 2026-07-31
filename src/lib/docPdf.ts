@@ -204,9 +204,7 @@ export async function previewElementAsPdf(el: HTMLElement, filename: string) {
  */
 export async function printElementToPdf(el: HTMLElement, filename: string) {
   const docTitle = filename.replace(/\.pdf$/i, "");
-  const head = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-    .map((n) => n.outerHTML)
-    .join("\n");
+  const head = collectCssText();
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText =
