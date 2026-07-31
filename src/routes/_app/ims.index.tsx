@@ -292,6 +292,8 @@ function Dashboard() {
                 <thead className="bg-muted/50">
                   <tr className="text-left">
                     <th className="p-2">Warehouse</th>
+                    <th className="p-2">ASP Code</th>
+                    <th className="p-2">Branch</th>
                     <th className="p-2">Type</th>
                     <th className="p-2 text-right">Opening</th>
                     <th className="p-2 text-right" title="Received (all GRNs)">Received</th>
@@ -312,6 +314,8 @@ function Dashboard() {
                     return (
                       <tr key={wid} className="border-t">
                         <td className="p-2">{wh ? wh.name : "Unassigned"}</td>
+                        <td className="p-2 text-xs">{wh?.asp_code || "—"}</td>
+                        <td className="p-2 text-xs">{wh?.branch?.name || "—"}</td>
                         <td className="p-2 text-xs text-muted-foreground">{wh?.type || "—"}</td>
                         <td className="p-2 text-right">{m.opening}</td>
                         <td className="p-2 text-right font-medium">{m.recvTotal}</td>
