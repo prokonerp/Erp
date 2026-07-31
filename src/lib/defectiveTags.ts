@@ -145,7 +145,7 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
 export async function markTagsPrinted(ids: string[], byName?: string | null) {
   if (!ids.length) return;
   const { data } = await sb.from("defective_tags").select("id,print_count").in("id", ids);
-  const counts = new Map((data || []).map((r: any) => [r.id, r.print_count || 0]));
+  const counts = new Map<string, number>((data || []).map((r: any) => [r.id as string, (r.print_count as number) || 0]));
   await Promise.all(
     ids.map((id) =>
       sb
