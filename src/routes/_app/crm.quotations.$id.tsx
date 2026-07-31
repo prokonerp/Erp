@@ -339,6 +339,37 @@ function QuoteEditor() {
     }
   };
 
+  const docName = () => `${q?.quote_no || "Quotation"}.pdf`;
+
+  const doPrint = async () => {
+    if (!printRef.current) return;
+    try {
+      await printElementSinglePage(printRef.current, docName());
+    } catch (e: any) {
+      toast.error(e?.message || "Print failed");
+    }
+  };
+
+  const doPreview = async () => {
+    if (!printRef.current) return;
+    try {
+      toast.info("Preparing preview…");
+      await previewElementAsPdf(printRef.current, docName());
+    } catch (e: any) {
+      toast.error(e?.message || "Preview failed");
+    }
+  };
+
+  const doDownload = async () => {
+    if (!printRef.current) return;
+    try {
+      toast.info("Preparing PDF…");
+      await saveElementAsPdf(printRef.current, docName());
+    } catch (e: any) {
+      toast.error(e?.message || "PDF failed");
+    }
+  };
+
   if (!q || !settings || !company) return <div className="text-muted-foreground">Loading…</div>;
 
   const STATUSES: QuoteStatus[] = ["draft", "sent", "accepted", "declined", "expired", "invoiced"];
