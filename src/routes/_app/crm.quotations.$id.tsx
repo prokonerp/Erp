@@ -635,8 +635,13 @@ function QuoteEditor() {
           ];
           return (
             <div
-              className="mt-6 flex items-center"
               style={{
+                marginTop: 16,
+                display: "flex",
+                flexDirection: "row",
+                flexWrap: "nowrap",
+                alignItems: "center",
+                width: "100%",
                 borderTop: "0.5px solid #9ca3af",
                 background: "#ffffff",
                 padding: "10px 16px",
@@ -649,6 +654,7 @@ function QuoteEditor() {
                   key={l.id}
                   style={{
                     height: 40,
+                    flex: "0 1 auto",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -659,7 +665,7 @@ function QuoteEditor() {
                   <img
                     src={l.url}
                     alt={l.oem_name}
-                    style={{ height: 32, maxWidth: 140, objectFit: "contain", display: "block" }}
+                    style={{ height: 30, maxWidth: 130, objectFit: "contain", display: "block" }}
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                   />
                 </div>
