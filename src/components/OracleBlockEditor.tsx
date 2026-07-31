@@ -13,7 +13,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { normalizeOracle, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
+import { normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import { IndentModelPicker } from "@/components/IndentModelPicker";
 
@@ -25,6 +25,7 @@ export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
   onGenerateCustomerGrn, dcExists = false, dcInfo, indentId,
+  pendingDocs,
 }: {
   index: number;
   value: OracleBlock;
@@ -41,6 +42,9 @@ export function OracleBlockEditor({
   dcInfo?: { challan_no?: string | null; challan_date?: string | null; status?: string | null; id?: string | null };
   /** Parent indent id — required for controlled admin reopen. */
   indentId?: string;
+  /** Count of related DC / GRN documents that are still not Submitted or
+   *  Closed. While either is > 0 the Oracle must stay Open. */
+  pendingDocs?: OraclePendingDocs;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -55,6 +59,8 @@ export function OracleBlockEditor({
   const status = oracleStatus(value);
   const closed = status === "closed";
   const complete = oracleIsComplete(value);
+  const docsPending = (pendingDocs?.dc || 0) + (pendingDocs?.grn || 0);
+  const canAutoClose = oracleCanAutoClose(value, pendingDocs);
   const locked = closed && !isAdmin;
   void defectiveParts;
 
@@ -99,7 +105,7 @@ export function OracleBlockEditor({
   // Auto-close: once every defective/exchange/received row is fully filled,
   // mark the block closed automatically (no manual confirmation).
   useEffect(() => {
-    if (closed || !complete) return;
+    if (closed || !canAutoClose) return;
     let cancelled = false;
     (async () => {
       const { data: u } = await supabase.auth.getUser();
@@ -118,7 +124,7 @@ export function OracleBlockEditor({
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [complete, closed]);
+  }, [canAutoClose, closed]);
 
   const reopen = () => {
     // Local-only reset kept for non-controlled callers (no indentId): flips
@@ -236,7 +242,11 @@ export function OracleBlockEditor({
           ) : (
             <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {complete ? "Closing…" : "Auto-closes when all rows are complete"}
+              {canAutoClose
+                ? "Closing…"
+                : complete && docsPending > 0
+                  ? `Awaiting ${pendingDocs?.dc ? `${pendingDocs.dc} DC` : ""}${pendingDocs?.dc && pendingDocs?.grn ? " & " : ""}${pendingDocs?.grn ? `${pendingDocs.grn} GRN` : ""} to be Submitted`
+                  : "Auto-closes when all rows are complete & all DC/GRN are Submitted"}
             </span>
           )}
           {!closed && (
