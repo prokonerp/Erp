@@ -14,10 +14,44 @@ const CONTENT_H_PX = Math.round((PAGE_H_MM - MARGIN_MM * 2) * PX_PER_MM);
  * then shrink-to-fit so the whole document lands on a single A4 page.
  * Both Print and Download PDF use this so the two outputs are identical.
  */
-async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = true) {
-  const head = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-    .map((n) => n.outerHTML)
-    .join("\n");
+/**
+ * Serialize every same-origin stylesheet into raw CSS text. When `emulatePrint`
+ * is set, `@media print` blocks are rewritten to `@media all` so a canvas
+ * rasterizer (which never applies print media) sees exactly what the browser's
+ * print engine sees.
+ */
+function collectCss(emulatePrint: boolean): string | null {
+  try {
+    let css = "";
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules: CSSRuleList;
+      try {
+        rules = (sheet as CSSStyleSheet).cssRules;
+      } catch {
+        return null; // cross-origin sheet — cannot read, fall back
+      }
+      for (const rule of Array.from(rules)) css += rule.cssText + "\n";
+    }
+    if (!css.trim()) return null;
+    if (emulatePrint) css = css.replace(/@media\s+print/gi, "@media all");
+    return css;
+  } catch {
+    return null;
+  }
+}
+
+async function buildPrintFrame(
+  el: HTMLElement,
+  docTitle: string,
+  applyScale = true,
+  emulatePrint = false,
+) {
+  const inlined = emulatePrint ? collectCss(true) : null;
+  const head = inlined
+    ? `<style>${inlined}</style>`
+    : Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+        .map((n) => n.outerHTML)
+        .join("\n");
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText = `position:fixed;right:0;bottom:0;width:${CONTENT_W_PX}px;height:${CONTENT_H_PX}px;border:0;opacity:0;pointer-events:none;`;
