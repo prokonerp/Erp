@@ -18,7 +18,7 @@ function Field({ label, value, wide }: { label: string; value?: string | null; w
 export function DefectiveTagCard({ tag }: { tag: DefectiveTag }) {
   const count = Math.max(0, Math.min(4, tag.replacement_count ?? 1));
   return (
-    <div className="defective-tag border-2 border-black bg-white text-black flex flex-col">
+    <div className="defective-tag h-full border-2 border-black bg-white text-black flex flex-col">
       <div className="border-b-2 border-black px-2 py-1 flex items-center justify-between">
         <span className="text-[13px] font-bold tracking-[0.15em] uppercase">Defective Tag</span>
         <span className="text-[10px] font-mono">{tag.tag_no || ""}</span>
