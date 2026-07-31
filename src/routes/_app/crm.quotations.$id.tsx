@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList, Share2, Download } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList, Share2, Download, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
 import type { ProductMaster } from "@/components/ProductPicker";
@@ -32,10 +32,18 @@ import {
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
-import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
+import { printElementSinglePage, saveElementAsPdf, previewElementAsPdf } from "@/lib/docPdf";
 import { getCurrentUserName } from "@/lib/currentUser";
 
-export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
+export type QuoteDocAction = "print" | "preview" | "download";
+
+export const Route = createFileRoute("/_app/crm/quotations/$id")({
+  component: QuoteEditor,
+  validateSearch: (s: Record<string, unknown>): { action?: QuoteDocAction } => {
+    const a = s.action;
+    return a === "print" || a === "preview" || a === "download" ? { action: a } : {};
+  },
+});
 
 type InvoiceSettingsRow = {
   branch_id: string;
@@ -71,6 +79,8 @@ function QuoteEditor() {
   const [warrantyMap, setWarrantyMap] = useState<Record<string, string>>({});
   const [preparedBy, setPreparedBy] = useState<PrintPreparedBy | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const { action } = Route.useSearch();
+  const autoRan = useRef(false);
 
   const load = async () => {
     let sourceId = id;
@@ -329,10 +339,55 @@ function QuoteEditor() {
     }
   };
 
+  const docName = () => `${q?.quote_no || "Quotation"}.pdf`;
+
+  const doPrint = async () => {
+    if (!printRef.current) return;
+    try {
+      await printElementSinglePage(printRef.current, docName());
+    } catch (e: any) {
+      toast.error(e?.message || "Print failed");
+    }
+  };
+
+  const doPreview = async () => {
+    if (!printRef.current) return;
+    try {
+      toast.info("Preparing preview…");
+      await previewElementAsPdf(printRef.current, docName());
+    } catch (e: any) {
+      toast.error(e?.message || "Preview failed");
+    }
+  };
+
+  const doDownload = async () => {
+    if (!printRef.current) return;
+    try {
+      toast.info("Preparing PDF…");
+      await saveElementAsPdf(printRef.current, docName());
+    } catch (e: any) {
+      toast.error(e?.message || "PDF failed");
+    }
+  };
+
+  // Deep-linked action from the quotation list (?action=print|preview|download)
+  useEffect(() => {
+    if (!action || autoRan.current || isClone) return;
+    if (!q || !settings || !company || !printRef.current) return;
+    autoRan.current = true;
+    const t = setTimeout(() => {
+      if (action === "print") void doPrint();
+      else if (action === "preview") void doPreview();
+      else void doDownload();
+      nav({ to: "/crm/quotations/$id", params: { id }, search: {}, replace: true });
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [action, q, settings, company]);
+
   if (!q || !settings || !company) return <div className="text-muted-foreground">Loading…</div>;
 
   const STATUSES: QuoteStatus[] = ["draft", "sent", "accepted", "declined", "expired", "invoiced"];
-  console.log("HEADER DATA:", company);
 
   return (
     <div className="space-y-4">
@@ -346,24 +401,9 @@ function QuoteEditor() {
           </Select>
           <Button size="sm" variant="outline" onClick={sendEmail} disabled={isClone}><Mail className="h-4 w-4 mr-1" />Email</Button>
           <Button size="sm" variant="outline" onClick={sendWA} disabled={isClone}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
-          <Button size="sm" variant="outline" disabled={isClone} onClick={async () => {
-            if (!printRef.current) return;
-            try {
-              await printElementSinglePage(printRef.current, `${q.quote_no || "Quotation"}.pdf`);
-            } catch (e: any) {
-              toast.error(e?.message || "Print failed");
-            }
-          }}><Printer className="h-4 w-4 mr-1" />Print</Button>
-          <Button size="sm" variant="outline" disabled={isClone} onClick={async () => {
-            if (!printRef.current) return;
-            const el = printRef.current;
-            try {
-              toast.info("Preparing PDF…");
-              await saveElementAsPdf(el, `${q.quote_no || "Quotation"}.pdf`);
-            } catch (e: any) {
-              toast.error(e?.message || "PDF failed");
-            }
-          }}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
+          <Button size="sm" variant="outline" disabled={isClone} onClick={doPrint}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button size="sm" variant="outline" disabled={isClone} onClick={doPreview}><Eye className="h-4 w-4 mr-1" />Preview PDF</Button>
+          <Button size="sm" variant="outline" disabled={isClone} onClick={doDownload}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
           <Button size="sm" onClick={() => setShareOpen(true)} disabled={isClone}><Share2 className="h-4 w-4 mr-1" />Share</Button>
           <Button size="sm" variant="outline" onClick={convertToSo} disabled={isClone}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
           <Button size="sm" onClick={save}><Save className="h-4 w-4 mr-1" />Save</Button>

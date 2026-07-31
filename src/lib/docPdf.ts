@@ -115,7 +115,7 @@ export async function printElementSinglePage(el: HTMLElement, filename: string) 
  * folder) — no print dialog. Uses the same print-CSS iframe as printing, so
  * the output matches Print Preview and always fits one A4 page.
  */
-export async function saveElementAsPdf(el: HTMLElement, filename: string) {
+async function buildPdfBlob(el: HTMLElement, filename: string): Promise<Blob> {
   // Capture at natural size (no CSS transform, so layout is untouched) and let
   // jsPDF scale the resulting image down to fit exactly one A4 page.
   const { iframe, root } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""), false);
@@ -139,9 +139,35 @@ export async function saveElementAsPdf(el: HTMLElement, filename: string) {
       imgW = (canvas.width * imgH) / canvas.height;
     }
     pdf.addImage(imgData, "JPEG", MARGIN_MM + (availW - imgW) / 2, MARGIN_MM, imgW, imgH);
-    await saveBlobWithPicker(pdf.output("blob"), filename);
+    return pdf.output("blob");
   } finally {
     iframe.remove();
+  }
+}
+
+export async function saveElementAsPdf(el: HTMLElement, filename: string) {
+  const blob = await buildPdfBlob(el, filename);
+  await saveBlobWithPicker(blob, filename);
+}
+
+/**
+ * Open the generated PDF inline in a new browser tab (preview).
+ * The tab is opened synchronously on the user gesture to dodge popup blockers.
+ */
+export async function previewElementAsPdf(el: HTMLElement, filename: string) {
+  const tab = window.open("", "_blank");
+  try {
+    const blob = await buildPdfBlob(el, filename);
+    const url = URL.createObjectURL(blob);
+    if (tab) {
+      tab.location.href = url;
+    } else {
+      window.open(url, "_blank");
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    tab?.close();
+    throw e;
   }
 }
 

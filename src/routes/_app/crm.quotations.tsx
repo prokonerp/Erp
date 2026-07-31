@@ -17,7 +17,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Eye, Copy, Trash2, Search, Pencil, Send, ArrowRightLeft, FileText, Loader2, Clock, CheckCircle2, FilePlus } from "lucide-react";
+import { Plus, MoreVertical, Eye, Copy, Trash2, Search, Pencil, Send, ArrowRightLeft, FileText, Loader2, Clock, CheckCircle2, FilePlus, Printer, Download } from "lucide-react";
 import { toast } from "sonner";
 import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
@@ -167,6 +167,15 @@ function QuotesList() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id } })} className="gap-2 cursor-pointer">
                         <Eye className="h-4 w-4" /> View
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "print" } })} className="gap-2 cursor-pointer">
+                        <Printer className="h-4 w-4" /> Print
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "preview" } })} className="gap-2 cursor-pointer">
+                        <FileText className="h-4 w-4" /> Preview PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "download" } })} className="gap-2 cursor-pointer">
+                        <Download className="h-4 w-4" /> Download PDF
                       </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => duplicate(r)} className="gap-2 cursor-pointer">
                         <Copy className="h-4 w-4" /> Clone
@@ -540,8 +549,14 @@ function QuotesWorkspace() {
                   <Button size="sm" variant="outline" onClick={convert} disabled={converting}>
                     <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />Convert
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id } })}>
-                    <FileText className="h-3.5 w-3.5 mr-1" />PDF
+                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "print" } })}>
+                    <Printer className="h-3.5 w-3.5 mr-1" />Print
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "preview" } })}>
+                    <FileText className="h-3.5 w-3.5 mr-1" />Preview
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "download" } })}>
+                    <Download className="h-3.5 w-3.5 mr-1" />Download
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

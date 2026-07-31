@@ -381,4 +381,5 @@ body::before {
 
 @media print {
   body::before { display: none; }
+  body { margin: 0; }
 }
