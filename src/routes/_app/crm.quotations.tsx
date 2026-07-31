@@ -168,6 +168,15 @@ function QuotesList() {
                       <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id } })} className="gap-2 cursor-pointer">
                         <Eye className="h-4 w-4" /> View
                       </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "print" } })} className="gap-2 cursor-pointer">
+                        <Printer className="h-4 w-4" /> Print
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "preview" } })} className="gap-2 cursor-pointer">
+                        <FileText className="h-4 w-4" /> Preview PDF
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "download" } })} className="gap-2 cursor-pointer">
+                        <Download className="h-4 w-4" /> Download PDF
+                      </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => duplicate(r)} className="gap-2 cursor-pointer">
                         <Copy className="h-4 w-4" /> Clone
                       </DropdownMenuItem>
