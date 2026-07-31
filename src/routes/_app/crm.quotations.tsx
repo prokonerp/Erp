@@ -549,8 +549,14 @@ function QuotesWorkspace() {
                   <Button size="sm" variant="outline" onClick={convert} disabled={converting}>
                     <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />Convert
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id } })}>
-                    <FileText className="h-3.5 w-3.5 mr-1" />PDF
+                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "print" } })}>
+                    <Printer className="h-3.5 w-3.5 mr-1" />Print
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "preview" } })}>
+                    <FileText className="h-3.5 w-3.5 mr-1" />Preview
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "download" } })}>
+                    <Download className="h-3.5 w-3.5 mr-1" />Download
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
