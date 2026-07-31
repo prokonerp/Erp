@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList, Share2, Download } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList, Share2, Download, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
 import type { ProductMaster } from "@/components/ProductPicker";
@@ -369,6 +369,21 @@ function QuoteEditor() {
       toast.error(e?.message || "PDF failed");
     }
   };
+
+  // Deep-linked action from the quotation list (?action=print|preview|download)
+  useEffect(() => {
+    if (!action || autoRan.current || isClone) return;
+    if (!q || !settings || !company || !printRef.current) return;
+    autoRan.current = true;
+    const t = setTimeout(() => {
+      if (action === "print") void doPrint();
+      else if (action === "preview") void doPreview();
+      else void doDownload();
+      nav({ to: "/crm/quotations/$id", params: { id }, search: {}, replace: true });
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [action, q, settings, company]);
 
   if (!q || !settings || !company) return <div className="text-muted-foreground">Loading…</div>;
 
