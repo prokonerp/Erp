@@ -19,6 +19,7 @@ import { fetchBranches, type BranchRow } from "@/lib/sales";
 import {
   type Customer, type QuoteItem,
   fmtMoney, computeQuoteTotals, lineAmount, INDIAN_STATES,
+  computeExpiryDate, DEFAULT_VALIDITY_DAYS,
 } from "@/lib/crm";
 import type { QuoteTermsTemplate } from "@/lib/crm";
 import { getCurrentUserName } from "@/lib/currentUser";
@@ -35,7 +36,6 @@ export const Route = createFileRoute("/_app/crm/quotations/new")({
 });
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
-const addDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 const emptyRow = (): QuoteItem => ({ description: "", qty: 1, unit: "Nos", rate: 0, discount_percent: 0, tax_percent: 18, amount: 0 });
 
 type StockRow = { product_id: string | null; quantity: number; warehouse: string | null };
