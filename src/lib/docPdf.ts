@@ -138,7 +138,7 @@ export async function saveElementAsPdf(el: HTMLElement, filename: string) {
       imgW = (canvas.width * imgH) / canvas.height;
     }
     pdf.addImage(imgData, "JPEG", MARGIN_MM + (availW - imgW) / 2, MARGIN_MM, imgW, imgH);
-    pdf.save(filename);
+    await saveBlobWithPicker(pdf.output("blob"), filename);
   } finally {
     iframe.remove();
   }
