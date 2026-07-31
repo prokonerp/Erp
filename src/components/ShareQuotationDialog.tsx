@@ -42,7 +42,7 @@ export function ShareQuotationDialog(p: ShareQuotationProps) {
 
   const generatePdf = () => {
     p.onGeneratePdf();
-    toast.info("Use your browser's dialog to save the PDF, then attach it if needed.");
+    toast.success("PDF saved to your downloads — attach it if needed.");
   };
 
   const sendWhatsApp = async () => {
