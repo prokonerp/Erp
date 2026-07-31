@@ -806,6 +806,120 @@ export type Database = {
         }
         Relationships: []
       }
+      defective_tag_sequence: {
+        Row: {
+          fy: string
+          last_no: number
+        }
+        Insert: {
+          fy: string
+          last_no?: number
+        }
+        Update: {
+          fy?: string
+          last_no?: number
+        }
+        Relationships: []
+      }
+      defective_tags: {
+        Row: {
+          asp_code: string | null
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          customer_name: string | null
+          engineer_name: string | null
+          id: string
+          model_no: string | null
+          oracle_order_no: string | null
+          print_count: number
+          printed_at: string | null
+          printed_by: string | null
+          reason: string | null
+          replacement_count: number
+          replacement_date: string | null
+          serial_no: string | null
+          service_request_no: string | null
+          status: string
+          tag_date: string
+          tag_no: string | null
+          txn_date: string | null
+          txn_id: string
+          txn_no: string | null
+          updated_at: string
+          warehouse_id: string | null
+        }
+        Insert: {
+          asp_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          customer_name?: string | null
+          engineer_name?: string | null
+          id?: string
+          model_no?: string | null
+          oracle_order_no?: string | null
+          print_count?: number
+          printed_at?: string | null
+          printed_by?: string | null
+          reason?: string | null
+          replacement_count?: number
+          replacement_date?: string | null
+          serial_no?: string | null
+          service_request_no?: string | null
+          status?: string
+          tag_date?: string
+          tag_no?: string | null
+          txn_date?: string | null
+          txn_id: string
+          txn_no?: string | null
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Update: {
+          asp_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          customer_name?: string | null
+          engineer_name?: string | null
+          id?: string
+          model_no?: string | null
+          oracle_order_no?: string | null
+          print_count?: number
+          printed_at?: string | null
+          printed_by?: string | null
+          reason?: string | null
+          replacement_count?: number
+          replacement_date?: string | null
+          serial_no?: string | null
+          service_request_no?: string | null
+          status?: string
+          tag_date?: string
+          tag_no?: string | null
+          txn_date?: string | null
+          txn_id?: string
+          txn_no?: string | null
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defective_tags_txn_id_fkey"
+            columns: ["txn_id"]
+            isOneToOne: false
+            referencedRelation: "ims_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "defective_tags_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_challans: {
         Row: {
           approved_by: string | null
