@@ -69,6 +69,38 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = t
   return { iframe, idoc, win, root, shell, scale };
 }
 
+/** Save a Blob, offering a native "Save as…" location picker when supported. */
+async function saveBlobWithPicker(blob: Blob, filename: string) {
+  const anyWin = window as unknown as {
+    showSaveFilePicker?: (opts: unknown) => Promise<{
+      createWritable: () => Promise<{ write: (d: Blob) => Promise<void>; close: () => Promise<void> }>;
+    }>;
+  };
+  if (typeof anyWin.showSaveFilePicker === "function") {
+    try {
+      const handle = await anyWin.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: "PDF document", accept: { "application/pdf": [".pdf"] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (err) {
+      if ((err as DOMException)?.name === "AbortError") return; // user cancelled
+      // fall through to normal download
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 /** Print a document, shrunk to fit a single A4 page. */
 export async function printElementSinglePage(el: HTMLElement, filename: string) {
   const { iframe, win } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""));
@@ -106,7 +138,7 @@ export async function saveElementAsPdf(el: HTMLElement, filename: string) {
       imgW = (canvas.width * imgH) / canvas.height;
     }
     pdf.addImage(imgData, "JPEG", MARGIN_MM + (availW - imgW) / 2, MARGIN_MM, imgW, imgH);
-    pdf.save(filename);
+    await saveBlobWithPicker(pdf.output("blob"), filename);
   } finally {
     iframe.remove();
   }
