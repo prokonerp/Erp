@@ -315,7 +315,8 @@ export function warehouseBranchName(wh: WarehouseLite | null | undefined): strin
 /** Friendly display: "Delhi Warehouse (Godown)" */
 export function formatWarehouse(wh: WarehouseLite | null | undefined): string {
   if (!wh) return "—";
-  return wh.type ? `${wh.name} (${wh.type})` : wh.name;
+  const bits = [wh.type, wh.asp_code ? `ASP: ${wh.asp_code}` : null, wh.branch?.name].filter(Boolean);
+  return bits.length ? `${wh.name} (${bits.join(" • ")})` : wh.name;
 }
 
 export function warehouseLookup(warehouses: WarehouseLite[]) {
