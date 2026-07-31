@@ -342,7 +342,6 @@ function QuoteEditor() {
   if (!q || !settings || !company) return <div className="text-muted-foreground">Loading…</div>;
 
   const STATUSES: QuoteStatus[] = ["draft", "sent", "accepted", "declined", "expired", "invoiced"];
-  console.log("HEADER DATA:", company);
 
   return (
     <div className="space-y-4">
