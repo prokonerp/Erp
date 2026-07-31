@@ -64,6 +64,7 @@ import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
 import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
 import { Route as AppImsLedgerRouteImport } from './routes/_app/ims.ledger'
 import { Route as AppImsIndentHistoryRouteImport } from './routes/_app/ims.indent-history'
+import { Route as AppImsDefectiveTagsRouteImport } from './routes/_app/ims.defective-tags'
 import { Route as AppImsAuditRouteImport } from './routes/_app/ims.audit'
 import { Route as AppGrnOemRouteImport } from './routes/_app/grn.oem'
 import { Route as AppGrnNewRouteImport } from './routes/_app/grn.new'
@@ -389,6 +390,11 @@ const AppImsIndentHistoryRoute = AppImsIndentHistoryRouteImport.update({
   path: '/indent-history',
   getParentRoute: () => AppImsRoute,
 } as any)
+const AppImsDefectiveTagsRoute = AppImsDefectiveTagsRouteImport.update({
+  id: '/defective-tags',
+  path: '/defective-tags',
+  getParentRoute: () => AppImsRoute,
+} as any)
 const AppImsAuditRoute = AppImsAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
@@ -685,6 +691,7 @@ export interface FileRoutesByFullPath {
   '/grn/new': typeof AppGrnNewRoute
   '/grn/oem': typeof AppGrnOemRouteWithChildren
   '/ims/audit': typeof AppImsAuditRoute
+  '/ims/defective-tags': typeof AppImsDefectiveTagsRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/ims/ledger': typeof AppImsLedgerRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -777,6 +784,7 @@ export interface FileRoutesByTo {
   '/grn/$id': typeof AppGrnIdRoute
   '/grn/new': typeof AppGrnNewRoute
   '/ims/audit': typeof AppImsAuditRoute
+  '/ims/defective-tags': typeof AppImsDefectiveTagsRoute
   '/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/ims/ledger': typeof AppImsLedgerRoute
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -884,6 +892,7 @@ export interface FileRoutesById {
   '/_app/grn/new': typeof AppGrnNewRoute
   '/_app/grn/oem': typeof AppGrnOemRouteWithChildren
   '/_app/ims/audit': typeof AppImsAuditRoute
+  '/_app/ims/defective-tags': typeof AppImsDefectiveTagsRoute
   '/_app/ims/indent-history': typeof AppImsIndentHistoryRoute
   '/_app/ims/ledger': typeof AppImsLedgerRoute
   '/_app/ims/oem-returns': typeof AppImsOemReturnsRoute
@@ -992,6 +1001,7 @@ export interface FileRouteTypes {
     | '/grn/new'
     | '/grn/oem'
     | '/ims/audit'
+    | '/ims/defective-tags'
     | '/ims/indent-history'
     | '/ims/ledger'
     | '/ims/oem-returns'
@@ -1084,6 +1094,7 @@ export interface FileRouteTypes {
     | '/grn/$id'
     | '/grn/new'
     | '/ims/audit'
+    | '/ims/defective-tags'
     | '/ims/indent-history'
     | '/ims/ledger'
     | '/ims/oem-returns'
@@ -1190,6 +1201,7 @@ export interface FileRouteTypes {
     | '/_app/grn/new'
     | '/_app/grn/oem'
     | '/_app/ims/audit'
+    | '/_app/ims/defective-tags'
     | '/_app/ims/indent-history'
     | '/_app/ims/ledger'
     | '/_app/ims/oem-returns'
@@ -1644,6 +1656,13 @@ declare module '@tanstack/react-router' {
       path: '/indent-history'
       fullPath: '/ims/indent-history'
       preLoaderRoute: typeof AppImsIndentHistoryRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/defective-tags': {
+      id: '/_app/ims/defective-tags'
+      path: '/defective-tags'
+      fullPath: '/ims/defective-tags'
+      preLoaderRoute: typeof AppImsDefectiveTagsRouteImport
       parentRoute: typeof AppImsRoute
     }
     '/_app/ims/audit': {
@@ -2214,6 +2233,7 @@ const AppImsTransfersRouteWithChildren = AppImsTransfersRoute._addFileChildren(
 
 interface AppImsRouteChildren {
   AppImsAuditRoute: typeof AppImsAuditRoute
+  AppImsDefectiveTagsRoute: typeof AppImsDefectiveTagsRoute
   AppImsIndentHistoryRoute: typeof AppImsIndentHistoryRoute
   AppImsLedgerRoute: typeof AppImsLedgerRoute
   AppImsOemReturnsRoute: typeof AppImsOemReturnsRoute
@@ -2228,6 +2248,7 @@ interface AppImsRouteChildren {
 
 const AppImsRouteChildren: AppImsRouteChildren = {
   AppImsAuditRoute: AppImsAuditRoute,
+  AppImsDefectiveTagsRoute: AppImsDefectiveTagsRoute,
   AppImsIndentHistoryRoute: AppImsIndentHistoryRoute,
   AppImsLedgerRoute: AppImsLedgerRoute,
   AppImsOemReturnsRoute: AppImsOemReturnsRoute,

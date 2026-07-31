@@ -176,6 +176,83 @@ export async function saveElementAsPdf(el: HTMLElement, filename: string) {
 }
 
 /**
+ * Print / download a multi-page A4 portrait document (e.g. sheets of defective
+ * tags) using the same inlined-CSS iframe as every other document, so preview
+ * and print match exactly and page breaks never split a block.
+ */
+async function buildMultiPageFrame(el: HTMLElement, docTitle: string) {
+  const head = collectCssText();
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText =
+    "position:fixed;right:0;bottom:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;";
+  document.body.appendChild(iframe);
+  const idoc = iframe.contentDocument!;
+  const win = iframe.contentWindow!;
+  idoc.open();
+  idoc.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>${docTitle}</title>${head}` +
+      `<style>html,body{background:#fff;margin:0;padding:0}` +
+      `.defective-tag-page{page-break-after:always;break-after:page}` +
+      `.defective-tag-page:last-child{page-break-after:auto;break-after:auto}` +
+      `.break-inside-avoid,.defective-tag{page-break-inside:avoid;break-inside:avoid}` +
+      `@media print{@page{size:A4 portrait;margin:10mm}}</style>` +
+      `</head><body>${el.outerHTML}</body></html>`,
+  );
+  idoc.close();
+  await new Promise<void>((resolve) => {
+    if (idoc.readyState === "complete") resolve();
+    else win.addEventListener("load", () => resolve(), { once: true });
+    setTimeout(resolve, 3000);
+  });
+  try {
+    await (idoc as Document & { fonts?: FontFaceSet }).fonts?.ready;
+  } catch {
+    /* ignore */
+  }
+  return { iframe, idoc, win };
+}
+
+/** Open the browser print dialog for a multi-page A4 portrait document. */
+export async function printMultiPageElement(el: HTMLElement, filename: string) {
+  const { iframe, win } = await buildMultiPageFrame(el, filename.replace(/\.pdf$/i, ""));
+  win.focus();
+  win.print();
+  setTimeout(() => iframe.remove(), 1000);
+}
+
+/** Download a multi-page A4 portrait document as a real .pdf (Save As dialog). */
+export async function saveMultiPageElementAsPdf(el: HTMLElement, filename: string) {
+  const { iframe, idoc } = await buildMultiPageFrame(el, filename.replace(/\.pdf$/i, ""));
+  try {
+    const pages = Array.from(idoc.querySelectorAll<HTMLElement>(".defective-tag-page"));
+    const targets = pages.length ? pages : [idoc.body];
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const availW = PAGE_W_MM - MARGIN_MM * 2;
+    const availH = PAGE_H_MM - MARGIN_MM * 2;
+    for (let i = 0; i < targets.length; i++) {
+      const canvas = await html2canvas(targets[i], {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      let imgW = availW;
+      let imgH = (canvas.height * imgW) / canvas.width;
+      if (imgH > availH) {
+        imgH = availH;
+        imgW = (canvas.width * imgH) / canvas.height;
+      }
+      if (i > 0) pdf.addPage();
+      pdf.addImage(imgData, "JPEG", MARGIN_MM + (availW - imgW) / 2, MARGIN_MM, imgW, imgH);
+    }
+    await saveBlobWithPicker(pdf.output("blob"), filename);
+  } finally {
+    iframe.remove();
+  }
+}
+
+/**
  * Render an element to PDF using the browser's own print engine, reusing the
  * exact same HTML and CSS (including @media print rules) as Print Preview.
  * Guarantees the "Download PDF" output matches Print exactly, unlike a canvas

@@ -34,6 +34,7 @@ import {
   Receipt,
   Archive as ArchiveIcon,
   Plus,
+  Tag,
 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
@@ -137,6 +138,7 @@ function AppLayout() {
     { to: "/indent", label: "Purchase Requests (Indent)", icon: ClipboardList, module: "indent", group: "Procurement" },
     { to: "/po", label: "Purchase Orders", icon: FileText, module: "po", group: "Procurement" },
     { to: "/ims", label: "Inventory (IMS)", icon: Warehouse, module: "ims", group: "Inventory" },
+    { to: "/ims/defective-tags", label: "Defective Tags", icon: Tag, module: "ims", group: "Inventory" },
     { to: "/reports", label: "Reports", icon: BarChart3, module: "reports", group: "Intelligence" },
     { to: "/import", label: "Data Import (CSV Import)", icon: Upload, adminOnly: true, group: "System" },
     { to: "/archive", label: "Archive (Deleted Records)", icon: ArchiveIcon, adminOnly: true, group: "System" },
