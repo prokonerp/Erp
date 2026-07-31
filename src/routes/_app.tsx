@@ -34,6 +34,7 @@ import {
   Receipt,
   Archive as ArchiveIcon,
   Plus,
+  Tag,
 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
