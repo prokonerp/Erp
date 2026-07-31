@@ -32,7 +32,7 @@ import {
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
-import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
+import { printElementSinglePage, saveElementAsPdf, requestPdfSaveLocation } from "@/lib/docPdf";
 import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
@@ -358,8 +358,12 @@ function QuoteEditor() {
             if (!printRef.current) return;
             const el = printRef.current;
             try {
+              const name = `${q.quote_no || "Quotation"}.pdf`;
+              // Ask for the save location first — the picker needs the click gesture.
+              const handle = await requestPdfSaveLocation(name);
+              if (handle === "cancelled") return;
               toast.info("Preparing PDF…");
-              await saveElementAsPdf(el, `${q.quote_no || "Quotation"}.pdf`);
+              await saveElementAsPdf(el, name, handle);
             } catch (e: any) {
               toast.error(e?.message || "PDF failed");
             }
