@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Plus, MoreVertical, Eye, Copy, Trash2, Search, Pencil, Send, ArrowRightLeft, FileText, Loader2, Clock, CheckCircle2, FilePlus, Printer, Download } from "lucide-react";
 import { toast } from "sonner";
-import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass } from "@/lib/crm";
+import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass, computeExpiryDate, DEFAULT_VALIDITY_DAYS } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { cn } from "@/lib/utils";
@@ -63,11 +63,11 @@ function QuotesList() {
     const cust = cmap[custId];
     const { data: u } = await supabase.auth.getUser();
     const today = new Date().toISOString().slice(0, 10);
-    const exp = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10);
+    const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);
     const { data, error } = await supabase.from("quotations").insert({
       customer_id: custId, owner_id: u.user!.id,
       subject: subject || null,
-      quote_date: today, expiry_date: exp, validity_days: 15,
+      quote_date: today, expiry_date: exp, validity_days: DEFAULT_VALIDITY_DAYS,
       billing_address: cust?.billing_address || cust?.address || null,
       shipping_address: cust?.shipping_address || cust?.billing_address || cust?.address || null,
       place_of_supply: cust?.state || null,
@@ -378,11 +378,11 @@ function QuotesWorkspace() {
     const cust = cmap[newCustId];
     const { data: u } = await supabase.auth.getUser();
     const today = new Date().toISOString().slice(0, 10);
-    const exp = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10);
+    const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);
     const { data, error } = await supabase.from("quotations").insert({
       customer_id: newCustId, owner_id: u.user!.id,
       subject: newSubject || null,
-      quote_date: today, expiry_date: exp, validity_days: 15,
+      quote_date: today, expiry_date: exp, validity_days: DEFAULT_VALIDITY_DAYS,
       billing_address: cust?.billing_address || cust?.address || null,
       shipping_address: cust?.shipping_address || cust?.billing_address || cust?.address || null,
       place_of_supply: cust?.state || null,
