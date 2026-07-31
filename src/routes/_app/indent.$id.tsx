@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer, ChevronsDownUp, ChevronsUpDown, FileOutput, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
-import { INDENT_TYPES, buildOraclesFromDefectiveParts, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock } from "@/lib/indent";
+import { INDENT_TYPES, buildOraclesFromDefectiveParts, docStatusSettled, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock, type OraclePendingDocs } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import { useIsAdmin } from "@/lib/useRole";
@@ -29,6 +29,9 @@ function IndentDetail() {
   const { isAdmin } = useIsAdmin();
   const [tick, setTick] = useState(0);
   const [dcByOracle, setDcByOracle] = useState<Record<string, { challan_no: string | null; challan_date: string | null; status: string | null; id: string }>>({});
+  /** Per-oracle count of DC / GRN documents that are not yet Submitted or
+   *  Closed. Blocks Oracle auto-close while any remain pending. */
+  const [pendingByOracle, setPendingByOracle] = useState<Record<string, OraclePendingDocs>>({});
   const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const hydratedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
