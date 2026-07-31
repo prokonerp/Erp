@@ -29,7 +29,6 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string) {
     `<!doctype html><html><head><meta charset="utf-8"><title>${docTitle}</title>${head}` +
       `<style>html,body{background:#fff;margin:0;padding:0;width:${CONTENT_W_PX}px}` +
       `#pdf-shell{width:${CONTENT_W_PX}px}` +
-      `#pdf-root,#pdf-root>*{display:block !important}` +
       `#pdf-root{width:${CONTENT_W_PX}px;transform-origin:top left}` +
       `@media print{@page{size:A4;margin:${MARGIN_MM}mm}html,body{width:auto}` +
       `#pdf-shell,#pdf-root{width:${CONTENT_W_PX}px}}</style>` +
