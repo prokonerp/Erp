@@ -4411,6 +4411,8 @@ export type Database = {
       warehouses: {
         Row: {
           address: string | null
+          asp_code: string | null
+          branch_id: string | null
           city: string | null
           code: string
           contact_number: string | null
@@ -4428,6 +4430,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          asp_code?: string | null
+          branch_id?: string | null
           city?: string | null
           code: string
           contact_number?: string | null
@@ -4445,6 +4449,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          asp_code?: string | null
+          branch_id?: string | null
           city?: string | null
           code?: string
           contact_number?: string | null
@@ -4460,7 +4466,15 @@ export type Database = {
           type?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "warehouses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_launch_logs: {
         Row: {
