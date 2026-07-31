@@ -14,10 +14,44 @@ const CONTENT_H_PX = Math.round((PAGE_H_MM - MARGIN_MM * 2) * PX_PER_MM);
  * then shrink-to-fit so the whole document lands on a single A4 page.
  * Both Print and Download PDF use this so the two outputs are identical.
  */
-async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = true) {
-  const head = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-    .map((n) => n.outerHTML)
-    .join("\n");
+/**
+ * Serialize every same-origin stylesheet into raw CSS text. When `emulatePrint`
+ * is set, `@media print` blocks are rewritten to `@media all` so a canvas
+ * rasterizer (which never applies print media) sees exactly what the browser's
+ * print engine sees.
+ */
+function collectCss(emulatePrint: boolean): string | null {
+  try {
+    let css = "";
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules: CSSRuleList;
+      try {
+        rules = (sheet as CSSStyleSheet).cssRules;
+      } catch {
+        return null; // cross-origin sheet — cannot read, fall back
+      }
+      for (const rule of Array.from(rules)) css += rule.cssText + "\n";
+    }
+    if (!css.trim()) return null;
+    if (emulatePrint) css = css.replace(/@media\s+print/gi, "@media all");
+    return css;
+  } catch {
+    return null;
+  }
+}
+
+async function buildPrintFrame(
+  el: HTMLElement,
+  docTitle: string,
+  applyScale = true,
+  emulatePrint = false,
+) {
+  const inlined = emulatePrint ? collectCss(true) : null;
+  const head = inlined
+    ? `<style>${inlined}</style>`
+    : Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+        .map((n) => n.outerHTML)
+        .join("\n");
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText = `position:fixed;right:0;bottom:0;width:${CONTENT_W_PX}px;height:${CONTENT_H_PX}px;border:0;opacity:0;pointer-events:none;`;
@@ -70,28 +104,31 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = t
   return { iframe, idoc, win, root, shell, scale };
 }
 
-/** Save a Blob, offering a native "Save as…" location picker when supported. */
-async function saveBlobWithPicker(blob: Blob, filename: string) {
-  const anyWin = window as unknown as {
-    showSaveFilePicker?: (opts: unknown) => Promise<{
-      createWritable: () => Promise<{ write: (d: Blob) => Promise<void>; close: () => Promise<void> }>;
-    }>;
-  };
-  if (typeof anyWin.showSaveFilePicker === "function") {
-    try {
-      const handle = await anyWin.showSaveFilePicker({
-        suggestedName: filename,
-        types: [{ description: "PDF document", accept: { "application/pdf": [".pdf"] } }],
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return;
-    } catch (err) {
-      if ((err as DOMException)?.name === "AbortError") return; // user cancelled
-      // fall through to normal download
-    }
+type SaveHandle = {
+  createWritable: () => Promise<{ write: (d: Blob) => Promise<void>; close: () => Promise<void> }>;
+};
+
+/**
+ * Ask for the "Save as…" location immediately, while the browser still counts
+ * the click as a user gesture. Must be called before any awaited rendering
+ * work, otherwise Chrome rejects the picker and the file drops silently into
+ * Downloads instead.
+ */
+export async function requestPdfSaveLocation(filename: string): Promise<SaveHandle | null | "cancelled"> {
+  const anyWin = window as unknown as { showSaveFilePicker?: (opts: unknown) => Promise<SaveHandle> };
+  if (typeof anyWin.showSaveFilePicker !== "function") return null;
+  try {
+    return await anyWin.showSaveFilePicker({
+      suggestedName: filename,
+      types: [{ description: "PDF document", accept: { "application/pdf": [".pdf"] } }],
+    });
+  } catch (err) {
+    if ((err as DOMException)?.name === "AbortError") return "cancelled";
+    return null; // picker blocked (e.g. sandboxed frame) — fall back to download
   }
+}
+
+function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -100,6 +137,23 @@ async function saveBlobWithPicker(blob: Blob, filename: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** Save a Blob, using a previously obtained handle or a native picker. */
+async function saveBlobWithPicker(blob: Blob, filename: string, handle?: SaveHandle | null) {
+  const h = handle ?? (await requestPdfSaveLocation(filename));
+  if (h === "cancelled") return;
+  if (h) {
+    try {
+      const writable = await h.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch {
+      /* fall through to normal download */
+    }
+  }
+  downloadBlob(blob, filename);
 }
 
 /** Print a document, shrunk to fit a single A4 page. */
@@ -115,10 +169,17 @@ export async function printElementSinglePage(el: HTMLElement, filename: string) 
  * folder) — no print dialog. Uses the same print-CSS iframe as printing, so
  * the output matches Print Preview and always fits one A4 page.
  */
-export async function saveElementAsPdf(el: HTMLElement, filename: string) {
+export async function saveElementAsPdf(
+  el: HTMLElement,
+  filename: string,
+  saveHandle?: SaveHandle | null | "cancelled",
+) {
+  if (saveHandle === "cancelled") return;
   // Capture at natural size (no CSS transform, so layout is untouched) and let
   // jsPDF scale the resulting image down to fit exactly one A4 page.
-  const { iframe, root } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""), false);
+  // `emulatePrint` inlines the app CSS with @media print promoted to @media all
+  // so the rasterized output matches Print Preview exactly.
+  const { iframe, root } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""), false, true);
   try {
     const canvas = await html2canvas(root, {
       scale: 2,
@@ -139,7 +200,7 @@ export async function saveElementAsPdf(el: HTMLElement, filename: string) {
       imgW = (canvas.width * imgH) / canvas.height;
     }
     pdf.addImage(imgData, "JPEG", MARGIN_MM + (availW - imgW) / 2, MARGIN_MM, imgW, imgH);
-    await saveBlobWithPicker(pdf.output("blob"), filename);
+    await saveBlobWithPicker(pdf.output("blob"), filename, saveHandle ?? undefined);
   } finally {
     iframe.remove();
   }
