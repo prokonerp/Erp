@@ -9,15 +9,40 @@ const CONTENT_W_PX = Math.round((PAGE_W_MM - MARGIN_MM * 2) * PX_PER_MM);
 const CONTENT_H_PX = Math.round((PAGE_H_MM - MARGIN_MM * 2) * PX_PER_MM);
 
 /**
+ * Collect every CSS rule of the app as *inline* text.
+ *
+ * Copying `<link rel="stylesheet">` tags into the capture iframe means the
+ * iframe has to re-fetch and re-parse the CSS; if that request is slow, blocked
+ * by the cache, or races the capture, the document rasterizes completely
+ * unstyled — which renders as one narrow vertical column with no table borders
+ * or left/right alignment. Reading the already-parsed rules out of the CSSOM
+ * and inlining them makes styling synchronous and impossible to miss.
+ */
+function collectCssText() {
+  let css = "";
+  const fallbacks: string[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      const rules = (sheet as CSSStyleSheet).cssRules;
+      if (!rules) throw new Error("no rules");
+      for (const rule of Array.from(rules)) css += rule.cssText + "\n";
+    } catch {
+      // Cross-origin sheet — fall back to re-linking it in the iframe.
+      const node = sheet.ownerNode as HTMLElement | null;
+      if (node) fallbacks.push(node.outerHTML);
+    }
+  }
+  return `${fallbacks.join("\n")}\n<style>${css}</style>`;
+}
+
+/**
  * Render an element inside a hidden iframe that carries every stylesheet of
  * the app (including @media print rules) laid out at exact A4 content width,
  * then shrink-to-fit so the whole document lands on a single A4 page.
  * Both Print and Download PDF use this so the two outputs are identical.
  */
 async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = true) {
-  const head = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
-    .map((n) => n.outerHTML)
-    .join("\n");
+  const head = collectCssText();
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText = `position:fixed;right:0;bottom:0;width:${CONTENT_W_PX}px;height:${CONTENT_H_PX}px;border:0;opacity:0;pointer-events:none;`;
