@@ -1,6 +1,117 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas-pro";
 
+const PX_PER_MM = 96 / 25.4;
+const PAGE_W_MM = 210;
+const PAGE_H_MM = 297;
+const MARGIN_MM = 10;
+const CONTENT_W_PX = Math.round((PAGE_W_MM - MARGIN_MM * 2) * PX_PER_MM);
+const CONTENT_H_PX = Math.round((PAGE_H_MM - MARGIN_MM * 2) * PX_PER_MM);
+
+/**
+ * Render an element inside a hidden iframe that carries every stylesheet of
+ * the app (including @media print rules) laid out at exact A4 content width,
+ * then shrink-to-fit so the whole document lands on a single A4 page.
+ * Both Print and Download PDF use this so the two outputs are identical.
+ */
+async function buildPrintFrame(el: HTMLElement, docTitle: string) {
+  const head = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+    .map((n) => n.outerHTML)
+    .join("\n");
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = `position:fixed;right:0;bottom:0;width:${CONTENT_W_PX}px;height:${CONTENT_H_PX}px;border:0;opacity:0;pointer-events:none;`;
+  document.body.appendChild(iframe);
+  const idoc = iframe.contentDocument!;
+  const win = iframe.contentWindow!;
+  idoc.open();
+  idoc.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>${docTitle}</title>${head}` +
+      `<style>html,body{background:#fff;margin:0;padding:0;width:${CONTENT_W_PX}px}` +
+      `#pdf-shell{width:${CONTENT_W_PX}px}` +
+      `#pdf-root,#pdf-root>*{display:block !important}` +
+      `#pdf-root{width:${CONTENT_W_PX}px;transform-origin:top left}` +
+      `@media print{@page{size:A4;margin:${MARGIN_MM}mm}html,body{width:auto}` +
+      `#pdf-shell,#pdf-root{width:${CONTENT_W_PX}px}}</style>` +
+      `</head><body><div id="pdf-shell"><div id="pdf-root">${el.outerHTML}</div></div></body></html>`,
+  );
+  idoc.close();
+  await new Promise<void>((resolve) => {
+    if (idoc.readyState === "complete") resolve();
+    else win.addEventListener("load", () => resolve(), { once: true });
+    setTimeout(resolve, 3000);
+  });
+  try {
+    await (idoc as Document & { fonts?: FontFaceSet }).fonts?.ready;
+  } catch {
+    /* ignore */
+  }
+  await Promise.all(
+    Array.from(idoc.images).map((img) =>
+      img.complete
+        ? Promise.resolve()
+        : new Promise<void>((res) => {
+            img.addEventListener("load", () => res(), { once: true });
+            img.addEventListener("error", () => res(), { once: true });
+            setTimeout(res, 3000);
+          }),
+    ),
+  );
+  const root = idoc.getElementById("pdf-root") as HTMLElement;
+  const shell = idoc.getElementById("pdf-shell") as HTMLElement;
+  // Shrink-to-fit onto exactly one A4 page.
+  const h = root.scrollHeight;
+  const scale = h > CONTENT_H_PX ? Math.max(0.4, CONTENT_H_PX / h) : 1;
+  if (scale < 1) {
+    root.style.transform = `scale(${scale})`;
+    shell.style.height = `${Math.ceil(h * scale)}px`;
+    shell.style.overflow = "hidden";
+  }
+  return { iframe, idoc, win, root, shell, scale };
+}
+
+/** Print a document, shrunk to fit a single A4 page. */
+export async function printElementSinglePage(el: HTMLElement, filename: string) {
+  const { iframe, win } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""));
+  win.focus();
+  win.print();
+  setTimeout(() => iframe.remove(), 1000);
+}
+
+/**
+ * Download the document as a real .pdf file (browser save dialog / Downloads
+ * folder) — no print dialog. Uses the same print-CSS iframe as printing, so
+ * the output matches Print Preview and always fits one A4 page.
+ */
+export async function saveElementAsPdf(el: HTMLElement, filename: string) {
+  const { iframe, shell, root, scale } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""));
+  try {
+    const target = scale < 1 ? shell : root;
+    const canvas = await html2canvas(target, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      windowWidth: CONTENT_W_PX,
+      width: CONTENT_W_PX,
+      height: Math.ceil(root.scrollHeight * scale),
+    });
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const availW = PAGE_W_MM - MARGIN_MM * 2;
+    const availH = PAGE_H_MM - MARGIN_MM * 2;
+    let imgW = availW;
+    let imgH = (canvas.height * imgW) / canvas.width;
+    if (imgH > availH) {
+      imgH = availH;
+      imgW = (canvas.width * imgH) / canvas.height;
+    }
+    pdf.addImage(imgData, "JPEG", MARGIN_MM + (availW - imgW) / 2, MARGIN_MM, imgW, imgH);
+    pdf.save(filename);
+  } finally {
+    iframe.remove();
+  }
+}
+
 /**
  * Render an element to PDF using the browser's own print engine, reusing the
  * exact same HTML and CSS (including @media print rules) as Print Preview.
