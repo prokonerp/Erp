@@ -32,7 +32,7 @@ import {
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
-import { printElementToPdf } from "@/lib/docPdf";
+import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
 import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
@@ -346,13 +346,20 @@ function QuoteEditor() {
           </Select>
           <Button size="sm" variant="outline" onClick={sendEmail} disabled={isClone}><Mail className="h-4 w-4 mr-1" />Email</Button>
           <Button size="sm" variant="outline" onClick={sendWA} disabled={isClone}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
-          <Button size="sm" variant="outline" onClick={() => window.print()} disabled={isClone}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button size="sm" variant="outline" disabled={isClone} onClick={async () => {
+            if (!printRef.current) return;
+            try {
+              await printElementSinglePage(printRef.current, `${q.quote_no || "Quotation"}.pdf`);
+            } catch (e: any) {
+              toast.error(e?.message || "Print failed");
+            }
+          }}><Printer className="h-4 w-4 mr-1" />Print</Button>
           <Button size="sm" variant="outline" disabled={isClone} onClick={async () => {
             if (!printRef.current) return;
             const el = printRef.current;
             try {
-              await printElementToPdf(el, `${q.quote_no || "Quotation"}.pdf`);
-              toast.info("Choose \"Save as PDF\" in the dialog to download.");
+              toast.info("Preparing PDF…");
+              await saveElementAsPdf(el, `${q.quote_no || "Quotation"}.pdf`);
             } catch (e: any) {
               toast.error(e?.message || "PDF failed");
             }
@@ -372,7 +379,7 @@ function QuoteEditor() {
         companyName={company.name}
         quoteNo={q.quote_no}
         subject={q.subject}
-        onGeneratePdf={() => window.print()}
+        onGeneratePdf={() => { if (printRef.current) void saveElementAsPdf(printRef.current, `${q.quote_no || "Quotation"}.pdf`); }}
       />
 
       <Card className="print:hidden">
