@@ -14,7 +14,7 @@ const CONTENT_H_PX = Math.round((PAGE_H_MM - MARGIN_MM * 2) * PX_PER_MM);
  * then shrink-to-fit so the whole document lands on a single A4 page.
  * Both Print and Download PDF use this so the two outputs are identical.
  */
-async function buildPrintFrame(el: HTMLElement, docTitle: string) {
+async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = true) {
   const head = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
     .map((n) => n.outerHTML)
     .join("\n");
@@ -29,7 +29,6 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string) {
     `<!doctype html><html><head><meta charset="utf-8"><title>${docTitle}</title>${head}` +
       `<style>html,body{background:#fff;margin:0;padding:0;width:${CONTENT_W_PX}px}` +
       `#pdf-shell{width:${CONTENT_W_PX}px}` +
-      `#pdf-root,#pdf-root>*{display:block !important}` +
       `#pdf-root{width:${CONTENT_W_PX}px;transform-origin:top left}` +
       `@media print{@page{size:A4;margin:${MARGIN_MM}mm}html,body{width:auto}` +
       `#pdf-shell,#pdf-root{width:${CONTENT_W_PX}px}}</style>` +
@@ -62,7 +61,7 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string) {
   // Shrink-to-fit onto exactly one A4 page.
   const h = root.scrollHeight;
   const scale = h > CONTENT_H_PX ? Math.max(0.4, CONTENT_H_PX / h) : 1;
-  if (scale < 1) {
+  if (applyScale && scale < 1) {
     root.style.transform = `scale(${scale})`;
     shell.style.height = `${Math.ceil(h * scale)}px`;
     shell.style.overflow = "hidden";
@@ -84,16 +83,17 @@ export async function printElementSinglePage(el: HTMLElement, filename: string) 
  * the output matches Print Preview and always fits one A4 page.
  */
 export async function saveElementAsPdf(el: HTMLElement, filename: string) {
-  const { iframe, shell, root, scale } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""));
+  // Capture at natural size (no CSS transform, so layout is untouched) and let
+  // jsPDF scale the resulting image down to fit exactly one A4 page.
+  const { iframe, root } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""), false);
   try {
-    const target = scale < 1 ? shell : root;
-    const canvas = await html2canvas(target, {
+    const canvas = await html2canvas(root, {
       scale: 2,
       useCORS: true,
       backgroundColor: "#ffffff",
       windowWidth: CONTENT_W_PX,
       width: CONTENT_W_PX,
-      height: Math.ceil(root.scrollHeight * scale),
+      height: Math.ceil(root.scrollHeight),
     });
     const imgData = canvas.toDataURL("image/jpeg", 0.95);
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
