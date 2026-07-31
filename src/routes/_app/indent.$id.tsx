@@ -64,30 +64,68 @@ function IndentDetail() {
         const raw = (t as { defective_parts_details?: unknown } | null)?.defective_parts_details;
         setDefParts(Array.isArray(raw) ? (raw as Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>) : []);
       }
-      // Load Delivery Challans linked to this indent so we can disable
-      // duplicate DC generation per Oracle Number.
-      const { data: dcs } = await supabase
-        .from("delivery_challans")
-        .select("id, challan_no, challan_date, status, items")
-        .eq("indent_id", id);
-      const map: Record<string, { challan_no: string | null; challan_date: string | null; status: string | null; id: string }> = {};
-      for (const dc of (dcs || []) as Array<{ id: string; challan_no: string | null; challan_date: string | null; status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
-        if ((dc.status || "").toLowerCase() === "cancelled") continue;
-        const seen = new Set<string>();
-        for (const it of dc.items || []) {
-          const on = (it?.oracle_no || "").trim();
-          if (!on || seen.has(on)) continue;
-          seen.add(on);
-          const key = on.toUpperCase();
-          if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
-        }
-      }
-      setDcByOracle(map);
+      await loadLinkedDocs();
       // Give React one paint before enabling auto-save so we don't save the
       // freshly-loaded record right back to the DB.
       setTimeout(() => { hydratedRef.current = true; }, 100);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  /** Load Delivery Challans + GRNs linked to this indent. Builds both the
+   *  "DC already generated" map and the per-oracle pending-document counts
+   *  used to gate Oracle auto-close. */
+  const loadLinkedDocs = useCallback(async () => {
+    const pending: Record<string, OraclePendingDocs> = {};
+    const bump = (oracleNo: string, kind: "dc" | "grn") => {
+      const key = (oracleNo || "").trim().toUpperCase();
+      if (!key) return;
+      if (!pending[key]) pending[key] = { dc: 0, grn: 0 };
+      pending[key][kind] += 1;
+    };
+
+    const { data: dcs } = await supabase
+      .from("delivery_challans")
+      .select("id, challan_no, challan_date, status, items")
+      .eq("indent_id", id);
+    const map: Record<string, { challan_no: string | null; challan_date: string | null; status: string | null; id: string }> = {};
+    for (const dc of (dcs || []) as Array<{ id: string; challan_no: string | null; challan_date: string | null; status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+      if ((dc.status || "").toLowerCase() === "cancelled") continue;
+      const seen = new Set<string>();
+      for (const it of dc.items || []) {
+        const on = (it?.oracle_no || "").trim();
+        if (!on || seen.has(on)) continue;
+        seen.add(on);
+        const key = on.toUpperCase();
+        if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
+        if (!docStatusSettled(dc.status)) bump(on, "dc");
+      }
+    }
+    setDcByOracle(map);
+
+    const { data: grnRows } = await supabase
+      .from("grns" as never)
+      .select("id, status, items")
+      .eq("indent_id", id);
+    for (const g of (grnRows || []) as unknown as Array<{ status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+      if ((g.status || "").toLowerCase() === "cancelled") continue;
+      if (docStatusSettled(g.status)) continue;
+      const seen = new Set<string>();
+      for (const it of g.items || []) {
+        const on = (it?.oracle_no || "").trim();
+        if (!on || seen.has(on)) continue;
+        seen.add(on);
+        bump(on, "grn");
+      }
+    }
+    setPendingByOracle(pending);
+  }, [id]);
+
+  // Refresh linked-document statuses periodically (same 60s tick used for age).
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    void loadLinkedDocs();
+  }, [tick, loadLinkedDocs]);
 
   const update = (p: Partial<Indent>) => setI((s) => (s ? { ...s, ...p } : s));
 
@@ -687,6 +725,7 @@ function IndentDetail() {
           onGenerateCustomerGrn={generateCustomerGrn}
           dcExists={!!dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
           dcInfo={dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
+          pendingDocs={pendingByOracle[(o.oracle_no || "").trim().toUpperCase()]}
         />
       ))}
     </div>
