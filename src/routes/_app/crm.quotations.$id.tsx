@@ -32,16 +32,16 @@ import {
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
-import { printElementSinglePage, saveElementAsPdf, previewElementAsPdf } from "@/lib/docPdf";
+import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
 import { getCurrentUserName } from "@/lib/currentUser";
 
-export type QuoteDocAction = "print" | "preview" | "download";
+export type QuoteDocAction = "print" | "download";
 
 export const Route = createFileRoute("/_app/crm/quotations/$id")({
   component: QuoteEditor,
   validateSearch: (s: Record<string, unknown>): { action?: QuoteDocAction } => {
     const a = s.action;
-    return a === "print" || a === "preview" || a === "download" ? { action: a } : {};
+    return a === "print" || a === "download" ? { action: a } : {};
   },
 });
 
@@ -350,16 +350,6 @@ function QuoteEditor() {
     }
   };
 
-  const doPreview = async () => {
-    if (!printRef.current) return;
-    try {
-      toast.info("Preparing preview…");
-      await previewElementAsPdf(printRef.current, docName());
-    } catch (e: any) {
-      toast.error(e?.message || "Preview failed");
-    }
-  };
-
   const doDownload = async () => {
     if (!printRef.current) return;
     try {
@@ -370,14 +360,13 @@ function QuoteEditor() {
     }
   };
 
-  // Deep-linked action from the quotation list (?action=print|preview|download)
+  // Deep-linked action from the quotation list (?action=print|download)
   useEffect(() => {
     if (!action || autoRan.current || isClone) return;
     if (!q || !settings || !company || !printRef.current) return;
     autoRan.current = true;
     const t = setTimeout(() => {
       if (action === "print") void doPrint();
-      else if (action === "preview") void doPreview();
       else void doDownload();
       nav({ to: "/crm/quotations/$id", params: { id }, search: {}, replace: true });
     }, 400);
@@ -402,7 +391,6 @@ function QuoteEditor() {
           <Button size="sm" variant="outline" onClick={sendEmail} disabled={isClone}><Mail className="h-4 w-4 mr-1" />Email</Button>
           <Button size="sm" variant="outline" onClick={sendWA} disabled={isClone}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
           <Button size="sm" variant="outline" disabled={isClone} onClick={doPrint}><Printer className="h-4 w-4 mr-1" />Print</Button>
-          <Button size="sm" variant="outline" disabled={isClone} onClick={doPreview}><Eye className="h-4 w-4 mr-1" />Preview PDF</Button>
           <Button size="sm" variant="outline" disabled={isClone} onClick={doDownload}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
           <Button size="sm" onClick={() => setShareOpen(true)} disabled={isClone}><Share2 className="h-4 w-4 mr-1" />Share</Button>
           <Button size="sm" variant="outline" onClick={convertToSo} disabled={isClone}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>

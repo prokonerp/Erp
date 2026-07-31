@@ -171,9 +171,6 @@ function QuotesList() {
                       <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "print" } })} className="gap-2 cursor-pointer">
                         <Printer className="h-4 w-4" /> Print
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "preview" } })} className="gap-2 cursor-pointer">
-                        <FileText className="h-4 w-4" /> Preview PDF
-                      </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "download" } })} className="gap-2 cursor-pointer">
                         <Download className="h-4 w-4" /> Download PDF
                       </DropdownMenuItem>
@@ -551,9 +548,6 @@ function QuotesWorkspace() {
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "print" } })}>
                     <Printer className="h-3.5 w-3.5 mr-1" />Print
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "preview" } })}>
-                    <FileText className="h-3.5 w-3.5 mr-1" />Preview
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "download" } })}>
                     <Download className="h-3.5 w-3.5 mr-1" />Download

@@ -176,27 +176,6 @@ export async function saveElementAsPdf(el: HTMLElement, filename: string) {
 }
 
 /**
- * Open the generated PDF inline in a new browser tab (preview).
- * The tab is opened synchronously on the user gesture to dodge popup blockers.
- */
-export async function previewElementAsPdf(el: HTMLElement, filename: string) {
-  const tab = window.open("", "_blank");
-  try {
-    const blob = await buildPdfBlob(el, filename);
-    const url = URL.createObjectURL(blob);
-    if (tab) {
-      tab.location.href = url;
-    } else {
-      window.open(url, "_blank");
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch (e) {
-    tab?.close();
-    throw e;
-  }
-}
-
-/**
  * Render an element to PDF using the browser's own print engine, reusing the
  * exact same HTML and CSS (including @media print rules) as Print Preview.
  * Guarantees the "Download PDF" output matches Print exactly, unlike a canvas
