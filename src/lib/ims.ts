@@ -289,17 +289,34 @@ export async function listAudit(limit = 500): Promise<AuditEntry[]> {
   return (data || []) as AuditEntry[];
 }
 
-export type WarehouseLite = { id: string; code: string | null; name: string; type: string | null };
+export type WarehouseLite = {
+  id: string;
+  code: string | null;
+  name: string;
+  type: string | null;
+  asp_code: string | null;
+  branch_id: string | null;
+  branch?: { id: string; name: string; code: string | null } | null;
+};
 export async function listWarehouses(): Promise<WarehouseLite[]> {
-  const { data, error } = await sb.from("warehouses").select("id,code,name,type").order("name");
+  const { data, error } = await sb
+    .from("warehouses")
+    .select("id,code,name,type,asp_code,branch_id,branch:branches(id,name,code)")
+    .order("name");
   if (error) throw error;
-  return (data || []) as WarehouseLite[];
+  return (data || []) as unknown as WarehouseLite[];
+}
+
+/** Branch name for a warehouse, sourced live from Warehouse Master. */
+export function warehouseBranchName(wh: WarehouseLite | null | undefined): string {
+  return wh?.branch?.name || "—";
 }
 
 /** Friendly display: "Delhi Warehouse (Godown)" */
 export function formatWarehouse(wh: WarehouseLite | null | undefined): string {
   if (!wh) return "—";
-  return wh.type ? `${wh.name} (${wh.type})` : wh.name;
+  const bits = [wh.type, wh.asp_code ? `ASP: ${wh.asp_code}` : null, wh.branch?.name].filter(Boolean);
+  return bits.length ? `${wh.name} (${bits.join(" • ")})` : wh.name;
 }
 
 export function warehouseLookup(warehouses: WarehouseLite[]) {
