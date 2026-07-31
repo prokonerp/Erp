@@ -136,6 +136,8 @@ function MastersPage() {
             fields={[
               { key: "code", label: "Warehouse Code", type: "upper", required: true },
               { key: "name", label: "Warehouse Name", type: "title", required: true },
+              { key: "asp_code", label: "ASP Code", type: "upper" },
+              { key: "branch_id", label: "Branch", type: "select", optionsFrom: { table: "branches", valueKey: "id", labelKey: "name" } },
               { key: "type", label: "Type (Godown / Store / Service Center / Transit)", type: "title" },
               { key: "status", label: "Status (Active / Inactive)", type: "title" },
               { key: "contact_person", label: "Contact Person", type: "title" },
