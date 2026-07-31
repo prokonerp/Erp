@@ -32,10 +32,18 @@ import {
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
-import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
+import { printElementSinglePage, saveElementAsPdf, previewElementAsPdf } from "@/lib/docPdf";
 import { getCurrentUserName } from "@/lib/currentUser";
 
-export const Route = createFileRoute("/_app/crm/quotations/$id")({ component: QuoteEditor });
+export type QuoteDocAction = "print" | "preview" | "download";
+
+export const Route = createFileRoute("/_app/crm/quotations/$id")({
+  component: QuoteEditor,
+  validateSearch: (s: Record<string, unknown>): { action?: QuoteDocAction } => {
+    const a = s.action;
+    return a === "print" || a === "preview" || a === "download" ? { action: a } : {};
+  },
+});
 
 type InvoiceSettingsRow = {
   branch_id: string;
@@ -71,6 +79,8 @@ function QuoteEditor() {
   const [warrantyMap, setWarrantyMap] = useState<Record<string, string>>({});
   const [preparedBy, setPreparedBy] = useState<PrintPreparedBy | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const { action } = Route.useSearch();
+  const autoRan = useRef(false);
 
   const load = async () => {
     let sourceId = id;
