@@ -30,6 +30,7 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = t
       `<style>html,body{background:#fff;margin:0;padding:0;width:${CONTENT_W_PX}px}` +
       `#pdf-shell{width:${CONTENT_W_PX}px}` +
       `#pdf-root{width:${CONTENT_W_PX}px;transform-origin:top left}` +
+        `#pdf-root>*{display:block !important}` +
       `@media print{@page{size:A4;margin:${MARGIN_MM}mm}html,body{width:auto}` +
       `#pdf-shell,#pdf-root{width:${CONTENT_W_PX}px}}</style>` +
       `</head><body><div id="pdf-shell"><div id="pdf-root">${el.outerHTML}</div></div></body></html>`,
