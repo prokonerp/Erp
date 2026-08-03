@@ -143,8 +143,9 @@ function LeadsList() {
           <TableHeader><TableRow>
             <TableHead>Customer</TableHead><TableHead>Lead</TableHead><TableHead>Status</TableHead>
             <TableHead>Next follow-up</TableHead><TableHead className="text-right">Expected</TableHead>
-            <TableHead className="text-right">Closed</TableHead><TableHead></TableHead>
+            <TableHead className="text-right">Closed</TableHead>
             {filter === "lost" && <TableHead>Lost reason</TableHead>}
+            <TableHead></TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {filtered.map((l) => (
