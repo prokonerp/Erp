@@ -29,9 +29,27 @@ export type Lead = {
   remarks: string | null;
   closed_remarks: string | null;
   lost_reason: string | null;
+  assigned_to: string | null;
+  assigned_by: string | null;
+  assigned_at: string | null;
+  acknowledged_at: string | null;
   created_at: string;
   updated_at: string;
 };
+
+/** Human "x ago" for pending-acknowledgment ageing. */
+export function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "just now";
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d`;
+}
 
 export type LeadActivity = {
   id: string;
