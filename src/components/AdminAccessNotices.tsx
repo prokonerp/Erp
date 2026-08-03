@@ -9,8 +9,10 @@ import type { ReactNode } from "react";
  * hasAnyAdmin/claimAdmin logic from useIsAdmin() (previously inline in Masters).
  */
 export function ClaimAdminBanner() {
-  const { loading, hasAnyAdmin, claimAdmin } = useIsAdmin();
-  if (loading || hasAnyAdmin) return null;
+  const { loading, hasAnyAdmin, isOwner, claimAdmin } = useIsAdmin();
+  // Only the designated workspace owner ever sees a claim CTA, and only while
+  // no admin exists. Everyone else sees nothing at all.
+  if (loading || hasAnyAdmin || !isOwner) return null;
   return (
     <Alert className="mb-4">
       <AlertDescription className="flex items-center justify-between gap-3">
