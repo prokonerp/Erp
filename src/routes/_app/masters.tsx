@@ -65,19 +65,6 @@ function MastersPage() {
         </div>
       </div>
 
-      {!loading && !hasAnyAdmin && (
-        <Alert>
-          <AlertDescription className="flex items-center justify-between gap-3">
-            <span>No admin exists yet. Claim admin to manage masters.</span>
-            <Button size="sm" onClick={async () => {
-              const { error } = await claimAdmin();
-              if (error) alert(error);
-              else window.location.reload();
-            }}>Claim admin</Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="w-full">
         <Tabs value={currentTab} className="w-full" onValueChange={handleTabChange}>
           <TabsList className="hidden">
