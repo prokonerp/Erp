@@ -125,51 +125,12 @@ export function CustomerPicker({ value, onChange, required, placeholder = "Searc
         </PopoverContent>
       </Popover>
 
-      <Dialog open={quickOpen} onOpenChange={setQuickOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Quick Add Customer</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2 space-y-1.5">
-              <Label>Company <span className="text-destructive">*</span></Label>
-              <Input value={quick.company} autoFocus onChange={(e) => setQuick({ ...quick, company: e.target.value })} placeholder="Customer / company name" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Contact Name</Label>
-              <Input value={quick.contact_name} onChange={(e) => setQuick({ ...quick, contact_name: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Phone</Label>
-              <Input value={quick.phone} onChange={(e) => setQuick({ ...quick, phone: e.target.value })} placeholder="10-digit mobile" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input type="email" value={quick.email} onChange={(e) => setQuick({ ...quick, email: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>GST Number</Label>
-              <Input value={quick.gst} onChange={(e) => setQuick({ ...quick, gst: e.target.value.toUpperCase() })} placeholder="15-char GSTIN" />
-            </div>
-            <div className="sm:col-span-2 space-y-1.5">
-              <Label>State</Label>
-              <Select value={quick.state} onValueChange={(v) => setQuick({ ...quick, state: v })}>
-                <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
-                <SelectContent>
-                  {INDIAN_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Need to add full address or other details? Complete the profile in Masters later.
-          </p>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setQuickOpen(false)}>Cancel</Button>
-            <Button type="button" onClick={saveQuick} disabled={saving}>{saving ? "Saving…" : "Save & Select"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CustomerFormDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        initialCompany={seedCompany}
+        onSaved={(created) => handleSaved(created)}
+      />
     </>
   );
 }
