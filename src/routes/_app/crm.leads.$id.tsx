@@ -8,12 +8,22 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { type Lead, type LeadActivity, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel } from "@/lib/crm";
 import { waOpen } from "@/lib/tickets";
 
 export const Route = createFileRoute("/_app/crm/leads/$id")({ component: LeadDetail });
+
+const LOST_REASONS = [
+  "Price too high",
+  "Chose a competitor",
+  "No budget",
+  "Bad timing",
+  "Went with in-house solution",
+  "Other",
+];
 
 function LeadDetail() {
   const { id } = Route.useParams();
@@ -23,6 +33,12 @@ function LeadDetail() {
   const [activities, setActivities] = useState<LeadActivity[]>([]);
   const [act, setAct] = useState<any>({ kind: "note", notes: "", next_followup: "" });
   const [closeVal, setCloseVal] = useState<string>("");
+  const [wonOpen, setWonOpen] = useState(false);
+  const [wonRemarks, setWonRemarks] = useState("");
+  const [lostOpen, setLostOpen] = useState(false);
+  const [lostReason, setLostReason] = useState("");
+  const [lostRemarks, setLostRemarks] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const load = async () => {
     const { data: l } = await supabase.from("leads").select("*").eq("id", id).single();
@@ -63,11 +79,23 @@ function LeadDetail() {
     toast.success("Follow-up logged"); load();
   };
 
+  const openWon = () => {
+    if (!Number(closeVal || 0)) return toast.error("Enter closed value");
+    setWonRemarks("");
+    setWonOpen(true);
+  };
+
   const markWon = async () => {
     const v = Number(closeVal || 0);
     if (!v) return toast.error("Enter closed value");
+    setBusy(true);
     // 1. update lead
-    await supabase.from("leads").update({ status: "won", closed_value: v, closed_at: new Date().toISOString().slice(0, 10) } as any).eq("id", id);
+    const { error } = await supabase.from("leads").update({
+      status: "won", closed_value: v,
+      closed_at: new Date().toISOString().slice(0, 10),
+      closed_remarks: wonRemarks.trim() || null,
+    } as any).eq("id", id);
+    if (error) { setBusy(false); return toast.error(error.message); }
     // 2. compute incentive against current rules
     const { data: rules } = await supabase.from("incentive_rules").select("*").order("sort_order");
     const { payout, applied_percent } = computeIncentive((rules || []) as unknown as IncentiveRule[], v);
@@ -76,13 +104,25 @@ function LeadDetail() {
       lead_id: id, owner_id: u.user!.id,
       period: fyLabel(), closed_value: v, applied_percent, payout, status: "pending",
     } as any);
+    setBusy(false);
+    setWonOpen(false);
     toast.success(`Won! Incentive ${"₹" + payout.toLocaleString("en-IN")} recorded`);
     load();
   };
 
   const markLost = async () => {
-    if (!confirm("Mark this lead as lost?")) return;
-    await supabase.from("leads").update({ status: "lost", closed_at: new Date().toISOString().slice(0, 10) } as any).eq("id", id);
+    if (!lostReason) return toast.error("Select a reason");
+    if (!lostRemarks.trim()) return toast.error("Remarks are required");
+    setBusy(true);
+    const { error } = await supabase.from("leads").update({
+      status: "lost",
+      closed_at: new Date().toISOString().slice(0, 10),
+      lost_reason: lostReason,
+      closed_remarks: lostRemarks.trim(),
+    } as any).eq("id", id);
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    setLostOpen(false);
     toast.success("Marked lost"); load();
   };
 
@@ -136,6 +176,10 @@ function LeadDetail() {
             <div>Expected: <span className="font-semibold">{fmtMoney(lead.expected_value)}</span></div>
             <div>Next follow-up: <span className="font-semibold">{fmtDate(lead.next_followup)}</span></div>
             {lead.status === "won" && <div>Closed: <span className="font-semibold text-green-700">{fmtMoney(lead.closed_value)}</span> on {fmtDate(lead.closed_at)}</div>}
+            {lead.status === "lost" && <div>Lost on {fmtDate(lead.closed_at)}{lead.lost_reason ? <> · <span className="font-semibold text-destructive">{lead.lost_reason}</span></> : null}</div>}
+            {(lead.status === "won" || lead.status === "lost") && lead.closed_remarks && (
+              <div className="text-xs text-muted-foreground whitespace-pre-wrap">Closing remarks: {lead.closed_remarks}</div>
+            )}
             {lead.remarks && <div className="text-xs text-muted-foreground">{lead.remarks}</div>}
           </div>
         </CardContent>
@@ -149,12 +193,67 @@ function LeadDetail() {
           <>
             <div className="flex items-center gap-1">
               <Input type="number" placeholder="Closed value" value={closeVal} onChange={(e) => setCloseVal(e.target.value)} className="w-36" />
-              <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={markWon}><Trophy className="h-4 w-4 mr-1" />Mark Won</Button>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={openWon}><Trophy className="h-4 w-4 mr-1" />Mark Won</Button>
             </div>
-            <Button size="sm" variant="destructive" onClick={markLost}><X className="h-4 w-4 mr-1" />Mark Lost</Button>
+            <Button size="sm" variant="destructive" onClick={() => { setLostReason(""); setLostRemarks(""); setLostOpen(true); }}><X className="h-4 w-4 mr-1" />Mark Lost</Button>
           </>
         )}
       </div>
+
+      <Dialog open={wonOpen} onOpenChange={(v) => { if (!busy) setWonOpen(v); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark lead as Won</DialogTitle>
+            <DialogDescription>Confirm the closed value and add any closing remarks.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Closed value (₹) *</Label>
+              <Input type="number" value={closeVal} onChange={(e) => setCloseVal(e.target.value)} />
+            </div>
+            <div>
+              <Label>Closing remarks</Label>
+              <Textarea rows={4} value={wonRemarks} onChange={(e) => setWonRemarks(e.target.value)} placeholder="What sealed the deal, special terms agreed…" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWonOpen(false)} disabled={busy}>Cancel</Button>
+            <Button className="bg-green-600 hover:bg-green-700" onClick={markWon} disabled={busy || !Number(closeVal || 0)}>
+              {busy ? "Saving…" : "Confirm Won"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={lostOpen} onOpenChange={(v) => { if (!busy) setLostOpen(v); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark lead as Lost</DialogTitle>
+            <DialogDescription>A reason and remarks are required before closing this lead.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Reason *</Label>
+              <Select value={lostReason} onValueChange={setLostReason}>
+                <SelectTrigger><SelectValue placeholder="Select a reason" /></SelectTrigger>
+                <SelectContent>
+                  {LOST_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Remarks *</Label>
+              <Textarea rows={4} value={lostRemarks} onChange={(e) => setLostRemarks(e.target.value)} placeholder="What happened? Add detail, especially if reason is Other." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLostOpen(false)} disabled={busy}>Cancel</Button>
+            <Button variant="destructive" onClick={markLost} disabled={busy || !lostReason || !lostRemarks.trim()}>
+              {busy ? "Saving…" : "Confirm Lost"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader><CardTitle className="text-base">Add follow-up</CardTitle></CardHeader>

@@ -27,6 +27,8 @@ export type Lead = {
   next_followup: string | null;
   closed_at: string | null;
   remarks: string | null;
+  closed_remarks: string | null;
+  lost_reason: string | null;
   created_at: string;
   updated_at: string;
 };
