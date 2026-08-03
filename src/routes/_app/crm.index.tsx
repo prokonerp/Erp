@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { type Lead, type Quotation, type Incentive, type IncentiveRule, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive } from "@/lib/crm";
-import { Target, TrendingUp, Calendar, Trophy, FileSpreadsheet } from "lucide-react";
+import { type Lead, type Quotation, type Incentive, type IncentiveRule, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, timeAgo } from "@/lib/crm";
+import { Target, TrendingUp, Calendar, Trophy, FileSpreadsheet, BellRing } from "lucide-react";
 
 export const Route = createFileRoute("/_app/crm/")({
   component: CrmDashboard,
@@ -18,6 +18,7 @@ function CrmDashboard() {
   const [quotes, setQuotes] = useState<Quotation[]>([]);
   const [incentives, setIncentives] = useState<Incentive[]>([]);
   const [rules, setRules] = useState<IncentiveRule[]>([]);
+  const [staff, setStaff] = useState<Record<string, string>>({});
 
   useEffect(() => {
     (async () => {
@@ -35,6 +36,10 @@ function CrmDashboard() {
       const cmap: Record<string, Customer> = {};
       for (const x of (c.data || []) as unknown as Customer[]) cmap[x.id] = x;
       setCustomers(cmap);
+      const { data: su } = await supabase.from("app_users").select("user_id,name,email");
+      const smap: Record<string, string> = {};
+      for (const u of (su || []) as any[]) if (u.user_id) smap[u.user_id] = u.name || u.email || u.user_id;
+      setStaff(smap);
     })();
   }, []);
 
@@ -57,6 +62,13 @@ function CrmDashboard() {
       .sort((a, b) => (a.next_followup || "").localeCompare(b.next_followup || ""))
       .slice(0, 10);
   }, [leads]);
+
+  const pendingAck = useMemo(
+    () => leads
+      .filter((l) => l.assigned_at && !l.acknowledged_at)
+      .sort((a, b) => (a.assigned_at || "").localeCompare(b.assigned_at || "")),
+    [leads]
+  );
 
   const StatCard = ({ icon: Icon, label, value, tone = "default" }: any) => (
     <Card>
@@ -84,6 +96,42 @@ function CrmDashboard() {
         <StatCard icon={Trophy} label="Projected incentive" value={fmtMoney(projected.payout)} tone="green" />
         <StatCard icon={TrendingUp} label="Effective rate" value={projected.applied_percent.toFixed(2) + "%"} />
       </div>
+
+      <Card className={pendingAck.length ? "border-amber-400/70" : undefined}>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BellRing className="h-4 w-4 text-amber-600" />
+            Pending acknowledgment
+            {pendingAck.length > 0 && (
+              <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">{pendingAck.length}</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {pendingAck.length === 0 ? (
+            <div className="text-sm text-muted-foreground">All assigned leads have been acknowledged.</div>
+          ) : (
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead>Lead</TableHead><TableHead>Customer</TableHead>
+                <TableHead>Assigned to</TableHead><TableHead>Assigned on</TableHead>
+                <TableHead className="text-right">Pending</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {pendingAck.slice(0, 10).map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell><Link to="/crm/leads/$id" params={{ id: l.id }} className="text-primary hover:underline">{l.title}</Link></TableCell>
+                    <TableCell>{customers[l.customer_id]?.company || "—"}</TableCell>
+                    <TableCell>{staff[l.assigned_to || l.owner_id] || "—"}</TableCell>
+                    <TableCell>{fmtDate(l.assigned_at)}</TableCell>
+                    <TableCell className="text-right text-amber-700 font-medium">{timeAgo(l.assigned_at)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

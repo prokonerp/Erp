@@ -152,7 +152,14 @@ function LeadsList() {
               <TableRow key={l.id}>
                 <TableCell>{cmap[l.customer_id]?.company || "—"}</TableCell>
                 <TableCell className="font-medium">{l.title}</TableCell>
-                <TableCell><Badge variant="outline" className={statusClass[l.status]}>{statusLabel[l.status]}</Badge></TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Badge variant="outline" className={statusClass[l.status]}>{statusLabel[l.status]}</Badge>
+                    {l.assigned_at && !l.acknowledged_at && (
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">Not yet acknowledged</Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>{fmtDate(l.next_followup)}</TableCell>
                 <TableCell className="text-right">{fmtMoney(l.expected_value)}</TableCell>
                 <TableCell className="text-right">{l.status === "won" ? fmtMoney(l.closed_value) : "—"}</TableCell>

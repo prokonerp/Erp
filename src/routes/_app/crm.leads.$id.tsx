@@ -9,9 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail } from "lucide-react";
+import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail, UserCheck, BellRing } from "lucide-react";
 import { toast } from "sonner";
 import { type Lead, type LeadActivity, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel } from "@/lib/crm";
+import { useIsAdmin } from "@/lib/useRole";
 import { waOpen } from "@/lib/tickets";
 
 export const Route = createFileRoute("/_app/crm/leads/$id")({ component: LeadDetail });
@@ -39,6 +40,10 @@ function LeadDetail() {
   const [lostReason, setLostReason] = useState("");
   const [lostRemarks, setLostRemarks] = useState("");
   const [busy, setBusy] = useState(false);
+  const { isAdmin, userId } = useIsAdmin();
+  const [staff, setStaff] = useState<{ user_id: string; name: string | null; email: string | null }[]>([]);
+  const [assignTo, setAssignTo] = useState("");
+  const [assignBusy, setAssignBusy] = useState(false);
 
   const load = async () => {
     const { data: l } = await supabase.from("leads").select("*").eq("id", id).single();
@@ -53,6 +58,55 @@ function LeadDetail() {
     setCloseVal(String((l as any).closed_value || (l as any).expected_value || ""));
   };
   useEffect(() => { load(); }, [id]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    (async () => {
+      const { data } = await supabase.from("app_users").select("user_id,name,email").order("name");
+      setStaff(((data || []) as any[]).filter((u) => u.user_id));
+    })();
+  }, [isAdmin]);
+
+  const myName = () => staff.find((s) => s.user_id === userId)?.name || staff.find((s) => s.user_id === userId)?.email || "user";
+  const nameOf = (uid: string | null) => {
+    const s = staff.find((x) => x.user_id === uid);
+    return s?.name || s?.email || "staff member";
+  };
+
+  const logActivity = async (notes: string) => {
+    if (!userId) return;
+    await supabase.from("lead_activities").insert({ lead_id: id, owner_id: userId, kind: "note", notes } as any);
+  };
+
+  const assignLead = async () => {
+    if (!assignTo) return toast.error("Select a staff member");
+    setAssignBusy(true);
+    const { error } = await supabase.from("leads").update({
+      owner_id: assignTo,
+      assigned_to: assignTo,
+      assigned_by: userId,
+      assigned_at: new Date().toISOString(),
+      acknowledged_at: null,
+    } as any).eq("id", id);
+    if (error) { setAssignBusy(false); return toast.error(error.message); }
+    await logActivity(`Assigned to ${nameOf(assignTo)} by ${myName()}`);
+    setAssignBusy(false);
+    setAssignTo("");
+    toast.success("Lead assigned"); load();
+  };
+
+  const acknowledge = async () => {
+    setAssignBusy(true);
+    const { error } = await supabase.from("leads").update({
+      acknowledged_at: new Date().toISOString(),
+      acknowledged_by: userId,
+      acknowledged: true,
+    } as any).eq("id", id);
+    if (error) { setAssignBusy(false); return toast.error(error.message); }
+    await logActivity(`Acknowledged by ${myName()}`);
+    setAssignBusy(false);
+    toast.success("Acknowledged"); load();
+  };
 
   const updateLead = async (patch: Partial<Lead>) => {
     const { error } = await supabase.from("leads").update(patch as any).eq("id", id);
@@ -154,6 +208,8 @@ function LeadDetail() {
 
   if (!lead) return <div className="text-muted-foreground">Loading…</div>;
 
+  const needsAck = !!userId && lead.owner_id === userId && !!lead.assigned_at && !lead.acknowledged_at;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -162,6 +218,17 @@ function LeadDetail() {
       </div>
 
       <Card>
+        {needsAck && (
+          <div className="mx-6 mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2">
+            <div className="flex items-center gap-2 text-sm text-amber-900 dark:text-amber-200">
+              <BellRing className="h-4 w-4" />
+              <span>Assigned to you on {fmtDate(lead.assigned_at)} — Acknowledge to confirm you've seen this</span>
+            </div>
+            <Button size="sm" onClick={acknowledge} disabled={assignBusy}>
+              <UserCheck className="h-4 w-4 mr-1" />Acknowledge
+            </Button>
+          </div>
+        )}
         <CardHeader><CardTitle className="text-base">{lead.title}</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-4 text-sm">
           <div>
@@ -181,9 +248,39 @@ function LeadDetail() {
               <div className="text-xs text-muted-foreground whitespace-pre-wrap">Closing remarks: {lead.closed_remarks}</div>
             )}
             {lead.remarks && <div className="text-xs text-muted-foreground">{lead.remarks}</div>}
+            {lead.assigned_at && (
+              <div className="text-xs text-muted-foreground">
+                Assigned {fmtDate(lead.assigned_at)} · {lead.acknowledged_at ? `acknowledged ${fmtDate(lead.acknowledged_at)}` : "not yet acknowledged"}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Assignment</CardTitle></CardHeader>
+          <CardContent className="flex flex-wrap items-end gap-3">
+            <div className="min-w-56">
+              <Label>Assign to</Label>
+              <Select value={assignTo} onValueChange={setAssignTo}>
+                <SelectTrigger><SelectValue placeholder="Select staff member" /></SelectTrigger>
+                <SelectContent>
+                  {staff.map((s) => (
+                    <SelectItem key={s.user_id} value={s.user_id}>{s.name || s.email || s.user_id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button size="sm" onClick={assignLead} disabled={assignBusy || !assignTo}>
+              <UserCheck className="h-4 w-4 mr-1" />{assignBusy ? "Assigning…" : "Assign"}
+            </Button>
+            <div className="text-xs text-muted-foreground">
+              Current owner: {nameOf(lead.owner_id)}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={createQuote}><FileSpreadsheet className="h-4 w-4 mr-1" />Create quotation</Button>
