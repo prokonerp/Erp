@@ -6,6 +6,7 @@ export function useIsAdmin() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [hasAnyAdmin, setHasAnyAdmin] = useState(true);
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -27,6 +28,11 @@ export function useIsAdmin() {
       const list = roles ?? [];
       setHasAnyAdmin(list.length > 0);
       setIsAdmin(list.some((r) => r.user_id === uid));
+      if (list.length === 0) {
+        const { data: owner } = await (supabase as any).rpc("is_designated_owner");
+        if (!active) return;
+        setIsOwner(owner === true);
+      }
       setLoading(false);
     })();
     return () => {
@@ -36,9 +42,7 @@ export function useIsAdmin() {
 
   async function claimAdmin() {
     if (!userId) return { error: "Not signed in" };
-    const { error } = await supabase
-      .from("user_roles")
-      .insert({ user_id: userId, role: "admin" });
+    const { error } = await (supabase as any).rpc("claim_admin");
     if (!error) {
       setIsAdmin(true);
       setHasAnyAdmin(true);
@@ -46,5 +50,5 @@ export function useIsAdmin() {
     return { error: error?.message };
   }
 
-  return { isAdmin, loading, userId, hasAnyAdmin, claimAdmin };
+  return { isAdmin, loading, userId, hasAnyAdmin, isOwner, claimAdmin };
 }
