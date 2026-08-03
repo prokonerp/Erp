@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { type Lead, type LeadStatus, type Customer, statusLabel, statusClass, fmtMoney, fmtDate } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
 import { CustomerPicker } from "@/components/CustomerPicker";
+import { useLeadAssignment } from "@/lib/useLeadAssignment";
 
 export const Route = createFileRoute("/_app/crm/leads")({ component: LeadsPage });
 
@@ -27,6 +28,7 @@ function LeadsPage() {
 
 function LeadsList() {
   const [rows, setRows] = useState<Lead[]>([]);
+  const { isAdmin, staff, busy: assignBusy, nameOf, assignLeadTo } = useLeadAssignment();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filter, setFilter] = useState<"all" | LeadStatus>("all");
   const [q, setQ] = useState("");
@@ -44,6 +46,13 @@ function LeadsList() {
     setCustomers((c.data || []) as unknown as Customer[]);
   };
   useEffect(() => { load(); }, []);
+
+  const assignInline = async (leadId: string, staffId: string) => {
+    const { error } = await assignLeadTo(leadId, staffId);
+    if (error) return toast.error(error);
+    toast.success("Lead assigned");
+    load();
+  };
 
   const cmap = Object.fromEntries(customers.map((c) => [c.id, c]));
 
@@ -142,6 +151,7 @@ function LeadsList() {
         <Table>
           <TableHeader><TableRow>
             <TableHead>Customer</TableHead><TableHead>Lead</TableHead><TableHead>Status</TableHead>
+            <TableHead>Assigned to</TableHead>
             <TableHead>Next follow-up</TableHead><TableHead className="text-right">Expected</TableHead>
             <TableHead className="text-right">Closed</TableHead>
             {filter === "lost" && <TableHead>Lost reason</TableHead>}
@@ -155,8 +165,27 @@ function LeadsList() {
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-1">
                     <Badge variant="outline" className={statusClass[l.status]}>{statusLabel[l.status]}</Badge>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1 min-w-[9rem]">
+                    <span className="text-sm">{nameOf(l.owner_id)}</span>
                     {l.assigned_at && !l.acknowledged_at && (
-                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">Not yet acknowledged</Badge>
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 w-fit">Not yet acknowledged</Badge>
+                    )}
+                    {isAdmin && (
+                      <Select
+                        value={l.owner_id || ""}
+                        onValueChange={(v) => { if (v && v !== l.owner_id) assignInline(l.id, v); }}
+                        disabled={assignBusy}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder="Assign…" /></SelectTrigger>
+                        <SelectContent>
+                          {staff.map((s) => (
+                            <SelectItem key={s.user_id} value={s.user_id}>{s.name || s.email || s.user_id}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
                   </div>
                 </TableCell>
@@ -169,7 +198,7 @@ function LeadsList() {
                 </TableCell>
               </TableRow>
             ))}
-            {filtered.length === 0 && <TableRow><TableCell colSpan={filter === "lost" ? 8 : 7} className="text-center text-muted-foreground py-6">No leads</TableCell></TableRow>}
+            {filtered.length === 0 && <TableRow><TableCell colSpan={filter === "lost" ? 9 : 8} className="text-center text-muted-foreground py-6">No leads</TableCell></TableRow>}
           </TableBody>
         </Table>
       </CardContent>
