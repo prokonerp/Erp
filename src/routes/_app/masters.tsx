@@ -6,8 +6,6 @@ import { CompanyProfileSettings } from "@/components/CompanyProfileSettings";
 import { CustomerMasterPage } from "./masters.customers";
 import { ProductMasterPage } from "./masters.products";
 import { useIsAdmin } from "@/lib/useRole";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck } from "lucide-react";
 import { RolesAndUsersPanel } from "@/components/RolesAndUsersPanel";
 
@@ -19,7 +17,7 @@ export const Route = createFileRoute("/_app/masters")({
 });
 
 function MastersPage() {
-  const { isAdmin, loading, hasAnyAdmin, claimAdmin } = useIsAdmin();
+  const { isAdmin, loading } = useIsAdmin();
   const navigate = useNavigate();
   const location = useLocation();
   const search = Route.useSearch();
@@ -64,19 +62,6 @@ function MastersPage() {
           {loading ? "Checking role…" : isAdmin ? "Admin — full edit access" : "Read-only (admin can edit)"}
         </div>
       </div>
-
-      {!loading && !hasAnyAdmin && (
-        <Alert>
-          <AlertDescription className="flex items-center justify-between gap-3">
-            <span>No admin exists yet. Claim admin to manage masters.</span>
-            <Button size="sm" onClick={async () => {
-              const { error } = await claimAdmin();
-              if (error) alert(error);
-              else window.location.reload();
-            }}>Claim admin</Button>
-          </AlertDescription>
-        </Alert>
-      )}
 
       <div className="w-full">
         <Tabs value={currentTab} className="w-full" onValueChange={handleTabChange}>

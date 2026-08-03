@@ -43,6 +43,7 @@ import { getMyProfile } from "@/lib/admin-users.functions";
 import { UserProfileMenu, type ProfileInfo } from "@/components/UserProfileMenu";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { IdleTimeout } from "@/components/IdleTimeout";
+import { ClaimAdminBanner } from "@/components/AdminAccessNotices";
 import { useActivityTracker } from "@/lib/useActivityTracker";
 import { toast } from "sonner";
 
@@ -475,6 +476,7 @@ function AppLayout() {
 
         {/* Content */}
         <main className="p-4 md:p-6 max-w-[1600px] w-full mx-auto">
+          <ClaimAdminBanner />
           <Outlet />
         </main>
       </div>

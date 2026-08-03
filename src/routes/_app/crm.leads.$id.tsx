@@ -13,6 +13,7 @@ import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail,
 import { toast } from "sonner";
 import { type Lead, type LeadActivity, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel } from "@/lib/crm";
 import { useIsAdmin } from "@/lib/useRole";
+import { AdminOnlySection } from "@/components/AdminAccessNotices";
 import { waOpen } from "@/lib/tickets";
 
 export const Route = createFileRoute("/_app/crm/leads/$id")({ component: LeadDetail });
@@ -257,7 +258,7 @@ function LeadDetail() {
         </CardContent>
       </Card>
 
-      {isAdmin && (
+      <AdminOnlySection label="Admin access required to assign this lead">
         <Card>
           <CardHeader><CardTitle className="text-base">Assignment</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap items-end gap-3">
@@ -280,7 +281,7 @@ function LeadDetail() {
             </div>
           </CardContent>
         </Card>
-      )}
+      </AdminOnlySection>
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={createQuote}><FileSpreadsheet className="h-4 w-4 mr-1" />Create quotation</Button>
