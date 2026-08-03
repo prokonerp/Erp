@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Save, Plus, Trash2, Printer, Mail, MessageCircle, FileText, ClipboardList, Share2, Download, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { ProductPicker } from "@/components/ProductPicker";
@@ -412,17 +411,6 @@ function QuoteEditor() {
         onGeneratePdf={() => { if (printRef.current) void saveElementAsPdf(printRef.current, `${q.quote_no || "Quotation"}.pdf`); }}
       />
 
-      <Tabs defaultValue="items" className="print:hidden">
-        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur -mx-1 px-1 py-1 border-b">
-          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
-            <TabsTrigger value="items" className="shrink-0">Items</TabsTrigger>
-            <TabsTrigger value="details" className="shrink-0">Details</TabsTrigger>
-            <TabsTrigger value="totals" className="shrink-0">Totals &amp; Charges</TabsTrigger>
-            <TabsTrigger value="notes" className="shrink-0">Notes &amp; Terms</TabsTrigger>
-          </TabsList>
-        </div>
-
-      <TabsContent value="details" className="space-y-4 mt-3">
       <Card className="print:hidden">
         <CardHeader><CardTitle className="text-base">{q.quote_no || (isClone ? "New quotation (unsaved copy)" : "Quotation")}</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-3 gap-3">
@@ -481,9 +469,7 @@ function QuoteEditor() {
           </div>
         </CardContent>
       </Card>
-      </TabsContent>
 
-      <TabsContent value="items" className="space-y-4 mt-3">
       <UpsSmartPanel items={q.items} onAddItems={addItems} />
 
       <Card className="print:hidden">
@@ -542,9 +528,7 @@ function QuoteEditor() {
           ))}
         </CardContent>
       </Card>
-      </TabsContent>
 
-      <TabsContent value="totals" className="space-y-4 mt-3">
       <Card className="print:hidden">
         <CardHeader><CardTitle className="text-base">Totals & charges</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-4">
@@ -569,9 +553,7 @@ function QuoteEditor() {
           </div>
         </CardContent>
       </Card>
-      </TabsContent>
 
-      <TabsContent value="notes" className="space-y-4 mt-3">
       <Card className="print:hidden">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Customer notes & terms</CardTitle>
@@ -608,25 +590,6 @@ function QuoteEditor() {
           </div>
         </CardContent>
       </Card>
-      </TabsContent>
-      </Tabs>
-
-      {/* Sticky summary bar — always visible while editing any tab */}
-      <div className="sticky bottom-0 z-20 print:hidden -mx-1 px-3 py-2 border-t bg-background/95 backdrop-blur flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-baseline gap-3 min-w-0">
-          <span className="text-xs text-muted-foreground">Grand Total</span>
-          <span className="text-lg font-bold">{fmtMoney(totals.total)}</span>
-          <span className="hidden sm:inline text-xs text-muted-foreground truncate">
-            {q.items.length} item{q.items.length === 1 ? "" : "s"} · Sub Total {fmtMoney(totals.subtotal)}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={save}><Save className="h-4 w-4 mr-1" />Save Draft</Button>
-          <Button size="sm" onClick={async () => { await save(); if (!isClone) setShareOpen(true); }}>
-            <Share2 className="h-4 w-4 mr-1" />Save &amp; Send
-          </Button>
-        </div>
-      </div>
 
       {/* ============ SHARED A4 PRINT VIEW ============ */}
       <div ref={printRef} className="hidden print:block text-black">
