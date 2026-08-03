@@ -4707,6 +4707,7 @@ export type Database = {
           matched_value: string
         }[]
       }
+      claim_admin: { Args: never; Returns: undefined }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
@@ -4718,6 +4719,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_designated_owner: { Args: never; Returns: boolean }
       my_pending_lead_acknowledgements: {
         Args: never
         Returns: {
