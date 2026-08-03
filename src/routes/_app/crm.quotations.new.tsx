@@ -311,7 +311,33 @@ function NewQuotation() {
       const { data, error } = await supabase.from("quotations").insert(payload as never).select().single();
       if (error) { toast.error(error.message); return null; }
       savedOnceRef.current = true;
-      const newId = (data as { id: string }).id;
+      const saved = data as { id: string; quote_no?: string | null; lead_id?: string | null };
+      const newId = saved.id;
+
+      // Direct-entry quotations get an auto-created lead so follow-up tracking always exists.
+      if (!saved.lead_id) {
+        const followup = new Date();
+        followup.setDate(followup.getDate() + 3);
+        const { data: lead, error: leadErr } = await supabase
+          .from("leads")
+          .insert({
+            customer_id: customerId,
+            owner_id: u.user!.id,
+            title: (subject || refNo || `Quotation ${saved.quote_no || ""}`).trim() || "Direct Quotation",
+            source: "Direct Quotation",
+            status: "quoted",
+            expected_value: totals.total,
+            next_followup: followup.toISOString().slice(0, 10),
+          } as never)
+          .select("id")
+          .single();
+        if (leadErr) {
+          toast.error(`Quotation saved, but lead could not be created: ${leadErr.message}`);
+        } else if (lead) {
+          await supabase.from("quotations").update({ lead_id: (lead as { id: string }).id } as never).eq("id", newId);
+        }
+      }
+
       toast.success(opts?.andSend ? "Quotation saved & marked sent" : "Draft saved");
       return newId;
     } finally {
