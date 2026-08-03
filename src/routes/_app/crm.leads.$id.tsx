@@ -13,6 +13,7 @@ import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail,
 import { toast } from "sonner";
 import { type Lead, type LeadActivity, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel } from "@/lib/crm";
 import { useIsAdmin } from "@/lib/useRole";
+import { AdminOnlySection } from "@/components/AdminAccessNotices";
 import { waOpen } from "@/lib/tickets";
 
 export const Route = createFileRoute("/_app/crm/leads/$id")({ component: LeadDetail });
