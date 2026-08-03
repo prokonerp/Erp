@@ -96,6 +96,8 @@ function LeadsList() {
               { header: "Expected", get: (l) => Number(l.expected_value || 0) },
               { header: "Closed", get: (l) => Number(l.closed_value || 0) },
               { header: "Closed on", get: (l) => l.closed_at || "" },
+              { header: "Lost reason", get: (l) => l.lost_reason || "" },
+              { header: "Closing remarks", get: (l) => l.closed_remarks || "" },
               { header: "Remarks", get: (l) => l.remarks || "" },
             ]}
           />
@@ -141,7 +143,9 @@ function LeadsList() {
           <TableHeader><TableRow>
             <TableHead>Customer</TableHead><TableHead>Lead</TableHead><TableHead>Status</TableHead>
             <TableHead>Next follow-up</TableHead><TableHead className="text-right">Expected</TableHead>
-            <TableHead className="text-right">Closed</TableHead><TableHead></TableHead>
+            <TableHead className="text-right">Closed</TableHead>
+            {filter === "lost" && <TableHead>Lost reason</TableHead>}
+            <TableHead></TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {filtered.map((l) => (
@@ -152,12 +156,13 @@ function LeadsList() {
                 <TableCell>{fmtDate(l.next_followup)}</TableCell>
                 <TableCell className="text-right">{fmtMoney(l.expected_value)}</TableCell>
                 <TableCell className="text-right">{l.status === "won" ? fmtMoney(l.closed_value) : "—"}</TableCell>
+                {filter === "lost" && <TableCell className="whitespace-normal">{l.lost_reason || "—"}</TableCell>}
                 <TableCell className="text-right">
                   <Link to="/crm/leads/$id" params={{ id: l.id }}><Button size="sm" variant="ghost"><Eye className="h-4 w-4" /></Button></Link>
                 </TableCell>
               </TableRow>
             ))}
-            {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">No leads</TableCell></TableRow>}
+            {filtered.length === 0 && <TableRow><TableCell colSpan={filter === "lost" ? 8 : 7} className="text-center text-muted-foreground py-6">No leads</TableCell></TableRow>}
           </TableBody>
         </Table>
       </CardContent>
