@@ -97,6 +97,42 @@ function CrmDashboard() {
         <StatCard icon={TrendingUp} label="Effective rate" value={projected.applied_percent.toFixed(2) + "%"} />
       </div>
 
+      <Card className={pendingAck.length ? "border-amber-400/70" : undefined}>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BellRing className="h-4 w-4 text-amber-600" />
+            Pending acknowledgment
+            {pendingAck.length > 0 && (
+              <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">{pendingAck.length}</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {pendingAck.length === 0 ? (
+            <div className="text-sm text-muted-foreground">All assigned leads have been acknowledged.</div>
+          ) : (
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead>Lead</TableHead><TableHead>Customer</TableHead>
+                <TableHead>Assigned to</TableHead><TableHead>Assigned on</TableHead>
+                <TableHead className="text-right">Pending</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {pendingAck.slice(0, 10).map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell><Link to="/crm/leads/$id" params={{ id: l.id }} className="text-primary hover:underline">{l.title}</Link></TableCell>
+                    <TableCell>{customers[l.customer_id]?.company || "—"}</TableCell>
+                    <TableCell>{staff[l.assigned_to || l.owner_id] || "—"}</TableCell>
+                    <TableCell>{fmtDate(l.assigned_at)}</TableCell>
+                    <TableCell className="text-right text-amber-700 font-medium">{timeAgo(l.assigned_at)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Upcoming follow-ups (14 days)</CardTitle>
