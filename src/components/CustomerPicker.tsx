@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchAll } from "@/lib/fetchAll";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
