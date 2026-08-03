@@ -1,18 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchAll } from "@/lib/fetchAll";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { type Customer } from "@/lib/crm";
-import { INDIAN_STATES } from "@/lib/india";
-import { createQuickCustomer } from "@/lib/customers";
+import { CustomerFormDialog } from "@/components/CustomerForm";
 
 type Props = {
   value: string | null | undefined;
@@ -22,16 +16,13 @@ type Props = {
   className?: string;
 };
 
-const emptyQuick = { company: "", contact_name: "", phone: "", email: "", gst: "", state: "" };
-
 export function CustomerPicker({ value, onChange, required, placeholder = "Search by name, mobile or GST…", className }: Props) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [quickOpen, setQuickOpen] = useState(false);
-  const [quick, setQuick] = useState(emptyQuick);
-  const [saving, setSaving] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [seedCompany, setSeedCompany] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -48,27 +39,17 @@ export function CustomerPicker({ value, onChange, required, placeholder = "Searc
   const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
 
   function openQuickAdd() {
-    setQuick({ ...emptyQuick, company: search.trim() });
-    setQuickOpen(true);
+    setSeedCompany(search.trim());
+    setAddOpen(true);
+    setOpen(false);
   }
 
-  async function saveQuick() {
-    if (!quick.company.trim()) { toast.error("Company name is required"); return; }
-    setSaving(true);
-    try {
-      const created = await createQuickCustomer(quick);
-      setRows((prev) => [...prev, created].sort((a, b) => (a.company || "").localeCompare(b.company || "")));
-      onChange(created.id, created);
-      toast.success("Customer added and selected");
-      setQuickOpen(false);
-      setQuick(emptyQuick);
-      setSearch("");
-      setOpen(false);
-    } catch (e: any) {
-      toast.error(e?.message || "Could not add customer");
-    } finally {
-      setSaving(false);
-    }
+  function handleSaved(created: Customer) {
+    setRows((prev) => [...prev.filter((r) => r.id !== created.id), created].sort((a, b) => (a.company || "").localeCompare(b.company || "")));
+    onChange(created.id, created);
+    setSearch("");
+    setAddOpen(false);
+    setOpen(false);
   }
 
   return (
@@ -142,51 +123,12 @@ export function CustomerPicker({ value, onChange, required, placeholder = "Searc
         </PopoverContent>
       </Popover>
 
-      <Dialog open={quickOpen} onOpenChange={setQuickOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Quick Add Customer</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2 space-y-1.5">
-              <Label>Company <span className="text-destructive">*</span></Label>
-              <Input value={quick.company} autoFocus onChange={(e) => setQuick({ ...quick, company: e.target.value })} placeholder="Customer / company name" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Contact Name</Label>
-              <Input value={quick.contact_name} onChange={(e) => setQuick({ ...quick, contact_name: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Phone</Label>
-              <Input value={quick.phone} onChange={(e) => setQuick({ ...quick, phone: e.target.value })} placeholder="10-digit mobile" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input type="email" value={quick.email} onChange={(e) => setQuick({ ...quick, email: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>GST Number</Label>
-              <Input value={quick.gst} onChange={(e) => setQuick({ ...quick, gst: e.target.value.toUpperCase() })} placeholder="15-char GSTIN" />
-            </div>
-            <div className="sm:col-span-2 space-y-1.5">
-              <Label>State</Label>
-              <Select value={quick.state} onValueChange={(v) => setQuick({ ...quick, state: v })}>
-                <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
-                <SelectContent>
-                  {INDIAN_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Need to add full address or other details? Complete the profile in Masters later.
-          </p>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setQuickOpen(false)}>Cancel</Button>
-            <Button type="button" onClick={saveQuick} disabled={saving}>{saving ? "Saving…" : "Save & Select"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CustomerFormDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        initialCompany={seedCompany}
+        onSaved={(created) => handleSaved(created)}
+      />
     </>
   );
 }
