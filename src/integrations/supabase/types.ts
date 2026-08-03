@@ -2772,11 +2772,13 @@ export type Database = {
           assigned_to: string | null
           assignment_status: string | null
           closed_at: string | null
+          closed_remarks: string | null
           closed_value: number | null
           created_at: string
           customer_id: string
           expected_value: number | null
           id: string
+          lost_reason: string | null
           next_followup: string | null
           owner_id: string
           remarks: string | null
@@ -2794,11 +2796,13 @@ export type Database = {
           assigned_to?: string | null
           assignment_status?: string | null
           closed_at?: string | null
+          closed_remarks?: string | null
           closed_value?: number | null
           created_at?: string
           customer_id: string
           expected_value?: number | null
           id?: string
+          lost_reason?: string | null
           next_followup?: string | null
           owner_id: string
           remarks?: string | null
@@ -2816,11 +2820,13 @@ export type Database = {
           assigned_to?: string | null
           assignment_status?: string | null
           closed_at?: string | null
+          closed_remarks?: string | null
           closed_value?: number | null
           created_at?: string
           customer_id?: string
           expected_value?: number | null
           id?: string
+          lost_reason?: string | null
           next_followup?: string | null
           owner_id?: string
           remarks?: string | null
