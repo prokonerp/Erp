@@ -5,14 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { type Customer } from "@/lib/crm";
-import { INDIAN_STATES } from "@/lib/india";
-import { createQuickCustomer } from "@/lib/customers";
+import { CustomerFormDialog } from "@/components/CustomerForm";
 
 type Props = {
   value: string | null | undefined;
@@ -22,16 +18,13 @@ type Props = {
   className?: string;
 };
 
-const emptyQuick = { company: "", contact_name: "", phone: "", email: "", gst: "", state: "" };
-
 export function CustomerPicker({ value, onChange, required, placeholder = "Search by name, mobile or GST…", className }: Props) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [quickOpen, setQuickOpen] = useState(false);
-  const [quick, setQuick] = useState(emptyQuick);
-  const [saving, setSaving] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [seedCompany, setSeedCompany] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -48,27 +41,17 @@ export function CustomerPicker({ value, onChange, required, placeholder = "Searc
   const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
 
   function openQuickAdd() {
-    setQuick({ ...emptyQuick, company: search.trim() });
-    setQuickOpen(true);
+    setSeedCompany(search.trim());
+    setAddOpen(true);
+    setOpen(false);
   }
 
-  async function saveQuick() {
-    if (!quick.company.trim()) { toast.error("Company name is required"); return; }
-    setSaving(true);
-    try {
-      const created = await createQuickCustomer(quick);
-      setRows((prev) => [...prev, created].sort((a, b) => (a.company || "").localeCompare(b.company || "")));
-      onChange(created.id, created);
-      toast.success("Customer added and selected");
-      setQuickOpen(false);
-      setQuick(emptyQuick);
-      setSearch("");
-      setOpen(false);
-    } catch (e: any) {
-      toast.error(e?.message || "Could not add customer");
-    } finally {
-      setSaving(false);
-    }
+  function handleSaved(created: Customer) {
+    setRows((prev) => [...prev.filter((r) => r.id !== created.id), created].sort((a, b) => (a.company || "").localeCompare(b.company || "")));
+    onChange(created.id, created);
+    setSearch("");
+    setAddOpen(false);
+    setOpen(false);
   }
 
   return (
