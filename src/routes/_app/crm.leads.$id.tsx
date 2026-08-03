@@ -257,7 +257,7 @@ function LeadDetail() {
         </CardContent>
       </Card>
 
-      {isAdmin && (
+      <AdminOnlySection label="Admin access required to assign this lead">
         <Card>
           <CardHeader><CardTitle className="text-base">Assignment</CardTitle></CardHeader>
           <CardContent className="flex flex-wrap items-end gap-3">
@@ -280,7 +280,7 @@ function LeadDetail() {
             </div>
           </CardContent>
         </Card>
-      )}
+      </AdminOnlySection>
 
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={createQuote}><FileSpreadsheet className="h-4 w-4 mr-1" />Create quotation</Button>
