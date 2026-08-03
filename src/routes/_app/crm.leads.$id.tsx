@@ -41,8 +41,7 @@ function LeadDetail() {
   const [lostReason, setLostReason] = useState("");
   const [lostRemarks, setLostRemarks] = useState("");
   const [busy, setBusy] = useState(false);
-  const { isAdmin, userId } = useIsAdmin();
-  const [staff, setStaff] = useState<{ user_id: string; name: string | null; email: string | null }[]>([]);
+  const { isAdmin, userId, staff, nameOf, myName, logActivity, assignLeadTo } = useLeadAssignment();
   const [assignTo, setAssignTo] = useState("");
   const [assignBusy, setAssignBusy] = useState(false);
 
@@ -60,37 +59,11 @@ function LeadDetail() {
   };
   useEffect(() => { load(); }, [id]);
 
-  useEffect(() => {
-    if (!isAdmin) return;
-    (async () => {
-      const { data } = await supabase.from("app_users").select("user_id,name,email").order("name");
-      setStaff(((data || []) as any[]).filter((u) => u.user_id));
-    })();
-  }, [isAdmin]);
-
-  const myName = () => staff.find((s) => s.user_id === userId)?.name || staff.find((s) => s.user_id === userId)?.email || "user";
-  const nameOf = (uid: string | null) => {
-    const s = staff.find((x) => x.user_id === uid);
-    return s?.name || s?.email || "staff member";
-  };
-
-  const logActivity = async (notes: string) => {
-    if (!userId) return;
-    await supabase.from("lead_activities").insert({ lead_id: id, owner_id: userId, kind: "note", notes } as any);
-  };
-
   const assignLead = async () => {
     if (!assignTo) return toast.error("Select a staff member");
     setAssignBusy(true);
-    const { error } = await supabase.from("leads").update({
-      owner_id: assignTo,
-      assigned_to: assignTo,
-      assigned_by: userId,
-      assigned_at: new Date().toISOString(),
-      acknowledged_at: null,
-    } as any).eq("id", id);
-    if (error) { setAssignBusy(false); return toast.error(error.message); }
-    await logActivity(`Assigned to ${nameOf(assignTo)} by ${myName()}`);
+    const { error } = await assignLeadTo(id, assignTo);
+    if (error) { setAssignBusy(false); return toast.error(error); }
     setAssignBusy(false);
     setAssignTo("");
     toast.success("Lead assigned"); load();
@@ -104,7 +77,7 @@ function LeadDetail() {
       acknowledged: true,
     } as any).eq("id", id);
     if (error) { setAssignBusy(false); return toast.error(error.message); }
-    await logActivity(`Acknowledged by ${myName()}`);
+    await logActivity(id, `Acknowledged by ${myName()}`);
     setAssignBusy(false);
     toast.success("Acknowledged"); load();
   };
