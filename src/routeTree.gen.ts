@@ -102,6 +102,7 @@ import { Route as AppSalesPaymentsNewRouteImport } from './routes/_app/sales.pay
 import { Route as AppSalesOrdersIdRouteImport } from './routes/_app/sales.orders.$id'
 import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.invoices.new'
 import { Route as AppSalesInvoicesIdRouteImport } from './routes/_app/sales.invoices.$id'
+import { Route as AppMastersCustomersIdRouteImport } from './routes/_app/masters.customers.$id'
 import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
 import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
 import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
@@ -580,6 +581,11 @@ const AppSalesInvoicesIdRoute = AppSalesInvoicesIdRouteImport.update({
   path: '/invoices/$id',
   getParentRoute: () => AppSalesRoute,
 } as any)
+const AppMastersCustomersIdRoute = AppMastersCustomersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppMastersCustomersRoute,
+} as any)
 const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -703,7 +709,7 @@ export interface FileRoutesByFullPath {
   '/ims/transfers': typeof AppImsTransfersRouteWithChildren
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
-  '/masters/customers': typeof AppMastersCustomersRoute
+  '/masters/customers': typeof AppMastersCustomersRouteWithChildren
   '/masters/products': typeof AppMastersProductsRoute
   '/po/$id': typeof AppPoIdRoute
   '/po/new': typeof AppPoNewRoute
@@ -738,6 +744,7 @@ export interface FileRoutesByFullPath {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/masters/customers/$id': typeof AppMastersCustomersIdRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/sales/orders/$id': typeof AppSalesOrdersIdRoute
@@ -795,7 +802,7 @@ export interface FileRoutesByTo {
   '/ims/transactions': typeof AppImsTransactionsRoute
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
-  '/masters/customers': typeof AppMastersCustomersRoute
+  '/masters/customers': typeof AppMastersCustomersRouteWithChildren
   '/masters/products': typeof AppMastersProductsRoute
   '/po/$id': typeof AppPoIdRoute
   '/po/new': typeof AppPoNewRoute
@@ -830,6 +837,7 @@ export interface FileRoutesByTo {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/masters/customers/$id': typeof AppMastersCustomersIdRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/sales/orders/$id': typeof AppSalesOrdersIdRoute
@@ -904,7 +912,7 @@ export interface FileRoutesById {
   '/_app/ims/transfers': typeof AppImsTransfersRouteWithChildren
   '/_app/indent/$id': typeof AppIndentIdRoute
   '/_app/indent/new': typeof AppIndentNewRoute
-  '/_app/masters/customers': typeof AppMastersCustomersRoute
+  '/_app/masters/customers': typeof AppMastersCustomersRouteWithChildren
   '/_app/masters/products': typeof AppMastersProductsRoute
   '/_app/po/$id': typeof AppPoIdRoute
   '/_app/po/new': typeof AppPoNewRoute
@@ -939,6 +947,7 @@ export interface FileRoutesById {
   '/_app/grn/oem/new': typeof AppGrnOemNewRoute
   '/_app/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/_app/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/_app/masters/customers/$id': typeof AppMastersCustomersIdRoute
   '/_app/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/_app/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/_app/sales/orders/$id': typeof AppSalesOrdersIdRoute
@@ -1048,6 +1057,7 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/masters/customers/$id'
     | '/sales/invoices/$id'
     | '/sales/invoices/new'
     | '/sales/orders/$id'
@@ -1140,6 +1150,7 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/masters/customers/$id'
     | '/sales/invoices/$id'
     | '/sales/invoices/new'
     | '/sales/orders/$id'
@@ -1248,6 +1259,7 @@ export interface FileRouteTypes {
     | '/_app/grn/oem/new'
     | '/_app/ims/transfers/$id'
     | '/_app/ims/transfers/new'
+    | '/_app/masters/customers/$id'
     | '/_app/sales/invoices/$id'
     | '/_app/sales/invoices/new'
     | '/_app/sales/orders/$id'
@@ -1924,6 +1936,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSalesInvoicesIdRouteImport
       parentRoute: typeof AppSalesRoute
     }
+    '/_app/masters/customers/$id': {
+      id: '/_app/masters/customers/$id'
+      path: '/$id'
+      fullPath: '/masters/customers/$id'
+      preLoaderRoute: typeof AppMastersCustomersIdRouteImport
+      parentRoute: typeof AppMastersCustomersRoute
+    }
     '/_app/ims/transfers/new': {
       id: '/_app/ims/transfers/new'
       path: '/new'
@@ -2280,13 +2299,24 @@ const AppIndentRouteWithChildren = AppIndentRoute._addFileChildren(
   AppIndentRouteChildren,
 )
 
+interface AppMastersCustomersRouteChildren {
+  AppMastersCustomersIdRoute: typeof AppMastersCustomersIdRoute
+}
+
+const AppMastersCustomersRouteChildren: AppMastersCustomersRouteChildren = {
+  AppMastersCustomersIdRoute: AppMastersCustomersIdRoute,
+}
+
+const AppMastersCustomersRouteWithChildren =
+  AppMastersCustomersRoute._addFileChildren(AppMastersCustomersRouteChildren)
+
 interface AppMastersRouteChildren {
-  AppMastersCustomersRoute: typeof AppMastersCustomersRoute
+  AppMastersCustomersRoute: typeof AppMastersCustomersRouteWithChildren
   AppMastersProductsRoute: typeof AppMastersProductsRoute
 }
 
 const AppMastersRouteChildren: AppMastersRouteChildren = {
-  AppMastersCustomersRoute: AppMastersCustomersRoute,
+  AppMastersCustomersRoute: AppMastersCustomersRouteWithChildren,
   AppMastersProductsRoute: AppMastersProductsRoute,
 }
 
