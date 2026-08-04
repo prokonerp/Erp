@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -172,8 +172,8 @@ function CustomerDetailPage() {
                       const underAmc = amcSerials.has(r.serial_number.toUpperCase());
                       const isOpen = openSerial === r.serial_number;
                       return (
-                        <>
-                          <TableRow key={r.id}>
+                        <Fragment key={r.id}>
+                          <TableRow>
                             <TableCell className="text-sm">{productLabel(r.product_id)}</TableCell>
                             <TableCell>
                               <button type="button" onClick={() => toggleSerial(r.serial_number)}
@@ -195,13 +195,13 @@ function CustomerDetailPage() {
                             </TableCell>
                           </TableRow>
                           {isOpen && (
-                            <TableRow key={`${r.id}-t`} className="bg-muted/30">
+                            <TableRow className="bg-muted/30">
                               <TableCell colSpan={5}>
                                 <TicketList rows={tickets[r.serial_number]} />
                               </TableCell>
                             </TableRow>
                           )}
-                        </>
+                        </Fragment>
                       );
                     })}
                   </TableBody>
