@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,7 +150,11 @@ export function CustomerMasterPage() {
             <TableBody>
               {filtered.map((c) => (
                 <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.company}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link to="/masters/customers/$id" params={{ id: c.id }} className="hover:underline hover:text-primary">
+                      {c.company}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-xs">{(c as any).customer_type || "—"}</TableCell>
                   <TableCell>{c.contact_name || "—"}</TableCell>
                   <TableCell>{c.phone || "—"}</TableCell>
