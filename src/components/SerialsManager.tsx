@@ -399,15 +399,37 @@ export function SerialsManager({ product }: { product: Product }) {
               <Label>Installation Date</Label>
               <Input type="date" value={editing.installation_date || ""} onChange={(e) => setEditing({ ...editing, installation_date: e.target.value })} />
             </div>
+            <div>
+              <Label>Site</Label>
+              <Select
+                value={editing.site_id || "__none"}
+                onValueChange={(v) => setEditing({ ...editing, site_id: v === "__none" ? null : v })}
+                disabled={!editing.customer_id}
+              >
+                <SelectTrigger><SelectValue placeholder={editing.customer_id ? "General / Unspecified" : "Select a customer first"} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">General / Unspecified</SelectItem>
+                  {sites.map((s) => <SelectItem key={s.id} value={s.id}>{s.site_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end gap-2 pb-2">
+              <Checkbox
+                id="warranty-override"
+                checked={!!editing.warranty_override}
+                onCheckedChange={(v) => setEditing({ ...editing, warranty_override: !!v })}
+              />
+              <Label htmlFor="warranty-override" className="text-sm font-normal">Override warranty from Product Master</Label>
+            </div>
             {product.warranty_applicable && (
               <>
                 <div>
-                  <Label>Warranty Start {!product.warranty_manual_override && <span className="text-xs text-muted-foreground">(auto)</span>}</Label>
-                  <Input type="date" value={editing.warranty_start_date || ""} disabled={!product.warranty_manual_override} onChange={(e) => setEditing({ ...editing, warranty_start_date: e.target.value })} />
+                  <Label>Warranty Start {!editing.warranty_override && <span className="text-xs text-muted-foreground">(auto)</span>}</Label>
+                  <Input type="date" value={editing.warranty_start_date || ""} disabled={!editing.warranty_override && !product.warranty_manual_override} onChange={(e) => setEditing({ ...editing, warranty_start_date: e.target.value })} />
                 </div>
                 <div>
-                  <Label>Warranty End {!product.warranty_manual_override && <span className="text-xs text-muted-foreground">(auto)</span>}</Label>
-                  <Input type="date" value={editing.warranty_end_date || ""} disabled={!product.warranty_manual_override} onChange={(e) => setEditing({ ...editing, warranty_end_date: e.target.value })} />
+                  <Label>Warranty End {!editing.warranty_override && <span className="text-xs text-muted-foreground">(auto)</span>}</Label>
+                  <Input type="date" value={editing.warranty_end_date || ""} disabled={!editing.warranty_override && !product.warranty_manual_override} onChange={(e) => setEditing({ ...editing, warranty_end_date: e.target.value })} />
                 </div>
               </>
             )}
