@@ -73,7 +73,6 @@ import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
 import { Route as AppGrnIdRouteImport } from './routes/_app/grn.$id'
 import { Route as AppGatepassNewRouteImport } from './routes/_app/gatepass.new'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
-import { Route as AppCustomersIdRouteImport } from './routes/_app/customers.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
 import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
@@ -436,11 +435,6 @@ const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   path: '/gatepass/$id',
   getParentRoute: () => AppRoute,
 } as any)
-const AppCustomersIdRoute = AppCustomersIdRouteImport.update({
-  id: '/customers/$id',
-  path: '/customers/$id',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppCrmSettingsRoute = AppCrmSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -689,7 +683,6 @@ export interface FileRoutesByFullPath {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
-  '/customers/$id': typeof AppCustomersIdRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
@@ -786,7 +779,6 @@ export interface FileRoutesByTo {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
-  '/customers/$id': typeof AppCustomersIdRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
@@ -892,7 +884,6 @@ export interface FileRoutesById {
   '/_app/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
-  '/_app/customers/$id': typeof AppCustomersIdRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/gatepass/new': typeof AppGatepassNewRoute
   '/_app/grn/$id': typeof AppGrnIdRoute
@@ -1002,7 +993,6 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
-    | '/customers/$id'
     | '/gatepass/$id'
     | '/gatepass/new'
     | '/grn/$id'
@@ -1099,7 +1089,6 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
-    | '/customers/$id'
     | '/gatepass/$id'
     | '/gatepass/new'
     | '/grn/$id'
@@ -1204,7 +1193,6 @@ export interface FileRouteTypes {
     | '/_app/crm/leads'
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
-    | '/_app/customers/$id'
     | '/_app/gatepass/$id'
     | '/_app/gatepass/new'
     | '/_app/grn/$id'
@@ -1731,13 +1719,6 @@ declare module '@tanstack/react-router' {
       path: '/gatepass/$id'
       fullPath: '/gatepass/$id'
       preLoaderRoute: typeof AppGatepassIdRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/customers/$id': {
-      id: '/_app/customers/$id'
-      path: '/customers/$id'
-      fullPath: '/customers/$id'
-      preLoaderRoute: typeof AppCustomersIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/crm/settings': {
@@ -2411,7 +2392,6 @@ interface AppRouteChildren {
   AppReportsRoute: typeof AppReportsRoute
   AppSalesRoute: typeof AppSalesRouteWithChildren
   AppTicketsRoute: typeof AppTicketsRouteWithChildren
-  AppCustomersIdRoute: typeof AppCustomersIdRoute
   AppGatepassIdRoute: typeof AppGatepassIdRoute
   AppGatepassNewRoute: typeof AppGatepassNewRoute
   AppGatepassIndexRoute: typeof AppGatepassIndexRoute
@@ -2435,7 +2415,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppReportsRoute: AppReportsRoute,
   AppSalesRoute: AppSalesRouteWithChildren,
   AppTicketsRoute: AppTicketsRouteWithChildren,
-  AppCustomersIdRoute: AppCustomersIdRoute,
   AppGatepassIdRoute: AppGatepassIdRoute,
   AppGatepassNewRoute: AppGatepassNewRoute,
   AppGatepassIndexRoute: AppGatepassIndexRoute,
