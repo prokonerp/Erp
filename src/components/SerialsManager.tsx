@@ -6,9 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, Save, X, Pencil, Upload, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import { upperTrim } from "@/lib/text";
+import { fetchCustomerSites, type CustomerSite } from "@/lib/customerSites";
 
 type Product = {
   id: string;
@@ -38,6 +40,8 @@ type Serial = {
   status: string;
   notes: string | null;
   warehouse_id?: string | null;
+  site_id?: string | null;
+  warranty_override?: boolean;
 };
 
 const STATUSES = ["In Stock", "Sold", "Installed", "Under Service", "Replaced", "Scrapped"] as const;
@@ -46,7 +50,7 @@ const empty = (product_id: string): Partial<Serial> => ({
   product_id, serial_number: "", purchase_invoice_no: "", purchase_date: null,
   supplier_id: null, sale_invoice_no: "", customer_id: null, installation_date: null,
   warranty_start_date: null, warranty_end_date: null, status: "In Stock", notes: "",
-  warehouse_id: null,
+  warehouse_id: null, site_id: null, warranty_override: false,
 });
 
 function addDuration(start: string, qty: number, unit: string): string {
@@ -62,6 +66,7 @@ export function SerialsManager({ product }: { product: Product }) {
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([]);
   const [customers, setCustomers] = useState<{ id: string; company: string | null; contact_name: string | null }[]>([]);
   const [warehouses, setWarehouses] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [sites, setSites] = useState<CustomerSite[]>([]);
   const [editing, setEditing] = useState<Partial<Serial> | null>(null);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("__all");
@@ -87,6 +92,15 @@ export function SerialsManager({ product }: { product: Product }) {
   };
   useEffect(() => { load(); }, [product.id]);
 
+  // Sites of the customer selected on the serial being edited.
+  useEffect(() => {
+    const cid = editing?.customer_id;
+    if (!cid) { setSites([]); return; }
+    let alive = true;
+    fetchCustomerSites(cid).then((s) => { if (alive) setSites(s); }).catch(() => { if (alive) setSites([]); });
+    return () => { alive = false; };
+  }, [editing?.customer_id]);
+
   const filtered = useMemo(() => rows.filter((r) => {
     const s = q.toLowerCase();
     const matchQ = !s || [r.serial_number, r.purchase_invoice_no, r.sale_invoice_no].some((v) => (v || "").toLowerCase().includes(s));
@@ -95,6 +109,8 @@ export function SerialsManager({ product }: { product: Product }) {
   }), [rows, q, statusFilter]);
 
   function recalcWarranty(s: Partial<Serial>): Partial<Serial> {
+    // Product Master drives warranty unless this serial overrides it.
+    if (s.warranty_override) return s;
     if (!product.warranty_applicable || !product.warranty_duration) return s;
     const startFrom = product.warranty_start_from || "Invoice Date";
     let base: string | null | undefined;
@@ -125,6 +141,8 @@ export function SerialsManager({ product }: { product: Product }) {
       status: calc.status || "In Stock",
       notes: calc.notes || null,
       warehouse_id: calc.warehouse_id || null,
+      site_id: calc.site_id || null,
+      warranty_override: !!calc.warranty_override,
     };
     const op = editing.id
       ? supabase.from("serials").update(payload).eq("id", editing.id)
