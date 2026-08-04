@@ -13,7 +13,7 @@ import { CustomerFormDialog } from "@/components/CustomerForm";
 import { fetchCustomerSites, warrantyBadgeClass, warrantyLabel, warrantyState, type CustomerSite } from "@/lib/customerSites";
 import { fmtDate } from "@/lib/amc";
 
-export const Route = createFileRoute("/_app/masters/customers_/$id")({
+export const Route = createFileRoute("/_app/customers/$id")({
   component: CustomerDetailPage,
   head: () => ({
     meta: [

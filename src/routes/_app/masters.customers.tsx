@@ -151,7 +151,7 @@ export function CustomerMasterPage() {
               {filtered.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">
-                    <Link to="/masters/customers/$id" params={{ id: c.id }} className="hover:underline hover:text-primary">
+                    <Link to="/customers/$id" params={{ id: c.id }} className="hover:underline hover:text-primary">
                       {c.company}
                     </Link>
                   </TableCell>
