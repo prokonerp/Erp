@@ -17,6 +17,7 @@ import { type Customer } from "@/lib/crm";
 import { INDIAN_STATES, isValidGSTIN, stateFromGSTIN } from "@/lib/india";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { cn } from "@/lib/utils";
+import { CustomerSitesTab } from "@/components/CustomerSitesTab";
 
 export const GST_TREATMENTS = ["Regular", "Composition", "Unregistered", "Consumer"] as const;
 export type GstTreatment = typeof GST_TREATMENTS[number];
@@ -284,11 +285,12 @@ export function StateCombobox({ value, onChange }: { value: string; onChange: (v
 }
 
 /** The full Customer Master field set (tabs). Controlled. */
-export function CustomerFormFields({ form, setForm, tab, setTab }: {
+export function CustomerFormFields({ form, setForm, tab, setTab, customerId }: {
   form: CustomerFormState;
   setForm: React.Dispatch<React.SetStateAction<CustomerFormState>>;
   tab: string;
   setTab: (t: string) => void;
+  customerId?: string | null;
 }) {
   const [emailError, setEmailError] = useState("");
 
@@ -317,6 +319,7 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
         <TabsTrigger value="gst">GST / PAN</TabsTrigger>
         <TabsTrigger value="address">Address</TabsTrigger>
         <TabsTrigger value="contacts">Contacts ({form.contacts.length})</TabsTrigger>
+        <TabsTrigger value="sites">Sites</TabsTrigger>
       </TabsList>
 
       <TabsContent value="basic" className="mt-4 space-y-4">
@@ -477,6 +480,10 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
           </div>
         ))}
       </TabsContent>
+
+      <TabsContent value="sites" className="mt-4">
+        <CustomerSitesTab customerId={customerId} />
+      </TabsContent>
     </Tabs>
   );
 }
@@ -538,7 +545,7 @@ export function CustomerFormDialog({
           <DialogTitle className="text-xl">{editing ? "Edit Customer" : "New Customer"}</DialogTitle>
         </DialogHeader>
 
-        <CustomerFormFields form={form} setForm={setForm} tab={tab} setTab={setTab} />
+        <CustomerFormFields form={form} setForm={setForm} tab={tab} setTab={setTab} customerId={editing?.id ?? null} />
 
         <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30 sticky bottom-0">
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
