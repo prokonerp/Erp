@@ -73,6 +73,7 @@ import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
 import { Route as AppGrnIdRouteImport } from './routes/_app/grn.$id'
 import { Route as AppGatepassNewRouteImport } from './routes/_app/gatepass.new'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
+import { Route as AppCustomersIdRouteImport } from './routes/_app/customers.$id'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
 import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
@@ -102,7 +103,6 @@ import { Route as AppSalesPaymentsNewRouteImport } from './routes/_app/sales.pay
 import { Route as AppSalesOrdersIdRouteImport } from './routes/_app/sales.orders.$id'
 import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.invoices.new'
 import { Route as AppSalesInvoicesIdRouteImport } from './routes/_app/sales.invoices.$id'
-import { Route as AppMastersCustomersIdRouteImport } from './routes/_app/masters.customers_.$id'
 import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
 import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
 import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
@@ -436,6 +436,11 @@ const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   path: '/gatepass/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCustomersIdRoute = AppCustomersIdRouteImport.update({
+  id: '/customers/$id',
+  path: '/customers/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCrmSettingsRoute = AppCrmSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -581,11 +586,6 @@ const AppSalesInvoicesIdRoute = AppSalesInvoicesIdRouteImport.update({
   path: '/invoices/$id',
   getParentRoute: () => AppSalesRoute,
 } as any)
-const AppMastersCustomersIdRoute = AppMastersCustomersIdRouteImport.update({
-  id: '/customers_/$id',
-  path: '/customers/$id',
-  getParentRoute: () => AppMastersRoute,
-} as any)
 const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -689,6 +689,7 @@ export interface FileRoutesByFullPath {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
+  '/customers/$id': typeof AppCustomersIdRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
@@ -744,7 +745,6 @@ export interface FileRoutesByFullPath {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
-  '/masters/customers/$id': typeof AppMastersCustomersIdRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/sales/orders/$id': typeof AppSalesOrdersIdRoute
@@ -786,6 +786,7 @@ export interface FileRoutesByTo {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
+  '/customers/$id': typeof AppCustomersIdRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
@@ -837,7 +838,6 @@ export interface FileRoutesByTo {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
-  '/masters/customers/$id': typeof AppMastersCustomersIdRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/sales/orders/$id': typeof AppSalesOrdersIdRoute
@@ -892,6 +892,7 @@ export interface FileRoutesById {
   '/_app/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
+  '/_app/customers/$id': typeof AppCustomersIdRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/gatepass/new': typeof AppGatepassNewRoute
   '/_app/grn/$id': typeof AppGrnIdRoute
@@ -947,7 +948,6 @@ export interface FileRoutesById {
   '/_app/grn/oem/new': typeof AppGrnOemNewRoute
   '/_app/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/_app/ims/transfers/new': typeof AppImsTransfersNewRoute
-  '/_app/masters/customers_/$id': typeof AppMastersCustomersIdRoute
   '/_app/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/_app/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/_app/sales/orders/$id': typeof AppSalesOrdersIdRoute
@@ -1002,6 +1002,7 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
+    | '/customers/$id'
     | '/gatepass/$id'
     | '/gatepass/new'
     | '/grn/$id'
@@ -1057,7 +1058,6 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
-    | '/masters/customers/$id'
     | '/sales/invoices/$id'
     | '/sales/invoices/new'
     | '/sales/orders/$id'
@@ -1099,6 +1099,7 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
+    | '/customers/$id'
     | '/gatepass/$id'
     | '/gatepass/new'
     | '/grn/$id'
@@ -1150,7 +1151,6 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
-    | '/masters/customers/$id'
     | '/sales/invoices/$id'
     | '/sales/invoices/new'
     | '/sales/orders/$id'
@@ -1204,6 +1204,7 @@ export interface FileRouteTypes {
     | '/_app/crm/leads'
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
+    | '/_app/customers/$id'
     | '/_app/gatepass/$id'
     | '/_app/gatepass/new'
     | '/_app/grn/$id'
@@ -1259,7 +1260,6 @@ export interface FileRouteTypes {
     | '/_app/grn/oem/new'
     | '/_app/ims/transfers/$id'
     | '/_app/ims/transfers/new'
-    | '/_app/masters/customers_/$id'
     | '/_app/sales/invoices/$id'
     | '/_app/sales/invoices/new'
     | '/_app/sales/orders/$id'
@@ -1733,6 +1733,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGatepassIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/customers/$id': {
+      id: '/_app/customers/$id'
+      path: '/customers/$id'
+      fullPath: '/customers/$id'
+      preLoaderRoute: typeof AppCustomersIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/crm/settings': {
       id: '/_app/crm/settings'
       path: '/settings'
@@ -1935,13 +1942,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/sales/invoices/$id'
       preLoaderRoute: typeof AppSalesInvoicesIdRouteImport
       parentRoute: typeof AppSalesRoute
-    }
-    '/_app/masters/customers_/$id': {
-      id: '/_app/masters/customers_/$id'
-      path: '/customers/$id'
-      fullPath: '/masters/customers/$id'
-      preLoaderRoute: typeof AppMastersCustomersIdRouteImport
-      parentRoute: typeof AppMastersRoute
     }
     '/_app/ims/transfers/new': {
       id: '/_app/ims/transfers/new'
@@ -2302,13 +2302,11 @@ const AppIndentRouteWithChildren = AppIndentRoute._addFileChildren(
 interface AppMastersRouteChildren {
   AppMastersCustomersRoute: typeof AppMastersCustomersRoute
   AppMastersProductsRoute: typeof AppMastersProductsRoute
-  AppMastersCustomersIdRoute: typeof AppMastersCustomersIdRoute
 }
 
 const AppMastersRouteChildren: AppMastersRouteChildren = {
   AppMastersCustomersRoute: AppMastersCustomersRoute,
   AppMastersProductsRoute: AppMastersProductsRoute,
-  AppMastersCustomersIdRoute: AppMastersCustomersIdRoute,
 }
 
 const AppMastersRouteWithChildren = AppMastersRoute._addFileChildren(
@@ -2413,6 +2411,7 @@ interface AppRouteChildren {
   AppReportsRoute: typeof AppReportsRoute
   AppSalesRoute: typeof AppSalesRouteWithChildren
   AppTicketsRoute: typeof AppTicketsRouteWithChildren
+  AppCustomersIdRoute: typeof AppCustomersIdRoute
   AppGatepassIdRoute: typeof AppGatepassIdRoute
   AppGatepassNewRoute: typeof AppGatepassNewRoute
   AppGatepassIndexRoute: typeof AppGatepassIndexRoute
@@ -2436,6 +2435,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppReportsRoute: AppReportsRoute,
   AppSalesRoute: AppSalesRouteWithChildren,
   AppTicketsRoute: AppTicketsRouteWithChildren,
+  AppCustomersIdRoute: AppCustomersIdRoute,
   AppGatepassIdRoute: AppGatepassIdRoute,
   AppGatepassNewRoute: AppGatepassNewRoute,
   AppGatepassIndexRoute: AppGatepassIndexRoute,
