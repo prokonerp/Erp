@@ -665,6 +665,41 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_sites: {
+        Row: {
+          address: string | null
+          created_at: string
+          customer_id: string
+          id: string
+          site_name: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          customer_id: string
+          id?: string
+          site_name: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          customer_id?: string
+          id?: string
+          site_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_sites_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
@@ -4085,11 +4120,13 @@ export type Database = {
           purchase_invoice_no: string | null
           sale_invoice_no: string | null
           serial_number: string
+          site_id: string | null
           status: string
           supplier_id: string | null
           updated_at: string
           warehouse_id: string | null
           warranty_end_date: string | null
+          warranty_override: boolean
           warranty_start_date: string | null
         }
         Insert: {
@@ -4103,11 +4140,13 @@ export type Database = {
           purchase_invoice_no?: string | null
           sale_invoice_no?: string | null
           serial_number: string
+          site_id?: string | null
           status?: string
           supplier_id?: string | null
           updated_at?: string
           warehouse_id?: string | null
           warranty_end_date?: string | null
+          warranty_override?: boolean
           warranty_start_date?: string | null
         }
         Update: {
@@ -4121,11 +4160,13 @@ export type Database = {
           purchase_invoice_no?: string | null
           sale_invoice_no?: string | null
           serial_number?: string
+          site_id?: string | null
           status?: string
           supplier_id?: string | null
           updated_at?: string
           warehouse_id?: string | null
           warranty_end_date?: string | null
+          warranty_override?: boolean
           warranty_start_date?: string | null
         }
         Relationships: [
@@ -4141,6 +4182,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "serials_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "customer_sites"
             referencedColumns: ["id"]
           },
           {
