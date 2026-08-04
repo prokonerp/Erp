@@ -421,7 +421,7 @@ export function SerialsManager({ product }: { product: Product }) {
               />
               <Label htmlFor="warranty-override" className="text-sm font-normal">Override warranty from Product Master</Label>
             </div>
-            {product.warranty_applicable && (
+            {(product.warranty_applicable || editing.warranty_override) && (
               <>
                 <div>
                   <Label>Warranty Start {!editing.warranty_override && <span className="text-xs text-muted-foreground">(auto)</span>}</Label>
