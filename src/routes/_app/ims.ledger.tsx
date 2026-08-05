@@ -277,8 +277,7 @@ function Ledger() {
               ) : filtered.length === 0 ? (
                 <tr><td className="p-4 text-muted-foreground" colSpan={12}>No transactions match the current filters.</td></tr>
               ) : filtered.map((r) => {
-                const item = r.stock_item_id ? stock.find((s) => s.id === r.stock_item_id) : null;
-                if (status !== "all" && item?.stock_status !== status) return null;
+                const item = r.stock_item_id ? stockById.get(r.stock_item_id) : null;
                 const counter = r.direction === "in"
                   ? (r.from_party || whName(r.from_warehouse_id))
                   : (r.to_party || whName(r.to_warehouse_id));
