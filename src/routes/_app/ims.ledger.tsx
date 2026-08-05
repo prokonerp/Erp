@@ -195,7 +195,7 @@ function Ledger() {
       </Card>
 
       <Card>
-        <CardContent className="grid grid-cols-1 md:grid-cols-6 gap-3 py-3">
+        <CardContent className="grid grid-cols-1 md:grid-cols-7 gap-3 py-3">
           <div>
             <Label className="text-xs">Warehouse</Label>
             <Select value={warehouseId} onValueChange={setWarehouseId}>
@@ -223,6 +223,17 @@ function Ledger() {
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 {Object.entries(STOCK_STATUS_LABEL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Stock Type</Label>
+            <Select value={stockType} onValueChange={setStockType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="good">Good</SelectItem>
+                <SelectItem value="defective">Defective</SelectItem>
               </SelectContent>
             </Select>
           </div>
