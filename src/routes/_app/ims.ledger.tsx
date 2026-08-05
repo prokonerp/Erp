@@ -181,6 +181,8 @@ function Ledger() {
 
   return (
     <div className="space-y-4">
+      <DefectiveTagQuickAction warehouseId={warehouseId} warehouses={warehouses} />
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">
@@ -359,7 +361,6 @@ function Ledger() {
         </DialogContent>
       </Dialog>
 
-      <DefectiveTagQuickAction warehouseId={warehouseId} warehouses={warehouses} />
     </div>
   );
 }
