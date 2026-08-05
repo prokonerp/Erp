@@ -1,19 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowDownCircle, ArrowUpCircle, History, RefreshCw } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
+import { ArrowDownCircle, ArrowUpCircle, History, RefreshCw, Tag as TagIcon, Printer, Download } from "lucide-react";
 import {
   listStock, listTransactions, listWarehouses,
   TXN_TYPE_LABEL, STOCK_STATUS_LABEL,
   type StockItem, type Transaction, type WarehouseLite, type TxnType,
 } from "@/lib/ims";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
+import { DefectiveTagSheet } from "@/components/DefectiveTagSheet";
+import { printMultiPageElement, saveMultiPageElementAsPdf } from "@/lib/docPdf";
+import { getCurrentUserName } from "@/lib/currentUser";
+import {
+  fmtDate, generateTags, listDefectiveInRecords, markTagsPrinted,
+  type DefectiveInRecord, type DefectiveTag,
+} from "@/lib/defectiveTags";
 
 export const Route = createFileRoute("/_app/ims/ledger")({
   component: Ledger,
@@ -349,7 +358,176 @@ function Ledger() {
           )}
         </DialogContent>
       </Dialog>
+
+      <DefectiveTagQuickAction warehouseId={warehouseId} warehouses={warehouses} />
     </div>
+  );
+}
+
+/** Multi-select defective stock in the ledger and generate/print defective tags inline. */
+function DefectiveTagQuickAction({
+  warehouseId, warehouses,
+}: { warehouseId: string; warehouses: WarehouseLite[] }) {
+  const [rows, setRows] = useState<DefectiveInRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [q, setQ] = useState("");
+  const [showGenerated, setShowGenerated] = useState(false);
+  const [sel, setSel] = useState<Record<string, boolean>>({});
+  const [preview, setPreview] = useState<DefectiveTag[] | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  const whName = useMemo(() => {
+    const m = new Map(warehouses.map((w) => [w.id, w.name]));
+    return (id: string | null) => (id ? m.get(id) || "—" : "—");
+  }, [warehouses]);
+
+  async function load() {
+    setLoading(true);
+    try {
+      setRows(await listDefectiveInRecords());
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to load defective stock");
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  const filtered = useMemo(() => {
+    const s = q.toLowerCase().trim();
+    return rows.filter((r) => {
+      if (warehouseId !== "all" && r.warehouse_id !== warehouseId) return false;
+      if (!showGenerated && r.tag_generated) return false;
+      if (!s) return true;
+      return [r.txn_no, r.service_request_no, r.oracle_order_no, r.model_no, r.part_name, r.serial_no, r.customer_name, r.asp_code, r.engineer_name, r.reason]
+        .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
+    });
+  }, [rows, warehouseId, showGenerated, q]);
+
+  const selectable = filtered.filter((r) => !r.tag_generated);
+  const selectedRows = selectable.filter((r) => sel[r.key]);
+
+  async function createTags() {
+    if (!selectedRows.length) return;
+    setSaving(true);
+    try {
+      const created = await generateTags(selectedRows, await getCurrentUserName());
+      toast.success(`${created.length} defective tag(s) generated`);
+      setSel({});
+      setPreview(created);
+      load();
+    } catch (e: any) {
+      toast.error(e?.message?.includes("duplicate") ? "A tag already exists for one of the selected items" : e?.message || "Tag generation failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function doPrint() {
+    if (!sheetRef.current || !preview) return;
+    await printMultiPageElement(sheetRef.current, "defective-tags");
+    await markTagsPrinted(preview.map((t) => t.id), await getCurrentUserName());
+  }
+  async function doDownload() {
+    if (!sheetRef.current || !preview) return;
+    try { await saveMultiPageElementAsPdf(sheetRef.current, "defective-tags.pdf"); }
+    catch (e: any) { toast.error(e?.message || "Download failed"); }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
+          <span className="flex items-center gap-2"><TagIcon className="h-4 w-4" /> Defective Stock — Quick Tag</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{selectedRows.length} selected</span>
+            <Button size="sm" disabled={!selectedRows.length || saving} onClick={createTags}>
+              <TagIcon className="h-3.5 w-3.5 mr-1" />
+              Create Defective Tag{selectedRows.length > 1 ? "s" : ""}
+            </Button>
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Input className="flex-1 min-w-[220px]" placeholder="Search model / serial / customer / SR / Oracle…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={showGenerated} onCheckedChange={(v) => setShowGenerated(!!v)} />
+            Show already tagged
+          </label>
+        </div>
+        <div className="border rounded-md overflow-auto max-h-[360px]">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/50 sticky top-0 z-10">
+              <tr className="text-left">
+                <th className="p-2 w-8">
+                  <Checkbox
+                    checked={selectable.length > 0 && selectedRows.length === selectable.length}
+                    onCheckedChange={(v) => setSel(v ? Object.fromEntries(selectable.map((r) => [r.key, true])) : {})}
+                  />
+                </th>
+                <th className="p-2">Stock IN No</th>
+                <th className="p-2">Date</th>
+                <th className="p-2">Model · Serial</th>
+                <th className="p-2">Warehouse</th>
+                <th className="p-2">Customer</th>
+                <th className="p-2">SR No</th>
+                <th className="p-2">Oracle</th>
+                <th className="p-2">Tag</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td className="p-4 text-muted-foreground" colSpan={9}>Loading defective stock…</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td className="p-4 text-muted-foreground" colSpan={9}>No defective stock for this selection.</td></tr>
+              ) : filtered.map((r) => (
+                <tr key={r.key} className="border-t align-top hover:bg-muted/30">
+                  <td className="p-2">
+                    <Checkbox
+                      disabled={r.tag_generated}
+                      checked={!!sel[r.key]}
+                      onCheckedChange={(v) => setSel((s) => ({ ...s, [r.key]: !!v }))}
+                    />
+                  </td>
+                  <td className="p-2 font-mono">{r.txn_no || "—"}</td>
+                  <td className="p-2 whitespace-nowrap">{fmtDate(r.txn_date)}</td>
+                  <td className="p-2">
+                    <div>{r.model_no || r.part_name || "—"}</div>
+                    <div className="font-mono text-muted-foreground">{r.serial_no || "—"}</div>
+                  </td>
+                  <td className="p-2">{whName(r.warehouse_id)}</td>
+                  <td className="p-2">{r.customer_name || "—"}</td>
+                  <td className="p-2">{r.service_request_no || "—"}</td>
+                  <td className="p-2">{r.oracle_order_no || "—"}</td>
+                  <td className="p-2">
+                    {r.tag_generated
+                      ? <Badge variant="secondary">{r.tag_no || "Generated"}</Badge>
+                      : <Badge variant="outline">Not Tagged</Badge>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="max-w-[900px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Defective Tag Preview — {preview?.length || 0} tag(s), A4 portrait, 4 per page</DialogTitle>
+          </DialogHeader>
+          <div className="bg-muted/40 p-4 overflow-x-auto">
+            {preview && <DefectiveTagSheet ref={sheetRef} tags={preview} />}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={doDownload}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
+            <Button onClick={doPrint}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
 

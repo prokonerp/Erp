@@ -186,7 +186,7 @@ function DefectiveTagsPage() {
       <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
         <DialogContent className="max-w-[900px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Defective Tag Preview — {preview?.length || 0} tag(s), A4 portrait, 2 per page</DialogTitle>
+            <DialogTitle>Defective Tag Preview — {preview?.length || 0} tag(s), A4 portrait, 4 per page</DialogTitle>
           </DialogHeader>
           <div className="bg-muted/40 p-4 overflow-x-auto">
             {preview && <DefectiveTagSheet ref={sheetRef} tags={preview} />}
