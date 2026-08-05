@@ -33,6 +33,14 @@ type LedgerRow = Transaction & {
 const IN_TYPES: TxnType[] = ["good_in", "defective_in", "transfer_in", "oem_replacement_receipt"];
 const OUT_TYPES: TxnType[] = ["good_out", "defective_out", "transfer_out", "oem_return"];
 
+/** Stock type a transaction moves — from the linked stock item, else inferred from txn type. */
+function txnStockType(t: Transaction, item?: StockItem | null): "good" | "defective" | null {
+  if (item) return item.stock_type;
+  if (t.txn_type === "defective_in" || t.txn_type === "defective_out" || t.txn_type === "oem_return") return "defective";
+  if (t.txn_type === "good_in" || t.txn_type === "good_out" || t.txn_type === "oem_replacement_receipt") return "good";
+  return null;
+}
+
 function classifyTxn(t: Transaction): { wh: string | null; dir: Direction } {
   if (IN_TYPES.includes(t.txn_type)) return { wh: t.to_warehouse_id, dir: "in" };
   if (OUT_TYPES.includes(t.txn_type)) return { wh: t.from_warehouse_id, dir: "out" };
@@ -51,6 +59,7 @@ function Ledger() {
   const [warehouseId, setWarehouseId] = useState<string>("all");
   const [txnType, setTxnType] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
+  const [stockType, setStockType] = useState<string>("all");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [q, setQ] = useState("");
@@ -64,6 +73,8 @@ function Ledger() {
     } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
+
+  const stockById = useMemo(() => new Map(stock.map((s) => [s.id, s])), [stock]);
 
   const whName = useMemo(() => {
     const m = new Map(warehouses.map((w) => [w.id, w]));
@@ -100,6 +111,9 @@ function Ledger() {
     return ledger.filter((r) => {
       if (warehouseId !== "all" && r.warehouse_id !== warehouseId) return false;
       if (txnType !== "all" && r.txn_type !== txnType) return false;
+      const item = r.stock_item_id ? stockById.get(r.stock_item_id) : null;
+      if (stockType !== "all" && txnStockType(r, item) !== stockType) return false;
+      if (status !== "all" && item?.stock_status !== status) return false;
       const ts = new Date(r.txn_date).getTime();
       if (ts < fromTs || ts > toTs) return false;
       if (!s) return true;
@@ -107,15 +121,24 @@ function Ledger() {
         r.reference, r.notes, r.indent_id, r.oem_case_id, r.from_party, r.to_party]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
     });
-  }, [ledger, warehouseId, txnType, from, to, q]);
+  }, [ledger, warehouseId, txnType, stockType, status, stockById, from, to, q]);
 
-  const scopedStock = useMemo(() => (
-    warehouseId === "all" ? stock : stock.filter((s) => s.warehouse_id === warehouseId)
-  ), [stock, warehouseId]);
+  // Stock scoped by the same warehouse / type / status filters as the ledger rows,
+  // so the summary always matches the IMS Stock page for the same selection.
+  const scopedStock = useMemo(() => stock.filter((s) => {
+    if (warehouseId !== "all" && s.warehouse_id !== warehouseId) return false;
+    if (stockType !== "all" && s.stock_type !== stockType) return false;
+    if (status !== "all" && s.stock_status !== status) return false;
+    return true;
+  }), [stock, warehouseId, stockType, status]);
 
-  const scopedTxns = useMemo(() => (
-    warehouseId === "all" ? txns : txns.filter((t) => t.from_warehouse_id === warehouseId || t.to_warehouse_id === warehouseId)
-  ), [txns, warehouseId]);
+  const scopedTxns = useMemo(() => txns.filter((t) => {
+    if (warehouseId !== "all" && t.from_warehouse_id !== warehouseId && t.to_warehouse_id !== warehouseId) return false;
+    const item = t.stock_item_id ? stockById.get(t.stock_item_id) : null;
+    if (stockType !== "all" && txnStockType(t, item) !== stockType) return false;
+    if (status !== "all" && item?.stock_status !== status) return false;
+    return true;
+  }), [txns, warehouseId, stockType, status, stockById]);
 
   const summary = useMemo(() => {
     const count = (fn: (s: StockItem) => boolean) => scopedStock.filter(fn).reduce((a, s) => a + (Number(s.qty) || 1), 0);
