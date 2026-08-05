@@ -178,9 +178,10 @@ export const TRANSFER_STATUS_LABEL: Record<TransferStatus, string> = {
 };
 
 export async function listStock(): Promise<StockItem[]> {
-  const { data, error } = await sb.from("ims_stock_items").select("*").order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data || []) as StockItem[];
+  const { fetchAll } = await import("@/lib/fetchAll");
+  return fetchAll<StockItem>("ims_stock_items", (q) =>
+    q.select("*").order("created_at", { ascending: false }),
+  );
 }
 
 export async function getStock(id: string): Promise<StockItem | null> {
@@ -206,9 +207,10 @@ export async function deleteStock(id: string): Promise<void> {
 }
 
 export async function listTransactions(): Promise<Transaction[]> {
-  const { data, error } = await sb.from("ims_transactions").select("*").order("txn_date", { ascending: false }).limit(500);
-  if (error) throw error;
-  return (data || []) as Transaction[];
+  const { fetchAll } = await import("@/lib/fetchAll");
+  return fetchAll<Transaction>("ims_transactions", (q) =>
+    q.select("*").order("txn_date", { ascending: false }),
+  );
 }
 
 export async function createTransaction(input: Partial<Transaction>): Promise<Transaction> {
