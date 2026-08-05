@@ -876,10 +876,11 @@ export type Database = {
           serial_no: string | null
           service_request_no: string | null
           status: string
+          stock_item_id: string | null
           tag_date: string
           tag_no: string | null
           txn_date: string | null
-          txn_id: string
+          txn_id: string | null
           txn_no: string | null
           updated_at: string
           warehouse_id: string | null
@@ -903,10 +904,11 @@ export type Database = {
           serial_no?: string | null
           service_request_no?: string | null
           status?: string
+          stock_item_id?: string | null
           tag_date?: string
           tag_no?: string | null
           txn_date?: string | null
-          txn_id: string
+          txn_id?: string | null
           txn_no?: string | null
           updated_at?: string
           warehouse_id?: string | null
@@ -930,15 +932,23 @@ export type Database = {
           serial_no?: string | null
           service_request_no?: string | null
           status?: string
+          stock_item_id?: string | null
           tag_date?: string
           tag_no?: string | null
           txn_date?: string | null
-          txn_id?: string
+          txn_id?: string | null
           txn_no?: string | null
           updated_at?: string
           warehouse_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "defective_tags_stock_item_id_fkey"
+            columns: ["stock_item_id"]
+            isOneToOne: false
+            referencedRelation: "ims_stock_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "defective_tags_txn_id_fkey"
             columns: ["txn_id"]

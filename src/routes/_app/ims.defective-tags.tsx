@@ -232,7 +232,7 @@ function CreateTagsDialog({
   }, [rows, q, showGenerated]);
 
   const selectable = filtered.filter((r) => !r.tag_generated);
-  const selectedRows = selectable.filter((r) => sel[r.txn_id]);
+  const selectedRows = selectable.filter((r) => sel[r.key]);
 
   async function generate() {
     if (!selectedRows.length) return;
@@ -271,7 +271,7 @@ function CreateTagsDialog({
                   <Checkbox
                     checked={selectable.length > 0 && selectedRows.length === selectable.length}
                     onCheckedChange={(v) =>
-                      setSel(v ? Object.fromEntries(selectable.map((r) => [r.txn_id, true])) : {})
+                      setSel(v ? Object.fromEntries(selectable.map((r) => [r.key, true])) : {})
                     }
                   />
                 </th>
@@ -295,12 +295,12 @@ function CreateTagsDialog({
               ) : filtered.length === 0 ? (
                 <tr><td className="p-4 text-muted-foreground" colSpan={13}>No pending Defective Stock IN records.</td></tr>
               ) : filtered.map((r) => (
-                <tr key={r.txn_id} className="border-t align-top">
+                <tr key={r.key} className="border-t align-top">
                   <td className="p-2">
                     <Checkbox
                       disabled={r.tag_generated}
-                      checked={!!sel[r.txn_id]}
-                      onCheckedChange={(v) => setSel((s) => ({ ...s, [r.txn_id]: !!v }))}
+                      checked={!!sel[r.key]}
+                      onCheckedChange={(v) => setSel((s) => ({ ...s, [r.key]: !!v }))}
                     />
                   </td>
                   <td className="p-2 font-mono">{r.txn_no || "—"}</td>

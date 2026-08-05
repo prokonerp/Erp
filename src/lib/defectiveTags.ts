@@ -33,7 +33,11 @@ export type DefectiveTag = {
 
 /** A Defective Stock IN transaction enriched with related ERP details. */
 export type DefectiveInRecord = {
-  txn_id: string;
+  /** Stable row key: transaction id, or `stock:<stock item id>` for stock-item sourced rows. */
+  key: string;
+  source: "txn" | "stock";
+  txn_id: string | null;
+  stock_item_id: string | null;
   txn_no: string | null;
   txn_date: string;
   service_request_no: string | null;
@@ -67,7 +71,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     fetchAll<any>("ims_transactions", (q) =>
       q.select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false }),
     ),
-    fetchAll<any>("defective_tags", (q) => q.select("txn_id,tag_no")),
+    fetchAll<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no")),
     listWarehouses(),
   ]);
 
@@ -84,13 +88,19 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   }
   const tById = new Map(tickets.map((t) => [t.id, t]));
   const whById = new Map<string, WarehouseLite>(warehouses.map((w) => [w.id, w]));
-  const tagByTxn = new Map(tags.map((t) => [t.txn_id, t.tag_no as string | null]));
+  const tagByTxn = new Map(tags.filter((t) => t.txn_id).map((t) => [t.txn_id, t.tag_no as string | null]));
+  const tagByStockItem = new Map(
+    tags.filter((t) => t.stock_item_id).map((t) => [t.stock_item_id, t.tag_no as string | null]),
+  );
 
-  return txns.map((t) => {
+  const fromTxns = txns.map((t) => {
     const tk = t.ticket_id ? tById.get(t.ticket_id) : null;
     const wh = whById.get(t.to_warehouse_id || t.from_warehouse_id || "");
     return {
+      key: t.id,
+      source: "txn" as const,
       txn_id: t.id,
+      stock_item_id: null,
       txn_no: t.txn_no,
       txn_date: t.txn_date,
       service_request_no: tk?.case_id || (t.ticket_id && !UUID_RE.test(t.ticket_id) ? t.ticket_id : null) || t.reference || null,
@@ -108,6 +118,47 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       tag_no: tagByTxn.get(t.id) ?? null,
     };
   });
+
+  // Defective stock can also exist as stock items without a matching `defective_in`
+  // transaction (opening stock, GRN-classified defectives, manual entries). Include
+  // those so they can be tagged too, skipping any already covered by a transaction.
+  const coveredSerials = new Set(
+    fromTxns.map((r) => `${(r.serial_no || "").toLowerCase()}|${(r.model_no || "").toLowerCase()}`).filter((k) => k !== "|"),
+  );
+  const stockItems = await fetchAll<any>("ims_stock_items", (q) =>
+    q.select("*").eq("stock_type", "defective").order("created_at", { ascending: false }),
+  );
+  const fromStock = stockItems
+    .filter(
+      (s) =>
+        !coveredSerials.has(`${(s.part_serial_no || "").toLowerCase()}|${(s.part_model_no || "").toLowerCase()}`),
+    )
+    .map((s) => {
+      const wh = whById.get(s.warehouse_id || "");
+      return {
+        key: `stock:${s.id}`,
+        source: "stock" as const,
+        txn_id: null,
+        stock_item_id: s.id as string,
+        txn_no: s.transaction_ref || null,
+        txn_date: s.created_at,
+        service_request_no: s.ticket_id && !UUID_RE.test(s.ticket_id) ? s.ticket_id : null,
+        oracle_order_no: s.oem_case_id || null,
+        model_no: s.part_model_no || null,
+        part_name: s.part_name || null,
+        serial_no: s.part_serial_no || null,
+        customer_name: s.customer_name || null,
+        asp_code: wh?.asp_code || null,
+        warehouse_id: wh?.id || null,
+        engineer_name: null,
+        replacement_date: s.created_at,
+        reason: s.notes || null,
+        tag_generated: tagByStockItem.has(s.id),
+        tag_no: tagByStockItem.get(s.id) ?? null,
+      } as DefectiveInRecord;
+    });
+
+  return [...fromTxns, ...fromStock];
 }
 
 export async function listDefectiveTags(): Promise<DefectiveTag[]> {
@@ -122,6 +173,7 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
     .filter((r) => !r.tag_generated)
     .map((r) => ({
       txn_id: r.txn_id,
+      stock_item_id: r.stock_item_id,
       txn_no: r.txn_no,
       txn_date: r.txn_date,
       service_request_no: r.service_request_no,
