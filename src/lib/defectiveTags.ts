@@ -125,8 +125,14 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const coveredSerials = new Set(
     fromTxns.map((r) => `${(r.serial_no || "").toLowerCase()}|${(r.model_no || "").toLowerCase()}`).filter((k) => k !== "|"),
   );
-  const stockItems = await fetchAll<any>("ims_stock_items", (q) =>
-    q.select("*").eq("stock_type", "defective").order("created_at", { ascending: false }),
+  // Include anything flagged defective by TYPE or by STATUS.
+  const allStock = await fetchAll<any>("ims_stock_items", (q) =>
+    q.select("*").order("created_at", { ascending: false }),
+  );
+  const stockItems = allStock.filter(
+    (s) =>
+      String(s.stock_type || "").toLowerCase() === "defective" ||
+      String(s.stock_status || "").toLowerCase().includes("defect"),
   );
   const fromStock = stockItems
     .filter(
