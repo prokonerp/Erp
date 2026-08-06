@@ -161,7 +161,7 @@ export type ComputedRow = {
   deductions: number;
   netSalary: number;
   eligible: { start: number; end: number; total: number };
-  attendance: Record<number, AttCode>;
+  attendance: Record<number, AttEntry>;
   record: SalaryRecord | null;
   /** Attendance-derived present days (P = 1, H = 0.5). */
   presentDays: number;
