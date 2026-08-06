@@ -216,7 +216,7 @@ export function computeRow(
   emp: Employee,
   year: number,
   month: number,
-  attendance: Record<number, AttCode>,
+  attendance: Record<number, AttEntry>,
   advanceEmi: number,
   deductions: number,
   record: SalaryRecord | null,
@@ -227,7 +227,8 @@ export function computeRow(
   const perDay = dim > 0 ? monthly / dim : 0;
   const eligible = eligibleRange(emp, year, month);
   let presentDays = 0;
-  for (let d = eligible.start; d <= eligible.end; d++) presentDays += codeValue(attendance[d]);
+  for (let d = eligible.start; d <= eligible.end; d++) presentDays += Number(attendance[d]?.dayValue ?? 0);
+  presentDays = round2(presentDays);
   const eligibleWorkingDays = Math.max(0, eligible.end - eligible.start + 1);
 
   const auto = computePaidDays(presentDays, dim, eligibleWorkingDays);
