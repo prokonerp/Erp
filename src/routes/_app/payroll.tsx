@@ -61,7 +61,11 @@ function PayrollPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [att, setAtt] = useState<Record<string, Record<number, AttCode>>>({});
+  const [att, setAtt] = useState<Record<string, Record<number, AttEntry>>>({});
+  const [lock, setLock] = useState<AttendanceLock | null>(null);
+  const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [records, setRecords] = useState<SalaryRecord[]>([]);
   const [deductions, setDeductions] = useState<Record<string, number>>({});
@@ -75,13 +79,16 @@ function PayrollPage() {
   async function load() {
     setLoading(true);
     try {
-      const [emps, a, adv, recs] = await Promise.all([
+      const [emps, a, adv, recs, lk, log] = await Promise.all([
         listEmployees(), listAttendance(year, month), listAdvances(), listSalaryRecords(year, month),
+        getAttendanceLock(year, month), listAttendanceAudit(year, month),
       ]);
       setEmployees(emps);
       setAtt(a);
       setAdvances(adv);
       setRecords(recs);
+      setLock(lk);
+      setAudit(log);
       const d: Record<string, number> = {};
       const o: Record<string, { paidDays?: number | null; emi?: number | null; net?: number | null }> = {};
       recs.forEach((r) => {
