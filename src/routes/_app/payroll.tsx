@@ -242,7 +242,11 @@ function PayrollPage() {
     setSaving(true);
     try {
       for (const r of rows) await upsertSalaryRecord(r, year, month, status);
-      if (status === "paid") await settleEmiForPeriod(advances, year, month);
+      if (status === "paid") {
+        await settleEmiForPeriod(advances, year, month);
+        await setAttendanceLock(year, month, true);
+        setLock(await getAttendanceLock(year, month));
+      }
       toast.success(status === "paid" ? "Marked as paid" : status === "approved" ? "Salary approved" : "Salary sheet saved");
       const recs = await listSalaryRecords(year, month);
       setRecords(recs);
@@ -313,9 +317,6 @@ function PayrollPage() {
         </div>
       </div>
 
-      {dueList.length > 0 && (
-        <></>
-      )}
       {locked && (
         <Card className="border-primary/40">
           <CardContent className="py-3 text-sm flex items-center gap-2">
