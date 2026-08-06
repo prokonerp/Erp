@@ -385,7 +385,7 @@ function PayrollPage() {
                         </TableRow>
                         {open && (
                           <TableRow>
-                            <TableCell colSpan={17} className="bg-muted/30">
+                            <TableCell colSpan={16} className="bg-muted/30">
                               <div className="space-y-2 py-1">
                                 <div className="flex flex-wrap items-center gap-3 text-xs">
                                   <span className="text-muted-foreground">
@@ -456,18 +456,25 @@ function AdvanceDialog({ employees, year, month, onSaved }: { employees: Employe
   const [open, setOpen] = useState(false);
   const [employeeId, setEmployeeId] = useState("");
   const [amount, setAmount] = useState("");
+  const [emiMonths, setEmiMonths] = useState("1");
   const [date, setDate] = useState(isoDate(year, month, 1));
   const [notes, setNotes] = useState("");
 
   async function save() {
     if (!employeeId || !Number(amount)) return toast.error("Select employee and amount");
+    const months = Math.max(1, Number(emiMonths) || 1);
+    const total = Number(amount);
     const { error } = await supabase.from("employee_advances").insert({
-      employee_id: employeeId, amount: Number(amount), advance_date: date,
+      employee_id: employeeId, amount: total, advance_date: date,
       period_year: year, period_month: month, notes: notes || null,
+      emi_months: months,
+      emi_amount: Number((total / months).toFixed(2)),
+      remaining_months: months,
+      start_year: year, start_month: month, status: "active",
     });
     if (error) return toast.error(error.message);
     toast.success("Advance recorded");
-    setOpen(false); setAmount(""); setNotes("");
+    setOpen(false); setAmount(""); setNotes(""); setEmiMonths("1");
     onSaved();
   }
 
@@ -489,6 +496,16 @@ function AdvanceDialog({ employees, year, month, onSaved }: { employees: Employe
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
             <div><Label className="text-xs">Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Recover over (months)</Label>
+              <Input type="number" min="1" value={emiMonths} onChange={(e) => setEmiMonths(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">EMI per month (₹)</Label>
+              <Input readOnly value={Number(amount) > 0 ? (Number(amount) / Math.max(1, Number(emiMonths) || 1)).toFixed(2) : "0.00"} />
+            </div>
           </div>
           <div><Label className="text-xs">Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         </div>
