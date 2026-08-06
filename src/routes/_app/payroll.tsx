@@ -314,6 +314,20 @@ function PayrollPage() {
       </div>
 
       {dueList.length > 0 && (
+        <></>
+      )}
+      {locked && (
+        <Card className="border-primary/40">
+          <CardContent className="py-3 text-sm flex items-center gap-2">
+            <Lock className="h-4 w-4 text-primary" />
+            <span>
+              Attendance for {MONTHS[month - 1]} {year} is locked{lock?.locked_by_email ? ` by ${lock.locked_by_email}` : ""}.
+              {isAdmin ? " Unlock to edit and recalculate salary." : " Ask an admin to unlock it."}
+            </span>
+          </CardContent>
+        </Card>
+      )}
+      {dueList.length > 0 && (
         <Card className="border-amber-500/40">
           <CardContent className="py-3 text-sm flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600" />
@@ -339,7 +353,15 @@ function PayrollPage() {
             <Input placeholder="Search employee…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-44" />
             <ExportButtons name={`Salary_${MONTHS[month - 1]}_${year}`} title={`Salary Sheet — ${MONTHS[month - 1]} ${year}`} rows={rows} columns={exportCols} />
             {isAdmin && <AdvanceDialog employees={employees} year={year} month={month} onSaved={load} />}
-            {isAdmin && <Button size="sm" variant="outline" onClick={bulkMarkAllPresent} disabled={saving}>Mark All Present</Button>}
+            {isAdmin && <Button size="sm" variant="outline" onClick={() => setConfirmBulk(true)} disabled={saving || locked}>Mark All Present</Button>}
+            {isAdmin && <Button size="sm" variant="outline" onClick={undoLast} disabled={saving || locked || !lastBatch}><Undo2 className="h-4 w-4 mr-1" />Undo Last</Button>}
+            {isAdmin && <Button size="sm" variant="ghost" onClick={() => undoMonth(null, "all employees")} disabled={saving || locked}>Undo Month</Button>}
+            <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)}><History className="h-4 w-4 mr-1" />History</Button>
+            {isAdmin && (
+              <Button size="sm" variant={locked ? "default" : "outline"} onClick={() => toggleLock(!locked)}>
+                {locked ? <><LockOpen className="h-4 w-4 mr-1" />Unlock</> : <><Lock className="h-4 w-4 mr-1" />Lock</>}
+              </Button>
+            )}
             {isAdmin && <Button size="sm" variant="outline" onClick={() => saveSheet()} disabled={saving}>Save</Button>}
             {isAdmin && <Button size="sm" variant="outline" onClick={() => saveSheet("approved")} disabled={saving}>Approve All</Button>}
             {isAdmin && <Button size="sm" onClick={() => saveSheet("paid")} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}Mark Paid</Button>}
