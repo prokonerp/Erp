@@ -468,26 +468,72 @@ function PayrollPage() {
                                     </Button>
                                   )}
                                 </div>
-                                <div className="text-xs text-muted-foreground">
-                                  Attendance — click a day to cycle P → H → A{r.eligible.start > 1 || r.eligible.end < r.daysInMonth ? ` · eligible days ${r.eligible.start}–${r.eligible.end}` : ""}
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  <span>
+                                    Attendance — enter Work Hours (1 day = {STANDARD_SHIFT_HOURS} hrs, Sunday counts double) or pick a type
+                                    {r.eligible.start > 1 || r.eligible.end < r.daysInMonth ? ` · eligible days ${r.eligible.start}–${r.eligible.end}` : ""}
+                                  </span>
+                                  {canEdit && (
+                                    <>
+                                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => markAllPresent(r)}>Mark all present</Button>
+                                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive" onClick={() => undoMonth(r.emp.id, r.emp.name)}>
+                                        <Undo2 className="h-3 w-3 mr-1" />Undo month
+                                      </Button>
+                                    </>
+                                  )}
                                 </div>
-                                <div className="flex flex-wrap gap-1">
-                                  {Array.from({ length: r.daysInMonth }, (_, k) => k + 1).map((d) => {
-                                    const inRange = d >= r.eligible.start && d <= r.eligible.end;
-                                    const c = (r.attendance[d] ?? (inRange ? "A" : undefined)) as AttCode | undefined;
-                                    return (
-                                      <button
-                                        key={d}
-                                        disabled={!isAdmin || !inRange}
-                                        onClick={() => { const n = nextCode(c); setCell(r.emp.id, d, n); void persistAttendance(r.emp.id, [d]); }}
-                                        className={`w-9 rounded-md border px-1 py-1 text-[11px] leading-tight transition-colors ${inRange ? codeCls[(c ?? "A") as AttCode] : "opacity-40"} ${isAdmin && inRange ? "hover:ring-1 hover:ring-primary" : ""}`}
-                                        title={`Day ${d}`}
-                                      >
-                                        <div className="font-medium">{d}</div>
-                                        <div>{inRange ? (c ?? "A") : "–"}</div>
-                                      </button>
-                                    );
-                                  })}
+                                <div className="rounded-md border bg-background max-h-80 overflow-auto">
+                                  <Table>
+                                    <TableHeader className="sticky top-0 bg-muted z-10">
+                                      <TableRow>
+                                        <TableHead className="w-20">Date</TableHead>
+                                        <TableHead className="w-20">Day</TableHead>
+                                        <TableHead className="w-28">Work Hours</TableHead>
+                                        <TableHead className="w-40">Attendance Type</TableHead>
+                                        <TableHead className="w-28 text-right">Calculated Days</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {Array.from({ length: r.daysInMonth }, (_, k) => k + 1).map((d) => {
+                                        const inRange = d >= r.eligible.start && d <= r.eligible.end;
+                                        const sunday = isSundayDate(year, month, d);
+                                        const e = r.attendance[d];
+                                        const code = (e?.code ?? "A") as AttCode;
+                                        const hours = e?.hours ?? null;
+                                        const dv = e?.dayValue ?? 0;
+                                        return (
+                                          <TableRow key={d} className={inRange ? rowTint(code, hours, dv, sunday) : "opacity-40"}>
+                                            <TableCell className="text-xs tabular-nums">{isoDate(year, month, d)}</TableCell>
+                                            <TableCell className={`text-xs ${sunday ? "font-semibold text-orange-600" : ""}`}>
+                                              {DOW[new Date(year, month - 1, d).getDay()]}
+                                              {e?.edited && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-yellow-400 align-middle" title="Edited entry" />}
+                                            </TableCell>
+                                            <TableCell>
+                                              <Input
+                                                type="number" min="0" max={MAX_WORK_HOURS} step="0.5"
+                                                disabled={!canEdit || !inRange}
+                                                className="h-8 w-20 text-right"
+                                                value={hours ?? ""}
+                                                placeholder="—"
+                                                onChange={(ev) => setDay(r.emp.id, d, { hours: ev.target.value === "" ? null : Number(ev.target.value) })}
+                                              />
+                                            </TableCell>
+                                            <TableCell>
+                                              <select
+                                                className="h-8 w-36 rounded-md border bg-background px-2 text-xs disabled:opacity-60"
+                                                disabled={!canEdit || !inRange || (hours != null && hours > 0)}
+                                                value={code}
+                                                onChange={(ev) => setDay(r.emp.id, d, { code: ev.target.value as AttCode })}
+                                              >
+                                                {ATT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                              </select>
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums font-medium">{inRange ? dv : "–"}</TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
                                 </div>
                               </div>
                             </TableCell>
