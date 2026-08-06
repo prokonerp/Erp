@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ExportButtons } from "@/components/ExportButtons";
+import { AdvanceLedger } from "@/components/AdvanceLedger";
 import { toast } from "sonner";
 import {
   AlertTriangle, BadgeIndianRupee, CalendarDays, CheckCircle2, ChevronDown, ChevronRight,
@@ -17,10 +18,10 @@ import {
 } from "lucide-react";
 import {
   MAX_WORK_HOURS, MONTHS, STANDARD_SHIFT_HOURS,
-  type AttCode, type AttEntry, type Advance, type AttendanceLock, type AuditRow,
+  type AttCode, type AttEntry, type Advance, type AdvancePayment, type AttendanceLock, type AuditRow,
   type ComputedRow, type Employee, type SalaryRecord,
   clearAttendance, computeRow, dayValueFor, daysInMonth, emiDueFor, getAttendanceLock, incrementDue,
-  isSundayDate, isoDate, listAdvances, listAttendance, listAttendanceAudit, listEmployees,
+  isSundayDate, isoDate, listAdvancePayments, listAdvances, listAttendance, listAttendanceAudit, listEmployees,
   listSalaryRecords, money, saveAttendance, setAttendanceLock, settleEmiForPeriod, undoBatch, upsertSalaryRecord,
 } from "@/lib/payroll";
 
@@ -67,6 +68,7 @@ function PayrollPage() {
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [advances, setAdvances] = useState<Advance[]>([]);
+  const [advPayments, setAdvPayments] = useState<AdvancePayment[]>([]);
   const [records, setRecords] = useState<SalaryRecord[]>([]);
   const [deductions, setDeductions] = useState<Record<string, number>>({});
   const [ov, setOv] = useState<Record<string, { paidDays?: number | null; emi?: number | null; net?: number | null }>>({});
@@ -79,13 +81,14 @@ function PayrollPage() {
   async function load() {
     setLoading(true);
     try {
-      const [emps, a, adv, recs, lk, log] = await Promise.all([
+      const [emps, a, adv, recs, lk, log, pays] = await Promise.all([
         listEmployees(), listAttendance(year, month), listAdvances(), listSalaryRecords(year, month),
-        getAttendanceLock(year, month), listAttendanceAudit(year, month),
+        getAttendanceLock(year, month), listAttendanceAudit(year, month), listAdvancePayments(),
       ]);
       setEmployees(emps);
       setAtt(a);
       setAdvances(adv);
+      setAdvPayments(pays);
       setRecords(recs);
       setLock(lk);
       setAudit(log);
@@ -111,9 +114,12 @@ function PayrollPage() {
   /** EMI due this period per employee (sum across active advance schedules). */
   const advByEmp = useMemo(() => {
     const m: Record<string, number> = {};
-    advances.forEach((a) => { m[a.employee_id] = (m[a.employee_id] ?? 0) + emiDueFor(a, year, month); });
+    advances.forEach((a) => {
+      const employee = employees.find((e) => e.id === a.employee_id) ?? null;
+      m[a.employee_id] = (m[a.employee_id] ?? 0) + emiDueFor(a, year, month, { payments: advPayments, employee });
+    });
     return m;
-  }, [advances, year, month]);
+  }, [advances, advPayments, employees, year, month]);
 
   const recByEmp = useMemo(() => {
     const m: Record<string, SalaryRecord> = {};
