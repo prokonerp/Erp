@@ -71,6 +71,21 @@ export type Advance = {
   start_year: number | null;
   start_month: number | null;
   status: string;
+  paid_amount: number;
+  paid_installments: number;
+};
+
+/** One recorded EMI recovery (or skip) against an advance for a salary period. */
+export type AdvancePayment = {
+  id: string;
+  advance_id: string;
+  employee_id: string;
+  period_year: number;
+  period_month: number;
+  amount: number;
+  kind: string; // 'emi' | 'skip' | 'exit_recovery' | 'closing'
+  notes: string | null;
+  created_at: string;
 };
 
 export type SalaryRecordExtra = {
