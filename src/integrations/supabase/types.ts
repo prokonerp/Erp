@@ -316,6 +316,41 @@ export type Database = {
           },
         ]
       }
+      attendance: {
+        Row: {
+          code: string
+          created_at: string
+          employee_id: string
+          id: string
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          code?: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          updated_at?: string
+          work_date: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       battery_catalog: {
         Row: {
           active: boolean
@@ -1192,14 +1227,62 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_advances: {
+        Row: {
+          advance_date: string
+          amount: number
+          created_at: string
+          employee_id: string
+          id: string
+          notes: string | null
+          period_month: number | null
+          period_year: number | null
+          updated_at: string
+        }
+        Insert: {
+          advance_date?: string
+          amount?: number
+          created_at?: string
+          employee_id: string
+          id?: string
+          notes?: string | null
+          period_month?: number | null
+          period_year?: number | null
+          updated_at?: string
+        }
+        Update: {
+          advance_date?: string
+          amount?: number
+          created_at?: string
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          period_month?: number | null
+          period_year?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_advances_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           active: boolean
           created_at: string
           department: string | null
           email: string | null
+          exit_date: string | null
           id: string
+          increment_cycle_months: number
           joining_date: string | null
+          last_increment_date: string | null
+          monthly_salary: number
           name: string
           notes: string | null
           phone: string | null
@@ -1211,8 +1294,12 @@ export type Database = {
           created_at?: string
           department?: string | null
           email?: string | null
+          exit_date?: string | null
           id?: string
+          increment_cycle_months?: number
           joining_date?: string | null
+          last_increment_date?: string | null
+          monthly_salary?: number
           name: string
           notes?: string | null
           phone?: string | null
@@ -1224,8 +1311,12 @@ export type Database = {
           created_at?: string
           department?: string | null
           email?: string | null
+          exit_date?: string | null
           id?: string
+          increment_cycle_months?: number
           joining_date?: string | null
+          last_increment_date?: string | null
+          monthly_salary?: number
           name?: string
           notes?: string | null
           phone?: string | null
@@ -3920,6 +4011,77 @@ export type Database = {
             columns: ["role_id"]
             isOneToOne: false
             referencedRelation: "app_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      salary_records: {
+        Row: {
+          advance: number
+          approved_at: string | null
+          created_at: string
+          days_in_month: number
+          deductions: number
+          employee_id: string
+          id: string
+          monthly_salary: number
+          net_salary: number
+          notes: string | null
+          paid_at: string | null
+          per_day_salary: number
+          period_month: number
+          period_year: number
+          status: string
+          total_salary: number
+          updated_at: string
+          working_days: number
+        }
+        Insert: {
+          advance?: number
+          approved_at?: string | null
+          created_at?: string
+          days_in_month: number
+          deductions?: number
+          employee_id: string
+          id?: string
+          monthly_salary?: number
+          net_salary?: number
+          notes?: string | null
+          paid_at?: string | null
+          per_day_salary?: number
+          period_month: number
+          period_year: number
+          status?: string
+          total_salary?: number
+          updated_at?: string
+          working_days?: number
+        }
+        Update: {
+          advance?: number
+          approved_at?: string | null
+          created_at?: string
+          days_in_month?: number
+          deductions?: number
+          employee_id?: string
+          id?: string
+          monthly_salary?: number
+          net_salary?: number
+          notes?: string | null
+          paid_at?: string | null
+          per_day_salary?: number
+          period_month?: number
+          period_year?: number
+          status?: string
+          total_salary?: number
+          updated_at?: string
+          working_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "salary_records_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]

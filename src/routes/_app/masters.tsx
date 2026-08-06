@@ -176,6 +176,10 @@ function MastersPage() {
               { key: "phone", label: "Phone", type: "phone" },
               { key: "email", label: "Email", type: "email" },
               { key: "joining_date", label: "Joining Date", type: "date" },
+              { key: "monthly_salary", label: "Monthly Salary (₹)", type: "number" },
+              { key: "last_increment_date", label: "Last Increment Date", type: "date", showInList: false },
+              { key: "increment_cycle_months", label: "Increment Cycle (months)", type: "number", showInList: false },
+              { key: "exit_date", label: "Exit Date", type: "date", showInList: false },
               { key: "active", label: "Active", type: "boolean" },
               { key: "notes", label: "Notes", type: "textarea", showInList: false },
             ]}

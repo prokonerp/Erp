@@ -124,6 +124,7 @@ function AppLayout() {
     { to: "/masters", label: "Vendors", icon: Truck, module: "customers", group: "Masters", search: { tab: "vendors" }, matchSearchTab: "vendors" },
     { to: "/masters/products", label: "Products", icon: Package, module: "customers", group: "Masters" },
     { to: "/masters", label: "Employees", icon: IdCard, module: "customers", group: "Masters", search: { tab: "employees" }, matchSearchTab: "employees" },
+    { to: "/payroll", label: "Salary & Attendance", icon: Wallet, module: "customers", group: "Masters" },
     { to: "/masters", label: "Inventory", icon: Boxes, module: "customers", group: "Masters", search: { tab: "inventory" }, matchSearchTab: "inventory" },
     { to: "/masters", label: "Accounts", icon: Wallet, module: "customers", group: "Masters", search: { tab: "accounts" }, matchSearchTab: "accounts" },
     { to: "/masters", label: "Users & Roles", icon: UserCog, module: "customers", group: "Masters", search: { tab: "users" }, matchSearchTab: "users" },
