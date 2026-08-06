@@ -20,9 +20,9 @@ import {
   MAX_WORK_HOURS, MONTHS, STANDARD_SHIFT_HOURS,
   type AttCode, type AttEntry, type Advance, type AdvancePayment, type AttendanceLock, type AuditRow,
   type ComputedRow, type Employee, type SalaryRecord,
-  clearAttendance, computeRow, dayValueFor, daysInMonth, emiDueFor, getAttendanceLock, incrementDue,
+  clearAttendance, computeRow, dayValueFor, daysInMonth, emiDueFor, fromMonthIndex, getAttendanceLock, incrementDue,
   isSundayDate, isoDate, listAdvancePayments, listAdvances, listAttendance, listAttendanceAudit, listEmployees,
-  listSalaryRecords, money, saveAttendance, setAttendanceLock, settleEmiForPeriod, undoBatch, upsertSalaryRecord,
+  listSalaryRecords, money, monthIndex, saveAttendance, setAttendanceLock, settleEmiForPeriod, undoBatch, upsertSalaryRecord,
 } from "@/lib/payroll";
 
 export const Route = createFileRoute("/_app/payroll")({
