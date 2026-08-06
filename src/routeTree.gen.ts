@@ -19,6 +19,7 @@ import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppRecordsRouteImport } from './routes/_app/records'
 import { Route as AppProductsRouteImport } from './routes/_app/products'
 import { Route as AppPoRouteImport } from './routes/_app/po'
+import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
 import { Route as AppNewRouteImport } from './routes/_app/new'
 import { Route as AppMastersRouteImport } from './routes/_app/masters'
 import { Route as AppIndentRouteImport } from './routes/_app/indent'
@@ -163,6 +164,11 @@ const AppProductsRoute = AppProductsRouteImport.update({
 const AppPoRoute = AppPoRouteImport.update({
   id: '/po',
   path: '/po',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPayrollRoute = AppPayrollRouteImport.update({
+  id: '/payroll',
+  path: '/payroll',
   getParentRoute: () => AppRoute,
 } as any)
 const AppNewRoute = AppNewRouteImport.update({
@@ -661,6 +667,7 @@ export interface FileRoutesByFullPath {
   '/indent': typeof AppIndentRouteWithChildren
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
+  '/payroll': typeof AppPayrollRoute
   '/po': typeof AppPoRouteWithChildren
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
@@ -762,6 +769,7 @@ export interface FileRoutesByTo {
   '/import': typeof AppImportRoute
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
+  '/payroll': typeof AppPayrollRoute
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
@@ -862,6 +870,7 @@ export interface FileRoutesById {
   '/_app/indent': typeof AppIndentRouteWithChildren
   '/_app/masters': typeof AppMastersRouteWithChildren
   '/_app/new': typeof AppNewRoute
+  '/_app/payroll': typeof AppPayrollRoute
   '/_app/po': typeof AppPoRouteWithChildren
   '/_app/products': typeof AppProductsRoute
   '/_app/records': typeof AppRecordsRoute
@@ -971,6 +980,7 @@ export interface FileRouteTypes {
     | '/indent'
     | '/masters'
     | '/new'
+    | '/payroll'
     | '/po'
     | '/products'
     | '/records'
@@ -1072,6 +1082,7 @@ export interface FileRouteTypes {
     | '/import'
     | '/masters'
     | '/new'
+    | '/payroll'
     | '/products'
     | '/records'
     | '/reports'
@@ -1171,6 +1182,7 @@ export interface FileRouteTypes {
     | '/_app/indent'
     | '/_app/masters'
     | '/_app/new'
+    | '/_app/payroll'
     | '/_app/po'
     | '/_app/products'
     | '/_app/records'
@@ -1341,6 +1353,13 @@ declare module '@tanstack/react-router' {
       path: '/po'
       fullPath: '/po'
       preLoaderRoute: typeof AppPoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/payroll': {
+      id: '/_app/payroll'
+      path: '/payroll'
+      fullPath: '/payroll'
+      preLoaderRoute: typeof AppPayrollRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/new': {
@@ -2386,6 +2405,7 @@ interface AppRouteChildren {
   AppIndentRoute: typeof AppIndentRouteWithChildren
   AppMastersRoute: typeof AppMastersRouteWithChildren
   AppNewRoute: typeof AppNewRoute
+  AppPayrollRoute: typeof AppPayrollRoute
   AppPoRoute: typeof AppPoRouteWithChildren
   AppProductsRoute: typeof AppProductsRoute
   AppRecordsRoute: typeof AppRecordsRoute
@@ -2409,6 +2429,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndentRoute: AppIndentRouteWithChildren,
   AppMastersRoute: AppMastersRouteWithChildren,
   AppNewRoute: AppNewRoute,
+  AppPayrollRoute: AppPayrollRoute,
   AppPoRoute: AppPoRouteWithChildren,
   AppProductsRoute: AppProductsRoute,
   AppRecordsRoute: AppRecordsRoute,
@@ -2431,13 +2452,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
