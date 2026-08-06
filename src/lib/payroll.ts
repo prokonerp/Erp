@@ -104,24 +104,60 @@ export const isSundayDate = (y: number, m: number, d: number) =>
 
 /**
  * Day credit for one date.
- * Priority: work hours (hours / 8, doubled on Sunday) → attendance type.
- * Type fallback: Present = 1, Half Day = 0.5, Sunday Work = 2, Absent = 0.
+ * Sunday: 1 (weekly off credit) + hours / 8 — unless the sandwich rule zeroes it.
+ * Weekday priority: work hours (hours / 8) → attendance type.
+ * Type fallback: Present = 1, Half Day = 0.5, Absent = 0.
  */
 export function dayValueFor(code: AttCode | undefined, hours: number | null | undefined, sunday: boolean): number {
   const h = hours == null || hours === ("" as unknown as number) ? null : Number(hours);
+  const worked = h != null && !Number.isNaN(h) && h > 0 ? Math.min(MAX_WORK_HOURS, Math.max(0, h)) / STANDARD_SHIFT_HOURS : 0;
+  if (sunday) return round2(1 + worked);
   if (h != null && !Number.isNaN(h) && h > 0) {
-    const clamped = Math.min(MAX_WORK_HOURS, Math.max(0, h));
-    const days = clamped / STANDARD_SHIFT_HOURS;
-    return round2(sunday ? days * 2 : days);
+    return round2(worked);
   }
-  if (code === "SW") return 2;
-  if (code === "P") return sunday ? 2 : 1;
+  if (code === "SW") return 1;
+  if (code === "P") return 1;
   if (code === "H") return 0.5;
   if (code === "OT") return 1;
   return 0;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** A day counts as absent when it has no entry, or an Absent entry with no work hours. */
+export function isAbsentDay(e: AttEntry | undefined): boolean {
+  if (!e) return true;
+  if (e.hours != null && Number(e.hours) > 0) return false;
+  return e.code === "A";
+}
+
+/**
+ * Sandwich rule: Saturday absent AND Monday absent → that Sunday is ignored (0 days).
+ * Returns a new attendance map with Sunday day values corrected.
+ */
+export function applySundayRules(
+  attendance: Record<number, AttEntry>,
+  year: number,
+  month: number,
+): Record<number, AttEntry> {
+  const out: Record<number, AttEntry> = { ...attendance };
+  const total = daysInMonth(year, month);
+  for (let d = 1; d <= total; d++) {
+    if (!isSundayDate(year, month, d)) continue;
+    const e = out[d];
+    const sat = d - 1 >= 1 ? out[d - 1] : undefined;
+    const mon = d + 1 <= total ? out[d + 1] : undefined;
+    const satAbsent = d - 1 >= 1 ? isAbsentDay(sat) : false;
+    const monAbsent = d + 1 <= total ? isAbsentDay(mon) : false;
+    const sandwich = satAbsent && monAbsent;
+    const base = e ?? { code: "A" as AttCode, hours: null, dayValue: 0 };
+    out[d] = {
+      ...base,
+      dayValue: sandwich ? 0 : dayValueFor(base.code, base.hours, true),
+    };
+  }
+  return out;
+}
 
 export function makeEntry(code: AttCode, hours: number | null, sunday: boolean, edited = false): AttEntry {
   return { code, hours: hours == null ? null : Number(hours), dayValue: dayValueFor(code, hours, sunday), edited };
@@ -203,12 +239,11 @@ export function emiDueFor(a: Advance, year: number, month: number): number {
  */
 export function computePaidDays(presentDays: number, totalDays: number, eligibleWorkingDays: number) {
   if (presentDays <= 0) return { paidDays: 0, benefit: 0 };
-  let paid: number;
-  if (presentDays >= totalDays) paid = totalDays + 1;
-  else if (presentDays === totalDays - 1) paid = totalDays;
-  else paid = presentDays + 1;
-  const maxAllowed = Math.min(totalDays + 1, eligibleWorkingDays + 1);
-  paid = Math.min(paid, maxAllowed);
+  // Present days already include Sunday credit, so the +1 benefit must never
+  // push the month beyond its real length (no duplicate counting).
+  let paid = presentDays >= totalDays ? totalDays : round2(presentDays + 1);
+  const maxAllowed = Math.min(totalDays, eligibleWorkingDays + 1);
+  paid = round2(Math.min(paid, maxAllowed));
   return { paidDays: paid, benefit: Math.max(0, paid - presentDays) };
 }
 
@@ -216,24 +251,27 @@ export function computeRow(
   emp: Employee,
   year: number,
   month: number,
-  attendance: Record<number, AttEntry>,
+  rawAttendance: Record<number, AttEntry>,
   advanceEmi: number,
   deductions: number,
   record: SalaryRecord | null,
   overrides?: { paidDays?: number | null; emi?: number | null; net?: number | null },
 ): ComputedRow {
+  const attendance = applySundayRules(rawAttendance, year, month);
   const dim = daysInMonth(year, month);
   const monthly = Number(emp.monthly_salary ?? 0);
   const perDay = dim > 0 ? monthly / dim : 0;
   const eligible = eligibleRange(emp, year, month);
   let presentDays = 0;
   for (let d = eligible.start; d <= eligible.end; d++) presentDays += Number(attendance[d]?.dayValue ?? 0);
-  presentDays = round2(presentDays);
+  presentDays = round2(Math.min(presentDays, Math.max(0, eligibleRangeSpan(eligible))));
   const eligibleWorkingDays = Math.max(0, eligible.end - eligible.start + 1);
 
   const auto = computePaidDays(presentDays, dim, eligibleWorkingDays);
   const overridePaid = overrides?.paidDays ?? record?.override_paid_days ?? null;
-  const paidDays = overridePaid != null ? Number(overridePaid) : auto.paidDays;
+  const paidDays = overridePaid != null
+    ? Math.min(Number(overridePaid), dim)
+    : auto.paidDays;
   const paidLeaveBenefit = overridePaid != null ? Math.max(0, paidDays - presentDays) : auto.benefit;
 
   const grossSalary = perDay * paidDays;
