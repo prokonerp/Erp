@@ -286,21 +286,201 @@ export async function listAttendance(year: number, month: number) {
   const to = isoDate(year, month, daysInMonth(year, month));
   const { data, error } = await supabase
     .from("attendance")
-    .select("employee_id,work_date,code")
+    .select("employee_id,work_date,code,work_hours,day_value,created_at,updated_at")
     .gte("work_date", from)
     .lte("work_date", to);
   if (error) throw error;
-  const map: Record<string, Record<number, AttCode>> = {};
-  for (const r of (data ?? []) as { employee_id: string; work_date: string; code: string }[]) {
+  const map: Record<string, Record<number, AttEntry>> = {};
+  type Row = { employee_id: string; work_date: string; code: string; work_hours: number | null; day_value: number | null; created_at: string; updated_at: string };
+  for (const r of (data ?? []) as Row[]) {
     const day = Number(r.work_date.slice(8, 10));
-    (map[r.employee_id] ??= {})[day] = (r.code as AttCode) ?? "A";
+    const code = (r.code as AttCode) ?? "A";
+    const hours = r.work_hours == null ? null : Number(r.work_hours);
+    const sunday = isSundayDate(year, month, day);
+    (map[r.employee_id] ??= {})[day] = {
+      code,
+      hours,
+      dayValue: r.day_value == null ? dayValueFor(code, hours, sunday) : Number(r.day_value),
+      edited: !!r.updated_at && !!r.created_at && new Date(r.updated_at).getTime() - new Date(r.created_at).getTime() > 1000,
+    };
   }
   return map;
 }
 
-export async function saveAttendance(rows: { employee_id: string; work_date: string; code: AttCode }[]) {
-  if (rows.length === 0) return;
-  const { error } = await supabase.from("attendance").upsert(rows, { onConflict: "employee_id,work_date" });
+export type AttendanceWrite = { employee_id: string; work_date: string; code: AttCode; hours: number | null };
+
+async function currentActor() {
+  const { data } = await supabase.auth.getUser();
+  return { id: data.user?.id ?? null, email: data.user?.email ?? null };
+}
+
+/**
+ * Upsert attendance and record an audit batch (old → new) so the action can be undone.
+ * Returns the batch id.
+ */
+export async function saveAttendance(rows: AttendanceWrite[], action = "edit"): Promise<string | null> {
+  if (rows.length === 0) return null;
+  for (const r of rows) {
+    const h = r.hours;
+    if (h != null && (Number.isNaN(Number(h)) || Number(h) < 0 || Number(h) > MAX_WORK_HOURS)) {
+      throw new Error(`Work hours must be between 0 and ${MAX_WORK_HOURS}`);
+    }
+  }
+  const actor = await currentActor();
+  const dates = rows.map((r) => r.work_date);
+  const empIds = Array.from(new Set(rows.map((r) => r.employee_id)));
+  const { data: existing } = await supabase
+    .from("attendance")
+    .select("employee_id,work_date,code,work_hours,day_value")
+    .in("employee_id", empIds)
+    .gte("work_date", dates.reduce((a, b) => (a < b ? a : b)))
+    .lte("work_date", dates.reduce((a, b) => (a > b ? a : b)));
+  const prev = new Map<string, { code: string; work_hours: number | null; day_value: number | null }>();
+  for (const e of (existing ?? []) as any[]) prev.set(`${e.employee_id}|${e.work_date}`, e);
+
+  const payload = rows.map((r) => {
+    const [y, m, d] = r.work_date.split("-").map(Number);
+    const sunday = isSundayDate(y, m, d);
+    return {
+      employee_id: r.employee_id,
+      work_date: r.work_date,
+      code: r.code,
+      work_hours: r.hours,
+      day_value: dayValueFor(r.code, r.hours, sunday),
+      is_sunday: sunday,
+      updated_by: actor.id,
+    };
+  });
+  const { error } = await supabase.from("attendance").upsert(payload, { onConflict: "employee_id,work_date" });
+  if (error) throw error;
+
+  const batchId = crypto.randomUUID();
+  const audit = payload.map((p) => {
+    const old = prev.get(`${p.employee_id}|${p.work_date}`);
+    return {
+      batch_id: batchId,
+      employee_id: p.employee_id,
+      work_date: p.work_date,
+      action,
+      old_code: old?.code ?? null,
+      old_hours: old?.work_hours ?? null,
+      old_day_value: old?.day_value ?? null,
+      new_code: p.code,
+      new_hours: p.work_hours,
+      new_day_value: p.day_value,
+      changed_by: actor.id,
+      changed_by_email: actor.email,
+    };
+  });
+  const { error: aErr } = await supabase.from("attendance_audit").insert(audit);
+  if (aErr) throw aErr;
+  return batchId;
+}
+
+export type AuditRow = {
+  id: string; batch_id: string; employee_id: string; work_date: string; action: string;
+  old_code: string | null; old_hours: number | null; old_day_value: number | null;
+  new_code: string | null; new_hours: number | null; new_day_value: number | null;
+  changed_by_email: string | null; undone: boolean; created_at: string;
+};
+
+export async function listAttendanceAudit(year: number, month: number): Promise<AuditRow[]> {
+  const from = isoDate(year, month, 1);
+  const to = isoDate(year, month, daysInMonth(year, month));
+  const { data, error } = await supabase
+    .from("attendance_audit")
+    .select("*")
+    .gte("work_date", from)
+    .lte("work_date", to)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return (data ?? []) as unknown as AuditRow[];
+}
+
+/** Restore every entry touched by a batch back to its previous value. */
+export async function undoBatch(batchId: string) {
+  const { data, error } = await supabase.from("attendance_audit").select("*").eq("batch_id", batchId).eq("undone", false);
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as AuditRow[];
+  if (rows.length === 0) throw new Error("Nothing to undo in this action");
+  const actor = await currentActor();
+  const restore = rows.filter((r) => r.old_code != null);
+  const remove = rows.filter((r) => r.old_code == null);
+  if (restore.length) {
+    const { error: uErr } = await supabase.from("attendance").upsert(
+      restore.map((r) => {
+        const [y, m, d] = r.work_date.split("-").map(Number);
+        return {
+          employee_id: r.employee_id, work_date: r.work_date,
+          code: r.old_code as string, work_hours: r.old_hours,
+          day_value: r.old_day_value ?? dayValueFor(r.old_code as AttCode, r.old_hours, isSundayDate(y, m, d)),
+          is_sunday: isSundayDate(y, m, d), updated_by: actor.id,
+        };
+      }),
+      { onConflict: "employee_id,work_date" },
+    );
+    if (uErr) throw uErr;
+  }
+  for (const r of remove) {
+    const { error: dErr } = await supabase.from("attendance").delete()
+      .eq("employee_id", r.employee_id).eq("work_date", r.work_date);
+    if (dErr) throw dErr;
+  }
+  const { error: mErr } = await supabase.from("attendance_audit").update({ undone: true }).eq("batch_id", batchId);
+  if (mErr) throw mErr;
+  return rows.length;
+}
+
+/** Clear attendance for an employee (or everyone when employeeId is null) for a month, with audit. */
+export async function clearAttendance(year: number, month: number, employeeId: string | null) {
+  const from = isoDate(year, month, 1);
+  const to = isoDate(year, month, daysInMonth(year, month));
+  let q = supabase.from("attendance").select("employee_id,work_date,code,work_hours,day_value").gte("work_date", from).lte("work_date", to);
+  if (employeeId) q = q.eq("employee_id", employeeId);
+  const { data, error } = await q;
+  if (error) throw error;
+  const rows = (data ?? []) as any[];
+  if (rows.length === 0) throw new Error("No attendance to undo for this period");
+  const actor = await currentActor();
+  const batchId = crypto.randomUUID();
+  const { error: aErr } = await supabase.from("attendance_audit").insert(
+    rows.map((r) => ({
+      batch_id: batchId, employee_id: r.employee_id, work_date: r.work_date,
+      action: employeeId ? "undo_employee_month" : "undo_full_month",
+      old_code: r.code, old_hours: r.work_hours, old_day_value: r.day_value,
+      new_code: null, new_hours: null, new_day_value: null,
+      changed_by: actor.id, changed_by_email: actor.email,
+    })),
+  );
+  if (aErr) throw aErr;
+  let del = supabase.from("attendance").delete().gte("work_date", from).lte("work_date", to);
+  if (employeeId) del = del.eq("employee_id", employeeId);
+  const { error: dErr } = await del;
+  if (dErr) throw dErr;
+  return rows.length;
+}
+
+export type AttendanceLock = { period_year: number; period_month: number; locked: boolean; locked_by_email: string | null; locked_at: string };
+
+export async function getAttendanceLock(year: number, month: number): Promise<AttendanceLock | null> {
+  const { data, error } = await supabase
+    .from("attendance_locks")
+    .select("period_year,period_month,locked,locked_by_email,locked_at")
+    .eq("period_year", year).eq("period_month", month).maybeSingle();
+  if (error) throw error;
+  return (data ?? null) as AttendanceLock | null;
+}
+
+export async function setAttendanceLock(year: number, month: number, locked: boolean) {
+  const actor = await currentActor();
+  const { error } = await supabase.from("attendance_locks").upsert(
+    {
+      period_year: year, period_month: month, locked,
+      locked_by: actor.id, locked_by_email: actor.email, locked_at: new Date().toISOString(),
+    },
+    { onConflict: "period_year,period_month" },
+  );
   if (error) throw error;
 }
 
