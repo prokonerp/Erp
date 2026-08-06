@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import {
   MONTHS, type AttCode, type Advance, type ComputedRow, type Employee, type SalaryRecord,
-  computeRow, daysInMonth, incrementDue, isoDate, listAdvances, listAttendance, listEmployees,
-  listSalaryRecords, money, saveAttendance, upsertSalaryRecord,
+  computeRow, daysInMonth, emiDueFor, incrementDue, isoDate, listAdvances, listAttendance, listEmployees,
+  listSalaryRecords, money, saveAttendance, settleEmiForPeriod, upsertSalaryRecord,
 } from "@/lib/payroll";
 
 export const Route = createFileRoute("/_app/payroll")({
@@ -52,6 +52,7 @@ function PayrollPage() {
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [records, setRecords] = useState<SalaryRecord[]>([]);
   const [deductions, setDeductions] = useState<Record<string, number>>({});
+  const [ov, setOv] = useState<Record<string, { paidDays?: number | null; emi?: number | null; net?: number | null }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -62,15 +63,24 @@ function PayrollPage() {
     setLoading(true);
     try {
       const [emps, a, adv, recs] = await Promise.all([
-        listEmployees(), listAttendance(year, month), listAdvances(year, month), listSalaryRecords(year, month),
+        listEmployees(), listAttendance(year, month), listAdvances(), listSalaryRecords(year, month),
       ]);
       setEmployees(emps);
       setAtt(a);
       setAdvances(adv);
       setRecords(recs);
       const d: Record<string, number> = {};
-      recs.forEach((r) => { d[r.employee_id] = Number(r.deductions ?? 0); });
+      const o: Record<string, { paidDays?: number | null; emi?: number | null; net?: number | null }> = {};
+      recs.forEach((r) => {
+        d[r.employee_id] = Number(r.deductions ?? 0);
+        o[r.employee_id] = {
+          paidDays: r.override_paid_days ?? null,
+          emi: r.override_emi ?? null,
+          net: r.override_net ?? null,
+        };
+      });
       setDeductions(d);
+      setOv(o);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to load payroll");
     }
@@ -78,11 +88,12 @@ function PayrollPage() {
   }
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [year, month]);
 
+  /** EMI due this period per employee (sum across active advance schedules). */
   const advByEmp = useMemo(() => {
     const m: Record<string, number> = {};
-    advances.forEach((a) => { m[a.employee_id] = (m[a.employee_id] ?? 0) + Number(a.amount ?? 0); });
+    advances.forEach((a) => { m[a.employee_id] = (m[a.employee_id] ?? 0) + emiDueFor(a, year, month); });
     return m;
-  }, [advances]);
+  }, [advances, year, month]);
 
   const recByEmp = useMemo(() => {
     const m: Record<string, SalaryRecord> = {};
@@ -95,14 +106,17 @@ function PayrollPage() {
     return employees
       .filter((e) => e.active !== false)
       .filter((e) => !q || e.name.toLowerCase().includes(q) || (e.role ?? "").toLowerCase().includes(q))
-      .map((e) => computeRow(e, year, month, att[e.id] ?? {}, advByEmp[e.id] ?? 0, deductions[e.id] ?? 0, recByEmp[e.id] ?? null))
+      .map((e) => computeRow(
+        e, year, month, att[e.id] ?? {}, advByEmp[e.id] ?? 0, deductions[e.id] ?? 0,
+        recByEmp[e.id] ?? null, ov[e.id],
+      ))
       .filter((r) => r.eligible.end >= r.eligible.start);
-  }, [employees, att, advByEmp, deductions, recByEmp, year, month, search]);
+  }, [employees, att, advByEmp, deductions, recByEmp, ov, year, month, search]);
 
   const totals = useMemo(() => rows.reduce(
     (acc, r) => ({
-      gross: acc.gross + r.totalSalary,
-      advance: acc.advance + r.advance,
+      gross: acc.gross + r.grossSalary,
+      advance: acc.advance + r.emiDeduction,
       net: acc.net + r.netSalary,
       paid: acc.paid + (r.record?.status === "paid" ? 1 : 0),
     }),
@@ -163,9 +177,11 @@ function PayrollPage() {
     setSaving(true);
     try {
       for (const r of rows) await upsertSalaryRecord(r, year, month, status);
+      if (status === "paid") await settleEmiForPeriod(advances, year, month);
       toast.success(status === "paid" ? "Marked as paid" : status === "approved" ? "Salary approved" : "Salary sheet saved");
       const recs = await listSalaryRecords(year, month);
       setRecords(recs);
+      if (status === "paid") setAdvances(await listAdvances());
     } catch (e: any) { toast.error(e.message); }
     setSaving(false);
   }
@@ -193,13 +209,16 @@ function PayrollPage() {
     { header: "Name", get: (r: ComputedRow) => r.emp.name },
     { header: "Designation", get: (r: ComputedRow) => r.emp.role ?? "" },
     { header: "Basic (Monthly)", get: (r: ComputedRow) => Number(r.emp.monthly_salary ?? 0) },
-    { header: "Days", get: (r: ComputedRow) => r.daysInMonth },
+    { header: "Total Days", get: (r: ComputedRow) => r.daysInMonth },
+    { header: "Present Days", get: (r: ComputedRow) => r.presentDays },
+    { header: "Paid Leave (+1)", get: (r: ComputedRow) => r.paidLeaveBenefit },
+    { header: "Paid Days", get: (r: ComputedRow) => r.paidDays },
     { header: "Per Day", get: (r: ComputedRow) => Number(r.perDay.toFixed(2)) },
-    { header: "Working Days", get: (r: ComputedRow) => r.workingDays },
-    { header: "Total", get: (r: ComputedRow) => Number(r.totalSalary.toFixed(2)) },
-    { header: "Advance", get: (r: ComputedRow) => r.advance },
+    { header: "Gross Salary", get: (r: ComputedRow) => Number(r.grossSalary.toFixed(2)) },
     { header: "Deductions", get: (r: ComputedRow) => r.deductions },
-    { header: "Net", get: (r: ComputedRow) => Number(r.netSalary.toFixed(2)) },
+    { header: "EMI Deduction", get: (r: ComputedRow) => Number(r.emiDeduction.toFixed(2)) },
+    { header: "EMI Carried Forward", get: (r: ComputedRow) => Number(r.emiCarryForward.toFixed(2)) },
+    { header: "Net Salary", get: (r: ComputedRow) => Number(r.netSalary.toFixed(2)) },
     { header: "Status", get: (r: ComputedRow) => r.record?.status ?? "draft" },
   ];
 
@@ -276,12 +295,14 @@ function PayrollPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Designation</TableHead>
                     <TableHead className="text-right">Basic</TableHead>
-                    <TableHead className="text-right">Days</TableHead>
+                    <TableHead className="text-right">Total Days</TableHead>
+                    <TableHead className="text-right">Present</TableHead>
+                    <TableHead className="text-right">Paid Leave</TableHead>
+                    <TableHead className="text-right">Paid Days</TableHead>
                     <TableHead className="text-right">Per Day</TableHead>
-                    <TableHead className="text-right">Working</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Advance</TableHead>
+                    <TableHead className="text-right">Gross</TableHead>
                     <TableHead className="text-right">Deduct.</TableHead>
+                    <TableHead className="text-right">EMI</TableHead>
                     <TableHead className="text-right">Net</TableHead>
                     <TableHead>Paid</TableHead>
                     <TableHead className="w-40">Actions</TableHead>
@@ -304,10 +325,20 @@ function PayrollPage() {
                           <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{r.emp.role ?? "—"}</TableCell>
                           <TableCell className="text-right tabular-nums">₹{money(Number(r.emp.monthly_salary ?? 0))}</TableCell>
                           <TableCell className="text-right tabular-nums">{r.daysInMonth}</TableCell>
+                          <TableCell className="text-right tabular-nums">{r.presentDays}</TableCell>
+                          <TableCell className="text-right tabular-nums text-emerald-600">{r.paidLeaveBenefit > 0 ? `+${r.paidLeaveBenefit}` : "—"}</TableCell>
+                          <TableCell className="text-right">
+                            {isAdmin ? (
+                              <Input
+                                type="number" step="0.5"
+                                className={`h-8 w-20 text-right ${r.overrides.paidDays != null ? "border-primary" : ""}`}
+                                value={r.paidDays}
+                                onChange={(e) => setOv((p) => ({ ...p, [r.emp.id]: { ...(p[r.emp.id] ?? {}), paidDays: e.target.value === "" ? null : Number(e.target.value) } }))}
+                              />
+                            ) : <span className="tabular-nums font-medium">{r.paidDays}</span>}
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">₹{money(r.perDay)}</TableCell>
-                          <TableCell className="text-right tabular-nums font-medium">{r.workingDays}</TableCell>
-                          <TableCell className="text-right tabular-nums">₹{money(r.totalSalary)}</TableCell>
-                          <TableCell className="text-right tabular-nums text-amber-600">₹{money(r.advance)}</TableCell>
+                          <TableCell className="text-right tabular-nums">₹{money(r.grossSalary)}</TableCell>
                           <TableCell className="text-right">
                             {isAdmin ? (
                               <Input
@@ -318,7 +349,26 @@ function PayrollPage() {
                               />
                             ) : <span className="tabular-nums">₹{money(r.deductions)}</span>}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums font-semibold">₹{money(r.netSalary)}</TableCell>
+                          <TableCell className="text-right">
+                            {isAdmin ? (
+                              <Input
+                                type="number"
+                                className={`h-8 w-24 text-right ${r.overrides.emi != null ? "border-primary" : ""}`}
+                                value={r.emiDeduction}
+                                onChange={(e) => setOv((p) => ({ ...p, [r.emp.id]: { ...(p[r.emp.id] ?? {}), emi: e.target.value === "" ? null : Number(e.target.value) } }))}
+                              />
+                            ) : <span className="tabular-nums text-amber-600">₹{money(r.emiDeduction)}</span>}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isAdmin ? (
+                              <Input
+                                type="number"
+                                className={`h-8 w-28 text-right font-semibold ${r.overrides.net != null ? "border-primary" : ""}`}
+                                value={Number(r.netSalary.toFixed(2))}
+                                onChange={(e) => setOv((p) => ({ ...p, [r.emp.id]: { ...(p[r.emp.id] ?? {}), net: e.target.value === "" ? null : Number(e.target.value) } }))}
+                              />
+                            ) : <span className="tabular-nums font-semibold">₹{money(r.netSalary)}</span>}
+                          </TableCell>
                           <TableCell>
                             <Badge variant={status === "paid" ? "default" : status === "approved" ? "secondary" : "outline"} className="capitalize">{status}</Badge>
                           </TableCell>
@@ -335,8 +385,24 @@ function PayrollPage() {
                         </TableRow>
                         {open && (
                           <TableRow>
-                            <TableCell colSpan={14} className="bg-muted/30">
+                            <TableCell colSpan={16} className="bg-muted/30">
                               <div className="space-y-2 py-1">
+                                <div className="flex flex-wrap items-center gap-3 text-xs">
+                                  <span className="text-muted-foreground">
+                                    Present {r.presentDays} / {r.daysInMonth} · paid leave +{r.paidLeaveBenefit} · paid days {r.paidDays}
+                                  </span>
+                                  {r.emiCarryForward > 0 && (
+                                    <Badge variant="outline" className="text-amber-600 border-amber-500/50">
+                                      ₹{money(r.emiCarryForward)} EMI carried forward to next month
+                                    </Badge>
+                                  )}
+                                  {isAdmin && (r.overrides.paidDays != null || r.overrides.emi != null || r.overrides.net != null) && (
+                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs"
+                                      onClick={() => setOv((p) => ({ ...p, [r.emp.id]: {} }))}>
+                                      Clear admin overrides
+                                    </Button>
+                                  )}
+                                </div>
                                 <div className="text-xs text-muted-foreground">
                                   Attendance — click a day to cycle P → H → A{r.eligible.start > 1 || r.eligible.end < r.daysInMonth ? ` · eligible days ${r.eligible.start}–${r.eligible.end}` : ""}
                                 </div>
@@ -390,18 +456,25 @@ function AdvanceDialog({ employees, year, month, onSaved }: { employees: Employe
   const [open, setOpen] = useState(false);
   const [employeeId, setEmployeeId] = useState("");
   const [amount, setAmount] = useState("");
+  const [emiMonths, setEmiMonths] = useState("1");
   const [date, setDate] = useState(isoDate(year, month, 1));
   const [notes, setNotes] = useState("");
 
   async function save() {
     if (!employeeId || !Number(amount)) return toast.error("Select employee and amount");
+    const months = Math.max(1, Number(emiMonths) || 1);
+    const total = Number(amount);
     const { error } = await supabase.from("employee_advances").insert({
-      employee_id: employeeId, amount: Number(amount), advance_date: date,
+      employee_id: employeeId, amount: total, advance_date: date,
       period_year: year, period_month: month, notes: notes || null,
+      emi_months: months,
+      emi_amount: Number((total / months).toFixed(2)),
+      remaining_months: months,
+      start_year: year, start_month: month, status: "active",
     });
     if (error) return toast.error(error.message);
     toast.success("Advance recorded");
-    setOpen(false); setAmount(""); setNotes("");
+    setOpen(false); setAmount(""); setNotes(""); setEmiMonths("1");
     onSaved();
   }
 
@@ -423,6 +496,16 @@ function AdvanceDialog({ employees, year, month, onSaved }: { employees: Employe
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
             <div><Label className="text-xs">Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Recover over (months)</Label>
+              <Input type="number" min="1" value={emiMonths} onChange={(e) => setEmiMonths(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">EMI per month (₹)</Label>
+              <Input readOnly value={Number(amount) > 0 ? (Number(amount) / Math.max(1, Number(emiMonths) || 1)).toFixed(2) : "0.00"} />
+            </div>
           </div>
           <div><Label className="text-xs">Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         </div>
