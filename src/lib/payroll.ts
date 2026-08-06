@@ -176,6 +176,7 @@ export function computeRow(
   advanceEmi: number,
   deductions: number,
   record: SalaryRecord | null,
+  overrides?: { paidDays?: number | null; emi?: number | null; net?: number | null },
 ): ComputedRow {
   const dim = daysInMonth(year, month);
   const monthly = Number(emp.monthly_salary ?? 0);
@@ -186,20 +187,20 @@ export function computeRow(
   const eligibleWorkingDays = Math.max(0, eligible.end - eligible.start + 1);
 
   const auto = computePaidDays(presentDays, dim, eligibleWorkingDays);
-  const overridePaid = record?.override_paid_days ?? null;
+  const overridePaid = overrides?.paidDays ?? record?.override_paid_days ?? null;
   const paidDays = overridePaid != null ? Number(overridePaid) : auto.paidDays;
   const paidLeaveBenefit = overridePaid != null ? Math.max(0, paidDays - presentDays) : auto.benefit;
 
   const grossSalary = perDay * paidDays;
 
-  const overrideEmi = record?.override_emi ?? null;
+  const overrideEmi = overrides?.emi ?? record?.override_emi ?? null;
   const wantedEmi = overrideEmi != null ? Number(overrideEmi) : advanceEmi;
   // Never allow a negative salary: cap EMI at what's payable, carry the rest forward.
   const payableAfterDeductions = Math.max(0, grossSalary - deductions);
   const emiDeduction = Math.min(wantedEmi, payableAfterDeductions);
   const emiCarryForward = Math.max(0, wantedEmi - emiDeduction);
 
-  const overrideNet = record?.override_net ?? null;
+  const overrideNet = overrides?.net ?? record?.override_net ?? null;
   const netSalary = overrideNet != null
     ? Number(overrideNet)
     : Math.max(0, grossSalary - deductions - emiDeduction);

@@ -106,17 +106,10 @@ function PayrollPage() {
     return employees
       .filter((e) => e.active !== false)
       .filter((e) => !q || e.name.toLowerCase().includes(q) || (e.role ?? "").toLowerCase().includes(q))
-      .map((e) => {
-        const base = recByEmp[e.id] ?? null;
-        const o = ov[e.id] ?? {};
-        const rec = {
-          ...(base ?? ({} as SalaryRecord)),
-          override_paid_days: o.paidDays ?? null,
-          override_emi: o.emi ?? null,
-          override_net: o.net ?? null,
-        } as SalaryRecord;
-        return computeRow(e, year, month, att[e.id] ?? {}, advByEmp[e.id] ?? 0, deductions[e.id] ?? 0, base ? rec : (Object.keys(o).length ? rec : null));
-      })
+      .map((e) => computeRow(
+        e, year, month, att[e.id] ?? {}, advByEmp[e.id] ?? 0, deductions[e.id] ?? 0,
+        recByEmp[e.id] ?? null, ov[e.id],
+      ))
       .filter((r) => r.eligible.end >= r.eligible.start);
   }, [employees, att, advByEmp, deductions, recByEmp, ov, year, month, search]);
 
