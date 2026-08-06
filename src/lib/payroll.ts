@@ -98,8 +98,37 @@ export function daysInMonth(year: number, month: number): number {
 export const isoDate = (y: number, m: number, d: number) =>
   `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
-export const codeValue = (c: AttCode | undefined): number =>
-  c === "P" ? 1 : c === "H" ? 0.5 : 0;
+/** Sunday auto-detect straight off the calendar. */
+export const isSundayDate = (y: number, m: number, d: number) =>
+  new Date(y, m - 1, d).getDay() === 0;
+
+/**
+ * Day credit for one date.
+ * Priority: work hours (hours / 8, doubled on Sunday) → attendance type.
+ * Type fallback: Present = 1, Half Day = 0.5, Sunday Work = 2, Absent = 0.
+ */
+export function dayValueFor(code: AttCode | undefined, hours: number | null | undefined, sunday: boolean): number {
+  const h = hours == null || hours === ("" as unknown as number) ? null : Number(hours);
+  if (h != null && !Number.isNaN(h) && h > 0) {
+    const clamped = Math.min(MAX_WORK_HOURS, Math.max(0, h));
+    const days = clamped / STANDARD_SHIFT_HOURS;
+    return round2(sunday ? days * 2 : days);
+  }
+  if (code === "SW") return 2;
+  if (code === "P") return sunday ? 2 : 1;
+  if (code === "H") return 0.5;
+  if (code === "OT") return 1;
+  return 0;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+export function makeEntry(code: AttCode, hours: number | null, sunday: boolean, edited = false): AttEntry {
+  return { code, hours: hours == null ? null : Number(hours), dayValue: dayValueFor(code, hours, sunday), edited };
+}
+
+/** Legacy helper kept for simple P/H/A day credit. */
+export const codeValue = (c: AttCode | undefined): number => dayValueFor(c, null, false);
 
 export const money = (n: number) =>
   new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(Math.round(n * 100) / 100);
