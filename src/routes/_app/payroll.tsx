@@ -551,7 +551,12 @@ function PayrollPage() {
                                                 {ATT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                                               </select>
                                             </TableCell>
-                                            <TableCell className="text-right tabular-nums font-medium">{inRange ? dv : "–"}</TableCell>
+                                            <TableCell className="text-right tabular-nums font-medium">
+                                              {inRange ? dv : "–"}
+                                              {inRange && sunday && dv === 0 && (
+                                                <span className="ml-1 text-[10px] font-normal text-destructive" title="Saturday and Monday both absent">sandwich</span>
+                                              )}
+                                            </TableCell>
                                           </TableRow>
                                         );
                                       })}
