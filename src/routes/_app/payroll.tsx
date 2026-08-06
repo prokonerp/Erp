@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ExportButtons } from "@/components/ExportButtons";
+import { AdvanceLedger } from "@/components/AdvanceLedger";
 import { toast } from "sonner";
 import {
   AlertTriangle, BadgeIndianRupee, CalendarDays, CheckCircle2, ChevronDown, ChevronRight,
@@ -17,11 +18,11 @@ import {
 } from "lucide-react";
 import {
   MAX_WORK_HOURS, MONTHS, STANDARD_SHIFT_HOURS,
-  type AttCode, type AttEntry, type Advance, type AttendanceLock, type AuditRow,
+  type AttCode, type AttEntry, type Advance, type AdvancePayment, type AttendanceLock, type AuditRow,
   type ComputedRow, type Employee, type SalaryRecord,
-  clearAttendance, computeRow, dayValueFor, daysInMonth, emiDueFor, getAttendanceLock, incrementDue,
-  isSundayDate, isoDate, listAdvances, listAttendance, listAttendanceAudit, listEmployees,
-  listSalaryRecords, money, saveAttendance, setAttendanceLock, settleEmiForPeriod, undoBatch, upsertSalaryRecord,
+  clearAttendance, computeRow, dayValueFor, daysInMonth, emiDueFor, fromMonthIndex, getAttendanceLock, incrementDue,
+  isSundayDate, isoDate, listAdvancePayments, listAdvances, listAttendance, listAttendanceAudit, listEmployees,
+  listSalaryRecords, money, monthIndex, saveAttendance, setAttendanceLock, settleEmiForPeriod, undoBatch, upsertSalaryRecord,
 } from "@/lib/payroll";
 
 export const Route = createFileRoute("/_app/payroll")({
@@ -67,6 +68,7 @@ function PayrollPage() {
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [advances, setAdvances] = useState<Advance[]>([]);
+  const [advPayments, setAdvPayments] = useState<AdvancePayment[]>([]);
   const [records, setRecords] = useState<SalaryRecord[]>([]);
   const [deductions, setDeductions] = useState<Record<string, number>>({});
   const [ov, setOv] = useState<Record<string, { paidDays?: number | null; emi?: number | null; net?: number | null }>>({});
@@ -79,13 +81,14 @@ function PayrollPage() {
   async function load() {
     setLoading(true);
     try {
-      const [emps, a, adv, recs, lk, log] = await Promise.all([
+      const [emps, a, adv, recs, lk, log, pays] = await Promise.all([
         listEmployees(), listAttendance(year, month), listAdvances(), listSalaryRecords(year, month),
-        getAttendanceLock(year, month), listAttendanceAudit(year, month),
+        getAttendanceLock(year, month), listAttendanceAudit(year, month), listAdvancePayments(),
       ]);
       setEmployees(emps);
       setAtt(a);
       setAdvances(adv);
+      setAdvPayments(pays);
       setRecords(recs);
       setLock(lk);
       setAudit(log);
@@ -111,9 +114,12 @@ function PayrollPage() {
   /** EMI due this period per employee (sum across active advance schedules). */
   const advByEmp = useMemo(() => {
     const m: Record<string, number> = {};
-    advances.forEach((a) => { m[a.employee_id] = (m[a.employee_id] ?? 0) + emiDueFor(a, year, month); });
+    advances.forEach((a) => {
+      const employee = employees.find((e) => e.id === a.employee_id) ?? null;
+      m[a.employee_id] = (m[a.employee_id] ?? 0) + emiDueFor(a, year, month, { payments: advPayments, employee });
+    });
     return m;
-  }, [advances, year, month]);
+  }, [advances, advPayments, employees, year, month]);
 
   const recByEmp = useMemo(() => {
     const m: Record<string, SalaryRecord> = {};
@@ -243,14 +249,19 @@ function PayrollPage() {
     try {
       for (const r of rows) await upsertSalaryRecord(r, year, month, status);
       if (status === "paid") {
-        await settleEmiForPeriod(advances, year, month);
+        const deducted: Record<string, number> = {};
+        rows.forEach((r) => { deducted[r.emp.id] = r.emiDeduction; });
+        await settleEmiForPeriod(advances, year, month, deducted, advPayments, employees);
         await setAttendanceLock(year, month, true);
         setLock(await getAttendanceLock(year, month));
       }
       toast.success(status === "paid" ? "Marked as paid" : status === "approved" ? "Salary approved" : "Salary sheet saved");
       const recs = await listSalaryRecords(year, month);
       setRecords(recs);
-      if (status === "paid") setAdvances(await listAdvances());
+      if (status === "paid") {
+        setAdvances(await listAdvances());
+        setAdvPayments(await listAdvancePayments());
+      }
     } catch (e: any) { toast.error(e.message); }
     setSaving(false);
   }
@@ -259,6 +270,14 @@ function PayrollPage() {
     if (!isAdmin) return;
     try {
       await upsertSalaryRecord(r, year, month, status);
+      if (status === "paid") {
+        await settleEmiForPeriod(
+          advances.filter((a) => a.employee_id === r.emp.id), year, month,
+          { [r.emp.id]: r.emiDeduction }, advPayments, employees,
+        );
+        setAdvances(await listAdvances());
+        setAdvPayments(await listAdvancePayments());
+      }
       setRecords(await listSalaryRecords(year, month));
       toast.success(status === "paid" ? "Marked paid" : "Approved");
     } catch (e: any) { toast.error(e.message); }
@@ -577,6 +596,16 @@ function PayrollPage() {
         </CardContent>
       </Card>
 
+      <AdvanceLedger
+        employees={employees}
+        advances={advances}
+        payments={advPayments}
+        year={year}
+        month={month}
+        isAdmin={isAdmin}
+        onChanged={load}
+      />
+
       <Dialog open={confirmBulk} onOpenChange={setConfirmBulk}>
         <DialogContent>
           <DialogHeader><DialogTitle>Mark all present?</DialogTitle></DialogHeader>
@@ -656,24 +685,35 @@ function AdvanceDialog({ employees, year, month, onSaved }: { employees: Employe
   const [employeeId, setEmployeeId] = useState("");
   const [amount, setAmount] = useState("");
   const [emiMonths, setEmiMonths] = useState("1");
+  const [emiAmount, setEmiAmount] = useState("");
+  const [startYear, setStartYear] = useState(year);
+  const [startMonth, setStartMonth] = useState(month);
   const [date, setDate] = useState(isoDate(year, month, 1));
   const [notes, setNotes] = useState("");
 
+  const total = Number(amount) || 0;
+  const months = Math.max(1, Number(emiMonths) || 1);
+  const emi = Number(emiAmount) > 0 ? Number(emiAmount) : (total > 0 ? Number((total / months).toFixed(2)) : 0);
+  /** Installments actually needed at this EMI — keeps end month and balance honest. */
+  const effMonths = emi > 0 ? Math.max(1, Math.ceil(total / emi)) : months;
+  const endIdx = monthIndex(startYear, startMonth) + effMonths - 1;
+  const end = fromMonthIndex(endIdx);
+
   async function save() {
-    if (!employeeId || !Number(amount)) return toast.error("Select employee and amount");
-    const months = Math.max(1, Number(emiMonths) || 1);
-    const total = Number(amount);
+    if (!employeeId || !total) return toast.error("Select employee and amount");
+    if (emi <= 0) return toast.error("EMI amount must be greater than zero");
     const { error } = await supabase.from("employee_advances").insert({
       employee_id: employeeId, amount: total, advance_date: date,
       period_year: year, period_month: month, notes: notes || null,
-      emi_months: months,
-      emi_amount: Number((total / months).toFixed(2)),
-      remaining_months: months,
-      start_year: year, start_month: month, status: "active",
+      emi_months: effMonths,
+      emi_amount: emi,
+      remaining_months: effMonths,
+      paid_amount: 0, paid_installments: 0,
+      start_year: startYear, start_month: startMonth, status: "active",
     });
     if (error) return toast.error(error.message);
     toast.success("Advance recorded");
-    setOpen(false); setAmount(""); setNotes(""); setEmiMonths("1");
+    setOpen(false); setAmount(""); setNotes(""); setEmiMonths("1"); setEmiAmount("");
     onSaved();
   }
 
@@ -693,18 +733,32 @@ function AdvanceDialog({ employees, year, month, onSaved }: { employees: Employe
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+            <div><Label className="text-xs">Total amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
             <div><Label className="text-xs">Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Recover over (months)</Label>
+              <Label className="text-xs">No. of installments</Label>
               <Input type="number" min="1" value={emiMonths} onChange={(e) => setEmiMonths(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs">EMI per month (₹)</Label>
-              <Input readOnly value={Number(amount) > 0 ? (Number(amount) / Math.max(1, Number(emiMonths) || 1)).toFixed(2) : "0.00"} />
+              <Label className="text-xs">EMI amount (₹)</Label>
+              <Input type="number" placeholder={total > 0 ? (total / months).toFixed(2) : "0.00"} value={emiAmount} onChange={(e) => setEmiAmount(e.target.value)} />
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Start month</Label>
+              <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={startMonth} onChange={(e) => setStartMonth(Number(e.target.value))}>
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+            </div>
+            <div><Label className="text-xs">Start year</Label><Input type="number" value={startYear} onChange={(e) => setStartYear(Number(e.target.value) || year)} /></div>
+          </div>
+          <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
+            <div>EMI <b className="tabular-nums">₹{money(emi)}</b> × <b>{effMonths}</b> installment(s)</div>
+            <div>Schedule: <b>{MONTHS[startMonth - 1]} {startYear}</b> → <b>{MONTHS[end.month - 1]} {end.year}</b></div>
+            <div>Remaining balance today: <b className="tabular-nums">₹{money(total)}</b></div>
           </div>
           <div><Label className="text-xs">Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         </div>

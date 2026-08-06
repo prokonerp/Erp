@@ -71,6 +71,21 @@ export type Advance = {
   start_year: number | null;
   start_month: number | null;
   status: string;
+  paid_amount: number;
+  paid_installments: number;
+};
+
+/** One recorded EMI recovery (or skip) against an advance for a salary period. */
+export type AdvancePayment = {
+  id: string;
+  advance_id: string;
+  employee_id: string;
+  period_year: number;
+  period_month: number;
+  amount: number;
+  kind: string; // 'emi' | 'skip' | 'exit_recovery' | 'closing'
+  notes: string | null;
+  created_at: string;
 };
 
 export type SalaryRecordExtra = {
@@ -214,18 +229,81 @@ export type ComputedRow = {
 
 export const monthIndex = (y: number, m: number) => y * 12 + (m - 1);
 
-/** Is this advance's EMI schedule active for the given period? */
-export function emiDueFor(a: Advance, year: number, month: number): number {
-  if ((a.status ?? "active") !== "active") return 0;
-  const sy = a.start_year ?? a.period_year;
-  const sm = a.start_month ?? a.period_month;
-  if (!sy || !sm) return 0;
-  const start = monthIndex(sy, sm);
-  const cur = monthIndex(year, month);
+export const fromMonthIndex = (i: number) => ({ year: Math.floor(i / 12), month: (i % 12) + 1 });
+
+/** Schedule facts for one advance: end month, balance, paid / pending installments. */
+export function advanceSummary(a: Advance) {
   const months = Math.max(1, Number(a.emi_months ?? 1));
-  if (cur < start || cur >= start + months) return 0;
-  const emi = Number(a.emi_amount ?? 0) || Number(a.amount ?? 0) / months;
-  return Math.max(0, emi);
+  const sy = a.start_year ?? a.period_year ?? null;
+  const sm = a.start_month ?? a.period_month ?? null;
+  const start = sy && sm ? monthIndex(sy, sm) : null;
+  const end = start != null ? fromMonthIndex(start + months - 1) : null;
+  const total = Number(a.amount ?? 0);
+  const paid = round2(Math.min(total, Number(a.paid_amount ?? 0)));
+  const balance = round2(Math.max(0, total - paid));
+  const emi = Number(a.emi_amount ?? 0) || total / months;
+  const paidInstallments = Number(a.paid_installments ?? 0);
+  const pendingInstallments = emi > 0 ? Math.ceil(balance / emi) : 0;
+  return {
+    months, start, startYear: sy, startMonth: sm,
+    endYear: end?.year ?? null, endMonth: end?.month ?? null,
+    total, paid, balance, emi: round2(emi), paidInstallments, pendingInstallments,
+    closed: (a.status ?? "active") !== "active" || balance <= 0,
+  };
+}
+
+/** Has this period already been settled or explicitly skipped? */
+export function paymentFor(payments: AdvancePayment[] | undefined, advanceId: string, year: number, month: number) {
+  return (payments ?? []).find((p) => p.advance_id === advanceId && p.period_year === year && p.period_month === month) ?? null;
+}
+
+/**
+ * EMI due for a period.
+ * - Outside the schedule (or closed/fully paid) → 0
+ * - Skipped by admin for that period → 0
+ * - Employee exiting this month (or already exited) → full outstanding balance
+ * - Otherwise the EMI amount, capped at the outstanding balance
+ */
+export function emiDueFor(
+  a: Advance,
+  year: number,
+  month: number,
+  opts?: { payments?: AdvancePayment[]; employee?: Employee | null },
+): number {
+  const s = advanceSummary(a);
+  if ((a.status ?? "active") !== "active" || s.balance <= 0 || s.start == null) return 0;
+
+  const existing = paymentFor(opts?.payments, a.id, year, month);
+  if (existing) return existing.kind === "skip" ? 0 : round2(Math.min(Number(existing.amount ?? 0), s.balance));
+
+  const cur = monthIndex(year, month);
+
+  // Full recovery on exit.
+  const exit = opts?.employee?.exit_date ? new Date(opts.employee.exit_date + "T00:00:00") : null;
+  if (exit && monthIndex(exit.getFullYear(), exit.getMonth() + 1) <= cur && cur >= s.start) return s.balance;
+
+  if (cur < s.start || cur >= s.start + s.months) return 0;
+  return round2(Math.min(s.emi, s.balance));
+}
+
+/** Spread an actually-deducted amount across an employee's active advances, oldest first. */
+export function allocateEmi(
+  advances: Advance[],
+  deducted: number,
+  year: number,
+  month: number,
+  opts?: { payments?: AdvancePayment[]; employee?: Employee | null },
+): { advance: Advance; due: number; amount: number }[] {
+  const dues = advances
+    .map((a) => ({ advance: a, due: emiDueFor(a, year, month, opts) }))
+    .filter((x) => x.due > 0)
+    .sort((x, y) => (x.advance.advance_date ?? "").localeCompare(y.advance.advance_date ?? ""));
+  let left = round2(Math.max(0, deducted));
+  return dues.map((x) => {
+    const amount = round2(Math.min(x.due, left));
+    left = round2(left - amount);
+    return { ...x, amount };
+  });
 }
 
 /**
@@ -526,25 +604,118 @@ export async function setAttendanceLock(year: number, month: number, locked: boo
 export async function listAdvances(): Promise<Advance[]> {
   const { data, error } = await supabase
     .from("employee_advances")
-    .select("id,employee_id,advance_date,amount,period_year,period_month,notes,emi_months,emi_amount,remaining_months,start_year,start_month,status")
+    .select("id,employee_id,advance_date,amount,period_year,period_month,notes,emi_months,emi_amount,remaining_months,start_year,start_month,status,paid_amount,paid_installments")
     .order("advance_date", { ascending: false });
   if (error) throw error;
   return (data ?? []) as unknown as Advance[];
 }
 
-/** Close out EMI schedules for a paid period: decrement remaining months, mark closed at zero. */
-export async function settleEmiForPeriod(advances: Advance[], year: number, month: number) {
-  const due = advances.filter((a) => emiDueFor(a, year, month) > 0);
-  for (const a of due) {
-    const months = Math.max(1, Number(a.emi_months ?? 1));
-    const start = monthIndex(a.start_year ?? a.period_year ?? year, a.start_month ?? a.period_month ?? month);
-    const remaining = Math.max(0, start + months - monthIndex(year, month) - 1);
-    const { error } = await supabase
-      .from("employee_advances")
-      .update({ remaining_months: remaining, status: remaining === 0 ? "closed" : "active" })
-      .eq("id", a.id);
-    if (error) throw error;
+export async function listAdvancePayments(): Promise<AdvancePayment[]> {
+  const { data, error } = await supabase
+    .from("advance_payments")
+    .select("id,advance_id,employee_id,period_year,period_month,amount,kind,notes,created_at")
+    .order("period_year", { ascending: false })
+    .order("period_month", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as AdvancePayment[];
+}
+
+/**
+ * Record the EMI actually recovered in a paid period (supports partial deduction),
+ * update paid amount / installments and close schedules once the balance hits zero.
+ */
+export async function settleEmiForPeriod(
+  advances: Advance[],
+  year: number,
+  month: number,
+  deductedByEmployee?: Record<string, number>,
+  payments?: AdvancePayment[],
+  employees?: Employee[],
+) {
+  const byEmp = new Map<string, Advance[]>();
+  for (const a of advances) {
+    if ((a.status ?? "active") !== "active") continue;
+    byEmp.set(a.employee_id, [...(byEmp.get(a.employee_id) ?? []), a]);
   }
+  for (const [empId, list] of byEmp) {
+    const employee = employees?.find((e) => e.id === empId) ?? null;
+    const totalDue = list.reduce((s, a) => s + emiDueFor(a, year, month, { payments, employee }), 0);
+    const deducted = deductedByEmployee ? Number(deductedByEmployee[empId] ?? 0) : totalDue;
+    const alloc = allocateEmi(list, deducted, year, month, { payments, employee });
+    for (const { advance, amount } of alloc) {
+      if (amount <= 0) continue;
+      const s = advanceSummary(advance);
+      const applied = Math.min(amount, s.balance);
+      const { error: pErr } = await supabase.from("advance_payments").upsert(
+        {
+          advance_id: advance.id, employee_id: empId, period_year: year, period_month: month,
+          amount: applied, kind: employee?.exit_date && applied >= s.balance && s.balance > 0 ? "exit_recovery" : "emi",
+        },
+        { onConflict: "advance_id,period_year,period_month" },
+      );
+      if (pErr) throw pErr;
+      const paidAmount = Math.min(s.total, s.paid + applied);
+      const balance = Math.max(0, s.total - paidAmount);
+      const emi = s.emi > 0 ? s.emi : s.total;
+      const { error } = await supabase
+        .from("employee_advances")
+        .update({
+          paid_amount: paidAmount,
+          paid_installments: Number(advance.paid_installments ?? 0) + 1,
+          remaining_months: emi > 0 ? Math.ceil(balance / emi) : 0,
+          status: balance <= 0 ? "closed" : "active",
+        })
+        .eq("id", advance.id);
+      if (error) throw error;
+    }
+  }
+}
+
+/** Admin override: skip one month — no deduction, schedule extends by a month. */
+export async function skipAdvanceMonth(a: Advance, year: number, month: number) {
+  const { error: pErr } = await supabase.from("advance_payments").upsert(
+    { advance_id: a.id, employee_id: a.employee_id, period_year: year, period_month: month, amount: 0, kind: "skip" },
+    { onConflict: "advance_id,period_year,period_month" },
+  );
+  if (pErr) throw pErr;
+  const { error } = await supabase
+    .from("employee_advances")
+    .update({ emi_months: Math.max(1, Number(a.emi_months ?? 1)) + 1 })
+    .eq("id", a.id);
+  if (error) throw error;
+}
+
+/** Admin override: edit EMI amount / installments / start period. */
+export async function updateAdvance(id: string, patch: Partial<Pick<Advance,
+  "amount" | "emi_amount" | "emi_months" | "start_year" | "start_month" | "notes" | "status">>) {
+  const { error } = await supabase.from("employee_advances").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+/** Admin override: close (write off / settle) the remaining balance. */
+export async function closeAdvance(a: Advance, recoverBalance: boolean, year: number, month: number) {
+  const s = advanceSummary(a);
+  if (recoverBalance && s.balance > 0) {
+    const { error: pErr } = await supabase.from("advance_payments").upsert(
+      { advance_id: a.id, employee_id: a.employee_id, period_year: year, period_month: month, amount: s.balance, kind: "closing" },
+      { onConflict: "advance_id,period_year,period_month" },
+    );
+    if (pErr) throw pErr;
+  }
+  const { error } = await supabase
+    .from("employee_advances")
+    .update({
+      status: "closed",
+      remaining_months: 0,
+      ...(recoverBalance ? { paid_amount: s.total, paid_installments: Number(a.paid_installments ?? 0) + (s.balance > 0 ? 1 : 0) } : {}),
+    })
+    .eq("id", a.id);
+  if (error) throw error;
+}
+
+export async function deleteAdvance(id: string) {
+  const { error } = await supabase.from("employee_advances").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export async function listSalaryRecords(year: number, month: number): Promise<SalaryRecord[]> {
