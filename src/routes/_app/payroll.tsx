@@ -295,12 +295,14 @@ function PayrollPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Designation</TableHead>
                     <TableHead className="text-right">Basic</TableHead>
-                    <TableHead className="text-right">Days</TableHead>
+                    <TableHead className="text-right">Total Days</TableHead>
+                    <TableHead className="text-right">Present</TableHead>
+                    <TableHead className="text-right">Paid Leave</TableHead>
+                    <TableHead className="text-right">Paid Days</TableHead>
                     <TableHead className="text-right">Per Day</TableHead>
-                    <TableHead className="text-right">Working</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Advance</TableHead>
+                    <TableHead className="text-right">Gross</TableHead>
                     <TableHead className="text-right">Deduct.</TableHead>
+                    <TableHead className="text-right">EMI</TableHead>
                     <TableHead className="text-right">Net</TableHead>
                     <TableHead>Paid</TableHead>
                     <TableHead className="w-40">Actions</TableHead>
@@ -323,10 +325,20 @@ function PayrollPage() {
                           <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{r.emp.role ?? "—"}</TableCell>
                           <TableCell className="text-right tabular-nums">₹{money(Number(r.emp.monthly_salary ?? 0))}</TableCell>
                           <TableCell className="text-right tabular-nums">{r.daysInMonth}</TableCell>
+                          <TableCell className="text-right tabular-nums">{r.presentDays}</TableCell>
+                          <TableCell className="text-right tabular-nums text-emerald-600">{r.paidLeaveBenefit > 0 ? `+${r.paidLeaveBenefit}` : "—"}</TableCell>
+                          <TableCell className="text-right">
+                            {isAdmin ? (
+                              <Input
+                                type="number" step="0.5"
+                                className={`h-8 w-20 text-right ${r.overrides.paidDays != null ? "border-primary" : ""}`}
+                                value={r.paidDays}
+                                onChange={(e) => setOv((p) => ({ ...p, [r.emp.id]: { ...(p[r.emp.id] ?? {}), paidDays: e.target.value === "" ? null : Number(e.target.value) } }))}
+                              />
+                            ) : <span className="tabular-nums font-medium">{r.paidDays}</span>}
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">₹{money(r.perDay)}</TableCell>
-                          <TableCell className="text-right tabular-nums font-medium">{r.workingDays}</TableCell>
-                          <TableCell className="text-right tabular-nums">₹{money(r.totalSalary)}</TableCell>
-                          <TableCell className="text-right tabular-nums text-amber-600">₹{money(r.advance)}</TableCell>
+                          <TableCell className="text-right tabular-nums">₹{money(r.grossSalary)}</TableCell>
                           <TableCell className="text-right">
                             {isAdmin ? (
                               <Input
@@ -337,7 +349,26 @@ function PayrollPage() {
                               />
                             ) : <span className="tabular-nums">₹{money(r.deductions)}</span>}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums font-semibold">₹{money(r.netSalary)}</TableCell>
+                          <TableCell className="text-right">
+                            {isAdmin ? (
+                              <Input
+                                type="number"
+                                className={`h-8 w-24 text-right ${r.overrides.emi != null ? "border-primary" : ""}`}
+                                value={r.emiDeduction}
+                                onChange={(e) => setOv((p) => ({ ...p, [r.emp.id]: { ...(p[r.emp.id] ?? {}), emi: e.target.value === "" ? null : Number(e.target.value) } }))}
+                              />
+                            ) : <span className="tabular-nums text-amber-600">₹{money(r.emiDeduction)}</span>}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isAdmin ? (
+                              <Input
+                                type="number"
+                                className={`h-8 w-28 text-right font-semibold ${r.overrides.net != null ? "border-primary" : ""}`}
+                                value={Number(r.netSalary.toFixed(2))}
+                                onChange={(e) => setOv((p) => ({ ...p, [r.emp.id]: { ...(p[r.emp.id] ?? {}), net: e.target.value === "" ? null : Number(e.target.value) } }))}
+                              />
+                            ) : <span className="tabular-nums font-semibold">₹{money(r.netSalary)}</span>}
+                          </TableCell>
                           <TableCell>
                             <Badge variant={status === "paid" ? "default" : status === "approved" ? "secondary" : "outline"} className="capitalize">{status}</Badge>
                           </TableCell>
@@ -354,8 +385,24 @@ function PayrollPage() {
                         </TableRow>
                         {open && (
                           <TableRow>
-                            <TableCell colSpan={14} className="bg-muted/30">
+                            <TableCell colSpan={17} className="bg-muted/30">
                               <div className="space-y-2 py-1">
+                                <div className="flex flex-wrap items-center gap-3 text-xs">
+                                  <span className="text-muted-foreground">
+                                    Present {r.presentDays} / {r.daysInMonth} · paid leave +{r.paidLeaveBenefit} · paid days {r.paidDays}
+                                  </span>
+                                  {r.emiCarryForward > 0 && (
+                                    <Badge variant="outline" className="text-amber-600 border-amber-500/50">
+                                      ₹{money(r.emiCarryForward)} EMI carried forward to next month
+                                    </Badge>
+                                  )}
+                                  {isAdmin && (r.overrides.paidDays != null || r.overrides.emi != null || r.overrides.net != null) && (
+                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs"
+                                      onClick={() => setOv((p) => ({ ...p, [r.emp.id]: {} }))}>
+                                      Clear admin overrides
+                                    </Button>
+                                  )}
+                                </div>
                                 <div className="text-xs text-muted-foreground">
                                   Attendance — click a day to cycle P → H → A{r.eligible.start > 1 || r.eligible.end < r.daysInMonth ? ` · eligible days ${r.eligible.start}–${r.eligible.end}` : ""}
                                 </div>
