@@ -264,7 +264,7 @@ export function computeRow(
   const eligible = eligibleRange(emp, year, month);
   let presentDays = 0;
   for (let d = eligible.start; d <= eligible.end; d++) presentDays += Number(attendance[d]?.dayValue ?? 0);
-  presentDays = round2(Math.min(presentDays, Math.max(0, eligibleRangeSpan(eligible))));
+  presentDays = round2(Math.max(0, Math.min(presentDays, dim)));
   const eligibleWorkingDays = Math.max(0, eligible.end - eligible.start + 1);
 
   const auto = computePaidDays(presentDays, dim, eligibleWorkingDays);
