@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { exportCSV } from "@/lib/exports";
+import { ProductStockSummary } from "@/components/ProductStockSummary";
 import {
   listStock, listTransactions, listTransfers, listReservations,
   listWarehouses, warehouseLookup,
@@ -22,6 +23,7 @@ function Reports() {
   const [resv, setResv] = useState<Reservation[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -29,6 +31,7 @@ function Reports() {
         listStock(), listTransactions(), listTransfers(), listReservations(), listWarehouses(),
       ]);
       setStock(s); setTxns(t); setTransfers(x); setResv(r); setWarehouses(w);
+      setLoading(false);
     })();
   }, []);
 
@@ -73,8 +76,10 @@ function Reports() {
 
   return (
     <div className="space-y-4">
+      <ProductStockSummary stock={stock} warehouses={warehouses} whName={whName} loading={loading} />
+
       <Card>
-        <CardHeader><CardTitle className="text-base">Stock Reports</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Stock Reports (CSV Exports)</CardTitle></CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => expStock("ims_good_stock", stock.filter((s) => s.stock_type === "good"))}>Good Stock</Button>
           <Button size="sm" variant="outline" onClick={() => expStock("ims_defective_stock", stock.filter((s) => s.stock_type === "defective"))}>Defective Stock</Button>
