@@ -119,14 +119,61 @@ export type ComputedRow = {
   eligible: { start: number; end: number; total: number };
   attendance: Record<number, AttCode>;
   record: SalaryRecord | null;
+  /** Attendance-derived present days (P = 1, H = 0.5). */
+  presentDays: number;
+  /** +1 paid leave benefit actually granted (0 when present days = 0). */
+  paidLeaveBenefit: number;
+  /** Final paid days after cases, mid-month cap and admin override. */
+  paidDays: number;
+  grossSalary: number;
+  emiDeduction: number;
+  /** EMI that could not be deducted this month (net would go negative). */
+  emiCarryForward: number;
+  overrides: { paidDays: number | null; emi: number | null; net: number | null };
 };
+
+export const monthIndex = (y: number, m: number) => y * 12 + (m - 1);
+
+/** Is this advance's EMI schedule active for the given period? */
+export function emiDueFor(a: Advance, year: number, month: number): number {
+  if ((a.status ?? "active") !== "active") return 0;
+  const sy = a.start_year ?? a.period_year;
+  const sm = a.start_month ?? a.period_month;
+  if (!sy || !sm) return 0;
+  const start = monthIndex(sy, sm);
+  const cur = monthIndex(year, month);
+  const months = Math.max(1, Number(a.emi_months ?? 1));
+  if (cur < start || cur >= start + months) return 0;
+  const emi = Number(a.emi_amount ?? 0) || Number(a.amount ?? 0) / months;
+  return Math.max(0, emi);
+}
+
+/**
+ * Paid-days rules:
+ *  present = 0                  -> 0 (no paid-leave benefit)
+ *  present = total              -> total + 1
+ *  present = total - 1          -> total
+ *  otherwise                    -> present + 1
+ * Mid-month join/exit caps paid days at (eligible working days + 1),
+ * and the absolute cap is always total + 1.
+ */
+export function computePaidDays(presentDays: number, totalDays: number, eligibleWorkingDays: number) {
+  if (presentDays <= 0) return { paidDays: 0, benefit: 0 };
+  let paid: number;
+  if (presentDays >= totalDays) paid = totalDays + 1;
+  else if (presentDays === totalDays - 1) paid = totalDays;
+  else paid = presentDays + 1;
+  const maxAllowed = Math.min(totalDays + 1, eligibleWorkingDays + 1);
+  paid = Math.min(paid, maxAllowed);
+  return { paidDays: paid, benefit: Math.max(0, paid - presentDays) };
+}
 
 export function computeRow(
   emp: Employee,
   year: number,
   month: number,
   attendance: Record<number, AttCode>,
-  advance: number,
+  advanceEmi: number,
   deductions: number,
   record: SalaryRecord | null,
 ): ComputedRow {
@@ -134,11 +181,38 @@ export function computeRow(
   const monthly = Number(emp.monthly_salary ?? 0);
   const perDay = dim > 0 ? monthly / dim : 0;
   const eligible = eligibleRange(emp, year, month);
-  let workingDays = 0;
-  for (let d = eligible.start; d <= eligible.end; d++) workingDays += codeValue(attendance[d]);
-  const totalSalary = perDay * workingDays;
-  const netSalary = totalSalary - advance - deductions;
-  return { emp, daysInMonth: dim, perDay, workingDays, totalSalary, advance, deductions, netSalary, eligible, attendance, record };
+  let presentDays = 0;
+  for (let d = eligible.start; d <= eligible.end; d++) presentDays += codeValue(attendance[d]);
+  const eligibleWorkingDays = Math.max(0, eligible.end - eligible.start + 1);
+
+  const auto = computePaidDays(presentDays, dim, eligibleWorkingDays);
+  const overridePaid = record?.override_paid_days ?? null;
+  const paidDays = overridePaid != null ? Number(overridePaid) : auto.paidDays;
+  const paidLeaveBenefit = overridePaid != null ? Math.max(0, paidDays - presentDays) : auto.benefit;
+
+  const grossSalary = perDay * paidDays;
+
+  const overrideEmi = record?.override_emi ?? null;
+  const wantedEmi = overrideEmi != null ? Number(overrideEmi) : advanceEmi;
+  // Never allow a negative salary: cap EMI at what's payable, carry the rest forward.
+  const payableAfterDeductions = Math.max(0, grossSalary - deductions);
+  const emiDeduction = Math.min(wantedEmi, payableAfterDeductions);
+  const emiCarryForward = Math.max(0, wantedEmi - emiDeduction);
+
+  const overrideNet = record?.override_net ?? null;
+  const netSalary = overrideNet != null
+    ? Number(overrideNet)
+    : Math.max(0, grossSalary - deductions - emiDeduction);
+
+  return {
+    emp, daysInMonth: dim, perDay,
+    workingDays: paidDays,
+    totalSalary: grossSalary,
+    advance: emiDeduction,
+    deductions, netSalary, eligible, attendance, record,
+    presentDays, paidLeaveBenefit, paidDays, grossSalary, emiDeduction, emiCarryForward,
+    overrides: { paidDays: overridePaid, emi: overrideEmi, net: overrideNet },
+  };
 }
 
 /** Salary revision due when today >= (last increment ?? DOJ) + cycle months. */
