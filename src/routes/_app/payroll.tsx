@@ -177,9 +177,11 @@ function PayrollPage() {
     setSaving(true);
     try {
       for (const r of rows) await upsertSalaryRecord(r, year, month, status);
+      if (status === "paid") await settleEmiForPeriod(advances, year, month);
       toast.success(status === "paid" ? "Marked as paid" : status === "approved" ? "Salary approved" : "Salary sheet saved");
       const recs = await listSalaryRecords(year, month);
       setRecords(recs);
+      if (status === "paid") setAdvances(await listAdvances());
     } catch (e: any) { toast.error(e.message); }
     setSaving(false);
   }
@@ -207,13 +209,16 @@ function PayrollPage() {
     { header: "Name", get: (r: ComputedRow) => r.emp.name },
     { header: "Designation", get: (r: ComputedRow) => r.emp.role ?? "" },
     { header: "Basic (Monthly)", get: (r: ComputedRow) => Number(r.emp.monthly_salary ?? 0) },
-    { header: "Days", get: (r: ComputedRow) => r.daysInMonth },
+    { header: "Total Days", get: (r: ComputedRow) => r.daysInMonth },
+    { header: "Present Days", get: (r: ComputedRow) => r.presentDays },
+    { header: "Paid Leave (+1)", get: (r: ComputedRow) => r.paidLeaveBenefit },
+    { header: "Paid Days", get: (r: ComputedRow) => r.paidDays },
     { header: "Per Day", get: (r: ComputedRow) => Number(r.perDay.toFixed(2)) },
-    { header: "Working Days", get: (r: ComputedRow) => r.workingDays },
-    { header: "Total", get: (r: ComputedRow) => Number(r.totalSalary.toFixed(2)) },
-    { header: "Advance", get: (r: ComputedRow) => r.advance },
+    { header: "Gross Salary", get: (r: ComputedRow) => Number(r.grossSalary.toFixed(2)) },
     { header: "Deductions", get: (r: ComputedRow) => r.deductions },
-    { header: "Net", get: (r: ComputedRow) => Number(r.netSalary.toFixed(2)) },
+    { header: "EMI Deduction", get: (r: ComputedRow) => Number(r.emiDeduction.toFixed(2)) },
+    { header: "EMI Carried Forward", get: (r: ComputedRow) => Number(r.emiCarryForward.toFixed(2)) },
+    { header: "Net Salary", get: (r: ComputedRow) => Number(r.netSalary.toFixed(2)) },
     { header: "Status", get: (r: ComputedRow) => r.record?.status ?? "draft" },
   ];
 
