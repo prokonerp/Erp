@@ -1232,33 +1232,51 @@ export type Database = {
           advance_date: string
           amount: number
           created_at: string
+          emi_amount: number
+          emi_months: number
           employee_id: string
           id: string
           notes: string | null
           period_month: number | null
           period_year: number | null
+          remaining_months: number
+          start_month: number | null
+          start_year: number | null
+          status: string
           updated_at: string
         }
         Insert: {
           advance_date?: string
           amount?: number
           created_at?: string
+          emi_amount?: number
+          emi_months?: number
           employee_id: string
           id?: string
           notes?: string | null
           period_month?: number | null
           period_year?: number | null
+          remaining_months?: number
+          start_month?: number | null
+          start_year?: number | null
+          status?: string
           updated_at?: string
         }
         Update: {
           advance_date?: string
           amount?: number
           created_at?: string
+          emi_amount?: number
+          emi_months?: number
           employee_id?: string
           id?: string
           notes?: string | null
           period_month?: number | null
           period_year?: number | null
+          remaining_months?: number
+          start_month?: number | null
+          start_year?: number | null
+          status?: string
           updated_at?: string
         }
         Relationships: [
@@ -4022,15 +4040,24 @@ export type Database = {
           created_at: string
           days_in_month: number
           deductions: number
+          emi_carry_forward: number
+          emi_deduction: number
           employee_id: string
+          gross_salary: number
           id: string
           monthly_salary: number
           net_salary: number
           notes: string | null
+          override_emi: number | null
+          override_net: number | null
+          override_paid_days: number | null
           paid_at: string | null
+          paid_days: number
+          paid_leave_benefit: number
           per_day_salary: number
           period_month: number
           period_year: number
+          present_days: number
           status: string
           total_salary: number
           updated_at: string
@@ -4042,15 +4069,24 @@ export type Database = {
           created_at?: string
           days_in_month: number
           deductions?: number
+          emi_carry_forward?: number
+          emi_deduction?: number
           employee_id: string
+          gross_salary?: number
           id?: string
           monthly_salary?: number
           net_salary?: number
           notes?: string | null
+          override_emi?: number | null
+          override_net?: number | null
+          override_paid_days?: number | null
           paid_at?: string | null
+          paid_days?: number
+          paid_leave_benefit?: number
           per_day_salary?: number
           period_month: number
           period_year: number
+          present_days?: number
           status?: string
           total_salary?: number
           updated_at?: string
@@ -4062,15 +4098,24 @@ export type Database = {
           created_at?: string
           days_in_month?: number
           deductions?: number
+          emi_carry_forward?: number
+          emi_deduction?: number
           employee_id?: string
+          gross_salary?: number
           id?: string
           monthly_salary?: number
           net_salary?: number
           notes?: string | null
+          override_emi?: number | null
+          override_net?: number | null
+          override_paid_days?: number | null
           paid_at?: string | null
+          paid_days?: number
+          paid_leave_benefit?: number
           per_day_salary?: number
           period_month?: number
           period_year?: number
+          present_days?: number
           status?: string
           total_salary?: number
           updated_at?: string
