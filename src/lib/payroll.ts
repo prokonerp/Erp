@@ -1,6 +1,21 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type AttCode = "P" | "A" | "H";
+/** Attendance type. OT = overtime entry, SW = Sunday work. */
+export type AttCode = "P" | "A" | "H" | "OT" | "SW";
+
+/** One standard shift. Work hours are converted to days against this. */
+export const STANDARD_SHIFT_HOURS = 8;
+export const MAX_WORK_HOURS = 24;
+
+export type AttEntry = {
+  code: AttCode;
+  /** Numeric work hours; when set it takes priority over the type. */
+  hours: number | null;
+  /** Final day credit for the date (decimals allowed). */
+  dayValue: number;
+  /** True when the row has been edited after first entry. */
+  edited?: boolean;
+};
 
 export type Employee = {
   id: string;
