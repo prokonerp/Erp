@@ -258,15 +258,29 @@ export async function saveAttendance(rows: { employee_id: string; work_date: str
   if (error) throw error;
 }
 
-export async function listAdvances(year: number, month: number): Promise<Advance[]> {
+/** All advances (EMI schedules can span months, so we filter client-side per period). */
+export async function listAdvances(): Promise<Advance[]> {
   const { data, error } = await supabase
     .from("employee_advances")
-    .select("id,employee_id,advance_date,amount,period_year,period_month,notes")
-    .eq("period_year", year)
-    .eq("period_month", month)
+    .select("id,employee_id,advance_date,amount,period_year,period_month,notes,emi_months,emi_amount,remaining_months,start_year,start_month,status")
     .order("advance_date", { ascending: false });
   if (error) throw error;
   return (data ?? []) as unknown as Advance[];
+}
+
+/** Close out EMI schedules for a paid period: decrement remaining months, mark closed at zero. */
+export async function settleEmiForPeriod(advances: Advance[], year: number, month: number) {
+  const due = advances.filter((a) => emiDueFor(a, year, month) > 0);
+  for (const a of due) {
+    const months = Math.max(1, Number(a.emi_months ?? 1));
+    const start = monthIndex(a.start_year ?? a.period_year ?? year, a.start_month ?? a.period_month ?? month);
+    const remaining = Math.max(0, start + months - monthIndex(year, month) - 1);
+    const { error } = await supabase
+      .from("employee_advances")
+      .update({ remaining_months: remaining, status: remaining === 0 ? "closed" : "active" })
+      .eq("id", a.id);
+    if (error) throw error;
+  }
 }
 
 export async function listSalaryRecords(year: number, month: number): Promise<SalaryRecord[]> {
@@ -287,11 +301,20 @@ export async function upsertSalaryRecord(row: ComputedRow, year: number, month: 
     days_in_month: row.daysInMonth,
     monthly_salary: Number(row.emp.monthly_salary ?? 0),
     per_day_salary: Number(row.perDay.toFixed(2)),
-    working_days: row.workingDays,
-    total_salary: Number(row.totalSalary.toFixed(2)),
-    advance: row.advance,
+    working_days: row.paidDays,
+    total_salary: Number(row.grossSalary.toFixed(2)),
+    advance: Number(row.emiDeduction.toFixed(2)),
     deductions: row.deductions,
     net_salary: Number(row.netSalary.toFixed(2)),
+    present_days: row.presentDays,
+    paid_leave_benefit: row.paidLeaveBenefit,
+    paid_days: row.paidDays,
+    gross_salary: Number(row.grossSalary.toFixed(2)),
+    emi_deduction: Number(row.emiDeduction.toFixed(2)),
+    emi_carry_forward: Number(row.emiCarryForward.toFixed(2)),
+    override_paid_days: row.overrides.paidDays,
+    override_emi: row.overrides.emi,
+    override_net: row.overrides.net,
     ...(status ? { status } : {}),
     ...(status === "approved" ? { approved_at: new Date().toISOString() } : {}),
     ...(status === "paid" ? { paid_at: new Date().toISOString() } : {}),
