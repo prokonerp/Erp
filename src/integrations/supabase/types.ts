@@ -47,6 +47,60 @@ export type Database = {
         }
         Relationships: []
       }
+      advance_payments: {
+        Row: {
+          advance_id: string
+          amount: number
+          created_at: string
+          employee_id: string
+          id: string
+          kind: string
+          notes: string | null
+          period_month: number
+          period_year: number
+          updated_at: string
+        }
+        Insert: {
+          advance_id: string
+          amount?: number
+          created_at?: string
+          employee_id: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          period_month: number
+          period_year: number
+          updated_at?: string
+        }
+        Update: {
+          advance_id?: string
+          amount?: number
+          created_at?: string
+          employee_id?: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          period_month?: number
+          period_year?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advance_payments_advance_id_fkey"
+            columns: ["advance_id"]
+            isOneToOne: false
+            referencedRelation: "employee_advances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advance_payments_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       amc_sequence: {
         Row: {
           id: number
@@ -1347,6 +1401,8 @@ export type Database = {
           employee_id: string
           id: string
           notes: string | null
+          paid_amount: number
+          paid_installments: number
           period_month: number | null
           period_year: number | null
           remaining_months: number
@@ -1364,6 +1420,8 @@ export type Database = {
           employee_id: string
           id?: string
           notes?: string | null
+          paid_amount?: number
+          paid_installments?: number
           period_month?: number | null
           period_year?: number | null
           remaining_months?: number
@@ -1381,6 +1439,8 @@ export type Database = {
           employee_id?: string
           id?: string
           notes?: string | null
+          paid_amount?: number
+          paid_installments?: number
           period_month?: number | null
           period_year?: number | null
           remaining_months?: number
