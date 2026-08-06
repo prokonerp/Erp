@@ -13,12 +13,15 @@ import { ExportButtons } from "@/components/ExportButtons";
 import { toast } from "sonner";
 import {
   AlertTriangle, BadgeIndianRupee, CalendarDays, CheckCircle2, ChevronDown, ChevronRight,
-  CircleCheck, IndianRupee, Loader2, Plus, RefreshCw, Users, Wallet,
+  CircleCheck, History, IndianRupee, Loader2, Lock, LockOpen, Plus, RefreshCw, Undo2, Users, Wallet,
 } from "lucide-react";
 import {
-  MONTHS, type AttCode, type Advance, type ComputedRow, type Employee, type SalaryRecord,
-  computeRow, daysInMonth, emiDueFor, incrementDue, isoDate, listAdvances, listAttendance, listEmployees,
-  listSalaryRecords, money, saveAttendance, settleEmiForPeriod, upsertSalaryRecord,
+  MAX_WORK_HOURS, MONTHS, STANDARD_SHIFT_HOURS,
+  type AttCode, type AttEntry, type Advance, type AttendanceLock, type AuditRow,
+  type ComputedRow, type Employee, type SalaryRecord,
+  clearAttendance, computeRow, dayValueFor, daysInMonth, emiDueFor, getAttendanceLock, incrementDue,
+  isSundayDate, isoDate, listAdvances, listAttendance, listAttendanceAudit, listEmployees,
+  listSalaryRecords, money, saveAttendance, setAttendanceLock, settleEmiForPeriod, undoBatch, upsertSalaryRecord,
 } from "@/lib/payroll";
 
 export const Route = createFileRoute("/_app/payroll")({
@@ -35,12 +38,22 @@ export const Route = createFileRoute("/_app/payroll")({
   }),
 });
 
-const codeCls: Record<AttCode, string> = {
-  P: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  A: "bg-destructive/15 text-destructive",
-  H: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
-};
-const nextCode = (c: AttCode | undefined): AttCode => (c === "P" ? "H" : c === "H" ? "A" : "P");
+const ATT_TYPES: { value: AttCode; label: string }[] = [
+  { value: "P", label: "Present" },
+  { value: "H", label: "Half Day" },
+  { value: "A", label: "Absent" },
+  { value: "OT", label: "Overtime Entry" },
+  { value: "SW", label: "Sunday Work" },
+];
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Row tint: Sunday orange, overtime blue, absent red. */
+function rowTint(code: AttCode, hours: number | null, dayValue: number, sunday: boolean) {
+  if ((hours ?? 0) > STANDARD_SHIFT_HOURS || code === "OT") return "bg-blue-500/10";
+  if (sunday) return "bg-orange-500/10";
+  if (dayValue <= 0) return "bg-destructive/10";
+  return "";
+}
 
 function PayrollPage() {
   const { isAdmin } = useIsAdmin();
