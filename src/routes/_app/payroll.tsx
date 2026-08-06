@@ -148,48 +148,93 @@ function PayrollPage() {
     [employees],
   );
 
-  function setCell(empId: string, day: number, code: AttCode) {
-    setAtt((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: code } }));
+  const locked = !!lock?.locked;
+  const canEdit = isAdmin && !locked;
+
+  function guard(): boolean {
+    if (!isAdmin) return false;
+    if (locked) { toast.error(`${MONTHS[month - 1]} ${year} attendance is locked. Unlock it to edit.`); return false; }
+    return true;
   }
 
-  async function persistAttendance(empId: string, days?: number[]) {
-    if (!isAdmin) return;
-    const map = att[empId] ?? {};
-    const list = (days ?? Object.keys(map).map(Number)).map((d) => ({
-      employee_id: empId, work_date: isoDate(year, month, d), code: (map[d] ?? "A") as AttCode,
-    }));
-    try { await saveAttendance(list); } catch (e: any) { toast.error(e.message); }
+  async function refreshAudit() {
+    try { setAudit(await listAttendanceAudit(year, month)); } catch { /* non-critical */ }
+  }
+
+  /** Write one day for one employee. Hours take priority over the type. */
+  async function setDay(empId: string, day: number, patch: { code?: AttCode; hours?: number | null }) {
+    if (!guard()) return;
+    const sunday = isSundayDate(year, month, day);
+    const cur = att[empId]?.[day];
+    const code = patch.code ?? cur?.code ?? "A";
+    const hours = patch.hours !== undefined ? patch.hours : (cur?.hours ?? null);
+    if (hours != null && (hours < 0 || hours > MAX_WORK_HOURS)) return toast.error(`Work hours must be 0–${MAX_WORK_HOURS}`);
+    const entry: AttEntry = { code, hours, dayValue: dayValueFor(code, hours, sunday), edited: true };
+    setAtt((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: entry } }));
+    try {
+      await saveAttendance([{ employee_id: empId, work_date: isoDate(year, month, day), code, hours }], "edit");
+      void refreshAudit();
+    } catch (e: any) { toast.error(e.message); }
   }
 
   async function markAllPresent(row: ComputedRow) {
-    if (!isAdmin) return;
+    if (!guard()) return;
     const days: number[] = [];
-    const map: Record<number, AttCode> = { ...(att[row.emp.id] ?? {}) };
-    for (let d = row.eligible.start; d <= row.eligible.end; d++) { map[d] = "P"; days.push(d); }
+    const map: Record<number, AttEntry> = { ...(att[row.emp.id] ?? {}) };
+    for (let d = row.eligible.start; d <= row.eligible.end; d++) {
+      map[d] = { code: "P", hours: null, dayValue: dayValueFor("P", null, isSundayDate(year, month, d)) };
+      days.push(d);
+    }
     setAtt((p) => ({ ...p, [row.emp.id]: map }));
     try {
-      await saveAttendance(days.map((d) => ({ employee_id: row.emp.id, work_date: isoDate(year, month, d), code: "P" as AttCode })));
+      await saveAttendance(
+        days.map((d) => ({ employee_id: row.emp.id, work_date: isoDate(year, month, d), code: "P" as AttCode, hours: null })),
+        "bulk_employee_present",
+      );
       toast.success(`All present — ${row.emp.name}`);
+      void refreshAudit();
     } catch (e: any) { toast.error(e.message); }
   }
 
   async function bulkMarkAllPresent() {
-    if (!isAdmin) return;
+    if (!guard()) return;
     setSaving(true);
-    const payload: { employee_id: string; work_date: string; code: AttCode }[] = [];
+    const payload: { employee_id: string; work_date: string; code: AttCode; hours: number | null }[] = [];
     const next = { ...att };
     for (const r of rows) {
-      const map: Record<number, AttCode> = { ...(next[r.emp.id] ?? {}) };
+      const map: Record<number, AttEntry> = { ...(next[r.emp.id] ?? {}) };
       for (let d = r.eligible.start; d <= r.eligible.end; d++) {
-        map[d] = "P";
-        payload.push({ employee_id: r.emp.id, work_date: isoDate(year, month, d), code: "P" });
+        map[d] = { code: "P", hours: null, dayValue: dayValueFor("P", null, isSundayDate(year, month, d)) };
+        payload.push({ employee_id: r.emp.id, work_date: isoDate(year, month, d), code: "P", hours: null });
       }
       next[r.emp.id] = map;
     }
     setAtt(next);
-    try { await saveAttendance(payload); toast.success("Marked all present for the month"); }
+    try { await saveAttendance(payload, "bulk_all_present"); toast.success("Marked all present for the month"); await load(); }
     catch (e: any) { toast.error(e.message); }
     setSaving(false);
+    setConfirmBulk(false);
+  }
+
+  const lastBatch = useMemo(() => audit.find((a) => !a.undone)?.batch_id ?? null, [audit]);
+
+  async function undoLast() {
+    if (!guard() || !lastBatch) return;
+    try { const n = await undoBatch(lastBatch); toast.success(`Undone ${n} attendance change(s)`); await load(); }
+    catch (e: any) { toast.error(e.message); }
+  }
+
+  async function undoMonth(empId: string | null, label: string) {
+    if (!guard()) return;
+    if (!confirm(`Clear all attendance for ${label} in ${MONTHS[month - 1]} ${year}? This can be reviewed in Edit History.`)) return;
+    try { const n = await clearAttendance(year, month, empId); toast.success(`Cleared ${n} attendance entr(ies)`); await load(); }
+    catch (e: any) { toast.error(e.message); }
+  }
+
+  async function toggleLock(next: boolean) {
+    if (!isAdmin) return;
+    try { await setAttendanceLock(year, month, next); setLock(await getAttendanceLock(year, month)); toast.success(next ? "Attendance locked" : "Attendance unlocked"); }
+    catch (e: any) { toast.error(e.message); }
   }
 
   async function saveSheet(status?: string) {
