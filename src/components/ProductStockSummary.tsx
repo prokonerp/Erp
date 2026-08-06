@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -136,8 +136,8 @@ export function ProductStockSummary({
                 const isOpen = !!open[g.key];
                 const low = g.available < LOW_STOCK_THRESHOLD;
                 return (
-                  <>
-                    <tr key={g.key} className="border-t hover:bg-muted/30 cursor-pointer"
+                  <Fragment key={g.key}>
+                    <tr className="border-t hover:bg-muted/30 cursor-pointer"
                       onClick={() => setOpen((o) => ({ ...o, [g.key]: !o[g.key] }))}>
                       <td className="p-2 text-muted-foreground">
                         {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -167,7 +167,7 @@ export function ProductStockSummary({
                       </td>
                     </tr>
                     {isOpen && (
-                      <tr key={`${g.key}-detail`} className="bg-muted/20">
+                      <tr className="bg-muted/20">
                         <td className="p-2" colSpan={9}>
                           <table className="w-full text-xs">
                             <thead>
@@ -198,7 +198,7 @@ export function ProductStockSummary({
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
