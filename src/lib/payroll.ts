@@ -31,6 +31,15 @@ export type SalaryRecord = {
   status: "draft" | "approved" | "paid" | string;
   approved_at: string | null;
   paid_at: string | null;
+  present_days?: number;
+  paid_leave_benefit?: number;
+  paid_days?: number;
+  gross_salary?: number;
+  emi_deduction?: number;
+  emi_carry_forward?: number;
+  override_paid_days?: number | null;
+  override_emi?: number | null;
+  override_net?: number | null;
 };
 
 export type Advance = {
@@ -41,6 +50,24 @@ export type Advance = {
   period_year: number | null;
   period_month: number | null;
   notes: string | null;
+  emi_months: number;
+  emi_amount: number;
+  remaining_months: number;
+  start_year: number | null;
+  start_month: number | null;
+  status: string;
+};
+
+export type SalaryRecordExtra = {
+  present_days?: number;
+  paid_leave_benefit?: number;
+  paid_days?: number;
+  gross_salary?: number;
+  emi_deduction?: number;
+  emi_carry_forward?: number;
+  override_paid_days?: number | null;
+  override_emi?: number | null;
+  override_net?: number | null;
 };
 
 export const MONTHS = [
