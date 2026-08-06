@@ -685,24 +685,35 @@ function AdvanceDialog({ employees, year, month, onSaved }: { employees: Employe
   const [employeeId, setEmployeeId] = useState("");
   const [amount, setAmount] = useState("");
   const [emiMonths, setEmiMonths] = useState("1");
+  const [emiAmount, setEmiAmount] = useState("");
+  const [startYear, setStartYear] = useState(year);
+  const [startMonth, setStartMonth] = useState(month);
   const [date, setDate] = useState(isoDate(year, month, 1));
   const [notes, setNotes] = useState("");
 
+  const total = Number(amount) || 0;
+  const months = Math.max(1, Number(emiMonths) || 1);
+  const emi = Number(emiAmount) > 0 ? Number(emiAmount) : (total > 0 ? Number((total / months).toFixed(2)) : 0);
+  /** Installments actually needed at this EMI — keeps end month and balance honest. */
+  const effMonths = emi > 0 ? Math.max(1, Math.ceil(total / emi)) : months;
+  const endIdx = monthIndex(startYear, startMonth) + effMonths - 1;
+  const end = fromMonthIndex(endIdx);
+
   async function save() {
-    if (!employeeId || !Number(amount)) return toast.error("Select employee and amount");
-    const months = Math.max(1, Number(emiMonths) || 1);
-    const total = Number(amount);
+    if (!employeeId || !total) return toast.error("Select employee and amount");
+    if (emi <= 0) return toast.error("EMI amount must be greater than zero");
     const { error } = await supabase.from("employee_advances").insert({
       employee_id: employeeId, amount: total, advance_date: date,
       period_year: year, period_month: month, notes: notes || null,
-      emi_months: months,
-      emi_amount: Number((total / months).toFixed(2)),
-      remaining_months: months,
-      start_year: year, start_month: month, status: "active",
+      emi_months: effMonths,
+      emi_amount: emi,
+      remaining_months: effMonths,
+      paid_amount: 0, paid_installments: 0,
+      start_year: startYear, start_month: startMonth, status: "active",
     });
     if (error) return toast.error(error.message);
     toast.success("Advance recorded");
-    setOpen(false); setAmount(""); setNotes(""); setEmiMonths("1");
+    setOpen(false); setAmount(""); setNotes(""); setEmiMonths("1"); setEmiAmount("");
     onSaved();
   }
 
@@ -722,18 +733,32 @@ function AdvanceDialog({ employees, year, month, onSaved }: { employees: Employe
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+            <div><Label className="text-xs">Total amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
             <div><Label className="text-xs">Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Recover over (months)</Label>
+              <Label className="text-xs">No. of installments</Label>
               <Input type="number" min="1" value={emiMonths} onChange={(e) => setEmiMonths(e.target.value)} />
             </div>
             <div>
-              <Label className="text-xs">EMI per month (₹)</Label>
-              <Input readOnly value={Number(amount) > 0 ? (Number(amount) / Math.max(1, Number(emiMonths) || 1)).toFixed(2) : "0.00"} />
+              <Label className="text-xs">EMI amount (₹)</Label>
+              <Input type="number" placeholder={total > 0 ? (total / months).toFixed(2) : "0.00"} value={emiAmount} onChange={(e) => setEmiAmount(e.target.value)} />
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Start month</Label>
+              <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={startMonth} onChange={(e) => setStartMonth(Number(e.target.value))}>
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+            </div>
+            <div><Label className="text-xs">Start year</Label><Input type="number" value={startYear} onChange={(e) => setStartYear(Number(e.target.value) || year)} /></div>
+          </div>
+          <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
+            <div>EMI <b className="tabular-nums">₹{money(emi)}</b> × <b>{effMonths}</b> installment(s)</div>
+            <div>Schedule: <b>{MONTHS[startMonth - 1]} {startYear}</b> → <b>{MONTHS[end.month - 1]} {end.year}</b></div>
+            <div>Remaining balance today: <b className="tabular-nums">₹{money(total)}</b></div>
           </div>
           <div><Label className="text-xs">Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         </div>
