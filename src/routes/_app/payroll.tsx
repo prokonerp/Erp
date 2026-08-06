@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import {
   MONTHS, type AttCode, type Advance, type ComputedRow, type Employee, type SalaryRecord,
-  computeRow, daysInMonth, incrementDue, isoDate, listAdvances, listAttendance, listEmployees,
-  listSalaryRecords, money, saveAttendance, upsertSalaryRecord,
+  computeRow, daysInMonth, emiDueFor, incrementDue, isoDate, listAdvances, listAttendance, listEmployees,
+  listSalaryRecords, money, saveAttendance, settleEmiForPeriod, upsertSalaryRecord,
 } from "@/lib/payroll";
 
 export const Route = createFileRoute("/_app/payroll")({
@@ -52,6 +52,7 @@ function PayrollPage() {
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [records, setRecords] = useState<SalaryRecord[]>([]);
   const [deductions, setDeductions] = useState<Record<string, number>>({});
+  const [ov, setOv] = useState<Record<string, { paidDays?: number | null; emi?: number | null; net?: number | null }>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -62,15 +63,24 @@ function PayrollPage() {
     setLoading(true);
     try {
       const [emps, a, adv, recs] = await Promise.all([
-        listEmployees(), listAttendance(year, month), listAdvances(year, month), listSalaryRecords(year, month),
+        listEmployees(), listAttendance(year, month), listAdvances(), listSalaryRecords(year, month),
       ]);
       setEmployees(emps);
       setAtt(a);
       setAdvances(adv);
       setRecords(recs);
       const d: Record<string, number> = {};
-      recs.forEach((r) => { d[r.employee_id] = Number(r.deductions ?? 0); });
+      const o: Record<string, { paidDays?: number | null; emi?: number | null; net?: number | null }> = {};
+      recs.forEach((r) => {
+        d[r.employee_id] = Number(r.deductions ?? 0);
+        o[r.employee_id] = {
+          paidDays: r.override_paid_days ?? null,
+          emi: r.override_emi ?? null,
+          net: r.override_net ?? null,
+        };
+      });
       setDeductions(d);
+      setOv(o);
     } catch (e: any) {
       toast.error(e.message ?? "Failed to load payroll");
     }
@@ -78,11 +88,12 @@ function PayrollPage() {
   }
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [year, month]);
 
+  /** EMI due this period per employee (sum across active advance schedules). */
   const advByEmp = useMemo(() => {
     const m: Record<string, number> = {};
-    advances.forEach((a) => { m[a.employee_id] = (m[a.employee_id] ?? 0) + Number(a.amount ?? 0); });
+    advances.forEach((a) => { m[a.employee_id] = (m[a.employee_id] ?? 0) + emiDueFor(a, year, month); });
     return m;
-  }, [advances]);
+  }, [advances, year, month]);
 
   const recByEmp = useMemo(() => {
     const m: Record<string, SalaryRecord> = {};
@@ -95,14 +106,24 @@ function PayrollPage() {
     return employees
       .filter((e) => e.active !== false)
       .filter((e) => !q || e.name.toLowerCase().includes(q) || (e.role ?? "").toLowerCase().includes(q))
-      .map((e) => computeRow(e, year, month, att[e.id] ?? {}, advByEmp[e.id] ?? 0, deductions[e.id] ?? 0, recByEmp[e.id] ?? null))
+      .map((e) => {
+        const base = recByEmp[e.id] ?? null;
+        const o = ov[e.id] ?? {};
+        const rec = {
+          ...(base ?? ({} as SalaryRecord)),
+          override_paid_days: o.paidDays ?? null,
+          override_emi: o.emi ?? null,
+          override_net: o.net ?? null,
+        } as SalaryRecord;
+        return computeRow(e, year, month, att[e.id] ?? {}, advByEmp[e.id] ?? 0, deductions[e.id] ?? 0, base ? rec : (Object.keys(o).length ? rec : null));
+      })
       .filter((r) => r.eligible.end >= r.eligible.start);
-  }, [employees, att, advByEmp, deductions, recByEmp, year, month, search]);
+  }, [employees, att, advByEmp, deductions, recByEmp, ov, year, month, search]);
 
   const totals = useMemo(() => rows.reduce(
     (acc, r) => ({
-      gross: acc.gross + r.totalSalary,
-      advance: acc.advance + r.advance,
+      gross: acc.gross + r.grossSalary,
+      advance: acc.advance + r.emiDeduction,
       net: acc.net + r.netSalary,
       paid: acc.paid + (r.record?.status === "paid" ? 1 : 0),
     }),
