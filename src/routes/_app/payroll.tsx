@@ -571,6 +571,66 @@ function PayrollPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={confirmBulk} onOpenChange={setConfirmBulk}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Mark all present?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure? This will update the full month of {MONTHS[month - 1]} {year} for {rows.length} employee(s) and overwrite existing entries.
+            You can reverse it with <span className="font-medium">Undo Last</span>.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmBulk(false)}>Cancel</Button>
+            <Button onClick={bulkMarkAllPresent} disabled={saving}>Yes, mark all present</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader><DialogTitle>Attendance Edit History — {MONTHS[month - 1]} {year}</DialogTitle></DialogHeader>
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
+            <Table>
+              <TableHeader className="sticky top-0 bg-muted z-10">
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Who</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Change</TableHead>
+                  <TableHead className="w-20"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {audit.length === 0 && (
+                  <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground text-center py-6">No attendance changes recorded this month.</TableCell></TableRow>
+                )}
+                {audit.map((a) => (
+                  <TableRow key={a.id} className={a.undone ? "opacity-50" : ""}>
+                    <TableCell className="text-xs whitespace-nowrap">{new Date(a.created_at).toLocaleString()}</TableCell>
+                    <TableCell className="text-xs">{a.changed_by_email ?? "—"}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{a.work_date}</TableCell>
+                    <TableCell className="text-xs capitalize">{a.action.replace(/_/g, " ")}</TableCell>
+                    <TableCell className="text-xs">
+                      {(a.old_code ?? "—")}{a.old_hours != null ? ` (${a.old_hours}h)` : ""} → {(a.new_code ?? "cleared")}{a.new_hours != null ? ` (${a.new_hours}h)` : ""}
+                      {" · "}{a.old_day_value ?? 0} → {a.new_day_value ?? 0} day(s)
+                    </TableCell>
+                    <TableCell>
+                      {isAdmin && !a.undone && !locked && (
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                          onClick={async () => { try { await undoBatch(a.batch_id); toast.success("Change undone"); await load(); } catch (e: any) { toast.error(e.message); } }}>
+                          <Undo2 className="h-3 w-3 mr-1" />Undo
+                        </Button>
+                      )}
+                      {a.undone && <Badge variant="outline" className="text-[10px]">undone</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
