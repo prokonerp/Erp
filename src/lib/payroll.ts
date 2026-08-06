@@ -229,18 +229,81 @@ export type ComputedRow = {
 
 export const monthIndex = (y: number, m: number) => y * 12 + (m - 1);
 
-/** Is this advance's EMI schedule active for the given period? */
-export function emiDueFor(a: Advance, year: number, month: number): number {
-  if ((a.status ?? "active") !== "active") return 0;
-  const sy = a.start_year ?? a.period_year;
-  const sm = a.start_month ?? a.period_month;
-  if (!sy || !sm) return 0;
-  const start = monthIndex(sy, sm);
-  const cur = monthIndex(year, month);
+export const fromMonthIndex = (i: number) => ({ year: Math.floor(i / 12), month: (i % 12) + 1 });
+
+/** Schedule facts for one advance: end month, balance, paid / pending installments. */
+export function advanceSummary(a: Advance) {
   const months = Math.max(1, Number(a.emi_months ?? 1));
-  if (cur < start || cur >= start + months) return 0;
-  const emi = Number(a.emi_amount ?? 0) || Number(a.amount ?? 0) / months;
-  return Math.max(0, emi);
+  const sy = a.start_year ?? a.period_year ?? null;
+  const sm = a.start_month ?? a.period_month ?? null;
+  const start = sy && sm ? monthIndex(sy, sm) : null;
+  const end = start != null ? fromMonthIndex(start + months - 1) : null;
+  const total = Number(a.amount ?? 0);
+  const paid = round2(Math.min(total, Number(a.paid_amount ?? 0)));
+  const balance = round2(Math.max(0, total - paid));
+  const emi = Number(a.emi_amount ?? 0) || total / months;
+  const paidInstallments = Number(a.paid_installments ?? 0);
+  const pendingInstallments = emi > 0 ? Math.ceil(balance / emi) : 0;
+  return {
+    months, start, startYear: sy, startMonth: sm,
+    endYear: end?.year ?? null, endMonth: end?.month ?? null,
+    total, paid, balance, emi: round2(emi), paidInstallments, pendingInstallments,
+    closed: (a.status ?? "active") !== "active" || balance <= 0,
+  };
+}
+
+/** Has this period already been settled or explicitly skipped? */
+export function paymentFor(payments: AdvancePayment[] | undefined, advanceId: string, year: number, month: number) {
+  return (payments ?? []).find((p) => p.advance_id === advanceId && p.period_year === year && p.period_month === month) ?? null;
+}
+
+/**
+ * EMI due for a period.
+ * - Outside the schedule (or closed/fully paid) → 0
+ * - Skipped by admin for that period → 0
+ * - Employee exiting this month (or already exited) → full outstanding balance
+ * - Otherwise the EMI amount, capped at the outstanding balance
+ */
+export function emiDueFor(
+  a: Advance,
+  year: number,
+  month: number,
+  opts?: { payments?: AdvancePayment[]; employee?: Employee | null },
+): number {
+  const s = advanceSummary(a);
+  if ((a.status ?? "active") !== "active" || s.balance <= 0 || s.start == null) return 0;
+
+  const existing = paymentFor(opts?.payments, a.id, year, month);
+  if (existing) return existing.kind === "skip" ? 0 : round2(Math.min(Number(existing.amount ?? 0), s.balance));
+
+  const cur = monthIndex(year, month);
+
+  // Full recovery on exit.
+  const exit = opts?.employee?.exit_date ? new Date(opts.employee.exit_date + "T00:00:00") : null;
+  if (exit && monthIndex(exit.getFullYear(), exit.getMonth() + 1) <= cur && cur >= s.start) return s.balance;
+
+  if (cur < s.start || cur >= s.start + s.months) return 0;
+  return round2(Math.min(s.emi, s.balance));
+}
+
+/** Spread an actually-deducted amount across an employee's active advances, oldest first. */
+export function allocateEmi(
+  advances: Advance[],
+  deducted: number,
+  year: number,
+  month: number,
+  opts?: { payments?: AdvancePayment[]; employee?: Employee | null },
+): { advance: Advance; due: number; amount: number }[] {
+  const dues = advances
+    .map((a) => ({ advance: a, due: emiDueFor(a, year, month, opts) }))
+    .filter((x) => x.due > 0)
+    .sort((x, y) => (x.advance.advance_date ?? "").localeCompare(y.advance.advance_date ?? ""));
+  let left = round2(Math.max(0, deducted));
+  return dues.map((x) => {
+    const amount = round2(Math.min(x.due, left));
+    left = round2(left - amount);
+    return { ...x, amount };
+  });
 }
 
 /**
