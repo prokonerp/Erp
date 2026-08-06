@@ -13,12 +13,15 @@ import { ExportButtons } from "@/components/ExportButtons";
 import { toast } from "sonner";
 import {
   AlertTriangle, BadgeIndianRupee, CalendarDays, CheckCircle2, ChevronDown, ChevronRight,
-  CircleCheck, IndianRupee, Loader2, Plus, RefreshCw, Users, Wallet,
+  CircleCheck, History, IndianRupee, Loader2, Lock, LockOpen, Plus, RefreshCw, Undo2, Users, Wallet,
 } from "lucide-react";
 import {
-  MONTHS, type AttCode, type Advance, type ComputedRow, type Employee, type SalaryRecord,
-  computeRow, daysInMonth, emiDueFor, incrementDue, isoDate, listAdvances, listAttendance, listEmployees,
-  listSalaryRecords, money, saveAttendance, settleEmiForPeriod, upsertSalaryRecord,
+  MAX_WORK_HOURS, MONTHS, STANDARD_SHIFT_HOURS,
+  type AttCode, type AttEntry, type Advance, type AttendanceLock, type AuditRow,
+  type ComputedRow, type Employee, type SalaryRecord,
+  clearAttendance, computeRow, dayValueFor, daysInMonth, emiDueFor, getAttendanceLock, incrementDue,
+  isSundayDate, isoDate, listAdvances, listAttendance, listAttendanceAudit, listEmployees,
+  listSalaryRecords, money, saveAttendance, setAttendanceLock, settleEmiForPeriod, undoBatch, upsertSalaryRecord,
 } from "@/lib/payroll";
 
 export const Route = createFileRoute("/_app/payroll")({
@@ -35,12 +38,22 @@ export const Route = createFileRoute("/_app/payroll")({
   }),
 });
 
-const codeCls: Record<AttCode, string> = {
-  P: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  A: "bg-destructive/15 text-destructive",
-  H: "bg-amber-500/20 text-amber-700 dark:text-amber-400",
-};
-const nextCode = (c: AttCode | undefined): AttCode => (c === "P" ? "H" : c === "H" ? "A" : "P");
+const ATT_TYPES: { value: AttCode; label: string }[] = [
+  { value: "P", label: "Present" },
+  { value: "H", label: "Half Day" },
+  { value: "A", label: "Absent" },
+  { value: "OT", label: "Overtime Entry" },
+  { value: "SW", label: "Sunday Work" },
+];
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Row tint: Sunday orange, overtime blue, absent red. */
+function rowTint(code: AttCode, hours: number | null, dayValue: number, sunday: boolean) {
+  if ((hours ?? 0) > STANDARD_SHIFT_HOURS || code === "OT") return "bg-blue-500/10";
+  if (sunday) return "bg-orange-500/10";
+  if (dayValue <= 0) return "bg-destructive/10";
+  return "";
+}
 
 function PayrollPage() {
   const { isAdmin } = useIsAdmin();
@@ -48,7 +61,11 @@ function PayrollPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [att, setAtt] = useState<Record<string, Record<number, AttCode>>>({});
+  const [att, setAtt] = useState<Record<string, Record<number, AttEntry>>>({});
+  const [lock, setLock] = useState<AttendanceLock | null>(null);
+  const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [records, setRecords] = useState<SalaryRecord[]>([]);
   const [deductions, setDeductions] = useState<Record<string, number>>({});
@@ -62,13 +79,16 @@ function PayrollPage() {
   async function load() {
     setLoading(true);
     try {
-      const [emps, a, adv, recs] = await Promise.all([
+      const [emps, a, adv, recs, lk, log] = await Promise.all([
         listEmployees(), listAttendance(year, month), listAdvances(), listSalaryRecords(year, month),
+        getAttendanceLock(year, month), listAttendanceAudit(year, month),
       ]);
       setEmployees(emps);
       setAtt(a);
       setAdvances(adv);
       setRecords(recs);
+      setLock(lk);
+      setAudit(log);
       const d: Record<string, number> = {};
       const o: Record<string, { paidDays?: number | null; emi?: number | null; net?: number | null }> = {};
       recs.forEach((r) => {
@@ -128,48 +148,93 @@ function PayrollPage() {
     [employees],
   );
 
-  function setCell(empId: string, day: number, code: AttCode) {
-    setAtt((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: code } }));
+  const locked = !!lock?.locked;
+  const canEdit = isAdmin && !locked;
+
+  function guard(): boolean {
+    if (!isAdmin) return false;
+    if (locked) { toast.error(`${MONTHS[month - 1]} ${year} attendance is locked. Unlock it to edit.`); return false; }
+    return true;
   }
 
-  async function persistAttendance(empId: string, days?: number[]) {
-    if (!isAdmin) return;
-    const map = att[empId] ?? {};
-    const list = (days ?? Object.keys(map).map(Number)).map((d) => ({
-      employee_id: empId, work_date: isoDate(year, month, d), code: (map[d] ?? "A") as AttCode,
-    }));
-    try { await saveAttendance(list); } catch (e: any) { toast.error(e.message); }
+  async function refreshAudit() {
+    try { setAudit(await listAttendanceAudit(year, month)); } catch { /* non-critical */ }
+  }
+
+  /** Write one day for one employee. Hours take priority over the type. */
+  async function setDay(empId: string, day: number, patch: { code?: AttCode; hours?: number | null }) {
+    if (!guard()) return;
+    const sunday = isSundayDate(year, month, day);
+    const cur = att[empId]?.[day];
+    const code = patch.code ?? cur?.code ?? "A";
+    const hours = patch.hours !== undefined ? patch.hours : (cur?.hours ?? null);
+    if (hours != null && (hours < 0 || hours > MAX_WORK_HOURS)) return toast.error(`Work hours must be 0–${MAX_WORK_HOURS}`);
+    const entry: AttEntry = { code, hours, dayValue: dayValueFor(code, hours, sunday), edited: true };
+    setAtt((prev) => ({ ...prev, [empId]: { ...(prev[empId] ?? {}), [day]: entry } }));
+    try {
+      await saveAttendance([{ employee_id: empId, work_date: isoDate(year, month, day), code, hours }], "edit");
+      void refreshAudit();
+    } catch (e: any) { toast.error(e.message); }
   }
 
   async function markAllPresent(row: ComputedRow) {
-    if (!isAdmin) return;
+    if (!guard()) return;
     const days: number[] = [];
-    const map: Record<number, AttCode> = { ...(att[row.emp.id] ?? {}) };
-    for (let d = row.eligible.start; d <= row.eligible.end; d++) { map[d] = "P"; days.push(d); }
+    const map: Record<number, AttEntry> = { ...(att[row.emp.id] ?? {}) };
+    for (let d = row.eligible.start; d <= row.eligible.end; d++) {
+      map[d] = { code: "P", hours: null, dayValue: dayValueFor("P", null, isSundayDate(year, month, d)) };
+      days.push(d);
+    }
     setAtt((p) => ({ ...p, [row.emp.id]: map }));
     try {
-      await saveAttendance(days.map((d) => ({ employee_id: row.emp.id, work_date: isoDate(year, month, d), code: "P" as AttCode })));
+      await saveAttendance(
+        days.map((d) => ({ employee_id: row.emp.id, work_date: isoDate(year, month, d), code: "P" as AttCode, hours: null })),
+        "bulk_employee_present",
+      );
       toast.success(`All present — ${row.emp.name}`);
+      void refreshAudit();
     } catch (e: any) { toast.error(e.message); }
   }
 
   async function bulkMarkAllPresent() {
-    if (!isAdmin) return;
+    if (!guard()) return;
     setSaving(true);
-    const payload: { employee_id: string; work_date: string; code: AttCode }[] = [];
+    const payload: { employee_id: string; work_date: string; code: AttCode; hours: number | null }[] = [];
     const next = { ...att };
     for (const r of rows) {
-      const map: Record<number, AttCode> = { ...(next[r.emp.id] ?? {}) };
+      const map: Record<number, AttEntry> = { ...(next[r.emp.id] ?? {}) };
       for (let d = r.eligible.start; d <= r.eligible.end; d++) {
-        map[d] = "P";
-        payload.push({ employee_id: r.emp.id, work_date: isoDate(year, month, d), code: "P" });
+        map[d] = { code: "P", hours: null, dayValue: dayValueFor("P", null, isSundayDate(year, month, d)) };
+        payload.push({ employee_id: r.emp.id, work_date: isoDate(year, month, d), code: "P", hours: null });
       }
       next[r.emp.id] = map;
     }
     setAtt(next);
-    try { await saveAttendance(payload); toast.success("Marked all present for the month"); }
+    try { await saveAttendance(payload, "bulk_all_present"); toast.success("Marked all present for the month"); await load(); }
     catch (e: any) { toast.error(e.message); }
     setSaving(false);
+    setConfirmBulk(false);
+  }
+
+  const lastBatch = useMemo(() => audit.find((a) => !a.undone)?.batch_id ?? null, [audit]);
+
+  async function undoLast() {
+    if (!guard() || !lastBatch) return;
+    try { const n = await undoBatch(lastBatch); toast.success(`Undone ${n} attendance change(s)`); await load(); }
+    catch (e: any) { toast.error(e.message); }
+  }
+
+  async function undoMonth(empId: string | null, label: string) {
+    if (!guard()) return;
+    if (!confirm(`Clear all attendance for ${label} in ${MONTHS[month - 1]} ${year}? This can be reviewed in Edit History.`)) return;
+    try { const n = await clearAttendance(year, month, empId); toast.success(`Cleared ${n} attendance entr(ies)`); await load(); }
+    catch (e: any) { toast.error(e.message); }
+  }
+
+  async function toggleLock(next: boolean) {
+    if (!isAdmin) return;
+    try { await setAttendanceLock(year, month, next); setLock(await getAttendanceLock(year, month)); toast.success(next ? "Attendance locked" : "Attendance unlocked"); }
+    catch (e: any) { toast.error(e.message); }
   }
 
   async function saveSheet(status?: string) {
@@ -177,7 +242,11 @@ function PayrollPage() {
     setSaving(true);
     try {
       for (const r of rows) await upsertSalaryRecord(r, year, month, status);
-      if (status === "paid") await settleEmiForPeriod(advances, year, month);
+      if (status === "paid") {
+        await settleEmiForPeriod(advances, year, month);
+        await setAttendanceLock(year, month, true);
+        setLock(await getAttendanceLock(year, month));
+      }
       toast.success(status === "paid" ? "Marked as paid" : status === "approved" ? "Salary approved" : "Salary sheet saved");
       const recs = await listSalaryRecords(year, month);
       setRecords(recs);
@@ -248,6 +317,17 @@ function PayrollPage() {
         </div>
       </div>
 
+      {locked && (
+        <Card className="border-primary/40">
+          <CardContent className="py-3 text-sm flex items-center gap-2">
+            <Lock className="h-4 w-4 text-primary" />
+            <span>
+              Attendance for {MONTHS[month - 1]} {year} is locked{lock?.locked_by_email ? ` by ${lock.locked_by_email}` : ""}.
+              {isAdmin ? " Unlock to edit and recalculate salary." : " Ask an admin to unlock it."}
+            </span>
+          </CardContent>
+        </Card>
+      )}
       {dueList.length > 0 && (
         <Card className="border-amber-500/40">
           <CardContent className="py-3 text-sm flex items-start gap-2">
@@ -274,7 +354,15 @@ function PayrollPage() {
             <Input placeholder="Search employee…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-44" />
             <ExportButtons name={`Salary_${MONTHS[month - 1]}_${year}`} title={`Salary Sheet — ${MONTHS[month - 1]} ${year}`} rows={rows} columns={exportCols} />
             {isAdmin && <AdvanceDialog employees={employees} year={year} month={month} onSaved={load} />}
-            {isAdmin && <Button size="sm" variant="outline" onClick={bulkMarkAllPresent} disabled={saving}>Mark All Present</Button>}
+            {isAdmin && <Button size="sm" variant="outline" onClick={() => setConfirmBulk(true)} disabled={saving || locked}>Mark All Present</Button>}
+            {isAdmin && <Button size="sm" variant="outline" onClick={undoLast} disabled={saving || locked || !lastBatch}><Undo2 className="h-4 w-4 mr-1" />Undo Last</Button>}
+            {isAdmin && <Button size="sm" variant="ghost" onClick={() => undoMonth(null, "all employees")} disabled={saving || locked}>Undo Month</Button>}
+            <Button size="sm" variant="outline" onClick={() => setHistoryOpen(true)}><History className="h-4 w-4 mr-1" />History</Button>
+            {isAdmin && (
+              <Button size="sm" variant={locked ? "default" : "outline"} onClick={() => toggleLock(!locked)}>
+                {locked ? <><LockOpen className="h-4 w-4 mr-1" />Unlock</> : <><Lock className="h-4 w-4 mr-1" />Lock</>}
+              </Button>
+            )}
             {isAdmin && <Button size="sm" variant="outline" onClick={() => saveSheet()} disabled={saving}>Save</Button>}
             {isAdmin && <Button size="sm" variant="outline" onClick={() => saveSheet("approved")} disabled={saving}>Approve All</Button>}
             {isAdmin && <Button size="sm" onClick={() => saveSheet("paid")} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}Mark Paid</Button>}
@@ -403,26 +491,72 @@ function PayrollPage() {
                                     </Button>
                                   )}
                                 </div>
-                                <div className="text-xs text-muted-foreground">
-                                  Attendance — click a day to cycle P → H → A{r.eligible.start > 1 || r.eligible.end < r.daysInMonth ? ` · eligible days ${r.eligible.start}–${r.eligible.end}` : ""}
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  <span>
+                                    Attendance — enter Work Hours (1 day = {STANDARD_SHIFT_HOURS} hrs, Sunday counts double) or pick a type
+                                    {r.eligible.start > 1 || r.eligible.end < r.daysInMonth ? ` · eligible days ${r.eligible.start}–${r.eligible.end}` : ""}
+                                  </span>
+                                  {canEdit && (
+                                    <>
+                                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => markAllPresent(r)}>Mark all present</Button>
+                                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive" onClick={() => undoMonth(r.emp.id, r.emp.name)}>
+                                        <Undo2 className="h-3 w-3 mr-1" />Undo month
+                                      </Button>
+                                    </>
+                                  )}
                                 </div>
-                                <div className="flex flex-wrap gap-1">
-                                  {Array.from({ length: r.daysInMonth }, (_, k) => k + 1).map((d) => {
-                                    const inRange = d >= r.eligible.start && d <= r.eligible.end;
-                                    const c = (r.attendance[d] ?? (inRange ? "A" : undefined)) as AttCode | undefined;
-                                    return (
-                                      <button
-                                        key={d}
-                                        disabled={!isAdmin || !inRange}
-                                        onClick={() => { const n = nextCode(c); setCell(r.emp.id, d, n); void persistAttendance(r.emp.id, [d]); }}
-                                        className={`w-9 rounded-md border px-1 py-1 text-[11px] leading-tight transition-colors ${inRange ? codeCls[(c ?? "A") as AttCode] : "opacity-40"} ${isAdmin && inRange ? "hover:ring-1 hover:ring-primary" : ""}`}
-                                        title={`Day ${d}`}
-                                      >
-                                        <div className="font-medium">{d}</div>
-                                        <div>{inRange ? (c ?? "A") : "–"}</div>
-                                      </button>
-                                    );
-                                  })}
+                                <div className="rounded-md border bg-background max-h-80 overflow-auto">
+                                  <Table>
+                                    <TableHeader className="sticky top-0 bg-muted z-10">
+                                      <TableRow>
+                                        <TableHead className="w-20">Date</TableHead>
+                                        <TableHead className="w-20">Day</TableHead>
+                                        <TableHead className="w-28">Work Hours</TableHead>
+                                        <TableHead className="w-40">Attendance Type</TableHead>
+                                        <TableHead className="w-28 text-right">Calculated Days</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {Array.from({ length: r.daysInMonth }, (_, k) => k + 1).map((d) => {
+                                        const inRange = d >= r.eligible.start && d <= r.eligible.end;
+                                        const sunday = isSundayDate(year, month, d);
+                                        const e = r.attendance[d];
+                                        const code = (e?.code ?? "A") as AttCode;
+                                        const hours = e?.hours ?? null;
+                                        const dv = e?.dayValue ?? 0;
+                                        return (
+                                          <TableRow key={d} className={inRange ? rowTint(code, hours, dv, sunday) : "opacity-40"}>
+                                            <TableCell className="text-xs tabular-nums">{isoDate(year, month, d)}</TableCell>
+                                            <TableCell className={`text-xs ${sunday ? "font-semibold text-orange-600" : ""}`}>
+                                              {DOW[new Date(year, month - 1, d).getDay()]}
+                                              {e?.edited && <span className="ml-1 inline-block h-2 w-2 rounded-full bg-yellow-400 align-middle" title="Edited entry" />}
+                                            </TableCell>
+                                            <TableCell>
+                                              <Input
+                                                type="number" min="0" max={MAX_WORK_HOURS} step="0.5"
+                                                disabled={!canEdit || !inRange}
+                                                className="h-8 w-20 text-right"
+                                                value={hours ?? ""}
+                                                placeholder="—"
+                                                onChange={(ev) => setDay(r.emp.id, d, { hours: ev.target.value === "" ? null : Number(ev.target.value) })}
+                                              />
+                                            </TableCell>
+                                            <TableCell>
+                                              <select
+                                                className="h-8 w-36 rounded-md border bg-background px-2 text-xs disabled:opacity-60"
+                                                disabled={!canEdit || !inRange || (hours != null && hours > 0)}
+                                                value={code}
+                                                onChange={(ev) => setDay(r.emp.id, d, { code: ev.target.value as AttCode })}
+                                              >
+                                                {ATT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                              </select>
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums font-medium">{inRange ? dv : "–"}</TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                    </TableBody>
+                                  </Table>
                                 </div>
                               </div>
                             </TableCell>
@@ -437,6 +571,66 @@ function PayrollPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={confirmBulk} onOpenChange={setConfirmBulk}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Mark all present?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure? This will update the full month of {MONTHS[month - 1]} {year} for {rows.length} employee(s) and overwrite existing entries.
+            You can reverse it with <span className="font-medium">Undo Last</span>.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmBulk(false)}>Cancel</Button>
+            <Button onClick={bulkMarkAllPresent} disabled={saving}>Yes, mark all present</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader><DialogTitle>Attendance Edit History — {MONTHS[month - 1]} {year}</DialogTitle></DialogHeader>
+          <div className="max-h-[60vh] overflow-auto rounded-md border">
+            <Table>
+              <TableHeader className="sticky top-0 bg-muted z-10">
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Who</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Change</TableHead>
+                  <TableHead className="w-20"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {audit.length === 0 && (
+                  <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground text-center py-6">No attendance changes recorded this month.</TableCell></TableRow>
+                )}
+                {audit.map((a) => (
+                  <TableRow key={a.id} className={a.undone ? "opacity-50" : ""}>
+                    <TableCell className="text-xs whitespace-nowrap">{new Date(a.created_at).toLocaleString()}</TableCell>
+                    <TableCell className="text-xs">{a.changed_by_email ?? "—"}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{a.work_date}</TableCell>
+                    <TableCell className="text-xs capitalize">{a.action.replace(/_/g, " ")}</TableCell>
+                    <TableCell className="text-xs">
+                      {(a.old_code ?? "—")}{a.old_hours != null ? ` (${a.old_hours}h)` : ""} → {(a.new_code ?? "cleared")}{a.new_hours != null ? ` (${a.new_hours}h)` : ""}
+                      {" · "}{a.old_day_value ?? 0} → {a.new_day_value ?? 0} day(s)
+                    </TableCell>
+                    <TableCell>
+                      {isAdmin && !a.undone && !locked && (
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                          onClick={async () => { try { await undoBatch(a.batch_id); toast.success("Change undone"); await load(); } catch (e: any) { toast.error(e.message); } }}>
+                          <Undo2 className="h-3 w-3 mr-1" />Undo
+                        </Button>
+                      )}
+                      {a.undone && <Badge variant="outline" className="text-[10px]">undone</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

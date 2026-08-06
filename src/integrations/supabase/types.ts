@@ -320,26 +320,38 @@ export type Database = {
         Row: {
           code: string
           created_at: string
+          day_value: number
           employee_id: string
           id: string
+          is_sunday: boolean
           updated_at: string
+          updated_by: string | null
           work_date: string
+          work_hours: number | null
         }
         Insert: {
           code?: string
           created_at?: string
+          day_value?: number
           employee_id: string
           id?: string
+          is_sunday?: boolean
           updated_at?: string
+          updated_by?: string | null
           work_date: string
+          work_hours?: number | null
         }
         Update: {
           code?: string
           created_at?: string
+          day_value?: number
           employee_id?: string
           id?: string
+          is_sunday?: boolean
           updated_at?: string
+          updated_by?: string | null
           work_date?: string
+          work_hours?: number | null
         }
         Relationships: [
           {
@@ -350,6 +362,104 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      attendance_audit: {
+        Row: {
+          action: string
+          batch_id: string
+          changed_by: string | null
+          changed_by_email: string | null
+          created_at: string
+          employee_id: string
+          id: string
+          new_code: string | null
+          new_day_value: number | null
+          new_hours: number | null
+          old_code: string | null
+          old_day_value: number | null
+          old_hours: number | null
+          undone: boolean
+          work_date: string
+        }
+        Insert: {
+          action: string
+          batch_id: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          created_at?: string
+          employee_id: string
+          id?: string
+          new_code?: string | null
+          new_day_value?: number | null
+          new_hours?: number | null
+          old_code?: string | null
+          old_day_value?: number | null
+          old_hours?: number | null
+          undone?: boolean
+          work_date: string
+        }
+        Update: {
+          action?: string
+          batch_id?: string
+          changed_by?: string | null
+          changed_by_email?: string | null
+          created_at?: string
+          employee_id?: string
+          id?: string
+          new_code?: string | null
+          new_day_value?: number | null
+          new_hours?: number | null
+          old_code?: string | null
+          old_day_value?: number | null
+          old_hours?: number | null
+          undone?: boolean
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_audit_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attendance_locks: {
+        Row: {
+          created_at: string
+          id: string
+          locked: boolean
+          locked_at: string
+          locked_by: string | null
+          locked_by_email: string | null
+          period_month: number
+          period_year: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          locked?: boolean
+          locked_at?: string
+          locked_by?: string | null
+          locked_by_email?: string | null
+          period_month: number
+          period_year: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          locked?: boolean
+          locked_at?: string
+          locked_by?: string | null
+          locked_by_email?: string | null
+          period_month?: number
+          period_year?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       battery_catalog: {
         Row: {
