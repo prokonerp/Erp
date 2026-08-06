@@ -249,14 +249,19 @@ function PayrollPage() {
     try {
       for (const r of rows) await upsertSalaryRecord(r, year, month, status);
       if (status === "paid") {
-        await settleEmiForPeriod(advances, year, month);
+        const deducted: Record<string, number> = {};
+        rows.forEach((r) => { deducted[r.emp.id] = r.emiDeduction; });
+        await settleEmiForPeriod(advances, year, month, deducted, advPayments, employees);
         await setAttendanceLock(year, month, true);
         setLock(await getAttendanceLock(year, month));
       }
       toast.success(status === "paid" ? "Marked as paid" : status === "approved" ? "Salary approved" : "Salary sheet saved");
       const recs = await listSalaryRecords(year, month);
       setRecords(recs);
-      if (status === "paid") setAdvances(await listAdvances());
+      if (status === "paid") {
+        setAdvances(await listAdvances());
+        setAdvPayments(await listAdvancePayments());
+      }
     } catch (e: any) { toast.error(e.message); }
     setSaving(false);
   }
@@ -265,6 +270,14 @@ function PayrollPage() {
     if (!isAdmin) return;
     try {
       await upsertSalaryRecord(r, year, month, status);
+      if (status === "paid") {
+        await settleEmiForPeriod(
+          advances.filter((a) => a.employee_id === r.emp.id), year, month,
+          { [r.emp.id]: r.emiDeduction }, advPayments, employees,
+        );
+        setAdvances(await listAdvances());
+        setAdvPayments(await listAdvancePayments());
+      }
       setRecords(await listSalaryRecords(year, month));
       toast.success(status === "paid" ? "Marked paid" : "Approved");
     } catch (e: any) { toast.error(e.message); }
