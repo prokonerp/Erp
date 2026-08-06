@@ -596,6 +596,16 @@ function PayrollPage() {
         </CardContent>
       </Card>
 
+      <AdvanceLedger
+        employees={employees}
+        advances={advances}
+        payments={advPayments}
+        year={year}
+        month={month}
+        isAdmin={isAdmin}
+        onChanged={load}
+      />
+
       <Dialog open={confirmBulk} onOpenChange={setConfirmBulk}>
         <DialogContent>
           <DialogHeader><DialogTitle>Mark all present?</DialogTitle></DialogHeader>
