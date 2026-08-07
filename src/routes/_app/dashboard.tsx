@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Ticket, ShieldCheck, ClipboardList, Briefcase, Warehouse, Truck,
   Plus, ExternalLink, AlertTriangle, CheckCircle2, Clock, Activity,
-  TrendingUp, FileText, PackageCheck, Send, LayoutDashboard,
+  TrendingUp, FileText, PackageCheck, Send, LayoutDashboard, CalendarCheck,
 } from "lucide-react";
 import { hoursExcludingSundays } from "@/lib/tickets";
 import type { ModuleKey } from "@/lib/permissions";
@@ -80,7 +80,7 @@ function DashboardPage() {
 /* ───────────── Quick Actions ───────────── */
 
 function QuickActions({ can, isAdmin }: { can: (m: ModuleKey, a?: any) => boolean; isAdmin: boolean }) {
-  const actions: { label: string; to: string; module: ModuleKey | "*"; icon: any }[] = [
+  const actions: { label: string; to: string; module: ModuleKey | "*"; icon: any; adminOnly?: boolean; noPlus?: boolean; search?: Record<string, string> }[] = [
     { label: "New Ticket", to: "/tickets/new", module: "tickets", icon: Ticket },
     { label: "New AMC", to: "/amc/new", module: "amc", icon: ShieldCheck },
     { label: "New Indent", to: "/indent/new", module: "indent", icon: ClipboardList },
@@ -88,16 +88,17 @@ function QuickActions({ can, isAdmin }: { can: (m: ModuleKey, a?: any) => boolea
     { label: "New Gatepass", to: "/gatepass/new", module: "gatepass", icon: FileText },
     { label: "New Delivery Challan", to: "/challan/new", module: "gatepass", icon: Send },
     { label: "New GRN", to: "/grn/new", module: "gatepass", icon: PackageCheck },
+    { label: "Mark Attendance", to: "/payroll", module: "*", icon: CalendarCheck, adminOnly: true, noPlus: true, search: { tab: "quick" } },
   ];
-  const visible = actions.filter((a) => isAdmin || a.module === "*" || can(a.module as ModuleKey, "create"));
+  const visible = actions.filter((a) => (a.adminOnly ? isAdmin : isAdmin || a.module === "*" || can(a.module as ModuleKey, "create")));
   if (!visible.length) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground mr-1">Quick actions</span>
       {visible.map((a) => (
-        <Link key={a.to + a.label} to={a.to}>
+        <Link key={a.to + a.label} to={a.to} search={a.search as any}>
           <Button size="sm" variant="outline" className="h-8 gap-1.5">
-            <a.icon className="h-3.5 w-3.5" /> <Plus className="h-3 w-3" /> {a.label}
+            <a.icon className="h-3.5 w-3.5" /> {!a.noPlus && <Plus className="h-3 w-3" />} {a.label}
           </Button>
         </Link>
       ))}
