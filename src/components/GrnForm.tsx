@@ -22,6 +22,14 @@ import { getCurrentUserName } from "@/lib/currentUser";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
+/** Condition drives inventory classification — only these values are accepted. */
+const CONDITIONS = ["Good", "Defective", "Scrap"] as const;
+/** Normalize legacy / free-text values; unknown values return "" so the user must re-pick. */
+const normCondition = (v?: string | null) => {
+  const m = CONDITIONS.find((c) => c.toLowerCase() === (v || "").trim().toLowerCase());
+  return m || "";
+};
+
 type Props = { category?: GrnCategory; editId?: string };
 
 export function GrnForm({ category: initialCategory = "customer", editId }: Props) {
@@ -302,6 +310,12 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         return false;
       }
     }
+    for (let i = 0; i < clean.length; i++) {
+      if (!normCondition(clean[i].condition)) {
+        toast.error(`Row ${i + 1}: select a Condition (Good, Defective or Scrap)`);
+        return false;
+      }
+    }
     return true;
   };
 
@@ -320,11 +334,13 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       .filter((it) => it.part_name.trim() || it.part_no.trim())
       .map((it) => {
         const qty = parseFloat(it.qty_received) || 0;
-        const good = (it.condition || "Good") === "Good";
         return {
           ...it,
-          qty_accepted: good ? String(qty) : "0",
-          qty_rejected: good ? "0" : String(qty),
+          condition: normCondition(it.condition),
+          // Every received unit is posted to inventory; its Condition alone
+          // decides whether it lands as good, defective or scrapped stock.
+          qty_accepted: String(qty),
+          qty_rejected: "0",
         };
       });
     const selectedWarehouse = warehouses.find((w) => w.id === warehouseId) || null;
@@ -698,8 +714,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="number" min="0" value={it.qty_received} readOnly className="bg-muted/40" onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
                         <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="date" value={it.received_date || ""} readOnly className="bg-muted/40" /></td>
                         <td className="px-2 py-1.5 border-t-0 border-border/60">
-                          <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceKind === "customer-section-d"}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                          <Select value={normCondition(it.condition)} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceKind === "customer-section-d"}>
+                            <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Good">Good</SelectItem>
                               <SelectItem value="Defective">Defective</SelectItem>
@@ -781,8 +797,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       <tr key={`${i}-ops`} className="align-top">
                         <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="number" min="0" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
                         <td className="px-2 py-1.5 border-t-0 border-border/60">
-                          <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                          <Select value={normCondition(it.condition)} onValueChange={(v) => updateItem(i, { condition: v })}>
+                            <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Good">Good</SelectItem>
                               <SelectItem value="Defective">Defective</SelectItem>
@@ -930,7 +946,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       <td className="border p-1">{it.model_no || it.part_name}</td>
                       <td className="border p-1">{it.uom}</td>
                       <td className="border p-1 text-right">{it.qty_received}</td>
-                      <td className="border p-1">{it.condition || "Good"}</td>
+                      <td className="border p-1">{normCondition(it.condition) || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
