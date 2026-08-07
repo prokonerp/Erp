@@ -286,6 +286,22 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     if (!form.source_name.trim()) { toast.error(`${sourceLabel} name is required`); return false; }
     const clean = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     if (clean.length === 0) { toast.error("Add at least one material row"); return false; }
+    for (let i = 0; i < clean.length; i++) {
+      const it = clean[i];
+      const qty = Math.max(1, Math.floor(parseFloat(it.qty_received) || 1));
+      const list = (it.serials && it.serials.length
+        ? it.serials
+        : (it.serial_no || "").split(",")).map((s) => s.trim()).filter(Boolean);
+      if (list.length === 0) continue; // non-serialized row
+      if (list.length !== qty) {
+        toast.error(`Row ${i + 1}: enter one serial number per unit (${qty} required)`);
+        return false;
+      }
+      if (new Set(list.map((s) => s.toLowerCase())).size !== list.length) {
+        toast.error(`Row ${i + 1}: duplicate serial numbers`);
+        return false;
+      }
+    }
     return true;
   };
 
