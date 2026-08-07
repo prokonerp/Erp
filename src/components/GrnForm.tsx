@@ -12,6 +12,7 @@ import { emptyGrnItem, CATEGORY_LABEL, type GrnCategory, type GrnItem } from "@/
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
+import { GrnSerialInputs } from "@/components/GrnSerialInputs";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
