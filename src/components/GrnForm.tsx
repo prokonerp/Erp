@@ -714,8 +714,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="number" min="0" value={it.qty_received} readOnly className="bg-muted/40" onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
                         <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="date" value={it.received_date || ""} readOnly className="bg-muted/40" /></td>
                         <td className="px-2 py-1.5 border-t-0 border-border/60">
-                          <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceKind === "customer-section-d"}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                          <Select value={normCondition(it.condition)} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceKind === "customer-section-d"}>
+                            <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Good">Good</SelectItem>
                               <SelectItem value="Defective">Defective</SelectItem>
