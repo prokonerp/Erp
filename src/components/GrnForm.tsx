@@ -22,6 +22,14 @@ import { getCurrentUserName } from "@/lib/currentUser";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
+/** Condition drives inventory classification — only these values are accepted. */
+const CONDITIONS = ["Good", "Defective", "Scrap"] as const;
+/** Normalize legacy / free-text values; unknown values return "" so the user must re-pick. */
+const normCondition = (v?: string | null) => {
+  const m = CONDITIONS.find((c) => c.toLowerCase() === (v || "").trim().toLowerCase());
+  return m || "";
+};
+
 type Props = { category?: GrnCategory; editId?: string };
 
 export function GrnForm({ category: initialCategory = "customer", editId }: Props) {
