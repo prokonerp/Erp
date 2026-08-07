@@ -623,6 +623,8 @@ function PayrollPage() {
         isAdmin={isAdmin}
         onChanged={load}
       />
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={confirmBulk} onOpenChange={setConfirmBulk}>
         <DialogContent>
