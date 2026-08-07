@@ -654,7 +654,15 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         <td className="px-2 py-1.5 border-t border-border/60 text-xs font-mono">{it.oracle_no || "—"}</td>
                         <td className="px-2 py-1.5 border-t border-border/60 text-xs">{it.warehouse_name || "—"}</td>
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} readOnly className="bg-muted/40" /></td>
-                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} readOnly={sourceKind !== "oem-section-c"} className={sourceKind !== "oem-section-c" ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                        <td className="px-2 py-1.5 border-t border-border/60">
+                          <GrnSerialInputs
+                            qty={parseFloat(it.qty_received) || 1}
+                            serials={it.serials}
+                            serialNo={it.serial_no}
+                            readOnly={sourceKind !== "oem-section-c"}
+                            onChange={(patch) => updateItem(i, patch)}
+                          />
+                        </td>
                         <td rowSpan={2} className="px-2 py-1.5 border-t border-border/60 text-right align-middle">
                           <Button
                             type="button"
@@ -730,7 +738,14 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
                         {!isCust && (
-                          <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                          <td className="px-2 py-1.5 border-t border-border/60">
+                            <GrnSerialInputs
+                              qty={parseFloat(it.qty_received) || 1}
+                              serials={it.serials}
+                              serialNo={it.serial_no}
+                              onChange={(patch) => updateItem(i, patch)}
+                            />
+                          </td>
                         )}
                         <td rowSpan={2} className="px-2 py-1.5 border-t border-border/60 text-right align-middle">
                           <Button
