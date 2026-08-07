@@ -10,7 +10,7 @@ import { ShieldCheck } from "lucide-react";
 import { RolesAndUsersPanel } from "@/components/RolesAndUsersPanel";
 
 export const Route = createFileRoute("/_app/masters")({
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (search: Record<string, unknown>): { tab?: string } => ({
     tab: typeof search.tab === "string" ? (search.tab as string) : undefined,
   }),
   component: MastersPage,

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { exportCSV } from "@/lib/exports";
 import { ProductStockSummary } from "@/components/ProductStockSummary";
+import { SalesServiceStockTables } from "@/components/SalesServiceStockTables";
 import {
   listStock, listTransactions, listTransfers, listReservations,
   listWarehouses, warehouseLookup,
@@ -76,6 +77,7 @@ function Reports() {
 
   return (
     <div className="space-y-4">
+      <SalesServiceStockTables stock={stock} warehouses={warehouses} loading={loading} />
       <ProductStockSummary stock={stock} warehouses={warehouses} whName={whName} loading={loading} />
 
       <Card>

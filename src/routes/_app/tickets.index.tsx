@@ -80,7 +80,10 @@ function PrioritySelect({ value, onChange, size = "md" }: { value: string; onCha
 }
 
 export const Route = createFileRoute("/_app/tickets/")({
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): {
+    engineer?: string; status?: string; scope?: string; priority?: string;
+    bucket?: string; oem?: string; parts?: string; ageBucket?: string;
+  } => ({
     engineer: typeof s.engineer === "string" ? s.engineer : undefined,
     status: typeof s.status === "string" ? s.status : undefined,
     scope: typeof s.scope === "string" ? s.scope : undefined,

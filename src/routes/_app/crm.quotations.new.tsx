@@ -26,7 +26,9 @@ import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/crm/quotations/new")({
   component: NewQuotation,
-  validateSearch: (s: Record<string, unknown>) => ({ clone: typeof s.clone === "string" ? s.clone : undefined }),
+  validateSearch: (s: Record<string, unknown>): { clone?: string } => ({
+    clone: typeof s.clone === "string" ? s.clone : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "New Quotation · Prokon ERP" },

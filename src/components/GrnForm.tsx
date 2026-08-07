@@ -12,6 +12,7 @@ import { emptyGrnItem, CATEGORY_LABEL, type GrnCategory, type GrnItem } from "@/
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
+import { GrnSerialInputs } from "@/components/GrnSerialInputs";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
@@ -285,6 +286,22 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     if (!form.source_name.trim()) { toast.error(`${sourceLabel} name is required`); return false; }
     const clean = items.filter((it) => it.part_name.trim() || it.part_no.trim());
     if (clean.length === 0) { toast.error("Add at least one material row"); return false; }
+    for (let i = 0; i < clean.length; i++) {
+      const it = clean[i];
+      const qty = Math.max(1, Math.floor(parseFloat(it.qty_received) || 1));
+      const list = (it.serials && it.serials.length
+        ? it.serials
+        : (it.serial_no || "").split(",")).map((s) => s.trim()).filter(Boolean);
+      if (list.length === 0) continue; // non-serialized row
+      if (list.length !== qty) {
+        toast.error(`Row ${i + 1}: enter one serial number per unit (${qty} required)`);
+        return false;
+      }
+      if (new Set(list.map((s) => s.toLowerCase())).size !== list.length) {
+        toast.error(`Row ${i + 1}: duplicate serial numbers`);
+        return false;
+      }
+    }
     return true;
   };
 
@@ -654,7 +671,15 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         <td className="px-2 py-1.5 border-t border-border/60 text-xs font-mono">{it.oracle_no || "—"}</td>
                         <td className="px-2 py-1.5 border-t border-border/60 text-xs">{it.warehouse_name || "—"}</td>
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} readOnly className="bg-muted/40" /></td>
-                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} readOnly={sourceKind !== "oem-section-c"} className={sourceKind !== "oem-section-c" ? "bg-muted/40" : ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                        <td className="px-2 py-1.5 border-t border-border/60">
+                          <GrnSerialInputs
+                            qty={parseFloat(it.qty_received) || 1}
+                            serials={it.serials}
+                            serialNo={it.serial_no}
+                            readOnly={sourceKind !== "oem-section-c"}
+                            onChange={(patch) => updateItem(i, patch)}
+                          />
+                        </td>
                         <td rowSpan={2} className="px-2 py-1.5 border-t border-border/60 text-right align-middle">
                           <Button
                             type="button"
@@ -730,7 +755,14 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} /></td>
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.uom} onChange={(e) => updateItem(i, { uom: e.target.value })} /></td>
                         {!isCust && (
-                          <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no || ""} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                          <td className="px-2 py-1.5 border-t border-border/60">
+                            <GrnSerialInputs
+                              qty={parseFloat(it.qty_received) || 1}
+                              serials={it.serials}
+                              serialNo={it.serial_no}
+                              onChange={(patch) => updateItem(i, patch)}
+                            />
+                          </td>
                         )}
                         <td rowSpan={2} className="px-2 py-1.5 border-t border-border/60 text-right align-middle">
                           <Button
