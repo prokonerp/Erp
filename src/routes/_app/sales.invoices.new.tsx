@@ -20,6 +20,7 @@ import {
   emptyItem,
   inr,
   itemDraftFromBreakup,
+  coverageSuffix,
   type BranchRow,
   type ItemDraft,
 } from "@/lib/sales";
@@ -364,7 +365,7 @@ function NewInvoice() {
                           onPick={(p) => {
                             setItem(idx, {
                             product_id: p.id,
-                            description: p.name,
+                            description: `${p.name}${coverageSuffix(p as any)}`,
                             hsn: p.hsn || "",
                             unit: p.unit || "Nos",
                             gst_rate: (p as any).gst_rate ?? it.gst_rate,

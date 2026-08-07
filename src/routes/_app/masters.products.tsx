@@ -55,6 +55,7 @@ const TAX_OPTIONS = [
 type FormState = {
   name: string;
   sku: string;
+  item_type: "product" | "service";
   category: string;
   brand: string;
   model: string;
@@ -79,7 +80,7 @@ type FormState = {
 };
 
 const empty: FormState = {
-  name: "", sku: "", category: "", brand: "", model: "", unit: "Nos",
+  name: "", sku: "", item_type: "product", category: "", brand: "", model: "", unit: "Nos",
   hsn: "", central_tax: "", local_tax: "", default_price: "", description: "", weight_kg: "", active: true,
   serial_tracking: false, serial_mode: "Manual", serial_format: "",
   warranty_applicable: false, warranty_type: "Manufacturer",
@@ -106,6 +107,7 @@ type ProductFull = ProductMaster & {
   warranty_start_from?: string | null;
   warranty_manual_override?: boolean;
   parent_tagging_required?: boolean;
+  item_type?: string | null;
 };
 
 export function ProductMasterPage() {
@@ -247,6 +249,7 @@ export function ProductMasterPage() {
     setForm({
       name: p.name || "",
       sku: "",
+      item_type: (p as any).item_type === "service" ? "service" : "product",
       category: p.category || "",
       brand: p.brand || "",
       model: p.model || "",
@@ -423,11 +426,15 @@ export function ProductMasterPage() {
     if (form.description && form.description.length > 200) {
       toast.error("Description must be 200 characters or less"); return;
     }
-    const openingErr = validateOpeningStock(opening, form.serial_tracking);
-    if (openingErr) { toast.error(openingErr); setTab("opening"); return; }
+    const isService = form.item_type === "service";
+    if (!isService) {
+      const openingErr = validateOpeningStock(opening, form.serial_tracking);
+      if (openingErr) { toast.error(openingErr); setTab("opening"); return; }
+    }
     const derivedName = [form.brand, form.model].filter(Boolean).join(" ").trim() || form.name.trim() || form.category;
     const payload = {
       name: toTitleCaseSmart(derivedName),
+      item_type: form.item_type,
       category: form.category ? toTitleCaseSmart(form.category) : null,
       brand: form.brand ? upperTrim(form.brand) : null,
       model: form.model ? upperTrim(form.model) : null,
@@ -497,7 +504,7 @@ export function ProductMasterPage() {
 
     // Post opening stock — only on initial creation. Locked records must be
     // edited via Stock Adjustment or an admin flow.
-    if (productId && opening.enabled && !openingLocked) {
+    if (productId && !isService && opening.enabled && !openingLocked) {
       try {
         await postOpeningStock(productId, payload);
       } catch (e: any) {
@@ -745,10 +752,34 @@ export function ProductMasterPage() {
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="serials">Serial &amp; Warranty</TabsTrigger>
               <TabsTrigger value="bundle">Bundle</TabsTrigger>
-              <TabsTrigger value="opening">Opening Stock</TabsTrigger>
+              {form.item_type !== "service" && <TabsTrigger value="opening">Opening Stock</TabsTrigger>}
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-4">
             <div className="grid md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <Label>Item Type *</Label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  {(["product", "service"] as const).map((t) => (
+                    <Button
+                      key={t}
+                      type="button"
+                      variant={form.item_type === t ? "default" : "outline"}
+                      onClick={() => {
+                        setForm({ ...form, item_type: t });
+                        if (t === "service" && tab === "opening") setTab("details");
+                      }}
+                      className="justify-center"
+                    >
+                      {t === "product" ? "Product" : "Service"}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {form.item_type === "service"
+                    ? "Services are billable only — excluded from stock, GRN/DC pickers and IMS reports. Uses a SAC code for GST."
+                    : "Products are always inventory-tracked. Use Serial Tracking to decide serial-wise vs quantity-wise tracking."}
+                </p>
+              </div>
               <div className="md:col-span-2">
                 <Label>Category *</Label>
                 <Select
@@ -801,8 +832,13 @@ export function ProductMasterPage() {
                 </Select>
               </div>
               <div>
-                <Label>HSN / SAC Code</Label>
-                <Input value={form.hsn} onChange={(e) => setForm({ ...form, hsn: e.target.value })} placeholder="8504" className="font-mono" />
+                <Label>{form.item_type === "service" ? "SAC Code" : "HSN Code"}</Label>
+                <Input
+                  value={form.hsn}
+                  onChange={(e) => setForm({ ...form, hsn: e.target.value })}
+                  placeholder={form.item_type === "service" ? "998719" : "8504"}
+                  className="font-mono"
+                />
               </div>
               <div>
                 <Label>Default Price (₹)</Label>

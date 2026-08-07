@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import type { ProductMaster } from "@/components/ProductPicker";
-import { fetchBranches, type BranchRow } from "@/lib/sales";
+import { fetchBranches, coverageSuffix, type BranchRow } from "@/lib/sales";
 import {
   type Customer, type QuoteItem,
   fmtMoney, computeQuoteTotals, lineAmount, INDIAN_STATES,
@@ -201,7 +201,7 @@ function NewQuotation() {
     setItem(i, {
       product_id: id || undefined,
       product_name: p?.name || undefined,
-      description: p?.name || items[i]?.description || "",
+      description: p ? `${p.name}${coverageSuffix(p as any)}` : items[i]?.description || "",
       hsn: p?.hsn || items[i]?.hsn,
       unit: p?.unit || items[i]?.unit || "Nos",
       rate: p?.default_price != null ? Number(p.default_price) : items[i]?.rate || 0,

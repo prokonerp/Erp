@@ -18,9 +18,14 @@ export type ProductMaster = {
   unit: string | null;
   description: string | null;
   active: boolean | null;
+  item_type?: string | null;
   serial_tracking?: boolean | null;
   default_price?: number | null;
   weight_kg?: number | null;
+  warranty_applicable?: boolean | null;
+  warranty_duration?: number | null;
+  warranty_unit?: string | null;
+  warranty_start_from?: string | null;
 };
 
 type Props = {
@@ -28,13 +33,15 @@ type Props = {
   onPick: (product: ProductMaster) => void;
   placeholder?: string;
   className?: string;
+  /** Stock-related forms (GRN, DC, Transfers) must not offer Service items. */
+  excludeServices?: boolean;
 };
 
 /**
  * Inline searchable product picker designed to live inside a row in an item table.
  * Calls onPick with the full product master record when a row is selected.
  */
-export function ProductMasterPicker({ value, onPick, placeholder = "Pick product…", className }: Props) {
+export function ProductMasterPicker({ value, onPick, placeholder = "Pick product…", className, excludeServices = false }: Props) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<ProductMaster[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,16 +49,20 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
   useEffect(() => {
     let alive = true;
     fetchAll<ProductMaster>("products", (q) =>
-      q.select("id,sku,name,model,brand,category,hsn,unit,description,active,serial_tracking,default_price,weight_kg").order("name"),
+      q.select("id,sku,name,model,brand,category,hsn,unit,description,active,item_type,serial_tracking,default_price,weight_kg,warranty_applicable,warranty_duration,warranty_unit,warranty_start_from").order("name"),
     )
       .then((data) => {
         if (!alive) return;
-        setRows(data.filter((p) => p.active !== false));
+        setRows(
+          data.filter(
+            (p) => p.active !== false && (!excludeServices || (p.item_type ?? "product") !== "service"),
+          ),
+        );
         setLoading(false);
       })
       .catch(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, []);
+  }, [excludeServices]);
 
   const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
 

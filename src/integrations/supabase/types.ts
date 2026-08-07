@@ -3620,6 +3620,7 @@ export type Database = {
           gst_rate: number | null
           hsn: string | null
           id: string
+          item_type: string
           local_tax_exempt: boolean
           local_tax_rate: number | null
           model: string | null
@@ -3653,6 +3654,7 @@ export type Database = {
           gst_rate?: number | null
           hsn?: string | null
           id?: string
+          item_type?: string
           local_tax_exempt?: boolean
           local_tax_rate?: number | null
           model?: string | null
@@ -3686,6 +3688,7 @@ export type Database = {
           gst_rate?: number | null
           hsn?: string | null
           id?: string
+          item_type?: string
           local_tax_exempt?: boolean
           local_tax_rate?: number | null
           model?: string | null
@@ -5153,6 +5156,30 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      ims_add_qty: {
+        Args: {
+          _model: string
+          _oem: string
+          _part_name: string
+          _qty: number
+          _ref: string
+          _stock_type: Database["public"]["Enums"]["ims_stock_type"]
+          _warehouse: string
+        }
+        Returns: string
+      }
+      ims_deduct_qty: {
+        Args: {
+          _doc_label?: string
+          _model: string
+          _new_status: Database["public"]["Enums"]["ims_stock_status"]
+          _qty: number
+          _ref: string
+          _stock_type: Database["public"]["Enums"]["ims_stock_type"]
+          _warehouse: string
+        }
+        Returns: string
       }
       is_designated_owner: { Args: never; Returns: boolean }
       my_pending_lead_acknowledgements: {

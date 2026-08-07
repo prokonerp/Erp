@@ -740,7 +740,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       <tr key={`${i}-id`} className="align-top">
                         <td rowSpan={2} className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
                         <td className="px-2 py-1.5 border-t border-border/60">
-                          <ProductMasterPicker
+                          <ProductMasterPicker excludeServices
                             value={it.product_id}
                             onPick={(p) => updateItem(i, {
                               product_id: p.id,
