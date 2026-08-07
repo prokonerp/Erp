@@ -11,12 +11,16 @@ import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" && s.next.startsWith("/") && !s.next.startsWith("//") ? s.next : undefined,
+  }),
   head: () => ({ meta: [{ title: "Sign in — Prokon Gatepass" }] }),
 });
 
 function AuthPage() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,13 +37,17 @@ function AuthPage() {
   }, []);
 
   if (loading) return <div className="p-8">Loading…</div>;
-  if (session) return <Navigate to="/dashboard" />;
+  if (session) return next ? <Navigate to={next} /> : <Navigate to="/dashboard" />;
 
   const signIn = async () => {
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) return toast.error(error.message);
+    if (next) {
+      window.location.href = next;
+      return;
+    }
     navigate({ to: "/dashboard" });
   };
 
