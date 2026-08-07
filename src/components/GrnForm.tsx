@@ -797,8 +797,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       <tr key={`${i}-ops`} className="align-top">
                         <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="number" min="0" value={it.qty_received} onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
                         <td className="px-2 py-1.5 border-t-0 border-border/60">
-                          <Select value={it.condition || "Good"} onValueChange={(v) => updateItem(i, { condition: v })}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                          <Select value={normCondition(it.condition)} onValueChange={(v) => updateItem(i, { condition: v })}>
+                            <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Good">Good</SelectItem>
                               <SelectItem value="Defective">Defective</SelectItem>
