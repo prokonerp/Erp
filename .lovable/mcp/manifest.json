@@ -1,0 +1,228 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.1",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://vimkodursmcsaptrrzbl.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "prokon-erp",
+      "version": "0.1.0",
+      "title": "Prokon ERP"
+    },
+    "tools": [
+      {
+        "name": "list_tickets",
+        "title": "List service tickets",
+        "description": "List service tickets, newest first. Optionally filter by status (Open, In Progress, Closed, ...) or a free-text search across case id, customer name and complaint.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact ticket status to filter by, or null for all."
+            },
+            "search": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Free-text search on case id, customer or complaint, or null."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Maximum number of tickets to return."
+            }
+          },
+          "required": [
+            "status",
+            "search",
+            "limit"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_ticket",
+        "title": "Get ticket details",
+        "description": "Fetch the full details of one service ticket by its case id (e.g. TKT-0042) or its internal id.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "case_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The ticket case id or internal ticket id."
+            }
+          },
+          "required": [
+            "case_id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "search_customers",
+        "title": "Search customers",
+        "description": "Search the customer master by company name, contact name, city, email or phone.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "search": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Text to search for across customer fields."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "description": "Maximum number of customers to return."
+            }
+          },
+          "required": [
+            "search",
+            "limit"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "stock_lookup",
+        "title": "Look up inventory stock",
+        "description": "Look up inventory stock items by part name, model number, serial number or OEM. Optionally filter by stock type (good/defective/scrap).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "search": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Text to match against part name, model no, serial no or OEM, or null for all."
+            },
+            "stock_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Stock type filter such as good, defective or scrap, or null for all."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Maximum number of stock rows to return."
+            }
+          },
+          "required": [
+            "search",
+            "stock_type",
+            "limit"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_invoices",
+        "title": "List sales invoices",
+        "description": "List sales invoices, newest first. Optionally filter by status or search invoice number / buyer name.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Invoice status to filter by, or null for all."
+            },
+            "search": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Text to match invoice number or buyer name, or null."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "Maximum number of invoices to return."
+            }
+          },
+          "required": [
+            "status",
+            "search",
+            "limit"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
