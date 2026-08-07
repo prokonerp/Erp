@@ -623,7 +623,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                   <tr key={`${i}-top`} className="border-t border-border/60 transition-colors hover:bg-muted/25">
                     <td rowSpan={2} className="px-3 py-2 text-center text-xs text-muted-foreground border-t border-border/60 align-middle w-10">{i + 1}</td>
                     <td className="px-3 py-2 align-top border-t border-border/60 min-w-[260px]">
-                      <ProductMasterPicker
+                      <ProductMasterPicker excludeServices
                         value={it.product_id}
                         onPick={(p) => updateItem(i, {
                           product_id: p.id,

@@ -220,6 +220,24 @@ export function itemDraftFromBreakup(
   };
 }
 
+/**
+ * Coverage/warranty suffix shown on a Quotation or Invoice line item, e.g.
+ * " — Coverage: 12 Months from Invoice Date". Works for both physical
+ * products (warranty) and services such as AMC contracts.
+ */
+export function coverageSuffix(p: {
+  warranty_applicable?: boolean | null;
+  warranty_duration?: number | null;
+  warranty_unit?: string | null;
+  warranty_start_from?: string | null;
+  item_type?: string | null;
+} | null | undefined): string {
+  if (!p?.warranty_applicable || !p.warranty_duration) return "";
+  const label = (p.item_type ?? "product") === "service" ? "Coverage" : "Warranty";
+  const from = p.warranty_start_from ? ` from ${p.warranty_start_from}` : "";
+  return ` — ${label}: ${p.warranty_duration} ${p.warranty_unit || "Months"}${from}`;
+}
+
 export function inr(n: number | null | undefined): string {
   const v = Number(n) || 0;
   return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

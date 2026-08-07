@@ -37,12 +37,12 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
   useEffect(() => {
     let alive = true;
     fetchAll<any>("products", (q) =>
-      q.select("id,name,model,brand,category,description,active").order("name"),
+      q.select("id,name,model,brand,category,description,active,item_type").order("name"),
     )
       .then((data) => {
         if (!alive) return;
         const mapped: (ImsModelPart & { description?: string | null })[] = data
-          .filter((p) => p.active !== false)
+          .filter((p) => p.active !== false && (p.item_type ?? "product") !== "service")
           .map((p) => ({
             id: p.id,
             name: p.name || p.model || "(unnamed)",
