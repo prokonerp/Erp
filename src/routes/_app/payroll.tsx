@@ -343,6 +343,17 @@ function PayrollPage() {
         </div>
       </div>
 
+      <Tabs value={tab} onValueChange={(v) => navigate({ search: { tab: v as "quick" | "sheet" }, replace: true })}>
+        <TabsList>
+          <TabsTrigger value="quick">Quick Mark</TabsTrigger>
+          <TabsTrigger value="sheet">Salary Sheet</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="quick" className="mt-4">
+          <QuickAttendanceToday isAdmin={isAdmin} onChanged={load} />
+        </TabsContent>
+
+        <TabsContent value="sheet" className="mt-4 space-y-4">
       {locked && (
         <Card className="border-primary/40">
           <CardContent className="py-3 text-sm flex items-center gap-2">
