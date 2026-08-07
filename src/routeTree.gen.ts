@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RaiseTicketRouteImport } from './routes/raise-ticket'
-import { Route as McpRouteImport } from './routes/mcp'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
@@ -121,11 +120,6 @@ import { Route as AppAmcOemSourceIdRouteImport } from './routes/_app/amc.oem.$so
 const RaiseTicketRoute = RaiseTicketRouteImport.update({
   id: '/raise-ticket',
   path: '/raise-ticket',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -661,7 +655,6 @@ const AppAmcOemSourceIdRoute = AppAmcOemSourceIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/mcp': typeof McpRoute
   '/raise-ticket': typeof RaiseTicketRoute
   '/amc': typeof AppAmcRouteWithChildren
   '/archive': typeof AppArchiveRoute
@@ -770,7 +763,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/mcp': typeof McpRoute
   '/raise-ticket': typeof RaiseTicketRoute
   '/archive': typeof AppArchiveRoute
   '/dashboard': typeof AppDashboardRoute
@@ -866,7 +858,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
-  '/mcp': typeof McpRoute
   '/raise-ticket': typeof RaiseTicketRoute
   '/_app/amc': typeof AppAmcRouteWithChildren
   '/_app/archive': typeof AppArchiveRoute
@@ -977,7 +968,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
-    | '/mcp'
     | '/raise-ticket'
     | '/amc'
     | '/archive'
@@ -1086,7 +1076,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
-    | '/mcp'
     | '/raise-ticket'
     | '/archive'
     | '/dashboard'
@@ -1181,7 +1170,6 @@ export interface FileRouteTypes {
     | '/'
     | '/_app'
     | '/auth'
-    | '/mcp'
     | '/raise-ticket'
     | '/_app/amc'
     | '/_app/archive'
@@ -1292,7 +1280,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
-  McpRoute: typeof McpRoute
   RaiseTicketRoute: typeof RaiseTicketRoute
 }
 
@@ -1303,13 +1290,6 @@ declare module '@tanstack/react-router' {
       path: '/raise-ticket'
       fullPath: '/raise-ticket'
       preLoaderRoute: typeof RaiseTicketRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -2467,7 +2447,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
-  McpRoute: McpRoute,
   RaiseTicketRoute: RaiseTicketRoute,
 }
 export const routeTree = rootRouteImport
