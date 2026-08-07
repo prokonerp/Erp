@@ -15,6 +15,9 @@ export type GrnItem = {
   batch_no: string;
   model_no?: string;
   serial_no?: string;
+  /** One serial number per received unit. Serialized rows must have
+   *  serials.length === qty so inventory creates one row per unit. */
+  serials?: string[];
   condition?: string;
   remarks?: string;
   /** Per-row warehouse mapping — populated when GRN is generated from an
