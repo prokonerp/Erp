@@ -946,7 +946,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                       <td className="border p-1">{it.model_no || it.part_name}</td>
                       <td className="border p-1">{it.uom}</td>
                       <td className="border p-1 text-right">{it.qty_received}</td>
-                      <td className="border p-1">{it.condition || "Good"}</td>
+                      <td className="border p-1">{normCondition(it.condition) || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
