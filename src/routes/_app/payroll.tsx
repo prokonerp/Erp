@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ExportButtons } from "@/components/ExportButtons";
 import { AdvanceLedger } from "@/components/AdvanceLedger";
+import { QuickAttendanceToday } from "@/components/QuickAttendanceToday";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   AlertTriangle, BadgeIndianRupee, CalendarDays, CheckCircle2, ChevronDown, ChevronRight,
@@ -27,6 +29,9 @@ import {
 
 export const Route = createFileRoute("/_app/payroll")({
   component: PayrollPage,
+  validateSearch: (s: Record<string, unknown>) => ({
+    tab: s.tab === "sheet" ? ("sheet" as const) : ("quick" as const),
+  }),
   head: () => ({
     meta: [
       { title: "Salary & Attendance — Prokon ERP" },
@@ -58,6 +63,8 @@ function rowTint(code: AttCode, hours: number | null, dayValue: number, sunday: 
 
 function PayrollPage() {
   const { isAdmin } = useIsAdmin();
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
