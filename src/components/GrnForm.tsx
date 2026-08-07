@@ -310,6 +310,12 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         return false;
       }
     }
+    for (let i = 0; i < clean.length; i++) {
+      if (!normCondition(clean[i].condition)) {
+        toast.error(`Row ${i + 1}: select a Condition (Good, Defective or Scrap)`);
+        return false;
+      }
+    }
     return true;
   };
 
@@ -328,11 +334,13 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       .filter((it) => it.part_name.trim() || it.part_no.trim())
       .map((it) => {
         const qty = parseFloat(it.qty_received) || 0;
-        const good = (it.condition || "Good") === "Good";
         return {
           ...it,
-          qty_accepted: good ? String(qty) : "0",
-          qty_rejected: good ? "0" : String(qty),
+          condition: normCondition(it.condition),
+          // Every received unit is posted to inventory; its Condition alone
+          // decides whether it lands as good, defective or scrapped stock.
+          qty_accepted: String(qty),
+          qty_rejected: "0",
         };
       });
     const selectedWarehouse = warehouses.find((w) => w.id === warehouseId) || null;
