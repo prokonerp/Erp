@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ChevronRight, ChevronDown } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
   listStock, listWarehouses, formatWarehouse,
@@ -51,6 +52,7 @@ function ReportsPage() {
   const [wh, setWh] = useState("__all");
   const [prod, setProd] = useState("__all");
   const [q, setQ] = useState("");
+  const [openSerialGroups, setOpenSerialGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     (async () => {
@@ -73,6 +75,8 @@ function ReportsPage() {
   const wMap = useMemo(() => Object.fromEntries(warehouses.map((w) => [w.id, w])), [warehouses]);
   const cMap = useMemo(() => Object.fromEntries(customers.map((c) => [c.id, c])), [customers]);
   const whName = (id: string | null | undefined) => (id ? formatWarehouse(wMap[id]) : "—");
+  /** Plain warehouse name (no type/ASP/branch suffix) — used by the Serial Tracking table. */
+  const plainWhName = (id: string | null | undefined) => (id ? (wMap[id]?.name || "—") : "—");
 
   /** Distinct products present in inventory, for the Product filter. */
   const stockProducts = useMemo(() => {
@@ -106,29 +110,29 @@ function ReportsPage() {
     return Array.from(m.values()).sort((a, b) => a.warehouse.localeCompare(b.warehouse) || a.product.localeCompare(b.product));
   }, [filteredStock, warehouses]);
 
-  /** Serial tracking: one row per serial. */
-  const serialRows = useMemo(() => {
-    const rows: { id: string; serial: string; product: string; oem: string; warehouse: string; status: string; type: string; customer: string; reference: string }[] = [];
+  /** Serial tracking: grouped by Model No + Warehouse (+ OEM via the shared groupKey). */
+  const serialGroups = useMemo(() => {
+    const m = new Map<string, { key: string; model: string; oem: string; warehouse: string; qty: number; serials: string[] }>();
     filteredStock.forEach((r) => {
       const list = splitSerials(r.part_serial_no);
-      const base = {
-        product: productLabel(r),
-        oem: r.oem || "—",
-        warehouse: whName(r.warehouse_id),
-        status: STOCK_STATUS_LABEL[r.stock_status] || r.stock_status,
-        type: STOCK_TYPE_LABEL[r.stock_type] || r.stock_type,
-        customer: r.customer_name || "—",
-        reference: r.transaction_ref || "—",
-      };
       if (list.length === 0) return;
-      list.forEach((sn, i) => rows.push({ id: `${r.id}-${i}`, serial: sn, ...base }));
+      const key = `${r.warehouse_id || "__"}_${groupKey(r)}`;
+      const e = m.get(key) || {
+        key,
+        model: r.part_model_no || r.part_name || "—",
+        oem: r.oem || "—",
+        warehouse: plainWhName(r.warehouse_id),
+        qty: 0,
+        serials: [] as string[],
+      };
+      e.qty += list.length;
+      e.serials.push(...list);
+      m.set(key, e);
     });
-    if (q) {
-      const s = q.toLowerCase();
-      return rows.filter((r) => [r.serial, r.product, r.oem, r.customer, r.reference].some((v) => v.toLowerCase().includes(s)));
-    }
-    return rows;
-  }, [filteredStock, q, warehouses]);
+    return Array.from(m.values())
+      .map((g) => ({ ...g, serials: Array.from(new Set(g.serials)).sort((a, b) => a.localeCompare(b)) }))
+      .sort((a, b) => a.model.localeCompare(b.model) || a.warehouse.localeCompare(b.warehouse));
+  }, [filteredStock, warehouses]);
 
   // --- Warranty tab still reads the legacy `serials` table (ims_stock_items has no warranty dates) ---
   const enriched = useMemo(() => serials.map((s) => ({
@@ -239,37 +243,54 @@ function ReportsPage() {
         <TabsContent value="serials" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Serial Number Tracking ({serialRows.length})</CardTitle>
-              <ExportButtons name="Serial_Tracking" title="Serial Number Tracking" rows={serialRows} columns={[
-                { header: "Serial", get: (r) => r.serial },
-                { header: "Product", get: (r) => r.product },
-                { header: "OEM", get: (r) => r.oem },
+              <CardTitle className="text-base">Serial Number Tracking ({serialGroups.length})</CardTitle>
+              <ExportButtons name="Serial_Tracking" title="Serial Number Tracking" rows={serialGroups} columns={[
+                { header: "Model No", get: (r) => r.model },
                 { header: "Warehouse", get: (r) => r.warehouse },
-                { header: "Type", get: (r) => r.type },
-                { header: "Status", get: (r) => r.status },
-                { header: "Customer", get: (r) => r.customer },
-                { header: "Reference", get: (r) => r.reference },
+                { header: "Total Qty", get: (r) => r.qty },
               ]} />
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Serial #</TableHead><TableHead>Product</TableHead><TableHead>Warehouse</TableHead>
-                  <TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead>Customer</TableHead><TableHead>Reference</TableHead>
+                  <TableHead className="w-8" />
+                  <TableHead>Model No</TableHead><TableHead>Warehouse Name</TableHead>
+                  <TableHead className="text-right">Total Quantity</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {serialRows.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-xs">{r.serial}</TableCell>
-                      <TableCell className="text-xs">{r.product}<br /><span className="text-muted-foreground">{r.oem}</span></TableCell>
-                      <TableCell className="text-xs">{r.warehouse}</TableCell>
-                      <TableCell className="text-xs">{r.type}</TableCell>
-                      <TableCell><Badge variant="secondary">{r.status}</Badge></TableCell>
-                      <TableCell className="text-xs">{r.customer}</TableCell>
-                      <TableCell className="text-xs">{r.reference}</TableCell>
-                    </TableRow>
-                  ))}
-                  {serialRows.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No serialised stock matches these filters.</TableCell></TableRow>}
+                  {serialGroups.map((g) => {
+                    const open = !!openSerialGroups[g.key];
+                    return (
+                      <>
+                        <TableRow
+                          key={g.key}
+                          className="cursor-pointer"
+                          onClick={() => setOpenSerialGroups((s) => ({ ...s, [g.key]: !s[g.key] }))}
+                        >
+                          <TableCell className="w-8 text-muted-foreground">
+                            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium">{g.model}</TableCell>
+                          <TableCell className="text-xs">{g.warehouse}</TableCell>
+                          <TableCell className="text-right font-medium">{g.qty}</TableCell>
+                        </TableRow>
+                        {open && (
+                          <TableRow key={`${g.key}-detail`} className="bg-muted/30 hover:bg-muted/30">
+                            <TableCell />
+                            <TableCell colSpan={3} className="py-3">
+                              <div className="text-xs text-muted-foreground mb-2">Serial numbers ({g.serials.length})</div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {g.serials.map((sn) => (
+                                  <Badge key={sn} variant="secondary" className="font-mono text-[11px]">{sn}</Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    );
+                  })}
+                  {serialGroups.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No serialised stock matches these filters.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent>
