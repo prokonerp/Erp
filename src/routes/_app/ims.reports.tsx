@@ -8,9 +8,9 @@ import { ProductStockSummary } from "@/components/ProductStockSummary";
 import { SalesServiceStockTables } from "@/components/SalesServiceStockTables";
 import {
   listStock, listTransactions, listTransfers, listReservations,
-  listWarehouses, warehouseLookup,
+  listWarehouses, listProducts, warehouseLookup,
   STOCK_STATUS_LABEL, STOCK_TYPE_LABEL, TXN_TYPE_LABEL, TRANSFER_STATUS_LABEL,
-  type StockItem, type Transaction, type Transfer, type Reservation, type WarehouseLite,
+  type StockItem, type Transaction, type Transfer, type Reservation, type WarehouseLite, type ProductLite,
 } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/ims/reports")({
@@ -23,15 +23,16 @@ function Reports() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [resv, setResv] = useState<Reservation[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
+  const [products, setProducts] = useState<ProductLite[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const [s, t, x, r, w] = await Promise.all([
-        listStock(), listTransactions(), listTransfers(), listReservations(), listWarehouses(),
+      const [s, t, x, r, w, p] = await Promise.all([
+        listStock(), listTransactions(), listTransfers(), listReservations(), listWarehouses(), listProducts(),
       ]);
-      setStock(s); setTxns(t); setTransfers(x); setResv(r); setWarehouses(w);
+      setStock(s); setTxns(t); setTransfers(x); setResv(r); setWarehouses(w); setProducts(p);
       setLoading(false);
     })();
   }, []);
@@ -77,8 +78,8 @@ function Reports() {
 
   return (
     <div className="space-y-4">
-      <SalesServiceStockTables stock={stock} warehouses={warehouses} loading={loading} />
-      <ProductStockSummary stock={stock} warehouses={warehouses} whName={whName} loading={loading} />
+      <SalesServiceStockTables stock={stock} warehouses={warehouses} products={products} loading={loading} />
+      <ProductStockSummary stock={stock} warehouses={warehouses} products={products} whName={whName} loading={loading} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">Stock Reports (CSV Exports)</CardTitle></CardHeader>

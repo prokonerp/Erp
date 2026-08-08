@@ -300,6 +300,23 @@ export type WarehouseLite = {
   branch_id: string | null;
   branch?: { id: string; name: string; code: string | null } | null;
 };
+
+export type ProductLite = {
+  id: string;
+  name: string | null;
+  model: string | null;
+  sku: string | null;
+  item_type: string;
+  description: string | null;
+};
+
+export async function listProducts(): Promise<ProductLite[]> {
+  const { fetchAll } = await import("@/lib/fetchAll");
+  return fetchAll<ProductLite>("products", (q) =>
+    q.select("id,name,model,sku,item_type,description").order("model"),
+  );
+}
+
 export async function listWarehouses(): Promise<WarehouseLite[]> {
   const { data, error } = await sb
     .from("warehouses")

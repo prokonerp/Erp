@@ -4,18 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Download } from "lucide-react";
 import { exportCSV, type ExportColumn } from "@/lib/exports";
-import type { StockItem, WarehouseLite } from "@/lib/ims";
+import type { StockItem, WarehouseLite, ProductLite } from "@/lib/ims";
 
-/** Same grouping key as ProductStockSummary (model | name | oem). */
+/** Grouping key: product model + oem (item name/code/description hidden from UI). */
 const groupKey = (r: StockItem) =>
-  `${(r.part_model_no || "").toLowerCase()}|${(r.part_name || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
+  `${(r.part_model_no || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
 
 type Bucket = "good" | "defective" | "scrap";
 
 type Row = {
   key: string;
   item: string;
-  model: string | null;
   oem: string | null;
   /** warehouseId -> bucket -> qty (absent = never any stock of that kind) */
   cells: Record<string, Partial<Record<Bucket, number>>>;
@@ -28,9 +27,15 @@ function bucketOf(r: StockItem): Bucket | null {
   return null;
 }
 
-function buildRows(stock: StockItem[], whIds: Set<string>): Row[] {
+function buildRows(stock: StockItem[], whIds: Set<string>, products: ProductLite[]): Row[] {
+  const productMap = new Map<string, ProductLite>();
+  for (const p of products) {
+    if (p.model) productMap.set(p.model, p);
+  }
   const map = new Map<string, Row>();
   for (const r of stock) {
+    const product = r.part_model_no ? productMap.get(r.part_model_no) : undefined;
+    if (!product || product.item_type !== "product") continue;
     const wid = r.warehouse_id || "";
     if (!whIds.has(wid)) continue;
     const b = bucketOf(r);
@@ -38,7 +43,7 @@ function buildRows(stock: StockItem[], whIds: Set<string>): Row[] {
     const key = groupKey(r);
     let g = map.get(key);
     if (!g) {
-      g = { key, item: r.part_name, model: r.part_model_no, oem: r.oem, cells: {} };
+      g = { key, item: product.model || r.part_model_no || "—", oem: r.oem, cells: {} };
       map.set(key, g);
     }
     const cell = (g.cells[wid] ||= {});
@@ -127,10 +132,7 @@ function StockMatrix({
                 <tr><td className="p-4 text-muted-foreground" colSpan={colCount}>No stock found.</td></tr>
               ) : rows.map((r) => (
                 <tr key={r.key} className="hover:bg-muted/30">
-                  <td className="p-2 border">
-                    {r.item}
-                    {r.model ? <span className="text-xs text-muted-foreground"> · {r.model}</span> : null}
-                  </td>
+                  <td className="p-2 border">{r.item}</td>
                   {warehouses.map((w) =>
                     buckets.map((b) => {
                       const v = cellVal(r, w.id, b);
@@ -165,10 +167,12 @@ function StockMatrix({
 export function SalesServiceStockTables({
   stock,
   warehouses,
+  products,
   loading,
 }: {
   stock: StockItem[];
   warehouses: WarehouseLite[];
+  products: ProductLite[];
   loading?: boolean;
 }) {
   const [q, setQ] = useState("");
@@ -177,13 +181,13 @@ export function SalesServiceStockTables({
   const godowns = useMemo(() => warehouses.filter((w) => norm(w.type) === "godown"), [warehouses]);
   const services = useMemo(() => warehouses.filter((w) => norm(w.type) === "service centre"), [warehouses]);
 
-  const salesRows = useMemo(() => buildRows(stock, new Set(godowns.map((w) => w.id))), [stock, godowns]);
-  const serviceRows = useMemo(() => buildRows(stock, new Set(services.map((w) => w.id))), [stock, services]);
+  const salesRows = useMemo(() => buildRows(stock, new Set(godowns.map((w) => w.id)), products), [stock, godowns, products]);
+  const serviceRows = useMemo(() => buildRows(stock, new Set(services.map((w) => w.id)), products), [stock, services, products]);
 
   const filter = (rows: Row[]) => {
     const term = q.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((r) => [r.item, r.model, r.oem].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)));
+    return rows.filter((r) => [r.item, r.oem].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)));
   };
 
   if (loading) {

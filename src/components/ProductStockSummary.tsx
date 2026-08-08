@@ -6,15 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, Download } from "lucide-react";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
 import { exportCSV } from "@/lib/exports";
-import { STOCK_TYPE_LABEL, type StockItem, type WarehouseLite } from "@/lib/ims";
+import { STOCK_TYPE_LABEL, type StockItem, type WarehouseLite, type ProductLite } from "@/lib/ims";
 
 const LOW_STOCK_THRESHOLD = 3;
 
 type Group = {
   key: string;
   oem: string | null;
-  part_name: string;
-  part_model_no: string | null;
+  model: string;
   total: number;
   available: number;
   reservedIssued: number;
@@ -23,31 +22,43 @@ type Group = {
   rows: StockItem[];
 };
 
-type SortKey = "part_name" | "oem" | "total" | "available" | "reservedIssued" | "defective";
+type SortKey = "model" | "oem" | "total" | "available" | "reservedIssued" | "defective";
 
 export function ProductStockSummary({
   stock,
   warehouses,
+  products,
   whName,
   loading,
 }: {
   stock: StockItem[];
   warehouses: WarehouseLite[];
+  products: ProductLite[];
   whName: (id: string | null | undefined) => string;
   loading?: boolean;
 }) {
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "part_name", dir: "asc" });
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "model", dir: "asc" });
   const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  const productMap = useMemo(() => {
+    const map = new Map<string, ProductLite>();
+    for (const p of products) {
+      if (p.model) map.set(p.model, p);
+    }
+    return map;
+  }, [products]);
 
   const groups = useMemo(() => {
     const map = new Map<string, Group>();
     for (const r of stock) {
-      const key = `${(r.part_model_no || "").toLowerCase()}|${(r.part_name || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
+      const product = r.part_model_no ? productMap.get(r.part_model_no) : undefined;
+      if (!product || product.item_type !== "product") continue;
+      const key = `${(r.part_model_no || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
       let g = map.get(key);
       if (!g) {
         g = {
-          key, oem: r.oem, part_name: r.part_name, part_model_no: r.part_model_no,
+          key, oem: r.oem, model: product.model || r.part_model_no || "—",
           total: 0, available: 0, reservedIssued: 0, defective: 0, byWarehouse: {}, rows: [],
         };
         map.set(key, g);
@@ -62,12 +73,12 @@ export function ProductStockSummary({
       g.rows.push(r);
     }
     return [...map.values()];
-  }, [stock]);
+  }, [stock, productMap]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     const list = term
-      ? groups.filter((g) => [g.part_name, g.part_model_no, g.oem].filter(Boolean)
+      ? groups.filter((g) => [g.model, g.oem].filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(term)))
       : groups;
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -92,8 +103,7 @@ export function ProductStockSummary({
   function download() {
     exportCSV("ims_product_stock_summary", [
       { header: "OEM", get: (r: Group) => r.oem },
-      { header: "Model / Part Name", get: (r: Group) => r.part_name },
-      { header: "Model / Part No", get: (r: Group) => r.part_model_no },
+      { header: "Model", get: (r: Group) => r.model },
       { header: "Total Qty", get: (r: Group) => r.total },
       { header: "Available", get: (r: Group) => r.available },
       { header: "Reserved/Issued", get: (r: Group) => r.reservedIssued },
@@ -118,8 +128,7 @@ export function ProductStockSummary({
               <tr>
                 <th className="p-2 w-8" />
                 {th("OEM", "oem")}
-                {th("Model / Part Name", "part_name")}
-                <th className="p-2 text-left">Model No</th>
+                {th("Model", "model")}
                 {th("Total Qty", "total", "right")}
                 {th("Available", "available", "right")}
                 {th("Reserved/Issued", "reservedIssued", "right")}
@@ -129,9 +138,9 @@ export function ProductStockSummary({
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={9}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={8}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={9}>No products found.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={8}>No products found.</td></tr>
               ) : filtered.map((g) => {
                 const isOpen = !!open[g.key];
                 const low = g.available < LOW_STOCK_THRESHOLD;
@@ -145,7 +154,7 @@ export function ProductStockSummary({
                       <td className="p-2">{g.oem || "—"}</td>
                       <td className="p-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span>{g.part_name}</span>
+                          <span>{g.model}</span>
                           {low && (
                             <Badge variant="outline" className={g.available === 0
                               ? "bg-rose-100 text-rose-800 border-rose-300"
@@ -155,7 +164,6 @@ export function ProductStockSummary({
                           )}
                         </div>
                       </td>
-                      <td className="p-2">{g.part_model_no || "—"}</td>
                       <td className="p-2 text-right font-medium">{g.total}</td>
                       <td className="p-2 text-right">{g.available}</td>
                       <td className="p-2 text-right">{g.reservedIssued}</td>
@@ -168,7 +176,7 @@ export function ProductStockSummary({
                     </tr>
                     {isOpen && (
                       <tr className="bg-muted/20">
-                        <td className="p-2" colSpan={9}>
+                        <td className="p-2" colSpan={8}>
                           <table className="w-full text-xs">
                             <thead>
                               <tr className="text-left text-muted-foreground">
