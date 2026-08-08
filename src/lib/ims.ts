@@ -308,12 +308,13 @@ export type ProductLite = {
   sku: string | null;
   item_type: string;
   description: string | null;
+  brand: string | null;
 };
 
 export async function listProducts(): Promise<ProductLite[]> {
   const { fetchAll } = await import("@/lib/fetchAll");
   return fetchAll<ProductLite>("products", (q) =>
-    q.select("id,name,model,sku,item_type,description").order("model"),
+    q.select("id,name,model,sku,item_type,description,brand").order("model"),
   );
 }
 
