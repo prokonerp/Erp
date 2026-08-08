@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
-  listStock, listWarehouses, formatWarehouse,
+  listStock, listWarehouses,
   type StockItem, type WarehouseLite,
 } from "@/lib/ims";
 
@@ -28,12 +28,12 @@ type Serial = {
 type Product = { id: string; name: string; brand: string | null; model: string | null; description: string | null; serial_tracking: boolean; warranty_applicable: boolean };
 type Customer = { id: string; company: string | null; contact_name: string | null };
 
-/** Same grouping key as ProductStockSummary / SalesServiceStockTables (model | name | oem). */
-const groupKey = (r: { part_model_no: string | null; part_name: string | null; oem: string | null }) =>
-  `${(r.part_model_no || "").toLowerCase()}|${(r.part_name || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
+/** Group by canonical model + OEM only; name/description are never part of the key. */
+const groupKey = (r: { part_model_no: string | null; oem: string | null }) =>
+  `${(r.part_model_no || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
 
-const productLabel = (r: { part_model_no: string | null; part_name: string | null; oem: string | null }) =>
-  [r.part_name, r.part_model_no].filter(Boolean).join(" — ") || "—";
+/** Product column shows ONLY the model number — no brand/name/description. */
+const productLabel = (r: { part_model_no: string | null }) => r.part_model_no || "—";
 
 /** One-serial-per-row: split comma/newline joined serials. */
 function splitSerials(v: string | null): string[] {
@@ -73,8 +73,7 @@ function ReportsPage() {
   const pMap = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
   const wMap = useMemo(() => Object.fromEntries(warehouses.map((w) => [w.id, w])), [warehouses]);
   const cMap = useMemo(() => Object.fromEntries(customers.map((c) => [c.id, c])), [customers]);
-  const whName = (id: string | null | undefined) => (id ? formatWarehouse(wMap[id]) : "—");
-  /** Plain warehouse name (no type/ASP/branch suffix) — used by the Serial Tracking table. */
+  /** Plain warehouse name only — no godown/ASP/branch suffix. */
   const plainWhName = (id: string | null | undefined) => (id ? (wMap[id]?.name || "—") : "—");
 
   /** Distinct products present in inventory, for the Product filter. */
@@ -100,7 +99,7 @@ function ReportsPage() {
     const m = new Map<string, { warehouse: string; product: string; oem: string; good: number; defective: number; qty: number }>();
     filteredStock.filter((r) => r.stock_status === "available").forEach((r) => {
       const key = `${r.warehouse_id || "__"}_${groupKey(r)}`;
-      const e = m.get(key) || { warehouse: whName(r.warehouse_id), product: productLabel(r), oem: r.oem || "—", good: 0, defective: 0, qty: 0 };
+      const e = m.get(key) || { warehouse: plainWhName(r.warehouse_id), product: productLabel(r), oem: r.oem || "—", good: 0, defective: 0, qty: 0 };
       const n = Number(r.qty ?? 1) || 0;
       if (r.stock_type === "defective") e.defective += n; else e.good += n;
       e.qty += n;
@@ -118,7 +117,7 @@ function ReportsPage() {
       const key = `${r.warehouse_id || "__"}_${groupKey(r)}`;
       const e = m.get(key) || {
         key,
-        model: r.part_model_no || r.part_name || "—",
+        model: r.part_model_no || "—",
         oem: r.oem || "—",
         warehouse: plainWhName(r.warehouse_id),
         qty: 0,
@@ -224,9 +223,9 @@ function ReportsPage() {
                 <TableBody>
                   {stockGroups.map((g, i) => (
                     <TableRow key={i}>
-                      <TableCell className="text-xs">{g.warehouse}</TableCell>
-                      <TableCell className="text-xs">{g.oem}</TableCell>
-                      <TableCell className="text-xs">{g.product}</TableCell>
+                      <TableCell>{g.warehouse}</TableCell>
+                      <TableCell>{g.oem}</TableCell>
+                      <TableCell>{g.product}</TableCell>
                       <TableCell className="text-right">{g.good || "—"}</TableCell>
                       <TableCell className="text-right">{g.defective || "—"}</TableCell>
                       <TableCell className="text-right font-medium">{g.qty}</TableCell>
@@ -253,7 +252,7 @@ function ReportsPage() {
               <Table>
                 <TableHeader><TableRow>
                   <TableHead className="w-8" />
-                  <TableHead>Model No</TableHead><TableHead>Warehouse Name</TableHead>
+                  <TableHead>Model No</TableHead><TableHead>Warehouse</TableHead>
                   <TableHead className="text-right">Total Quantity</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
@@ -268,8 +267,8 @@ function ReportsPage() {
                           <TableCell className="w-8 text-muted-foreground">
                             {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </TableCell>
-                          <TableCell className="text-xs font-medium">{g.model}</TableCell>
-                          <TableCell className="text-xs">{g.warehouse}</TableCell>
+                          <TableCell className="font-medium">{g.model}</TableCell>
+                          <TableCell>{g.warehouse}</TableCell>
                           <TableCell className="text-right font-medium">{g.qty}</TableCell>
                         </TableRow>
                         {open && (
