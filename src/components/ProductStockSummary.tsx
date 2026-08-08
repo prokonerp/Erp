@@ -13,8 +13,7 @@ const LOW_STOCK_THRESHOLD = 3;
 type Group = {
   key: string;
   oem: string | null;
-  part_name: string;
-  part_model_no: string | null;
+  model: string;
   total: number;
   available: number;
   reservedIssued: number;
@@ -23,16 +22,18 @@ type Group = {
   rows: StockItem[];
 };
 
-type SortKey = "part_name" | "oem" | "total" | "available" | "reservedIssued" | "defective";
+type SortKey = "model" | "oem" | "total" | "available" | "reservedIssued" | "defective";
 
 export function ProductStockSummary({
   stock,
   warehouses,
+  products,
   whName,
   loading,
 }: {
   stock: StockItem[];
   warehouses: WarehouseLite[];
+  products: ProductLite[];
   whName: (id: string | null | undefined) => string;
   loading?: boolean;
 }) {
