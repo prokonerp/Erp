@@ -23,6 +23,7 @@ import {
 } from "@/lib/crm";
 import type { QuoteTermsTemplate } from "@/lib/crm";
 import { getCurrentUserName } from "@/lib/currentUser";
+import { productDisplayName } from "@/lib/productNames";
 
 export const Route = createFileRoute("/_app/crm/quotations/new")({
   component: NewQuotation,

@@ -18,6 +18,7 @@ import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { getCurrentUserName } from "@/lib/currentUser";
+import { productDisplayName } from "@/lib/productNames";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 

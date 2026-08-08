@@ -32,6 +32,7 @@ import {
   amountInWords,
 } from "@/lib/gst";
 import { getCompany } from "@/lib/letterhead";
+import { productDisplayName, productShortName } from "@/lib/productNames";
 
 export const Route = createFileRoute("/_app/sales/invoices/new")({
   component: NewInvoice,
