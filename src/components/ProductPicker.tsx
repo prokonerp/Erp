@@ -6,10 +6,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown, Plus, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { productShortName, productSearchBlob } from "@/lib/productNames";
 
 export type ProductMaster = {
   id: string;
   name: string;
+  short_name?: string | null;
+  display_name?: string | null;
   unit: string;
   category?: string | null;
   brand?: string | null;
@@ -59,7 +62,7 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
         >
           <span className="truncate">
             {selected ? (
-              <span className="font-medium">{selected.model || selected.description || "—"}</span>
+              <span className="font-medium">{productShortName(selected)}</span>
             ) : (loading ? "Loading models…" : placeholder)}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -69,7 +72,7 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
         <Command
           filter={(val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}
         >
-          <CommandInput placeholder="Search model name…" />
+          <CommandInput placeholder="Search by model or full name…" />
           <CommandList>
             <CommandEmpty>
               <div className="py-4 px-3 text-sm space-y-2">
@@ -87,7 +90,7 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
             </CommandEmpty>
             <CommandGroup heading={`${rows.length} models`}>
               {rows.map((p) => {
-                const blob = `${p.model || ""} ${p.name}`.toLowerCase();
+                const blob = productSearchBlob(p);
                 return (
                   <CommandItem
                     key={p.id}
@@ -97,7 +100,7 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
                     <Check className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">
-                        {p.model || "—"}
+                        {productShortName(p)}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {p.description || "—"}

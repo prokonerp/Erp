@@ -18,6 +18,7 @@ import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { getCurrentUserName } from "@/lib/currentUser";
+import { productDisplayName } from "@/lib/productNames";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
@@ -628,7 +629,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                         onPick={(p) => updateItem(i, {
                           product_id: p.id,
                           part_no: p.sku || p.model || "",
-                          part_name: p.name,
+                          part_name: productDisplayName(p as any),
                           description: p.description || "",
                           uom: p.unit || it.uom || "Nos",
                           model_no: p.model || "",

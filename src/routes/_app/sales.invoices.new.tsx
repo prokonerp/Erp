@@ -32,6 +32,7 @@ import {
   amountInWords,
 } from "@/lib/gst";
 import { getCompany } from "@/lib/letterhead";
+import { productDisplayName, productShortName } from "@/lib/productNames";
 
 export const Route = createFileRoute("/_app/sales/invoices/new")({
   component: NewInvoice,
@@ -365,13 +366,13 @@ function NewInvoice() {
                           onPick={(p) => {
                             setItem(idx, {
                             product_id: p.id,
-                            description: `${p.name}${coverageSuffix(p as any)}`,
+                            description: `${productDisplayName(p as any)}${coverageSuffix(p as any)}`,
                             hsn: p.hsn || "",
                             unit: p.unit || "Nos",
                             gst_rate: (p as any).gst_rate ?? it.gst_rate,
                             is_serialized: !!(p as any).serial_tracking,
                             part_model_no: p.model,
-                            part_name: p.name,
+                            part_name: productShortName(p as any),
                             serial_numbers: [],
                             });
                             fetchBundleChildrenRaw(p.id).then((rowsB) => {
@@ -513,7 +514,7 @@ function NewInvoice() {
             ...arr,
             ...picks.map((pk) => ({
               product_id: pk.product.id,
-              description: pk.product.name + (pk.note ? ` — ${pk.note}` : ""),
+              description: productDisplayName(pk.product as any) + (pk.note ? ` — ${pk.note}` : ""),
               hsn: pk.product.hsn || "",
               qty: pk.qty,
               unit: pk.product.unit || "Nos",
@@ -524,7 +525,7 @@ function NewInvoice() {
               serial_numbers: [],
               is_serialized: !!(pk.product as any).serial_tracking,
               part_model_no: pk.product.model ?? null,
-              part_name: pk.product.name ?? null,
+              part_name: productShortName(pk.product as any),
             })),
           ]);
         }}

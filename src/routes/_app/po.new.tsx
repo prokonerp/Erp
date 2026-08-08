@@ -21,6 +21,7 @@ import {
   type DeliveryAddressType,
   type POItemDraft,
 } from "@/lib/purchaseOrder";
+import { productDisplayName } from "@/lib/productNames";
 
 export const Route = createFileRoute("/_app/po/new")({
   component: NewPO,
@@ -313,7 +314,7 @@ function NewPO() {
                           value={it.product_id}
                           onPick={(p) => setItem(idx, {
                             product_id: p.id,
-                            description: p.name,
+                            description: productDisplayName(p as any),
                             hsn: p.hsn || "",
                             unit: p.unit || "Nos",
                             gst_rate: (p as any).gst_rate ?? it.gst_rate,

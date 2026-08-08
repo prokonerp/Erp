@@ -37,7 +37,7 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
   useEffect(() => {
     let alive = true;
     fetchAll<any>("products", (q) =>
-      q.select("id,name,model,brand,category,description,active,item_type").order("name"),
+      q.select("id,name,short_name,display_name,model,brand,category,description,active,item_type").order("model"),
     )
       .then((data) => {
         if (!alive) return;
@@ -46,7 +46,7 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
           .map((p) => ({
             id: p.id,
             name: p.name || p.model || "(unnamed)",
-            model: p.model || null,
+            model: (p.short_name || p.model) || null,
             brand: p.brand || null,
             category: p.category || null,
             description: p.description || null,
