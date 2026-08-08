@@ -6,16 +6,15 @@ import { Download } from "lucide-react";
 import { exportCSV, type ExportColumn } from "@/lib/exports";
 import type { StockItem, WarehouseLite, ProductLite } from "@/lib/ims";
 
-/** Same grouping key as ProductStockSummary (model | name | oem). */
+/** Grouping key: product model + oem (item name/code/description hidden from UI). */
 const groupKey = (r: StockItem) =>
-  `${(r.part_model_no || "").toLowerCase()}|${(r.part_name || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
+  `${(r.part_model_no || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
 
 type Bucket = "good" | "defective" | "scrap";
 
 type Row = {
   key: string;
   item: string;
-  model: string | null;
   oem: string | null;
   /** warehouseId -> bucket -> qty (absent = never any stock of that kind) */
   cells: Record<string, Partial<Record<Bucket, number>>>;
@@ -28,9 +27,15 @@ function bucketOf(r: StockItem): Bucket | null {
   return null;
 }
 
-function buildRows(stock: StockItem[], whIds: Set<string>): Row[] {
+function buildRows(stock: StockItem[], whIds: Set<string>, products: ProductLite[]): Row[] {
+  const productMap = new Map<string, ProductLite>();
+  for (const p of products) {
+    if (p.model) productMap.set(p.model, p);
+  }
   const map = new Map<string, Row>();
   for (const r of stock) {
+    const product = r.part_model_no ? productMap.get(r.part_model_no) : undefined;
+    if (!product || product.item_type !== "product") continue;
     const wid = r.warehouse_id || "";
     if (!whIds.has(wid)) continue;
     const b = bucketOf(r);
@@ -38,7 +43,7 @@ function buildRows(stock: StockItem[], whIds: Set<string>): Row[] {
     const key = groupKey(r);
     let g = map.get(key);
     if (!g) {
-      g = { key, item: r.part_name, model: r.part_model_no, oem: r.oem, cells: {} };
+      g = { key, item: product.model || r.part_model_no || "—", oem: r.oem, cells: {} };
       map.set(key, g);
     }
     const cell = (g.cells[wid] ||= {});
