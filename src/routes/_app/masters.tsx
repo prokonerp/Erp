@@ -8,6 +8,7 @@ import { ProductMasterPage } from "./masters.products";
 import { useIsAdmin } from "@/lib/useRole";
 import { ShieldCheck } from "lucide-react";
 import { RolesAndUsersPanel } from "@/components/RolesAndUsersPanel";
+import { ModuleGate } from "@/components/ModuleGate";
 
 export const Route = createFileRoute("/_app/masters")({
   validateSearch: (search: Record<string, unknown>): { tab?: string } => ({
@@ -165,6 +166,7 @@ function MastersPage() {
 
 
         <TabsContent value="employees" className="mt-4">
+          <ModuleGate module="employees" title="Employee Master is restricted">
           <MasterCrud
             table="employees"
             title="Employee Master"
@@ -184,6 +186,7 @@ function MastersPage() {
               { key: "notes", label: "Notes", type: "textarea", showInList: false },
             ]}
           />
+          </ModuleGate>
         </TabsContent>
 
         <TabsContent value="inventory" className="mt-4">

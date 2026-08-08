@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { ExportButtons } from "@/components/ExportButtons";
 import { AdvanceLedger } from "@/components/AdvanceLedger";
 import { QuickAttendanceToday } from "@/components/QuickAttendanceToday";
+import { ModuleGate } from "@/components/ModuleGate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
@@ -28,7 +29,7 @@ import {
 } from "@/lib/payroll";
 
 export const Route = createFileRoute("/_app/payroll")({
-  component: PayrollPage,
+  component: GuardedPayrollPage,
   validateSearch: (s: Record<string, unknown>) => ({
     tab: s.tab === "sheet" ? ("sheet" as const) : ("quick" as const),
   }),
@@ -52,6 +53,14 @@ const ATT_TYPES: { value: AttCode; label: string }[] = [
   { value: "SW", label: "Sunday Work" },
 ];
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function GuardedPayrollPage() {
+  return (
+    <ModuleGate module="payroll" title="Salary & Attendance is restricted">
+      <PayrollPage />
+    </ModuleGate>
+  );
+}
 
 /** Row tint: Sunday orange, overtime blue, absent red. */
 function rowTint(code: AttCode, hours: number | null, dayValue: number, sunday: boolean) {
