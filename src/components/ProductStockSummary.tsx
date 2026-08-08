@@ -103,8 +103,7 @@ export function ProductStockSummary({
   function download() {
     exportCSV("ims_product_stock_summary", [
       { header: "OEM", get: (r: Group) => r.oem },
-      { header: "Model / Part Name", get: (r: Group) => r.part_name },
-      { header: "Model / Part No", get: (r: Group) => r.part_model_no },
+      { header: "Model", get: (r: Group) => r.model },
       { header: "Total Qty", get: (r: Group) => r.total },
       { header: "Available", get: (r: Group) => r.available },
       { header: "Reserved/Issued", get: (r: Group) => r.reservedIssued },
