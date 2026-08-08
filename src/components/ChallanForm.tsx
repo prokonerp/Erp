@@ -629,7 +629,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                         onPick={(p) => updateItem(i, {
                           product_id: p.id,
                           part_no: p.sku || p.model || "",
-                          part_name: p.name,
+                          part_name: productDisplayName(p as any),
                           description: p.description || "",
                           uom: p.unit || it.uom || "Nos",
                           model_no: p.model || "",
