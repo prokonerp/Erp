@@ -100,7 +100,7 @@ function ReportsPage() {
     const m = new Map<string, { warehouse: string; product: string; oem: string; good: number; defective: number; qty: number }>();
     filteredStock.filter((r) => r.stock_status === "available").forEach((r) => {
       const key = `${r.warehouse_id || "__"}_${groupKey(r)}`;
-      const e = m.get(key) || { warehouse: whName(r.warehouse_id), product: productLabel(r), oem: r.oem || "—", good: 0, defective: 0, qty: 0 };
+      const e = m.get(key) || { warehouse: plainWhName(r.warehouse_id), product: productLabel(r), oem: r.oem || "—", good: 0, defective: 0, qty: 0 };
       const n = Number(r.qty ?? 1) || 0;
       if (r.stock_type === "defective") e.defective += n; else e.good += n;
       e.qty += n;
