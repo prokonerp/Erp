@@ -15,13 +15,13 @@ import type { Customer } from "@/lib/crm";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { computeTotals, stateCodeFromGSTIN, stateNameFromCode, amountInWords } from "@/lib/gst";
 import {
-import { productDisplayName } from "@/lib/productNames";
   emptyPOItem,
   inrPO,
   poItemFromBreakup,
   type DeliveryAddressType,
   type POItemDraft,
 } from "@/lib/purchaseOrder";
+import { productDisplayName } from "@/lib/productNames";
 
 export const Route = createFileRoute("/_app/po/new")({
   component: NewPO,
