@@ -73,8 +73,7 @@ function ReportsPage() {
   const pMap = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
   const wMap = useMemo(() => Object.fromEntries(warehouses.map((w) => [w.id, w])), [warehouses]);
   const cMap = useMemo(() => Object.fromEntries(customers.map((c) => [c.id, c])), [customers]);
-  const whName = (id: string | null | undefined) => (id ? formatWarehouse(wMap[id]) : "—");
-  /** Plain warehouse name (no type/ASP/branch suffix) — used by the Serial Tracking table. */
+  /** Plain warehouse name only — no godown/ASP/branch suffix. */
   const plainWhName = (id: string | null | undefined) => (id ? (wMap[id]?.name || "—") : "—");
 
   /** Distinct products present in inventory, for the Product filter. */
