@@ -8,9 +8,9 @@ import { ProductStockSummary } from "@/components/ProductStockSummary";
 import { SalesServiceStockTables } from "@/components/SalesServiceStockTables";
 import {
   listStock, listTransactions, listTransfers, listReservations,
-  listWarehouses, warehouseLookup,
+  listWarehouses, listProducts, warehouseLookup,
   STOCK_STATUS_LABEL, STOCK_TYPE_LABEL, TXN_TYPE_LABEL, TRANSFER_STATUS_LABEL,
-  type StockItem, type Transaction, type Transfer, type Reservation, type WarehouseLite,
+  type StockItem, type Transaction, type Transfer, type Reservation, type WarehouseLite, type ProductLite,
 } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/ims/reports")({
