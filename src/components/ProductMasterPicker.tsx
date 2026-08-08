@@ -6,11 +6,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown, Plus, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { productShortName, productSearchBlob } from "@/lib/productNames";
 
 export type ProductMaster = {
   id: string;
   sku: string | null;
   name: string;
+  short_name?: string | null;
+  display_name?: string | null;
   model: string | null;
   brand: string | null;
   category: string | null;
@@ -49,7 +52,7 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
   useEffect(() => {
     let alive = true;
     fetchAll<ProductMaster>("products", (q) =>
-      q.select("id,sku,name,model,brand,category,hsn,unit,description,active,item_type,serial_tracking,default_price,weight_kg,warranty_applicable,warranty_duration,warranty_unit,warranty_start_from").order("name"),
+      q.select("id,sku,name,short_name,display_name,model,brand,category,hsn,unit,description,active,item_type,serial_tracking,is_serialized,default_price,weight_kg,warranty_applicable,warranty_duration,warranty_unit,warranty_start_from").order("model"),
     )
       .then((data) => {
         if (!alive) return;
@@ -79,7 +82,7 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
         >
           <span className="truncate text-xs">
             {selected
-              ? (selected.model || selected.description || "—")
+              ? productShortName(selected)
               : (loading ? "Loading…" : placeholder)}
           </span>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
@@ -99,7 +102,7 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
             </CommandEmpty>
             <CommandGroup heading={`${rows.length} products`}>
               {rows.map((p) => {
-                const blob = [p.sku, p.model, p.name, p.category, p.brand].filter(Boolean).join(" ").toLowerCase();
+                const blob = productSearchBlob(p);
                 return (
                   <CommandItem
                     key={p.id}
@@ -109,7 +112,7 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
                     <Check className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        {p.model || "—"}
+                        {productShortName(p)}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {p.description || <span className="font-mono">{p.sku || "—"}</span>}
