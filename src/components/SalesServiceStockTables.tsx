@@ -167,10 +167,12 @@ function StockMatrix({
 export function SalesServiceStockTables({
   stock,
   warehouses,
+  products,
   loading,
 }: {
   stock: StockItem[];
   warehouses: WarehouseLite[];
+  products: ProductLite[];
   loading?: boolean;
 }) {
   const [q, setQ] = useState("");
@@ -179,13 +181,13 @@ export function SalesServiceStockTables({
   const godowns = useMemo(() => warehouses.filter((w) => norm(w.type) === "godown"), [warehouses]);
   const services = useMemo(() => warehouses.filter((w) => norm(w.type) === "service centre"), [warehouses]);
 
-  const salesRows = useMemo(() => buildRows(stock, new Set(godowns.map((w) => w.id))), [stock, godowns]);
-  const serviceRows = useMemo(() => buildRows(stock, new Set(services.map((w) => w.id))), [stock, services]);
+  const salesRows = useMemo(() => buildRows(stock, new Set(godowns.map((w) => w.id)), products), [stock, godowns, products]);
+  const serviceRows = useMemo(() => buildRows(stock, new Set(services.map((w) => w.id)), products), [stock, services, products]);
 
   const filter = (rows: Row[]) => {
     const term = q.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((r) => [r.item, r.model, r.oem].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)));
+    return rows.filter((r) => [r.item, r.oem].filter(Boolean).some((v) => String(v).toLowerCase().includes(term)));
   };
 
   if (loading) {
