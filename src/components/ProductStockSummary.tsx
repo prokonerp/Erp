@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, Download } from "lucide-react";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
 import { exportCSV } from "@/lib/exports";
-import { STOCK_TYPE_LABEL, type StockItem, type WarehouseLite } from "@/lib/ims";
+import { STOCK_TYPE_LABEL, type StockItem, type WarehouseLite, type ProductLite } from "@/lib/ims";
 
 const LOW_STOCK_THRESHOLD = 3;
 
