@@ -252,7 +252,7 @@ function ReportsPage() {
               <Table>
                 <TableHeader><TableRow>
                   <TableHead className="w-8" />
-                  <TableHead>Model No</TableHead><TableHead>Warehouse Name</TableHead>
+                  <TableHead>Model No</TableHead><TableHead>Warehouse</TableHead>
                   <TableHead className="text-right">Total Quantity</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
@@ -267,8 +267,8 @@ function ReportsPage() {
                           <TableCell className="w-8 text-muted-foreground">
                             {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                           </TableCell>
-                          <TableCell className="text-xs font-medium">{g.model}</TableCell>
-                          <TableCell className="text-xs">{g.warehouse}</TableCell>
+                          <TableCell className="font-medium">{g.model}</TableCell>
+                          <TableCell>{g.warehouse}</TableCell>
                           <TableCell className="text-right font-medium">{g.qty}</TableCell>
                         </TableRow>
                         {open && (
