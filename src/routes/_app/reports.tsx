@@ -28,12 +28,12 @@ type Serial = {
 type Product = { id: string; name: string; brand: string | null; model: string | null; description: string | null; serial_tracking: boolean; warranty_applicable: boolean };
 type Customer = { id: string; company: string | null; contact_name: string | null };
 
-/** Same grouping key as ProductStockSummary / SalesServiceStockTables (model | name | oem). */
-const groupKey = (r: { part_model_no: string | null; part_name: string | null; oem: string | null }) =>
-  `${(r.part_model_no || "").toLowerCase()}|${(r.part_name || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
+/** Group by canonical model + OEM only; name/description are never part of the key. */
+const groupKey = (r: { part_model_no: string | null; oem: string | null }) =>
+  `${(r.part_model_no || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
 
-const productLabel = (r: { part_model_no: string | null; part_name: string | null; oem: string | null }) =>
-  [r.part_name, r.part_model_no].filter(Boolean).join(" — ") || "—";
+/** Product column shows ONLY the model number — no brand/name/description. */
+const productLabel = (r: { part_model_no: string | null }) => r.part_model_no || "—";
 
 /** One-serial-per-row: split comma/newline joined serials. */
 function splitSerials(v: string | null): string[] {
