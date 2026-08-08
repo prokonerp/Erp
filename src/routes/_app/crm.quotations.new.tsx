@@ -201,8 +201,8 @@ function NewQuotation() {
   const pickProduct = (i: number, id: string | null, p: ProductMaster | null) => {
     setItem(i, {
       product_id: id || undefined,
-      product_name: p?.name || undefined,
-      description: p ? `${p.name}${coverageSuffix(p as any)}` : items[i]?.description || "",
+      product_name: p ? productDisplayName(p as any) : undefined,
+      description: p ? `${productDisplayName(p as any)}${coverageSuffix(p as any)}` : items[i]?.description || "",
       hsn: p?.hsn || items[i]?.hsn,
       unit: p?.unit || items[i]?.unit || "Nos",
       rate: p?.default_price != null ? Number(p.default_price) : items[i]?.rate || 0,
