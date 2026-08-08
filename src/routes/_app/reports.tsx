@@ -118,7 +118,7 @@ function ReportsPage() {
       const key = `${r.warehouse_id || "__"}_${groupKey(r)}`;
       const e = m.get(key) || {
         key,
-        model: r.part_model_no || r.part_name || "—",
+        model: r.part_model_no || "—",
         oem: r.oem || "—",
         warehouse: plainWhName(r.warehouse_id),
         qty: 0,
