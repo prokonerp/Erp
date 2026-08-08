@@ -128,8 +128,7 @@ export function ProductStockSummary({
               <tr>
                 <th className="p-2 w-8" />
                 {th("OEM", "oem")}
-                {th("Model / Part Name", "part_name")}
-                <th className="p-2 text-left">Model No</th>
+                {th("Model", "model")}
                 {th("Total Qty", "total", "right")}
                 {th("Available", "available", "right")}
                 {th("Reserved/Issued", "reservedIssued", "right")}
@@ -139,9 +138,9 @@ export function ProductStockSummary({
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={9}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={8}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={9}>No products found.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={8}>No products found.</td></tr>
               ) : filtered.map((g) => {
                 const isOpen = !!open[g.key];
                 const low = g.available < LOW_STOCK_THRESHOLD;
@@ -155,7 +154,7 @@ export function ProductStockSummary({
                       <td className="p-2">{g.oem || "—"}</td>
                       <td className="p-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span>{g.part_name}</span>
+                          <span>{g.model}</span>
                           {low && (
                             <Badge variant="outline" className={g.available === 0
                               ? "bg-rose-100 text-rose-800 border-rose-300"
@@ -165,7 +164,6 @@ export function ProductStockSummary({
                           )}
                         </div>
                       </td>
-                      <td className="p-2">{g.part_model_no || "—"}</td>
                       <td className="p-2 text-right font-medium">{g.total}</td>
                       <td className="p-2 text-right">{g.available}</td>
                       <td className="p-2 text-right">{g.reservedIssued}</td>
