@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
-  listStock, listWarehouses, formatWarehouse,
+  listStock, listWarehouses,
   type StockItem, type WarehouseLite,
 } from "@/lib/ims";
 
