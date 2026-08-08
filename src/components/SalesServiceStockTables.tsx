@@ -132,10 +132,7 @@ function StockMatrix({
                 <tr><td className="p-4 text-muted-foreground" colSpan={colCount}>No stock found.</td></tr>
               ) : rows.map((r) => (
                 <tr key={r.key} className="hover:bg-muted/30">
-                  <td className="p-2 border">
-                    {r.item}
-                    {r.model ? <span className="text-xs text-muted-foreground"> · {r.model}</span> : null}
-                  </td>
+                  <td className="p-2 border">{r.item}</td>
                   {warehouses.map((w) =>
                     buckets.map((b) => {
                       const v = cellVal(r, w.id, b);
