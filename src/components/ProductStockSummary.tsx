@@ -176,7 +176,7 @@ export function ProductStockSummary({
                     </tr>
                     {isOpen && (
                       <tr className="bg-muted/20">
-                        <td className="p-2" colSpan={9}>
+                        <td className="p-2" colSpan={8}>
                           <table className="w-full text-xs">
                             <thead>
                               <tr className="text-left text-muted-foreground">
