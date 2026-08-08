@@ -8,6 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ExportButtons } from "@/components/ExportButtons";
+import {
+  listStock, listWarehouses, formatWarehouse,
+  STOCK_STATUS_LABEL, STOCK_TYPE_LABEL,
+  type StockItem, type WarehouseLite,
+} from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/reports")({
   component: ReportsPage,
@@ -21,13 +26,26 @@ type Serial = {
   sale_invoice_no: string | null; customer_id: string | null; installation_date: string | null;
 };
 type Product = { id: string; name: string; brand: string | null; model: string | null; description: string | null; serial_tracking: boolean; warranty_applicable: boolean };
-type Warehouse = { id: string; name: string; code: string };
 type Customer = { id: string; company: string | null; contact_name: string | null };
 
+/** Same grouping key as ProductStockSummary / SalesServiceStockTables (model | name | oem). */
+const groupKey = (r: { part_model_no: string | null; part_name: string | null; oem: string | null }) =>
+  `${(r.part_model_no || "").toLowerCase()}|${(r.part_name || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
+
+const productLabel = (r: { part_model_no: string | null; part_name: string | null; oem: string | null }) =>
+  [r.part_name, r.part_model_no].filter(Boolean).join(" — ") || "—";
+
+/** One-serial-per-row: split comma/newline joined serials. */
+function splitSerials(v: string | null): string[] {
+  if (!v) return [];
+  return v.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
+}
+
 function ReportsPage() {
+  const [stock, setStock] = useState<StockItem[]>([]);
   const [serials, setSerials] = useState<Serial[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tab, setTab] = useState("stock");
   const [wh, setWh] = useState("__all");
@@ -36,15 +54,17 @@ function ReportsPage() {
 
   useEffect(() => {
     (async () => {
-      const [s, p, w, c] = await Promise.all([
+      const [st, w, s, p, c] = await Promise.all([
+        listStock(),
+        listWarehouses(),
         supabase.from("serials").select("*"),
         supabase.from("products").select("id,name,brand,model,description,serial_tracking,warranty_applicable"),
-        supabase.from("warehouses").select("id,name,code").order("name"),
         supabase.from("customers").select("id,company,contact_name"),
       ]);
+      setStock(st);
+      setWarehouses(w);
       setSerials((s.data || []) as any);
       setProducts((p.data || []) as any);
-      setWarehouses((w.data || []) as any);
       setCustomers((c.data || []) as any);
     })();
   }, []);
@@ -52,36 +72,80 @@ function ReportsPage() {
   const pMap = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
   const wMap = useMemo(() => Object.fromEntries(warehouses.map((w) => [w.id, w])), [warehouses]);
   const cMap = useMemo(() => Object.fromEntries(customers.map((c) => [c.id, c])), [customers]);
+  const whName = (id: string | null | undefined) => (id ? formatWarehouse(wMap[id]) : "—");
 
+  /** Distinct products present in inventory, for the Product filter. */
+  const stockProducts = useMemo(() => {
+    const m = new Map<string, string>();
+    stock.forEach((r) => { if (!m.has(groupKey(r))) m.set(groupKey(r), productLabel(r)); });
+    return [...m.entries()].map(([key, label]) => ({ key, label })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [stock]);
+
+  const filteredStock = useMemo(() => stock.filter((r) => {
+    if (wh !== "__all" && r.warehouse_id !== wh) return false;
+    if (prod !== "__all" && groupKey(r) !== prod) return false;
+    if (q) {
+      const s = q.toLowerCase();
+      if (![r.part_serial_no, r.part_name, r.part_model_no, r.oem, r.customer_name, r.transaction_ref]
+        .some((v) => (v || "").toLowerCase().includes(s))) return false;
+    }
+    return true;
+  }), [stock, wh, prod, q]);
+
+  /** Stock-by-warehouse: available stock only, grouped by warehouse + product. */
+  const stockGroups = useMemo(() => {
+    const m = new Map<string, { warehouse: string; product: string; oem: string; good: number; defective: number; qty: number }>();
+    filteredStock.filter((r) => r.stock_status === "available").forEach((r) => {
+      const key = `${r.warehouse_id || "__"}_${groupKey(r)}`;
+      const e = m.get(key) || { warehouse: whName(r.warehouse_id), product: productLabel(r), oem: r.oem || "—", good: 0, defective: 0, qty: 0 };
+      const n = Number(r.qty ?? 1) || 0;
+      if (r.stock_type === "defective") e.defective += n; else e.good += n;
+      e.qty += n;
+      m.set(key, e);
+    });
+    return Array.from(m.values()).sort((a, b) => a.warehouse.localeCompare(b.warehouse) || a.product.localeCompare(b.product));
+  }, [filteredStock, warehouses]);
+
+  /** Serial tracking: one row per serial. */
+  const serialRows = useMemo(() => {
+    const rows: { id: string; serial: string; product: string; oem: string; warehouse: string; status: string; type: string; customer: string; reference: string }[] = [];
+    filteredStock.forEach((r) => {
+      const list = splitSerials(r.part_serial_no);
+      const base = {
+        product: productLabel(r),
+        oem: r.oem || "—",
+        warehouse: whName(r.warehouse_id),
+        status: STOCK_STATUS_LABEL[r.stock_status] || r.stock_status,
+        type: STOCK_TYPE_LABEL[r.stock_type] || r.stock_type,
+        customer: r.customer_name || "—",
+        reference: r.transaction_ref || "—",
+      };
+      if (list.length === 0) return;
+      list.forEach((sn, i) => rows.push({ id: `${r.id}-${i}`, serial: sn, ...base }));
+    });
+    if (q) {
+      const s = q.toLowerCase();
+      return rows.filter((r) => [r.serial, r.product, r.oem, r.customer, r.reference].some((v) => v.toLowerCase().includes(s)));
+    }
+    return rows;
+  }, [filteredStock, q, warehouses]);
+
+  // --- Warranty tab still reads the legacy `serials` table (ims_stock_items has no warranty dates) ---
   const enriched = useMemo(() => serials.map((s) => ({
     ...s,
     product: pMap[s.product_id]?.name || "—",
     brand_model: [pMap[s.product_id]?.brand, pMap[s.product_id]?.model].filter(Boolean).join(" / ") || "",
-    warehouse: s.warehouse_id ? `${wMap[s.warehouse_id]?.code || ""} — ${wMap[s.warehouse_id]?.name || ""}` : "—",
     customer: s.customer_id ? (cMap[s.customer_id]?.company || cMap[s.customer_id]?.contact_name || "—") : "—",
-  })), [serials, pMap, wMap, cMap]);
+  })), [serials, pMap, cMap]);
 
   const filtered = useMemo(() => enriched.filter((r) => {
     if (wh !== "__all" && r.warehouse_id !== wh) return false;
-    if (prod !== "__all" && r.product_id !== prod) return false;
     if (q) {
       const s = q.toLowerCase();
       if (![r.serial_number, r.product, r.customer, r.sale_invoice_no || ""].some((v) => (v || "").toLowerCase().includes(s))) return false;
     }
     return true;
-  }), [enriched, wh, prod, q]);
-
-  // Stock-by-warehouse aggregation: only In Stock items
-  const stockGroups = useMemo(() => {
-    const m = new Map<string, { warehouse: string; product: string; qty: number }>();
-    filtered.filter((r) => r.status === "In Stock").forEach((r) => {
-      const key = `${r.warehouse_id || "__"}_${r.product_id}`;
-      const e = m.get(key) || { warehouse: r.warehouse, product: r.product, qty: 0 };
-      e.qty += 1;
-      m.set(key, e);
-    });
-    return Array.from(m.values()).sort((a, b) => a.warehouse.localeCompare(b.warehouse));
-  }, [filtered]);
+  }), [enriched, wh, q]);
 
   const today = new Date().toISOString().slice(0, 10);
   const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
