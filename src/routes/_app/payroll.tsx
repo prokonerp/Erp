@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { ExportButtons } from "@/components/ExportButtons";
 import { AdvanceLedger } from "@/components/AdvanceLedger";
 import { QuickAttendanceToday } from "@/components/QuickAttendanceToday";
+import { ModuleGate } from "@/components/ModuleGate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
