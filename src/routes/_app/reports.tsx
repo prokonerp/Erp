@@ -171,7 +171,7 @@ function ReportsPage() {
               <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all">All warehouses</SelectItem>
-                {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.code} — {w.name}</SelectItem>)}
+                {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.code ? `${w.code} — ` : ""}{w.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -181,14 +181,7 @@ function ReportsPage() {
               <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all">All products</SelectItem>
-                {products.filter((p) => p.serial_tracking).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <div className="flex flex-col">
-                      <span className="truncate">{p.model || "—"}</span>
-                      <span className="text-xs text-muted-foreground truncate">{p.description || "—"}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {stockProducts.map((p) => <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -209,21 +202,34 @@ function ReportsPage() {
         <TabsContent value="stock" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">In-Stock Quantities ({stockGroups.length})</CardTitle>
+              <CardTitle className="text-base">Available Stock by Warehouse ({stockGroups.length})</CardTitle>
               <ExportButtons name="Stock_By_Warehouse" title="Stock by Warehouse" rows={stockGroups} columns={[
                 { header: "Warehouse", get: (r) => r.warehouse },
+                { header: "OEM", get: (r) => r.oem },
                 { header: "Product", get: (r) => r.product },
-                { header: "Qty", get: (r) => r.qty },
+                { header: "Good", get: (r) => r.good },
+                { header: "Defective", get: (r) => r.defective },
+                { header: "Total", get: (r) => r.qty },
               ]} />
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>Warehouse</TableHead><TableHead>Product</TableHead><TableHead className="text-right">Qty In Stock</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow>
+                  <TableHead>Warehouse</TableHead><TableHead>OEM</TableHead><TableHead>Product</TableHead>
+                  <TableHead className="text-right">Good</TableHead><TableHead className="text-right">Defective</TableHead><TableHead className="text-right">Total Available</TableHead>
+                </TableRow></TableHeader>
                 <TableBody>
                   {stockGroups.map((g, i) => (
-                    <TableRow key={i}><TableCell>{g.warehouse}</TableCell><TableCell>{g.product}</TableCell><TableCell className="text-right font-medium">{g.qty}</TableCell></TableRow>
+                    <TableRow key={i}>
+                      <TableCell className="text-xs">{g.warehouse}</TableCell>
+                      <TableCell className="text-xs">{g.oem}</TableCell>
+                      <TableCell className="text-xs">{g.product}</TableCell>
+                      <TableCell className="text-right">{g.good || "—"}</TableCell>
+                      <TableCell className="text-right">{g.defective || "—"}</TableCell>
+                      <TableCell className="text-right font-medium">{g.qty}</TableCell>
+                    </TableRow>
                   ))}
-                  {stockGroups.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">No in-stock serials match these filters.</TableCell></TableRow>}
+                  {stockGroups.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No available stock matches these filters.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent>
@@ -233,38 +239,37 @@ function ReportsPage() {
         <TabsContent value="serials" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Serial Number Tracking ({filtered.length})</CardTitle>
-              <ExportButtons name="Serial_Tracking" title="Serial Number Tracking" rows={filtered} columns={[
-                { header: "Serial", get: (r) => r.serial_number },
+              <CardTitle className="text-base">Serial Number Tracking ({serialRows.length})</CardTitle>
+              <ExportButtons name="Serial_Tracking" title="Serial Number Tracking" rows={serialRows} columns={[
+                { header: "Serial", get: (r) => r.serial },
                 { header: "Product", get: (r) => r.product },
-                { header: "Brand / Model", get: (r) => r.brand_model },
+                { header: "OEM", get: (r) => r.oem },
                 { header: "Warehouse", get: (r) => r.warehouse },
+                { header: "Type", get: (r) => r.type },
                 { header: "Status", get: (r) => r.status },
                 { header: "Customer", get: (r) => r.customer },
-                { header: "Sale Invoice", get: (r) => r.sale_invoice_no || "" },
-                { header: "Purchase Date", get: (r) => r.purchase_date || "" },
-                { header: "Installation", get: (r) => r.installation_date || "" },
-                { header: "Warranty End", get: (r) => r.warranty_end_date || "" },
+                { header: "Reference", get: (r) => r.reference },
               ]} />
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Serial #</TableHead><TableHead>Product</TableHead><TableHead>Warehouse</TableHead>
-                  <TableHead>Status</TableHead><TableHead>Customer</TableHead><TableHead>Warranty End</TableHead>
+                  <TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead>Customer</TableHead><TableHead>Reference</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {filtered.map((r) => (
+                  {serialRows.map((r) => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-mono text-xs">{r.serial_number}</TableCell>
-                      <TableCell className="text-xs">{r.product}<br /><span className="text-muted-foreground">{r.brand_model}</span></TableCell>
+                      <TableCell className="font-mono text-xs">{r.serial}</TableCell>
+                      <TableCell className="text-xs">{r.product}<br /><span className="text-muted-foreground">{r.oem}</span></TableCell>
                       <TableCell className="text-xs">{r.warehouse}</TableCell>
+                      <TableCell className="text-xs">{r.type}</TableCell>
                       <TableCell><Badge variant="secondary">{r.status}</Badge></TableCell>
                       <TableCell className="text-xs">{r.customer}</TableCell>
-                      <TableCell className="text-xs">{r.warranty_end_date || "—"}</TableCell>
+                      <TableCell className="text-xs">{r.reference}</TableCell>
                     </TableRow>
                   ))}
-                  {filtered.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No serials match these filters.</TableCell></TableRow>}
+                  {serialRows.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No serialised stock matches these filters.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent>
