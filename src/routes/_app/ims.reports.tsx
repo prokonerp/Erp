@@ -78,8 +78,8 @@ function Reports() {
 
   return (
     <div className="space-y-4">
-      <SalesServiceStockTables stock={stock} warehouses={warehouses} loading={loading} />
-      <ProductStockSummary stock={stock} warehouses={warehouses} whName={whName} loading={loading} />
+      <SalesServiceStockTables stock={stock} warehouses={warehouses} products={products} loading={loading} />
+      <ProductStockSummary stock={stock} warehouses={warehouses} products={products} whName={whName} loading={loading} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">Stock Reports (CSV Exports)</CardTitle></CardHeader>
