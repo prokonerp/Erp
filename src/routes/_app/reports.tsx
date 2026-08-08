@@ -223,9 +223,9 @@ function ReportsPage() {
                 <TableBody>
                   {stockGroups.map((g, i) => (
                     <TableRow key={i}>
-                      <TableCell className="text-xs">{g.warehouse}</TableCell>
-                      <TableCell className="text-xs">{g.oem}</TableCell>
-                      <TableCell className="text-xs">{g.product}</TableCell>
+                      <TableCell>{g.warehouse}</TableCell>
+                      <TableCell>{g.oem}</TableCell>
+                      <TableCell>{g.product}</TableCell>
                       <TableCell className="text-right">{g.good || "—"}</TableCell>
                       <TableCell className="text-right">{g.defective || "—"}</TableCell>
                       <TableCell className="text-right font-medium">{g.qty}</TableCell>
