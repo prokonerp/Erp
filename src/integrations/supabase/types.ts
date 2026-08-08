@@ -3617,9 +3617,11 @@ export type Database = {
           created_at: string
           default_price: number | null
           description: string | null
+          display_name: string | null
           gst_rate: number | null
           hsn: string | null
           id: string
+          is_serialized: boolean
           item_type: string
           local_tax_exempt: boolean
           local_tax_rate: number | null
@@ -3629,6 +3631,7 @@ export type Database = {
           serial_format: string | null
           serial_mode: string
           serial_tracking: boolean
+          short_name: string | null
           sku: string | null
           tax_rate: number | null
           track_stock_on_invoice: boolean
@@ -3651,9 +3654,11 @@ export type Database = {
           created_at?: string
           default_price?: number | null
           description?: string | null
+          display_name?: string | null
           gst_rate?: number | null
           hsn?: string | null
           id?: string
+          is_serialized?: boolean
           item_type?: string
           local_tax_exempt?: boolean
           local_tax_rate?: number | null
@@ -3663,6 +3668,7 @@ export type Database = {
           serial_format?: string | null
           serial_mode?: string
           serial_tracking?: boolean
+          short_name?: string | null
           sku?: string | null
           tax_rate?: number | null
           track_stock_on_invoice?: boolean
@@ -3685,9 +3691,11 @@ export type Database = {
           created_at?: string
           default_price?: number | null
           description?: string | null
+          display_name?: string | null
           gst_rate?: number | null
           hsn?: string | null
           id?: string
+          is_serialized?: boolean
           item_type?: string
           local_tax_exempt?: boolean
           local_tax_rate?: number | null
@@ -3697,6 +3705,7 @@ export type Database = {
           serial_format?: string | null
           serial_mode?: string
           serial_tracking?: boolean
+          short_name?: string | null
           sku?: string | null
           tax_rate?: number | null
           track_stock_on_invoice?: boolean
