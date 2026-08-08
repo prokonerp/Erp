@@ -38,17 +38,27 @@ export function ProductStockSummary({
   loading?: boolean;
 }) {
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "part_name", dir: "asc" });
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "model", dir: "asc" });
   const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  const productMap = useMemo(() => {
+    const map = new Map<string, ProductLite>();
+    for (const p of products) {
+      if (p.model) map.set(p.model, p);
+    }
+    return map;
+  }, [products]);
 
   const groups = useMemo(() => {
     const map = new Map<string, Group>();
     for (const r of stock) {
-      const key = `${(r.part_model_no || "").toLowerCase()}|${(r.part_name || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
+      const product = r.part_model_no ? productMap.get(r.part_model_no) : undefined;
+      if (!product || product.item_type !== "product") continue;
+      const key = `${(r.part_model_no || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
       let g = map.get(key);
       if (!g) {
         g = {
-          key, oem: r.oem, part_name: r.part_name, part_model_no: r.part_model_no,
+          key, oem: r.oem, model: product.model || r.part_model_no || "—",
           total: 0, available: 0, reservedIssued: 0, defective: 0, byWarehouse: {}, rows: [],
         };
         map.set(key, g);
@@ -63,12 +73,12 @@ export function ProductStockSummary({
       g.rows.push(r);
     }
     return [...map.values()];
-  }, [stock]);
+  }, [stock, productMap]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     const list = term
-      ? groups.filter((g) => [g.part_name, g.part_model_no, g.oem].filter(Boolean)
+      ? groups.filter((g) => [g.model, g.oem].filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(term)))
       : groups;
     const dir = sort.dir === "asc" ? 1 : -1;
