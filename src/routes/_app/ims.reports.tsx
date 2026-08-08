@@ -23,15 +23,16 @@ function Reports() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [resv, setResv] = useState<Reservation[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
+  const [products, setProducts] = useState<ProductLite[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const [s, t, x, r, w] = await Promise.all([
-        listStock(), listTransactions(), listTransfers(), listReservations(), listWarehouses(),
+      const [s, t, x, r, w, p] = await Promise.all([
+        listStock(), listTransactions(), listTransfers(), listReservations(), listWarehouses(), listProducts(),
       ]);
-      setStock(s); setTxns(t); setTransfers(x); setResv(r); setWarehouses(w);
+      setStock(s); setTxns(t); setTransfers(x); setResv(r); setWarehouses(w); setProducts(p);
       setLoading(false);
     })();
   }, []);
