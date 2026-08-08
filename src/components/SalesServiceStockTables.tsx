@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Download } from "lucide-react";
 import { exportCSV, type ExportColumn } from "@/lib/exports";
-import type { StockItem, WarehouseLite } from "@/lib/ims";
+import type { StockItem, WarehouseLite, ProductLite } from "@/lib/ims";
 
 /** Same grouping key as ProductStockSummary (model | name | oem). */
 const groupKey = (r: StockItem) =>
