@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -11,7 +11,6 @@ import { ChevronRight, ChevronDown } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
   listStock, listWarehouses, formatWarehouse,
-  STOCK_STATUS_LABEL, STOCK_TYPE_LABEL,
   type StockItem, type WarehouseLite,
 } from "@/lib/ims";
 
@@ -261,9 +260,8 @@ function ReportsPage() {
                   {serialGroups.map((g) => {
                     const open = !!openSerialGroups[g.key];
                     return (
-                      <>
+                      <Fragment key={g.key}>
                         <TableRow
-                          key={g.key}
                           className="cursor-pointer"
                           onClick={() => setOpenSerialGroups((s) => ({ ...s, [g.key]: !s[g.key] }))}
                         >
@@ -275,7 +273,7 @@ function ReportsPage() {
                           <TableCell className="text-right font-medium">{g.qty}</TableCell>
                         </TableRow>
                         {open && (
-                          <TableRow key={`${g.key}-detail`} className="bg-muted/30 hover:bg-muted/30">
+                          <TableRow className="bg-muted/30 hover:bg-muted/30">
                             <TableCell />
                             <TableCell colSpan={3} className="py-3">
                               <div className="text-xs text-muted-foreground mb-2">Serial numbers ({g.serials.length})</div>
@@ -287,7 +285,7 @@ function ReportsPage() {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                   {serialGroups.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No serialised stock matches these filters.</TableCell></TableRow>}
