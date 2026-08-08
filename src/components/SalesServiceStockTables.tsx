@@ -6,9 +6,8 @@ import { Download } from "lucide-react";
 import { exportCSV, type ExportColumn } from "@/lib/exports";
 import type { StockItem, WarehouseLite, ProductLite } from "@/lib/ims";
 
-/** Grouping key: product model + oem (item name/code/description hidden from UI). */
-const groupKey = (r: StockItem) =>
-  `${(r.part_model_no || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
+/** Normalize free-text keys (case-insensitive, trimmed). */
+const norm = (v: string | null | undefined) => (v || "").trim().toLowerCase();
 
 type Bucket = "good" | "defective" | "scrap";
 
@@ -30,20 +29,22 @@ function bucketOf(r: StockItem): Bucket | null {
 function buildRows(stock: StockItem[], whIds: Set<string>, products: ProductLite[]): Row[] {
   const productMap = new Map<string, ProductLite>();
   for (const p of products) {
-    if (p.model) productMap.set(p.model, p);
+    const k = norm(p.model);
+    if (k) productMap.set(k, p);
   }
   const map = new Map<string, Row>();
   for (const r of stock) {
-    const product = r.part_model_no ? productMap.get(r.part_model_no) : undefined;
+    const product = productMap.get(norm(r.part_model_no));
     if (!product || product.item_type !== "product") continue;
     const wid = r.warehouse_id || "";
     if (!whIds.has(wid)) continue;
     const b = bucketOf(r);
     if (!b) continue;
-    const key = groupKey(r);
+    // Group strictly by the product master record — never by the stock row's own oem.
+    const key = product.id;
     let g = map.get(key);
     if (!g) {
-      g = { key, item: product.model || r.part_model_no || "—", oem: r.oem, cells: {} };
+      g = { key, item: product.model || r.part_model_no || "—", oem: product.brand ?? null, cells: {} };
       map.set(key, g);
     }
     const cell = (g.cells[wid] ||= {});
