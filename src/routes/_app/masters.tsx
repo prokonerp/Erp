@@ -186,6 +186,7 @@ function MastersPage() {
               { key: "notes", label: "Notes", type: "textarea", showInList: false },
             ]}
           />
+          </ModuleGate>
         </TabsContent>
 
         <TabsContent value="inventory" className="mt-4">
