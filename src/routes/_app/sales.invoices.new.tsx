@@ -33,6 +33,9 @@ import {
 } from "@/lib/gst";
 import { getCompany } from "@/lib/letterhead";
 import { productDisplayName, productShortName } from "@/lib/productNames";
+import { useIsAdmin } from "@/lib/useRole";
+import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
+import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 
 export const Route = createFileRoute("/_app/sales/invoices/new")({
   component: NewInvoice,
@@ -63,6 +66,10 @@ function NewInvoice() {
   const [bundleFor, setBundleFor] = useState<ProductMaster | null>(null);
   const [bundleOpen, setBundleOpen] = useState(false);
   const [bundleParentQty, setBundleParentQty] = useState(1);
+  const { isAdmin } = useIsAdmin();
+  const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
+  const [negOpen, setNegOpen] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<"draft" | "issued">("issued");
 
   useEffect(() => {
     fetchBranches().then((bs) => {
@@ -153,6 +160,41 @@ function NewInvoice() {
     if (new Set(allSerials).size !== allSerials.length) return toast.error("Duplicate serial numbers across lines");
     if (gstinError) return toast.error(gstinError);
 
+    // Non-serialized products: verify pooled availability before posting.
+    const wname = (id: string | null) => warehouses.find((w) => w.id === id)?.name ?? null;
+    let short: Shortfall[] = [];
+    try {
+      short = await findShortfalls(
+        items
+          .filter((it) => !it.is_serialized && it.product_id && it.part_model_no)
+          .map((it) => ({
+            model: it.part_model_no as string,
+            label: it.description || it.part_model_no,
+            warehouseId: it.warehouse_id,
+            warehouseName: wname(it.warehouse_id),
+            qty: Number(it.qty) || 0,
+          })),
+      );
+    } catch { /* availability check is best-effort; DB still enforces */ }
+
+    if (short.length > 0) {
+      if (!isAdmin) return toast.error(blockMessage(short[0]));
+      setShortfalls(short);
+      setPendingStatus(status);
+      setNegOpen(true);
+      return;
+    }
+
+    await doSave(status, false, [], null);
+  }
+
+  async function doSave(
+    status: "draft" | "issued",
+    allowNegative: boolean,
+    short: Shortfall[],
+    reason: string | null,
+  ) {
+    if (!customer || !branch) return;
     setSaving(true);
     try {
       const company = await getCompany();
@@ -191,6 +233,7 @@ function NewInvoice() {
         notes,
         terms,
         payment_terms: paymentTerms || null,
+        allow_negative_stock: allowNegative,
       };
       const { data: inv, error } = await supabase.from("invoices").insert(invoicePayload).select("id, invoice_no").single();
       if (error) throw error;
@@ -202,6 +245,16 @@ function NewInvoice() {
       });
       const { error: e2 } = await supabase.from("invoice_items").insert(itemRows);
       if (e2) throw e2;
+
+      if (allowNegative && short.length > 0) {
+        await logNegativeOverrides({
+          documentType: "invoice",
+          documentId: inv.id,
+          documentNo: inv.invoice_no,
+          shortfalls: short,
+          reason,
+        });
+      }
 
       toast.success(`Invoice ${inv.invoice_no || ""} ${status === "issued" ? "issued" : "saved"}`);
       nav({ to: "/sales/invoices/$id", params: { id: inv.id } });
@@ -455,6 +508,16 @@ function NewInvoice() {
           onConfirm={(sns) => setItem(serialPickerIdx, { serial_numbers: sns })}
         />
       )}
+
+      <NegativeStockDialog
+        open={negOpen}
+        onOpenChange={setNegOpen}
+        shortfalls={shortfalls}
+        onProceed={async (reason) => {
+          setNegOpen(false);
+          await doSave(pendingStatus, true, shortfalls, reason || null);
+        }}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">

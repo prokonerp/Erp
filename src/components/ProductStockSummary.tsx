@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, Download } from "lucide-react";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
 import { exportCSV } from "@/lib/exports";
 import { STOCK_TYPE_LABEL, type StockItem, type WarehouseLite, type ProductLite } from "@/lib/ims";
+import { qtyCellClass } from "@/lib/negativeStock";
 
 const LOW_STOCK_THRESHOLD = 3;
 
@@ -159,13 +160,13 @@ export function ProductStockSummary({
                             <Badge variant="outline" className={g.available === 0
                               ? "bg-rose-100 text-rose-800 border-rose-300"
                               : "bg-amber-100 text-amber-800 border-amber-300"}>
-                              {g.available === 0 ? "Out of stock" : "Low stock"}
+                              {g.available < 0 ? "Negative stock" : g.available === 0 ? "Out of stock" : "Low stock"}
                             </Badge>
                           )}
                         </div>
                       </td>
                       <td className="p-2 text-right font-medium">{g.total}</td>
-                      <td className="p-2 text-right">{g.available}</td>
+                      <td className={`p-2 text-right ${qtyCellClass(g.available)}`}>{g.available}</td>
                       <td className="p-2 text-right">{g.reservedIssued}</td>
                       <td className="p-2 text-right">{g.defective}</td>
                       <td className="p-2 text-xs text-muted-foreground">
