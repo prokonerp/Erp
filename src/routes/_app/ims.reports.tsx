@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { exportCSV } from "@/lib/exports";
 import { ProductStockSummary } from "@/components/ProductStockSummary";
 import { SalesServiceStockTables } from "@/components/SalesServiceStockTables";
+import { NegativeOverridesList } from "@/components/NegativeOverridesList";
 import {
   listStock, listTransactions, listTransfers, listReservations,
   listWarehouses, listProducts, warehouseLookup,
@@ -80,6 +81,8 @@ function Reports() {
     <div className="space-y-4">
       <SalesServiceStockTables stock={stock} warehouses={warehouses} products={products} loading={loading} />
       <ProductStockSummary stock={stock} warehouses={warehouses} products={products} whName={whName} loading={loading} />
+
+      <NegativeOverridesList warehouses={warehouses} />
 
       <Card>
         <CardHeader><CardTitle className="text-base">Stock Reports (CSV Exports)</CardTitle></CardHeader>

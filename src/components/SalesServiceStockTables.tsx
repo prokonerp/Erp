@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Download } from "lucide-react";
 import { exportCSV, type ExportColumn } from "@/lib/exports";
+import { qtyCellClass } from "@/lib/negativeStock";
 import type { StockItem, WarehouseLite, ProductLite } from "@/lib/ims";
 
 /** Normalize free-text keys (case-insensitive, trimmed). */
@@ -138,10 +139,18 @@ function StockMatrix({
                   {warehouses.map((w) =>
                     buckets.map((b) => {
                       const v = cellVal(r, w.id, b);
-                      return <td key={`${w.id}-${b}`} className="p-2 border text-right">{v === undefined ? "" : v}</td>;
+                      return (
+                        <td key={`${w.id}-${b}`} className={`p-2 border text-right ${qtyCellClass(v)}`}>
+                          {v === undefined ? "" : v}
+                        </td>
+                      );
                     }),
                   )}
-                  {withTotal && <td className="p-2 border text-right font-medium">{rowTotal(r, warehouses, buckets)}</td>}
+                  {withTotal && (
+                    <td className={`p-2 border text-right font-medium ${qtyCellClass(rowTotal(r, warehouses, buckets))}`}>
+                      {rowTotal(r, warehouses, buckets)}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -152,10 +161,14 @@ function StockMatrix({
                   {warehouses.map((w) =>
                     buckets.map((b) => {
                       const v = colTotal(w.id, b);
-                      return <td key={`${w.id}-${b}`} className="p-2 border text-right">{v === undefined ? "" : v}</td>;
+                      return (
+                        <td key={`${w.id}-${b}`} className={`p-2 border text-right ${qtyCellClass(v)}`}>
+                          {v === undefined ? "" : v}
+                        </td>
+                      );
                     }),
                   )}
-                  {withTotal && <td className="p-2 border text-right">{grandTotal}</td>}
+                  {withTotal && <td className={`p-2 border text-right ${qtyCellClass(grandTotal)}`}>{grandTotal}</td>}
                 </tr>
               </tfoot>
             )}

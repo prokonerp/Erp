@@ -1166,6 +1166,7 @@ export type Database = {
       }
       delivery_challans: {
         Row: {
+          allow_negative_stock: boolean
           approved_by: string | null
           branch_id: string | null
           challan_date: string
@@ -1216,6 +1217,7 @@ export type Database = {
           vehicle_number: string | null
         }
         Insert: {
+          allow_negative_stock?: boolean
           approved_by?: string | null
           branch_id?: string | null
           challan_date?: string
@@ -1266,6 +1268,7 @@ export type Database = {
           vehicle_number?: string | null
         }
         Update: {
+          allow_negative_stock?: boolean
           approved_by?: string | null
           branch_id?: string | null
           challan_date?: string
@@ -2778,6 +2781,7 @@ export type Database = {
         Row: {
           ack_date: string | null
           ack_no: string | null
+          allow_negative_stock: boolean
           billing_address: string | null
           branch_id: string
           buyer_gstin: string | null
@@ -2838,6 +2842,7 @@ export type Database = {
         Insert: {
           ack_date?: string | null
           ack_no?: string | null
+          allow_negative_stock?: boolean
           billing_address?: string | null
           branch_id: string
           buyer_gstin?: string | null
@@ -2898,6 +2903,7 @@ export type Database = {
         Update: {
           ack_date?: string | null
           ack_no?: string | null
+          allow_negative_stock?: boolean
           billing_address?: string | null
           branch_id?: string
           buyer_gstin?: string | null
@@ -4606,6 +4612,68 @@ export type Database = {
           },
         ]
       }
+      stock_negative_overrides: {
+        Row: {
+          available_qty: number
+          created_at: string
+          document_id: string | null
+          document_no: string | null
+          document_type: string
+          id: string
+          overridden_at: string
+          overridden_by: string | null
+          overridden_by_name: string | null
+          product_model: string
+          reason: string | null
+          requested_qty: number
+          resulting_negative_qty: number
+          updated_at: string
+          warehouse_id: string | null
+        }
+        Insert: {
+          available_qty: number
+          created_at?: string
+          document_id?: string | null
+          document_no?: string | null
+          document_type: string
+          id?: string
+          overridden_at?: string
+          overridden_by?: string | null
+          overridden_by_name?: string | null
+          product_model: string
+          reason?: string | null
+          requested_qty: number
+          resulting_negative_qty: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Update: {
+          available_qty?: number
+          created_at?: string
+          document_id?: string | null
+          document_no?: string | null
+          document_type?: string
+          id?: string
+          overridden_at?: string
+          overridden_by?: string | null
+          overridden_by_name?: string | null
+          product_model?: string
+          reason?: string | null
+          requested_qty?: number
+          resulting_negative_qty?: number
+          updated_at?: string
+          warehouse_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_negative_overrides_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ticket_activities: {
         Row: {
           actor: string | null
@@ -5178,18 +5246,32 @@ export type Database = {
         }
         Returns: string
       }
-      ims_deduct_qty: {
-        Args: {
-          _doc_label?: string
-          _model: string
-          _new_status: Database["public"]["Enums"]["ims_stock_status"]
-          _qty: number
-          _ref: string
-          _stock_type: Database["public"]["Enums"]["ims_stock_type"]
-          _warehouse: string
-        }
-        Returns: string
-      }
+      ims_deduct_qty:
+        | {
+            Args: {
+              _doc_label?: string
+              _model: string
+              _new_status: Database["public"]["Enums"]["ims_stock_status"]
+              _qty: number
+              _ref: string
+              _stock_type: Database["public"]["Enums"]["ims_stock_type"]
+              _warehouse: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              _allow_negative?: boolean
+              _doc_label?: string
+              _model: string
+              _new_status: Database["public"]["Enums"]["ims_stock_status"]
+              _qty: number
+              _ref: string
+              _stock_type: Database["public"]["Enums"]["ims_stock_type"]
+              _warehouse: string
+            }
+            Returns: string
+          }
       is_designated_owner: { Args: never; Returns: boolean }
       my_pending_lead_acknowledgements: {
         Args: never

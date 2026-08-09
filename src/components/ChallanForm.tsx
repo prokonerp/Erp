@@ -19,6 +19,9 @@ import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { getCurrentUserName } from "@/lib/currentUser";
 import { productDisplayName } from "@/lib/productNames";
+import { useIsAdmin } from "@/lib/useRole";
+import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
+import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
 
@@ -75,6 +78,13 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const { isAdmin } = useIsAdmin();
+  const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
+  const [negOpen, setNegOpen] = useState(false);
+  // Set to true only after an admin explicitly approves an oversell.
+  const allowNegativeRef = useRef(false);
+  const overrideReasonRef = useRef<string | null>(null);
+  const negBlockedRef = useRef(false);
 
   // Auto-populate Prepared By with the current logged-in user's name (new records only).
   useEffect(() => {
@@ -192,11 +202,44 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       items: cleanItems,
       branch_id: branchId,
       indent_id: form.indent_id || null,
+      allow_negative_stock: dcType === "customer" ? allowNegativeRef.current : false,
     };
+  };
+
+  /**
+   * Pre-flight availability check for non-serialized products on a
+   * DC to Customer. Returns true when it is safe to post.
+   * Hard blocks regular staff; admins get a warn-and-confirm dialog.
+   */
+  const preflightStock = async (): Promise<boolean> => {
+    if (dcType !== "customer") return true;
+    if (allowNegativeRef.current) return true;
+    const lines = items
+      .filter((it) => !(it.serial_no || "").trim() && (it.model_no || it.part_no || "").trim())
+      .map((it) => ({
+        model: (it.model_no || it.part_no || "").trim(),
+        label: it.part_name || it.model_no || it.part_no,
+        warehouseId: null,
+        warehouseName: null,
+        qty: parseFloat(it.qty) || 0,
+      }));
+    let short: Shortfall[] = [];
+    try { short = await findShortfalls(lines); } catch { return true; }
+    if (short.length === 0) return true;
+    if (!isAdmin) {
+      negBlockedRef.current = true;
+      toast.error(blockMessage(short[0]));
+      return false;
+    }
+    setShortfalls(short);
+    setNegOpen(true);
+    return false;
   };
 
   const persist = async () => {
     if (!canAutosave() || savingRef.current) return;
+    // Only the first write posts inventory — gate that write on availability.
+    if (!recordId && !(await preflightStock())) return;
     const payload = buildPayload();
     const signature = JSON.stringify({ ...payload, recordId });
     if (signature === lastPayloadRef.current) return;
@@ -220,6 +263,15 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         if (error) throw error;
         const newId = (data as { id: string }).id;
         setRecordId(newId);
+        if (allowNegativeRef.current && shortfalls.length > 0) {
+          await logNegativeOverrides({
+            documentType: "dc",
+            documentId: newId,
+            documentNo: null,
+            shortfalls,
+            reason: overrideReasonRef.current,
+          });
+        }
         // Swap URL so refresh/back keeps the same record — no new insert on next save.
         navigate({ to: "/challan/$id/edit", params: { id: newId }, replace: true });
       }
@@ -238,10 +290,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   // Debounced trigger — waits 2.5s of inactivity before flushing.
   useEffect(() => {
     if (!canAutosave()) return;
+    if (negOpen) return; // an override decision is pending
     const t = setTimeout(() => { void persist(); }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, items, dcType, branchId]);
+  }, [form, items, dcType, branchId, negOpen]);
 
   // Flush on tab close if there are pending changes.
   useEffect(() => {
@@ -356,6 +409,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   // "Done" button: flush any pending auto-save, then jump to the view page.
   const submit = async () => {
     if (!validate()) return;
+    if (!recordId && !(await preflightStock())) return;
     setBusy(true);
     await persist();
     setBusy(false);
@@ -931,6 +985,18 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <NegativeStockDialog
+        open={negOpen}
+        onOpenChange={setNegOpen}
+        shortfalls={shortfalls}
+        onProceed={async (reason) => {
+          allowNegativeRef.current = true;
+          overrideReasonRef.current = reason || null;
+          setNegOpen(false);
+          await persist();
+        }}
+      />
     </FormShell>
   );
 }
