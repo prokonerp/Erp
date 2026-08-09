@@ -17,6 +17,7 @@ const TABS: { to: string; label: string }[] = [
   { to: "/ims/oem-returns", label: "OEM Returns" },
   { to: "/ims/defective-tags", label: "Defective Tags" },
   { to: "/ims/indent-history", label: "Indent History" },
+  { to: "/ims/serial-track", label: "Serial Track" },
   { to: "/ims/reports", label: "Reports" },
   { to: "/ims/audit", label: "Audit Trail" },
 ];
