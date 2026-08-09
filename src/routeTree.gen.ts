@@ -63,6 +63,7 @@ import { Route as AppImsTransfersRouteImport } from './routes/_app/ims.transfers
 import { Route as AppImsTransactionsRouteImport } from './routes/_app/ims.transactions'
 import { Route as AppImsStockManagementRouteImport } from './routes/_app/ims.stock-management'
 import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
+import { Route as AppImsSerialTrackRouteImport } from './routes/_app/ims.serial-track'
 import { Route as AppImsReservationsRouteImport } from './routes/_app/ims.reservations'
 import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
 import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
@@ -391,6 +392,11 @@ const AppImsStockManagementRoute = AppImsStockManagementRouteImport.update({
 const AppImsStockRoute = AppImsStockRouteImport.update({
   id: '/stock',
   path: '/stock',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsSerialTrackRoute = AppImsSerialTrackRouteImport.update({
+  id: '/serial-track',
+  path: '/serial-track',
   getParentRoute: () => AppImsRoute,
 } as any)
 const AppImsReservationsRoute = AppImsReservationsRouteImport.update({
@@ -742,6 +748,7 @@ export interface FileRoutesByFullPath {
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
   '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
+  '/ims/serial-track': typeof AppImsSerialTrackRoute
   '/ims/stock': typeof AppImsStockRoute
   '/ims/stock-management': typeof AppImsStockManagementRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
@@ -841,6 +848,7 @@ export interface FileRoutesByTo {
   '/ims/oem-returns': typeof AppImsOemReturnsRoute
   '/ims/reports': typeof AppImsReportsRoute
   '/ims/reservations': typeof AppImsReservationsRoute
+  '/ims/serial-track': typeof AppImsSerialTrackRoute
   '/ims/stock': typeof AppImsStockRoute
   '/ims/stock-management': typeof AppImsStockManagementRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
@@ -955,6 +963,7 @@ export interface FileRoutesById {
   '/_app/ims/oem-returns': typeof AppImsOemReturnsRoute
   '/_app/ims/reports': typeof AppImsReportsRoute
   '/_app/ims/reservations': typeof AppImsReservationsRoute
+  '/_app/ims/serial-track': typeof AppImsSerialTrackRoute
   '/_app/ims/stock': typeof AppImsStockRoute
   '/_app/ims/stock-management': typeof AppImsStockManagementRoute
   '/_app/ims/transactions': typeof AppImsTransactionsRoute
@@ -1070,6 +1079,7 @@ export interface FileRouteTypes {
     | '/ims/oem-returns'
     | '/ims/reports'
     | '/ims/reservations'
+    | '/ims/serial-track'
     | '/ims/stock'
     | '/ims/stock-management'
     | '/ims/transactions'
@@ -1169,6 +1179,7 @@ export interface FileRouteTypes {
     | '/ims/oem-returns'
     | '/ims/reports'
     | '/ims/reservations'
+    | '/ims/serial-track'
     | '/ims/stock'
     | '/ims/stock-management'
     | '/ims/transactions'
@@ -1282,6 +1293,7 @@ export interface FileRouteTypes {
     | '/_app/ims/oem-returns'
     | '/_app/ims/reports'
     | '/_app/ims/reservations'
+    | '/_app/ims/serial-track'
     | '/_app/ims/stock'
     | '/_app/ims/stock-management'
     | '/_app/ims/transactions'
@@ -1729,6 +1741,13 @@ declare module '@tanstack/react-router' {
       path: '/stock'
       fullPath: '/ims/stock'
       preLoaderRoute: typeof AppImsStockRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/serial-track': {
+      id: '/_app/ims/serial-track'
+      path: '/serial-track'
+      fullPath: '/ims/serial-track'
+      preLoaderRoute: typeof AppImsSerialTrackRouteImport
       parentRoute: typeof AppImsRoute
     }
     '/_app/ims/reservations': {
@@ -2361,6 +2380,7 @@ interface AppImsRouteChildren {
   AppImsOemReturnsRoute: typeof AppImsOemReturnsRoute
   AppImsReportsRoute: typeof AppImsReportsRoute
   AppImsReservationsRoute: typeof AppImsReservationsRoute
+  AppImsSerialTrackRoute: typeof AppImsSerialTrackRoute
   AppImsStockRoute: typeof AppImsStockRoute
   AppImsStockManagementRoute: typeof AppImsStockManagementRoute
   AppImsTransactionsRoute: typeof AppImsTransactionsRoute
@@ -2376,6 +2396,7 @@ const AppImsRouteChildren: AppImsRouteChildren = {
   AppImsOemReturnsRoute: AppImsOemReturnsRoute,
   AppImsReportsRoute: AppImsReportsRoute,
   AppImsReservationsRoute: AppImsReservationsRoute,
+  AppImsSerialTrackRoute: AppImsSerialTrackRoute,
   AppImsStockRoute: AppImsStockRoute,
   AppImsStockManagementRoute: AppImsStockManagementRoute,
   AppImsTransactionsRoute: AppImsTransactionsRoute,
