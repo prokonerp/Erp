@@ -5246,32 +5246,22 @@ export type Database = {
         }
         Returns: string
       }
-      ims_deduct_qty:
-        | {
-            Args: {
-              _doc_label?: string
-              _model: string
-              _new_status: Database["public"]["Enums"]["ims_stock_status"]
-              _qty: number
-              _ref: string
-              _stock_type: Database["public"]["Enums"]["ims_stock_type"]
-              _warehouse: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              _allow_negative?: boolean
-              _doc_label?: string
-              _model: string
-              _new_status: Database["public"]["Enums"]["ims_stock_status"]
-              _qty: number
-              _ref: string
-              _stock_type: Database["public"]["Enums"]["ims_stock_type"]
-              _warehouse: string
-            }
-            Returns: string
-          }
+      ims_deduct_qty: {
+        Args: {
+          _allow_negative?: boolean
+          _doc_label?: string
+          _model: string
+          _new_status: Database["public"]["Enums"]["ims_stock_status"]
+          _qty: number
+          _ref: string
+          _stock_type: Database["public"]["Enums"]["ims_stock_type"]
+          _warehouse: string
+        }
+        Returns: {
+          qty_taken: number
+          stock_item_id: string
+        }[]
+      }
       is_designated_owner: { Args: never; Returns: boolean }
       my_pending_lead_acknowledgements: {
         Args: never
