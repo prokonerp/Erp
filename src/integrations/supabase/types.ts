@@ -2200,6 +2200,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          cancelled_reason: string | null
           created_at: string
           destination_warehouse_id: string | null
           id: string
@@ -2226,6 +2227,7 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          cancelled_reason?: string | null
           created_at?: string
           destination_warehouse_id?: string | null
           id?: string
@@ -2252,6 +2254,7 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          cancelled_reason?: string | null
           created_at?: string
           destination_warehouse_id?: string | null
           id?: string
@@ -5332,6 +5335,7 @@ export type Database = {
         | "in_transit"
         | "received"
         | "completed"
+        | "cancelled"
       ims_txn_type:
         | "good_in"
         | "good_out"
@@ -5490,6 +5494,7 @@ export const Constants = {
         "in_transit",
         "received",
         "completed",
+        "cancelled",
       ],
       ims_txn_type: [
         "good_in",

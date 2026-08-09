@@ -25,6 +25,7 @@ function TransferDetail() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
   const [recvRemarks, setRecvRemarks] = useState("");
   const { isAdmin } = usePermissions();
 
@@ -90,6 +91,7 @@ function TransferDetail() {
           {t.approved_at && <div><span className="text-muted-foreground">Approved: </span>{new Date(t.approved_at).toLocaleString()}</div>}
           {t.received_at && <div><span className="text-muted-foreground">Received: </span>{new Date(t.received_at).toLocaleString()}</div>}
           {t.rejected_reason && <div className="md:col-span-2"><span className="text-muted-foreground">Rejected: </span>{t.rejected_reason}</div>}
+          {t.cancelled_reason && <div className="md:col-span-2"><span className="text-muted-foreground">Cancelled: </span>{t.cancelled_reason}</div>}
           {t.receipt_remarks && <div className="md:col-span-2"><span className="text-muted-foreground">Receipt notes: </span>{t.receipt_remarks}</div>}
         </CardContent>
       </Card>
@@ -128,7 +130,16 @@ function TransferDetail() {
               </Button>
             </div>
           )}
-          {(t.status === "completed" || t.status === "rejected") && (
+          {t.status === "in_transit" && isAdmin && (
+            <div className="flex gap-2 items-center">
+              <Input placeholder="Cancellation reason" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className="w-60" />
+              <Button size="sm" variant="destructive" disabled={busy || !cancelReason}
+                onClick={() => action({ status: "cancelled", cancelled_reason: cancelReason }, "Transfer cancelled — stock returned to source warehouse")}>
+                Cancel Transfer
+              </Button>
+            </div>
+          )}
+          {(t.status === "completed" || t.status === "rejected" || t.status === "cancelled") && (
             <div className="text-sm text-muted-foreground">No further actions.</div>
           )}
         </CardContent>

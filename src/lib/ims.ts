@@ -28,7 +28,8 @@ export type TransferStatus =
   | "rejected"
   | "in_transit"
   | "received"
-  | "completed";
+  | "completed"
+  | "cancelled";
 
 export type ReservationStatus = "reserved" | "issued" | "released";
 
@@ -103,6 +104,7 @@ export type Transfer = {
   approved_by: string | null;
   approved_at: string | null;
   rejected_reason: string | null;
+  cancelled_reason: string | null;
   received_by: string | null;
   received_at: string | null;
   receipt_remarks: string | null;
@@ -175,6 +177,7 @@ export const TRANSFER_STATUS_LABEL: Record<TransferStatus, string> = {
   in_transit: "In Transit",
   received: "Received",
   completed: "Completed",
+  cancelled: "Cancelled",
 };
 
 export async function listStock(): Promise<StockItem[]> {
