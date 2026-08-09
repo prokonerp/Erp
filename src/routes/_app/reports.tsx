@@ -111,7 +111,7 @@ function ReportsPage() {
   /** Serial tracking: grouped by Model No + Warehouse (+ OEM via the shared groupKey). */
   const serialGroups = useMemo(() => {
     const m = new Map<string, { key: string; model: string; oem: string; warehouse: string; qty: number; serials: string[] }>();
-    filteredStock.forEach((r) => {
+    filteredStock.filter((r) => r.stock_status === "available").forEach((r) => {
       const list = splitSerials(r.part_serial_no);
       if (list.length === 0) return;
       const key = `${r.warehouse_id || "__"}_${groupKey(r)}`;
