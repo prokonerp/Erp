@@ -142,6 +142,7 @@ function AppLayout() {
     { to: "/ims", label: "Inventory (IMS)", icon: Warehouse, module: "ims", group: "Inventory" },
     { to: "/ims/defective-tags", label: "Defective Tags", icon: Tag, module: "ims", group: "Inventory" },
     { to: "/reports", label: "Reports", icon: BarChart3, module: "reports", group: "Intelligence" },
+    { to: "/ims/serial-track", label: "Serial Track", icon: Search, module: "ims", group: "Intelligence" },
     { to: "/import", label: "Data Import (CSV Import)", icon: Upload, adminOnly: true, group: "System" },
     { to: "/archive", label: "Archive (Deleted Records)", icon: ArchiveIcon, adminOnly: true, group: "System" },
   ];
