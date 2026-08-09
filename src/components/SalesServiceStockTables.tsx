@@ -21,6 +21,7 @@ type Row = {
 
 function bucketOf(r: StockItem): Bucket | null {
   if (r.stock_status === "scrapped") return "scrap";
+  if (r.stock_status !== "available") return null;
   if (r.stock_type === "good") return "good";
   if (r.stock_type === "defective") return "defective";
   return null;
