@@ -35,6 +35,7 @@ import {
   Archive as ArchiveIcon,
   Plus,
   Tag,
+  Search,
 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
