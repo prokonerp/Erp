@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Search, Download } from "lucide-react";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
 import { exportCSV } from "@/lib/exports";
 import {
-  listStock, listWarehouses, listTransactions,
+  listWarehouses,
   TXN_TYPE_LABEL, type StockItem, type Transaction, type WarehouseLite,
 } from "@/lib/ims";
 
@@ -27,21 +28,55 @@ export const Route = createFileRoute("/_app/ims/serial-track")({
 const splitSerials = (v: string | null | undefined): string[] =>
   (v || "").split(",").map((s) => s.trim()).filter(Boolean);
 
+/** Clean, business-facing label derived from txn_type + reference + notes. */
+const typeLabel = (t: Transaction): string => {
+  const ref = (t.reference || t.txn_no || "").toLowerCase();
+  const notes = (t.notes || "").toLowerCase();
+  if (notes.includes("reversal")) return "Reversal";
+  if ((t.txn_type === "good_in" || t.txn_type === "defective_in") && ref.includes("grn")) return "Purchase";
+  if (t.txn_type === "good_out" && ref.includes("invoice")) return "Sale";
+  if (t.txn_type === "transfer_in" || t.txn_type === "transfer_out") return "Transfer";
+  if ((t.txn_type === "defective_out" || t.txn_type === "good_out") && (ref.includes("dc") || ref.includes("challan"))) return "OEM Return";
+  return TXN_TYPE_LABEL[t.txn_type] || t.txn_type;
+};
+
 function SerialTrack() {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState("");
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    (async () => {
-      try {
-        const [s, t, w] = await Promise.all([listStock(), listTransactions(), listWarehouses()]);
-        setStock(s); setTxns(t); setWarehouses(w);
-      } finally { setLoading(false); }
-    })();
+    listWarehouses().then(setWarehouses).catch(() => {});
   }, []);
+
+  // Debounced targeted search — exact match, with defensive LIKE for legacy comma rows.
+  useEffect(() => {
+    const term = q.trim();
+    if (!term) { setStock([]); setTxns([]); setSearched(""); return; }
+    let alive = true;
+    setLoading(true);
+    const h = setTimeout(async () => {
+      try {
+        const sb = supabase as unknown as { from: (t: string) => any };
+        const [s, t] = await Promise.all([
+          sb.from("ims_stock_items").select("*")
+            .or(`part_serial_no.eq.${term},part_serial_no.ilike.%${term}%`).limit(25),
+          sb.from("ims_transactions").select("*")
+            .or(`part_serial_no.eq.${term},part_serial_no.ilike.%${term}%`).limit(500),
+        ]);
+        if (!alive) return;
+        setStock((s.data || []) as StockItem[]);
+        setTxns((t.data || []) as Transaction[]);
+        setSearched(term);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }, 300);
+    return () => { alive = false; clearTimeout(h); };
+  }, [q]);
 
   const wMap = useMemo(() => Object.fromEntries(warehouses.map((w) => [w.id, w])), [warehouses]);
   /** Plain warehouse name only — no ASP/Godown suffix (same style as Reports). */
@@ -62,8 +97,9 @@ function SerialTrack() {
 
   const historyFor = (row: StockItem) =>
     txns
-      .filter((t) => t.stock_item_id === row.id ||
-        (!!t.part_serial_no && splitSerials(t.part_serial_no).some((s) => s.toLowerCase() === (row.part_serial_no || "").toLowerCase())))
+      .filter((t) =>
+        (!!t.part_serial_no && splitSerials(t.part_serial_no).some((s) => s.toLowerCase() === term)) ||
+        t.stock_item_id === row.id)
       .sort((a, b) => (a.txn_date || a.created_at).localeCompare(b.txn_date || b.created_at));
 
   const party = (t: Transaction) => t.to_party || t.from_party || "—";
@@ -86,7 +122,7 @@ function SerialTrack() {
             />
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            {loading ? "Loading inventory…" : `${stock.length} stock records searchable`}
+            {loading ? "Searching…" : searched ? `${matches.length} match(es) for “${searched}”` : "Type a serial number to search"}
           </p>
         </CardContent>
       </Card>
@@ -99,7 +135,7 @@ function SerialTrack() {
 
       {matches.map(({ serial, row }) => {
         const hist = historyFor(row);
-        const issuedTo = row.stock_status === "issued"
+        const issuedTo = (row.stock_status === "issued" || row.stock_status === "returned_to_oem")
           ? (hist.slice().reverse().find((t) => t.txn_type === "good_out" || t.txn_type === "defective_out"))
           : null;
         return (
@@ -134,7 +170,7 @@ function SerialTrack() {
                   variant="outline" size="sm" disabled={hist.length === 0}
                   onClick={() => exportCSV(`serial_${serial}_history`, [
                     { header: "Date", get: (t: Transaction) => (t.txn_date || t.created_at || "").slice(0, 10) },
-                    { header: "Type", get: (t: Transaction) => TXN_TYPE_LABEL[t.txn_type] || t.txn_type },
+                    { header: "Type", get: (t: Transaction) => typeLabel(t) },
                     { header: "Voucher/Reference", get: (t: Transaction) => t.txn_no || t.reference || "" },
                     { header: "Party", get: (t: Transaction) => party(t) },
                     { header: "From Warehouse", get: (t: Transaction) => plainWhName(t.from_warehouse_id) },
@@ -165,7 +201,7 @@ function SerialTrack() {
                       {hist.map((t) => (
                         <tr key={t.id} className="border-t">
                           <td className="p-2 whitespace-nowrap">{(t.txn_date || t.created_at || "").slice(0, 10)}</td>
-                          <td className="p-2"><Badge variant="outline">{TXN_TYPE_LABEL[t.txn_type] || t.txn_type}</Badge></td>
+                          <td className="p-2"><Badge variant="outline">{typeLabel(t)}</Badge></td>
                           <td className="p-2">{t.txn_no || t.reference || "—"}</td>
                           <td className="p-2">{party(t)}</td>
                           <td className="p-2 whitespace-nowrap">
