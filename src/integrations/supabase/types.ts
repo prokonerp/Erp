@@ -5161,7 +5161,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      _oracle_block_complete: { Args: { blk: Json }; Returns: boolean }
+      _oracle_block_complete: {
+        Args: { _require_customer?: boolean; blk: Json }
+        Returns: boolean
+      }
       _oracle_row_str: { Args: { k: string; v: Json }; Returns: string }
       acknowledge_lead_assignment: {
         Args: { _assignment_id: string; _device?: string; _ip?: string }
@@ -5286,6 +5289,14 @@ export type Database = {
       next_ims_txn_seq: { Args: never; Returns: number }
       next_indent_seq: { Args: never; Returns: number }
       next_ticket_seq: { Args: never; Returns: number }
+      oracle_docs_pending: {
+        Args: { _indent_id: string; _oracle_no: string }
+        Returns: boolean
+      }
+      oracles_autoclose: {
+        Args: { _indent_id: string; _indent_type: string; _oracles: Json }
+        Returns: Json
+      }
       purge_archived_records: {
         Args: never
         Returns: {

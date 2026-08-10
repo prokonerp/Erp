@@ -25,7 +25,7 @@ export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
   onGenerateCustomerGrn, dcExists = false, dcInfo, indentId,
-  pendingDocs,
+  pendingDocs, indentType,
 }: {
   index: number;
   value: OracleBlock;
@@ -45,6 +45,9 @@ export function OracleBlockEditor({
   /** Count of related DC / GRN documents that are still not Submitted or
    *  Closed. While either is > 0 the Oracle must stay Open. */
   pendingDocs?: OraclePendingDocs;
+  /** Parent indent type — decides whether Section D (customer return) is
+   *  mandatory for completeness / auto-close. */
+  indentType?: string | null;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -58,9 +61,9 @@ export function OracleBlockEditor({
 
   const status = oracleStatus(value);
   const closed = status === "closed";
-  const complete = oracleIsComplete(value);
+  const complete = oracleIsComplete(value, indentType);
   const docsPending = (pendingDocs?.dc || 0) + (pendingDocs?.grn || 0);
-  const canAutoClose = oracleCanAutoClose(value, pendingDocs);
+  const canAutoClose = oracleCanAutoClose(value, pendingDocs, indentType);
   const locked = closed && !isAdmin;
   void defectiveParts;
 

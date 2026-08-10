@@ -170,34 +170,50 @@ export function normalizeOracle(o: OracleBlock): OracleBlock {
   return out;
 }
 
-export function oracleIsComplete(oIn: OracleBlock): boolean {
+/** Section D (Material Received from Customer) is mandatory for exchange-type
+ *  RMAs where the customer physically returns the defective unit. For
+ *  RMA Service Ship nothing comes back from the customer, so D is optional —
+ *  unless the user has already started filling one of those rows. */
+export function requiresCustomerReturn(indentType?: string | null): boolean {
+  return (indentType || "") !== "rma_service_ship";
+}
+
+export function oracleIsComplete(oIn: OracleBlock, indentType?: string | null): boolean {
   const o = normalizeOracle(oIn);
   const nn = (s?: string) => !!(s && String(s).trim());
   const qty = (s?: string) => nn(s) && Number(s) > 0;
   if (o.defective_rows.length === 0) return false;
+  const custRows = o.customer_received_rows || [];
+  const custTouched = custRows.some((c) => nn(c?.warehouse_id) || nn(c?.serial_no) || nn(c?.received_date));
+  const needCust = requiresCustomerReturn(indentType) || custTouched;
   for (let i = 0; i < o.defective_rows.length; i++) {
     const d = o.defective_rows[i];
     const e = o.exchange_rows[i];
     const r = o.received_rows[i];
-    const c = (o.customer_received_rows || [])[i];
+    const c = custRows[i];
     if (!(nn(d.def_model_no) && nn(d.def_serial_no) && qty(d.qty))) return false;
     if (!e || !(nn(e.warehouse_id) && nn(e.model_no) && nn(e.serial_no) && qty(e.qty))) return false;
     if (!r || !(nn(r.warehouse_id) && nn(r.model_no) && nn(r.serial_no) && qty(r.qty) && nn(r.received_date))) return false;
-    // Section D: Material Received (from Customer). Since normalizeOracle
-    // pads customer_received_rows to defective length by default, every
-    // row must be completed (warehouse, model, serial, qty, date, tag).
-    if (!c || !(nn(c.warehouse_id) && nn(c.model_no) && nn(c.serial_no) && qty(c.qty) && nn(c.received_date) && nn(c.product_tag))) return false;
+    // Section D: Material Received (from Customer) — conditional on indent type.
+    if (needCust) {
+      if (!c || !(nn(c.warehouse_id) && nn(c.model_no) && nn(c.serial_no) && qty(c.qty) && nn(c.received_date) && nn(c.product_tag))) return false;
+    }
   }
   return true;
 }
 
 /** Tri-state progress indicator for a single Oracle block:
- *  - "closed": already marked closed OR every A/B/C/D row is complete.
+ *  - "closed": already marked closed, or every required row is complete AND
+ *    no linked DC/GRN is still pending (same rule as auto-close).
  *  - "pending": no material fields filled yet.
  *  - "in_progress": some rows partially filled but not all complete. */
-export function oracleProgress(oIn: OracleBlock): "closed" | "in_progress" | "pending" {
+export function oracleProgress(
+  oIn: OracleBlock,
+  indentType?: string | null,
+  pending?: OraclePendingDocs | null,
+): "closed" | "in_progress" | "pending" {
   const o = normalizeOracle(oIn);
-  if (o.status === "closed" || oracleIsComplete(o)) return "closed";
+  if (o.status === "closed" || oracleCanAutoClose(o, pending, indentType)) return "closed";
   const nn = (s?: string) => !!(s && String(s).trim());
   const anyFilled =
     o.defective_rows.some((d) => nn(d.def_model_no) || nn(d.def_serial_no) || nn(d.qty)) ||
@@ -278,8 +294,12 @@ export function docStatusSettled(status?: string | null): boolean {
 
 /** An Oracle may auto-close only when every A–D row is complete AND every
  *  related Delivery Challan / GRN is Submitted or Closed. */
-export function oracleCanAutoClose(o: OracleBlock, pending?: OraclePendingDocs | null): boolean {
-  if (!oracleIsComplete(o)) return false;
+export function oracleCanAutoClose(
+  o: OracleBlock,
+  pending?: OraclePendingDocs | null,
+  indentType?: string | null,
+): boolean {
+  if (!oracleIsComplete(o, indentType)) return false;
   if (pending && (pending.dc > 0 || pending.grn > 0)) return false;
   return true;
 }

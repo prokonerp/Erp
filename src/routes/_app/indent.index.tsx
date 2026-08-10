@@ -139,7 +139,7 @@ function IndentList() {
                     ) : (
                       <div className="space-y-2">
                         {oracles.map((o, i) => {
-                          const prog = oracleProgress(o);
+                          const prog = oracleProgress(o, r.indent_type);
                           const dotCls = prog === "closed" ? "bg-emerald-500" : prog === "in_progress" ? "bg-amber-500" : "bg-rose-500";
                           const progLabel = prog === "closed" ? "Closed" : prog === "in_progress" ? "In Progress" : "Pending";
                           const defs = (o.defective_rows && o.defective_rows.length)
