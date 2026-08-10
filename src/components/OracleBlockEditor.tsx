@@ -84,6 +84,7 @@ export function OracleBlockEditor({
         const { data } = await supabase.from("ims_stock_items")
           .select("id,part_name,part_model_no,part_serial_no,warehouse_id")
           .eq("warehouse_id", r.warehouse_id)
+          .eq("stock_type", "good")
           .eq("stock_status", "available")
           .order("part_name");
         next[i] = (data || []) as StockRow[];
@@ -136,6 +137,13 @@ export function OracleBlockEditor({
     toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} reopened`);
   };
 
+  /** Serial numbers of the defective units in Section A — these must never
+   *  be offered as exchange (good) stock. */
+  const defectiveSerials = useMemo(
+    () => new Set(value.defective_rows.map((d) => (d.def_serial_no || "").trim().toUpperCase()).filter(Boolean)),
+    [value.defective_rows],
+  );
+
   const modelsFor = (rows: StockRow[]) => {
     const seen = new Set<string>();
     const out: { key: string; label: string }[] = [];
@@ -143,13 +151,17 @@ export function OracleBlockEditor({
       const key = `${s.part_name}||${s.part_model_no || ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ key, label: s.part_model_no ? `${s.part_name} — ${s.part_model_no}` : s.part_name });
+      out.push({ key, label: s.part_model_no || s.part_name });
     }
     return out;
   };
   const serialsFor = (rows: StockRow[], modelKey: string) => {
     const [pn, mn] = (modelKey || "").split("||");
-    return rows.filter((s) => s.part_name === pn && (s.part_model_no || "") === (mn || ""));
+    return rows.filter((s) =>
+      s.part_name === pn &&
+      (s.part_model_no || "") === (mn || "") &&
+      !defectiveSerials.has((s.part_serial_no || "").trim().toUpperCase()),
+    );
   };
   /** Ensure the currently-saved model/serial always renders in the Select,
    *  even if the underlying IMS row is no longer 'available' (e.g. issued
@@ -158,7 +170,7 @@ export function OracleBlockEditor({
     const list = modelsFor(rows);
     if (savedKey && !list.some((m) => m.key === savedKey)) {
       const [pn, mn] = savedKey.split("||");
-      list.unshift({ key: savedKey, label: mn ? `${pn} — ${mn}` : pn });
+      list.unshift({ key: savedKey, label: mn || pn });
     }
     return list;
   };
