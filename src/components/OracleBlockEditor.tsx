@@ -62,7 +62,12 @@ export function OracleBlockEditor({
   const status = oracleStatus(value);
   const closed = status === "closed";
   const complete = oracleIsComplete(value, indentType);
-  const docsPending = (pendingDocs?.dc || 0) + (pendingDocs?.grn || 0);
+  const pendingParts = [
+    { label: "DC", n: pendingDocs?.dc.pending || 0 },
+    { label: "OEM GRN", n: pendingDocs?.oem_grn.pending || 0 },
+    { label: "Customer GRN", n: pendingDocs?.customer_grn.pending || 0 },
+  ].filter((p) => p.n > 0);
+  const docsPending = pendingParts.reduce((s, p) => s + p.n, 0);
   const canAutoClose = oracleCanAutoClose(value, pendingDocs, indentType);
   const locked = closed && !isAdmin;
   void defectiveParts;
@@ -260,8 +265,10 @@ export function OracleBlockEditor({
               {canAutoClose
                 ? "Closing…"
                 : complete && docsPending > 0
-                  ? `Awaiting ${pendingDocs?.dc ? `${pendingDocs.dc} DC` : ""}${pendingDocs?.dc && pendingDocs?.grn ? " & " : ""}${pendingDocs?.grn ? `${pendingDocs.grn} GRN` : ""} to be Submitted`
-                  : "Auto-closes when all rows are complete & all DC/GRN are Submitted"}
+                  ? `Awaiting ${pendingParts.map((p) => `${p.n} ${p.label}`).join(" & ")} to be Submitted`
+                  : complete
+                    ? "Awaiting required DC / GRN to be generated & Submitted"
+                    : "Auto-closes when all rows are complete & all required DC/GRN are Submitted"}
             </span>
           )}
           {!closed && (
