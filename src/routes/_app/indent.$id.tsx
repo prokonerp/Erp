@@ -77,11 +77,11 @@ function IndentDetail() {
    *  used to gate Oracle auto-close. */
   const loadLinkedDocs = useCallback(async () => {
     const pending: Record<string, OraclePendingDocs> = {};
-    const bump = (oracleNo: string, kind: "dc" | "grn") => {
+    const bump = (oracleNo: string, kind: "dc" | "oem_grn" | "customer_grn", settled: boolean) => {
       const key = (oracleNo || "").trim().toUpperCase();
       if (!key) return;
-      if (!pending[key]) pending[key] = { dc: 0, grn: 0 };
-      pending[key][kind] += 1;
+      if (!pending[key]) pending[key] = emptyOracleDocs();
+      pending[key][kind][settled ? "settled" : "pending"] += 1;
     };
 
     const { data: dcs } = await supabase
@@ -98,24 +98,26 @@ function IndentDetail() {
         seen.add(on);
         const key = on.toUpperCase();
         if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
-        if (!docStatusSettled(dc.status)) bump(on, "dc");
+        bump(on, "dc", docStatusSettled(dc.status));
       }
     }
     setDcByOracle(map);
 
     const { data: grnRows } = await supabase
       .from("grns" as never)
-      .select("id, status, items")
+      .select("id, status, category, items")
       .eq("indent_id", id);
-    for (const g of (grnRows || []) as unknown as Array<{ status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+    for (const g of (grnRows || []) as unknown as Array<{ status: string | null; category: string | null; items: Array<{ oracle_no?: string }> | null }>) {
       if ((g.status || "").toLowerCase() === "cancelled") continue;
-      if (docStatusSettled(g.status)) continue;
+      const cat = (g.category || "").trim().toLowerCase();
+      const kind = cat === "customer" ? ("customer_grn" as const) : ("oem_grn" as const);
+      const settled = docStatusSettled(g.status);
       const seen = new Set<string>();
       for (const it of g.items || []) {
         const on = (it?.oracle_no || "").trim();
         if (!on || seen.has(on)) continue;
         seen.add(on);
-        bump(on, "grn");
+        bump(on, kind, settled);
       }
     }
     setPendingByOracle(pending);
