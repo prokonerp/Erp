@@ -421,6 +421,10 @@ function IndentDetail() {
     // Partial-receipt / duplicate-GRN guard: subtract quantities already
     // covered by prior non-cancelled GRNs linked to this Indent (OEM category).
     const priorQty = await fetchPriorGrnQty(i.id, "oem");
+    // Hard, existence-based duplicate guard for serialized rows: the same
+    // model + serial can never be received twice under the same Oracle.
+    const priorSerials = await fetchPriorGrnSerialKeys(i.id, "oem");
+    const blocked: string[] = [];
     const items: Array<{
       product_id?: string; part_no: string; part_name: string; description: string; uom: string;
       qty_received: string; qty_accepted: string; qty_rejected: string;
@@ -469,7 +473,15 @@ function IndentDetail() {
         const prod = model ? prodByModel[model] : undefined;
         const partName = maybeName || prod?.name || defRow?.part_name || model;
         const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
-        const remaining = remainingQty(priorQty, model, serial, qty);
+        const oracleNo = (o.oracle_no || "").trim();
+        if (serial) {
+          const key = `${oracleNo.toUpperCase()}||${model.trim().toUpperCase()}||${serial.toUpperCase()}`;
+          if (priorSerials.has(key)) {
+            blocked.push(`${model || partName} / Serial ${serial} was already received under Oracle ${oracleNo || "—"} — cannot receive the same unit twice.`);
+            continue;
+          }
+        }
+        const remaining = serial ? (parseFloat(qty || "1") || 1) : remainingQty(priorQty, model, serial, qty);
         if (remaining <= 0) continue; // already fully GRN'd → skip
         items.push({
           product_id: prod?.id,
@@ -488,12 +500,20 @@ function IndentDetail() {
           warehouse_id: rv?.warehouse_id || undefined,
           warehouse_name: rv?.warehouse_name || undefined,
           received_date: rv?.received_date || undefined,
-          oracle_no: (o.oracle_no || "").trim() || undefined,
+          oracle_no: oracleNo || undefined,
         });
       }
     }
+    if (blocked.length > 0) {
+      toast.error("Duplicate serial(s) blocked", {
+        description: blocked.join("\n"),
+        duration: 12000,
+      });
+    }
     if (items.length === 0) {
-      toast.error("No pending OEM items — all Section C rows are already covered by existing GRNs.");
+      if (blocked.length === 0) {
+        toast.error("No pending OEM items — all Section C rows are already covered by existing GRNs.");
+      }
       return;
     }
     const prefill = {
