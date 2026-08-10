@@ -41,7 +41,7 @@ function IndentList() {
   const filtered = !s
     ? rows
     : rows.filter((r) =>
-        [r.indent_no, r.case_id, r.oem_case_id, r.company, r.product_model, r.product_serial, r.engineer_name, r.indent_city]
+        [r.indent_no, r.case_id, r.oem_case_id, r.oracle_number, r.company, r.product_model, r.product_serial, r.engineer_name, r.indent_city]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(s)),
       );
@@ -97,7 +97,7 @@ function IndentList() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Input placeholder="Indent no, Case ID, OEM Case ID, company, product model/serial, engineer, city…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input placeholder="Indent no, Oracle#, Case ID, OEM Case ID, company, product model/serial, engineer, city…" value={q} onChange={(e) => setQ(e.target.value)} />
         </CardContent>
       </Card>
 

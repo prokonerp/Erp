@@ -379,6 +379,7 @@ export type Indent = {
   indent_city: string | null;
   case_id: string | null;
   oem_case_id: string | null;
+  oracle_number: string | null;
   company: string | null;
   def_model_no: string | null;
   def_serial_no: string | null;
