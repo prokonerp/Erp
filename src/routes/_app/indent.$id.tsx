@@ -270,6 +270,32 @@ function IndentDetail() {
     return Math.max(0, req - done);
   };
 
+  /** Existence-based duplicate guard for serialized receipts. Returns a Set of
+   *  `${oracle}||${model}||${serial}` triples (trimmed/upper-cased) already
+   *  received by prior non-cancelled GRNs for this Indent + category. */
+  const fetchPriorGrnSerialKeys = async (
+    indentId: string,
+    category: "oem" | "customer",
+  ): Promise<Set<string>> => {
+    const seen = new Set<string>();
+    const { data } = await supabase
+      .from("grns" as never)
+      .select("status, items")
+      .eq("indent_id", indentId)
+      .eq("category", category);
+    for (const g of (data || []) as Array<{ status?: string | null; items?: Array<Record<string, unknown>> | null }>) {
+      if ((g.status || "").toLowerCase() === "cancelled") continue;
+      for (const it of g.items || []) {
+        const serial = String((it.serial_no as string) || "").trim().toUpperCase();
+        if (!serial) continue;
+        const model = String((it.model_no as string) || "").trim().toUpperCase();
+        const oracle = String((it.oracle_no as string) || "").trim().toUpperCase();
+        seen.add(`${oracle}||${model}||${serial}`);
+      }
+    }
+    return seen;
+  };
+
   const generateChallan = async (only?: OracleBlock) => {
     if (!i) return;
     // Duplicate DC guard — block generation when any target Oracle already
