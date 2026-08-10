@@ -294,8 +294,12 @@ export function docStatusSettled(status?: string | null): boolean {
 
 /** An Oracle may auto-close only when every A–D row is complete AND every
  *  related Delivery Challan / GRN is Submitted or Closed. */
-export function oracleCanAutoClose(o: OracleBlock, pending?: OraclePendingDocs | null): boolean {
-  if (!oracleIsComplete(o)) return false;
+export function oracleCanAutoClose(
+  o: OracleBlock,
+  pending?: OraclePendingDocs | null,
+  indentType?: string | null,
+): boolean {
+  if (!oracleIsComplete(o, indentType)) return false;
   if (pending && (pending.dc > 0 || pending.grn > 0)) return false;
   return true;
 }
