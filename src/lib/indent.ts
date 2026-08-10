@@ -282,8 +282,29 @@ export function oracleStatus(o: OracleBlock): "open" | "closed" {
   return o.status === "closed" ? "closed" : "open";
 }
 
-/** Count of related documents that are not yet Submitted/Closed. */
-export type OraclePendingDocs = { dc: number; grn: number };
+/** Per-oracle, per-document-type counts of related documents.
+ *  `pending` = exists but not yet Submitted/Closed.
+ *  `settled` = exists and is Submitted/Closed.
+ *  Both zero means the document was never created — which is NOT the same
+ *  as "nothing pending" and must block auto-close. */
+export type DocCounts = { pending: number; settled: number };
+export type OraclePendingDocs = {
+  dc: DocCounts;
+  oem_grn: DocCounts;
+  customer_grn: DocCounts;
+};
+
+export const emptyDocCounts = (): DocCounts => ({ pending: 0, settled: 0 });
+export const emptyOracleDocs = (): OraclePendingDocs => ({
+  dc: emptyDocCounts(), oem_grn: emptyDocCounts(), customer_grn: emptyDocCounts(),
+});
+
+/** A document type is satisfied only when at least one exists AND none of
+ *  the existing ones are still pending. */
+function docSatisfied(c?: DocCounts | null): boolean {
+  if (!c) return false;
+  return c.settled > 0 && c.pending === 0;
+}
 
 /** A document status counts as settled only when Submitted or Closed.
  *  Cancelled documents are ignored by the callers building these counts. */
@@ -293,14 +314,31 @@ export function docStatusSettled(status?: string | null): boolean {
 }
 
 /** An Oracle may auto-close only when every A–D row is complete AND every
- *  related Delivery Challan / GRN is Submitted or Closed. */
+ *  section that has material to send/receive has its corresponding document
+ *  actually generated and Submitted/Closed:
+ *   - Section B (exchange rows) → Delivery Challan
+ *   - Section C (OEM received rows) → GRN (category = oem)
+ *   - Section D (customer received rows) → GRN (category = customer) */
 export function oracleCanAutoClose(
-  o: OracleBlock,
+  oIn: OracleBlock,
   pending?: OraclePendingDocs | null,
   indentType?: string | null,
 ): boolean {
-  if (!oracleIsComplete(o, indentType)) return false;
-  if (pending && (pending.dc > 0 || pending.grn > 0)) return false;
+  if (!oracleIsComplete(oIn, indentType)) return false;
+  const o = normalizeOracle(oIn);
+  const nn = (s?: string) => !!(s && String(s).trim());
+  const rowFilled = (r?: { warehouse_id?: string; model_no?: string; serial_no?: string; qty?: string }) =>
+    !!r && (nn(r.warehouse_id) || nn(r.model_no) || nn(r.serial_no) || nn(r.qty));
+
+  const needDc = o.exchange_rows.some(rowFilled);
+  const needOemGrn = o.received_rows.some(rowFilled);
+  const custRows = o.customer_received_rows || [];
+  const custTouched = custRows.some(rowFilled);
+  const needCustomerGrn = (requiresCustomerReturn(indentType) && custRows.length > 0) || custTouched;
+
+  if (needDc && !docSatisfied(pending?.dc)) return false;
+  if (needOemGrn && !docSatisfied(pending?.oem_grn)) return false;
+  if (needCustomerGrn && !docSatisfied(pending?.customer_grn)) return false;
   return true;
 }
 
