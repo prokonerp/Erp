@@ -726,6 +726,7 @@ function IndentDetail() {
           dcExists={!!dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
           dcInfo={dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
           pendingDocs={pendingByOracle[(o.oracle_no || "").trim().toUpperCase()]}
+          indentType={i.indent_type}
         />
       ))}
     </div>
