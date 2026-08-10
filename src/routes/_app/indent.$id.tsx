@@ -291,6 +291,9 @@ function IndentDetail() {
         const model = String((it.model_no as string) || "").trim().toUpperCase();
         const oracle = String((it.oracle_no as string) || "").trim().toUpperCase();
         seen.add(`${oracle}||${model}||${serial}`);
+        // Legacy GRN items were saved without an oracle tag; register a
+        // blank-oracle variant so those receipts still block re-receipt.
+        if (oracle) seen.add(`||${model}||${serial}`);
       }
     }
     return seen;
@@ -475,8 +478,8 @@ function IndentDetail() {
         const desc = prod?.description || (defRow?.part_name && defRow.part_name !== partName ? defRow.part_name : "");
         const oracleNo = (o.oracle_no || "").trim();
         if (serial) {
-          const key = `${oracleNo.toUpperCase()}||${model.trim().toUpperCase()}||${serial.toUpperCase()}`;
-          if (priorSerials.has(key)) {
+          const ms = `${model.trim().toUpperCase()}||${serial.toUpperCase()}`;
+          if (priorSerials.has(`${oracleNo.toUpperCase()}||${ms}`) || priorSerials.has(`||${ms}`)) {
             blocked.push(`${model || partName} / Serial ${serial} was already received under Oracle ${oracleNo || "—"} — cannot receive the same unit twice.`);
             continue;
           }
