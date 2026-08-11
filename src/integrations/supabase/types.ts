@@ -5296,6 +5296,10 @@ export type Database = {
         Args: { _indent_id: string; _oracle_no: string }
         Returns: boolean
       }
+      oracle_docs_satisfied: {
+        Args: { _indent_id: string; _require_customer?: boolean; blk: Json }
+        Returns: boolean
+      }
       oracles_autoclose: {
         Args: { _indent_id: string; _indent_type: string; _oracles: Json }
         Returns: Json
