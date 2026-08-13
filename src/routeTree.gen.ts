@@ -98,6 +98,7 @@ import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as AppSalesPaymentsIndexRouteImport } from './routes/_app/sales.payments.index'
 import { Route as AppSalesInvoicesIndexRouteImport } from './routes/_app/sales.invoices.index'
+import { Route as AppSalesGeneralDcIndexRouteImport } from './routes/_app/sales.general-dc.index'
 import { Route as AppSalesEwayIndexRouteImport } from './routes/_app/sales.eway.index'
 import { Route as AppImsTransfersIndexRouteImport } from './routes/_app/ims.transfers.index'
 import { Route as AppGrnOemIndexRouteImport } from './routes/_app/grn.oem.index'
@@ -109,6 +110,7 @@ import { Route as AppSalesPaymentsNewRouteImport } from './routes/_app/sales.pay
 import { Route as AppSalesOrdersIdRouteImport } from './routes/_app/sales.orders.$id'
 import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.invoices.new'
 import { Route as AppSalesInvoicesIdRouteImport } from './routes/_app/sales.invoices.$id'
+import { Route as AppSalesGeneralDcNewRouteImport } from './routes/_app/sales.general-dc.new'
 import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
 import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
 import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
@@ -570,6 +572,11 @@ const AppSalesInvoicesIndexRoute = AppSalesInvoicesIndexRouteImport.update({
   path: '/invoices/',
   getParentRoute: () => AppSalesRoute,
 } as any)
+const AppSalesGeneralDcIndexRoute = AppSalesGeneralDcIndexRouteImport.update({
+  id: '/general-dc/',
+  path: '/general-dc/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
 const AppSalesEwayIndexRoute = AppSalesEwayIndexRouteImport.update({
   id: '/eway/',
   path: '/eway/',
@@ -623,6 +630,11 @@ const AppSalesInvoicesNewRoute = AppSalesInvoicesNewRouteImport.update({
 const AppSalesInvoicesIdRoute = AppSalesInvoicesIdRouteImport.update({
   id: '/invoices/$id',
   path: '/invoices/$id',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesGeneralDcNewRoute = AppSalesGeneralDcNewRouteImport.update({
+  id: '/general-dc/new',
+  path: '/general-dc/new',
   getParentRoute: () => AppSalesRoute,
 } as any)
 const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
@@ -790,6 +802,7 @@ export interface FileRoutesByFullPath {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/sales/general-dc/new': typeof AppSalesGeneralDcNewRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/sales/orders/$id': typeof AppSalesOrdersIdRoute
@@ -801,6 +814,7 @@ export interface FileRoutesByFullPath {
   '/grn/oem/': typeof AppGrnOemIndexRoute
   '/ims/transfers/': typeof AppImsTransfersIndexRoute
   '/sales/eway/': typeof AppSalesEwayIndexRoute
+  '/sales/general-dc/': typeof AppSalesGeneralDcIndexRoute
   '/sales/invoices/': typeof AppSalesInvoicesIndexRoute
   '/sales/payments/': typeof AppSalesPaymentsIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
@@ -889,6 +903,7 @@ export interface FileRoutesByTo {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/sales/general-dc/new': typeof AppSalesGeneralDcNewRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/sales/orders/$id': typeof AppSalesOrdersIdRoute
@@ -900,6 +915,7 @@ export interface FileRoutesByTo {
   '/grn/oem': typeof AppGrnOemIndexRoute
   '/ims/transfers': typeof AppImsTransfersIndexRoute
   '/sales/eway': typeof AppSalesEwayIndexRoute
+  '/sales/general-dc': typeof AppSalesGeneralDcIndexRoute
   '/sales/invoices': typeof AppSalesInvoicesIndexRoute
   '/sales/payments': typeof AppSalesPaymentsIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
@@ -1005,6 +1021,7 @@ export interface FileRoutesById {
   '/_app/grn/oem/new': typeof AppGrnOemNewRoute
   '/_app/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/_app/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/_app/sales/general-dc/new': typeof AppSalesGeneralDcNewRoute
   '/_app/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
   '/_app/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/_app/sales/orders/$id': typeof AppSalesOrdersIdRoute
@@ -1016,6 +1033,7 @@ export interface FileRoutesById {
   '/_app/grn/oem/': typeof AppGrnOemIndexRoute
   '/_app/ims/transfers/': typeof AppImsTransfersIndexRoute
   '/_app/sales/eway/': typeof AppSalesEwayIndexRoute
+  '/_app/sales/general-dc/': typeof AppSalesGeneralDcIndexRoute
   '/_app/sales/invoices/': typeof AppSalesInvoicesIndexRoute
   '/_app/sales/payments/': typeof AppSalesPaymentsIndexRoute
   '/_app/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
@@ -1121,6 +1139,7 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/sales/general-dc/new'
     | '/sales/invoices/$id'
     | '/sales/invoices/new'
     | '/sales/orders/$id'
@@ -1132,6 +1151,7 @@ export interface FileRouteTypes {
     | '/grn/oem/'
     | '/ims/transfers/'
     | '/sales/eway/'
+    | '/sales/general-dc/'
     | '/sales/invoices/'
     | '/sales/payments/'
     | '/amc/oem/$source/$id'
@@ -1220,6 +1240,7 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/sales/general-dc/new'
     | '/sales/invoices/$id'
     | '/sales/invoices/new'
     | '/sales/orders/$id'
@@ -1231,6 +1252,7 @@ export interface FileRouteTypes {
     | '/grn/oem'
     | '/ims/transfers'
     | '/sales/eway'
+    | '/sales/general-dc'
     | '/sales/invoices'
     | '/sales/payments'
     | '/amc/oem/$source/$id'
@@ -1335,6 +1357,7 @@ export interface FileRouteTypes {
     | '/_app/grn/oem/new'
     | '/_app/ims/transfers/$id'
     | '/_app/ims/transfers/new'
+    | '/_app/sales/general-dc/new'
     | '/_app/sales/invoices/$id'
     | '/_app/sales/invoices/new'
     | '/_app/sales/orders/$id'
@@ -1346,6 +1369,7 @@ export interface FileRouteTypes {
     | '/_app/grn/oem/'
     | '/_app/ims/transfers/'
     | '/_app/sales/eway/'
+    | '/_app/sales/general-dc/'
     | '/_app/sales/invoices/'
     | '/_app/sales/payments/'
     | '/_app/amc/oem/$source/$id'
@@ -1988,6 +2012,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSalesInvoicesIndexRouteImport
       parentRoute: typeof AppSalesRoute
     }
+    '/_app/sales/general-dc/': {
+      id: '/_app/sales/general-dc/'
+      path: '/general-dc'
+      fullPath: '/sales/general-dc/'
+      preLoaderRoute: typeof AppSalesGeneralDcIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
     '/_app/sales/eway/': {
       id: '/_app/sales/eway/'
       path: '/eway'
@@ -2063,6 +2094,13 @@ declare module '@tanstack/react-router' {
       path: '/invoices/$id'
       fullPath: '/sales/invoices/$id'
       preLoaderRoute: typeof AppSalesInvoicesIdRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/general-dc/new': {
+      id: '/_app/sales/general-dc/new'
+      path: '/general-dc/new'
+      fullPath: '/sales/general-dc/new'
+      preLoaderRoute: typeof AppSalesGeneralDcNewRouteImport
       parentRoute: typeof AppSalesRoute
     }
     '/_app/ims/transfers/new': {
@@ -2470,10 +2508,12 @@ interface AppSalesRouteChildren {
   AppSalesQuotationsRoute: typeof AppSalesQuotationsRoute
   AppSalesSettingsRoute: typeof AppSalesSettingsRoute
   AppSalesIndexRoute: typeof AppSalesIndexRoute
+  AppSalesGeneralDcNewRoute: typeof AppSalesGeneralDcNewRoute
   AppSalesInvoicesIdRoute: typeof AppSalesInvoicesIdRoute
   AppSalesInvoicesNewRoute: typeof AppSalesInvoicesNewRoute
   AppSalesPaymentsNewRoute: typeof AppSalesPaymentsNewRoute
   AppSalesEwayIndexRoute: typeof AppSalesEwayIndexRoute
+  AppSalesGeneralDcIndexRoute: typeof AppSalesGeneralDcIndexRoute
   AppSalesInvoicesIndexRoute: typeof AppSalesInvoicesIndexRoute
   AppSalesPaymentsIndexRoute: typeof AppSalesPaymentsIndexRoute
 }
@@ -2483,10 +2523,12 @@ const AppSalesRouteChildren: AppSalesRouteChildren = {
   AppSalesQuotationsRoute: AppSalesQuotationsRoute,
   AppSalesSettingsRoute: AppSalesSettingsRoute,
   AppSalesIndexRoute: AppSalesIndexRoute,
+  AppSalesGeneralDcNewRoute: AppSalesGeneralDcNewRoute,
   AppSalesInvoicesIdRoute: AppSalesInvoicesIdRoute,
   AppSalesInvoicesNewRoute: AppSalesInvoicesNewRoute,
   AppSalesPaymentsNewRoute: AppSalesPaymentsNewRoute,
   AppSalesEwayIndexRoute: AppSalesEwayIndexRoute,
+  AppSalesGeneralDcIndexRoute: AppSalesGeneralDcIndexRoute,
   AppSalesInvoicesIndexRoute: AppSalesInvoicesIndexRoute,
   AppSalesPaymentsIndexRoute: AppSalesPaymentsIndexRoute,
 }
