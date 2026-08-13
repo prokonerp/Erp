@@ -643,6 +643,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         </FormGrid>
       </FormSection>
 
+      <div ref={itemsSectionRef} />
       <FormSection
         title="Material Details"
         description={`${items.length} row(s) • Total qty ${totalQty}`}
@@ -687,7 +688,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             <tbody>
               {items.map((it, i) => (
                 <>
-                  <tr key={`${i}-top`} className="border-t border-border/60 transition-colors hover:bg-muted/25">
+                  <tr key={`${i}-top`} data-short={isShortRow(it) ? "1" : undefined} className={`border-t border-border/60 transition-colors hover:bg-muted/25 ${isShortRow(it) ? "bg-destructive/10 ring-1 ring-destructive/40" : ""}`}>
                     <td rowSpan={2} className="px-3 py-2 text-center text-xs text-muted-foreground border-t border-border/60 align-middle w-10">{i + 1}</td>
                     <td className="px-3 py-2 align-top border-t border-border/60 min-w-[260px]">
                       <ProductMasterPicker excludeServices
@@ -775,7 +776,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                       </Button>
                     </td>
                   </tr>
-                  <tr key={`${i}-bottom`} className="transition-colors hover:bg-muted/25">
+                  <tr key={`${i}-bottom`} className={`transition-colors hover:bg-muted/25 ${isShortRow(it) ? "bg-destructive/10" : ""}`}>
                     {isOem ? (
                       <td colSpan={4} className="px-3 py-2 border-t border-dashed border-border/40 align-top bg-muted/15">
                         <div className="grid grid-cols-6 gap-3">
