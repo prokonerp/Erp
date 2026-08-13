@@ -288,17 +288,21 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   };
 
   // Debounced trigger — waits 2.5s of inactivity before flushing.
+  // NEVER performs the first save: the initial INSERT (and its stock
+  // pre-flight) must come from an explicit "Save & Continue".
   useEffect(() => {
+    if (!recordId) return;
     if (!canAutosave()) return;
     if (negOpen) return; // an override decision is pending
     const t = setTimeout(() => { void persist(); }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, items, dcType, branchId, negOpen]);
+  }, [form, items, dcType, branchId, negOpen, recordId]);
 
   // Flush on tab close if there are pending changes.
   useEffect(() => {
     const onBeforeUnload = () => {
+      if (!recordId) return; // never create the record implicitly
       if (saveState === "saving" || (canAutosave() && lastPayloadRef.current !== JSON.stringify({ ...buildPayload(), recordId }))) {
         void persist();
       }
