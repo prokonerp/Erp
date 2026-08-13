@@ -5,10 +5,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Download, FileText, Printer, Zap } from "lucide-react";
+import { ArrowLeft, Ban, Download, FileText, Pencil, Printer, Trash2, Zap } from "lucide-react";
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 import { GeneralDcPrintView } from "@/components/GeneralDcPrintView";
-import { printElementToPdf } from "@/lib/docPdf";
+import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
+import { ControlledActionDialog } from "@/components/ControlledActionDialog";
+import { usePermissions } from "@/lib/usePermissions";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { getCompany } from "@/lib/letterhead";
 import { DEFAULT_COMPANY_PROFILE, type CompanyProfile } from "@/lib/companyProfile";
 import { inr } from "@/lib/sales";
@@ -16,6 +22,8 @@ import { useIsAdmin } from "@/lib/useRole";
 import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
 import {
   GDC_PREFILL_KEY,
+  cancelGeneralDc,
+  deleteGeneralDc,
   gdcTotal,
   getGeneralDc,
   updateGeneralDc,
@@ -41,12 +49,16 @@ const tone: Record<string, string> = {
   Draft: "bg-slate-200 text-slate-800",
   Issued: "bg-blue-100 text-blue-800",
   Converted: "bg-emerald-100 text-emerald-800",
+  Cancelled: "bg-rose-100 text-rose-800",
 };
 
 function GeneralDcDetail() {
   const { id } = useParams({ from: "/_app/sales/general-dc/$id" });
   const nav = useNavigate();
   const { isAdmin } = useIsAdmin();
+  const { can } = usePermissions();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [dc, setDc] = useState<GeneralDcRow | null>(null);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
   const [warehouseNames, setWarehouseNames] = useState<Record<string, string>>({});
@@ -115,7 +127,34 @@ function GeneralDcDetail() {
 
   async function printDoc() {
     if (!printRef.current || !dc) return;
-    await printElementToPdf(printRef.current, `${dc.dc_no || "general-dc"}.pdf`);
+    await printElementSinglePage(printRef.current, `${dc.dc_no || "general-dc"}.pdf`);
+  }
+
+  async function downloadPdf() {
+    if (!printRef.current || !dc) return;
+    await saveElementAsPdf(printRef.current, `${dc.dc_no || "general-dc"}.pdf`);
+  }
+
+  async function doCancel(reason: string) {
+    if (!dc) return;
+    try {
+      const row = await cancelGeneralDc(dc.id, reason);
+      setDc(row);
+      toast.success(`${row.dc_no} cancelled — stock restored`);
+    } catch (e) {
+      return { error: (e as Error).message || "Could not cancel challan" };
+    }
+  }
+
+  async function doDelete() {
+    if (!dc) return;
+    try {
+      await deleteGeneralDc(dc.id);
+      toast.success(`${dc.dc_no} deleted`);
+      nav({ to: "/sales/general-dc" });
+    } catch (e) {
+      toast.error((e as Error).message || "Could not delete challan");
+    }
   }
 
   function convertToInvoice() {
@@ -167,10 +206,25 @@ function GeneralDcDetail() {
               <Zap className="h-4 w-4 mr-1.5" />Issue
             </Button>
           )}
+          {dc.status === "Draft" && can("general_dc", "edit") && (
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/sales/general-dc/$id/edit" params={{ id: dc.id }}><Pencil className="h-4 w-4 mr-1.5" />Edit</Link>
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={printDoc}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
-          <Button size="sm" variant="outline" onClick={printDoc}><Download className="h-4 w-4 mr-1.5" />Download PDF</Button>
+          <Button size="sm" variant="outline" onClick={downloadPdf}><Download className="h-4 w-4 mr-1.5" />Download PDF</Button>
           {dc.status === "Issued" && (
             <Button size="sm" onClick={convertToInvoice}><FileText className="h-4 w-4 mr-1.5" />Convert to Invoice</Button>
+          )}
+          {dc.status === "Issued" && can("general_dc", "delete") && (
+            <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
+              <Ban className="h-4 w-4 mr-1.5" />Cancel DC
+            </Button>
+          )}
+          {dc.status === "Draft" && can("general_dc", "delete") && (
+            <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4 mr-1.5" />Delete
+            </Button>
           )}
           {dc.status === "Converted" && dc.converted_invoice_id && (
             <Button size="sm" variant="outline" asChild>
@@ -248,6 +302,44 @@ function GeneralDcDetail() {
           await doIssue(true, shortfalls, reason || null);
         }}
       />
+
+      <ControlledActionDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title={`Cancel ${dc.dc_no}?`}
+        description="Cancelling returns every unit issued on this challan back to available stock in its original warehouse and writes a reversal entry in the stock ledger."
+        warning="A cancelled General DC is final — it cannot be issued again or converted to an invoice."
+        confirmLabel="Cancel challan"
+        confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        reasonPlaceholder="e.g. Dispatch aborted, wrong customer, material returned…"
+        onConfirm={async ({ reason }) => doCancel(reason)}
+      />
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this draft challan?</AlertDialogTitle>
+            <AlertDialogDescription>
+              No stock has been posted for a draft, so this simply removes the record. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-md border text-sm divide-y">
+            <div className="flex justify-between p-2"><span className="text-muted-foreground">DC Number</span><span className="font-medium">{dc.dc_no || "—"}</span></div>
+            <div className="flex justify-between p-2"><span className="text-muted-foreground">Customer</span><span className="font-medium">{dc.customer_name || "—"}</span></div>
+            <div className="flex justify-between p-2"><span className="text-muted-foreground">Date</span><span className="font-medium">{dc.dc_date}</span></div>
+            <div className="flex justify-between p-2"><span className="text-muted-foreground">Status</span><span className="font-medium">{dc.status}</span></div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); void doDelete(); }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Print source (hidden on screen) */}
       <div className="hidden">

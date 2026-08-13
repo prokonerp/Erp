@@ -13,7 +13,7 @@ export type GeneralDcItem = {
   serial_numbers: string[];
 };
 
-export type GeneralDcStatus = "Draft" | "Issued" | "Converted";
+export type GeneralDcStatus = "Draft" | "Issued" | "Converted" | "Cancelled";
 
 export type GeneralDcRow = {
   id: string;
@@ -32,6 +32,10 @@ export type GeneralDcRow = {
   allow_negative_stock: boolean;
   notes: string | null;
   terms: string | null;
+  cancelled_reason: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  created_by: string | null;
   created_at: string;
 };
 
@@ -77,6 +81,16 @@ export async function updateGeneralDc(id: string, patch: Record<string, unknown>
   const { data, error } = await supabase.from(TBL).update(patch as never).eq("id", id).select("*").single();
   if (error) throw error;
   return data as unknown as GeneralDcRow;
+}
+
+export async function deleteGeneralDc(id: string): Promise<void> {
+  const { error } = await supabase.from(TBL).delete().eq("id", id);
+  if (error) throw error;
+}
+
+/** Cancel an issued challan — the DB reverses all posted stock. */
+export async function cancelGeneralDc(id: string, reason: string): Promise<GeneralDcRow> {
+  return updateGeneralDc(id, { status: "Cancelled", cancelled_reason: reason });
 }
 
 export const GDC_PREFILL_KEY = "invoice:prefill:from-general-dc";

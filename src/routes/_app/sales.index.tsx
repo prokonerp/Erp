@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Receipt, Wallet, Truck, FileText, IndianRupee, AlertCircle, CheckCircle2, Clock,
-  TrendingUp, Users, Package, ShoppingCart, ArrowRightLeft, Activity, RotateCcw,
+  TrendingUp, Users, Package, ShoppingCart, ArrowRightLeft, Activity, RotateCcw, PackageCheck,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid,
@@ -217,6 +217,7 @@ function HeadSalesDashboard() {
           <Button asChild size="sm"><Link to="/sales/invoices/new"><Receipt className="h-4 w-4 mr-1.5" />New Invoice</Link></Button>
           <Button asChild size="sm" variant="outline"><Link to="/sales/payments/new"><Wallet className="h-4 w-4 mr-1.5" />Record Payment</Link></Button>
           <Button asChild size="sm" variant="outline"><Link to="/crm/quotations"><FileText className="h-4 w-4 mr-1.5" />New Quote</Link></Button>
+          <Button asChild size="sm" variant="outline"><Link to="/sales/general-dc/new"><PackageCheck className="h-4 w-4 mr-1.5" />New General DC</Link></Button>
           <Button asChild size="sm" variant="outline"><Link to="/sales/eway"><Truck className="h-4 w-4 mr-1.5" />e-Way Bill</Link></Button>
         </div>
       </div>

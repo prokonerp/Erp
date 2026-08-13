@@ -26,6 +26,7 @@ const tone: Record<string, string> = {
   Draft: "bg-slate-200 text-slate-800",
   Issued: "bg-blue-100 text-blue-800",
   Converted: "bg-emerald-100 text-emerald-800",
+  Cancelled: "bg-rose-100 text-rose-800",
 };
 
 function GeneralDcList() {

@@ -124,6 +124,7 @@ import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
 import { Route as AppChallanOemNewRouteImport } from './routes/_app/challan.oem.new'
 import { Route as AppChallanCustomerNewRouteImport } from './routes/_app/challan.customer.new'
 import { Route as AppChallanIdEditRouteImport } from './routes/_app/challan.$id_.edit'
+import { Route as AppSalesGeneralDcIdEditRouteImport } from './routes/_app/sales.general-dc.$id_.edit'
 import { Route as AppAmcOemSourceIdRouteImport } from './routes/_app/amc.oem.$source.$id'
 
 const RaiseTicketRoute = RaiseTicketRouteImport.update({
@@ -703,6 +704,11 @@ const AppChallanIdEditRoute = AppChallanIdEditRouteImport.update({
   path: '/$id/edit',
   getParentRoute: () => AppChallanRoute,
 } as any)
+const AppSalesGeneralDcIdEditRoute = AppSalesGeneralDcIdEditRouteImport.update({
+  id: '/general-dc/$id_/edit',
+  path: '/general-dc/$id/edit',
+  getParentRoute: () => AppSalesRoute,
+} as any)
 const AppAmcOemSourceIdRoute = AppAmcOemSourceIdRouteImport.update({
   id: '/$source/$id',
   path: '/$source/$id',
@@ -825,6 +831,7 @@ export interface FileRoutesByFullPath {
   '/sales/invoices/': typeof AppSalesInvoicesIndexRoute
   '/sales/payments/': typeof AppSalesPaymentsIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
+  '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -927,6 +934,7 @@ export interface FileRoutesByTo {
   '/sales/invoices': typeof AppSalesInvoicesIndexRoute
   '/sales/payments': typeof AppSalesPaymentsIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
+  '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1046,6 +1054,7 @@ export interface FileRoutesById {
   '/_app/sales/invoices/': typeof AppSalesInvoicesIndexRoute
   '/_app/sales/payments/': typeof AppSalesPaymentsIndexRoute
   '/_app/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
+  '/_app/sales/general-dc/$id_/edit': typeof AppSalesGeneralDcIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1165,6 +1174,7 @@ export interface FileRouteTypes {
     | '/sales/invoices/'
     | '/sales/payments/'
     | '/amc/oem/$source/$id'
+    | '/sales/general-dc/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1267,6 +1277,7 @@ export interface FileRouteTypes {
     | '/sales/invoices'
     | '/sales/payments'
     | '/amc/oem/$source/$id'
+    | '/sales/general-dc/$id/edit'
   id:
     | '__root__'
     | '/'
@@ -1385,6 +1396,7 @@ export interface FileRouteTypes {
     | '/_app/sales/invoices/'
     | '/_app/sales/payments/'
     | '/_app/amc/oem/$source/$id'
+    | '/_app/sales/general-dc/$id_/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -2206,6 +2218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChallanIdEditRouteImport
       parentRoute: typeof AppChallanRoute
     }
+    '/_app/sales/general-dc/$id_/edit': {
+      id: '/_app/sales/general-dc/$id_/edit'
+      path: '/general-dc/$id/edit'
+      fullPath: '/sales/general-dc/$id/edit'
+      preLoaderRoute: typeof AppSalesGeneralDcIdEditRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
     '/_app/amc/oem/$source/$id': {
       id: '/_app/amc/oem/$source/$id'
       path: '/$source/$id'
@@ -2536,6 +2555,7 @@ interface AppSalesRouteChildren {
   AppSalesGeneralDcIndexRoute: typeof AppSalesGeneralDcIndexRoute
   AppSalesInvoicesIndexRoute: typeof AppSalesInvoicesIndexRoute
   AppSalesPaymentsIndexRoute: typeof AppSalesPaymentsIndexRoute
+  AppSalesGeneralDcIdEditRoute: typeof AppSalesGeneralDcIdEditRoute
 }
 
 const AppSalesRouteChildren: AppSalesRouteChildren = {
@@ -2552,6 +2572,7 @@ const AppSalesRouteChildren: AppSalesRouteChildren = {
   AppSalesGeneralDcIndexRoute: AppSalesGeneralDcIndexRoute,
   AppSalesInvoicesIndexRoute: AppSalesInvoicesIndexRoute,
   AppSalesPaymentsIndexRoute: AppSalesPaymentsIndexRoute,
+  AppSalesGeneralDcIdEditRoute: AppSalesGeneralDcIdEditRoute,
 }
 
 const AppSalesRouteWithChildren = AppSalesRoute._addFileChildren(
