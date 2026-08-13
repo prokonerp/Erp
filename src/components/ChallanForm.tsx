@@ -1002,7 +1002,17 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
 
       <NegativeStockDialog
         open={negOpen}
-        onOpenChange={setNegOpen}
+        onOpenChange={(o) => {
+          setNegOpen(o);
+          if (!o) {
+            // Cancelled — drop the user straight back onto the editable rows.
+            setReviewOpen(false);
+            setBusy(false);
+            setTimeout(() => {
+              itemsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 60);
+          }
+        }}
         shortfalls={shortfalls}
         onProceed={async (reason) => {
           allowNegativeRef.current = true;
