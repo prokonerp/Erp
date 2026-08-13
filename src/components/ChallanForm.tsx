@@ -428,6 +428,14 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const totalQty = items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0);
   const partyLabel = isOem ? "OEM" : "Customer";
 
+  // Rows that caused the last shortfall — highlighted so the user knows what to fix.
+  const shortModelKeys = new Set(
+    shortfalls.map((s) => (s.model || "").trim().toLowerCase()).filter(Boolean),
+  );
+  const isShortRow = (it: ChallanItem) =>
+    shortModelKeys.size > 0 &&
+    shortModelKeys.has((it.model_no || it.part_no || "").trim().toLowerCase());
+
   const actions = (
     <>
       <Button type="button" variant="outline" size="sm" onClick={openReview} disabled={busy} className="gap-1.5">
