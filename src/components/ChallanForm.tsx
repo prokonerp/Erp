@@ -688,7 +688,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             </thead>
             <tbody>
               {items.map((it, i) => (
-                <>
+                <Fragment key={i}>
                   <tr key={`${i}-top`} data-short={isShortRow(it) ? "1" : undefined} className={`border-t border-border/60 transition-colors hover:bg-muted/25 ${isShortRow(it) ? "bg-destructive/10 ring-1 ring-destructive/40" : ""}`}>
                     <td rowSpan={2} className="px-3 py-2 text-center text-xs text-muted-foreground border-t border-border/60 align-middle w-10">{i + 1}</td>
                     <td className="px-3 py-2 align-top border-t border-border/60 min-w-[260px]">
