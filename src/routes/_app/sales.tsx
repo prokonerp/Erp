@@ -7,6 +7,7 @@ import {
   Settings2,
   Receipt,
   ClipboardList,
+  PackageCheck,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/sales")({
@@ -18,6 +19,7 @@ const NAV = [
   { to: "/sales", label: "HEAD SALES", icon: LayoutDashboard, exact: true },
   { to: "/sales/orders", label: "Sales Orders", icon: ClipboardList },
   { to: "/sales/invoices", label: "Invoices", icon: Receipt },
+  { to: "/sales/general-dc", label: "General DC", icon: PackageCheck },
   { to: "/sales/payments", label: "Payments", icon: Wallet },
   { to: "/sales/eway", label: "e-Way Bills", icon: Truck },
   { to: "/sales/quotations", label: "Quotations", icon: FileText },
