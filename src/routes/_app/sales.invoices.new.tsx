@@ -190,9 +190,11 @@ function NewInvoice() {
     if (gstinError) return toast.error(gstinError);
 
     // Non-serialized products: verify pooled availability before posting.
+    // Converted General DCs already consumed the stock — skip the check.
     const wname = (id: string | null) => warehouses.find((w) => w.id === id)?.name ?? null;
     let short: Shortfall[] = [];
     try {
+      if (fromGeneralDc) throw new Error("skip");
       short = await findShortfalls(
         items
           .filter((it) => !it.is_serialized && it.product_id && it.part_model_no)
@@ -263,14 +265,12 @@ function NewInvoice() {
         terms,
         payment_terms: paymentTerms || null,
         allow_negative_stock: allowNegative,
+        // Stock already left the warehouse when the General DC was issued.
+        skip_stock_posting: !!fromGeneralDc,
+        source_general_dc_id: fromGeneralDc?.id ?? null,
       };
       const { data: inv, error } = await supabase.from("invoices").insert(invoicePayload).select("id, invoice_no").single();
       if (error) throw error;
-
-      if (fromGeneralDc) {
-        // Stock already left the warehouse when the General DC was issued.
-        invoicePayload.skip_stock_posting = true;
-      }
 
       const itemRows = items.map((d, i) => {
         const b = totals.items[i];
