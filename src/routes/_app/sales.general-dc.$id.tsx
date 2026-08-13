@@ -208,7 +208,7 @@ function GeneralDcDetail() {
           )}
           {dc.status === "Draft" && can("general_dc", "edit") && (
             <Button size="sm" variant="outline" asChild>
-              <Link to="/sales/general-dc/$id_/edit" params={{ id: dc.id }}><Pencil className="h-4 w-4 mr-1.5" />Edit</Link>
+              <Link to="/sales/general-dc/$id/edit" params={{ id: dc.id }}><Pencil className="h-4 w-4 mr-1.5" />Edit</Link>
             </Button>
           )}
           <Button size="sm" variant="outline" onClick={printDoc}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
