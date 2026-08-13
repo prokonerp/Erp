@@ -846,7 +846,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                       </td>
                     )}
                   </tr>
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
