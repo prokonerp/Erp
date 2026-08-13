@@ -85,6 +85,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const allowNegativeRef = useRef(false);
   const overrideReasonRef = useRef<string | null>(null);
   const negBlockedRef = useRef(false);
+  const itemsSectionRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-populate Prepared By with the current logged-in user's name (new records only).
   useEffect(() => {
