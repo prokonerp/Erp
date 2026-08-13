@@ -1658,6 +1658,94 @@ export type Database = {
           },
         ]
       }
+      general_delivery_challans: {
+        Row: {
+          allow_negative_stock: boolean
+          billing_address: string | null
+          branch_id: string | null
+          converted_invoice_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          customer_name: string | null
+          dc_date: string
+          dc_no: string | null
+          id: string
+          items: Json
+          notes: string | null
+          purpose: string | null
+          returnable: boolean
+          shipping_address: string | null
+          status: string
+          terms: string | null
+          updated_at: string
+        }
+        Insert: {
+          allow_negative_stock?: boolean
+          billing_address?: string | null
+          branch_id?: string | null
+          converted_invoice_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          dc_date?: string
+          dc_no?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          purpose?: string | null
+          returnable?: boolean
+          shipping_address?: string | null
+          status?: string
+          terms?: string | null
+          updated_at?: string
+        }
+        Update: {
+          allow_negative_stock?: boolean
+          billing_address?: string | null
+          branch_id?: string | null
+          converted_invoice_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          customer_name?: string | null
+          dc_date?: string
+          dc_no?: string | null
+          id?: string
+          items?: Json
+          notes?: string | null
+          purpose?: string | null
+          returnable?: boolean
+          shipping_address?: string | null
+          status?: string
+          terms?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "general_delivery_challans_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "general_delivery_challans_converted_invoice_id_fkey"
+            columns: ["converted_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "general_delivery_challans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grns: {
         Row: {
           accepted_qty: number | null
@@ -2836,6 +2924,8 @@ export type Database = {
           seller_state_code: string | null
           sgst: number
           shipping_address: string | null
+          skip_stock_posting: boolean
+          source_general_dc_id: string | null
           status: string
           subtotal: number
           taxable_value: number
@@ -2897,6 +2987,8 @@ export type Database = {
           seller_state_code?: string | null
           sgst?: number
           shipping_address?: string | null
+          skip_stock_posting?: boolean
+          source_general_dc_id?: string | null
           status?: string
           subtotal?: number
           taxable_value?: number
@@ -2958,6 +3050,8 @@ export type Database = {
           seller_state_code?: string | null
           sgst?: number
           shipping_address?: string | null
+          skip_stock_posting?: boolean
+          source_general_dc_id?: string | null
           status?: string
           subtotal?: number
           taxable_value?: number
@@ -2994,6 +3088,13 @@ export type Database = {
             columns: ["sales_order_id"]
             isOneToOne: false
             referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_source_general_dc_id_fkey"
+            columns: ["source_general_dc_id"]
+            isOneToOne: false
+            referencedRelation: "general_delivery_challans"
             referencedColumns: ["id"]
           },
         ]
