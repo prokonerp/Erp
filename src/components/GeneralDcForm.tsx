@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -24,18 +24,22 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   const nav = useNavigate();
   const { isAdmin } = useIsAdmin();
   const [branches, setBranches] = useState<BranchRow[]>([]);
-  const [branchId, setBranchId] = useState("");
+  const [branchId, setBranchId] = useState(existing?.branch_id ?? "");
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [dcDate, setDcDate] = useState(new Date().toISOString().slice(0, 10));
-  const [returnable, setReturnable] = useState(false);
-  const [billing, setBilling] = useState("");
-  const [shipping, setShipping] = useState("");
-  const [sameAsBilling, setSameAsBilling] = useState(true);
-  const [purpose, setPurpose] = useState("");
-  const [notes, setNotes] = useState("");
-  const [terms, setTerms] = useState("");
-  const [items, setItems] = useState<GeneralDcItem[]>([emptyGeneralDcItem()]);
+  const [dcDate, setDcDate] = useState(existing?.dc_date ?? new Date().toISOString().slice(0, 10));
+  const [returnable, setReturnable] = useState(!!existing?.returnable);
+  const [billing, setBilling] = useState(existing?.billing_address ?? "");
+  const [shipping, setShipping] = useState(existing?.shipping_address ?? "");
+  const [sameAsBilling, setSameAsBilling] = useState(
+    isEdit ? (existing?.shipping_address ?? "") === (existing?.billing_address ?? "") : true,
+  );
+  const [purpose, setPurpose] = useState(existing?.purpose ?? "");
+  const [notes, setNotes] = useState(existing?.notes ?? "");
+  const [terms, setTerms] = useState(existing?.terms ?? "");
+  const [items, setItems] = useState<GeneralDcItem[]>(
+    existing?.items?.length ? existing.items : [emptyGeneralDcItem()],
+  );
   const [serialIdx, setSerialIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
@@ -45,6 +49,7 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
     fetchBranches()
       .then((bs) => {
         setBranches(bs);
+        if (existing?.branch_id) return;
         const def = bs.find((b) => b.is_default) || bs[0];
         if (def) setBranchId(def.id);
       })
@@ -53,8 +58,17 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
       .then(({ data }) => setWarehouses((data ?? []) as { id: string; name: string }[]));
   }, []);
 
+  const skipAddrSync = useRef(isEdit);
+
+  useEffect(() => {
+    if (!existing?.customer_id) return;
+    supabase.from("customers").select("*").eq("id", existing.customer_id).maybeSingle()
+      .then(({ data }) => { if (data) setCustomer(data as unknown as Customer); });
+  }, [existing?.customer_id]);
+
   useEffect(() => {
     if (!customer) return;
+    if (skipAddrSync.current) { skipAddrSync.current = false; return; }
     const bill = customer.billing_address || (customer as unknown as { address?: string }).address || "";
     const ship = (customer as unknown as { shipping_address?: string }).shipping_address || bill;
     setBilling(bill);
@@ -129,7 +143,7 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
     setSaving(true);
     try {
       const { data: u } = await supabase.auth.getUser();
-      const row = await insertGeneralDc({
+      const payload = {
         dc_date: dcDate,
         returnable,
         customer_id: customer.id,
@@ -143,8 +157,11 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
         allow_negative_stock: allowNegative,
         notes: notes || null,
         terms: terms || null,
-        created_by: u.user?.id ?? null,
-      });
+        created_by: existing?.created_by ?? u.user?.id ?? null,
+      };
+      const row = existing
+        ? await updateGeneralDc(existing.id, payload)
+        : await insertGeneralDc(payload);
       if (allowNegative && short.length > 0) {
         await logNegativeOverrides({
           documentType: "dc",
@@ -154,7 +171,7 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
           reason,
         }).catch(() => {});
       }
-      toast.success(`${row.dc_no} ${status === "Issued" ? "issued" : "saved as draft"}`);
+      toast.success(`${row.dc_no} ${status === "Issued" ? "issued" : isEdit ? "updated" : "saved as draft"}`);
       nav({ to: "/sales/general-dc/$id", params: { id: row.id } });
     } catch (e) {
       toast.error((e as Error).message || "Save failed");
@@ -166,10 +183,10 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">New General Delivery Challan</h1>
+        <h1 className="text-2xl font-bold">{isEdit ? `Edit ${existing?.dc_no ?? "General DC"}` : "New General Delivery Challan"}</h1>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled={saving} onClick={() => save("Draft")}>
-            <Save className="h-4 w-4 mr-1.5" />Save as Draft
+            <Save className="h-4 w-4 mr-1.5" />{isEdit ? "Save Changes" : "Save as Draft"}
           </Button>
           <Button size="sm" disabled={saving} onClick={() => save("Issued")}>
             <Zap className="h-4 w-4 mr-1.5" />Issue
