@@ -1663,6 +1663,9 @@ export type Database = {
           allow_negative_stock: boolean
           billing_address: string | null
           branch_id: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          cancelled_reason: string | null
           converted_invoice_id: string | null
           created_at: string
           created_by: string | null
@@ -1684,6 +1687,9 @@ export type Database = {
           allow_negative_stock?: boolean
           billing_address?: string | null
           branch_id?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancelled_reason?: string | null
           converted_invoice_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1705,6 +1711,9 @@ export type Database = {
           allow_negative_stock?: boolean
           billing_address?: string | null
           branch_id?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancelled_reason?: string | null
           converted_invoice_id?: string | null
           created_at?: string
           created_by?: string | null
