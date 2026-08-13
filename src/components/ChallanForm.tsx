@@ -226,7 +226,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       }));
     let short: Shortfall[] = [];
     try { short = await findShortfalls(lines); } catch { return true; }
-    if (short.length === 0) return true;
+    if (short.length === 0) { setShortfalls([]); return true; }
     if (!isAdmin) {
       negBlockedRef.current = true;
       toast.error(blockMessage(short[0]));
@@ -1019,6 +1019,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           overrideReasonRef.current = reason || null;
           setNegOpen(false);
           await persist();
+          setReviewOpen(false);
         }}
       />
     </FormShell>
