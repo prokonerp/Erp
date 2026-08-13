@@ -36,6 +36,7 @@ import { productDisplayName, productShortName } from "@/lib/productNames";
 import { useIsAdmin } from "@/lib/useRole";
 import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
+import { GDC_PREFILL_KEY, updateGeneralDc, type GeneralDcInvoicePrefill } from "@/lib/generalDc";
 
 export const Route = createFileRoute("/_app/sales/invoices/new")({
   component: NewInvoice,
@@ -70,6 +71,34 @@ function NewInvoice() {
   const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
   const [negOpen, setNegOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<"draft" | "issued">("issued");
+  // Prefill coming from an issued General Delivery Challan — stock was already
+  // reduced on Issue, so the invoice must NOT deduct it a second time.
+  const [fromGeneralDc, setFromGeneralDc] = useState<{ id: string; no: string | null } | null>(null);
+
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem(GDC_PREFILL_KEY); } catch { /* noop */ }
+    if (!raw) return;
+    try { sessionStorage.removeItem(GDC_PREFILL_KEY); } catch { /* noop */ }
+    let p: GeneralDcInvoicePrefill;
+    try { p = JSON.parse(raw) as GeneralDcInvoicePrefill; } catch { return; }
+    setFromGeneralDc({ id: p.general_dc_id, no: p.general_dc_no });
+    if (p.branch_id) setBranchId(p.branch_id);
+    if (p.billing_address) setBilling(p.billing_address);
+    if (p.shipping_address) {
+      setShipping(p.shipping_address);
+      setSameAsBilling(p.shipping_address === p.billing_address);
+    }
+    if (p.notes) setNotes(p.notes);
+    if (p.terms) setTerms(p.terms);
+    if (Array.isArray(p.items) && p.items.length > 0) {
+      setItems(p.items.map((it) => ({ ...emptyItem(), ...it })));
+    }
+    if (p.customer_id) {
+      supabase.from("customers").select("*").eq("id", p.customer_id).maybeSingle()
+        .then(({ data }) => { if (data) setCustomer(data as unknown as Customer); });
+    }
+  }, []);
 
   useEffect(() => {
     fetchBranches().then((bs) => {
@@ -238,6 +267,11 @@ function NewInvoice() {
       const { data: inv, error } = await supabase.from("invoices").insert(invoicePayload).select("id, invoice_no").single();
       if (error) throw error;
 
+      if (fromGeneralDc) {
+        // Stock already left the warehouse when the General DC was issued.
+        invoicePayload.skip_stock_posting = true;
+      }
+
       const itemRows = items.map((d, i) => {
         const b = totals.items[i];
         const row = itemDraftFromBreakup(d, b);
@@ -254,6 +288,13 @@ function NewInvoice() {
           shortfalls: short,
           reason,
         });
+      }
+
+      if (fromGeneralDc) {
+        await updateGeneralDc(fromGeneralDc.id, {
+          status: "Converted",
+          converted_invoice_id: inv.id,
+        }).catch(() => {});
       }
 
       toast.success(`Invoice ${inv.invoice_no || ""} ${status === "issued" ? "issued" : "saved"}`);
