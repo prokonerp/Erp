@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { BranchPicker } from "@/components/BranchPicker";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
@@ -85,6 +85,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const allowNegativeRef = useRef(false);
   const overrideReasonRef = useRef<string | null>(null);
   const negBlockedRef = useRef(false);
+  const itemsSectionRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-populate Prepared By with the current logged-in user's name (new records only).
   useEffect(() => {
@@ -225,7 +226,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       }));
     let short: Shortfall[] = [];
     try { short = await findShortfalls(lines); } catch { return true; }
-    if (short.length === 0) return true;
+    if (short.length === 0) { setShortfalls([]); return true; }
     if (!isAdmin) {
       negBlockedRef.current = true;
       toast.error(blockMessage(short[0]));
@@ -288,17 +289,21 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   };
 
   // Debounced trigger — waits 2.5s of inactivity before flushing.
+  // NEVER performs the first save: the initial INSERT (and its stock
+  // pre-flight) must come from an explicit "Save & Continue".
   useEffect(() => {
+    if (!recordId) return;
     if (!canAutosave()) return;
     if (negOpen) return; // an override decision is pending
     const t = setTimeout(() => { void persist(); }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, items, dcType, branchId, negOpen]);
+  }, [form, items, dcType, branchId, negOpen, recordId]);
 
   // Flush on tab close if there are pending changes.
   useEffect(() => {
     const onBeforeUnload = () => {
+      if (!recordId) return; // never create the record implicitly
       if (saveState === "saving" || (canAutosave() && lastPayloadRef.current !== JSON.stringify({ ...buildPayload(), recordId }))) {
         void persist();
       }
@@ -423,6 +428,14 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
 
   const totalQty = items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0);
   const partyLabel = isOem ? "OEM" : "Customer";
+
+  // Rows that caused the last shortfall — highlighted so the user knows what to fix.
+  const shortModelKeys = new Set(
+    shortfalls.map((s) => (s.model || "").trim().toLowerCase()).filter(Boolean),
+  );
+  const isShortRow = (it: ChallanItem) =>
+    shortModelKeys.size > 0 &&
+    shortModelKeys.has((it.model_no || it.part_no || "").trim().toLowerCase());
 
   const actions = (
     <>
@@ -631,6 +644,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         </FormGrid>
       </FormSection>
 
+      <div ref={itemsSectionRef} />
       <FormSection
         title="Material Details"
         description={`${items.length} row(s) • Total qty ${totalQty}`}
@@ -674,8 +688,8 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             </thead>
             <tbody>
               {items.map((it, i) => (
-                <>
-                  <tr key={`${i}-top`} className="border-t border-border/60 transition-colors hover:bg-muted/25">
+                <Fragment key={i}>
+                  <tr key={`${i}-top`} data-short={isShortRow(it) ? "1" : undefined} className={`border-t border-border/60 transition-colors hover:bg-muted/25 ${isShortRow(it) ? "bg-destructive/10 ring-1 ring-destructive/40" : ""}`}>
                     <td rowSpan={2} className="px-3 py-2 text-center text-xs text-muted-foreground border-t border-border/60 align-middle w-10">{i + 1}</td>
                     <td className="px-3 py-2 align-top border-t border-border/60 min-w-[260px]">
                       <ProductMasterPicker excludeServices
@@ -763,7 +777,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                       </Button>
                     </td>
                   </tr>
-                  <tr key={`${i}-bottom`} className="transition-colors hover:bg-muted/25">
+                  <tr key={`${i}-bottom`} className={`transition-colors hover:bg-muted/25 ${isShortRow(it) ? "bg-destructive/10" : ""}`}>
                     {isOem ? (
                       <td colSpan={4} className="px-3 py-2 border-t border-dashed border-border/40 align-top bg-muted/15">
                         <div className="grid grid-cols-6 gap-3">
@@ -832,7 +846,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                       </td>
                     )}
                   </tr>
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -988,13 +1002,24 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
 
       <NegativeStockDialog
         open={negOpen}
-        onOpenChange={setNegOpen}
+        onOpenChange={(o) => {
+          setNegOpen(o);
+          if (!o) {
+            // Cancelled — drop the user straight back onto the editable rows.
+            setReviewOpen(false);
+            setBusy(false);
+            setTimeout(() => {
+              itemsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 60);
+          }
+        }}
         shortfalls={shortfalls}
         onProceed={async (reason) => {
           allowNegativeRef.current = true;
           overrideReasonRef.current = reason || null;
           setNegOpen(false);
           await persist();
+          setReviewOpen(false);
         }}
       />
     </FormShell>
