@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import type { ProductMaster } from "@/components/ProductPicker";
-import { fetchBranches, coverageSuffix, type BranchRow } from "@/lib/sales";
+import { fetchBranches, type BranchRow } from "@/lib/sales";
 import {
   type Customer, type QuoteItem,
   fmtMoney, computeQuoteTotals, lineAmount, INDIAN_STATES,
@@ -202,7 +202,8 @@ function NewQuotation() {
     setItem(i, {
       product_id: id || undefined,
       product_name: p ? productDisplayName(p as any) : undefined,
-      description: p ? `${p.description || productDisplayName(p as any)}${coverageSuffix(p as any)}` : items[i]?.description || "",
+      description: p ? productDisplayName(p as any) : items[i]?.description || "",
+      item_details: p ? (p.description || "") : items[i]?.item_details || "",
       hsn: p?.hsn || items[i]?.hsn,
       unit: p?.unit || items[i]?.unit || "Nos",
       rate: p?.default_price != null ? Number(p.default_price) : items[i]?.rate || 0,
@@ -506,6 +507,7 @@ function NewQuotation() {
                     <td className="p-1">
                       <ProductPicker value={it.product_id || null} onChange={(id, p) => pickProduct(i, id, p)} />
                       <Input value={it.description || ""} onChange={(e) => setItem(i, { description: e.target.value })} placeholder="Description" className="h-7 text-xs mt-1" />
+                      <Input value={it.item_details || ""} onChange={(e) => setItem(i, { item_details: e.target.value })} placeholder="Extra details printed under the line" className="h-7 text-xs mt-1" />
                       {st && (
                         <div className={`text-[10px] mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${oos ? "bg-red-100 text-red-700" : low ? "bg-amber-100 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>
                           {oos ? <PackageX className="h-3 w-3" /> : low ? <AlertTriangle className="h-3 w-3" /> : <PackageCheck className="h-3 w-3" />}
