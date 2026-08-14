@@ -1673,11 +1673,14 @@ export type Database = {
           customer_name: string | null
           dc_date: string
           dc_no: string | null
+          expected_return_date: string | null
           id: string
           items: Json
           notes: string | null
           purpose: string | null
           returnable: boolean
+          returned_at: string | null
+          returned_by: string | null
           shipping_address: string | null
           status: string
           terms: string | null
@@ -1697,11 +1700,14 @@ export type Database = {
           customer_name?: string | null
           dc_date?: string
           dc_no?: string | null
+          expected_return_date?: string | null
           id?: string
           items?: Json
           notes?: string | null
           purpose?: string | null
           returnable?: boolean
+          returned_at?: string | null
+          returned_by?: string | null
           shipping_address?: string | null
           status?: string
           terms?: string | null
@@ -1721,11 +1727,14 @@ export type Database = {
           customer_name?: string | null
           dc_date?: string
           dc_no?: string | null
+          expected_return_date?: string | null
           id?: string
           items?: Json
           notes?: string | null
           purpose?: string | null
           returnable?: boolean
+          returned_at?: string | null
+          returned_by?: string | null
           shipping_address?: string | null
           status?: string
           terms?: string | null
