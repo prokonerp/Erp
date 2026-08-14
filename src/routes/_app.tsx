@@ -134,6 +134,7 @@ function AppLayout() {
     { to: "/crm", label: "Customers (Sales & CRM)", icon: Briefcase, module: "quotations", group: "Customers" },
     { to: "/sales", label: "Head Sales", icon: Receipt, module: "sales", group: "Sales" },
     { to: "/sales/quotations", label: "Quotations", icon: FileSpreadsheet, module: "quotations", group: "Sales" },
+    { to: "/sales/general-dc", label: "General DC", icon: PackageCheck, module: "general_dc", group: "Sales" },
     { to: "/sales/invoices", label: "Invoices", icon: FileText, module: "sales", group: "Sales" },
     { to: "/sales/payments", label: "Payments", icon: Wallet, module: "sales", group: "Sales" },
     { to: "/sales/eway", label: "e-Way Bills", icon: Truck, module: "sales", group: "Sales" },

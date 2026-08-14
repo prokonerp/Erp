@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
@@ -22,6 +22,7 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const { session, loading } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -38,8 +39,14 @@ function AuthPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!session) return;
+    const target = next && next !== pathname ? next : "/dashboard";
+    void navigate({ to: target, search: {} });
+  }, [session, next, pathname, navigate]);
+
   if (loading) return <div className="p-8">Loading…</div>;
-  if (session) return next ? <Navigate to={next} /> : <Navigate to="/dashboard" />;
+
 
   const signIn = async () => {
     setBusy(true);
