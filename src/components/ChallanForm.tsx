@@ -139,7 +139,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     try { payload = JSON.parse(raw); } catch { return; }
     const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<ChallanItem>>) : [];
     if (prefillItems.length > 0) {
-      setItems(prefillItems.map((it) => ({ ...emptyItem(), ...it })) as ChallanItem[]);
+      const mapped = prefillItems.map((it) => ({ ...emptyItem(), ...it })) as ChallanItem[];
+      setItems(mapped);
+      void hydrateItemsFromModels(mapped).then((hydrated) => setItems(hydrated));
     }
     setForm((f) => ({
       ...f,
