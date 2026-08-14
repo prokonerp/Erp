@@ -231,6 +231,61 @@ function ChallanView() {
         </table>
 
         {/* Material table */}
+        {isOem ? (
+          <table style={{ marginBottom: 6, fontSize: 10 }}>
+            <thead style={{ background: "#eef2ff" }}>
+              <tr>
+                <th style={{ width: 24 }}>S.No</th>
+                <th>OEM Ref ID</th>
+                <th>Model</th>
+                <th>Serial No</th>
+                <th>Oracle</th>
+                <th style={{ width: 55 }}>Stock Type</th>
+                <th style={{ width: 36 }}>Qty</th>
+                <th style={{ width: 55 }}>HSN</th>
+                <th style={{ width: 60 }}>Unit Price</th>
+                <th style={{ width: 55 }}>Weight</th>
+                <th>Good Return Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(c.items || []).map((it, i) => (
+                <tr key={i}>
+                  <td style={{ textAlign: "center" }}>{i + 1}</td>
+                  <td>{it.oem_ref_id || ""}</td>
+                  <td>{it.model_no || ""}</td>
+                  <td>{it.good_defective_serial || it.serial_no || ""}</td>
+                  <td>{it.oracle_no || ""}</td>
+                  <td>{it.stock_type || ""}</td>
+                  <td style={{ textAlign: "center" }}>{it.qty}</td>
+                  <td>{it.hsn || ""}</td>
+                  <td style={{ textAlign: "right" }}>{it.unit_price || ""}</td>
+                  <td style={{ textAlign: "right" }}>{it.weight_kg || ""}</td>
+                  <td>{(it as Record<string, any>).good_return_reason || ""}</td>
+                </tr>
+              ))}
+              {(() => {
+                const rows = c.items || [];
+                const tQty = rows.reduce((s, it) => s + (parseFloat(it.qty as string) || 0), 0);
+                const tVal = rows.reduce(
+                  (s, it) => s + (parseFloat(it.qty as string) || 0) * (parseFloat((it.unit_price as string) || "") || 0),
+                  0,
+                );
+                const tWt = rows.reduce((s, it) => s + (parseFloat((it.weight_kg as string) || "") || 0), 0);
+                return (
+                  <tr style={{ fontWeight: 700, background: "#f8fafc" }}>
+                    <td colSpan={6} style={{ textAlign: "right" }}>Totals</td>
+                    <td style={{ textAlign: "center" }}>{tQty}</td>
+                    <td></td>
+                    <td style={{ textAlign: "right" }}>Total Value: {tVal.toFixed(2)}</td>
+                    <td style={{ textAlign: "right" }}>{tWt.toFixed(2)}</td>
+                    <td></td>
+                  </tr>
+                );
+              })()}
+            </tbody>
+          </table>
+        ) : (
         <table style={{ marginBottom: 6, fontSize: 10 }}>
           <thead style={{ background: "#eef2ff" }}>
             <tr>
@@ -311,6 +366,7 @@ function ChallanView() {
             })()}
           </tbody>
         </table>
+        )}
 
         {/* Remarks */}
         {(c.dispatch_remarks || c.internal_remarks) && (

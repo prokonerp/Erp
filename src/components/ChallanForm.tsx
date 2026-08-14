@@ -139,7 +139,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     try { payload = JSON.parse(raw); } catch { return; }
     const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<ChallanItem>>) : [];
     if (prefillItems.length > 0) {
-      setItems(prefillItems.map((it) => ({ ...emptyItem(), ...it })) as ChallanItem[]);
+      const mapped = prefillItems.map((it) => ({ ...emptyItem(), ...it })) as ChallanItem[];
+      setItems(mapped);
+      void hydrateItemsFromModels(mapped).then((hydrated) => setItems(hydrated));
     }
     setForm((f) => ({
       ...f,
@@ -338,18 +340,24 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
 
-  // Fetch Unit Price from Goods Master based on the entered Good Model.
-  // Matches products.model case-insensitively; falls back to sku.
-  const applyPriceFromModel = async (i: number, model: string) => {
+  // Look up a Product Master row by model (case-insensitive), falling back to sku.
+  const lookupProductByModel = async (model: string) => {
     const m = (model || "").trim();
-    if (!m) return;
+    if (!m) return null;
     const { data } = await supabase
       .from("products")
-      .select("id,model,sku,default_price")
+      .select("id,model,sku,default_price,hsn,weight_kg")
       .or(`model.ilike.${m},sku.ilike.${m}`)
       .limit(1)
       .maybeSingle();
-    const row = data as { default_price?: number | null } | null;
+    return (data as { default_price?: number | null; hsn?: string | null; weight_kg?: number | null } | null) || null;
+  };
+
+  // Fetch Unit Price from Goods Master based on the entered Good Model.
+  const applyPriceFromModel = async (i: number, model: string) => {
+    const m = (model || "").trim();
+    if (!m) return;
+    const row = await lookupProductByModel(m);
     if (row && row.default_price != null) {
       updateItem(i, { unit_price: String(row.default_price) });
     } else {
@@ -357,6 +365,50 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       toast.message(`No Unit Price set in Goods Master for model "${m}"`);
     }
   };
+
+  // OEM branch: entering a Model directly fills Unit Price and also back-fills
+  // HSN / Weight from Product Master when those cells are still blank.
+  const applyModelDetails = async (i: number, model: string) => {
+    const m = (model || "").trim();
+    if (!m) return;
+    const row = await lookupProductByModel(m);
+    if (row && row.default_price != null) {
+      updateItem(i, { unit_price: String(row.default_price) });
+    } else {
+      updateItem(i, { unit_price: "" });
+      toast.message(`No Unit Price set in Goods Master for model "${m}"`);
+    }
+    if (!row) return;
+    setItems((arr) =>
+      arr.map((it, idx) =>
+        idx !== i
+          ? it
+          : {
+              ...it,
+              hsn: it.hsn || row.hsn || "",
+              weight_kg: it.weight_kg || (row.weight_kg != null ? String(row.weight_kg) : ""),
+            },
+      ),
+    );
+  };
+
+  // Prefilled rows (Defective Tags → DC to OEM, Stock Ledger → Return to OEM)
+  // arrive with only a Model; hydrate HSN / Weight / Unit Price from masters.
+  const hydrateItemsFromModels = async (rows: ChallanItem[]) =>
+    Promise.all(
+      rows.map(async (it) => {
+        const m = (it.model_no || "").trim();
+        if (!m) return it;
+        const row = await lookupProductByModel(m);
+        if (!row) return it;
+        return {
+          ...it,
+          unit_price: it.unit_price || (row.default_price != null ? String(row.default_price) : ""),
+          hsn: it.hsn || row.hsn || "",
+          weight_kg: it.weight_kg || (row.weight_kg != null ? String(row.weight_kg) : ""),
+        };
+      }),
+    );
 
   const applyCustomer = (id: string | null, c: Customer | null) => {
     setPartyId(id);
@@ -449,6 +501,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   };
 
   const totalQty = items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0);
+  const totalValue = items.reduce(
+    (s, it) => s + (parseFloat(it.qty) || 0) * (parseFloat(it.unit_price || "") || 0),
+    0,
+  );
+  const totalWeight = items.reduce((s, it) => s + (parseFloat(it.weight_kg || "") || 0), 0);
   const partyLabel = isOem ? "OEM" : "Customer";
 
   // Rows that caused the last shortfall — highlighted so the user knows what to fix.
@@ -677,6 +734,140 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           </Button>
         }
       >
+        {isOem && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Quick add from Product Master</span>
+            <div className="w-[320px]">
+              <ProductMasterPicker
+                excludeServices
+                placeholder="Pick product to add a row…"
+                onPick={(p) =>
+                  setItems((arr) => {
+                    const row: ChallanItem = {
+                      ...emptyItem(),
+                      product_id: p.id,
+                      part_no: p.sku || p.model || "",
+                      part_name: productDisplayName(p as any),
+                      description: p.description || "",
+                      uom: p.unit || "Nos",
+                      model_no: p.model || "",
+                      hsn: (p as any).hsn || "",
+                      unit_price: p.default_price != null ? String(p.default_price) : "",
+                      weight_kg: p.weight_kg != null ? String(p.weight_kg) : "",
+                    };
+                    const last = arr[arr.length - 1];
+                    const lastEmpty = last && !last.part_no && !last.part_name && !last.model_no;
+                    return lastEmpty ? [...arr.slice(0, -1), row] : [...arr, row];
+                  })
+                }
+              />
+            </div>
+          </div>
+        )}
+        {isOem ? (
+          <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+            <table className="w-full text-sm border-separate border-spacing-0 min-w-[1500px]">
+              <thead className="bg-muted/70">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">
+                  <th className="px-3 py-2 w-10 text-center">S.No</th>
+                  <th className="px-3 py-2 min-w-[140px]">OEM Ref ID</th>
+                  <th className="px-3 py-2 min-w-[170px]">Model</th>
+                  <th className="px-3 py-2 min-w-[170px]">Serial No</th>
+                  <th className="px-3 py-2 min-w-[140px]">Oracle</th>
+                  <th className="px-3 py-2 w-32">Stock Type</th>
+                  <th className="px-3 py-2 w-24">Qty</th>
+                  <th className="px-3 py-2 w-28">HSN</th>
+                  <th className="px-3 py-2 w-32">Unit Price</th>
+                  <th className="px-3 py-2 w-28">Weight</th>
+                  <th className="px-3 py-2 min-w-[180px]">Good Return Reason</th>
+                  <th className="px-3 py-2 w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => (
+                  <tr
+                    key={i}
+                    data-short={isShortRow(it) ? "1" : undefined}
+                    className={`border-t border-border/60 transition-colors hover:bg-muted/25 ${isShortRow(it) ? "bg-destructive/10 ring-1 ring-destructive/40" : ""}`}
+                  >
+                    <td className="px-3 py-2 text-center text-xs text-muted-foreground border-t border-border/60 align-middle">{i + 1}</td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Input value={it.oem_ref_id || ""} onChange={(e) => updateItem(i, { oem_ref_id: e.target.value })} />
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Input
+                        value={it.model_no || ""}
+                        onChange={(e) => updateItem(i, { model_no: e.target.value })}
+                        onBlur={(e) => applyModelDetails(i, e.target.value)}
+                      />
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Select value={it.stock_type || ""} onValueChange={(v) => updateItem(i, { stock_type: v })}>
+                        <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Good">Good</SelectItem>
+                          <SelectItem value="Defective">Defective</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Input type="number" min="0" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} />
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Input value={it.hsn || ""} onChange={(e) => updateItem(i, { hsn: e.target.value })} />
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={it.unit_price || ""}
+                        placeholder={(it.model_no || "").trim() ? "No price in Master" : "Enter Model first"}
+                        onChange={(e) => updateItem(i, { unit_price: e.target.value })}
+                      />
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Input type="number" min="0" value={it.weight_kg || ""} onChange={(e) => updateItem(i, { weight_kg: e.target.value })} />
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-top">
+                      <Input value={it.good_return_reason || ""} onChange={(e) => updateItem(i, { good_return_reason: e.target.value })} />
+                    </td>
+                    <td className="px-3 py-2 border-t border-border/60 align-middle text-right">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setItems(items.filter((_, idx) => idx !== i))}
+                        disabled={items.length === 1}
+                        aria-label="Remove row"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border bg-muted/50 text-xs font-semibold">
+                  <td colSpan={6} className="px-3 py-2 text-right">Totals</td>
+                  <td className="px-3 py-2">{totalQty}</td>
+                  <td className="px-3 py-2"></td>
+                  <td className="px-3 py-2" title="Total Value = Σ (Qty × Unit Price)">
+                    <span className="block text-[10px] font-normal text-muted-foreground">Total Value</span>
+                    {totalValue.toFixed(2)}
+                  </td>
+                  <td className="px-3 py-2">{totalWeight.toFixed(2)}</td>
+                  <td colSpan={2} className="px-3 py-2"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ) : (
         <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
           <table className="w-full text-sm border-separate border-spacing-0 min-w-[1400px]">
             <thead className="bg-muted/70">
@@ -873,6 +1064,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             </tbody>
           </table>
         </div>
+        )}
       </FormSection>
 
       <FormSection title="Remarks & Authorization">
