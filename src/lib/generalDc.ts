@@ -185,6 +185,7 @@ export function buildReturnGrnPrefill(dc: GeneralDcRow, warehouseNames: Record<s
     const q = String(Math.max(0, Number(it.qty) || 0));
     return [{ ...base, serial_no: "", qty_received: q, qty_accepted: q, qty_rejected: "0" }];
   });
+  const firstWh = (dc.items || []).find((it) => it.warehouse_id)?.warehouse_id ?? null;
   return {
     source: "general_dc",
     general_dc_id: dc.id,
@@ -193,6 +194,8 @@ export function buildReturnGrnPrefill(dc: GeneralDcRow, warehouseNames: Record<s
     source_doc_type: "Customer Return",
     source_doc_no: dc.dc_no || "",
     source_doc_date: dc.dc_date || "",
+    warehouse_id: firstWh,
+    storage_location: firstWh ? (warehouseNames[firstWh] || "") : "",
     internal_remarks: `Return against General DC ${dc.dc_no ?? ""}`.trim(),
     items,
   };
