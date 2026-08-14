@@ -1064,6 +1064,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             </tbody>
           </table>
         </div>
+        )}
       </FormSection>
 
       <FormSection title="Remarks & Authorization">
