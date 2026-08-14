@@ -92,7 +92,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   // When GRN is auto-populated from a source document (Indent Section C/D),
   // material identification fields become read-only to preserve traceability.
   const [sourceLocked, setSourceLocked] = useState(false);
-  const [sourceKind, setSourceKind] = useState<"oem-section-c" | "customer-section-d" | null>(null);
+  const [sourceKind, setSourceKind] = useState<"oem-section-c" | "customer-section-d" | "customer-gdc" | null>(null);
 
   // Auto-populate Received By with the current logged-in user's name (new records only).
   useEffect(() => {
@@ -172,7 +172,13 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     if (prefillItems.length > 0) {
       setItems(prefillItems.map((it) => ({ ...emptyGrnItem(), ...it })) as GrnItem[]);
       setSourceLocked(true);
-      setSourceKind(kind === "oem" ? "oem-section-c" : "customer-section-d");
+      setSourceKind(
+        kind === "oem"
+          ? "oem-section-c"
+          : payload.source === "general_dc"
+            ? "customer-gdc"
+            : "customer-section-d",
+      );
     }
     setForm((f) => ({
       ...f,
@@ -449,7 +455,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 Auto-populated from{" "}
                 {sourceKind === "oem-section-c"
                   ? "Indent Section C — Material Received (from OEM)"
-                  : "Indent Section D — Material Received (from Customer)"}
+                  : sourceKind === "customer-gdc"
+                    ? "General Delivery Challan — Return Receipt (from Customer)"
+                    : "Indent Section D — Material Received (from Customer)"}
               </div>
               <div className="text-muted-foreground">
                 Material identification fields are read-only to preserve source traceability.
