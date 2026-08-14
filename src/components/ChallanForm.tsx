@@ -501,6 +501,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   };
 
   const totalQty = items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0);
+  const totalValue = items.reduce(
+    (s, it) => s + (parseFloat(it.qty) || 0) * (parseFloat(it.unit_price || "") || 0),
+    0,
+  );
+  const totalWeight = items.reduce((s, it) => s + (parseFloat(it.weight_kg || "") || 0), 0);
   const partyLabel = isOem ? "OEM" : "Customer";
 
   // Rows that caused the last shortfall — highlighted so the user knows what to fix.
