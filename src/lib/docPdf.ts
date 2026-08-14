@@ -182,7 +182,6 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string) {
     // Lay out wider so that after the CSS scale the content still spans the
     // full printable width (no blank left/right margins), then re-clamp.
     root.style.width = `${CONTENT_W_PX / scale}px`;
-    scale = Math.min(1, (CONTENT_H_PX / root.scrollHeight) * (1 / scale) * scale);
     scale = Math.min(1, CONTENT_H_PX / root.scrollHeight);
   }
   let pages: HTMLElement[] | null = null;
