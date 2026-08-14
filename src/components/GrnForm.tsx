@@ -462,7 +462,10 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
               <div className="text-muted-foreground">
                 Material identification fields are read-only to preserve source traceability.
                 {form.indent_id ? <> Indent Ref: <span className="font-mono">{form.indent_id}</span></> : null}
-                {" "}Edit at the source Indent if corrections are needed.
+                {" "}
+                {sourceKind === "customer-gdc"
+                  ? "Set the received condition per row — Good, Defective or Scrap."
+                  : "Edit at the source Indent if corrections are needed."}
               </div>
             </div>
           </div>
