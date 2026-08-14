@@ -29,6 +29,7 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [dcDate, setDcDate] = useState(existing?.dc_date ?? new Date().toISOString().slice(0, 10));
   const [returnable, setReturnable] = useState(!!existing?.returnable);
+  const [expectedReturn, setExpectedReturn] = useState(existing?.expected_return_date ?? "");
   const [billing, setBilling] = useState(existing?.billing_address ?? "");
   const [shipping, setShipping] = useState(existing?.shipping_address ?? "");
   const [sameAsBilling, setSameAsBilling] = useState(
@@ -146,6 +147,7 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
       const payload = {
         dc_date: dcDate,
         returnable,
+        expected_return_date: returnable ? (expectedReturn || null) : null,
         customer_id: customer.id,
         customer_name: customer.company,
         billing_address: billing || null,
@@ -214,6 +216,12 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
             <Label className="text-xs">DC Date</Label>
             <Input type="date" value={dcDate} onChange={(e) => setDcDate(e.target.value)} />
           </div>
+          {returnable && (
+            <div>
+              <Label className="text-xs">Expected Return Date</Label>
+              <Input type="date" value={expectedReturn} onChange={(e) => setExpectedReturn(e.target.value)} />
+            </div>
+          )}
           <div>
             <Label className="text-xs">Branch (Seller)</Label>
             <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
