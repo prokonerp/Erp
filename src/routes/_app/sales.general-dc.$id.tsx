@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Ban, Download, FileText, Pencil, Printer, Trash2, Zap } from "lucide-react";
+import { ArrowLeft, Ban, Download, FileText, PackageCheck, Pencil, Printer, Trash2, Zap } from "lucide-react";
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 import { GeneralDcPrintView } from "@/components/GeneralDcPrintView";
 import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
@@ -27,6 +27,8 @@ import {
   gdcTotal,
   getGeneralDc,
   updateGeneralDc,
+  isGdcReturned,
+  stageReturnGrnPrefill,
   type GeneralDcInvoicePrefill,
   type GeneralDcRow,
 } from "@/lib/generalDc";
@@ -65,6 +67,7 @@ function GeneralDcDetail() {
   const [busy, setBusy] = useState(false);
   const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
   const [negOpen, setNegOpen] = useState(false);
+  const [returned, setReturned] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,6 +79,11 @@ function GeneralDcDetail() {
       setWarehouseNames(map);
     });
   }, [id]);
+
+  useEffect(() => {
+    if (!dc?.returnable || !dc?.dc_no) return;
+    isGdcReturned(dc.dc_no).then(setReturned).catch(() => {});
+  }, [dc?.dc_no, dc?.returnable, dc?.status]);
 
   async function issue() {
     if (!dc) return;
@@ -216,6 +224,11 @@ function GeneralDcDetail() {
           {dc.status === "Issued" && (
             <Button size="sm" onClick={convertToInvoice}><FileText className="h-4 w-4 mr-1.5" />Convert to Invoice</Button>
           )}
+          {dc.returnable && dc.status === "Issued" && !returned && (
+            <Button size="sm" variant="outline" onClick={() => { stageReturnGrnPrefill(dc, warehouseNames); nav({ to: "/grn/customer/new" }); }}>
+              <PackageCheck className="h-4 w-4 mr-1.5" />Generate Return GRN
+            </Button>
+          )}
           {dc.status === "Issued" && can("general_dc", "delete") && (
             <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
               <Ban className="h-4 w-4 mr-1.5" />Cancel DC
@@ -253,6 +266,12 @@ function GeneralDcDetail() {
           <CardContent className="text-sm space-y-1">
             <div><span className="text-muted-foreground">Date: </span>{dc.dc_date}</div>
             <div><span className="text-muted-foreground">Purpose: </span>{dc.purpose || "—"}</div>
+            {dc.returnable && (
+              <>
+                <div><span className="text-muted-foreground">Expected Return: </span>{dc.expected_return_date || "—"}</div>
+                <div><span className="text-muted-foreground">Return Status: </span>{returned ? "Returned (GRN settled)" : "Pending"}</div>
+              </>
+            )}
             <div><span className="text-muted-foreground">Total: </span>{inr(gdcTotal(dc.items || []))}</div>
           </CardContent>
         </Card>
