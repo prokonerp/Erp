@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import type { ProductMaster } from "@/components/ProductPicker";
-import { fetchBranches, coverageSuffix, type BranchRow } from "@/lib/sales";
+import { fetchBranches, type BranchRow } from "@/lib/sales";
 import {
   type Customer, type QuoteItem,
   fmtMoney, computeQuoteTotals, lineAmount, INDIAN_STATES,
