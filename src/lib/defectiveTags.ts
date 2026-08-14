@@ -53,6 +53,8 @@ export type DefectiveInRecord = {
   reason: string | null;
   tag_generated: boolean;
   tag_no: string | null;
+  /** Underlying stock item already dispatched back to the OEM. */
+  sent_to_oem: boolean;
 };
 
 export function fmtDate(d?: string | null) {
@@ -93,6 +95,19 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     tags.filter((t) => t.stock_item_id).map((t) => [t.stock_item_id, t.tag_no as string | null]),
   );
 
+  // Include anything flagged defective by TYPE or by STATUS.
+  const allStock = await fetchAll<any>("ims_stock_items", (q) =>
+    q.select("*").order("created_at", { ascending: false }),
+  );
+  const statusKey = (serial?: string | null, model?: string | null) =>
+    `${(serial || "").toLowerCase()}|${(model || "").toLowerCase()}`;
+  const sentToOemKeys = new Set(
+    allStock
+      .filter((s) => String(s.stock_status || "").toLowerCase() === "returned_to_oem")
+      .map((s) => statusKey(s.part_serial_no, s.part_model_no))
+      .filter((k: string) => k !== "|"),
+  );
+
   const fromTxns = txns.map((t) => {
     const tk = t.ticket_id ? tById.get(t.ticket_id) : null;
     const wh = whById.get(t.to_warehouse_id || t.from_warehouse_id || "");
@@ -116,6 +131,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       reason: t.notes || tk?.complaint || null,
       tag_generated: tagByTxn.has(t.id),
       tag_no: tagByTxn.get(t.id) ?? null,
+      sent_to_oem: sentToOemKeys.has(statusKey(t.part_serial_no, t.part_model_no)),
     };
   });
 
@@ -124,10 +140,6 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   // those so they can be tagged too, skipping any already covered by a transaction.
   const coveredSerials = new Set(
     fromTxns.map((r) => `${(r.serial_no || "").toLowerCase()}|${(r.model_no || "").toLowerCase()}`).filter((k) => k !== "|"),
-  );
-  // Include anything flagged defective by TYPE or by STATUS.
-  const allStock = await fetchAll<any>("ims_stock_items", (q) =>
-    q.select("*").order("created_at", { ascending: false }),
   );
   const stockItems = allStock.filter(
     (s) =>
@@ -161,6 +173,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         reason: s.notes || null,
         tag_generated: tagByStockItem.has(s.id),
         tag_no: tagByStockItem.get(s.id) ?? null,
+        sent_to_oem: String(s.stock_status || "").toLowerCase() === "returned_to_oem",
       } as DefectiveInRecord;
     });
 
