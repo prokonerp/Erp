@@ -235,9 +235,11 @@ function CreateTagsDialog({
     });
   }, [rows, q, showGenerated, showSentToOem]);
 
-  const selectable = filtered.filter((r) => !r.tag_generated);
+  const selectable = filtered.filter((r) => !r.sent_to_oem);
   const selectedRows = selectable.filter((r) => sel[r.key]);
-  const selectedForDc = filtered.filter((r) => sel[r.key] && !r.sent_to_oem);
+  const selectedForTags = selectedRows.filter((r) => !r.tag_generated);
+  const selectedForDc = selectedRows;
+
 
   function generateDcToOem() {
     if (!selectedForDc.length) return;
@@ -263,10 +265,10 @@ function CreateTagsDialog({
   }
 
   async function generate() {
-    if (!selectedRows.length) return;
+    if (!selectedForTags.length) return;
     setSaving(true);
     try {
-      const created = await generateTags(selectedRows, await getCurrentUserName());
+      const created = await generateTags(selectedForTags, await getCurrentUserName());
       toast.success(`${created.length} defective tag(s) generated`);
       onOpenChange(false);
       onGenerated(created);
@@ -276,6 +278,7 @@ function CreateTagsDialog({
       setSaving(false);
     }
   }
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -330,11 +333,12 @@ function CreateTagsDialog({
                 <tr key={r.key} className="border-t align-top">
                   <td className="p-2">
                     <Checkbox
-                      disabled={r.tag_generated}
+                      disabled={r.sent_to_oem}
                       checked={!!sel[r.key]}
                       onCheckedChange={(v) => setSel((s) => ({ ...s, [r.key]: !!v }))}
                     />
                   </td>
+
                   <td className="p-2 font-mono">{r.txn_no || "—"}</td>
                   <td className="p-2 whitespace-nowrap">{fmtDate(r.txn_date)}</td>
                   <td className="p-2">{r.service_request_no || "—"}</td>
@@ -347,10 +351,13 @@ function CreateTagsDialog({
                   <td className="p-2 whitespace-nowrap">{fmtDate(r.replacement_date)}</td>
                   <td className="p-2 max-w-[180px] break-words">{r.reason || "—"}</td>
                   <td className="p-2">
-                    {r.tag_generated
-                      ? <Badge variant="secondary">Generated</Badge>
-                      : <Badge variant="outline">Not Generated</Badge>}
+                    {r.sent_to_oem
+                      ? <Badge variant="outline">Sent to OEM</Badge>
+                      : r.tag_generated
+                        ? <Badge variant="secondary">Tagged — ready for DC</Badge>
+                        : <Badge variant="outline">Not Generated</Badge>}
                   </td>
+
                 </tr>
               ))}
             </tbody>
@@ -361,9 +368,10 @@ function CreateTagsDialog({
           <Button variant="secondary" disabled={!selectedForDc.length} onClick={generateDcToOem}>
             <Truck className="h-4 w-4 mr-1" />Generate DC to OEM
           </Button>
-          <Button disabled={!selectedRows.length || saving} onClick={generate}>
-            Generate {selectedRows.length || ""} Tag{selectedRows.length === 1 ? "" : "s"}
+          <Button disabled={!selectedForTags.length || saving} onClick={generate}>
+            Generate {selectedForTags.length || ""} Tag{selectedForTags.length === 1 ? "" : "s"}
           </Button>
+
         </DialogFooter>
       </DialogContent>
     </Dialog>
