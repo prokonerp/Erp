@@ -338,18 +338,24 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
 
-  // Fetch Unit Price from Goods Master based on the entered Good Model.
-  // Matches products.model case-insensitively; falls back to sku.
-  const applyPriceFromModel = async (i: number, model: string) => {
+  // Look up a Product Master row by model (case-insensitive), falling back to sku.
+  const lookupProductByModel = async (model: string) => {
     const m = (model || "").trim();
-    if (!m) return;
+    if (!m) return null;
     const { data } = await supabase
       .from("products")
-      .select("id,model,sku,default_price")
+      .select("id,model,sku,default_price,hsn,weight_kg")
       .or(`model.ilike.${m},sku.ilike.${m}`)
       .limit(1)
       .maybeSingle();
-    const row = data as { default_price?: number | null } | null;
+    return (data as { default_price?: number | null; hsn?: string | null; weight_kg?: number | null } | null) || null;
+  };
+
+  // Fetch Unit Price from Goods Master based on the entered Good Model.
+  const applyPriceFromModel = async (i: number, model: string) => {
+    const m = (model || "").trim();
+    if (!m) return;
+    const row = await lookupProductByModel(m);
     if (row && row.default_price != null) {
       updateItem(i, { unit_price: String(row.default_price) });
     } else {
@@ -357,6 +363,50 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       toast.message(`No Unit Price set in Goods Master for model "${m}"`);
     }
   };
+
+  // OEM branch: entering a Model directly fills Unit Price and also back-fills
+  // HSN / Weight from Product Master when those cells are still blank.
+  const applyModelDetails = async (i: number, model: string) => {
+    const m = (model || "").trim();
+    if (!m) return;
+    const row = await lookupProductByModel(m);
+    if (row && row.default_price != null) {
+      updateItem(i, { unit_price: String(row.default_price) });
+    } else {
+      updateItem(i, { unit_price: "" });
+      toast.message(`No Unit Price set in Goods Master for model "${m}"`);
+    }
+    if (!row) return;
+    setItems((arr) =>
+      arr.map((it, idx) =>
+        idx !== i
+          ? it
+          : {
+              ...it,
+              hsn: it.hsn || row.hsn || "",
+              weight_kg: it.weight_kg || (row.weight_kg != null ? String(row.weight_kg) : ""),
+            },
+      ),
+    );
+  };
+
+  // Prefilled rows (Defective Tags → DC to OEM, Stock Ledger → Return to OEM)
+  // arrive with only a Model; hydrate HSN / Weight / Unit Price from masters.
+  const hydrateItemsFromModels = async (rows: ChallanItem[]) =>
+    Promise.all(
+      rows.map(async (it) => {
+        const m = (it.model_no || "").trim();
+        if (!m) return it;
+        const row = await lookupProductByModel(m);
+        if (!row) return it;
+        return {
+          ...it,
+          unit_price: it.unit_price || (row.default_price != null ? String(row.default_price) : ""),
+          hsn: it.hsn || row.hsn || "",
+          weight_kg: it.weight_kg || (row.weight_kg != null ? String(row.weight_kg) : ""),
+        };
+      }),
+    );
 
   const applyCustomer = (id: string | null, c: Customer | null) => {
     setPartyId(id);
