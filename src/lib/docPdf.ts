@@ -41,7 +41,95 @@ function collectCssText() {
  * then shrink-to-fit so the whole document lands on a single A4 page.
  * Both Print and Download PDF use this so the two outputs are identical.
  */
-async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = true) {
+/** Minimum readable shrink; below this we paginate instead of compressing. */
+const MIN_READABLE_SCALE = 0.7;
+
+/**
+ * Split a rendered document element into multiple A4 pages.
+ *
+ * Reuses the repeated-header pattern of the GRN report: everything before the
+ * item table (company header, Bill To / Ship To, meta, subject) plus the table
+ * column headers repeat at the top of every page; the trailing blocks
+ * (totals, bank details, terms, notes, signature) print once after the last
+ * item row. A row is never split across pages.
+ */
+function paginateDoc(idoc: Document, root: HTMLElement): HTMLElement[] | null {
+  // The document body is whichever element directly contains the item table
+  // (the parent may be a plain print wrapper around the .doc-print block).
+  const table = root.querySelector("table.items") as HTMLTableElement | null;
+  const docEl = table?.parentElement as HTMLElement | null;
+  const tbody = table?.querySelector("tbody");
+  if (!table || !docEl || !tbody) return null;
+  const outer = root.firstElementChild as HTMLElement | null;
+  const children = Array.from(docEl.children);
+  const ti = children.indexOf(table);
+  const headNodes = children.slice(0, ti);
+  const tailNodes = children.slice(ti + 1);
+  const rows = Array.from(tbody.children) as HTMLElement[];
+  if (!rows.length) return null;
+  const makePage = () => {
+    const page = docEl.cloneNode(false) as HTMLElement;
+    page.classList.add("pdf-page");
+    page.style.minHeight = "0";
+    for (const n of headNodes) page.appendChild(n.cloneNode(true));
+    const t = table.cloneNode(false) as HTMLTableElement;
+    const thead = table.querySelector("thead");
+    if (thead) t.appendChild(thead.cloneNode(true));
+    const tb = idoc.createElement("tbody");
+    t.appendChild(tb);
+    page.appendChild(t);
+    return { page, tb, t };
+  };
+  const holder = idoc.createElement("div");
+  holder.style.cssText = `width:${CONTENT_W_PX}px;position:absolute;left:-99999px;top:0;`;
+  idoc.body.appendChild(holder);
+  const pages: HTMLElement[] = [];
+  let cur = makePage();
+  holder.appendChild(cur.page);
+  let i = 0;
+  while (i < rows.length) {
+    const row = rows[i].cloneNode(true) as HTMLElement;
+    cur.tb.appendChild(row);
+    if (cur.page.scrollHeight > CONTENT_H_PX && cur.tb.children.length > 1) {
+      cur.tb.removeChild(row);
+      pages.push(cur.page);
+      holder.removeChild(cur.page);
+      cur = makePage();
+      holder.appendChild(cur.page);
+      continue; // retry the same row on a fresh page
+    }
+    i++;
+  }
+  // Trailing blocks follow the last item row; if they don't fit, move to a new page.
+  const tailClones = tailNodes.map((n) => n.cloneNode(true) as HTMLElement);
+  for (const n of tailClones) cur.page.appendChild(n);
+  if (cur.page.scrollHeight > CONTENT_H_PX) {
+    for (const n of tailClones) cur.page.removeChild(n);
+    pages.push(cur.page);
+    holder.removeChild(cur.page);
+    cur = makePage();
+    holder.appendChild(cur.page);
+    cur.t.remove(); // no item rows on the trailing page
+    for (const n of tailClones) cur.page.appendChild(n);
+  }
+  pages.push(cur.page);
+  holder.remove();
+  if (pages.length < 2) return null;
+  root.innerHTML = "";
+  for (const p of pages) {
+    if (outer && outer !== docEl) {
+      // preserve the wrapper's classes/styles around each page
+      const wrap = outer.cloneNode(false) as HTMLElement;
+      wrap.appendChild(p);
+      root.appendChild(wrap);
+    } else {
+      root.appendChild(p);
+    }
+  }
+  return pages;
+}
+
+async function buildPrintFrame(el: HTMLElement, docTitle: string) {
   const head = collectCssText();
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
@@ -56,6 +144,9 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = t
       `#pdf-shell{width:${CONTENT_W_PX}px}` +
       `#pdf-root{width:${CONTENT_W_PX}px;transform-origin:top left}` +
         `#pdf-root>*{display:block !important}` +
+      `.pdf-page{page-break-after:always;break-after:page}` +
+      `.pdf-page:last-child{page-break-after:auto;break-after:auto}` +
+      `.pdf-page tr{page-break-inside:avoid;break-inside:avoid}` +
       `@media print{@page{size:A4;margin:${MARGIN_MM}mm}html,body{width:auto}` +
       `#pdf-shell,#pdf-root{width:${CONTENT_W_PX}px}}</style>` +
       `</head><body><div id="pdf-shell"><div id="pdf-root">${el.outerHTML}</div></div></body></html>`,
@@ -84,15 +175,34 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string, applyScale = t
   );
   const root = idoc.getElementById("pdf-root") as HTMLElement;
   const shell = idoc.getElementById("pdf-shell") as HTMLElement;
-  // Shrink-to-fit onto exactly one A4 page.
-  const h = root.scrollHeight;
-  const scale = h > CONTENT_H_PX ? Math.max(0.4, CONTENT_H_PX / h) : 1;
-  if (applyScale && scale < 1) {
-    root.style.transform = `scale(${scale})`;
-    shell.style.height = `${Math.ceil(h * scale)}px`;
-    shell.style.overflow = "hidden";
+  // Shrink-to-fit onto one A4 page, but only down to a readable minimum.
+  let scale = 1;
+  if (root.scrollHeight > CONTENT_H_PX) {
+    scale = CONTENT_H_PX / root.scrollHeight;
+    // Lay out wider so that after the CSS scale the content still spans the
+    // full printable width (no blank left/right margins), then re-clamp.
+    root.style.width = `${CONTENT_W_PX / scale}px`;
+    scale = Math.min(1, CONTENT_H_PX / root.scrollHeight);
   }
-  return { iframe, idoc, win, root, shell, scale };
+  let pages: HTMLElement[] | null = null;
+  const fitScale = scale;
+  if (scale < MIN_READABLE_SCALE) {
+    // Too tall to shrink readably — split into real pages at 100% size.
+    root.style.width = `${CONTENT_W_PX}px`;
+    scale = 1;
+    pages = paginateDoc(idoc, root);
+    // Not splittable (e.g. only a couple of item rows) — fall back to shrinking.
+    if (!pages) scale = fitScale;
+  }
+  if (!pages && scale < 1) {
+    root.style.width = `${CONTENT_W_PX / scale}px`;
+    root.style.transform = `scale(${scale})`;
+    shell.style.height = `${Math.ceil(root.scrollHeight * scale)}px`;
+    shell.style.overflow = "hidden";
+  } else {
+    root.style.width = `${CONTENT_W_PX}px`;
+  }
+  return { iframe, idoc, win, root, shell, scale, pages };
 }
 
 /** Save a Blob, offering a native "Save as…" location picker when supported. */
@@ -141,29 +251,36 @@ export async function printElementSinglePage(el: HTMLElement, filename: string) 
  * the output matches Print Preview and always fits one A4 page.
  */
 async function buildPdfBlob(el: HTMLElement, filename: string): Promise<Blob> {
-  // Capture at natural size (no CSS transform, so layout is untouched) and let
-  // jsPDF scale the resulting image down to fit exactly one A4 page.
-  const { iframe, root } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""), false);
+  const { iframe, root, scale, pages } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""));
   try {
-    const canvas = await html2canvas(root, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      windowWidth: CONTENT_W_PX,
-      width: CONTENT_W_PX,
-      height: Math.ceil(root.scrollHeight),
-    });
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const availW = PAGE_W_MM - MARGIN_MM * 2;
     const availH = PAGE_H_MM - MARGIN_MM * 2;
-    let imgW = availW;
-    let imgH = (canvas.height * imgW) / canvas.width;
-    if (imgH > availH) {
-      imgH = availH;
-      imgW = (canvas.width * imgH) / canvas.height;
+
+    // Capture at natural (untransformed) size so html2canvas never sees a CSS
+    // transform; jsPDF then draws each page at FULL printable width.
+    const naturalW = Math.round(CONTENT_W_PX / (scale || 1));
+    root.style.transform = "none";
+    if (!pages) root.style.width = `${naturalW}px`;
+
+    const targets: HTMLElement[] = pages && pages.length ? pages : [root];
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const w = pages ? CONTENT_W_PX : naturalW;
+      const canvas = await html2canvas(target, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        windowWidth: w,
+        width: w,
+        height: Math.ceil(target.scrollHeight),
+      });
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const imgW = availW; // always full page width — no side margins
+      const imgH = Math.min(availH, (canvas.height * imgW) / canvas.width);
+      if (i > 0) pdf.addPage();
+      pdf.addImage(imgData, "JPEG", MARGIN_MM, MARGIN_MM, imgW, imgH);
     }
-    pdf.addImage(imgData, "JPEG", MARGIN_MM + (availW - imgW) / 2, MARGIN_MM, imgW, imgH);
     return pdf.output("blob");
   } finally {
     iframe.remove();
