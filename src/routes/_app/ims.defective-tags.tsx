@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Printer, Eye, Download, RefreshCw } from "lucide-react";
+import { Plus, Printer, Eye, Download, RefreshCw, Truck } from "lucide-react";
 import { getCurrentUserName } from "@/lib/currentUser";
 import { printMultiPageElement, saveMultiPageElementAsPdf } from "@/lib/docPdf";
 import { DefectiveTagSheet } from "@/components/DefectiveTagSheet";
@@ -209,7 +210,9 @@ function CreateTagsDialog({
   const [saving, setSaving] = useState(false);
   const [q, setQ] = useState("");
   const [showGenerated, setShowGenerated] = useState(false);
+  const [showSentToOem, setShowSentToOem] = useState(false);
   const [sel, setSel] = useState<Record<string, boolean>>({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!open) return;
@@ -225,14 +228,39 @@ function CreateTagsDialog({
     const s = q.toLowerCase().trim();
     return rows.filter((r) => {
       if (!showGenerated && r.tag_generated) return false;
+      if (!showSentToOem && r.sent_to_oem) return false;
       if (!s) return true;
       return [r.txn_no, r.service_request_no, r.oracle_order_no, r.model_no, r.serial_no, r.customer_name, r.asp_code, r.engineer_name, r.reason]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
     });
-  }, [rows, q, showGenerated]);
+  }, [rows, q, showGenerated, showSentToOem]);
 
   const selectable = filtered.filter((r) => !r.tag_generated);
   const selectedRows = selectable.filter((r) => sel[r.key]);
+  const selectedForDc = filtered.filter((r) => sel[r.key] && !r.sent_to_oem);
+
+  function generateDcToOem() {
+    if (!selectedForDc.length) return;
+    const prefill = {
+      source: "defective_tags",
+      reference_no: "",
+      internal_remarks: "Defective stock return to OEM",
+      items: selectedForDc.map((r) => ({
+        part_no: r.model_no || "",
+        part_name: r.part_name || r.model_no || "",
+        description: "",
+        uom: "Nos",
+        qty: "1",
+        model_no: r.model_no || "",
+        serial_no: r.serial_no || "",
+        oracle_no: r.oracle_order_no || "",
+        stock_type: "Defective",
+      })),
+    };
+    try { sessionStorage.setItem("challan:prefill:new-oem", JSON.stringify(prefill)); } catch { /* noop */ }
+    onOpenChange(false);
+    navigate({ to: "/challan/oem/new" });
+  }
 
   async function generate() {
     if (!selectedRows.length) return;
@@ -260,6 +288,10 @@ function CreateTagsDialog({
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={showGenerated} onCheckedChange={(v) => setShowGenerated(!!v)} />
             Show already generated
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={showSentToOem} onCheckedChange={(v) => setShowSentToOem(!!v)} />
+            Show already sent to OEM
           </label>
           <div className="text-sm text-muted-foreground">{selectedRows.length} selected</div>
         </div>
@@ -326,6 +358,9 @@ function CreateTagsDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="secondary" disabled={!selectedForDc.length} onClick={generateDcToOem}>
+            <Truck className="h-4 w-4 mr-1" />Generate DC to OEM
+          </Button>
           <Button disabled={!selectedRows.length || saving} onClick={generate}>
             Generate {selectedRows.length || ""} Tag{selectedRows.length === 1 ? "" : "s"}
           </Button>

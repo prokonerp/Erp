@@ -127,6 +127,28 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Prefill for DC to OEM (e.g. Defective Tags → Generate DC to OEM).
+  useEffect(() => {
+    if (editId) return;
+    if (!isOem) return;
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem("challan:prefill:new-oem"); } catch { /* noop */ }
+    if (!raw) return;
+    try { sessionStorage.removeItem("challan:prefill:new-oem"); } catch { /* noop */ }
+    let payload: Record<string, unknown>;
+    try { payload = JSON.parse(raw); } catch { return; }
+    const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<ChallanItem>>) : [];
+    if (prefillItems.length > 0) {
+      setItems(prefillItems.map((it) => ({ ...emptyItem(), ...it })) as ChallanItem[]);
+    }
+    setForm((f) => ({
+      ...f,
+      reference_no: (payload.reference_no as string) || f.reference_no,
+      internal_remarks: (payload.internal_remarks as string) || f.internal_remarks,
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Load existing record for edit mode.
   useEffect(() => {
     if (!editId) return;
