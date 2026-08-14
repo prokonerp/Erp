@@ -489,8 +489,9 @@ function QuoteEditor() {
                     onChange={(id, p) => {
                       setItem(i, {
                       product_id: id || "",
-                      product_name: p?.name || undefined,
-                      description: p?.name || it.description,
+                      product_name: p ? productDisplayName(p as any) : undefined,
+                      description: p ? productDisplayName(p as any) : it.description,
+                      item_details: p ? (p.description || "") : it.item_details,
                       hsn: p?.hsn || it.hsn,
                       unit: p?.unit || it.unit,
                       rate: p?.default_price != null ? Number(p.default_price) : it.rate,
