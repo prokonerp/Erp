@@ -16,12 +16,16 @@ import { DefectiveTagSheet } from "@/components/DefectiveTagSheet";
 import { listWarehouses, type WarehouseLite } from "@/lib/ims";
 import {
   fmtDate,
+  ageingDays,
+  dispatchKey,
+  fetchTagDispatches,
   generateTags,
   listDefectiveInRecords,
   listDefectiveTags,
   markTagsPrinted,
   type DefectiveInRecord,
   type DefectiveTag,
+  type TagDispatch,
 } from "@/lib/defectiveTags";
 
 export const Route = createFileRoute("/_app/ims/defective-tags")({
@@ -46,6 +50,7 @@ function DefectiveTagsPage() {
   const [tags, setTags] = useState<DefectiveTag[]>([]);
   const [records, setRecords] = useState<DefectiveInRecord[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
+  const [dispatches, setDispatches] = useState<Map<string, TagDispatch>>(new Map());
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<string>("");
   const [preview, setPreview] = useState<DefectiveTag[] | null>(null);
@@ -54,10 +59,16 @@ function DefectiveTagsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [t, r, w] = await Promise.all([listDefectiveTags(), listDefectiveInRecords(), listWarehouses()]);
+      const [t, r, w, d] = await Promise.all([
+        listDefectiveTags(),
+        listDefectiveInRecords(),
+        listWarehouses(),
+        fetchTagDispatches(),
+      ]);
       setTags(t);
       setRecords(r);
       setWarehouses(w);
+      setDispatches(d);
     } catch (e: any) {
       toast.error(e?.message || "Failed to load defective tags");
     } finally {
@@ -126,7 +137,7 @@ function DefectiveTagsPage() {
         ))}
 
         <TabsContent value="register" className="mt-4">
-          <RegisterTab tags={tags} loading={loading} onRefresh={load} onPreview={setPreview} />
+          <RegisterTab tags={tags} dispatches={dispatches} loading={loading} onRefresh={load} onPreview={setPreview} />
         </TabsContent>
       </Tabs>
 
