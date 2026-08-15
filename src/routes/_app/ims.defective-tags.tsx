@@ -257,7 +257,7 @@ function CreateTagsDialog({
         serial_no: r.serial_no || "",
         oracle_no: r.oracle_order_no || "",
         stock_type: "Defective",
-        oem_ref_id: r.txn_no || r.service_request_no || "",
+        oem_ref_id: r.oem_ref_id || "",
       })),
     };
     try { sessionStorage.setItem("challan:prefill:new-oem", JSON.stringify(prefill)); } catch { /* noop */ }
