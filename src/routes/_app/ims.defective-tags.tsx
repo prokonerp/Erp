@@ -223,6 +223,7 @@ function CreateTagsDialog({
   const [q, setQ] = useState("");
   const [showGenerated, setShowGenerated] = useState(false);
   const [showSentToOem, setShowSentToOem] = useState(false);
+  const [aspFilter, setAspFilter] = useState("all");
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
 
@@ -241,11 +242,26 @@ function CreateTagsDialog({
     return rows.filter((r) => {
       if (!showGenerated && r.tag_generated) return false;
       if (!showSentToOem && r.sent_to_oem) return false;
+      if (aspFilter !== "all" && (r.asp_code || "") !== aspFilter) return false;
       if (!s) return true;
       return [r.oem_ref_id, r.oracle_order_no, r.model_no, r.serial_no, r.customer_name, r.asp_code, r.engineer_name, r.reason]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
     });
-  }, [rows, q, showGenerated, showSentToOem]);
+  }, [rows, q, showGenerated, showSentToOem, aspFilter]);
+
+  const aspOptions = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.asp_code).filter(Boolean) as string[])).sort(),
+    [rows],
+  );
+
+  const aspCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    rows.filter((r) => !r.sent_to_oem).forEach((r) => {
+      const k = r.asp_code || "No ASP";
+      m.set(k, (m.get(k) || 0) + 1);
+    });
+    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [rows]);
 
   const selectable = filtered.filter((r) => !r.sent_to_oem);
   const selectedRows = selectable.filter((r) => sel[r.key]);
@@ -255,6 +271,11 @@ function CreateTagsDialog({
 
   function generateDcToOem() {
     if (!selectedForDc.length) return;
+    const asps = Array.from(new Set(selectedForDc.map((r) => r.asp_code || "No ASP")));
+    if (asps.length > 1) {
+      toast.error(`Selected items belong to multiple ASP locations (${asps.join(", ")}) — please select items from one ASP at a time`);
+      return;
+    }
     const prefill = {
       source: "defective_tags",
       reference_no: "",
@@ -301,6 +322,13 @@ function CreateTagsDialog({
         </DialogHeader>
         <div className="flex flex-wrap items-center gap-3">
           <Input className="flex-1 min-w-[240px]" placeholder="Search stock IN / SR / Oracle / model / serial / customer…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Select value={aspFilter} onValueChange={setAspFilter}>
+            <SelectTrigger className="w-[160px]"><SelectValue placeholder="All ASPs" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All ASPs</SelectItem>
+              {aspOptions.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={showGenerated} onCheckedChange={(v) => setShowGenerated(!!v)} />
             Show already generated
@@ -311,6 +339,13 @@ function CreateTagsDialog({
           </label>
           <div className="text-sm text-muted-foreground">{selectedRows.length} selected</div>
         </div>
+        {aspCounts.length > 0 && (
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {aspCounts.map(([asp, n]) => (
+              <Badge key={asp} variant="outline" className="font-normal">{asp}: {n} pending</Badge>
+            ))}
+          </div>
+        )}
         <div className="flex-1 overflow-auto border rounded-md">
           <table className="w-full text-xs">
             <thead className="bg-muted/50 sticky top-0">
