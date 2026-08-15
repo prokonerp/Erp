@@ -1065,6 +1065,7 @@ export type Database = {
           engineer_name: string | null
           id: string
           model_no: string | null
+          oem_case_id: string | null
           oracle_order_no: string | null
           print_count: number
           printed_at: string | null
@@ -1093,6 +1094,7 @@ export type Database = {
           engineer_name?: string | null
           id?: string
           model_no?: string | null
+          oem_case_id?: string | null
           oracle_order_no?: string | null
           print_count?: number
           printed_at?: string | null
@@ -1121,6 +1123,7 @@ export type Database = {
           engineer_name?: string | null
           id?: string
           model_no?: string | null
+          oem_case_id?: string | null
           oracle_order_no?: string | null
           print_count?: number
           printed_at?: string | null
