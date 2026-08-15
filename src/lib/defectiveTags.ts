@@ -41,6 +41,7 @@ export type DefectiveInRecord = {
   txn_no: string | null;
   txn_date: string;
   service_request_no: string | null;
+  oem_ref_id: string | null;
   oracle_order_no: string | null;
   model_no: string | null;
   part_name: string | null;
@@ -84,11 +85,32 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   if (ticketIds.length) {
     const { data } = await sb
       .from("tickets")
-      .select("id,case_id,customer_name,assigned_engineer_name,complaint")
+      .select("id,case_id,customer_name,assigned_engineer_name,complaint,oem_ref_id,defective_parts_details")
       .in("id", ticketIds);
     tickets = data || [];
   }
   const tById = new Map(tickets.map((t) => [t.id, t]));
+
+  // Batch: all indents for the involved tickets, so Oracle # can be resolved
+  // from the Indent that already handled this defective part.
+  const norm = (v: any) => String(v ?? "").trim().toLowerCase();
+  const oracleByTicketPart = new Map<string, string>();
+  if (ticketIds.length) {
+    const { data: indents } = await sb
+      .from("indents")
+      .select("ticket_id,oracles_data")
+      .in("ticket_id", ticketIds);
+    for (const ind of indents || []) {
+      for (const blk of (ind.oracles_data as any[]) || []) {
+        const oracleNo = String(blk?.oracle_no || "").trim();
+        if (!oracleNo) continue;
+        for (const row of (blk?.defective_rows as any[]) || []) {
+          const k = `${ind.ticket_id}|${norm(row?.def_model_no)}|${norm(row?.def_serial_no)}`;
+          if (!oracleByTicketPart.has(k)) oracleByTicketPart.set(k, oracleNo);
+        }
+      }
+    }
+  }
   const whById = new Map<string, WarehouseLite>(warehouses.map((w) => [w.id, w]));
   const tagByTxn = new Map(tags.filter((t) => t.txn_id).map((t) => [t.txn_id, t.tag_no as string | null]));
   const tagByStockItem = new Map(
@@ -111,6 +133,17 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const fromTxns = txns.map((t) => {
     const tk = t.ticket_id ? tById.get(t.ticket_id) : null;
     const wh = whById.get(t.to_warehouse_id || t.from_warehouse_id || "");
+    // Serial fallback: pull from the ticket's defective parts capture.
+    let serialNo: string | null = t.part_serial_no || null;
+    if (!serialNo && tk?.defective_parts_details) {
+      const match = ((tk.defective_parts_details as any[]) || []).find(
+        (p) => norm(p?.model_no) === norm(t.part_model_no) && p?.serial,
+      );
+      serialNo = match?.serial || null;
+    }
+    const oracleFromIndent = t.ticket_id
+      ? oracleByTicketPart.get(`${t.ticket_id}|${norm(t.part_model_no)}|${norm(serialNo)}`) || null
+      : null;
     return {
       key: t.id,
       source: "txn" as const,
@@ -119,10 +152,11 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       txn_no: t.txn_no,
       txn_date: t.txn_date,
       service_request_no: tk?.case_id || (t.ticket_id && !UUID_RE.test(t.ticket_id) ? t.ticket_id : null) || t.reference || null,
-      oracle_order_no: t.oem_case_id || null,
+      oem_ref_id: tk?.oem_ref_id || null,
+      oracle_order_no: oracleFromIndent || t.oem_case_id || null,
       model_no: t.part_model_no || null,
       part_name: t.part_name || null,
-      serial_no: t.part_serial_no || null,
+      serial_no: serialNo,
       customer_name: t.from_party || tk?.customer_name || null,
       asp_code: wh?.asp_code || null,
       warehouse_id: wh?.id || null,
@@ -161,6 +195,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         txn_no: s.transaction_ref || null,
         txn_date: s.created_at,
         service_request_no: s.ticket_id && !UUID_RE.test(s.ticket_id) ? s.ticket_id : null,
+        oem_ref_id: null,
         oracle_order_no: s.oem_case_id || null,
         model_no: s.part_model_no || null,
         part_name: s.part_name || null,
