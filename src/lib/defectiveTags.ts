@@ -328,6 +328,51 @@ export async function listDefectiveTags(): Promise<DefectiveTag[]> {
   );
 }
 
+export type TagDispatch = { dc_no: string; dc_date: string | null };
+
+/** Key used to match a tag to its dispatched stock item: model|serial (lowercased). */
+export function dispatchKey(model?: string | null, serial?: string | null) {
+  return `${String(model ?? "").trim().toLowerCase()}|${String(serial ?? "").trim().toLowerCase()}`;
+}
+
+/**
+ * Map of model|serial → the OEM DC that dispatched it, for stock already
+ * returned to OEM. Two batched queries only.
+ */
+export async function fetchTagDispatches(): Promise<Map<string, TagDispatch>> {
+  const stock = await fetchAll<any>("ims_stock_items", (q) =>
+    q.select("part_model_no,part_serial_no,transaction_ref,updated_at").eq("stock_status", "returned_to_oem"),
+  );
+  const map = new Map<string, TagDispatch>();
+  const challanNos = new Set<string>();
+  for (const s of stock || []) {
+    const key = dispatchKey(s.part_model_no, s.part_serial_no);
+    if (key === "|") continue;
+    const ref = String(s.transaction_ref || "").trim();
+    const dcNo = ref.startsWith("DC ") ? ref.slice(3).trim() : ref;
+    if (!dcNo) continue;
+    if (!map.has(key)) map.set(key, { dc_no: dcNo, dc_date: null });
+    challanNos.add(dcNo);
+  }
+  if (challanNos.size) {
+    const { data } = await sb
+      .from("delivery_challans")
+      .select("challan_no,challan_date")
+      .in("challan_no", Array.from(challanNos));
+    const dateByNo = new Map<string, string | null>((data || []).map((d: any) => [d.challan_no, d.challan_date]));
+    for (const v of map.values()) v.dc_date = dateByNo.get(v.dc_no) ?? null;
+  }
+  return map;
+}
+
+/** Whole days between txn_date and today. */
+export function ageingDays(d?: string | null): number | null {
+  if (!d) return null;
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - dt.getTime()) / 86400000));
+}
+
 /** One selected Defective Stock IN record = one Defective Tag. Duplicates are rejected by the DB. */
 export async function generateTags(records: DefectiveInRecord[], createdByName?: string | null) {
   const rows = records
