@@ -121,6 +121,7 @@ function DefectiveTagsPage() {
               warehouseName={a === NO_ASP ? "Unassigned warehouse" : whByAsp.get(a) || "—"}
               rows={records.filter((r) => (r.asp_code || NO_ASP) === a)}
               loading={loading}
+              allTags={tags}
               onGenerated={(created) => { load(); setPreview(created); }}
             />
           </TabsContent>
@@ -150,12 +151,13 @@ function DefectiveTagsPage() {
 }
 
 function AspTab({
-  aspKey, warehouseName, rows, loading, onGenerated,
+  aspKey, warehouseName, rows, loading, allTags, onGenerated,
 }: {
   aspKey: string;
   warehouseName: string;
   rows: DefectiveInRecord[];
   loading: boolean;
+  allTags: DefectiveTag[];
   onGenerated: (tags: DefectiveTag[]) => void;
 }) {
   const [q, setQ] = useState("");
@@ -203,13 +205,21 @@ function AspTab({
   }
 
   async function generate() {
-    if (!selectedForTags.length) return;
+    if (!selectedRows.length) return;
     setSaving(true);
     try {
-      const created = await generateTags(selectedForTags, await getCurrentUserName());
-      toast.success(`${created.length} defective tag(s) generated`);
+      const created = selectedForTags.length
+        ? await generateTags(selectedForTags, await getCurrentUserName())
+        : [];
+      if (created.length) toast.success(`${created.length} defective tag(s) generated`);
+      const norm = (v: any) => String(v ?? "").trim().toLowerCase();
+      const existing = allTags.filter((t) =>
+        selectedRows.some(
+          (r) => r.tag_generated && norm(t.model_no) === norm(r.model_no) && norm(t.serial_no) === norm(r.serial_no),
+        ),
+      );
       setSel({});
-      onGenerated(created);
+      onGenerated([...created, ...existing]);
     } catch (e: any) {
       toast.error(e?.message?.includes("duplicate") ? "A tag already exists for one of the selected records" : e?.message || "Tag generation failed");
     } finally {
@@ -303,9 +313,9 @@ function AspTab({
         <CardContent className="py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-muted-foreground">{selectedRows.length} selected</div>
           <div className="flex gap-2">
-            <Button disabled={!selectedForTags.length || saving} onClick={generate}>
+            <Button disabled={!selectedRows.length || saving} onClick={generate}>
               <Printer className="h-4 w-4 mr-1" />
-              Print Tag{selectedForTags.length === 1 ? "" : "s"}{selectedForTags.length ? ` (${selectedForTags.length})` : ""}
+              Print Tag{selectedRows.length === 1 ? "" : "s"}{selectedRows.length ? ` (${selectedRows.length})` : ""}
             </Button>
             <Button variant="secondary" disabled={!selectedRows.length} onClick={generateDcToOem}>
               <Truck className="h-4 w-4 mr-1" />Generate DC to OEM
