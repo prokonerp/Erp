@@ -16,12 +16,16 @@ import { DefectiveTagSheet } from "@/components/DefectiveTagSheet";
 import { listWarehouses, type WarehouseLite } from "@/lib/ims";
 import {
   fmtDate,
+  ageingDays,
+  dispatchKey,
+  fetchTagDispatches,
   generateTags,
   listDefectiveInRecords,
   listDefectiveTags,
   markTagsPrinted,
   type DefectiveInRecord,
   type DefectiveTag,
+  type TagDispatch,
 } from "@/lib/defectiveTags";
 
 export const Route = createFileRoute("/_app/ims/defective-tags")({
@@ -46,6 +50,7 @@ function DefectiveTagsPage() {
   const [tags, setTags] = useState<DefectiveTag[]>([]);
   const [records, setRecords] = useState<DefectiveInRecord[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
+  const [dispatches, setDispatches] = useState<Map<string, TagDispatch>>(new Map());
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<string>("");
   const [preview, setPreview] = useState<DefectiveTag[] | null>(null);
@@ -54,10 +59,16 @@ function DefectiveTagsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [t, r, w] = await Promise.all([listDefectiveTags(), listDefectiveInRecords(), listWarehouses()]);
+      const [t, r, w, d] = await Promise.all([
+        listDefectiveTags(),
+        listDefectiveInRecords(),
+        listWarehouses(),
+        fetchTagDispatches(),
+      ]);
       setTags(t);
       setRecords(r);
       setWarehouses(w);
+      setDispatches(d);
     } catch (e: any) {
       toast.error(e?.message || "Failed to load defective tags");
     } finally {
@@ -126,7 +137,7 @@ function DefectiveTagsPage() {
         ))}
 
         <TabsContent value="register" className="mt-4">
-          <RegisterTab tags={tags} loading={loading} onRefresh={load} onPreview={setPreview} />
+          <RegisterTab tags={tags} dispatches={dispatches} loading={loading} onRefresh={load} onPreview={setPreview} />
         </TabsContent>
       </Tabs>
 
@@ -269,15 +280,16 @@ function AspTab({
                 <th className="p-2">Customer</th>
                 <th className="p-2">Engineer</th>
                 <th className="p-2">Repl. Date</th>
+                <th className="p-2">Ageing (Days)</th>
                 <th className="p-2">Reason</th>
                 <th className="p-2">Tag</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={11}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={11}>No pending defective items for this ASP.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>No pending defective items for this ASP.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.key} className="border-t align-top">
                   <td className="p-2">
@@ -294,6 +306,13 @@ function AspTab({
                   <td className="p-2">{r.customer_name || "—"}</td>
                   <td className="p-2">{r.engineer_name || "—"}</td>
                   <td className="p-2 whitespace-nowrap">{fmtDate(r.replacement_date)}</td>
+                  <td className="p-2 whitespace-nowrap">
+                    {(() => {
+                      const d = ageingDays(r.txn_date);
+                      if (d === null) return "—";
+                      return <span className={d > 10 ? "text-destructive font-bold" : ""}>{d}</span>;
+                    })()}
+                  </td>
                   <td className="p-2 max-w-[180px] break-words">{r.reason || "—"}</td>
                   <td className="p-2">
                     {r.tag_generated
@@ -326,9 +345,10 @@ function AspTab({
 }
 
 function RegisterTab({
-  tags, loading, onRefresh, onPreview,
+  tags: allTags, dispatches, loading, onRefresh, onPreview,
 }: {
   tags: DefectiveTag[];
+  dispatches: Map<string, TagDispatch>;
   loading: boolean;
   onRefresh: () => void;
   onPreview: (t: DefectiveTag[]) => void;
@@ -338,6 +358,13 @@ function RegisterTab({
   const [aspFilter, setAspFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("tag_date");
   const [sortAsc, setSortAsc] = useState(false);
+
+  // Only tags whose physical part has actually been dispatched back to the OEM.
+  const tags = useMemo(
+    () => allTags.filter((t) => dispatches.has(dispatchKey(t.model_no, t.serial_no))),
+    [allTags, dispatches],
+  );
+  const dcFor = (t: DefectiveTag) => dispatches.get(dispatchKey(t.model_no, t.serial_no));
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase().trim();
@@ -416,14 +443,18 @@ function RegisterTab({
                 <th className="p-2">ASP</th>
                 <th className="p-2">Engineer</th>
                 <th className="p-2">Status</th>
+                <th className="p-2">DC No</th>
+                <th className="p-2">DC Date</th>
                 <th className="p-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>No defective tags yet.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>
+                  No tags dispatched to OEM yet — tags appear here once a DC to OEM is generated for them.
+                </td></tr>
               ) : filtered.map((t) => (
                 <tr key={t.id} className="border-t align-top">
                   <td className="p-2 font-mono text-xs">{t.tag_no}</td>
@@ -442,6 +473,8 @@ function RegisterTab({
                       ? <Badge variant="secondary">Printed ×{t.print_count}</Badge>
                       : <Badge>Generated</Badge>}
                   </td>
+                  <td className="p-2 font-mono text-xs">{dcFor(t)?.dc_no || "—"}</td>
+                  <td className="p-2 whitespace-nowrap">{fmtDate(dcFor(t)?.dc_date)}</td>
                   <td className="p-2 text-right whitespace-nowrap">
                     <Button size="sm" variant="ghost" onClick={() => onPreview([t])}>
                       <Eye className="h-4 w-4 mr-1" />{t.printed_at ? "Reprint" : "Preview"}
