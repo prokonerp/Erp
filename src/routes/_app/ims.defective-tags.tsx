@@ -74,7 +74,6 @@ function DefectiveTagsPage() {
     return keys;
   }, [pending]);
 
-  console.log("DBG", { tab, aspTabs });
   const activeTab = tab && (tab === "register" || aspTabs.includes(tab)) ? tab : (aspTabs[0] || "register");
 
   const whByAsp = useMemo(() => {
