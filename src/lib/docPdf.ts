@@ -297,12 +297,13 @@ export async function saveElementAsPdf(el: HTMLElement, filename: string) {
  * tags) using the same inlined-CSS iframe as every other document, so preview
  * and print match exactly and page breaks never split a block.
  */
-async function buildMultiPageFrame(el: HTMLElement, docTitle: string) {
+async function buildMultiPageFrame(el: HTMLElement, docTitle: string, landscape = false) {
   const head = collectCssText();
+  const pw = landscape ? "297mm" : "210mm";
+  const ph = landscape ? "210mm" : "297mm";
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText =
-    "position:fixed;right:0;bottom:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;";
+  iframe.style.cssText = `position:fixed;right:0;bottom:0;width:${pw};height:${ph};border:0;opacity:0;pointer-events:none;`;
   document.body.appendChild(iframe);
   const idoc = iframe.contentDocument!;
   const win = iframe.contentWindow!;
@@ -313,7 +314,7 @@ async function buildMultiPageFrame(el: HTMLElement, docTitle: string) {
       `.defective-tag-page{page-break-after:always;break-after:page}` +
       `.defective-tag-page:last-child{page-break-after:auto;break-after:auto}` +
       `.break-inside-avoid,.defective-tag{page-break-inside:avoid;break-inside:avoid}` +
-      `@media print{@page{size:A4 portrait;margin:10mm}}</style>` +
+      `@media print{@page{size:A4 ${landscape ? "landscape" : "portrait"};margin:10mm}}</style>` +
       `</head><body>${el.outerHTML}</body></html>`,
   );
   idoc.close();
@@ -330,23 +331,32 @@ async function buildMultiPageFrame(el: HTMLElement, docTitle: string) {
   return { iframe, idoc, win };
 }
 
-/** Open the browser print dialog for a multi-page A4 portrait document. */
-export async function printMultiPageElement(el: HTMLElement, filename: string) {
-  const { iframe, win } = await buildMultiPageFrame(el, filename.replace(/\.pdf$/i, ""));
+/** Open the browser print dialog for a multi-page A4 document. */
+export async function printMultiPageElement(
+  el: HTMLElement,
+  filename: string,
+  opts: { landscape?: boolean } = {},
+) {
+  const { iframe, win } = await buildMultiPageFrame(el, filename.replace(/\.pdf$/i, ""), !!opts.landscape);
   win.focus();
   win.print();
   setTimeout(() => iframe.remove(), 1000);
 }
 
-/** Download a multi-page A4 portrait document as a real .pdf (Save As dialog). */
-export async function saveMultiPageElementAsPdf(el: HTMLElement, filename: string) {
-  const { iframe, idoc } = await buildMultiPageFrame(el, filename.replace(/\.pdf$/i, ""));
+/** Download a multi-page A4 document as a real .pdf (Save As dialog). */
+export async function saveMultiPageElementAsPdf(
+  el: HTMLElement,
+  filename: string,
+  opts: { landscape?: boolean } = {},
+) {
+  const landscape = !!opts.landscape;
+  const { iframe, idoc } = await buildMultiPageFrame(el, filename.replace(/\.pdf$/i, ""), landscape);
   try {
     const pages = Array.from(idoc.querySelectorAll<HTMLElement>(".defective-tag-page"));
     const targets = pages.length ? pages : [idoc.body];
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const availW = PAGE_W_MM - MARGIN_MM * 2;
-    const availH = PAGE_H_MM - MARGIN_MM * 2;
+    const pdf = new jsPDF({ orientation: landscape ? "landscape" : "portrait", unit: "mm", format: "a4" });
+    const availW = (landscape ? PAGE_H_MM : PAGE_W_MM) - MARGIN_MM * 2;
+    const availH = (landscape ? PAGE_W_MM : PAGE_H_MM) - MARGIN_MM * 2;
     for (let i = 0; i < targets.length; i++) {
       const canvas = await html2canvas(targets[i], {
         scale: 2,

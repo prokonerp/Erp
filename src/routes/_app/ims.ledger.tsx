@@ -427,12 +427,12 @@ function DefectiveTagQuickAction({
 
   async function doPrint() {
     if (!sheetRef.current || !preview) return;
-    await printMultiPageElement(sheetRef.current, "defective-tags");
+    await printMultiPageElement(sheetRef.current, "defective-tags", { landscape: true });
     await markTagsPrinted(preview.map((t) => t.id), await getCurrentUserName());
   }
   async function doDownload() {
     if (!sheetRef.current || !preview) return;
-    try { await saveMultiPageElementAsPdf(sheetRef.current, "defective-tags.pdf"); }
+    try { await saveMultiPageElementAsPdf(sheetRef.current, "defective-tags.pdf", { landscape: true }); }
     catch (e: any) { toast.error(e?.message || "Download failed"); }
   }
 
