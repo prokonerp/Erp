@@ -35,7 +35,7 @@ export type DefectiveTag = {
 export type DefectiveInRecord = {
   /** Stable row key: transaction id, or `stock:<stock item id>` for stock-item sourced rows. */
   key: string;
-  source: "txn" | "stock";
+  source: "indent" | "txn" | "stock";
   txn_id: string | null;
   stock_item_id: string | null;
   txn_no: string | null;
