@@ -146,26 +146,26 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
 
   // ── PRIMARY SOURCE: Indent → Oracle block → defective rows ──────────────────
   // Replacement Date comes from the linked customer Delivery Challan for the block.
-  const indentIds = liveIndents.map((i) => i.id);
-  const dcDateByIndentOracle = new Map<string, string>();
-  if (indentIds.length) {
-    const { data: dcs } = await sb
-      .from("delivery_challans")
-      .select("indent_id,doc_type,challan_date,items")
-      .eq("doc_type", "customer")
-      .in("indent_id", indentIds);
+  // Real Section B customer DCs often have indent_id = null, so match on the
+  // item's own defective_serial / defective_model instead.
+  const dcDateBySerial = new Map<string, string>();
+  const dcDateByModel = new Map<string, string>();
+  {
+    const dcs = await fetchAll<any>("delivery_challans", (q) =>
+      q.select("challan_date,items").eq("doc_type", "customer").order("challan_date", { ascending: false }),
+    );
     for (const dc of dcs || []) {
-      const oracles = new Set(
-        ((dc.items as any[]) || [])
-          .map((it) => norm(it?.oracle_no))
-          .filter(Boolean),
-      );
-      for (const o of oracles) {
-        const k = `${dc.indent_id}|${o}`;
-        if (!dcDateByIndentOracle.has(k) && dc.challan_date) dcDateByIndentOracle.set(k, dc.challan_date);
+      if (!dc.challan_date) continue;
+      for (const it of (dc.items as any[]) || []) {
+        const s = norm(it?.defective_serial);
+        const m = norm(it?.defective_model);
+        if (s && !dcDateBySerial.has(s)) dcDateBySerial.set(s, dc.challan_date);
+        if (m && !dcDateByModel.has(m)) dcDateByModel.set(m, dc.challan_date);
       }
     }
   }
+  const dcDateFor = (model?: string | null, serial?: string | null) =>
+    (serial && dcDateBySerial.get(norm(serial))) || (!serial && model ? dcDateByModel.get(norm(model)) : null) || null;
 
   // Reuse existing txn linkage (and its tag) when the same physical part is
   // already present in IMS, so tags stay attached to one record.
@@ -218,7 +218,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
           asp_code: wh?.asp_code || null,
           warehouse_id: wh?.id || null,
           engineer_name: ind.engineer_name || tk?.assigned_engineer_name || null,
-          replacement_date: oracleNo ? dcDateByIndentOracle.get(`${ind.id}|${norm(oracleNo)}`) || null : null,
+          replacement_date: dcDateFor(model, serial),
           reason: remarks || null,
           tag_generated: txn ? tagByTxn.has(txn.id) : false,
           tag_no: txn ? tagByTxn.get(txn.id) ?? null : null,
@@ -266,7 +266,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       asp_code: wh?.asp_code || null,
       warehouse_id: wh?.id || null,
       engineer_name: tk?.assigned_engineer_name || null,
-      replacement_date: t.txn_date,
+      replacement_date: dcDateFor(t.part_model_no, serialNo) || t.txn_date,
       reason: t.notes || tk?.complaint || null,
       tag_generated: tagByTxn.has(t.id),
       tag_no: tagByTxn.get(t.id) ?? null,
@@ -311,7 +311,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         asp_code: wh?.asp_code || null,
         warehouse_id: wh?.id || null,
         engineer_name: null,
-        replacement_date: s.created_at,
+        replacement_date: dcDateFor(s.part_model_no, s.part_serial_no) || s.created_at,
         reason: s.notes || null,
         tag_generated: tagByStockItem.has(s.id),
         tag_no: tagByStockItem.get(s.id) ?? null,
