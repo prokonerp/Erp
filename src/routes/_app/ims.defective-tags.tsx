@@ -280,15 +280,16 @@ function AspTab({
                 <th className="p-2">Customer</th>
                 <th className="p-2">Engineer</th>
                 <th className="p-2">Repl. Date</th>
+                <th className="p-2">Ageing (Days)</th>
                 <th className="p-2">Reason</th>
                 <th className="p-2">Tag</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={11}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={11}>No pending defective items for this ASP.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>No pending defective items for this ASP.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.key} className="border-t align-top">
                   <td className="p-2">
@@ -305,6 +306,13 @@ function AspTab({
                   <td className="p-2">{r.customer_name || "—"}</td>
                   <td className="p-2">{r.engineer_name || "—"}</td>
                   <td className="p-2 whitespace-nowrap">{fmtDate(r.replacement_date)}</td>
+                  <td className="p-2 whitespace-nowrap">
+                    {(() => {
+                      const d = ageingDays(r.txn_date);
+                      if (d === null) return "—";
+                      return <span className={d > 10 ? "text-destructive font-bold" : ""}>{d}</span>;
+                    })()}
+                  </td>
                   <td className="p-2 max-w-[180px] break-words">{r.reason || "—"}</td>
                   <td className="p-2">
                     {r.tag_generated
