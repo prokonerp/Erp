@@ -74,15 +74,7 @@ function DefectiveTagsPage() {
     return keys;
   }, [pending]);
 
-  const touched = useRef(false);
-  useEffect(() => {
-    if (touched.current) {
-      if (tab !== "register" && !aspTabs.includes(tab)) setTab(aspTabs[0] || "register");
-      return;
-    }
-    if (aspTabs.length) { setTab(aspTabs[0]); touched.current = true; }
-    else if (!tab) setTab("register");
-  }, [aspTabs, tab]);
+  const activeTab = tab && (tab === "register" || aspTabs.includes(tab)) ? tab : (aspTabs[0] || "register");
 
   const whByAsp = useMemo(() => {
     const m = new Map<string, string>();
@@ -107,7 +99,7 @@ function DefectiveTagsPage() {
 
   return (
     <div className="space-y-4">
-      <Tabs value={tab || "register"} onValueChange={(v) => { touched.current = true; setTab(v); }}>
+      <Tabs value={activeTab} onValueChange={setTab}>
         <TabsList className="flex-wrap h-auto">
           {aspTabs.map((a) => (
             <TabsTrigger key={a} value={a}>
