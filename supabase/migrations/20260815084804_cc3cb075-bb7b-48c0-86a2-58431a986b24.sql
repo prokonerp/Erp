@@ -1,0 +1,1 @@
+ALTER TABLE public.defective_tags ADD COLUMN IF NOT EXISTS oem_case_id text;
