@@ -46,6 +46,28 @@ type SortKey = "tag_no" | "tag_date" | "customer_name" | "model_no";
 
 const NO_ASP = "__no_asp__";
 
+const normKey = (v: any) => String(v ?? "").trim().toLowerCase();
+
+function buildDcPrefill(rows: DefectiveInRecord[]) {
+  return {
+    source: "defective_tags",
+    reference_no: "",
+    internal_remarks: "Defective stock return to OEM",
+    items: rows.map((r) => ({
+      part_no: r.model_no || "",
+      part_name: r.part_name || r.model_no || "",
+      description: "",
+      uom: "Nos",
+      qty: "1",
+      model_no: r.model_no || "",
+      serial_no: r.serial_no || "",
+      oracle_no: r.oracle_order_no || "",
+      stock_type: "Defective",
+      oem_ref_id: r.oem_ref_id || "",
+    })),
+  };
+}
+
 function DefectiveTagsPage() {
   const [tags, setTags] = useState<DefectiveTag[]>([]);
   const [records, setRecords] = useState<DefectiveInRecord[]>([]);
@@ -54,7 +76,10 @@ function DefectiveTagsPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<string>("");
   const [preview, setPreview] = useState<DefectiveTag[] | null>(null);
+  const [dcCandidates, setDcCandidates] = useState<DefectiveInRecord[] | null>(null);
+  const [askDc, setAskDc] = useState<DefectiveInRecord[] | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   async function load() {
     setLoading(true);
@@ -77,6 +102,32 @@ function DefectiveTagsPage() {
   }
   useEffect(() => { load(); }, []);
 
+  function patchRecords(keys: string[], created: DefectiveTag[]) {
+    const set = new Set(keys);
+    setRecords((prev) =>
+      prev.map((r) => {
+        if (!set.has(r.key)) return r;
+        const t = created.find(
+          (c) => normKey(c.model_no) === normKey(r.model_no) && normKey(c.serial_no) === normKey(r.serial_no),
+        );
+        return { ...r, tag_generated: true, tag_no: t?.tag_no ?? r.tag_no };
+      }),
+    );
+  }
+
+  function goToOemDc(rows: DefectiveInRecord[]) {
+    try {
+      sessionStorage.setItem("challan:prefill:new-oem", JSON.stringify(buildDcPrefill(rows)));
+    } catch { /* noop */ }
+    navigate({ to: "/challan/oem/new" });
+  }
+
+  function closePreview() {
+    setPreview(null);
+    if (dcCandidates?.length) setAskDc(dcCandidates);
+    setDcCandidates(null);
+  }
+
   const pending = useMemo(() => records.filter((r) => !r.sent_to_oem), [records]);
 
   const aspTabs = useMemo(() => {
@@ -98,11 +149,13 @@ function DefectiveTagsPage() {
     await printMultiPageElement(sheetRef.current, "defective-tags", { landscape: true });
     await markTagsPrinted(preview.map((t) => t.id), await getCurrentUserName());
     load();
+    closePreview();
   }
   async function doDownload() {
     if (!sheetRef.current || !preview) return;
     try {
       await saveMultiPageElementAsPdf(sheetRef.current, "defective-tags.pdf", { landscape: true });
+      closePreview();
     } catch (e: any) {
       toast.error(e?.message || "Download failed");
     }
@@ -131,17 +184,30 @@ function DefectiveTagsPage() {
               rows={records.filter((r) => (r.asp_code || NO_ASP) === a)}
               loading={loading}
               allTags={tags}
-              onGenerated={(created) => { load(); setPreview(created); }}
+              onGenerated={(created, selectedRows) => {
+                patchRecords(selectedRows.map((r) => r.key), created);
+                load();
+                setDcCandidates(selectedRows);
+                setPreview(created);
+              }}
+              onView={(t) => { setDcCandidates(null); setPreview([t]); }}
+              onGenerateDc={goToOemDc}
             />
           </TabsContent>
         ))}
 
         <TabsContent value="register" className="mt-4">
-          <RegisterTab tags={tags} dispatches={dispatches} loading={loading} onRefresh={load} onPreview={setPreview} />
+          <RegisterTab
+            tags={tags}
+            dispatches={dispatches}
+            loading={loading}
+            onRefresh={load}
+            onPreview={(t) => { setDcCandidates(null); setPreview(t); }}
+          />
         </TabsContent>
       </Tabs>
 
-      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+      <Dialog open={!!preview} onOpenChange={(o) => { if (!o) closePreview(); }}>
         <DialogContent className="max-w-[900px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Defective Tag Preview — {preview?.length || 0} tag(s), A4 landscape, 4 per page</DialogTitle>
@@ -155,25 +221,38 @@ function DefectiveTagsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!askDc} onOpenChange={(o) => !o && setAskDc(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generate DC to OEM for these {askDc?.length || 0} item(s)?</DialogTitle>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAskDc(null)}>No</Button>
+            <Button onClick={() => { const rows = askDc || []; setAskDc(null); goToOemDc(rows); }}>Yes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 function AspTab({
-  aspKey, warehouseName, rows, loading, allTags, onGenerated,
+  aspKey, warehouseName, rows, loading, allTags, onGenerated, onView, onGenerateDc,
 }: {
   aspKey: string;
   warehouseName: string;
   rows: DefectiveInRecord[];
   loading: boolean;
   allTags: DefectiveTag[];
-  onGenerated: (tags: DefectiveTag[]) => void;
+  onGenerated: (tags: DefectiveTag[], selectedRows: DefectiveInRecord[]) => void;
+  onView: (tag: DefectiveTag) => void;
+  onGenerateDc: (rows: DefectiveInRecord[]) => void;
 }) {
   const [q, setQ] = useState("");
   const [showGenerated, setShowGenerated] = useState(false);
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
-  const navigate = useNavigate();
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase().trim();
@@ -192,43 +271,26 @@ function AspTab({
 
   function generateDcToOem() {
     if (!selectedRows.length) return;
-    const prefill = {
-      source: "defective_tags",
-      reference_no: "",
-      internal_remarks: "Defective stock return to OEM",
-      items: selectedRows.map((r) => ({
-        part_no: r.model_no || "",
-        part_name: r.part_name || r.model_no || "",
-        description: "",
-        uom: "Nos",
-        qty: "1",
-        model_no: r.model_no || "",
-        serial_no: r.serial_no || "",
-        oracle_no: r.oracle_order_no || "",
-        stock_type: "Defective",
-        oem_ref_id: r.oem_ref_id || "",
-      })),
-    };
-    try { sessionStorage.setItem("challan:prefill:new-oem", JSON.stringify(prefill)); } catch { /* noop */ }
-    navigate({ to: "/challan/oem/new" });
+    onGenerateDc(selectedRows);
   }
 
   async function generate() {
     if (!selectedRows.length) return;
+    const chosen = selectedRows;
     setSaving(true);
     try {
       const created = selectedForTags.length
         ? await generateTags(selectedForTags, await getCurrentUserName())
         : [];
       if (created.length) toast.success(`${created.length} defective tag(s) generated`);
-      const norm = (v: any) => String(v ?? "").trim().toLowerCase();
+      const norm = normKey;
       const existing = allTags.filter((t) =>
-        selectedRows.some(
+        chosen.some(
           (r) => r.tag_generated && norm(t.model_no) === norm(r.model_no) && norm(t.serial_no) === norm(r.serial_no),
         ),
       );
       setSel({});
-      onGenerated([...created, ...existing]);
+      onGenerated([...created, ...existing], chosen);
     } catch (e: any) {
       toast.error(e?.message?.includes("duplicate") ? "A tag already exists for one of the selected records" : e?.message || "Tag generation failed");
     } finally {
@@ -315,9 +377,23 @@ function AspTab({
                   </td>
                   <td className="p-2 max-w-[180px] break-words">{r.reason || "—"}</td>
                   <td className="p-2">
-                    {r.tag_generated
-                      ? <Badge variant="secondary">Tagged — ready for DC</Badge>
-                      : <Badge variant="outline">Not Generated</Badge>}
+                    {r.tag_generated ? (
+                      <div className="flex items-center gap-1 whitespace-nowrap">
+                        <Badge variant="secondary">Generated</Badge>
+                        {(() => {
+                          const t = allTags.find(
+                            (x) => normKey(x.model_no) === normKey(r.model_no) && normKey(x.serial_no) === normKey(r.serial_no),
+                          );
+                          return t ? (
+                            <Button size="sm" variant="ghost" className="h-6 px-1.5" onClick={() => onView(t)}>
+                              <Eye className="h-3.5 w-3.5 mr-1" />View
+                            </Button>
+                          ) : null;
+                        })()}
+                      </div>
+                    ) : (
+                      <Badge variant="outline">Not Generated</Badge>
+                    )}
                   </td>
                 </tr>
               ))}
