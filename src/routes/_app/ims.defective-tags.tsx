@@ -345,9 +345,10 @@ function AspTab({
 }
 
 function RegisterTab({
-  tags, loading, onRefresh, onPreview,
+  tags: allTags, dispatches, loading, onRefresh, onPreview,
 }: {
   tags: DefectiveTag[];
+  dispatches: Map<string, TagDispatch>;
   loading: boolean;
   onRefresh: () => void;
   onPreview: (t: DefectiveTag[]) => void;
@@ -357,6 +358,13 @@ function RegisterTab({
   const [aspFilter, setAspFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("tag_date");
   const [sortAsc, setSortAsc] = useState(false);
+
+  // Only tags whose physical part has actually been dispatched back to the OEM.
+  const tags = useMemo(
+    () => allTags.filter((t) => dispatches.has(dispatchKey(t.model_no, t.serial_no))),
+    [allTags, dispatches],
+  );
+  const dcFor = (t: DefectiveTag) => dispatches.get(dispatchKey(t.model_no, t.serial_no));
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase().trim();
@@ -435,14 +443,18 @@ function RegisterTab({
                 <th className="p-2">ASP</th>
                 <th className="p-2">Engineer</th>
                 <th className="p-2">Status</th>
+                <th className="p-2">DC No</th>
+                <th className="p-2">DC Date</th>
                 <th className="p-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={10}>No defective tags yet.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>
+                  No tags dispatched to OEM yet — tags appear here once a DC to OEM is generated for them.
+                </td></tr>
               ) : filtered.map((t) => (
                 <tr key={t.id} className="border-t align-top">
                   <td className="p-2 font-mono text-xs">{t.tag_no}</td>
@@ -461,6 +473,8 @@ function RegisterTab({
                       ? <Badge variant="secondary">Printed ×{t.print_count}</Badge>
                       : <Badge>Generated</Badge>}
                   </td>
+                  <td className="p-2 font-mono text-xs">{dcFor(t)?.dc_no || "—"}</td>
+                  <td className="p-2 whitespace-nowrap">{fmtDate(dcFor(t)?.dc_date)}</td>
                   <td className="p-2 text-right whitespace-nowrap">
                     <Button size="sm" variant="ghost" onClick={() => onPreview([t])}>
                       <Eye className="h-4 w-4 mr-1" />{t.printed_at ? "Reprint" : "Preview"}
