@@ -377,9 +377,23 @@ function AspTab({
                   </td>
                   <td className="p-2 max-w-[180px] break-words">{r.reason || "—"}</td>
                   <td className="p-2">
-                    {r.tag_generated
-                      ? <Badge variant="secondary">Tagged — ready for DC</Badge>
-                      : <Badge variant="outline">Not Generated</Badge>}
+                    {r.tag_generated ? (
+                      <div className="flex items-center gap-1 whitespace-nowrap">
+                        <Badge variant="secondary">Generated</Badge>
+                        {(() => {
+                          const t = allTags.find(
+                            (x) => normKey(x.model_no) === normKey(r.model_no) && normKey(x.serial_no) === normKey(r.serial_no),
+                          );
+                          return t ? (
+                            <Button size="sm" variant="ghost" className="h-6 px-1.5" onClick={() => onView(t)}>
+                              <Eye className="h-3.5 w-3.5 mr-1" />View
+                            </Button>
+                          ) : null;
+                        })()}
+                      </div>
+                    ) : (
+                      <Badge variant="outline">Not Generated</Badge>
+                    )}
                   </td>
                 </tr>
               ))}
