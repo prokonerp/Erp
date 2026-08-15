@@ -68,7 +68,7 @@ function DefectiveTagsPage() {
       if (status === "printed" && !t.printed_at) return false;
       if (status === "not_printed" && t.printed_at) return false;
       if (!s) return true;
-      return [t.tag_no, t.txn_no, t.service_request_no, t.oracle_order_no, t.model_no, t.serial_no, t.customer_name, t.asp_code, t.engineer_name]
+      return [t.tag_no, t.oem_case_id, t.oracle_order_no, t.model_no, t.serial_no, t.customer_name, t.asp_code, t.engineer_name]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(s));
     });
@@ -135,8 +135,7 @@ function DefectiveTagsPage() {
               <tr className="text-left">
                 <th className="p-2 cursor-pointer" onClick={() => toggleSort("tag_no")}>Tag No</th>
                 <th className="p-2 cursor-pointer" onClick={() => toggleSort("tag_date")}>Generated</th>
-                <th className="p-2">Stock IN No</th>
-                <th className="p-2">SR No</th>
+                <th className="p-2">OEM Case ID</th>
                 <th className="p-2">Oracle Order</th>
                 <th className="p-2 cursor-pointer" onClick={() => toggleSort("model_no")}>Model · Serial</th>
                 <th className="p-2 cursor-pointer" onClick={() => toggleSort("customer_name")}>Customer</th>
@@ -148,15 +147,14 @@ function DefectiveTagsPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={11}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={10}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={11}>No defective tags yet.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={10}>No defective tags yet.</td></tr>
               ) : filtered.map((t) => (
                 <tr key={t.id} className="border-t align-top">
                   <td className="p-2 font-mono text-xs">{t.tag_no}</td>
                   <td className="p-2 whitespace-nowrap">{fmtDate(t.tag_date)}</td>
-                  <td className="p-2 font-mono text-xs">{t.txn_no || "—"}</td>
-                  <td className="p-2">{t.service_request_no || "—"}</td>
+                  <td className="p-2">{t.oem_case_id || "—"}</td>
                   <td className="p-2">{t.oracle_order_no || "—"}</td>
                   <td className="p-2">
                     <div>{t.model_no || "—"}</div>
@@ -230,7 +228,7 @@ function CreateTagsDialog({
       if (!showGenerated && r.tag_generated) return false;
       if (!showSentToOem && r.sent_to_oem) return false;
       if (!s) return true;
-      return [r.txn_no, r.service_request_no, r.oracle_order_no, r.model_no, r.serial_no, r.customer_name, r.asp_code, r.engineer_name, r.reason]
+      return [r.oem_ref_id, r.oracle_order_no, r.model_no, r.serial_no, r.customer_name, r.asp_code, r.engineer_name, r.reason]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
     });
   }, [rows, q, showGenerated, showSentToOem]);
@@ -311,9 +309,8 @@ function CreateTagsDialog({
                     }
                   />
                 </th>
-                <th className="p-2">Stock IN No</th>
                 <th className="p-2">Date</th>
-                <th className="p-2">SR No</th>
+                <th className="p-2">OEM Case ID</th>
                 <th className="p-2">Oracle Order</th>
                 <th className="p-2">Model</th>
                 <th className="p-2">Defective Serial</th>
@@ -327,9 +324,9 @@ function CreateTagsDialog({
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={13}>Loading…</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>Loading…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={13}>No pending Defective Stock IN records.</td></tr>
+                <tr><td className="p-4 text-muted-foreground" colSpan={12}>No pending Defective Stock IN records.</td></tr>
               ) : filtered.map((r) => (
                 <tr key={r.key} className="border-t align-top">
                   <td className="p-2">
@@ -340,9 +337,8 @@ function CreateTagsDialog({
                     />
                   </td>
 
-                  <td className="p-2 font-mono">{r.txn_no || "—"}</td>
                   <td className="p-2 whitespace-nowrap">{fmtDate(r.txn_date)}</td>
-                  <td className="p-2">{r.service_request_no || "—"}</td>
+                  <td className="p-2">{r.oem_ref_id || "—"}</td>
                   <td className="p-2">{r.oracle_order_no || "—"}</td>
                   <td className="p-2">{r.model_no || r.part_name || "—"}</td>
                   <td className="p-2 font-mono">{r.serial_no || "—"}</td>

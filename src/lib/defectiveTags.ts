@@ -27,6 +27,7 @@ export type DefectiveTag = {
   printed_at: string | null;
   printed_by: string | null;
   print_count: number;
+  oem_case_id: string | null;
   created_by_name: string | null;
   created_at: string;
 };
@@ -337,6 +338,7 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
       txn_no: r.txn_no,
       txn_date: r.txn_date,
       service_request_no: r.service_request_no,
+      oem_case_id: r.oem_ref_id,
       oracle_order_no: r.oracle_order_no,
       model_no: r.model_no || r.part_name,
       serial_no: r.serial_no,
