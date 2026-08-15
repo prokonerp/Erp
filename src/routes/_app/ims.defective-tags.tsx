@@ -44,6 +44,7 @@ function DefectiveTagsPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
+  const [aspFilter, setAspFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("tag_date");
   const [sortAsc, setSortAsc] = useState(false);
   const [openCreate, setOpenCreate] = useState(false);
@@ -67,6 +68,7 @@ function DefectiveTagsPage() {
     const rows = tags.filter((t) => {
       if (status === "printed" && !t.printed_at) return false;
       if (status === "not_printed" && t.printed_at) return false;
+      if (aspFilter !== "all" && (t.asp_code || "") !== aspFilter) return false;
       if (!s) return true;
       return [t.tag_no, t.oem_case_id, t.oracle_order_no, t.model_no, t.serial_no, t.customer_name, t.asp_code, t.engineer_name]
         .filter(Boolean)
@@ -77,7 +79,12 @@ function DefectiveTagsPage() {
       const bv = String(b[sortKey] ?? "");
       return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
     });
-  }, [tags, q, status, sortKey, sortAsc]);
+  }, [tags, q, status, aspFilter, sortKey, sortAsc]);
+
+  const aspOptions = useMemo(
+    () => Array.from(new Set(tags.map((t) => t.asp_code).filter(Boolean) as string[])).sort(),
+    [tags],
+  );
 
   function toggleSort(k: SortKey) {
     if (k === sortKey) setSortAsc((v) => !v);
@@ -110,11 +117,11 @@ function DefectiveTagsPage() {
               <Button size="sm" variant="outline" disabled={filtered.length === 0} onClick={() => setPreview(filtered)}>
                 <Printer className="h-4 w-4 mr-1" />Print All (filtered)
               </Button>
-              <Button size="sm" onClick={() => setOpenCreate(true)}><Plus className="h-4 w-4 mr-1" />Create Defective Tag</Button>
+              <Button size="sm" onClick={() => setOpenCreate(true)}><Plus className="h-4 w-4 mr-1" />Select Items — Tag / Send to OEM</Button>
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <Input className="md:col-span-2" placeholder="Tag no / Stock IN / SR / Oracle / Model / Serial / Customer / ASP / Engineer…" value={q} onChange={(e) => setQ(e.target.value)} />
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -122,6 +129,13 @@ function DefectiveTagsPage() {
               <SelectItem value="all">All Tags</SelectItem>
               <SelectItem value="printed">Printed</SelectItem>
               <SelectItem value="not_printed">Not Printed</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={aspFilter} onValueChange={setAspFilter}>
+            <SelectTrigger><SelectValue placeholder="All ASPs" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All ASPs</SelectItem>
+              {aspOptions.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
             </SelectContent>
           </Select>
           <div className="text-sm text-muted-foreground self-center">{filtered.length} of {tags.length}</div>
