@@ -66,20 +66,33 @@ export function fmtDate(d?: string | null) {
 }
 
 /**
- * All Defective Stock IN records from IMS (`ims_transactions.txn_type = 'defective_in'`),
- * joined live with Ticket (service request), Warehouse (ASP code) and existing tags.
+ * Defective parts, sourced primarily from Indents (`indents.oracles_data[].defective_rows`),
+ * which is where the workflow actually captures accurate model/serial/Oracle/OEM Case data.
+ * Defective stock that has no Indent yet still shows up via the IMS transaction/stock fallback.
  */
 export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
-  const [txns, tags, warehouses] = await Promise.all([
+  const [txns, tags, warehouses, indents] = await Promise.all([
     fetchAll<any>("ims_transactions", (q) =>
       q.select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false }),
     ),
     fetchAll<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no")),
     listWarehouses(),
+    fetchAll<any>("indents", (q) =>
+      q
+        .select("id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted")
+        .order("indent_date", { ascending: false }),
+    ),
   ]);
 
+  const liveIndents = (indents || []).filter((i) => !i.is_deleted);
+
   const ticketIds = Array.from(
-    new Set(txns.map((t) => t.ticket_id).filter((id: string | null) => !!id && UUID_RE.test(id))),
+    new Set(
+      [
+        ...txns.map((t) => t.ticket_id),
+        ...liveIndents.map((i) => i.ticket_id),
+      ].filter((id: string | null) => !!id && UUID_RE.test(id)),
+    ),
   ) as string[];
   let tickets: any[] = [];
   if (ticketIds.length) {
@@ -130,7 +143,98 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       .filter((k: string) => k !== "|"),
   );
 
-  const fromTxns = txns.map((t) => {
+  // ── PRIMARY SOURCE: Indent → Oracle block → defective rows ──────────────────
+  // Replacement Date comes from the linked customer Delivery Challan for the block.
+  const indentIds = liveIndents.map((i) => i.id);
+  const dcDateByIndentOracle = new Map<string, string>();
+  if (indentIds.length) {
+    const { data: dcs } = await sb
+      .from("delivery_challans")
+      .select("indent_id,doc_type,challan_date,items")
+      .eq("doc_type", "customer")
+      .in("indent_id", indentIds);
+    for (const dc of dcs || []) {
+      const oracles = new Set(
+        ((dc.items as any[]) || [])
+          .map((it) => norm(it?.oracle_no))
+          .filter(Boolean),
+      );
+      for (const o of oracles) {
+        const k = `${dc.indent_id}|${o}`;
+        if (!dcDateByIndentOracle.has(k) && dc.challan_date) dcDateByIndentOracle.set(k, dc.challan_date);
+      }
+    }
+  }
+
+  // Reuse existing txn linkage (and its tag) when the same physical part is
+  // already present in IMS, so tags stay attached to one record.
+  const txnByPart = new Map<string, any>();
+  for (const t of txns) {
+    const k = `${norm(t.part_model_no)}|${norm(t.part_serial_no)}`;
+    if (k !== "|" && !txnByPart.has(k)) txnByPart.set(k, t);
+  }
+
+  const fromIndents: DefectiveInRecord[] = [];
+  const indentCoveredTxnIds = new Set<string>();
+  const indentCoveredParts = new Set<string>();
+  for (const ind of liveIndents) {
+    const tk = ind.ticket_id ? tById.get(ind.ticket_id) : null;
+    for (const blk of (ind.oracles_data as any[]) || []) {
+      const oracleNo = String(blk?.oracle_no || "").trim() || null;
+      const wh = whById.get(
+        ((blk?.received_rows as any[]) || []).map((r) => r?.warehouse_id).find((w) => w && UUID_RE.test(w)) || "",
+      );
+      const rows = (blk?.defective_rows as any[]) || [];
+      rows.forEach((row, idx) => {
+        const model = String(row?.def_model_no || "").trim() || null;
+        const serial = String(row?.def_serial_no || "").trim() || null;
+        if (!model && !serial) return;
+        const partKey = `${norm(model)}|${norm(serial)}`;
+        if (partKey !== "|" && indentCoveredParts.has(partKey)) return;
+        if (partKey !== "|") indentCoveredParts.add(partKey);
+        const txn = txnByPart.get(partKey);
+        if (txn) indentCoveredTxnIds.add(txn.id);
+        const remarks =
+          ((tk?.defective_parts_details as any[]) || []).find(
+            (p) =>
+              (norm(p?.model_no) === norm(model) || norm(p?.name) === norm(model)) &&
+              (!serial || norm(p?.serial) === norm(serial)),
+          )?.remarks || null;
+        fromIndents.push({
+          key: txn ? txn.id : `indent:${ind.id}:${oracleNo || idx}:${idx}`,
+          source: "indent",
+          txn_id: txn?.id ?? null,
+          stock_item_id: null,
+          txn_no: txn?.txn_no ?? ind.indent_no ?? null,
+          txn_date: txn?.txn_date || ind.indent_date || ind.created_at,
+          service_request_no: tk?.case_id || ind.case_id || null,
+          oem_ref_id: ind.oem_case_id || tk?.oem_ref_id || null,
+          oracle_order_no: oracleNo,
+          model_no: model,
+          part_name: row?.part_name || null,
+          serial_no: serial,
+          customer_name: tk?.customer_name || null,
+          asp_code: wh?.asp_code || null,
+          warehouse_id: wh?.id || null,
+          engineer_name: ind.engineer_name || tk?.assigned_engineer_name || null,
+          replacement_date: oracleNo ? dcDateByIndentOracle.get(`${ind.id}|${norm(oracleNo)}`) || null : null,
+          reason: remarks || null,
+          tag_generated: txn ? tagByTxn.has(txn.id) : false,
+          tag_no: txn ? tagByTxn.get(txn.id) ?? null : null,
+          sent_to_oem: sentToOemKeys.has(statusKey(serial, model)),
+        });
+      });
+    }
+  }
+
+  // ── FALLBACK: defective IMS transactions with no Indent-sourced counterpart ──
+  const fromTxns = txns
+    .filter(
+      (t) =>
+        !indentCoveredTxnIds.has(t.id) &&
+        !indentCoveredParts.has(`${norm(t.part_model_no)}|${norm(t.part_serial_no)}`),
+    )
+    .map((t) => {
     const tk = t.ticket_id ? tById.get(t.ticket_id) : null;
     const wh = whById.get(t.to_warehouse_id || t.from_warehouse_id || "");
     // Serial fallback: pull from the ticket's defective parts capture.
@@ -173,7 +277,9 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   // transaction (opening stock, GRN-classified defectives, manual entries). Include
   // those so they can be tagged too, skipping any already covered by a transaction.
   const coveredSerials = new Set(
-    fromTxns.map((r) => `${(r.serial_no || "").toLowerCase()}|${(r.model_no || "").toLowerCase()}`).filter((k) => k !== "|"),
+    [...fromIndents, ...fromTxns]
+      .map((r) => `${(r.serial_no || "").toLowerCase()}|${(r.model_no || "").toLowerCase()}`)
+      .filter((k) => k !== "|"),
   );
   const stockItems = allStock.filter(
     (s) =>
@@ -212,7 +318,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       } as DefectiveInRecord;
     });
 
-  return [...fromTxns, ...fromStock];
+  return [...fromIndents, ...fromTxns, ...fromStock];
 }
 
 export async function listDefectiveTags(): Promise<DefectiveTag[]> {
