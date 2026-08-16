@@ -388,8 +388,27 @@ export function ageingDays(d?: string | null): number | null {
 
 /** One selected Defective Stock IN record = one Defective Tag. Duplicates are rejected by the DB. */
 export async function generateTags(records: DefectiveInRecord[], createdByName?: string | null) {
-  const rows = records
-    .filter((r) => !r.tag_generated)
+  const candidates = records.filter((r) => !r.tag_generated);
+  if (!candidates.length) return [] as DefectiveTag[];
+
+  // Guard against duplicates even when the UI-side flag is stale: re-check the
+  // register for any existing tag on the same physical unit (model + serial).
+  const existing = await fetchAll<any>("defective_tags", (q) => q.select("tag_no,model_no,serial_no"));
+  const taken = new Map<string, string | null>();
+  for (const t of existing || []) {
+    const k = dispatchKey(t.model_no, t.serial_no);
+    if (k !== "|" && !taken.has(k)) taken.set(k, t.tag_no ?? null);
+  }
+  const dupes = candidates.filter((r) => taken.has(dispatchKey(r.model_no || r.part_name, r.serial_no)));
+  if (dupes.length) {
+    const d = dupes[0];
+    const tagNo = taken.get(dispatchKey(d.model_no || d.part_name, d.serial_no));
+    throw new Error(
+      `A defective tag already exists for ${d.model_no || d.part_name || "this item"}${d.serial_no ? ` / ${d.serial_no}` : ""}${tagNo ? ` (${tagNo})` : ""}. Duplicate tags are not allowed.`,
+    );
+  }
+
+  const rows = candidates
     .map((r) => ({
       txn_id: r.txn_id,
       stock_item_id: r.stock_item_id,
