@@ -352,9 +352,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       lastPayloadRef.current = signature;
       setLastSavedAt(new Date());
       setSaveState("saved");
-    } catch (e) {
+    } catch (e: any) {
       setSaveState("error");
-      const msg = e instanceof Error ? e.message : "Auto-save failed";
+      const msg = e?.message || "Auto-save failed";
       toast.error(msg);
     } finally {
       savingRef.current = false;
