@@ -482,7 +482,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   };
 
   const openReview = () => {
-    if (validate()) setReviewOpen(true);
+    if (!validate()) return;
+    setReviewOpen(true);
+    void checkWarehouseMatch();
   };
 
   // "Done" button: flush any pending auto-save, then jump to the view page.
