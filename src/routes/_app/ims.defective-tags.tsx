@@ -60,7 +60,7 @@ function buildDcPrefill(rows: DefectiveInRecord[]) {
       uom: "Nos",
       qty: "1",
       model_no: r.model_no || "",
-      serial_no: r.serial_no || "",
+      good_defective_serial: r.serial_no || "",
       oracle_no: r.oracle_order_no || "",
       stock_type: "Defective",
       oem_ref_id: r.oem_ref_id || "",
