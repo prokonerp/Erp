@@ -86,6 +86,55 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const overrideReasonRef = useRef<string | null>(null);
   const negBlockedRef = useRef(false);
   const itemsSectionRef = useRef<HTMLDivElement | null>(null);
+  // Non-blocking warnings when the physical location of a serial does not
+  // match the "Supply From Warehouse" (branch) chosen on the document.
+  const [whWarnings, setWhWarnings] = useState<string[]>([]);
+
+  /**
+   * Warn (never block) when a serial's stock row lives in a warehouse that
+   * belongs to a different branch than the selected Supply From branch.
+   */
+  const checkWarehouseMatch = async () => {
+    setWhWarnings([]);
+    if (!branchId) return;
+    const serials = items
+      .map((it) => ((it.good_defective_serial || it.serial_no || "") as string).trim())
+      .filter(Boolean);
+    if (!serials.length) return;
+    try {
+      const { data: stock } = await supabase
+        .from("ims_stock_items")
+        .select("part_model_no,part_serial_no,warehouse_id")
+        .in("part_serial_no", serials);
+      if (!stock?.length) return;
+      const whIds = Array.from(
+        new Set((stock as Array<{ warehouse_id: string | null }>).map((s) => s.warehouse_id).filter(Boolean)),
+      ) as string[];
+      if (!whIds.length) return;
+      const { data: whs } = await supabase
+        .from("warehouses")
+        .select("id,name,branch_id")
+        .in("id", whIds);
+      const whById = new Map(
+        ((whs as Array<{ id: string; name: string; branch_id: string | null }>) || []).map((w) => [w.id, w]),
+      );
+      const { data: br } = await supabase.from("branches").select("id,name").eq("id", branchId).maybeSingle();
+      const branchName = (br as { name?: string } | null)?.name || "the selected branch";
+      const msgs: string[] = [];
+      for (const s of stock as Array<{ part_model_no: string | null; part_serial_no: string | null; warehouse_id: string | null }>) {
+        const w = s.warehouse_id ? whById.get(s.warehouse_id) : null;
+        if (!w || !w.branch_id) continue;
+        if (w.branch_id === branchId) continue;
+        msgs.push(
+          `Note: ${s.part_model_no || "Item"}/${s.part_serial_no} is physically in ${w.name}, but Supply From is set to ${branchName}`,
+        );
+      }
+      if (msgs.length) {
+        setWhWarnings(msgs);
+        msgs.slice(0, 3).forEach((m) => toast.warning(m));
+      }
+    } catch { /* warning only — never block */ }
+  };
 
   // Auto-populate Prepared By with the current logged-in user's name (new records only).
   useEffect(() => {
