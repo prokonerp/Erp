@@ -1153,6 +1153,17 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             <DialogTitle>Review Delivery Challan — {isOem ? "To OEM" : "To Customer"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-6 text-sm">
+            {whWarnings.length > 0 && (
+              <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 space-y-1">
+                <div className="font-semibold text-amber-700 dark:text-amber-400">Warehouse mismatch</div>
+                {whWarnings.map((m, i) => (
+                  <p key={i} className="text-xs text-amber-800 dark:text-amber-300">{m}</p>
+                ))}
+                <p className="text-[10px] text-muted-foreground">
+                  This does not block dispatch — cross-warehouse dispatch is allowed.
+                </p>
+              </div>
+            )}
             <section>
               <h3 className="font-semibold mb-2 border-b pb-1">Document Information</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
