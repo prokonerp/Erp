@@ -76,7 +76,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     fetchAll<any>("ims_transactions", (q) =>
       q.select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false }),
     ),
-    fetchAll<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no")),
+    fetchAll<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no,model_no,serial_no")),
     listWarehouses(),
     fetchAll<any>("indents", (q) =>
       q
@@ -130,6 +130,19 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const tagByStockItem = new Map(
     tags.filter((t) => t.stock_item_id).map((t) => [t.stock_item_id, t.tag_no as string | null]),
   );
+  // Global lookup by the physical unit (model + serial). A tag for a unit must be
+  // found regardless of which txn / stock row surfaced the row in this listing.
+  const tagByPart = new Map<string, string | null>();
+  for (const t of tags) {
+    const k = dispatchKey(t.model_no, t.serial_no);
+    if (k === "|") continue;
+    if (!tagByPart.has(k)) tagByPart.set(k, (t.tag_no as string | null) ?? null);
+  }
+  const tagFor = (model?: string | null, serial?: string | null) => {
+    const k = dispatchKey(model, serial);
+    return k === "|" ? undefined : tagByPart.get(k);
+  };
+  const hasTag = (model?: string | null, serial?: string | null) => tagFor(model, serial) !== undefined;
 
   // Include anything flagged defective by TYPE or by STATUS.
   const allStock = await fetchAll<any>("ims_stock_items", (q) =>
@@ -220,8 +233,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
           engineer_name: ind.engineer_name || tk?.assigned_engineer_name || null,
           replacement_date: dcDateFor(model, serial),
           reason: remarks || null,
-          tag_generated: txn ? tagByTxn.has(txn.id) : false,
-          tag_no: txn ? tagByTxn.get(txn.id) ?? null : null,
+          tag_generated: hasTag(model, serial) || (txn ? tagByTxn.has(txn.id) : false),
+          tag_no: tagFor(model, serial) ?? (txn ? tagByTxn.get(txn.id) ?? null : null),
           sent_to_oem: sentToOemKeys.has(statusKey(serial, model)),
         });
       });
@@ -268,8 +281,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       engineer_name: tk?.assigned_engineer_name || null,
       replacement_date: dcDateFor(t.part_model_no, serialNo) || t.txn_date,
       reason: t.notes || tk?.complaint || null,
-      tag_generated: tagByTxn.has(t.id),
-      tag_no: tagByTxn.get(t.id) ?? null,
+      tag_generated: hasTag(t.part_model_no, serialNo) || tagByTxn.has(t.id),
+      tag_no: tagFor(t.part_model_no, serialNo) ?? tagByTxn.get(t.id) ?? null,
       sent_to_oem: sentToOemKeys.has(statusKey(t.part_serial_no, t.part_model_no)),
     };
   });
@@ -313,8 +326,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         engineer_name: null,
         replacement_date: dcDateFor(s.part_model_no, s.part_serial_no) || s.created_at,
         reason: s.notes || null,
-        tag_generated: tagByStockItem.has(s.id),
-        tag_no: tagByStockItem.get(s.id) ?? null,
+        tag_generated: hasTag(s.part_model_no, s.part_serial_no) || tagByStockItem.has(s.id),
+        tag_no: tagFor(s.part_model_no, s.part_serial_no) ?? tagByStockItem.get(s.id) ?? null,
         sent_to_oem: String(s.stock_status || "").toLowerCase() === "returned_to_oem",
       } as DefectiveInRecord;
     });
@@ -375,8 +388,27 @@ export function ageingDays(d?: string | null): number | null {
 
 /** One selected Defective Stock IN record = one Defective Tag. Duplicates are rejected by the DB. */
 export async function generateTags(records: DefectiveInRecord[], createdByName?: string | null) {
-  const rows = records
-    .filter((r) => !r.tag_generated)
+  const candidates = records.filter((r) => !r.tag_generated);
+  if (!candidates.length) return [] as DefectiveTag[];
+
+  // Guard against duplicates even when the UI-side flag is stale: re-check the
+  // register for any existing tag on the same physical unit (model + serial).
+  const existing = await fetchAll<any>("defective_tags", (q) => q.select("tag_no,model_no,serial_no"));
+  const taken = new Map<string, string | null>();
+  for (const t of existing || []) {
+    const k = dispatchKey(t.model_no, t.serial_no);
+    if (k !== "|" && !taken.has(k)) taken.set(k, t.tag_no ?? null);
+  }
+  const dupes = candidates.filter((r) => taken.has(dispatchKey(r.model_no || r.part_name, r.serial_no)));
+  if (dupes.length) {
+    const d = dupes[0];
+    const tagNo = taken.get(dispatchKey(d.model_no || d.part_name, d.serial_no));
+    throw new Error(
+      `A defective tag already exists for ${d.model_no || d.part_name || "this item"}${d.serial_no ? ` / ${d.serial_no}` : ""}${tagNo ? ` (${tagNo})` : ""}. Duplicate tags are not allowed.`,
+    );
+  }
+
+  const rows = candidates
     .map((r) => ({
       txn_id: r.txn_id,
       stock_item_id: r.stock_item_id,

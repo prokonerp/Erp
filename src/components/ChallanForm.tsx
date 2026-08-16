@@ -86,6 +86,55 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const overrideReasonRef = useRef<string | null>(null);
   const negBlockedRef = useRef(false);
   const itemsSectionRef = useRef<HTMLDivElement | null>(null);
+  // Non-blocking warnings when the physical location of a serial does not
+  // match the "Supply From Warehouse" (branch) chosen on the document.
+  const [whWarnings, setWhWarnings] = useState<string[]>([]);
+
+  /**
+   * Warn (never block) when a serial's stock row lives in a warehouse that
+   * belongs to a different branch than the selected Supply From branch.
+   */
+  const checkWarehouseMatch = async () => {
+    setWhWarnings([]);
+    if (!branchId) return;
+    const serials = items
+      .map((it) => ((it.good_defective_serial || it.serial_no || "") as string).trim())
+      .filter(Boolean);
+    if (!serials.length) return;
+    try {
+      const { data: stock } = await supabase
+        .from("ims_stock_items")
+        .select("part_model_no,part_serial_no,warehouse_id")
+        .in("part_serial_no", serials);
+      if (!stock?.length) return;
+      const whIds = Array.from(
+        new Set((stock as Array<{ warehouse_id: string | null }>).map((s) => s.warehouse_id).filter(Boolean)),
+      ) as string[];
+      if (!whIds.length) return;
+      const { data: whs } = await supabase
+        .from("warehouses")
+        .select("id,name,branch_id")
+        .in("id", whIds);
+      const whById = new Map(
+        ((whs as Array<{ id: string; name: string; branch_id: string | null }>) || []).map((w) => [w.id, w]),
+      );
+      const { data: br } = await supabase.from("branches").select("id,name").eq("id", branchId).maybeSingle();
+      const branchName = (br as { name?: string } | null)?.name || "the selected branch";
+      const msgs: string[] = [];
+      for (const s of stock as Array<{ part_model_no: string | null; part_serial_no: string | null; warehouse_id: string | null }>) {
+        const w = s.warehouse_id ? whById.get(s.warehouse_id) : null;
+        if (!w || !w.branch_id) continue;
+        if (w.branch_id === branchId) continue;
+        msgs.push(
+          `Note: ${s.part_model_no || "Item"}/${s.part_serial_no} is physically in ${w.name}, but Supply From is set to ${branchName}`,
+        );
+      }
+      if (msgs.length) {
+        setWhWarnings(msgs);
+        msgs.slice(0, 3).forEach((m) => toast.warning(m));
+      }
+    } catch { /* warning only — never block */ }
+  };
 
   // Auto-populate Prepared By with the current logged-in user's name (new records only).
   useEffect(() => {
@@ -482,7 +531,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   };
 
   const openReview = () => {
-    if (validate()) setReviewOpen(true);
+    if (!validate()) return;
+    setReviewOpen(true);
+    void checkWarehouseMatch();
   };
 
   // "Done" button: flush any pending auto-save, then jump to the view page.
@@ -1102,6 +1153,17 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             <DialogTitle>Review Delivery Challan — {isOem ? "To OEM" : "To Customer"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-6 text-sm">
+            {whWarnings.length > 0 && (
+              <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 space-y-1">
+                <div className="font-semibold text-amber-700 dark:text-amber-400">Warehouse mismatch</div>
+                {whWarnings.map((m, i) => (
+                  <p key={i} className="text-xs text-amber-800 dark:text-amber-300">{m}</p>
+                ))}
+                <p className="text-[10px] text-muted-foreground">
+                  This does not block dispatch — cross-warehouse dispatch is allowed.
+                </p>
+              </div>
+            )}
             <section>
               <h3 className="font-semibold mb-2 border-b pb-1">Document Information</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
