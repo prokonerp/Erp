@@ -76,7 +76,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     fetchAll<any>("ims_transactions", (q) =>
       q.select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false }),
     ),
-    fetchAll<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no")),
+    fetchAll<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no,model_no,serial_no")),
     listWarehouses(),
     fetchAll<any>("indents", (q) =>
       q
@@ -130,6 +130,19 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const tagByStockItem = new Map(
     tags.filter((t) => t.stock_item_id).map((t) => [t.stock_item_id, t.tag_no as string | null]),
   );
+  // Global lookup by the physical unit (model + serial). A tag for a unit must be
+  // found regardless of which txn / stock row surfaced the row in this listing.
+  const tagByPart = new Map<string, string | null>();
+  for (const t of tags) {
+    const k = dispatchKey(t.model_no, t.serial_no);
+    if (k === "|") continue;
+    if (!tagByPart.has(k)) tagByPart.set(k, (t.tag_no as string | null) ?? null);
+  }
+  const tagFor = (model?: string | null, serial?: string | null) => {
+    const k = dispatchKey(model, serial);
+    return k === "|" ? undefined : tagByPart.get(k);
+  };
+  const hasTag = (model?: string | null, serial?: string | null) => tagFor(model, serial) !== undefined;
 
   // Include anything flagged defective by TYPE or by STATUS.
   const allStock = await fetchAll<any>("ims_stock_items", (q) =>
