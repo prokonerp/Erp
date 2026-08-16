@@ -233,8 +233,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
           engineer_name: ind.engineer_name || tk?.assigned_engineer_name || null,
           replacement_date: dcDateFor(model, serial),
           reason: remarks || null,
-          tag_generated: txn ? tagByTxn.has(txn.id) : false,
-          tag_no: txn ? tagByTxn.get(txn.id) ?? null : null,
+          tag_generated: hasTag(model, serial) || (txn ? tagByTxn.has(txn.id) : false),
+          tag_no: tagFor(model, serial) ?? (txn ? tagByTxn.get(txn.id) ?? null : null),
           sent_to_oem: sentToOemKeys.has(statusKey(serial, model)),
         });
       });
@@ -281,8 +281,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       engineer_name: tk?.assigned_engineer_name || null,
       replacement_date: dcDateFor(t.part_model_no, serialNo) || t.txn_date,
       reason: t.notes || tk?.complaint || null,
-      tag_generated: tagByTxn.has(t.id),
-      tag_no: tagByTxn.get(t.id) ?? null,
+      tag_generated: hasTag(t.part_model_no, serialNo) || tagByTxn.has(t.id),
+      tag_no: tagFor(t.part_model_no, serialNo) ?? tagByTxn.get(t.id) ?? null,
       sent_to_oem: sentToOemKeys.has(statusKey(t.part_serial_no, t.part_model_no)),
     };
   });
@@ -326,8 +326,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         engineer_name: null,
         replacement_date: dcDateFor(s.part_model_no, s.part_serial_no) || s.created_at,
         reason: s.notes || null,
-        tag_generated: tagByStockItem.has(s.id),
-        tag_no: tagByStockItem.get(s.id) ?? null,
+        tag_generated: hasTag(s.part_model_no, s.part_serial_no) || tagByStockItem.has(s.id),
+        tag_no: tagFor(s.part_model_no, s.part_serial_no) ?? tagByStockItem.get(s.id) ?? null,
         sent_to_oem: String(s.stock_status || "").toLowerCase() === "returned_to_oem",
       } as DefectiveInRecord;
     });
