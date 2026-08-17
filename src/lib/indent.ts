@@ -202,6 +202,63 @@ export function oracleIsComplete(oIn: OracleBlock, indentType?: string | null): 
   return true;
 }
 
+export type SectionKey = "A" | "B" | "C" | "D";
+
+/** Per-section field-completeness, extracted verbatim from `oracleIsComplete`
+ *  so the pipeline display and the closure check can never disagree.
+ *  Returns the list of human-readable missing field labels (empty = complete). */
+export function sectionMissingFields(
+  oIn: OracleBlock,
+  section: SectionKey,
+  indentType?: string | null,
+): string[] {
+  const o = normalizeOracle(oIn);
+  const nn = (s?: string) => !!(s && String(s).trim());
+  const qty = (s?: string) => nn(s) && Number(s) > 0;
+  const missing = new Set<string>();
+  if (o.defective_rows.length === 0) {
+    missing.add("No defective rows");
+    return Array.from(missing);
+  }
+  const custRows = o.customer_received_rows || [];
+  const custTouched = custRows.some((c) => nn(c?.warehouse_id) || nn(c?.serial_no) || nn(c?.received_date));
+  const needCust = requiresCustomerReturn(indentType) || custTouched;
+  for (let i = 0; i < o.defective_rows.length; i++) {
+    if (section === "A") {
+      const d = o.defective_rows[i];
+      if (!nn(d.def_model_no)) missing.add("Model No");
+      if (!nn(d.def_serial_no)) missing.add("Serial No");
+      if (!qty(d.qty)) missing.add("Qty");
+    } else if (section === "B") {
+      const e = o.exchange_rows[i];
+      if (!e) { missing.add("Exchange row"); continue; }
+      if (!nn(e.warehouse_id)) missing.add("Warehouse");
+      if (!nn(e.model_no)) missing.add("Model");
+      if (!nn(e.serial_no)) missing.add("Serial");
+      if (!qty(e.qty)) missing.add("Qty");
+    } else if (section === "C") {
+      const r = o.received_rows[i];
+      if (!r) { missing.add("Received row"); continue; }
+      if (!nn(r.warehouse_id)) missing.add("Warehouse");
+      if (!nn(r.model_no)) missing.add("Model");
+      if (!nn(r.serial_no)) missing.add("Serial");
+      if (!qty(r.qty)) missing.add("Qty");
+      if (!nn(r.received_date)) missing.add("Received Date");
+    } else {
+      if (!needCust) return [];
+      const c = custRows[i];
+      if (!c) { missing.add("Customer return row"); continue; }
+      if (!nn(c.warehouse_id)) missing.add("Warehouse");
+      if (!nn(c.model_no)) missing.add("Model");
+      if (!nn(c.serial_no)) missing.add("Serial");
+      if (!qty(c.qty)) missing.add("Qty");
+      if (!nn(c.received_date)) missing.add("Received Date");
+      if (!nn(c.product_tag)) missing.add("Product Tag");
+    }
+  }
+  return Array.from(missing);
+}
+
 /** Tri-state progress indicator for a single Oracle block:
  *  - "closed": already marked closed, or every required row is complete AND
  *    no linked DC/GRN is still pending (same rule as auto-close).
@@ -301,7 +358,7 @@ export const emptyOracleDocs = (): OraclePendingDocs => ({
 
 /** A document type is satisfied only when at least one exists AND none of
  *  the existing ones are still pending. */
-function docSatisfied(c?: DocCounts | null): boolean {
+export function docSatisfied(c?: DocCounts | null): boolean {
   if (!c) return false;
   return c.settled > 0 && c.pending === 0;
 }
