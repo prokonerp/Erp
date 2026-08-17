@@ -16,6 +16,7 @@ import {
 import { normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import { IndentModelPicker } from "@/components/IndentModelPicker";
+import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeline";
 
 type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string };
 type Warehouse = { id: string; name: string; code: string };
@@ -25,7 +26,7 @@ export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
   onGenerateCustomerGrn, dcExists = false, dcInfo, indentId,
-  pendingDocs, indentType,
+  pendingDocs, indentType, docInfo, duplicateIndentNo,
 }: {
   index: number;
   value: OracleBlock;
@@ -48,6 +49,10 @@ export function OracleBlockEditor({
   /** Parent indent type — decides whether Section D (customer return) is
    *  mandatory for completeness / auto-close. */
   indentType?: string | null;
+  /** Document numbers/statuses per section, for the status pipeline. */
+  docInfo?: OracleDocInfoMap;
+  /** Indent No where this same Oracle # also appears (informational). */
+  duplicateIndentNo?: string | null;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -278,6 +283,18 @@ export function OracleBlockEditor({
       </CardHeader>
       {!collapsed && (
       <CardContent className={`space-y-4 ${locked ? "pointer-events-none opacity-80" : ""}`}>
+        <div className="pointer-events-auto">
+          <OraclePipeline
+            oracle={value}
+            indentType={indentType}
+            pendingDocs={pendingDocs}
+            docInfo={{ ...(docInfo || {}), dc: docInfo?.dc ?? (dcInfo ? { no: dcInfo.challan_no, status: dcInfo.status } : null) }}
+            duplicateIndentNo={duplicateIndentNo}
+            onGenerateChallan={onGenerateChallan}
+            onGenerateGrn={onGenerateGrn}
+            onGenerateCustomerGrn={onGenerateCustomerGrn}
+          />
+        </div>
         <div className="max-w-xs">
           <Label>Oracle #</Label>
           <Input
