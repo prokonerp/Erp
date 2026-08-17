@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, docStatusSettled, emptyOracleDocs, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock, type OraclePendingDocs } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
+import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeline";
 import { useIsAdmin } from "@/lib/useRole";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
@@ -32,6 +33,10 @@ function IndentDetail() {
   /** Per-oracle count of DC / GRN documents that are not yet Submitted or
    *  Closed. Blocks Oracle auto-close while any remain pending. */
   const [pendingByOracle, setPendingByOracle] = useState<Record<string, OraclePendingDocs>>({});
+  /** Doc numbers/statuses per oracle, used by the status pipeline. */
+  const [docInfoByOracle, setDocInfoByOracle] = useState<Record<string, OracleDocInfoMap>>({});
+  /** Oracle # → another Indent No where the same Oracle # is also used. */
+  const [dupOracle, setDupOracle] = useState<Record<string, string>>({});
   const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const hydratedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,6 +82,13 @@ function IndentDetail() {
    *  used to gate Oracle auto-close. */
   const loadLinkedDocs = useCallback(async () => {
     const pending: Record<string, OraclePendingDocs> = {};
+    const docs: Record<string, OracleDocInfoMap> = {};
+    const setDoc = (oracleNo: string, kind: "dc" | "oem_grn" | "customer_grn", no: string | null, status: string | null) => {
+      const key = (oracleNo || "").trim().toUpperCase();
+      if (!key) return;
+      if (!docs[key]) docs[key] = {};
+      if (!docs[key][kind]) docs[key][kind] = { no, status };
+    };
     const bump = (oracleNo: string, kind: "dc" | "oem_grn" | "customer_grn", settled: boolean) => {
       const key = (oracleNo || "").trim().toUpperCase();
       if (!key) return;
@@ -99,15 +111,16 @@ function IndentDetail() {
         const key = on.toUpperCase();
         if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
         bump(on, "dc", docStatusSettled(dc.status));
+        setDoc(on, "dc", dc.challan_no, dc.status);
       }
     }
     setDcByOracle(map);
 
     const { data: grnRows } = await supabase
       .from("grns" as never)
-      .select("id, status, category, items")
+      .select("id, grn_no, status, category, items")
       .eq("indent_id", id);
-    for (const g of (grnRows || []) as unknown as Array<{ status: string | null; category: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+    for (const g of (grnRows || []) as unknown as Array<{ grn_no: string | null; status: string | null; category: string | null; items: Array<{ oracle_no?: string }> | null }>) {
       if ((g.status || "").toLowerCase() === "cancelled") continue;
       const cat = (g.category || "").trim().toLowerCase();
       const kind = cat === "customer" ? ("customer_grn" as const) : ("oem_grn" as const);
@@ -118,9 +131,11 @@ function IndentDetail() {
         if (!on || seen.has(on)) continue;
         seen.add(on);
         bump(on, kind, settled);
+        setDoc(on, kind, g.grn_no, g.status);
       }
     }
     setPendingByOracle(pending);
+    setDocInfoByOracle(docs);
   }, [id]);
 
   // Refresh linked-document statuses periodically (same 60s tick used for age).
@@ -128,6 +143,29 @@ function IndentDetail() {
     if (!hydratedRef.current) return;
     void loadLinkedDocs();
   }, [tick, loadLinkedDocs]);
+
+  /** One batched lookup: which of this Indent's Oracle #s also appear on
+   *  another Indent. Informational only. */
+  const oracleKeys = (i?.oracles_data || [])
+    .map((o) => (o.oracle_no || "").trim().toUpperCase()).filter(Boolean).sort().join(",");
+  useEffect(() => {
+    if (!oracleKeys) { setDupOracle({}); return; }
+    const wanted = new Set(oracleKeys.split(","));
+    (async () => {
+      const { data } = await supabase
+        .from("indents" as never)
+        .select("id, indent_no, oracles_data")
+        .neq("id", id);
+      const out: Record<string, string> = {};
+      for (const row of (data || []) as unknown as Array<{ id: string; indent_no: string | null; oracles_data: OracleBlock[] | null }>) {
+        for (const o of row.oracles_data || []) {
+          const k = (o?.oracle_no || "").trim().toUpperCase();
+          if (k && wanted.has(k) && !out[k]) out[k] = row.indent_no || "(no number)";
+        }
+      }
+      setDupOracle(out);
+    })();
+  }, [oracleKeys, id]);
 
   const update = (p: Partial<Indent>) => setI((s) => (s ? { ...s, ...p } : s));
 
@@ -712,6 +750,32 @@ function IndentDetail() {
         </div>
       </div>
 
+      {(i.oracles_data || []).length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Oracle Progress</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {(i.oracles_data || []).map((o: OracleBlock, idx: number) => {
+              const key = (o.oracle_no || "").trim().toUpperCase();
+              return (
+                <OraclePipeline
+                  key={idx}
+                  condensed={(i.oracles_data || []).length > 1}
+                  oracle={o}
+                  indentType={i.indent_type}
+                  pendingDocs={pendingByOracle[key]}
+                  docInfo={docInfoByOracle[key]}
+                  duplicateIndentNo={dupOracle[key]}
+                  onGenerateChallan={generateChallan}
+                  onGenerateGrn={generateGrn}
+                  onGenerateCustomerGrn={generateCustomerGrn}
+                  onOpenBlock={() => setCollapsedMap((m) => ({ ...m, [idx]: false }))}
+                />
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader><CardTitle className="text-base">Linked Ticket (read-only sync)</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -777,6 +841,8 @@ function IndentDetail() {
           dcExists={!!dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
           dcInfo={dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
           pendingDocs={pendingByOracle[(o.oracle_no || "").trim().toUpperCase()]}
+          docInfo={docInfoByOracle[(o.oracle_no || "").trim().toUpperCase()]}
+          duplicateIndentNo={dupOracle[(o.oracle_no || "").trim().toUpperCase()]}
           indentType={i.indent_type}
         />
       ))}
