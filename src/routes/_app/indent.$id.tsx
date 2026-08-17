@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, docStatusSettled, emptyOracleDocs, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock, type OraclePendingDocs } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
+import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeline";
 import { useIsAdmin } from "@/lib/useRole";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
@@ -32,6 +33,10 @@ function IndentDetail() {
   /** Per-oracle count of DC / GRN documents that are not yet Submitted or
    *  Closed. Blocks Oracle auto-close while any remain pending. */
   const [pendingByOracle, setPendingByOracle] = useState<Record<string, OraclePendingDocs>>({});
+  /** Doc numbers/statuses per oracle, used by the status pipeline. */
+  const [docInfoByOracle, setDocInfoByOracle] = useState<Record<string, OracleDocInfoMap>>({});
+  /** Oracle # → another Indent No where the same Oracle # is also used. */
+  const [dupOracle, setDupOracle] = useState<Record<string, string>>({});
   const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const hydratedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,6 +82,13 @@ function IndentDetail() {
    *  used to gate Oracle auto-close. */
   const loadLinkedDocs = useCallback(async () => {
     const pending: Record<string, OraclePendingDocs> = {};
+    const docs: Record<string, OracleDocInfoMap> = {};
+    const setDoc = (oracleNo: string, kind: "dc" | "oem_grn" | "customer_grn", no: string | null, status: string | null) => {
+      const key = (oracleNo || "").trim().toUpperCase();
+      if (!key) return;
+      if (!docs[key]) docs[key] = {};
+      if (!docs[key][kind]) docs[key][kind] = { no, status };
+    };
     const bump = (oracleNo: string, kind: "dc" | "oem_grn" | "customer_grn", settled: boolean) => {
       const key = (oracleNo || "").trim().toUpperCase();
       if (!key) return;
@@ -99,15 +111,16 @@ function IndentDetail() {
         const key = on.toUpperCase();
         if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
         bump(on, "dc", docStatusSettled(dc.status));
+        setDoc(on, "dc", dc.challan_no, dc.status);
       }
     }
     setDcByOracle(map);
 
     const { data: grnRows } = await supabase
       .from("grns" as never)
-      .select("id, status, category, items")
+      .select("id, grn_no, status, category, items")
       .eq("indent_id", id);
-    for (const g of (grnRows || []) as unknown as Array<{ status: string | null; category: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+    for (const g of (grnRows || []) as unknown as Array<{ grn_no: string | null; status: string | null; category: string | null; items: Array<{ oracle_no?: string }> | null }>) {
       if ((g.status || "").toLowerCase() === "cancelled") continue;
       const cat = (g.category || "").trim().toLowerCase();
       const kind = cat === "customer" ? ("customer_grn" as const) : ("oem_grn" as const);
@@ -118,9 +131,11 @@ function IndentDetail() {
         if (!on || seen.has(on)) continue;
         seen.add(on);
         bump(on, kind, settled);
+        setDoc(on, kind, g.grn_no, g.status);
       }
     }
     setPendingByOracle(pending);
+    setDocInfoByOracle(docs);
   }, [id]);
 
   // Refresh linked-document statuses periodically (same 60s tick used for age).
