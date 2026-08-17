@@ -750,7 +750,7 @@ function IndentDetail() {
         </div>
       </div>
 
-      {(i.oracles_data || []).length > 0 && (
+      {(i.oracles_data || []).length > 1 && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base">Oracle Progress</CardTitle></CardHeader>
           <CardContent className="space-y-2">
@@ -759,7 +759,7 @@ function IndentDetail() {
               return (
                 <OraclePipeline
                   key={idx}
-                  condensed={(i.oracles_data || []).length > 1}
+                  condensed
                   oracle={o}
                   indentType={i.indent_type}
                   pendingDocs={pendingByOracle[key]}
