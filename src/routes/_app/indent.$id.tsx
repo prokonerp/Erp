@@ -46,6 +46,7 @@ function IndentDetail() {
     if (typeof window === "undefined") return {};
     try { return JSON.parse(sessionStorage.getItem(`indent:collapsed:${id}`) || "{}"); } catch { return {}; }
   });
+  const [oracleTab, setOracleTab] = useState<"open" | "closed">("open");
   useEffect(() => {
     try { sessionStorage.setItem(storageKey, JSON.stringify(collapsedMap)); } catch { /* noop */ }
   }, [collapsedMap, storageKey]);
