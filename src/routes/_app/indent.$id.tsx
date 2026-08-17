@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer, ChevronsDownUp, ChevronsUpDown, FileOutput, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, docStatusSettled, emptyOracleDocs, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock, type OraclePendingDocs } from "@/lib/indent";
@@ -45,6 +46,7 @@ function IndentDetail() {
     if (typeof window === "undefined") return {};
     try { return JSON.parse(sessionStorage.getItem(`indent:collapsed:${id}`) || "{}"); } catch { return {}; }
   });
+  const [oracleTab, setOracleTab] = useState<"open" | "closed">("open");
   useEffect(() => {
     try { sessionStorage.setItem(storageKey, JSON.stringify(collapsedMap)); } catch { /* noop */ }
   }, [collapsedMap, storageKey]);
@@ -732,6 +734,12 @@ function IndentDetail() {
   const age = formatAge(i.created_at, closedAt);
   void tick;
 
+  const oraclesWithIndex = (i.oracles_data || []).map((o, idx) => ({ oracle: o, originalIndex: idx }));
+  const openOracles = oraclesWithIndex.filter(({ oracle }) => oracle.status !== "closed");
+  const closedOracles = oraclesWithIndex.filter(({ oracle }) => oracle.status === "closed");
+  const visibleOracles = oracleTab === "open" ? openOracles : closedOracles;
+
+
   return (
     <div className="space-y-4">
       <Card>
@@ -781,26 +789,42 @@ function IndentDetail() {
 
       {(i.oracles_data || []).length > 1 && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Oracle Progress</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Oracle Progress</CardTitle>
+              <Tabs value={oracleTab} onValueChange={(v) => setOracleTab(v as "open" | "closed")} className="w-auto">
+                <TabsList className="h-7">
+                  <TabsTrigger value="open" className="text-xs px-2">Open ({openOracles.length})</TabsTrigger>
+                  <TabsTrigger value="closed" className="text-xs px-2">Closed ({closedOracles.length})</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardHeader>
           <CardContent className="space-y-2">
-            {(i.oracles_data || []).map((o: OracleBlock, idx: number) => {
-              const key = (o.oracle_no || "").trim().toUpperCase();
-              return (
-                <OraclePipeline
-                  key={idx}
-                  condensed
-                  oracle={o}
-                  indentType={i.indent_type}
-                  pendingDocs={pendingByOracle[key]}
-                  docInfo={docInfoByOracle[key]}
-                  duplicateIndentNo={dupOracle[key]}
-                  onGenerateChallan={generateChallan}
-                  onGenerateGrn={generateGrn}
-                  onGenerateCustomerGrn={generateCustomerGrn}
-                  onOpenBlock={() => setCollapsedMap((m) => ({ ...m, [idx]: false }))}
-                />
-              );
-            })}
+            {visibleOracles.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-4">
+                No {oracleTab} Oracles in this summary.
+              </div>
+            ) : (
+              visibleOracles.map(({ oracle: o, originalIndex: idx }) => {
+                const key = (o.oracle_no || "").trim().toUpperCase();
+                return (
+                  <OraclePipeline
+                    key={idx}
+                    condensed
+                    oracle={o}
+                    indentType={i.indent_type}
+                    pendingDocs={pendingByOracle[key]}
+                    docInfo={docInfoByOracle[key]}
+                    duplicateIndentNo={dupOracle[key]}
+                    onGenerateChallan={generateChallan}
+                    onGenerateGrn={generateGrn}
+                    onGenerateCustomerGrn={generateCustomerGrn}
+                    onOpenBlock={() => setCollapsedMap((m) => ({ ...m, [idx]: false }))}
+                  />
+                );
+              })
+            )}
           </CardContent>
         </Card>
       )}
@@ -838,10 +862,16 @@ function IndentDetail() {
         <h2 className="text-lg font-semibold">Oracles <span className="text-xs font-normal text-muted-foreground">(auto from Ticket Defective Parts)</span></h2>
         {(i.oracles_data || []).length > 0 && (
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries((i.oracles_data || []).map((_, ix) => [ix, false])))}>
+            <Tabs value={oracleTab} onValueChange={(v) => setOracleTab(v as "open" | "closed")} className="w-auto">
+              <TabsList className="h-8">
+                <TabsTrigger value="open" className="text-xs px-2">Open ({openOracles.length})</TabsTrigger>
+                <TabsTrigger value="closed" className="text-xs px-2">Closed ({closedOracles.length})</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries(visibleOracles.map(({ originalIndex }) => [originalIndex, false])))}>
               <ChevronsUpDown className="h-4 w-4 mr-1" />Expand All
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries((i.oracles_data || []).map((_, ix) => [ix, true])))}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries(visibleOracles.map(({ originalIndex }) => [originalIndex, true])))}>
               <ChevronsDownUp className="h-4 w-4 mr-1" />Collapse All
             </Button>
           </div>
@@ -852,7 +882,12 @@ function IndentDetail() {
           No Oracle entries — add defective parts with Oracle # tags in the linked ticket then click <span className="font-medium">Resync from Ticket</span>.
         </div>
       )}
-      {(i.oracles_data || []).map((o: OracleBlock, idx: number) => (
+      {visibleOracles.length === 0 && (i.oracles_data || []).length > 0 && (
+        <div className="text-sm text-muted-foreground border rounded-md p-4 text-center">
+          No {oracleTab} Oracles — switch to the other tab or resync from the linked ticket.
+        </div>
+      )}
+      {visibleOracles.map(({ oracle: o, originalIndex: idx }) => (
         <OracleBlockEditor
           key={idx}
           index={idx}
