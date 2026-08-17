@@ -36,6 +36,21 @@ function GrnView() {
     fetchGrn(id).then(setG).catch((e) => toast.error(e.message));
   }, [id]);
 
+  // Auto-start the PDF download when opened with ?download=1 (from the
+  // Indent Oracle pipeline "Download PDF" button).
+  const autoDownloaded = useState(() => ({ done: false }))[0];
+  useEffect(() => {
+    if (!g || autoDownloaded.done) return;
+    if (new URLSearchParams(window.location.search).get("download") !== "1") return;
+    autoDownloaded.done = true;
+    const t = setTimeout(async () => {
+      const el = document.getElementById("print-area");
+      if (!el) return;
+      try { await downloadElementAsPdf(el, `GRN_${g.grn_no || g.id}.pdf`); } catch { /* ignore */ }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [g, autoDownloaded]);
+
   useEffect(() => {
     if (!g?.grn_no) return;
     (async () => {

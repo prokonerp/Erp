@@ -1,12 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, AlertTriangle, ChevronRight, FileText, Receipt } from "lucide-react";
+import { CheckCircle2, AlertTriangle, ChevronRight, FileText, Receipt, Eye, Download } from "lucide-react";
 import {
   docSatisfied, normalizeOracle, oracleDocRequirements, requiresCustomerReturn,
   sectionMissingFields, type OracleBlock, type OraclePendingDocs, type SectionKey,
 } from "@/lib/indent";
 
-export type OracleDocInfo = { no?: string | null; status?: string | null };
+export type OracleDocInfo = { no?: string | null; status?: string | null; id?: string | null };
 export type OracleDocInfoMap = {
   dc?: OracleDocInfo | null;
   oem_grn?: OracleDocInfo | null;
@@ -23,6 +23,10 @@ export type PipelineStep = {
   /** which generate action unblocks this step, if any */
   action?: "dc" | "oem_grn" | "customer_grn";
   actionLabel?: string;
+  /** Existing settled document for this section (enables View / Download). */
+  docKind?: "dc" | "oem_grn" | "customer_grn";
+  docId?: string | null;
+  docNo?: string | null;
 };
 
 const SECTION_LABEL: Record<SectionKey, string> = {
@@ -93,6 +97,9 @@ export function computeOracleSteps(
       detail: info?.no
         ? `${info.no}${info.status ? ` · ${info.status}` : ""}`
         : needDoc ? "Document Submitted" : "Fields complete",
+      docKind: needDoc ? docKey : undefined,
+      docId: needDoc ? (info?.id ?? pendingDocs?.[docKey]?.doc_id ?? null) : null,
+      docNo: needDoc ? (info?.no ?? pendingDocs?.[docKey]?.doc_no ?? null) : null,
     };
   };
 
@@ -198,6 +205,28 @@ export function OraclePipeline({
                   {s.action === "dc" ? <FileText className="h-3 w-3 mr-1" /> : <Receipt className="h-3 w-3 mr-1" />}
                   {s.actionLabel}
                 </Button>
+              )}
+              {!s.action && s.docId && (
+                <div className="flex items-center gap-1 mt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[11px] px-2"
+                    onClick={() => window.open(`${s.docKind === "dc" ? "/challan" : "/grn"}/${s.docId}`, "_blank", "noopener")}
+                  >
+                    <Eye className="h-3 w-3 mr-1" />
+                    {s.docKind === "dc" ? "View DC" : "View GRN"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[11px] px-2"
+                    onClick={() => window.open(`${s.docKind === "dc" ? "/challan" : "/grn"}/${s.docId}?download=1`, "_blank", "noopener")}
+                  >
+                    <Download className="h-3 w-3 mr-1" />
+                    Download PDF
+                  </Button>
+                </div>
               )}
             </div>
             {ix < steps.length - 1 && (
