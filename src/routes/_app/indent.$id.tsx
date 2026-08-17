@@ -750,6 +750,32 @@ function IndentDetail() {
         </div>
       </div>
 
+      {(i.oracles_data || []).length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Oracle Progress</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {(i.oracles_data || []).map((o: OracleBlock, idx: number) => {
+              const key = (o.oracle_no || "").trim().toUpperCase();
+              return (
+                <OraclePipeline
+                  key={idx}
+                  condensed={(i.oracles_data || []).length > 1}
+                  oracle={o}
+                  indentType={i.indent_type}
+                  pendingDocs={pendingByOracle[key]}
+                  docInfo={docInfoByOracle[key]}
+                  duplicateIndentNo={dupOracle[key]}
+                  onGenerateChallan={generateChallan}
+                  onGenerateGrn={generateGrn}
+                  onGenerateCustomerGrn={generateCustomerGrn}
+                  onOpenBlock={() => setCollapsedMap((m) => ({ ...m, [idx]: false }))}
+                />
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader><CardTitle className="text-base">Linked Ticket (read-only sync)</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -815,6 +841,8 @@ function IndentDetail() {
           dcExists={!!dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
           dcInfo={dcByOracle[(o.oracle_no || "").trim().toUpperCase()]}
           pendingDocs={pendingByOracle[(o.oracle_no || "").trim().toUpperCase()]}
+          docInfo={docInfoByOracle[(o.oracle_no || "").trim().toUpperCase()]}
+          duplicateIndentNo={dupOracle[(o.oracle_no || "").trim().toUpperCase()]}
           indentType={i.indent_type}
         />
       ))}
