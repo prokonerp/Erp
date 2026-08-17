@@ -69,7 +69,7 @@ function IndentDetail() {
         const raw = (t as { defective_parts_details?: unknown } | null)?.defective_parts_details;
         setDefParts(Array.isArray(raw) ? (raw as Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>) : []);
       }
-      await loadLinkedDocs();
+      await loadLinkedDocs(ind?.indent_no);
       // Give React one paint before enabling auto-save so we don't save the
       // freshly-loaded record right back to the DB.
       setTimeout(() => { hydratedRef.current = true; }, 100);
@@ -79,8 +79,10 @@ function IndentDetail() {
 
   /** Load Delivery Challans + GRNs linked to this indent. Builds both the
    *  "DC already generated" map and the per-oracle pending-document counts
-   *  used to gate Oracle auto-close. */
-  const loadLinkedDocs = useCallback(async () => {
+   *  used to gate Oracle auto-close. Also queries by reference_no for legacy
+   *  DCs that were saved without an indent_id but still carry the indent_no
+   *  in reference_no. */
+  const loadLinkedDocs = useCallback(async (indentNo?: string | null) => {
     const pending: Record<string, OraclePendingDocs> = {};
     const docs: Record<string, OracleDocInfoMap> = {};
     const setDoc = (oracleNo: string, kind: "dc" | "oem_grn" | "customer_grn", no: string | null, status: string | null) => {
@@ -96,22 +98,25 @@ function IndentDetail() {
       pending[key][kind][settled ? "settled" : "pending"] += 1;
     };
 
-    const { data: dcs } = await supabase
-      .from("delivery_challans")
-      .select("id, challan_no, challan_date, status, items")
-      .eq("indent_id", id);
+    const dcQueries = [supabase.from("delivery_challans").select("id, challan_no, challan_date, status, items, indent_id, reference_no").eq("indent_id", id)];
+    if (indentNo) {
+      dcQueries.push(supabase.from("delivery_challans").select("id, challan_no, challan_date, status, items, indent_id, reference_no").eq("reference_no", indentNo).is("indent_id", null));
+    }
+    const dcResults = await Promise.all(dcQueries);
     const map: Record<string, { challan_no: string | null; challan_date: string | null; status: string | null; id: string }> = {};
-    for (const dc of (dcs || []) as Array<{ id: string; challan_no: string | null; challan_date: string | null; status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
-      if ((dc.status || "").toLowerCase() === "cancelled") continue;
-      const seen = new Set<string>();
-      for (const it of dc.items || []) {
-        const on = (it?.oracle_no || "").trim();
-        if (!on || seen.has(on)) continue;
-        seen.add(on);
-        const key = on.toUpperCase();
-        if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
-        bump(on, "dc", docStatusSettled(dc.status));
-        setDoc(on, "dc", dc.challan_no, dc.status);
+    for (const { data: dcs } of dcResults) {
+      for (const dc of (dcs || []) as Array<{ id: string; challan_no: string | null; challan_date: string | null; status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+        if ((dc.status || "").toLowerCase() === "cancelled") continue;
+        const seen = new Set<string>();
+        for (const it of dc.items || []) {
+          const on = (it?.oracle_no || "").trim();
+          if (!on || seen.has(on)) continue;
+          seen.add(on);
+          const key = on.toUpperCase();
+          if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
+          bump(on, "dc", docStatusSettled(dc.status));
+          setDoc(on, "dc", dc.challan_no, dc.status);
+        }
       }
     }
     setDcByOracle(map);
@@ -138,11 +143,13 @@ function IndentDetail() {
     setDocInfoByOracle(docs);
   }, [id]);
 
+
   // Refresh linked-document statuses periodically (same 60s tick used for age).
   useEffect(() => {
     if (!hydratedRef.current) return;
-    void loadLinkedDocs();
-  }, [tick, loadLinkedDocs]);
+    void loadLinkedDocs(i?.indent_no);
+  }, [tick, loadLinkedDocs, i?.indent_no]);
+
 
   /** One batched lookup: which of this Indent's Oracle #s also appear on
    *  another Indent. Informational only. */
