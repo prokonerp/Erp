@@ -376,23 +376,29 @@ export function docStatusSettled(status?: string | null): boolean {
  *   - Section B (exchange rows) → Delivery Challan
  *   - Section C (OEM received rows) → GRN (category = oem)
  *   - Section D (customer received rows) → GRN (category = customer) */
+/** Which documents this Oracle needs before it may close. Extracted from
+ *  `oracleCanAutoClose` so the pipeline display uses the identical rule. */
+export function oracleDocRequirements(oIn: OracleBlock, indentType?: string | null) {
+  const o = normalizeOracle(oIn);
+  const nn = (s?: string) => !!(s && String(s).trim());
+  const rowFilled = (r?: { warehouse_id?: string; model_no?: string; serial_no?: string; qty?: string }) =>
+    !!r && (nn(r.warehouse_id) || nn(r.model_no) || nn(r.serial_no) || nn(r.qty));
+  const custRows = o.customer_received_rows || [];
+  const custTouched = custRows.some(rowFilled);
+  return {
+    needDc: o.exchange_rows.some(rowFilled),
+    needOemGrn: o.received_rows.some(rowFilled),
+    needCustomerGrn: (requiresCustomerReturn(indentType) && custRows.length > 0) || custTouched,
+  };
+}
+
 export function oracleCanAutoClose(
   oIn: OracleBlock,
   pending?: OraclePendingDocs | null,
   indentType?: string | null,
 ): boolean {
   if (!oracleIsComplete(oIn, indentType)) return false;
-  const o = normalizeOracle(oIn);
-  const nn = (s?: string) => !!(s && String(s).trim());
-  const rowFilled = (r?: { warehouse_id?: string; model_no?: string; serial_no?: string; qty?: string }) =>
-    !!r && (nn(r.warehouse_id) || nn(r.model_no) || nn(r.serial_no) || nn(r.qty));
-
-  const needDc = o.exchange_rows.some(rowFilled);
-  const needOemGrn = o.received_rows.some(rowFilled);
-  const custRows = o.customer_received_rows || [];
-  const custTouched = custRows.some(rowFilled);
-  const needCustomerGrn = (requiresCustomerReturn(indentType) && custRows.length > 0) || custTouched;
-
+  const { needDc, needOemGrn, needCustomerGrn } = oracleDocRequirements(oIn, indentType);
   if (needDc && !docSatisfied(pending?.dc)) return false;
   if (needOemGrn && !docSatisfied(pending?.oem_grn)) return false;
   if (needCustomerGrn && !docSatisfied(pending?.customer_grn)) return false;
