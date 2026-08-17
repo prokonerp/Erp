@@ -862,10 +862,16 @@ function IndentDetail() {
         <h2 className="text-lg font-semibold">Oracles <span className="text-xs font-normal text-muted-foreground">(auto from Ticket Defective Parts)</span></h2>
         {(i.oracles_data || []).length > 0 && (
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries((i.oracles_data || []).map((_, ix) => [ix, false])))}>
+            <Tabs value={oracleTab} onValueChange={(v) => setOracleTab(v as "open" | "closed")} className="w-auto">
+              <TabsList className="h-8">
+                <TabsTrigger value="open" className="text-xs px-2">Open ({openOracles.length})</TabsTrigger>
+                <TabsTrigger value="closed" className="text-xs px-2">Closed ({closedOracles.length})</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries(visibleOracles.map(({ originalIndex }) => [originalIndex, false])))}>
               <ChevronsUpDown className="h-4 w-4 mr-1" />Expand All
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries((i.oracles_data || []).map((_, ix) => [ix, true])))}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setCollapsedMap(Object.fromEntries(visibleOracles.map(({ originalIndex }) => [originalIndex, true])))}>
               <ChevronsDownUp className="h-4 w-4 mr-1" />Collapse All
             </Button>
           </div>
@@ -876,7 +882,12 @@ function IndentDetail() {
           No Oracle entries — add defective parts with Oracle # tags in the linked ticket then click <span className="font-medium">Resync from Ticket</span>.
         </div>
       )}
-      {(i.oracles_data || []).map((o: OracleBlock, idx: number) => (
+      {visibleOracles.length === 0 && (i.oracles_data || []).length > 0 && (
+        <div className="text-sm text-muted-foreground border rounded-md p-4 text-center">
+          No {oracleTab} Oracles — switch to the other tab or resync from the linked ticket.
+        </div>
+      )}
+      {visibleOracles.map(({ oracle: o, originalIndex: idx }) => (
         <OracleBlockEditor
           key={idx}
           index={idx}
