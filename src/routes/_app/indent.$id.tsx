@@ -85,11 +85,32 @@ function IndentDetail() {
   const loadLinkedDocs = useCallback(async (indentNo?: string | null) => {
     const pending: Record<string, OraclePendingDocs> = {};
     const docs: Record<string, OracleDocInfoMap> = {};
-    const setDoc = (oracleNo: string, kind: "dc" | "oem_grn" | "customer_grn", no: string | null, status: string | null) => {
+    // Track the newest settled document per oracle+kind so View/Download link
+    // to the right record when several exist.
+    const newest: Record<string, number> = {};
+    const setDoc = (
+      oracleNo: string,
+      kind: "dc" | "oem_grn" | "customer_grn",
+      no: string | null,
+      status: string | null,
+      docId?: string | null,
+      createdAt?: string | null,
+      settled?: boolean,
+    ) => {
       const key = (oracleNo || "").trim().toUpperCase();
       if (!key) return;
       if (!docs[key]) docs[key] = {};
-      if (!docs[key][kind]) docs[key][kind] = { no, status };
+      if (!docs[key][kind]) docs[key][kind] = { no, status, id: docId ?? null };
+      if (!settled) return;
+      const ts = createdAt ? new Date(createdAt).getTime() : 0;
+      const nk = `${key}|${kind}`;
+      if (newest[nk] !== undefined && ts <= newest[nk]) return;
+      newest[nk] = ts;
+      docs[key][kind] = { no, status, id: docId ?? null };
+      if (pending[key]) {
+        pending[key][kind].doc_id = docId ?? null;
+        pending[key][kind].doc_no = no;
+      }
     };
     const bump = (oracleNo: string, kind: "dc" | "oem_grn" | "customer_grn", settled: boolean) => {
       const key = (oracleNo || "").trim().toUpperCase();
@@ -98,14 +119,15 @@ function IndentDetail() {
       pending[key][kind][settled ? "settled" : "pending"] += 1;
     };
 
-    const dcQueries = [supabase.from("delivery_challans").select("id, challan_no, challan_date, status, items, indent_id, reference_no").eq("indent_id", id)];
+    const dcCols = "id, challan_no, challan_date, created_at, status, items, indent_id, reference_no";
+    const dcQueries = [supabase.from("delivery_challans").select(dcCols).eq("indent_id", id)];
     if (indentNo) {
-      dcQueries.push(supabase.from("delivery_challans").select("id, challan_no, challan_date, status, items, indent_id, reference_no").eq("reference_no", indentNo).is("indent_id", null));
+      dcQueries.push(supabase.from("delivery_challans").select(dcCols).eq("reference_no", indentNo).is("indent_id", null));
     }
     const dcResults = await Promise.all(dcQueries);
     const map: Record<string, { challan_no: string | null; challan_date: string | null; status: string | null; id: string }> = {};
     for (const { data: dcs } of dcResults) {
-      for (const dc of (dcs || []) as Array<{ id: string; challan_no: string | null; challan_date: string | null; status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+      for (const dc of (dcs || []) as Array<{ id: string; challan_no: string | null; challan_date: string | null; created_at?: string | null; status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
         if ((dc.status || "").toLowerCase() === "cancelled") continue;
         const seen = new Set<string>();
         for (const it of dc.items || []) {
@@ -115,7 +137,7 @@ function IndentDetail() {
           const key = on.toUpperCase();
           if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
           bump(on, "dc", docStatusSettled(dc.status));
-          setDoc(on, "dc", dc.challan_no, dc.status);
+          setDoc(on, "dc", dc.challan_no, dc.status, dc.id, dc.created_at || dc.challan_date, docStatusSettled(dc.status));
         }
       }
     }
@@ -123,9 +145,9 @@ function IndentDetail() {
 
     const { data: grnRows } = await supabase
       .from("grns" as never)
-      .select("id, grn_no, status, category, items")
+      .select("id, grn_no, status, category, items, created_at")
       .eq("indent_id", id);
-    for (const g of (grnRows || []) as unknown as Array<{ grn_no: string | null; status: string | null; category: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+    for (const g of (grnRows || []) as unknown as Array<{ id: string; grn_no: string | null; status: string | null; category: string | null; created_at?: string | null; items: Array<{ oracle_no?: string }> | null }>) {
       if ((g.status || "").toLowerCase() === "cancelled") continue;
       const cat = (g.category || "").trim().toLowerCase();
       const kind = cat === "customer" ? ("customer_grn" as const) : ("oem_grn" as const);
@@ -136,7 +158,7 @@ function IndentDetail() {
         if (!on || seen.has(on)) continue;
         seen.add(on);
         bump(on, kind, settled);
-        setDoc(on, kind, g.grn_no, g.status);
+        setDoc(on, kind, g.grn_no, g.status, g.id, g.created_at, settled);
       }
     }
     setPendingByOracle(pending);

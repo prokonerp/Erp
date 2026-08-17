@@ -344,7 +344,13 @@ export function oracleStatus(o: OracleBlock): "open" | "closed" {
  *  `settled` = exists and is Submitted/Closed.
  *  Both zero means the document was never created — which is NOT the same
  *  as "nothing pending" and must block auto-close. */
-export type DocCounts = { pending: number; settled: number };
+export type DocCounts = {
+  pending: number;
+  settled: number;
+  /** Most recently created settled document for this section, when known. */
+  doc_id?: string | null;
+  doc_no?: string | null;
+};
 export type OraclePendingDocs = {
   dc: DocCounts;
   oem_grn: DocCounts;

@@ -33,6 +33,21 @@ function ChallanView() {
     fetchChallan(id).then(setC).catch((e) => toast.error(e.message));
   }, [id]);
 
+  // Auto-start the PDF download when opened with ?download=1 (from the
+  // Indent Oracle pipeline "Download PDF" button).
+  const autoDownloaded = useState(() => ({ done: false }))[0];
+  useEffect(() => {
+    if (!c || !company || autoDownloaded.done) return;
+    if (new URLSearchParams(window.location.search).get("download") !== "1") return;
+    autoDownloaded.done = true;
+    const t = setTimeout(async () => {
+      const el = document.getElementById("print-area");
+      if (!el) return;
+      try { await downloadElementAsPdf(el, `DC_${c.challan_no || c.id}.pdf`); } catch { /* ignore */ }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [c, company, autoDownloaded]);
+
   if (!c || !company) return <div className="text-muted-foreground">Loading…</div>;
   const isOem = c.doc_type === "oem";
   const oemLogo = isOem ? (c.oem_logo_url ? { url: c.oem_logo_url, alt: c.party_name || "OEM" } : getOemLogo(c.party_name)) : null;

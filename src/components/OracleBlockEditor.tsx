@@ -6,14 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, FileText, Receipt, Lock, LockOpen, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { Trash2, FileText, Receipt, Lock, LockOpen, CheckCircle2, ChevronDown, ChevronUp, Eye, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
+import { docSatisfied, normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import { IndentModelPicker } from "@/components/IndentModelPicker";
 import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeline";
@@ -21,6 +21,23 @@ import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeli
 type DefectivePart = { name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string };
 type Warehouse = { id: string; name: string; code: string };
 type StockRow = { id: string; part_name: string; part_model_no: string | null; part_serial_no: string | null; warehouse_id: string | null; warehouse_name?: string };
+
+/** View / Download PDF pair shown in a section header once its linked
+ *  document exists and is settled. */
+function DocLinkButtons({ kind, docId }: { kind: "dc" | "grn"; docId: string }) {
+  const base = kind === "dc" ? "/challan" : "/grn";
+  const open = (suffix = "") => window.open(`${base}/${docId}${suffix}`, "_blank", "noopener");
+  return (
+    <div className="flex items-center gap-1">
+      <Button variant="outline" size="sm" onClick={() => open()} title="Open the linked document">
+        <Eye className="h-4 w-4 mr-1" />{kind === "dc" ? "View DC" : "View GRN"}
+      </Button>
+      <Button variant="outline" size="sm" onClick={() => open("?download=1")} title="Open and download the PDF">
+        <Download className="h-4 w-4 mr-1" />Download PDF
+      </Button>
+    </div>
+  );
+}
 
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
@@ -332,9 +349,13 @@ export function OracleBlockEditor({
                 <Badge variant="secondary" className="font-mono">
                   DC {dcInfo?.challan_no || ""}{dcInfo?.status ? ` · ${dcInfo.status}` : ""}
                 </Badge>
-                <Button variant="outline" size="sm" disabled title="Delivery Challan already generated for this Oracle Number">
-                  <FileText className="h-4 w-4 mr-1" />DC Generated
-                </Button>
+                {(dcInfo?.id || pendingDocs?.dc.doc_id) ? (
+                  <DocLinkButtons kind="dc" docId={(dcInfo?.id || pendingDocs?.dc.doc_id) as string} />
+                ) : (
+                  <Button variant="outline" size="sm" disabled title="Delivery Challan already generated for this Oracle Number">
+                    <FileText className="h-4 w-4 mr-1" />DC Generated
+                  </Button>
+                )}
               </div>
             ) : (
               <Button
@@ -406,7 +427,20 @@ export function OracleBlockEditor({
         <div className="rounded-md border p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">C. Material Received (from OEM)</div>
-            {onGenerateGrn && (
+            {onGenerateGrn && (docSatisfied(pendingDocs?.oem_grn) ? (
+              <div className="flex items-center gap-2 text-xs">
+                {docInfo?.oem_grn?.no && (
+                  <Badge variant="secondary" className="font-mono">
+                    {docInfo.oem_grn.no}{docInfo.oem_grn.status ? ` · ${docInfo.oem_grn.status}` : ""}
+                  </Badge>
+                )}
+                {(docInfo?.oem_grn?.id || pendingDocs?.oem_grn.doc_id) ? (
+                  <DocLinkButtons kind="grn" docId={(docInfo?.oem_grn?.id || pendingDocs?.oem_grn.doc_id) as string} />
+                ) : (
+                  <Button variant="outline" size="sm" disabled><Receipt className="h-4 w-4 mr-1" />GRN Generated</Button>
+                )}
+              </div>
+            ) : (
               <Button
                 variant="outline"
                 size="sm"
@@ -415,7 +449,7 @@ export function OracleBlockEditor({
               >
                 <Receipt className="h-4 w-4 mr-1" />Generate GRN
               </Button>
-            )}
+            ))}
           </div>
           {value.received_rows.map((rcv, i) => {
             const def = value.defective_rows[i];
@@ -464,7 +498,20 @@ export function OracleBlockEditor({
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">D. Material Received (from Customer)</div>
             <div className="flex items-center gap-2">
-              {onGenerateCustomerGrn && (
+              {onGenerateCustomerGrn && (docSatisfied(pendingDocs?.customer_grn) ? (
+                <div className="flex items-center gap-2 text-xs">
+                  {docInfo?.customer_grn?.no && (
+                    <Badge variant="secondary" className="font-mono">
+                      {docInfo.customer_grn.no}{docInfo.customer_grn.status ? ` · ${docInfo.customer_grn.status}` : ""}
+                    </Badge>
+                  )}
+                  {(docInfo?.customer_grn?.id || pendingDocs?.customer_grn.doc_id) ? (
+                    <DocLinkButtons kind="grn" docId={(docInfo?.customer_grn?.id || pendingDocs?.customer_grn.doc_id) as string} />
+                  ) : (
+                    <Button variant="outline" size="sm" disabled><Receipt className="h-4 w-4 mr-1" />GRN Generated</Button>
+                  )}
+                </div>
+              ) : (
                 <Button
                   variant="outline"
                   size="sm"
@@ -473,7 +520,7 @@ export function OracleBlockEditor({
                 >
                   <Receipt className="h-4 w-4 mr-1" />Generate GRN
                 </Button>
-              )}
+              ))}
             </div>
           </div>
           {custRows.map((rcv, i) => {
