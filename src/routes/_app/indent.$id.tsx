@@ -69,7 +69,7 @@ function IndentDetail() {
         const raw = (t as { defective_parts_details?: unknown } | null)?.defective_parts_details;
         setDefParts(Array.isArray(raw) ? (raw as Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>) : []);
       }
-      await loadLinkedDocs();
+      await loadLinkedDocs(ind?.indent_no);
       // Give React one paint before enabling auto-save so we don't save the
       // freshly-loaded record right back to the DB.
       setTimeout(() => { hydratedRef.current = true; }, 100);
