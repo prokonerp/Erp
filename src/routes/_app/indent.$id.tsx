@@ -147,8 +147,9 @@ function IndentDetail() {
   // Refresh linked-document statuses periodically (same 60s tick used for age).
   useEffect(() => {
     if (!hydratedRef.current) return;
-    void loadLinkedDocs();
-  }, [tick, loadLinkedDocs]);
+    void loadLinkedDocs(i?.indent_no);
+  }, [tick, loadLinkedDocs, i?.indent_no]);
+
 
   /** One batched lookup: which of this Indent's Oracle #s also appear on
    *  another Indent. Informational only. */
