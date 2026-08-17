@@ -363,11 +363,13 @@ export function docSatisfied(c?: DocCounts | null): boolean {
   return c.settled > 0 && c.pending === 0;
 }
 
-/** A document status counts as settled only when Submitted or Closed.
+/** A document status counts as settled when Submitted, Closed, or
+ *  "Challan Generated" — the latter is a genuine completed state for
+ *  Delivery Challans where stock has already been posted.
  *  Cancelled documents are ignored by the callers building these counts. */
 export function docStatusSettled(status?: string | null): boolean {
   const s = (status || "").trim().toLowerCase();
-  return s === "submitted" || s === "closed";
+  return s === "submitted" || s === "closed" || s === "challan generated";
 }
 
 /** An Oracle may auto-close only when every A–D row is complete AND every
