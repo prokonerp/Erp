@@ -734,6 +734,12 @@ function IndentDetail() {
   const age = formatAge(i.created_at, closedAt);
   void tick;
 
+  const oraclesWithIndex = (i.oracles_data || []).map((o, idx) => ({ oracle: o, originalIndex: idx }));
+  const openOracles = oraclesWithIndex.filter(({ oracle }) => oracle.status !== "closed");
+  const closedOracles = oraclesWithIndex.filter(({ oracle }) => oracle.status === "closed");
+  const visibleOracles = oracleTab === "open" ? openOracles : closedOracles;
+
+
   return (
     <div className="space-y-4">
       <Card>
