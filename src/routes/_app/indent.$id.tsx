@@ -144,6 +144,29 @@ function IndentDetail() {
     void loadLinkedDocs();
   }, [tick, loadLinkedDocs]);
 
+  /** One batched lookup: which of this Indent's Oracle #s also appear on
+   *  another Indent. Informational only. */
+  const oracleKeys = (i?.oracles_data || [])
+    .map((o) => (o.oracle_no || "").trim().toUpperCase()).filter(Boolean).sort().join(",");
+  useEffect(() => {
+    if (!oracleKeys) { setDupOracle({}); return; }
+    const wanted = new Set(oracleKeys.split(","));
+    (async () => {
+      const { data } = await supabase
+        .from("indents" as never)
+        .select("id, indent_no, oracles_data")
+        .neq("id", id);
+      const out: Record<string, string> = {};
+      for (const row of (data || []) as unknown as Array<{ id: string; indent_no: string | null; oracles_data: OracleBlock[] | null }>) {
+        for (const o of row.oracles_data || []) {
+          const k = (o?.oracle_no || "").trim().toUpperCase();
+          if (k && wanted.has(k) && !out[k]) out[k] = row.indent_no || "(no number)";
+        }
+      }
+      setDupOracle(out);
+    })();
+  }, [oracleKeys, id]);
+
   const update = (p: Partial<Indent>) => setI((s) => (s ? { ...s, ...p } : s));
 
   /** Debounced auto-save. Skips until the record has hydrated and only fires
