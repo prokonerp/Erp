@@ -789,26 +789,42 @@ function IndentDetail() {
 
       {(i.oracles_data || []).length > 1 && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Oracle Progress</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Oracle Progress</CardTitle>
+              <Tabs value={oracleTab} onValueChange={(v) => setOracleTab(v as "open" | "closed")} className="w-auto">
+                <TabsList className="h-7">
+                  <TabsTrigger value="open" className="text-xs px-2">Open ({openOracles.length})</TabsTrigger>
+                  <TabsTrigger value="closed" className="text-xs px-2">Closed ({closedOracles.length})</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardHeader>
           <CardContent className="space-y-2">
-            {(i.oracles_data || []).map((o: OracleBlock, idx: number) => {
-              const key = (o.oracle_no || "").trim().toUpperCase();
-              return (
-                <OraclePipeline
-                  key={idx}
-                  condensed
-                  oracle={o}
-                  indentType={i.indent_type}
-                  pendingDocs={pendingByOracle[key]}
-                  docInfo={docInfoByOracle[key]}
-                  duplicateIndentNo={dupOracle[key]}
-                  onGenerateChallan={generateChallan}
-                  onGenerateGrn={generateGrn}
-                  onGenerateCustomerGrn={generateCustomerGrn}
-                  onOpenBlock={() => setCollapsedMap((m) => ({ ...m, [idx]: false }))}
-                />
-              );
-            })}
+            {visibleOracles.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-4">
+                No {oracleTab} Oracles in this summary.
+              </div>
+            ) : (
+              visibleOracles.map(({ oracle: o, originalIndex: idx }) => {
+                const key = (o.oracle_no || "").trim().toUpperCase();
+                return (
+                  <OraclePipeline
+                    key={idx}
+                    condensed
+                    oracle={o}
+                    indentType={i.indent_type}
+                    pendingDocs={pendingByOracle[key]}
+                    docInfo={docInfoByOracle[key]}
+                    duplicateIndentNo={dupOracle[key]}
+                    onGenerateChallan={generateChallan}
+                    onGenerateGrn={generateGrn}
+                    onGenerateCustomerGrn={generateCustomerGrn}
+                    onOpenBlock={() => setCollapsedMap((m) => ({ ...m, [idx]: false }))}
+                  />
+                );
+              })
+            )}
           </CardContent>
         </Card>
       )}
