@@ -4110,6 +4110,7 @@ export type Database = {
           customer_notes: string | null
           delivery_timeline: string | null
           discount_amount: number
+          discount_label: string | null
           expiry_date: string | null
           gst_amount: number
           gst_percent: number
@@ -4157,6 +4158,7 @@ export type Database = {
           customer_notes?: string | null
           delivery_timeline?: string | null
           discount_amount?: number
+          discount_label?: string | null
           expiry_date?: string | null
           gst_amount?: number
           gst_percent?: number
@@ -4204,6 +4206,7 @@ export type Database = {
           customer_notes?: string | null
           delivery_timeline?: string | null
           discount_amount?: number
+          discount_label?: string | null
           expiry_date?: string | null
           gst_amount?: number
           gst_percent?: number
