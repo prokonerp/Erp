@@ -629,7 +629,7 @@ function QuotesWorkspace() {
                   <div className="flex justify-end">
                     <div className="w-full max-w-sm space-y-1 text-sm">
                       <SumRow label="Subtotal" value={fmtMoney(selected.subtotal)} />
-                      {Number(selected.discount_amount) > 0 && <SumRow label="Discount" value={`- ${fmtMoney(selected.discount_amount)}`} />}
+                      {Number(selected.discount_amount) > 0 && <SumRow label={(selected as any).discount_label || "Discount"} value={`- ${fmtMoney(selected.discount_amount)}`} />}
                       {Number(selected.shipping_charges) > 0 && <SumRow label="Shipping" value={fmtMoney(selected.shipping_charges)} />}
                       <SumRow label="Tax" value={fmtMoney(selected.gst_amount)} />
                       <div className="border-t pt-1 flex justify-between font-semibold">

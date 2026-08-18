@@ -66,6 +66,7 @@ function NewQuotation() {
   const [deliveryTimeline, setDeliveryTimeline] = useState("");
   const [items, setItems] = useState<QuoteItem[]>([emptyRow()]);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountLabel, setDiscountLabel] = useState("Discount");
   const [shippingCharges, setShippingCharges] = useState(0);
   const [adjustment, setAdjustment] = useState(0);
   const [tcsPercent, setTcsPercent] = useState(0);
@@ -154,6 +155,7 @@ function NewQuotation() {
       setPaymentTerms(q.payment_terms || "");
       setDeliveryTimeline(q.delivery_timeline || "");
       setDiscountAmount(Number(q.discount_amount) || 0);
+      setDiscountLabel((q as any).discount_label || "Discount");
       setShippingCharges(Number(q.shipping_charges) || 0);
       setAdjustment(Number(q.adjustment) || 0);
       setTcsPercent(Number(q.tcs_percent) || 0);
@@ -294,6 +296,7 @@ function NewQuotation() {
         place_of_supply: placeOfSupply || null,
         items: items.filter((it) => (it.description || "").trim() || it.product_id) as unknown,
         discount_amount: discountAmount,
+        discount_label: discountLabel.trim() || "Discount",
         shipping_charges: shippingCharges,
         adjustment,
         tcs_percent: tcsPercent,
@@ -570,7 +573,8 @@ function NewQuotation() {
           <CardHeader className="py-3"><CardTitle className="text-sm">Totals & Charges</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <div className="grid grid-cols-2 gap-2 items-center"><Label className="text-xs">Discount (₹)</Label><Input type="number" value={discountAmount} onChange={(e) => setDiscountAmount(Number(e.target.value))} className="h-8 text-sm" /></div>
+              <div className="grid grid-cols-2 gap-2 items-center"><Label className="text-xs">Discount label</Label><Input value={discountLabel} placeholder="Discount" onChange={(e) => setDiscountLabel(e.target.value)} className="h-8 text-sm" /></div>
+              <div className="grid grid-cols-2 gap-2 items-center"><Label className="text-xs">{(discountLabel.trim() || "Discount")} (₹)</Label><Input type="number" value={discountAmount} onChange={(e) => setDiscountAmount(Number(e.target.value))} className="h-8 text-sm" /></div>
               <div className="grid grid-cols-2 gap-2 items-center"><Label className="text-xs">Shipping (₹)</Label><Input type="number" value={shippingCharges} onChange={(e) => setShippingCharges(Number(e.target.value))} className="h-8 text-sm" /></div>
               <div className="grid grid-cols-2 gap-2 items-center"><Label className="text-xs">Adjustment (₹)</Label><Input type="number" value={adjustment} onChange={(e) => setAdjustment(Number(e.target.value))} className="h-8 text-sm" /></div>
               <div className="grid grid-cols-2 gap-2 items-center"><Label className="text-xs">TCS %</Label><Input type="number" value={tcsPercent} onChange={(e) => setTcsPercent(Number(e.target.value))} className="h-8 text-sm" /></div>
@@ -578,7 +582,7 @@ function NewQuotation() {
             </div>
             <div className="border rounded-md p-3 text-sm space-y-1 bg-muted/30">
               <div className="flex justify-between"><span>Subtotal</span><span>{fmtMoney(totals.subtotal)}</span></div>
-              {discountAmount > 0 && <div className="flex justify-between text-red-600"><span>Discount</span><span>− {fmtMoney(discountAmount)}</span></div>}
+              {discountAmount > 0 && <div className="flex justify-between text-red-600"><span>{discountLabel.trim() || "Discount"}</span><span>− {fmtMoney(discountAmount)}</span></div>}
               {shippingCharges > 0 && <div className="flex justify-between"><span>Shipping</span><span>{fmtMoney(shippingCharges)}</span></div>}
               {adjustment !== 0 && <div className="flex justify-between"><span>Adjustment</span><span>{fmtMoney(adjustment)}</span></div>}
               {totals.cgst_amount > 0 && <div className="flex justify-between"><span>CGST</span><span>{fmtMoney(totals.cgst_amount)}</span></div>}

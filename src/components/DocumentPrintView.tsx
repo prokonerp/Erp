@@ -27,6 +27,7 @@ export type PrintItem = {
 export type PrintTotals = {
   subtotal: number;
   discount?: number;
+  discount_label?: string;
   shipping?: number;
   adjustment?: number;
   cgst?: number;
@@ -336,7 +337,7 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
           <table className="w-full">
             <tbody>
               <tr><td className="py-0.5">Sub Total</td><td className="py-0.5 text-right">{fmtMoney(t.subtotal)}</td></tr>
-              {t.discount ? <tr><td className="py-0.5">Discount</td><td className="py-0.5 text-right">− {fmtMoney(t.discount)}</td></tr> : null}
+              {t.discount ? <tr><td className="py-0.5">{t.discount_label || "Discount"}</td><td className="py-0.5 text-right">− {fmtMoney(t.discount)}</td></tr> : null}
               {t.shipping ? <tr><td className="py-0.5">Shipping</td><td className="py-0.5 text-right">{fmtMoney(t.shipping)}</td></tr> : null}
               {t.adjustment ? <tr><td className="py-0.5">Adjustment</td><td className="py-0.5 text-right">{fmtMoney(t.adjustment)}</td></tr> : null}
               {t.cgst ? <tr><td className="py-0.5">CGST</td><td className="py-0.5 text-right">{fmtMoney(t.cgst)}</td></tr> : null}

@@ -104,6 +104,7 @@ export type Quotation = {
   items: QuoteItem[];
   subtotal: number;             // sum of line amounts (after line discount, before tax)
   discount_amount: number;      // doc-level flat discount
+  discount_label?: string | null; // editable label for the discount line
   shipping_charges: number;
   adjustment: number;
   tcs_percent: number;

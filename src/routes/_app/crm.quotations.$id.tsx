@@ -65,6 +65,7 @@ function QuoteEditor() {
   const nav = useNavigate();
   const isClone = id === "new";
   const [q, setQ] = useState<Quotation | null>(null);
+  const [discountLabel, setDiscountLabel] = useState("Discount");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [templates, setTemplates] = useState<QuoteTermsTemplate[]>([]);
   const [settings, setSettings] = useState<CrmSettings | null>(null);
@@ -109,6 +110,7 @@ function QuoteEditor() {
       quote.expiry_date = computeExpiryDate(quote.quote_date, quote.validity_days || DEFAULT_VALIDITY_DAYS);
     }
     setQ(quote);
+    setDiscountLabel(((quote as any).discount_label || "").trim() || "Discount");
     if (quote.customer_id) {
       const { data: c } = await supabase.from("customers").select("*").eq("id", quote.customer_id).single();
       setCustomer((c as unknown as Customer) || null);
@@ -277,6 +279,7 @@ function QuoteEditor() {
       round_off: q.round_off || 0,
       subtotal: totals.subtotal,
       gst_percent: q.gst_percent,
+      discount_label: discountLabel.trim() || "Discount",
       gst_amount: totals.total_tax,
       cgst_amount: totals.cgst_amount,
       sgst_amount: totals.sgst_amount,
@@ -535,7 +538,8 @@ function QuoteEditor() {
         <CardHeader><CardTitle className="text-base">Totals & charges</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2"><Label className="self-center">Discount (₹)</Label><Input type="number" value={q.discount_amount || 0} onChange={(e) => setQ({ ...q, discount_amount: Number(e.target.value) })} /></div>
+            <div className="grid grid-cols-2 gap-2"><Label className="self-center">Discount label</Label><Input value={discountLabel} placeholder="Discount" onChange={(e) => setDiscountLabel(e.target.value)} /></div>
+            <div className="grid grid-cols-2 gap-2"><Label className="self-center">{(discountLabel.trim() || "Discount")} (₹)</Label><Input type="number" value={q.discount_amount || 0} onChange={(e) => setQ({ ...q, discount_amount: Number(e.target.value) })} /></div>
             <div className="grid grid-cols-2 gap-2"><Label className="self-center">Shipping charges (₹)</Label><Input type="number" value={q.shipping_charges || 0} onChange={(e) => setQ({ ...q, shipping_charges: Number(e.target.value) })} /></div>
             <div className="grid grid-cols-2 gap-2"><Label className="self-center">Adjustment (₹)</Label><Input type="number" value={q.adjustment || 0} onChange={(e) => setQ({ ...q, adjustment: Number(e.target.value) })} /></div>
             <div className="grid grid-cols-2 gap-2"><Label className="self-center">TCS %</Label><Input type="number" value={q.tcs_percent || 0} onChange={(e) => setQ({ ...q, tcs_percent: Number(e.target.value) })} /></div>
@@ -543,7 +547,7 @@ function QuoteEditor() {
           </div>
           <div className="text-sm border rounded-md p-3 space-y-1">
             <div className="flex justify-between"><span>Sub Total</span><span>{fmtMoney(totals.subtotal)}</span></div>
-            {(q.discount_amount || 0) > 0 && <div className="flex justify-between text-red-600"><span>Discount</span><span>− {fmtMoney(q.discount_amount)}</span></div>}
+            {(q.discount_amount || 0) > 0 && <div className="flex justify-between text-red-600"><span>{discountLabel.trim() || "Discount"}</span><span>− {fmtMoney(q.discount_amount)}</span></div>}
             {(q.shipping_charges || 0) > 0 && <div className="flex justify-between"><span>Shipping</span><span>{fmtMoney(q.shipping_charges)}</span></div>}
             {(q.adjustment || 0) !== 0 && <div className="flex justify-between"><span>Adjustment</span><span>{fmtMoney(q.adjustment)}</span></div>}
             {totals.cgst_amount > 0 && <div className="flex justify-between"><span>CGST</span><span>{fmtMoney(totals.cgst_amount)}</span></div>}
@@ -640,6 +644,7 @@ function QuoteEditor() {
             totals: {
               subtotal: totals.subtotal,
               discount: q.discount_amount || 0,
+              discount_label: discountLabel.trim() || "Discount",
               shipping: q.shipping_charges || 0,
               adjustment: q.adjustment || 0,
               cgst: totals.cgst_amount,
@@ -820,7 +825,7 @@ function QuoteEditor() {
             <table className="w-full">
               <tbody>
                 <tr><td className="py-0.5">Sub Total</td><td className="py-0.5 text-right">{fmtMoney(totals.subtotal)}</td></tr>
-                {(q.discount_amount || 0) > 0 && <tr><td className="py-0.5">Discount</td><td className="py-0.5 text-right">− {fmtMoney(q.discount_amount)}</td></tr>}
+                {(q.discount_amount || 0) > 0 && <tr><td className="py-0.5">{discountLabel.trim() || "Discount"}</td><td className="py-0.5 text-right">− {fmtMoney(q.discount_amount)}</td></tr>}
                 {(q.shipping_charges || 0) > 0 && <tr><td className="py-0.5">Shipping</td><td className="py-0.5 text-right">{fmtMoney(q.shipping_charges)}</td></tr>}
                 {(q.adjustment || 0) !== 0 && <tr><td className="py-0.5">Adjustment</td><td className="py-0.5 text-right">{fmtMoney(q.adjustment)}</td></tr>}
                 {totals.cgst_amount > 0 && <tr><td className="py-0.5">CGST</td><td className="py-0.5 text-right">{fmtMoney(totals.cgst_amount)}</td></tr>}
