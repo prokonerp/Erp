@@ -213,6 +213,14 @@ function NewIndent() {
     if (!form.ticket_id) return toast.error("Linked Ticket is required");
     if (!form.indent_type) return toast.error("Please select an Indent Type before saving");
     setBusy(true);
+    // Cancel any queued autosave so it can't race with this manual save.
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    // If autosave's insert is currently in flight, wait for it to finish.
+    if (creatingRef.current) {
+      for (let i = 0; i < 100 && creatingRef.current; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
     const { data: u } = await supabase.auth.getUser();
     const payload = {
       indent_date: form.indent_date,
@@ -228,12 +236,34 @@ function NewIndent() {
       oracles_data: form.oracles_data,
       engineer_name: form.engineer_name || null,
       remarks: form.remarks || null,
-      created_by: u.user?.id ?? null,
     };
-    const { data, error } = await supabase.from("indents" as never).insert(payload as never).select("id, indent_no").maybeSingle() as unknown as { data: { id: string; indent_no: string | null } | null; error: { message: string } | null };
+
+    let data: { id: string; indent_no: string | null } | null = null;
+    let error: { message: string } | null = null;
+
+    if (draftIdRef.current) {
+      // Autosave already created this record — update it instead of inserting a duplicate.
+      const res = await supabase.from("indents" as never)
+        .update(payload as never)
+        .eq("id", draftIdRef.current)
+        .select("id, indent_no")
+        .maybeSingle() as unknown as { data: { id: string; indent_no: string | null } | null; error: { message: string } | null };
+      data = res.data;
+      error = res.error;
+    } else {
+      creatingRef.current = true;
+      const res = await supabase.from("indents" as never)
+        .insert({ ...payload, created_by: u.user?.id ?? null } as never)
+        .select("id, indent_no")
+        .maybeSingle() as unknown as { data: { id: string; indent_no: string | null } | null; error: { message: string } | null };
+      creatingRef.current = false;
+      data = res.data;
+      error = res.error;
+      if (data) draftIdRef.current = data.id;
+    }
     setBusy(false);
     if (error) return toast.error(error.message);
-    if (!data) return toast.error("Failed to create Indent");
+    if (!data) return toast.error("Failed to save Indent");
     // Auto-populate the linked Ticket's Good Parts Used from closed Oracles.
     await syncTicketGoodPartsFromIndent(supabase, {
       id: data.id,
