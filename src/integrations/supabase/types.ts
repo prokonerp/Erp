@@ -370,6 +370,41 @@ export type Database = {
           },
         ]
       }
+      assignable_engineers: {
+        Row: {
+          active: boolean
+          department: string | null
+          id: string
+          name: string
+          phone: string | null
+          role: string | null
+        }
+        Insert: {
+          active?: boolean
+          department?: string | null
+          id: string
+          name: string
+          phone?: string | null
+          role?: string | null
+        }
+        Update: {
+          active?: boolean
+          department?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignable_engineers_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance: {
         Row: {
           code: string
@@ -5286,17 +5321,7 @@ export type Database = {
       }
     }
     Views: {
-      assignable_engineers: {
-        Row: {
-          active: boolean | null
-          department: string | null
-          id: string | null
-          name: string | null
-          phone: string | null
-          role: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       _oracle_block_complete: {
@@ -5367,17 +5392,6 @@ export type Database = {
         }[]
       }
       claim_admin: { Args: never; Returns: undefined }
-      get_assignable_engineers: {
-        Args: never
-        Returns: {
-          active: boolean
-          department: string
-          id: string
-          name: string
-          phone: string
-          role: string
-        }[]
-      }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
