@@ -370,6 +370,41 @@ export type Database = {
           },
         ]
       }
+      assignable_engineers: {
+        Row: {
+          active: boolean
+          department: string | null
+          id: string
+          name: string
+          phone: string | null
+          role: string | null
+        }
+        Insert: {
+          active?: boolean
+          department?: string | null
+          id: string
+          name: string
+          phone?: string | null
+          role?: string | null
+        }
+        Update: {
+          active?: boolean
+          department?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignable_engineers_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance: {
         Row: {
           code: string

@@ -198,7 +198,7 @@ function TicketsList() {
       flagged = new Set(((acts as { ticket_id: string }[] | null) || []).map((a) => a.ticket_id));
     }
     setRows(baseRows.map((r) => ({ ...r, has_special_activity: flagged.has(r.id) })));
-    const { data: emps } = await supabase.from("employees").select("id,name,phone,department,active").eq("active", true).order("name");
+    const { data: emps } = await supabase.from("assignable_engineers").select("id,name,phone,department,active").order("name");
     setEmployees((emps || []) as Employee[]);
     setLoading(false);
   };
