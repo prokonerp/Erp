@@ -350,6 +350,10 @@ function TicketsList() {
       setClosingCtx({ r, notify: !!opts.notify });
       return;
     }
+    if (next === "Cancelled") {
+      setCancellingCtx({ r });
+      return;
+    }
     const patch: Record<string, unknown> = { status: next };
     const { error } = await supabase.from("tickets").update(patch as never).eq("id", r.id);
     if (error) return toast.error(error.message);
