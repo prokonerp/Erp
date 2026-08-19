@@ -156,6 +156,8 @@ function TicketDetail() {
   const [deptFilter, setDeptFilter] = useState<string>("all");
   const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
   const [closingOpen, setClosingOpen] = useState(false);
+  const [cancellingOpen, setCancellingOpen] = useState(false);
+
   const { isAdmin } = useIsAdmin();
   const [selectedDefRows, setSelectedDefRows] = useState<Record<number, boolean>>({});
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -428,6 +430,10 @@ function TicketDetail() {
       setClosingOpen(true);
       return;
     }
+    if (next === "Cancelled") {
+      setCancellingOpen(true);
+      return;
+    }
     const prev = t.status;
     const extra: Partial<Ticket> = { status: next };
     update(extra);
@@ -436,6 +442,7 @@ function TicketDetail() {
     await logActivity("status", `Status changed: ${prev} → ${next}`, prev, next);
     await load();
   };
+
 
   const confirmClose = async (remarks: string): Promise<boolean> => {
     const prev = t.status;
@@ -464,6 +471,32 @@ function TicketDetail() {
     }
     return true;
   };
+
+  const confirmCancel = async (remarks: string): Promise<boolean> => {
+    const prev = t.status;
+    const { data: u } = await supabase.auth.getUser();
+    const actorName =
+      (u.user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ||
+      (u.user?.user_metadata as { full_name?: string; name?: string } | null)?.name ||
+      u.user?.email ||
+      "User";
+    const ts = new Date().toLocaleString();
+    const noteBody = `Cancellation Reason by ${actorName} at ${ts}:\n${remarks}`;
+    const { error: noteErr } = await supabase.from("ticket_activities").insert({
+      ticket_id: t.id, kind: "note", notes: noteBody, actor: u.user?.id ?? null,
+    } as never);
+    if (noteErr) { toast.error(`Could not save reason: ${noteErr.message}`); return false; }
+    const { error: upErr } = await supabase.from("tickets").update({
+      status: "Cancelled",
+    } as never).eq("id", t.id);
+    if (upErr) { toast.error(`Reason saved, but cancellation failed: ${upErr.message}`); return false; }
+    await logActivity("status", `Status changed: ${prev} → Cancelled`, prev, "Cancelled");
+    toast.success("Ticket cancelled");
+    await load();
+    // No customer WhatsApp message on cancellation — only genuine closures should notify the customer.
+    return true;
+  };
+
 
   const assignEngineer = async () => {
     if (!t.assigned_engineer_name || !t.assigned_engineer_phone) {
@@ -1148,6 +1181,16 @@ function TicketDetail() {
         caseId={t.case_id}
         onConfirm={confirmClose}
       />
+      <ClosingRemarksDialog
+        open={cancellingOpen}
+        onOpenChange={setCancellingOpen}
+        caseId={t.case_id}
+        title={`Cancellation Reason — ${t.case_id}`}
+        actionLabel="Save & Cancel Ticket"
+        placeholder="Describe why this ticket is being cancelled…"
+        onConfirm={confirmCancel}
+      />
+
     </div>
   );
 }

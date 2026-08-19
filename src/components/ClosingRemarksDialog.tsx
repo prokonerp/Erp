@@ -15,11 +15,28 @@ type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   caseId?: string | null;
-  /** Perform the actual close. Return true on success; false keeps the dialog open and remarks intact. */
+  /** Optional dialog title. Defaults to "Closing Remarks" so existing Close flow is unchanged. */
+  title?: string;
+  /** Optional primary button label. Defaults to "Save & Close Ticket". */
+  actionLabel?: string;
+  /** Optional description override. Defaults to the Close flow description. */
+  description?: string;
+  /** Optional placeholder override. */
+  placeholder?: string;
+  /** Perform the action. Return true on success; false keeps the dialog open and remarks intact. */
   onConfirm: (remarks: string) => Promise<boolean>;
 };
 
-export function ClosingRemarksDialog({ open, onOpenChange, caseId, onConfirm }: Props) {
+export function ClosingRemarksDialog({
+  open,
+  onOpenChange,
+  caseId,
+  title,
+  actionLabel,
+  description,
+  placeholder,
+  onConfirm,
+}: Props) {
   const [remarks, setRemarks] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -40,13 +57,19 @@ export function ClosingRemarksDialog({ open, onOpenChange, caseId, onConfirm }: 
     // On failure keep dialog open so remarks are not lost.
   };
 
+  const dialogTitle = title || `Closing Remarks${caseId ? ` — ${caseId}` : ""}`;
+  const isClosing = !title || title.toLowerCase().includes("closing");
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Closing Remarks{caseId ? ` — ${caseId}` : ""}</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>
-            Remarks are required to close this ticket. They will be added to the ticket's Notes with your name and timestamp.
+            {description ||
+              (isClosing
+                ? "Remarks are required to close this ticket. They will be added to the ticket's Notes with your name and timestamp."
+                : "Remarks are required for this action. They will be added to the ticket's Notes with your name and timestamp.")}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
@@ -57,7 +80,7 @@ export function ClosingRemarksDialog({ open, onOpenChange, caseId, onConfirm }: 
             autoFocus
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
-            placeholder="Describe resolution, root cause, action taken…"
+            placeholder={placeholder || "Describe resolution, root cause, action taken…"}
           />
         </div>
         <DialogFooter>
@@ -65,7 +88,7 @@ export function ClosingRemarksDialog({ open, onOpenChange, caseId, onConfirm }: 
             Cancel
           </Button>
           <Button onClick={submit} disabled={busy || !remarks.trim()}>
-            {busy ? "Closing…" : "Save & Close Ticket"}
+            {busy ? "Saving…" : (actionLabel || "Save & Close Ticket")}
           </Button>
         </DialogFooter>
       </DialogContent>
