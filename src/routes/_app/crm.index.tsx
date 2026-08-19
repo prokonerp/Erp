@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { type Lead, type Quotation, type Incentive, type IncentiveRule, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, timeAgo } from "@/lib/crm";
+import { type Lead, type Quotation, type Incentive, type IncentiveRule, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, timeAgo, fetchCustomersByIds } from "@/lib/crm";
 import { Target, TrendingUp, Calendar, Trophy, FileSpreadsheet, BellRing } from "lucide-react";
 
 export const Route = createFileRoute("/_app/crm/")({
@@ -22,19 +22,24 @@ function CrmDashboard() {
 
   useEffect(() => {
     (async () => {
-      const [l, q, i, r, c] = await Promise.all([
+      const [l, q, i, r] = await Promise.all([
         supabase.from("leads").select("*").order("updated_at", { ascending: false }),
         supabase.from("quotations").select("*").order("created_at", { ascending: false }),
         supabase.from("incentives").select("*").order("created_at", { ascending: false }),
         supabase.from("incentive_rules").select("*").order("sort_order"),
-        supabase.from("customers").select("*"),
       ]);
       setLeads((l.data || []) as unknown as Lead[]);
       setQuotes((q.data || []) as unknown as Quotation[]);
       setIncentives((i.data || []) as unknown as Incentive[]);
       setRules((r.data || []) as unknown as IncentiveRule[]);
+      // Resolve only referenced customers — the full table exceeds Supabase's
+      // 1000-row cap and would silently drop alphabetically-late records.
+      const custRows = await fetchCustomersByIds([
+        ...((l.data || []) as any[]).map((x) => x.customer_id),
+        ...((q.data || []) as any[]).map((x) => x.customer_id),
+      ]);
       const cmap: Record<string, Customer> = {};
-      for (const x of (c.data || []) as unknown as Customer[]) cmap[x.id] = x;
+      for (const x of custRows) cmap[x.id] = x;
       setCustomers(cmap);
       const { data: su } = await supabase.from("app_users").select("user_id,name,email");
       const smap: Record<string, string> = {};

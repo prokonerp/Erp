@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
-import { type Lead, type LeadStatus, type Customer, statusLabel, statusClass, fmtMoney, fmtDate } from "@/lib/crm";
+import { type Lead, type LeadStatus, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, fetchCustomersByIds } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { useLeadAssignment } from "@/lib/useLeadAssignment";
@@ -38,12 +38,12 @@ function LeadsList() {
   });
 
   const load = async () => {
-    const [l, c] = await Promise.all([
-      supabase.from("leads").select("*").order("updated_at", { ascending: false }),
-      supabase.from("customers").select("*").order("company"),
-    ]);
-    setRows((l.data || []) as unknown as Lead[]);
-    setCustomers((c.data || []) as unknown as Customer[]);
+    const { data: l } = await supabase.from("leads").select("*").order("updated_at", { ascending: false });
+    const list = (l || []) as unknown as Lead[];
+    setRows(list);
+    // Only resolve the customers referenced by these leads (the full table
+    // exceeds Supabase's 1000-row response cap and silently truncates).
+    setCustomers(await fetchCustomersByIds(list.map((r) => r.customer_id)));
   };
   useEffect(() => { load(); }, []);
 

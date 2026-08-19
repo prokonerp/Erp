@@ -313,3 +313,26 @@ export function amountInWords(num: number): string {
   if (s) out += three(s);
   return out.trim() + " Rupees Only";
 }
+
+/**
+ * Resolve customers by explicit ids (chunked to stay under URL / row limits).
+ * Use this for name-resolution maps instead of fetching the whole customers
+ * table, which Supabase silently caps at 1000 rows.
+ */
+export async function fetchCustomersByIds(
+  ids: (string | null | undefined)[],
+  columns = "*",
+): Promise<Customer[]> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const unique = Array.from(new Set(ids.filter((x): x is string => !!x)));
+  if (!unique.length) return [];
+  const out: Customer[] = [];
+  const CHUNK = 200;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const slice = unique.slice(i, i + CHUNK);
+    const { data, error } = await supabase.from("customers").select(columns).in("id", slice);
+    if (error) throw error;
+    out.push(...((data || []) as unknown as Customer[]));
+  }
+  return out;
+}

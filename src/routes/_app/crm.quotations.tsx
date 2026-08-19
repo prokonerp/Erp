@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Plus, MoreVertical, Eye, Copy, Trash2, Search, Pencil, Send, ArrowRightLeft, FileText, Loader2, Clock, CheckCircle2, FilePlus, Printer, Download } from "lucide-react";
 import { toast } from "sonner";
-import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass, computeExpiryDate, DEFAULT_VALIDITY_DAYS } from "@/lib/crm";
+import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass, computeExpiryDate, DEFAULT_VALIDITY_DAYS, fetchCustomersByIds } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { cn } from "@/lib/utils";
@@ -47,12 +47,13 @@ function QuotesList() {
   const [delId, setDelId] = useState<string | null>(null);
 
   const load = async () => {
-    const [a, c] = await Promise.all([
-      supabase.from("quotations").select("*").order("created_at", { ascending: false }),
-      supabase.from("customers").select("*").order("company"),
-    ]);
-    setRows((a.data || []) as unknown as Quotation[]);
-    setCustomers((c.data || []) as unknown as Customer[]);
+    const { data: a } = await supabase.from("quotations").select("*").order("created_at", { ascending: false });
+    const list = (a || []) as unknown as Quotation[];
+    setRows(list);
+    // Resolve only the customers referenced by these quotations — fetching the
+    // whole table silently truncates at Supabase's 1000-row cap.
+    const cust = await fetchCustomersByIds(list.map((r) => r.customer_id));
+    setCustomers(cust);
   };
   useEffect(() => { load(); }, []);
 
@@ -60,7 +61,7 @@ function QuotesList() {
 
   const create = async () => {
     if (!custId) return toast.error("Select customer");
-    const cust = cmap[custId];
+    const cust = cmap[custId] || (await fetchCustomersByIds([custId]))[0];
     const { data: u } = await supabase.auth.getUser();
     const today = new Date().toISOString().slice(0, 10);
     const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);
@@ -254,9 +255,25 @@ function QuotesWorkspace() {
     [customers],
   );
 
-  const loadCustomers = useCallback(async () => {
-    const { data } = await supabase.from("customers").select("*").order("company");
-    setCustomers((data || []) as unknown as Customer[]);
+  // Resolve names only for the customers referenced by the loaded quotations.
+  // Fetching the whole customers table hits Supabase's 1000-row cap and makes
+  // alphabetically-late customers render blank.
+  const resolveCustomers = useCallback(async (ids: (string | null)[]) => {
+    setCustomers((prev) => {
+      const known = new Set(prev.map((c) => c.id));
+      const missing = Array.from(new Set(ids.filter((x): x is string => !!x && !known.has(x))));
+      if (missing.length) {
+        fetchCustomersByIds(missing)
+          .then((fetched) => {
+            if (fetched.length) setCustomers((cur) => {
+              const have = new Set(cur.map((c) => c.id));
+              return [...cur, ...fetched.filter((c) => !have.has(c.id))];
+            });
+          })
+          .catch(() => {});
+      }
+      return prev;
+    });
   }, []);
 
   const buildQuery = useCallback(
@@ -296,8 +313,8 @@ function QuotesWorkspace() {
     setLoadingMore(false);
   }, [buildQuery, rows.length, loadingMore, hasMore]);
 
-  useEffect(() => { loadCustomers(); }, [loadCustomers]);
   useEffect(() => { loadFirst(); }, [loadFirst]);
+  useEffect(() => { resolveCustomers(rows.map((r) => r.customer_id ?? null)); }, [rows, resolveCustomers]);
 
   // Filter by customer / amount client-side (list is already narrow).
   const filtered = useMemo(() => {
@@ -375,7 +392,7 @@ function QuotesWorkspace() {
 
   const createNew = async () => {
     if (!newCustId) return toast.error("Select customer");
-    const cust = cmap[newCustId];
+    const cust = cmap[newCustId] || (await fetchCustomersByIds([newCustId]))[0];
     const { data: u } = await supabase.auth.getUser();
     const today = new Date().toISOString().slice(0, 10);
     const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);

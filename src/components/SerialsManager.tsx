@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAll } from "@/lib/fetchAll";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,10 +75,14 @@ export function SerialsManager({ product }: { product: Product }) {
   const [bulkDate, setBulkDate] = useState<string>("");
 
   const load = async () => {
-    const [{ data: ser }, { data: ven }, { data: cust }, { data: wh }] = await Promise.all([
+    const [{ data: ser }, { data: ven }, cust, { data: wh }] = await Promise.all([
       supabase.from("serials").select("*").eq("product_id", product.id).order("created_at", { ascending: false }),
       supabase.from("vendors").select("id,name").order("name"),
-      supabase.from("customers").select("id,company,contact_name").order("company"),
+      // Paged fetch: a plain select() caps at 1000 rows and would hide
+      // alphabetically-late customers from this selector.
+      fetchAll<{ id: string; company: string | null; contact_name: string | null }>(
+        "customers", (q) => q.select("id,company,contact_name").order("company"),
+      ),
       supabase.from("warehouses").select("id,name,code").eq("status", "Active").order("name"),
     ]);
     setRows((ser || []) as Serial[]);
