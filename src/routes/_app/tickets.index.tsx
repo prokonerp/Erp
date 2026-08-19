@@ -150,6 +150,7 @@ function TicketsList() {
   const [, setNowTick] = useState(0);
   const [view, setView] = useState<"table" | "cards">("table");
   const [closingCtx, setClosingCtx] = useState<{ r: Row; notify: boolean } | null>(null);
+  const [cancellingCtx, setCancellingCtx] = useState<{ r: Row } | null>(null);
   const [showTerminal, setShowTerminal] = useState(false);
   type SortKey = "created" | "timer" | "priority" | "customer";
   const [sortKey, setSortKey] = useState<SortKey>("created");
