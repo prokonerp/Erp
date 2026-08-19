@@ -401,6 +401,37 @@ function TicketsList() {
     return true;
   };
 
+  const confirmCancel = async (remarks: string): Promise<boolean> => {
+    if (!cancellingCtx) return false;
+    const { r } = cancellingCtx;
+    const { data: u } = await supabase.auth.getUser();
+    const actorName =
+      (u.user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ||
+      (u.user?.user_metadata as { full_name?: string; name?: string } | null)?.name ||
+      u.user?.email ||
+      "User";
+    const ts = new Date().toLocaleString();
+    const noteBody = `Cancellation Reason by ${actorName} at ${ts}:\n${remarks}`;
+    // 1) Save the cancellation reason note before changing status.
+    const { error: noteErr } = await supabase.from("ticket_activities").insert({
+      ticket_id: r.id, kind: "note", notes: noteBody, actor: u.user?.id ?? null,
+    } as never);
+    if (noteErr) { toast.error(`Could not save cancellation reason: ${noteErr.message}`); return false; }
+    // 2) Update the ticket status only after the note is stored.
+    const { error: upErr } = await supabase.from("tickets").update({
+      status: "Cancelled",
+    } as never).eq("id", r.id);
+    if (upErr) { toast.error(`Cancellation reason saved, but cancelling failed: ${upErr.message}`); return false; }
+    await supabase.from("ticket_activities").insert({
+      ticket_id: r.id, kind: "status", from_status: r.status, to_status: "Cancelled",
+      notes: `Status changed: ${r.status} → Cancelled`, actor: u.user?.id ?? null,
+    } as never);
+    toast.success("Ticket cancelled");
+    setCancellingCtx(null);
+    load();
+    return true;
+  };
+
   const softDelete = async (r: Row) => {
     const { error } = await softDeleteRow("tickets", r.id);
     if (error) return toast.error(error.message);
