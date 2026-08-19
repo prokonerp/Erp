@@ -69,6 +69,7 @@ export type QuoteItem = {
   description: string;
   item_details?: string;      // extra notes line under description
   hsn?: string;
+  warranty_months?: number;   // per-line warranty override (months)
   qty: number;
   unit?: string;
   rate: number;
