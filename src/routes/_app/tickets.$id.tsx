@@ -180,7 +180,7 @@ function TicketDetail() {
       supabase.from("products").select("id,name,model,brand,description").order("name"),
       supabase.from("ticket_activities").select("*").eq("ticket_id", id).order("created_at", { ascending: false }),
       supabase.from("wa_templates").select("id,body"),
-      supabase.from("employees").select("id,name,phone,department,role,active").eq("active", true).order("name"),
+      supabase.from("assignable_engineers").select("id,name,phone,department,role,active").order("name"),
     ]);
     if (tk) {
       const row = tk as unknown as Ticket;
