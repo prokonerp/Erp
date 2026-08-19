@@ -5286,7 +5286,17 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      assignable_engineers: {
+        Row: {
+          active: boolean | null
+          department: string | null
+          id: string | null
+          name: string | null
+          phone: string | null
+          role: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       _oracle_block_complete: {
@@ -5357,6 +5367,17 @@ export type Database = {
         }[]
       }
       claim_admin: { Args: never; Returns: undefined }
+      get_assignable_engineers: {
+        Args: never
+        Returns: {
+          active: boolean
+          department: string
+          id: string
+          name: string
+          phone: string
+          role: string
+        }[]
+      }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
