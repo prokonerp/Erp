@@ -1181,6 +1181,16 @@ function TicketDetail() {
         caseId={t.case_id}
         onConfirm={confirmClose}
       />
+      <ClosingRemarksDialog
+        open={cancellingOpen}
+        onOpenChange={setCancellingOpen}
+        caseId={t.case_id}
+        title={`Cancellation Reason — ${t.case_id}`}
+        actionLabel="Save & Cancel Ticket"
+        placeholder="Describe why this ticket is being cancelled…"
+        onConfirm={confirmCancel}
+      />
+
     </div>
   );
 }
