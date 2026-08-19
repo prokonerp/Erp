@@ -238,6 +238,24 @@ export function coverageSuffix(p: {
   return ` — ${label}: ${p.warranty_duration} ${p.warranty_unit || "Months"}${from}`;
 }
 
+/**
+ * Warranty duration of a product expressed in months, using exactly the same
+ * fields/conversion coverageSuffix() reads, so a line's default warranty always
+ * matches what coverageSuffix would have shown.
+ */
+export function productWarrantyMonths(p: {
+  warranty_applicable?: boolean | null;
+  warranty_duration?: number | null;
+  warranty_unit?: string | null;
+} | null | undefined): number {
+  if (!p?.warranty_applicable || !p.warranty_duration) return 0;
+  const unit = String(p.warranty_unit || "Months").toLowerCase();
+  const n = Number(p.warranty_duration) || 0;
+  if (unit.startsWith("y")) return n * 12;
+  if (unit.startsWith("d")) return Math.round(n / 30);
+  return n;
+}
+
 export function inr(n: number | null | undefined): string {
   const v = Number(n) || 0;
   return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
