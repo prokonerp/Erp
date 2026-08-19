@@ -682,6 +682,16 @@ function TicketsList() {
         caseId={closingCtx?.r.case_id}
         onConfirm={confirmClose}
       />
+      <ClosingRemarksDialog
+        open={!!cancellingCtx}
+        onOpenChange={(v) => { if (!v) setCancellingCtx(null); }}
+        caseId={cancellingCtx?.r.case_id}
+        title="Cancellation Reason"
+        actionLabel="Save & Cancel Ticket"
+        description="Remarks are required to cancel this ticket. They will be added to the ticket's Notes with your name and timestamp."
+        placeholder="Describe the reason for cancellation…"
+        onConfirm={confirmCancel}
+      />
     </div>
   );
 
