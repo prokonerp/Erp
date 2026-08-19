@@ -79,6 +79,15 @@ function AppLayout() {
 
   async function loadProfile() {
     try {
+      // Ensure a live access token exists before calling the protected
+      // server fn; otherwise the auth middleware throws "No authorization
+      // header provided" (e.g. right after sign-out or a stale session).
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data: s } = await supabase.auth.getSession();
+      if (!s.session?.access_token) {
+        setProfile(null);
+        return;
+      }
       const p = await fetchProfile();
       setProfile(p as any);
       if (p.expired) {
