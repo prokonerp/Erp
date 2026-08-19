@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import type { ProductMaster } from "@/components/ProductPicker";
-import { fetchBranches, type BranchRow } from "@/lib/sales";
+import { fetchBranches, productWarrantyMonths, type BranchRow } from "@/lib/sales";
 import {
   type Customer, type QuoteItem,
   fmtMoney, computeQuoteTotals, lineAmount, INDIAN_STATES,
@@ -207,6 +207,7 @@ function NewQuotation() {
       description: p ? productDisplayName(p as any) : items[i]?.description || "",
       item_details: p ? (p.description || "") : items[i]?.item_details || "",
       hsn: p?.hsn || items[i]?.hsn,
+      warranty_months: p ? productWarrantyMonths(p as any) : items[i]?.warranty_months,
       unit: p?.unit || items[i]?.unit || "Nos",
       rate: p?.default_price != null ? Number(p.default_price) : items[i]?.rate || 0,
     });
@@ -489,9 +490,10 @@ function NewQuotation() {
               <tr>
                 <th className="p-2 w-8">#</th>
                 <th className="p-2 min-w-[260px]">Item</th>
-                <th className="p-2 w-20">HSN</th>
+                <th className="p-2 w-16">HSN</th>
+                <th className="p-2 w-14 text-right">Warranty</th>
                 <th className="p-2 w-20 text-right">Qty</th>
-                <th className="p-2 w-20">Unit</th>
+                <th className="p-2 w-16">Unit</th>
                 <th className="p-2 w-28 text-right">Rate</th>
                 <th className="p-2 w-20 text-right">Disc %</th>
                 <th className="p-2 w-20 text-right">Tax %</th>
@@ -519,6 +521,7 @@ function NewQuotation() {
                       )}
                     </td>
                     <td className="p-1"><Input value={it.hsn || ""} onChange={(e) => setItem(i, { hsn: e.target.value })} className="h-7 text-xs" /></td>
+                    <td className="p-1"><Input type="number" value={it.warranty_months ?? ""} onChange={(e) => setItem(i, { warranty_months: e.target.value === "" ? undefined : Number(e.target.value) })} placeholder="12" className="h-7 text-xs text-right" /></td>
                     <td className="p-1"><Input type="number" value={it.qty} onChange={(e) => setItem(i, { qty: Number(e.target.value) })} className="h-7 text-xs text-right" /></td>
                     <td className="p-1"><Input value={it.unit || ""} onChange={(e) => setItem(i, { unit: e.target.value })} className="h-7 text-xs" /></td>
                     <td className="p-1"><Input type="number" value={it.rate} onChange={(e) => setItem(i, { rate: Number(e.target.value) })} className="h-7 text-xs text-right" /></td>
