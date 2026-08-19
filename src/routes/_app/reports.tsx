@@ -55,18 +55,23 @@ function ReportsPage() {
 
   useEffect(() => {
     (async () => {
-      const [st, w, s, p, c] = await Promise.all([
+      const [st, w, s, p] = await Promise.all([
         listStock(),
         listWarehouses(),
         supabase.from("serials").select("*"),
         supabase.from("products").select("id,name,brand,model,description,serial_tracking,warranty_applicable"),
-        supabase.from("customers").select("id,company,contact_name"),
       ]);
       setStock(st);
       setWarehouses(w);
       setSerials((s.data || []) as any);
       setProducts((p.data || []) as any);
-      setCustomers((c.data || []) as any);
+      // Resolve only the customers referenced by these serials — fetching the
+      // whole table truncates at Supabase's 1000-row cap.
+      const ids = ((s.data || []) as any[]).map((x) => x.customer_id);
+      const { data: c } = ids.filter(Boolean).length
+        ? await supabase.from("customers").select("id,company,contact_name").in("id", Array.from(new Set(ids.filter(Boolean))).slice(0, 1000))
+        : { data: [] as any[] };
+      setCustomers((c || []) as any);
     })();
   }, []);
 
