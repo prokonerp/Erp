@@ -140,6 +140,7 @@ export function OraclePipeline({
 }) {
   const steps = computeOracleSteps(oracle, indentType, pendingDocs, docInfo);
   const closed = oracle.status === "closed";
+  const forceClosed = closed && !!oracle.force_closed;
   const doneCount = steps.filter((s) => s.done).length;
   const allDone = doneCount === steps.length;
   const statusText = closed
@@ -162,6 +163,11 @@ export function OraclePipeline({
         <Badge className={closed || allDone ? "bg-emerald-600 hover:bg-emerald-600" : "bg-destructive hover:bg-destructive"}>
           {statusText}
         </Badge>
+        {forceClosed && (
+          <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300" title={oracle.force_close_reason || undefined}>
+            Force Closed
+          </Badge>
+        )}
         {duplicateIndentNo && (
           <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300 text-[11px]">
             ⚠ Also used on Indent {duplicateIndentNo}

@@ -8,13 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer, ChevronsDownUp, ChevronsUpDown, FileOutput, PackageCheck } from "lucide-react";
+import { Save, ArrowLeft, Trash2, ExternalLink, RefreshCw, Timer, ChevronsDownUp, ChevronsUpDown, FileOutput, PackageCheck, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, docStatusSettled, emptyOracleDocs, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock, type OraclePendingDocs } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeline";
 import { useIsAdmin } from "@/lib/useRole";
+import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export const Route = createFileRoute("/_app/indent/$id")({
@@ -38,6 +39,7 @@ function IndentDetail() {
   /** Oracle # → another Indent No where the same Oracle # is also used. */
   const [dupOracle, setDupOracle] = useState<Record<string, string>>({});
   const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [forceCloseAllOpen, setForceCloseAllOpen] = useState(false);
   const hydratedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storageKey = `indent:collapsed:${id}`;
@@ -731,6 +733,7 @@ function IndentDetail() {
   const closedAt = indentClosedAt(i.oracles_data);
   const age = formatAge(i.created_at, closedAt);
   void tick;
+  const openOracleCount = (i.oracles_data || []).filter((o: OracleBlock) => (o.status || "open") !== "closed").length;
 
   return (
     <div className="space-y-4">
@@ -771,6 +774,11 @@ function IndentDetail() {
           <Button variant="outline" size="sm" onClick={() => generateGrn()}>
             <PackageCheck className="h-4 w-4 mr-1" />Generate GRN
           </Button>
+          {isAdmin && openOracleCount > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setForceCloseAllOpen(true)} title="Admin: close every still-open Oracle on this Indent with one shared reason">
+              <ShieldCheck className="h-4 w-4 mr-1" />Force Close Open Oracles ({openOracleCount})
+            </Button>
+          )}
           <span className="text-xs text-muted-foreground self-center min-w-[70px] text-right">
             {autoSaveState === "saving" ? "Saving…" : autoSaveState === "saved" ? "Saved" : autoSaveState === "error" ? "Save Failed" : ""}
           </span>
@@ -875,6 +883,37 @@ function IndentDetail() {
           indentType={i.indent_type}
         />
       ))}
+
+      <ControlledActionDialog
+        open={forceCloseAllOpen}
+        onOpenChange={setForceCloseAllOpen}
+        title={`Force Close ${openOracleCount} open Oracle${openOracleCount === 1 ? "" : "s"}?`}
+        description="Admin override: closes every still-open Oracle on this Indent with one shared reason. Each Oracle is marked Force Closed with this reason."
+        warning="This bypasses the normal auto-close checks. No stock or document changes are made."
+        confirmLabel="Force Close All Open"
+        reasonPlaceholder="e.g., Sections completed via standalone documents, backfilled manually"
+        onConfirm={async ({ reason }) => {
+          const { data: u } = await supabase.auth.getUser();
+          const meta = (u.user?.user_metadata || {}) as { full_name?: string; name?: string };
+          const name = meta.full_name || meta.name || u.user?.email || null;
+          const at = new Date().toISOString();
+          const next = (i.oracles_data || []).map((o: OracleBlock) =>
+            (o.status || "open") === "closed"
+              ? o
+              : {
+                  ...o,
+                  status: "closed" as const,
+                  closed_by: u.user?.id || null,
+                  closed_by_name: name,
+                  closed_at: at,
+                  force_closed: true,
+                  force_close_reason: reason,
+                },
+          );
+          update({ oracles_data: next });
+          toast.success(`${openOracleCount} Oracle${openOracleCount === 1 ? "" : "s"} force-closed`);
+        }}
+      />
     </div>
   );
 }
