@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Eye } from "lucide-react";
 import { toast } from "sonner";
-import { type Lead, type LeadStatus, type Customer, statusLabel, statusClass, fmtMoney, fmtDate } from "@/lib/crm";
+import { type Lead, type LeadStatus, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, fetchCustomersByIds } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { useLeadAssignment } from "@/lib/useLeadAssignment";
