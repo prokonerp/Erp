@@ -73,6 +73,10 @@ export type OracleBlock = {
     reason?: string | null;
     scope?: "grn" | "dc" | "full" | null;
   } | null;
+  /** Set when an admin force-closes the oracle, bypassing the normal
+   *  auto-close requirements. Always paired with `force_close_reason`. */
+  force_closed?: boolean | null;
+  force_close_reason?: string | null;
 };
 
 const blankExchangeRow = (qty = ""): OracleExchangeRow => ({

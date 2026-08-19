@@ -6,14 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, FileText, Receipt, Lock, LockOpen, CheckCircle2, ChevronDown, ChevronUp, Eye, Download } from "lucide-react";
+import { Trash2, FileText, Receipt, Lock, LockOpen, CheckCircle2, ChevronDown, ChevronUp, Eye, Download, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { docSatisfied, normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { docSatisfied, normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, sectionMissingFields, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import { IndentModelPicker } from "@/components/IndentModelPicker";
 import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeline";
@@ -36,6 +37,35 @@ function DocLinkButtons({ kind, docId }: { kind: "dc" | "grn"; docId: string }) 
         <Download className="h-4 w-4 mr-1" />Download PDF
       </Button>
     </div>
+  );
+}
+
+/** Generate button for a section, disabled until that section's own fields
+ *  are complete (per `sectionMissingFields`). Shows what's missing on hover. */
+function GenerateButton({
+  label, icon, missing, onClick,
+}: { label: string; icon: "dc" | "grn"; missing: string[]; onClick: () => void }) {
+  const disabled = missing.length > 0;
+  const Icon = icon === "dc" ? FileText : Receipt;
+  const btn = (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={disabled}
+      onClick={onClick}
+      title={disabled ? `Missing: ${missing.join(", ")}` : undefined}
+    >
+      <Icon className="h-4 w-4 mr-1" />{label}
+    </Button>
+  );
+  if (!disabled) return btn;
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild><span className="inline-flex cursor-not-allowed">{btn}</span></TooltipTrigger>
+        <TooltipContent>Missing: {missing.join(", ")}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -80,6 +110,7 @@ export function OracleBlockEditor({
   const [shortageMsg, setShortageMsg] = useState<string>("");
   const [shortageHasOther, setShortageHasOther] = useState(false);
   const [reopenOpen, setReopenOpen] = useState(false);
+  const [forceCloseOpen, setForceCloseOpen] = useState(false);
 
   const status = oracleStatus(value);
   const closed = status === "closed";
@@ -91,6 +122,11 @@ export function OracleBlockEditor({
   ].filter((p) => p.n > 0);
   const docsPending = pendingParts.reduce((s, p) => s + p.n, 0);
   const canAutoClose = oracleCanAutoClose(value, pendingDocs, indentType);
+  // Per-section completeness — the single source of truth for gating the
+  // three Generate buttons below.
+  const missingB = sectionMissingFields(value, "B", indentType);
+  const missingC = sectionMissingFields(value, "C", indentType);
+  const missingD = sectionMissingFields(value, "D", indentType);
   const locked = closed && !isAdmin;
   void defectiveParts;
 
@@ -258,6 +294,11 @@ export function OracleBlockEditor({
           {value.reopened && (
             <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">Reopened</Badge>
           )}
+          {closed && value.force_closed && (
+            <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300" title={value.force_close_reason || undefined}>
+              Force Closed
+            </Badge>
+          )}
           {collapsed && (
             <span className="text-xs text-muted-foreground inline-flex flex-wrap gap-x-3 gap-y-0.5">
               <span>Def: {defCount}</span>
@@ -271,6 +312,11 @@ export function OracleBlockEditor({
               by {value.closed_by_name || "—"} · {value.closed_at ? new Date(value.closed_at).toLocaleString() : ""}
             </span>
           )}
+          {closed && value.force_closed && value.force_close_reason && !collapsed && (
+            <span className="text-xs text-amber-700 dark:text-amber-300">
+              Force close reason: {value.force_close_reason}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {closed ? (
@@ -282,6 +328,7 @@ export function OracleBlockEditor({
               <span className="text-xs text-muted-foreground inline-flex items-center"><Lock className="h-3 w-3 mr-1" />Locked</span>
             )
           ) : (
+            <>
             <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
               <CheckCircle2 className="h-3.5 w-3.5" />
               {canAutoClose
@@ -292,6 +339,12 @@ export function OracleBlockEditor({
                     ? "Awaiting required DC / GRN to be generated & Submitted"
                     : "Auto-closes when all rows are complete & all required DC/GRN are Submitted"}
             </span>
+            {isAdmin && (
+              <Button variant="outline" size="sm" onClick={() => setForceCloseOpen(true)} title="Admin: close this Oracle with a mandatory reason">
+                <ShieldCheck className="h-4 w-4 mr-1" />Force Close
+              </Button>
+            )}
+            </>
           )}
           {!closed && (
             <Button variant="ghost" size="icon" onClick={onRemove}><Trash2 className="h-4 w-4" /></Button>
@@ -358,14 +411,12 @@ export function OracleBlockEditor({
                 )}
               </div>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
+              <GenerateButton
+                label="Generate Delivery Challan"
+                icon="dc"
+                missing={missingB}
                 onClick={() => onGenerateChallan(value)}
-                title="Create a new Delivery Challan prefilled from this Oracle"
-              >
-                <FileText className="h-4 w-4 mr-1" />Generate Delivery Challan
-              </Button>
+              />
             ))}
           </div>
           {value.exchange_rows.map((ex, i) => {
@@ -441,14 +492,12 @@ export function OracleBlockEditor({
                 )}
               </div>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
+              <GenerateButton
+                label="Generate GRN"
+                icon="grn"
+                missing={missingC}
                 onClick={() => onGenerateGrn(value)}
-                title="Create a new GRN prefilled from this Oracle"
-              >
-                <Receipt className="h-4 w-4 mr-1" />Generate GRN
-              </Button>
+              />
             ))}
           </div>
           {value.received_rows.map((rcv, i) => {
@@ -512,14 +561,12 @@ export function OracleBlockEditor({
                   )}
                 </div>
               ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
+                <GenerateButton
+                  label="Generate GRN"
+                  icon="grn"
+                  missing={missingD}
                   onClick={() => onGenerateCustomerGrn(value)}
-                  title="Create a new GRN prefilled from Customer-returned material"
-                >
-                  <Receipt className="h-4 w-4 mr-1" />Generate GRN
-                </Button>
+                />
               ))}
             </div>
           </div>
@@ -625,6 +672,29 @@ export function OracleBlockEditor({
               scope: (scope as "grn" | "dc" | "full") || "full",
             },
           });
+        }}
+      />
+      <ControlledActionDialog
+        open={forceCloseOpen}
+        onOpenChange={setForceCloseOpen}
+        title={`Force Close Oracle ${value.oracle_no || `#${index + 1}`}?`}
+        description="Admin override: closes this Oracle even though its sections / documents are not complete. The reason is stored on the record and shown as a Force Closed badge."
+        warning="This bypasses the normal auto-close checks. No stock or document changes are made."
+        confirmLabel="Force Close Oracle"
+        reasonPlaceholder="e.g., Section B completed via standalone DC-CUST/2026/0101, backfilled manually"
+        onConfirm={async ({ reason }) => {
+          const { data: u } = await supabase.auth.getUser();
+          const meta = (u.user?.user_metadata || {}) as { full_name?: string; name?: string };
+          onChange({
+            ...value,
+            status: "closed",
+            closed_by: u.user?.id || null,
+            closed_by_name: meta.full_name || meta.name || u.user?.email || null,
+            closed_at: new Date().toISOString(),
+            force_closed: true,
+            force_close_reason: reason,
+          });
+          toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} force-closed`);
         }}
       />
       <AlertDialog open={shortageOpen} onOpenChange={setShortageOpen}>
