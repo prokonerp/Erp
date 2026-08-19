@@ -18,7 +18,7 @@ import { UpsSmartPanel } from "@/components/UpsSmartPanel";
 import { BundleApplyDialog } from "@/components/BundleApplyDialog";
 import { fetchBundleChildrenRaw } from "@/lib/productBundles";
 import { waOpen } from "@/lib/tickets";
-import { fetchBranches, type BranchRow } from "@/lib/sales";
+import { fetchBranches, productWarrantyMonths, type BranchRow } from "@/lib/sales";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { ShareQuotationDialog } from "@/components/ShareQuotationDialog";
 import { Switch } from "@/components/ui/switch";
@@ -497,6 +497,7 @@ function QuoteEditor() {
                       description: p ? productDisplayName(p as any) : it.description,
                       item_details: p ? (p.description || "") : it.item_details,
                       hsn: p?.hsn || it.hsn,
+                      warranty_months: p ? productWarrantyMonths(p as any) : it.warranty_months,
                       unit: p?.unit || it.unit,
                       rate: p?.default_price != null ? Number(p.default_price) : it.rate,
                       } as Partial<QuoteItem>);
@@ -515,9 +516,10 @@ function QuoteEditor() {
                   />
                 </div>
                 <div className="col-span-3 md:col-span-1"><Label className="text-xs">HSN</Label><Input value={it.hsn || ""} onChange={(e) => setItem(i, { hsn: e.target.value })} /></div>
+                <div className="col-span-3 md:col-span-1"><Label className="text-xs">Warranty</Label><Input type="number" value={it.warranty_months ?? ""} placeholder="12" onChange={(e) => setItem(i, { warranty_months: e.target.value === "" ? undefined : Number(e.target.value) })} /></div>
                 <div className="col-span-3 md:col-span-1"><Label className="text-xs">Qty</Label><Input type="number" value={it.qty} onChange={(e) => setItem(i, { qty: Number(e.target.value) })} /></div>
                 <div className="col-span-3 md:col-span-1"><Label className="text-xs">Unit</Label><Input value={it.unit || ""} onChange={(e) => setItem(i, { unit: e.target.value })} /></div>
-                <div className="col-span-3 md:col-span-2"><Label className="text-xs">Rate</Label><Input type="number" value={it.rate} onChange={(e) => setItem(i, { rate: Number(e.target.value) })} /></div>
+                <div className="col-span-3 md:col-span-1"><Label className="text-xs">Rate</Label><Input type="number" value={it.rate} onChange={(e) => setItem(i, { rate: Number(e.target.value) })} /></div>
                 <div className="col-span-12 md:col-span-2 text-right text-sm pb-2">
                   <div className="text-xs text-muted-foreground">Amount</div>
                   <div className="font-semibold">{fmtMoney(it.amount)}</div>
@@ -632,7 +634,12 @@ function QuoteEditor() {
               return {
                 description: it.description || (it as any).product_name || "—",
                 item_details: it.item_details || null,
-                warranty: (it as any).product_id ? warrantyMap[(it as any).product_id] || null : null,
+                warranty:
+                  it.warranty_months != null && Number(it.warranty_months) > 0
+                    ? `${Number(it.warranty_months)} M`
+                    : (it as any).product_id
+                      ? warrantyMap[(it as any).product_id] || null
+                      : null,
                 hsn: it.hsn,
                 qty: Number(it.qty || 0),
                 unit: it.unit,
