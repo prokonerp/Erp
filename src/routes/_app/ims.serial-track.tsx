@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Download } from "lucide-react";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
 import { exportCSV } from "@/lib/exports";
+import { findEquipmentBySerial, warrantyEnd, coverStatus, amcStatusOf, statusClass, statusLabel, type InstalledEquipment } from "@/lib/installedEquipment";
 import {
   listWarehouses,
   TXN_TYPE_LABEL, type StockItem, type Transaction, type WarehouseLite,
@@ -59,6 +60,7 @@ function SerialTrack() {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [tickets, setTickets] = useState<TicketLite[]>([]);
+  const [equipment, setEquipment] = useState<InstalledEquipment[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState("");
@@ -76,7 +78,7 @@ function SerialTrack() {
   // Service history: tickets logged against this serial.
   useEffect(() => {
     const term = q.trim();
-    if (!term) { setTickets([]); return; }
+    if (!term) { setTickets([]); setEquipment([]); return; }
     let alive = true;
     const h = setTimeout(async () => {
       const sb = supabase as unknown as { from: (t: string) => any };
@@ -87,6 +89,10 @@ function SerialTrack() {
         .order("created_at", { ascending: true })
         .limit(200);
       if (alive) setTickets((data || []) as TicketLite[]);
+      try {
+        const eq = await findEquipmentBySerial(term);
+        if (alive) setEquipment(eq);
+      } catch { if (alive) setEquipment([]); }
     }, 300);
     return () => { alive = false; clearTimeout(h); };
   }, [q]);
