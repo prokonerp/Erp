@@ -320,6 +320,13 @@ function InstalledEquipmentPage() {
         <p className="text-sm text-muted-foreground">Pick a customer to see every unit installed at their sites with live warranty and AMC coverage.</p>
       </div>
 
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="list">Register</TabsTrigger>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list" className="space-y-4 mt-0">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Customer</CardTitle>
@@ -334,8 +341,15 @@ function InstalledEquipmentPage() {
           <Button disabled={!customerId} size="sm" onClick={openAdd}>
             <Plus className="h-4 w-4 mr-1" />Add Equipment
           </Button>
+          <input
+            ref={fileRef} type="file" accept=".csv,text/csv" hidden
+            onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])}
+          />
+          <Button variant="outline" size="sm" disabled={importing} onClick={() => fileRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-1" />{importing ? "Importing…" : "Import CSV"}
+          </Button>
           <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setEditId(null); }}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editId ? "Edit" : "Add"} installed equipment{customerName ? ` — ${customerName}` : ""}</DialogTitle>
                 <DialogDescription>Pick a model from Product Master — warranty months fill in automatically and stay editable.</DialogDescription>
