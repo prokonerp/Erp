@@ -322,6 +322,7 @@ function InstalledEquipmentPage() {
                     <th className="px-2 py-1.5">AMC Status</th>
                     <th className="px-2 py-1.5 w-16 text-center">Ticket</th>
                     <th className="px-2 py-1.5 w-14 text-center">View</th>
+                    <th className="px-2 py-1.5 w-20 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -358,10 +359,18 @@ function InstalledEquipmentPage() {
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
                       </td>
+                      <td className="px-2 py-1 text-center whitespace-nowrap">
+                        <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(d.row)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" title="Delete" onClick={() => setDeleteRow(d.row)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                   {!loading && filtered.length === 0 && (
-                    <tr><td colSpan={11} className="px-2 py-8 text-center text-muted-foreground">
+                    <tr><td colSpan={12} className="px-2 py-8 text-center text-muted-foreground">
                       {rows.length === 0 ? "No installed equipment recorded for this customer yet." : "No rows match the current search / filters."}
                     </td></tr>
                   )}
@@ -371,6 +380,21 @@ function InstalledEquipmentPage() {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={!!deleteRow} onOpenChange={(o) => { if (!o) setDeleteRow(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this equipment record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteRow?.model_no}{deleteRow?.serial_no ? ` · ${deleteRow.serial_no}` : ""} will be removed from this customer's register. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
