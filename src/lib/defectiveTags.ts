@@ -156,6 +156,12 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       .map((s) => statusKey(s.part_serial_no, s.part_model_no))
       .filter((k: string) => k !== "|"),
   );
+  const availablePartKeys = new Set(
+    allStock
+      .filter((s) => String(s.stock_status || "").toLowerCase() === "available")
+      .map((s) => `${norm(s.part_model_no)}|${norm(s.part_serial_no)}`)
+      .filter((k: string) => k !== "|"),
+  );
 
   // ── PRIMARY SOURCE: Indent → Oracle block → defective rows ──────────────────
   // Replacement Date comes from the linked customer Delivery Challan for the block.
@@ -204,6 +210,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         const serial = String(row?.def_serial_no || "").trim() || null;
         if (!model && !serial) return;
         const partKey = `${norm(model)}|${norm(serial)}`;
+        // Only surface indent-sourced rows that correspond to real available physical stock.
+        if (!availablePartKeys.has(partKey)) return;
         if (partKey !== "|" && indentCoveredParts.has(partKey)) return;
         if (partKey !== "|") indentCoveredParts.add(partKey);
         const txn = txnByPart.get(partKey);
