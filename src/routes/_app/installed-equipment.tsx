@@ -389,6 +389,36 @@ function InstalledEquipmentPage() {
         </CardContent>
       </Card>
 
+      {importResult && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between gap-2">
+              <span>Import summary</span>
+              <Button variant="ghost" size="sm" onClick={() => setImportResult(null)}>
+                <X className="h-4 w-4 mr-1" />Dismiss
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">{importResult.imported} imported</Badge>
+              <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">{importResult.skipped.length} skipped (duplicates)</Badge>
+              <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">{importResult.failed.length} failed</Badge>
+            </div>
+            {(importResult.skipped.length > 0 || importResult.failed.length > 0) && (
+              <ul className="max-h-48 overflow-auto rounded-md border p-2 text-xs space-y-1">
+                {importResult.skipped.map((s) => (
+                  <li key={`s${s.row}`} className="text-orange-700">Row {s.row}: skipped — {s.reason}</li>
+                ))}
+                {importResult.failed.map((f) => (
+                  <li key={`f${f.row}`} className="text-destructive">Row {f.row}: failed — {f.reason}</li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {customerId && (
         <Card>
           <CardHeader className="pb-2">
