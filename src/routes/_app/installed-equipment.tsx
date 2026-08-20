@@ -385,6 +385,7 @@ function InstalledEquipmentPage() {
               {AMC_CHIPS.map(chipBtn)}
             </div>
 
+            <TabsContent value="list" className="mt-0">
             <div className="max-h-[70vh] overflow-auto rounded-md border">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 z-10 bg-muted">
