@@ -139,8 +139,7 @@ function InstalledEquipmentPage() {
     if (!draft.model_no.trim()) { toast.error("Model No is required"); return; }
     setSaving(true);
     try {
-      const sb = supabase as unknown as { from: (t: string) => any };
-      const { error } = await sb.from("installed_equipment").insert({
+      const payload = {
         customer_id: customerId,
         model_no: draft.model_no.trim(),
         serial_no: draft.serial_no.trim().toUpperCase() || null,
@@ -149,16 +148,49 @@ function InstalledEquipmentPage() {
         warranty_months: Number(draft.warranty_months) || 0,
         amc_start_date: draft.amc_start_date || null,
         amc_end_date: draft.amc_end_date || null,
-      });
-      if (error) throw error;
-      toast.success("Equipment added");
+        remarks: draft.remarks.trim() || null,
+      };
+      if (editId) await updateEquipment(editId, payload);
+      else await createEquipment(payload);
+      toast.success(editId ? "Equipment updated" : "Equipment added");
       setAddOpen(false);
+      setEditId(null);
       setDraft({ ...emptyDraft });
       await load(customerId);
     } catch (e) {
       toast.error((e as { message?: string })?.message || "Could not save");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openAdd = () => { setEditId(null); setDraft({ ...emptyDraft }); setAddOpen(true); };
+
+  const openEdit = (r: InstalledEquipment) => {
+    setEditId(r.id);
+    setDraft({
+      product_id: null,
+      model_no: r.model_no || "",
+      serial_no: r.serial_no || "",
+      invoice_no: r.invoice_no || "",
+      invoice_date: (r.invoice_date || "").slice(0, 10),
+      warranty_months: String(r.warranty_months ?? 0),
+      amc_start_date: (r.amc_start_date || "").slice(0, 10),
+      amc_end_date: (r.amc_end_date || "").slice(0, 10),
+      remarks: r.remarks || "",
+    });
+    setAddOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteRow || !customerId) return;
+    try {
+      await deleteEquipment(deleteRow.id);
+      toast.success("Equipment deleted");
+      setDeleteRow(null);
+      await load(customerId);
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || "Could not delete");
     }
   };
 
