@@ -14,6 +14,18 @@ export type InstalledEquipment = {
   created_at: string;
 };
 
+export type EquipmentInput = {
+  customer_id?: string;
+  model_no: string;
+  serial_no: string | null;
+  invoice_no: string | null;
+  invoice_date: string | null;
+  warranty_months: number;
+  amc_start_date: string | null;
+  amc_end_date: string | null;
+  remarks?: string | null;
+};
+
 export type CoverStatus = "active" | "expiring" | "expired" | "none";
 
 const addMonthsIso = (iso: string, months: number): string => {
