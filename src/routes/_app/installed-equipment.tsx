@@ -79,8 +79,6 @@ function InstalledEquipmentPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportOutcome | null>(null);
-  const [allRows, setAllRows] = useState<InstalledEquipment[]>([]);
-  const [allLoading, setAllLoading] = useState(false);
   const [sortDesc, setSortDesc] = useState(true);
 
   const load = async (id: string) => {
@@ -94,22 +92,6 @@ function InstalledEquipmentPage() {
     }
   };
 
-  const loadAll = async () => {
-    setAllLoading(true);
-    try {
-      setAllRows(await listAllEquipment());
-    } catch (e) {
-      toast.error((e as { message?: string })?.message || "Failed to load summary");
-    } finally {
-      setAllLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (tab === "summary" && allRows.length === 0 && !allLoading) void loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
-
   const onImport = async (file: File) => {
     setImporting(true);
     try {
@@ -119,7 +101,6 @@ function InstalledEquipmentPage() {
       setImportResult(res);
       if (res.imported) toast.success(`Imported ${res.imported} row(s)`);
       if (customerId) await load(customerId);
-      if (allRows.length) await loadAll();
     } catch (e) {
       toast.error((e as { message?: string })?.message || "Import failed");
     } finally {
