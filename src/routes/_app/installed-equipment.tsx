@@ -354,12 +354,14 @@ function InstalledEquipmentPage() {
 
       {customerId && (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center justify-between gap-2">
-              <span>Installed units {loading ? "" : `(${filtered.length}${filtered.length !== rows.length ? ` of ${rows.length}` : ""})`}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 pt-4">
+            <Tabs value={tab} onValueChange={setTab} className="space-y-3">
+            <TabsList>
+              <TabsTrigger value="list">
+                Installed Units{loading ? "" : ` (${filtered.length}${filtered.length !== rows.length ? ` of ${rows.length}` : ""})`}
+              </TabsTrigger>
+              <TabsTrigger value="summary">Summary</TabsTrigger>
+            </TabsList>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative w-full max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
