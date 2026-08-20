@@ -1,8 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAll } from "@/lib/fetchAll";
+import { productWarrantyMonths } from "@/lib/sales";
 
 export type InstalledEquipment = {
   id: string;
   customer_id: string;
+  product_id?: string | null;
   model_no: string;
   serial_no: string | null;
   invoice_no: string | null;
@@ -16,6 +19,7 @@ export type InstalledEquipment = {
 
 export type EquipmentInput = {
   customer_id?: string;
+  product_id?: string | null;
   model_no: string;
   serial_no: string | null;
   invoice_no: string | null;
@@ -109,4 +113,112 @@ export const findEquipmentBySerial = async (serial: string): Promise<InstalledEq
   const { data, error } = await table().select("*").ilike("serial_no", `%${serial}%`).limit(25);
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
+};
+
+/** Every equipment row across all customers (used by the Summary tab). */
+export const listAllEquipment = async (): Promise<InstalledEquipment[]> =>
+  fetchAll<InstalledEquipment>("installed_equipment", (q) => q.select("*"));
+
+export type ImportOutcome = {
+  imported: number;
+  skipped: { row: number; reason: string }[];
+  failed: { row: number; reason: string }[];
+};
+
+const pick = (r: Record<string, string>, keys: string[]) => {
+  for (const k of keys) {
+    const hit = Object.keys(r).find((h) => h.trim().toLowerCase() === k.toLowerCase());
+    if (hit && (r[hit] || "").trim()) return r[hit].trim();
+  }
+  return "";
+};
+
+const toIso = (s: string): string | null => {
+  if (!s) return null;
+  const t = s.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+  const m = t.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (m) {
+    const y = m[3].length === 2 ? `20${m[3]}` : m[3];
+    return `${y}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  }
+  const d = new Date(t);
+  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+};
+
+const addMonths = (iso: string, months: number) => addMonthsIso(iso, months);
+
+/**
+ * Import CSV rows into installed_equipment.
+ * Per-row validation: customer must resolve, (customer, serial) must be unique,
+ * model is matched against Product Master to fill product_id / default warranty.
+ */
+export const importEquipmentRows = async (rows: Record<string, string>[]): Promise<ImportOutcome> => {
+  const out: ImportOutcome = { imported: 0, skipped: [], failed: [] };
+  if (!rows.length) return out;
+
+  const customers = await fetchAll<any>("customers", (q) => q.select("id,company,customer_code"));
+  const byName = new Map<string, string>();
+  const byCode = new Map<string, string>();
+  for (const c of customers) {
+    if (c.company) byName.set(String(c.company).trim().toLowerCase(), c.id);
+    if (c.customer_code) byCode.set(String(c.customer_code).trim().toLowerCase(), c.id);
+  }
+
+  const products = await fetchAll<any>("products", (q) =>
+    q.select("id,name,model,short_name,warranty_applicable,warranty_duration,warranty_unit"));
+  const byModel = new Map<string, any>();
+  for (const p of products) {
+    for (const key of [p.model, p.short_name, p.name]) {
+      const k = String(key || "").trim().toLowerCase();
+      if (k && !byModel.has(k)) byModel.set(k, p);
+    }
+  }
+
+  const existing = await listAllEquipment();
+  const seen = new Set(
+    existing.filter((e) => e.serial_no).map((e) => `${e.customer_id}|${e.serial_no!.toUpperCase()}`),
+  );
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const line = i + 2; // header is line 1
+    const custRaw = pick(r, ["Customer", "Customer Name", "Company", "Customer Code"]);
+    const model = pick(r, ["Model No", "Model", "Model Number"]);
+    if (!custRaw && !model) continue; // blank line
+    const customerId = byName.get(custRaw.toLowerCase()) || byCode.get(custRaw.toLowerCase());
+    if (!customerId) { out.failed.push({ row: line, reason: `Customer "${custRaw || "(blank)"}" not found` }); continue; }
+    if (!model) { out.failed.push({ row: line, reason: "Model No is required" }); continue; }
+
+    const serial = pick(r, ["Serial No", "Serial", "Serial Number"]).toUpperCase() || null;
+    if (serial) {
+      const key = `${customerId}|${serial}`;
+      if (seen.has(key)) { out.skipped.push({ row: line, reason: `${serial} already exists for this customer` }); continue; }
+      seen.add(key);
+    }
+
+    const prod = byModel.get(model.trim().toLowerCase()) || null;
+    const csvWarranty = pick(r, ["Warranty Months", "Warranty (Months)", "Warranty"]);
+    const warranty = csvWarranty ? Number(csvWarranty) || 0 : productWarrantyMonths(prod);
+    const amcStart = toIso(pick(r, ["AMC Start Date", "AMC Start"]));
+    const amcMonths = Number(pick(r, ["AMC Months", "AMC Duration"])) || 0;
+
+    const payload: EquipmentInput = {
+      customer_id: customerId,
+      product_id: prod?.id ?? null,
+      model_no: model.trim(),
+      serial_no: serial,
+      invoice_no: pick(r, ["Invoice No", "Invoice Number"]) || null,
+      invoice_date: toIso(pick(r, ["Invoice Date"])),
+      warranty_months: warranty,
+      amc_start_date: amcStart,
+      amc_end_date: amcStart && amcMonths ? addMonths(amcStart, amcMonths) : null,
+      remarks: pick(r, ["Remarks", "Notes"]) || null,
+    };
+
+    const { error } = await table().insert(payload);
+    if (error) out.failed.push({ row: line, reason: error.message });
+    else out.imported++;
+  }
+  return out;
 };

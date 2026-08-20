@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,12 +13,16 @@ import {
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import { productWarrantyMonths } from "@/lib/sales";
-import { Search, Plus, LifeBuoy, Eye, X, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, LifeBuoy, Eye, X, Pencil, Trash2, Upload, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/amc";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { parseCSV } from "@/lib/csv";
+import { useIsAdmin } from "@/lib/useRole";
 import {
   listEquipmentForCustomer, createEquipment, updateEquipment, deleteEquipment,
   warrantyEnd, coverStatus, amcStatusOf,
+  listAllEquipment, importEquipmentRows, type ImportOutcome,
   statusClass, statusLabel, type InstalledEquipment, type CoverStatus,
 } from "@/lib/installedEquipment";
 
@@ -59,6 +63,7 @@ const emptyDraft = {
 
 function InstalledEquipmentPage() {
   const navigate = useNavigate();
+  const { isAdmin } = useIsAdmin();
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [rows, setRows] = useState<InstalledEquipment[]>([]);
@@ -70,6 +75,13 @@ function InstalledEquipmentPage() {
   const [deleteRow, setDeleteRow] = useState<InstalledEquipment | null>(null);
   const [draft, setDraft] = useState({ ...emptyDraft });
   const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState("list");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportOutcome | null>(null);
+  const [allRows, setAllRows] = useState<InstalledEquipment[]>([]);
+  const [allLoading, setAllLoading] = useState(false);
+  const [sortDesc, setSortDesc] = useState(true);
 
   const load = async (id: string) => {
     setLoading(true);
@@ -79,6 +91,40 @@ function InstalledEquipmentPage() {
       toast.error((e as { message?: string })?.message || "Failed to load installed equipment");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAll = async () => {
+    setAllLoading(true);
+    try {
+      setAllRows(await listAllEquipment());
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || "Failed to load summary");
+    } finally {
+      setAllLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "summary" && allRows.length === 0 && !allLoading) void loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  const onImport = async (file: File) => {
+    setImporting(true);
+    try {
+      const parsed = parseCSV(await file.text());
+      if (!parsed.length) { toast.error("Empty CSV"); return; }
+      const res = await importEquipmentRows(parsed);
+      setImportResult(res);
+      if (res.imported) toast.success(`Imported ${res.imported} row(s)`);
+      if (customerId) await load(customerId);
+      if (allRows.length) await loadAll();
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || "Import failed");
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -140,6 +186,7 @@ function InstalledEquipmentPage() {
     try {
       const payload = {
         customer_id: customerId,
+        product_id: draft.product_id,
         model_no: draft.model_no.trim(),
         serial_no: draft.serial_no.trim().toUpperCase() || null,
         invoice_no: draft.invoice_no.trim() || null,
@@ -213,6 +260,59 @@ function InstalledEquipmentPage() {
     );
   };
 
+  // Summary tab: system-wide aggregates, scoped by the same chips.
+  const summaryFiltered = useMemo(() => {
+    const wSel = WARRANTY_CHIPS.filter((c) => chips.has(c.key)).map((c) => c.status);
+    const aSel = AMC_CHIPS.filter((c) => chips.has(c.key)).map((c) => c.status);
+    return allRows.filter((r) => {
+      const w = coverStatus(warrantyEnd(r));
+      const a = amcStatusOf(r);
+      return (wSel.length === 0 || wSel.includes(w)) && (aSel.length === 0 || aSel.includes(a));
+    });
+  }, [allRows, chips]);
+
+  const summaryChipCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const r of allRows) {
+      const w = coverStatus(warrantyEnd(r));
+      const a = amcStatusOf(r);
+      c[`w:${w}`] = (c[`w:${w}`] || 0) + 1;
+      c[`a:${a}`] = (c[`a:${a}`] || 0) + 1;
+    }
+    return c;
+  }, [allRows]);
+
+  const modelCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of summaryFiltered) {
+      const k = (r.model_no || "—").trim();
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    const list = Array.from(m, ([model, count]) => ({ model, count }));
+    list.sort((a, b) => (sortDesc ? b.count - a.count : a.count - b.count) || a.model.localeCompare(b.model));
+    return list;
+  }, [summaryFiltered, sortDesc]);
+
+  const summaryChipBtn = (c: { key: ChipKey; label: string }) => {
+    const on = chips.has(c.key);
+    return (
+      <button
+        key={c.key}
+        type="button"
+        onClick={() => toggleChip(c.key)}
+        aria-pressed={on}
+        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+          on ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted border-border"
+        }`}
+      >
+        {c.label}
+        <span className={`ml-1.5 rounded-full px-1.5 text-[10px] ${on ? "bg-primary-foreground/20" : "bg-muted"}`}>
+          {summaryChipCounts[c.key] || 0}
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -220,6 +320,13 @@ function InstalledEquipmentPage() {
         <p className="text-sm text-muted-foreground">Pick a customer to see every unit installed at their sites with live warranty and AMC coverage.</p>
       </div>
 
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="list">Register</TabsTrigger>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list" className="space-y-4 mt-0">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Customer</CardTitle>
@@ -234,8 +341,15 @@ function InstalledEquipmentPage() {
           <Button disabled={!customerId} size="sm" onClick={openAdd}>
             <Plus className="h-4 w-4 mr-1" />Add Equipment
           </Button>
+          <input
+            ref={fileRef} type="file" accept=".csv,text/csv" hidden
+            onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])}
+          />
+          <Button variant="outline" size="sm" disabled={importing} onClick={() => fileRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-1" />{importing ? "Importing…" : "Import CSV"}
+          </Button>
           <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setEditId(null); }}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editId ? "Edit" : "Add"} installed equipment{customerName ? ` — ${customerName}` : ""}</DialogTitle>
                 <DialogDescription>Pick a model from Product Master — warranty months fill in automatically and stay editable.</DialogDescription>
@@ -274,6 +388,36 @@ function InstalledEquipmentPage() {
           </Dialog>
         </CardContent>
       </Card>
+
+      {importResult && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between gap-2">
+              <span>Import summary</span>
+              <Button variant="ghost" size="sm" onClick={() => setImportResult(null)}>
+                <X className="h-4 w-4 mr-1" />Dismiss
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">{importResult.imported} imported</Badge>
+              <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">{importResult.skipped.length} skipped (duplicates)</Badge>
+              <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">{importResult.failed.length} failed</Badge>
+            </div>
+            {(importResult.skipped.length > 0 || importResult.failed.length > 0) && (
+              <ul className="max-h-48 overflow-auto rounded-md border p-2 text-xs space-y-1">
+                {importResult.skipped.map((s) => (
+                  <li key={`s${s.row}`} className="text-orange-700">Row {s.row}: skipped — {s.reason}</li>
+                ))}
+                {importResult.failed.map((f) => (
+                  <li key={`f${f.row}`} className="text-destructive">Row {f.row}: failed — {f.reason}</li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {customerId && (
         <Card>
@@ -359,12 +503,18 @@ function InstalledEquipmentPage() {
                         </Button>
                       </td>
                       <td className="px-2 py-1 text-center whitespace-nowrap">
-                        <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(d.row)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" title="Delete" onClick={() => setDeleteRow(d.row)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {isAdmin ? (
+                          <>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(d.row)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" title="Delete" onClick={() => setDeleteRow(d.row)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -379,6 +529,69 @@ function InstalledEquipmentPage() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="summary" className="space-y-4 mt-0">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Total Installed Units</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-semibold">{allLoading ? "…" : summaryFiltered.length}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Across all customers and models{chips.size > 0 ? ` · filtered (of ${allRows.length} total)` : ""}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center justify-between gap-2">
+                <span>Model-wise breakdown</span>
+                {chips.size > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setChips(new Set())}>
+                    <X className="h-4 w-4 mr-1" />Clear filters
+                  </Button>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-1.5">
+                {WARRANTY_CHIPS.map(summaryChipBtn)}
+                <span className="w-2" />
+                {AMC_CHIPS.map(summaryChipBtn)}
+              </div>
+              <div className="max-h-[65vh] overflow-auto rounded-md border">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 z-10 bg-muted">
+                    <tr className="text-left">
+                      <th className="px-2 py-1.5 w-10">Sr</th>
+                      <th className="px-2 py-1.5">Model No</th>
+                      <th className="px-2 py-1.5 w-28 text-right">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => setSortDesc((s) => !s)}>
+                          Units <ArrowUpDown className="h-3 w-3" />
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelCounts.map((m, i) => (
+                      <tr key={m.model} className="border-t">
+                        <td className="px-2 py-1 text-muted-foreground">{i + 1}</td>
+                        <td className="px-2 py-1 font-medium">{m.model}</td>
+                        <td className="px-2 py-1 text-right">{m.count}</td>
+                      </tr>
+                    ))}
+                    {!allLoading && modelCounts.length === 0 && (
+                      <tr><td colSpan={3} className="px-2 py-8 text-center text-muted-foreground">No installed equipment matches the current filters.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <AlertDialog open={!!deleteRow} onOpenChange={(o) => { if (!o) setDeleteRow(null); }}>
         <AlertDialogContent>
