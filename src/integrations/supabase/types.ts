@@ -2708,6 +2708,62 @@ export type Database = {
           },
         ]
       }
+      installed_equipment: {
+        Row: {
+          amc_end_date: string | null
+          amc_start_date: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          invoice_date: string | null
+          invoice_no: string | null
+          model_no: string
+          remarks: string | null
+          serial_no: string | null
+          updated_at: string
+          warranty_months: number
+        }
+        Insert: {
+          amc_end_date?: string | null
+          amc_start_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          invoice_date?: string | null
+          invoice_no?: string | null
+          model_no: string
+          remarks?: string | null
+          serial_no?: string | null
+          updated_at?: string
+          warranty_months?: number
+        }
+        Update: {
+          amc_end_date?: string | null
+          amc_start_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          invoice_date?: string | null
+          invoice_no?: string | null
+          model_no?: string
+          remarks?: string | null
+          serial_no?: string | null
+          updated_at?: string
+          warranty_months?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "installed_equipment_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory: {
         Row: {
           created_at: string

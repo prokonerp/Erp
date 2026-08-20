@@ -1,0 +1,314 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { CustomerPicker } from "@/components/CustomerPicker";
+import { Search, Plus, LifeBuoy, Eye, X } from "lucide-react";
+import { toast } from "sonner";
+import { fmtDate } from "@/lib/amc";
+import {
+  listEquipmentForCustomer, warrantyEnd, coverStatus, amcStatusOf,
+  statusClass, statusLabel, type InstalledEquipment, type CoverStatus,
+} from "@/lib/installedEquipment";
+
+export const Route = createFileRoute("/_app/installed-equipment")({
+  component: InstalledEquipmentPage,
+  head: () => ({
+    meta: [
+      { title: "Installed Equipment — Customer Site Register | Prokon" },
+      { name: "description", content: "Customer-wise register of installed units with warranty and AMC status, quick ticket raising and full serial footprint." },
+      { property: "og:title", content: "Installed Equipment — Customer Site Register" },
+      { property: "og:description", content: "Track installed units per customer with live warranty and AMC coverage status." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+});
+
+type ChipKey = `w:${CoverStatus}` | `a:${CoverStatus}`;
+
+const WARRANTY_CHIPS: { key: ChipKey; label: string; status: CoverStatus }[] = [
+  { key: "w:active", label: "Warranty: Active", status: "active" },
+  { key: "w:expiring", label: "Warranty: Expiring", status: "expiring" },
+  { key: "w:expired", label: "Warranty: Expired", status: "expired" },
+];
+const AMC_CHIPS: { key: ChipKey; label: string; status: CoverStatus }[] = [
+  { key: "a:active", label: "AMC: Active", status: "active" },
+  { key: "a:expiring", label: "AMC: Expiring", status: "expiring" },
+  { key: "a:expired", label: "AMC: Expired", status: "expired" },
+  { key: "a:none", label: "AMC: None", status: "none" },
+];
+
+const emptyDraft = {
+  model_no: "", serial_no: "", invoice_no: "", invoice_date: "",
+  warranty_months: "12", amc_start_date: "", amc_end_date: "",
+};
+
+function InstalledEquipmentPage() {
+  const navigate = useNavigate();
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [rows, setRows] = useState<InstalledEquipment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [q, setQ] = useState("");
+  const [chips, setChips] = useState<Set<ChipKey>>(new Set());
+  const [addOpen, setAddOpen] = useState(false);
+  const [draft, setDraft] = useState({ ...emptyDraft });
+  const [saving, setSaving] = useState(false);
+
+  const load = async (id: string) => {
+    setLoading(true);
+    try {
+      setRows(await listEquipmentForCustomer(id));
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || "Failed to load installed equipment");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!customerId) { setRows([]); return; }
+    void load(customerId);
+  }, [customerId]);
+
+  const decorated = useMemo(
+    () => rows.map((r) => {
+      const wEnd = warrantyEnd(r);
+      return { row: r, wEnd, w: coverStatus(wEnd), a: amcStatusOf(r) };
+    }),
+    [rows],
+  );
+
+  const term = q.trim().toLowerCase();
+  const textMatched = useMemo(
+    () => decorated.filter((d) =>
+      !term ||
+      (d.row.model_no || "").toLowerCase().includes(term) ||
+      (d.row.serial_no || "").toLowerCase().includes(term) ||
+      (d.row.invoice_no || "").toLowerCase().includes(term)),
+    [decorated, term],
+  );
+
+  // Counts reflect the current text search, so chips stay meaningful while typing.
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const d of textMatched) {
+      c[`w:${d.w}`] = (c[`w:${d.w}`] || 0) + 1;
+      c[`a:${d.a}`] = (c[`a:${d.a}`] || 0) + 1;
+    }
+    return c;
+  }, [textMatched]);
+
+  const filtered = useMemo(() => {
+    const wSel = WARRANTY_CHIPS.filter((c) => chips.has(c.key)).map((c) => c.status);
+    const aSel = AMC_CHIPS.filter((c) => chips.has(c.key)).map((c) => c.status);
+    return textMatched.filter((d) =>
+      (wSel.length === 0 || wSel.includes(d.w)) &&
+      (aSel.length === 0 || aSel.includes(d.a)));
+  }, [textMatched, chips]);
+
+  const toggleChip = (k: ChipKey) =>
+    setChips((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+
+  const anyFilter = chips.size > 0 || term.length > 0;
+  const clearFilters = () => { setChips(new Set()); setQ(""); };
+
+  const saveDraft = async () => {
+    if (!customerId) return;
+    if (!draft.model_no.trim()) { toast.error("Model No is required"); return; }
+    setSaving(true);
+    try {
+      const sb = supabase as unknown as { from: (t: string) => any };
+      const { error } = await sb.from("installed_equipment").insert({
+        customer_id: customerId,
+        model_no: draft.model_no.trim(),
+        serial_no: draft.serial_no.trim().toUpperCase() || null,
+        invoice_no: draft.invoice_no.trim() || null,
+        invoice_date: draft.invoice_date || null,
+        warranty_months: Number(draft.warranty_months) || 0,
+        amc_start_date: draft.amc_start_date || null,
+        amc_end_date: draft.amc_end_date || null,
+      });
+      if (error) throw error;
+      toast.success("Equipment added");
+      setAddOpen(false);
+      setDraft({ ...emptyDraft });
+      await load(customerId);
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const chipBtn = (c: { key: ChipKey; label: string }) => {
+    const on = chips.has(c.key);
+    return (
+      <button
+        key={c.key}
+        type="button"
+        onClick={() => toggleChip(c.key)}
+        aria-pressed={on}
+        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+          on ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted border-border"
+        }`}
+      >
+        {c.label}
+        <span className={`ml-1.5 rounded-full px-1.5 text-[10px] ${on ? "bg-primary-foreground/20" : "bg-muted"}`}>
+          {counts[c.key] || 0}
+        </span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold">Installed Equipment</h1>
+        <p className="text-sm text-muted-foreground">Pick a customer to see every unit installed at their sites with live warranty and AMC coverage.</p>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Customer</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[280px] flex-1">
+            <CustomerPicker
+              value={customerId}
+              onChange={(id, c) => { setCustomerId(id); setCustomerName(c?.company || ""); }}
+            />
+          </div>
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger asChild>
+              <Button disabled={!customerId} size="sm"><Plus className="h-4 w-4 mr-1" />Add Equipment</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Add installed equipment{customerName ? ` — ${customerName}` : ""}</DialogTitle></DialogHeader>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div><Label>Model No *</Label><Input value={draft.model_no} onChange={(e) => setDraft({ ...draft, model_no: e.target.value })} /></div>
+                <div><Label>Serial No</Label><Input value={draft.serial_no} onChange={(e) => setDraft({ ...draft, serial_no: e.target.value })} /></div>
+                <div><Label>Invoice No</Label><Input value={draft.invoice_no} onChange={(e) => setDraft({ ...draft, invoice_no: e.target.value })} /></div>
+                <div><Label>Invoice Date</Label><Input type="date" value={draft.invoice_date} onChange={(e) => setDraft({ ...draft, invoice_date: e.target.value })} /></div>
+                <div><Label>Warranty (months)</Label><Input type="number" value={draft.warranty_months} onChange={(e) => setDraft({ ...draft, warranty_months: e.target.value })} /></div>
+                <div />
+                <div><Label>AMC Start</Label><Input type="date" value={draft.amc_start_date} onChange={(e) => setDraft({ ...draft, amc_start_date: e.target.value })} /></div>
+                <div><Label>AMC End</Label><Input type="date" value={draft.amc_end_date} onChange={(e) => setDraft({ ...draft, amc_end_date: e.target.value })} /></div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+                <Button onClick={saveDraft} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      </Card>
+
+      {customerId && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between gap-2">
+              <span>Installed units {loading ? "" : `(${filtered.length}${filtered.length !== rows.length ? ` of ${rows.length}` : ""})`}</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9 h-8 text-sm"
+                  placeholder="Search model, serial or invoice no…"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+              </div>
+              {anyFilter && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  <X className="h-4 w-4 mr-1" />Clear filters
+                </Button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {WARRANTY_CHIPS.map(chipBtn)}
+              <span className="w-2" />
+              {AMC_CHIPS.map(chipBtn)}
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto rounded-md border">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 z-10 bg-muted">
+                  <tr className="text-left">
+                    <th className="px-2 py-1.5 w-10">Sr</th>
+                    <th className="px-2 py-1.5">Model No</th>
+                    <th className="px-2 py-1.5">Serial No</th>
+                    <th className="px-2 py-1.5">Inv No</th>
+                    <th className="px-2 py-1.5">Inv Date</th>
+                    <th className="px-2 py-1.5 text-right">Warranty (M)</th>
+                    <th className="px-2 py-1.5">Warranty Status</th>
+                    <th className="px-2 py-1.5">AMC Start</th>
+                    <th className="px-2 py-1.5">AMC Status</th>
+                    <th className="px-2 py-1.5 w-16 text-center">Ticket</th>
+                    <th className="px-2 py-1.5 w-14 text-center">View</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((d, i) => (
+                    <tr key={d.row.id} className="border-t hover:bg-muted/40">
+                      <td className="px-2 py-1 text-muted-foreground">{i + 1}</td>
+                      <td className="px-2 py-1 font-medium">{d.row.model_no}</td>
+                      <td className="px-2 py-1 font-mono">{d.row.serial_no || "—"}</td>
+                      <td className="px-2 py-1">{d.row.invoice_no || "—"}</td>
+                      <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.invoice_date) || "—"}</td>
+                      <td className="px-2 py-1 text-right">{d.row.warranty_months || 0}</td>
+                      <td className="px-2 py-1">
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusClass(d.w)}`}>{statusLabel[d.w]}</Badge>
+                        {d.wEnd && <span className="ml-1 text-muted-foreground">{fmtDate(d.wEnd)}</span>}
+                      </td>
+                      <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.amc_start_date) || "—"}</td>
+                      <td className="px-2 py-1">
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusClass(d.a)}`}>{statusLabel[d.a]}</Badge>
+                      </td>
+                      <td className="px-2 py-1 text-center">
+                        <Button
+                          size="icon" variant="ghost" className="h-6 w-6" title="Raise ticket"
+                          onClick={() => navigate({ to: "/tickets/new", search: { equipment: d.row.id } as never })}
+                        >
+                          <LifeBuoy className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                      <td className="px-2 py-1 text-center">
+                        <Button
+                          size="icon" variant="ghost" className="h-6 w-6" title="View serial footprint"
+                          disabled={!d.row.serial_no}
+                          onClick={() => navigate({ to: "/ims/serial-track", search: { serial: d.row.serial_no } as never })}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!loading && filtered.length === 0 && (
+                    <tr><td colSpan={11} className="px-2 py-8 text-center text-muted-foreground">
+                      {rows.length === 0 ? "No installed equipment recorded for this customer yet." : "No rows match the current search / filters."}
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
