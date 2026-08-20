@@ -462,41 +462,9 @@ function InstalledEquipmentPage() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        </Card>
-      )}
-        </TabsContent>
+            </TabsContent>
 
-        <TabsContent value="summary" className="space-y-4 mt-0">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Total Installed Units</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold">{allLoading ? "…" : summaryFiltered.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Across all customers and models{chips.size > 0 ? ` · filtered (of ${allRows.length} total)` : ""}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center justify-between gap-2">
-                <span>Model-wise breakdown</span>
-                {chips.size > 0 && (
-                  <Button variant="ghost" size="sm" onClick={() => setChips(new Set())}>
-                    <X className="h-4 w-4 mr-1" />Clear filters
-                  </Button>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex flex-wrap gap-1.5">
-                {WARRANTY_CHIPS.map(summaryChipBtn)}
-                <span className="w-2" />
-                {AMC_CHIPS.map(summaryChipBtn)}
-              </div>
+            <TabsContent value="summary" className="mt-0">
               <div className="max-h-[65vh] overflow-auto rounded-md border">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 z-10 bg-muted">
@@ -512,22 +480,32 @@ function InstalledEquipmentPage() {
                   </thead>
                   <tbody>
                     {modelCounts.map((m, i) => (
-                      <tr key={m.model} className="border-t">
+                      <tr key={m.model} className="border-t hover:bg-muted/40">
                         <td className="px-2 py-1 text-muted-foreground">{i + 1}</td>
                         <td className="px-2 py-1 font-medium">{m.model}</td>
                         <td className="px-2 py-1 text-right">{m.count}</td>
                       </tr>
                     ))}
-                    {!allLoading && modelCounts.length === 0 && (
+                    {!loading && modelCounts.length === 0 && (
                       <tr><td colSpan={3} className="px-2 py-8 text-center text-muted-foreground">No installed equipment matches the current filters.</td></tr>
                     )}
                   </tbody>
+                  {modelCounts.length > 0 && (
+                    <tfoot className="sticky bottom-0 bg-muted font-semibold">
+                      <tr className="border-t">
+                        <td className="px-2 py-1.5" />
+                        <td className="px-2 py-1.5">Total</td>
+                        <td className="px-2 py-1.5 text-right">{filtered.length}</td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
 
       <AlertDialog open={!!deleteRow} onOpenChange={(o) => { if (!o) setDeleteRow(null); }}>
         <AlertDialogContent>
