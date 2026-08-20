@@ -22,7 +22,7 @@ import { useIsAdmin } from "@/lib/useRole";
 import {
   listEquipmentForCustomer, createEquipment, updateEquipment, deleteEquipment,
   warrantyEnd, coverStatus, amcStatusOf,
-  listAllEquipment, importEquipmentRows, type ImportOutcome,
+  importEquipmentRows, type ImportOutcome,
   statusClass, statusLabel, type InstalledEquipment, type CoverStatus,
 } from "@/lib/installedEquipment";
 
@@ -79,8 +79,6 @@ function InstalledEquipmentPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportOutcome | null>(null);
-  const [allRows, setAllRows] = useState<InstalledEquipment[]>([]);
-  const [allLoading, setAllLoading] = useState(false);
   const [sortDesc, setSortDesc] = useState(true);
 
   const load = async (id: string) => {
@@ -94,22 +92,6 @@ function InstalledEquipmentPage() {
     }
   };
 
-  const loadAll = async () => {
-    setAllLoading(true);
-    try {
-      setAllRows(await listAllEquipment());
-    } catch (e) {
-      toast.error((e as { message?: string })?.message || "Failed to load summary");
-    } finally {
-      setAllLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (tab === "summary" && allRows.length === 0 && !allLoading) void loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
-
   const onImport = async (file: File) => {
     setImporting(true);
     try {
@@ -119,7 +101,6 @@ function InstalledEquipmentPage() {
       setImportResult(res);
       if (res.imported) toast.success(`Imported ${res.imported} row(s)`);
       if (customerId) await load(customerId);
-      if (allRows.length) await loadAll();
     } catch (e) {
       toast.error((e as { message?: string })?.message || "Import failed");
     } finally {
@@ -260,58 +241,17 @@ function InstalledEquipmentPage() {
     );
   };
 
-  // Summary tab: system-wide aggregates, scoped by the same chips.
-  const summaryFiltered = useMemo(() => {
-    const wSel = WARRANTY_CHIPS.filter((c) => chips.has(c.key)).map((c) => c.status);
-    const aSel = AMC_CHIPS.filter((c) => chips.has(c.key)).map((c) => c.status);
-    return allRows.filter((r) => {
-      const w = coverStatus(warrantyEnd(r));
-      const a = amcStatusOf(r);
-      return (wSel.length === 0 || wSel.includes(w)) && (aSel.length === 0 || aSel.includes(a));
-    });
-  }, [allRows, chips]);
-
-  const summaryChipCounts = useMemo(() => {
-    const c: Record<string, number> = {};
-    for (const r of allRows) {
-      const w = coverStatus(warrantyEnd(r));
-      const a = amcStatusOf(r);
-      c[`w:${w}`] = (c[`w:${w}`] || 0) + 1;
-      c[`a:${a}`] = (c[`a:${a}`] || 0) + 1;
-    }
-    return c;
-  }, [allRows]);
-
+  // Summary: model-wise counts for the currently selected customer, same filters.
   const modelCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of summaryFiltered) {
-      const k = (r.model_no || "—").trim();
+    for (const d of filtered) {
+      const k = (d.row.model_no || "—").trim();
       m.set(k, (m.get(k) || 0) + 1);
     }
     const list = Array.from(m, ([model, count]) => ({ model, count }));
     list.sort((a, b) => (sortDesc ? b.count - a.count : a.count - b.count) || a.model.localeCompare(b.model));
     return list;
-  }, [summaryFiltered, sortDesc]);
-
-  const summaryChipBtn = (c: { key: ChipKey; label: string }) => {
-    const on = chips.has(c.key);
-    return (
-      <button
-        key={c.key}
-        type="button"
-        onClick={() => toggleChip(c.key)}
-        aria-pressed={on}
-        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-          on ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted border-border"
-        }`}
-      >
-        {c.label}
-        <span className={`ml-1.5 rounded-full px-1.5 text-[10px] ${on ? "bg-primary-foreground/20" : "bg-muted"}`}>
-          {summaryChipCounts[c.key] || 0}
-        </span>
-      </button>
-    );
-  };
+  }, [filtered, sortDesc]);
 
   return (
     <div className="space-y-4">
@@ -320,13 +260,6 @@ function InstalledEquipmentPage() {
         <p className="text-sm text-muted-foreground">Pick a customer to see every unit installed at their sites with live warranty and AMC coverage.</p>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="list">Register</TabsTrigger>
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="list" className="space-y-4 mt-0">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Customer</CardTitle>
@@ -421,12 +354,14 @@ function InstalledEquipmentPage() {
 
       {customerId && (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center justify-between gap-2">
-              <span>Installed units {loading ? "" : `(${filtered.length}${filtered.length !== rows.length ? ` of ${rows.length}` : ""})`}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 pt-4">
+            <Tabs value={tab} onValueChange={setTab} className="space-y-3">
+            <TabsList>
+              <TabsTrigger value="list">
+                Installed Units{loading ? "" : ` (${filtered.length}${filtered.length !== rows.length ? ` of ${rows.length}` : ""})`}
+              </TabsTrigger>
+              <TabsTrigger value="summary">Summary</TabsTrigger>
+            </TabsList>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative w-full max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -450,6 +385,7 @@ function InstalledEquipmentPage() {
               {AMC_CHIPS.map(chipBtn)}
             </div>
 
+            <TabsContent value="list" className="mt-0">
             <div className="max-h-[70vh] overflow-auto rounded-md border">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 z-10 bg-muted">
@@ -526,41 +462,9 @@ function InstalledEquipmentPage() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        </Card>
-      )}
-        </TabsContent>
+            </TabsContent>
 
-        <TabsContent value="summary" className="space-y-4 mt-0">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Total Installed Units</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-semibold">{allLoading ? "…" : summaryFiltered.length}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Across all customers and models{chips.size > 0 ? ` · filtered (of ${allRows.length} total)` : ""}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center justify-between gap-2">
-                <span>Model-wise breakdown</span>
-                {chips.size > 0 && (
-                  <Button variant="ghost" size="sm" onClick={() => setChips(new Set())}>
-                    <X className="h-4 w-4 mr-1" />Clear filters
-                  </Button>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex flex-wrap gap-1.5">
-                {WARRANTY_CHIPS.map(summaryChipBtn)}
-                <span className="w-2" />
-                {AMC_CHIPS.map(summaryChipBtn)}
-              </div>
+            <TabsContent value="summary" className="mt-0">
               <div className="max-h-[65vh] overflow-auto rounded-md border">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 z-10 bg-muted">
@@ -576,22 +480,32 @@ function InstalledEquipmentPage() {
                   </thead>
                   <tbody>
                     {modelCounts.map((m, i) => (
-                      <tr key={m.model} className="border-t">
+                      <tr key={m.model} className="border-t hover:bg-muted/40">
                         <td className="px-2 py-1 text-muted-foreground">{i + 1}</td>
                         <td className="px-2 py-1 font-medium">{m.model}</td>
                         <td className="px-2 py-1 text-right">{m.count}</td>
                       </tr>
                     ))}
-                    {!allLoading && modelCounts.length === 0 && (
+                    {!loading && modelCounts.length === 0 && (
                       <tr><td colSpan={3} className="px-2 py-8 text-center text-muted-foreground">No installed equipment matches the current filters.</td></tr>
                     )}
                   </tbody>
+                  {modelCounts.length > 0 && (
+                    <tfoot className="sticky bottom-0 bg-muted font-semibold">
+                      <tr className="border-t">
+                        <td className="px-2 py-1.5" />
+                        <td className="px-2 py-1.5">Total</td>
+                        <td className="px-2 py-1.5 text-right">{filtered.length}</td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
 
       <AlertDialog open={!!deleteRow} onOpenChange={(o) => { if (!o) setDeleteRow(null); }}>
         <AlertDialogContent>
