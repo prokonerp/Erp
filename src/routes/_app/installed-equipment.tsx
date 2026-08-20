@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,12 +13,16 @@ import {
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import { productWarrantyMonths } from "@/lib/sales";
-import { Search, Plus, LifeBuoy, Eye, X, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, LifeBuoy, Eye, X, Pencil, Trash2, Upload, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/amc";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { parseCSV } from "@/lib/csv";
+import { useIsAdmin } from "@/lib/useRole";
 import {
   listEquipmentForCustomer, createEquipment, updateEquipment, deleteEquipment,
   warrantyEnd, coverStatus, amcStatusOf,
+  listAllEquipment, importEquipmentRows, type ImportOutcome,
   statusClass, statusLabel, type InstalledEquipment, type CoverStatus,
 } from "@/lib/installedEquipment";
 
