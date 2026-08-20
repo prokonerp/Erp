@@ -259,6 +259,59 @@ function InstalledEquipmentPage() {
     );
   };
 
+  // Summary tab: system-wide aggregates, scoped by the same chips.
+  const summaryFiltered = useMemo(() => {
+    const wSel = WARRANTY_CHIPS.filter((c) => chips.has(c.key)).map((c) => c.status);
+    const aSel = AMC_CHIPS.filter((c) => chips.has(c.key)).map((c) => c.status);
+    return allRows.filter((r) => {
+      const w = coverStatus(warrantyEnd(r));
+      const a = amcStatusOf(r);
+      return (wSel.length === 0 || wSel.includes(w)) && (aSel.length === 0 || aSel.includes(a));
+    });
+  }, [allRows, chips]);
+
+  const summaryChipCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const r of allRows) {
+      const w = coverStatus(warrantyEnd(r));
+      const a = amcStatusOf(r);
+      c[`w:${w}`] = (c[`w:${w}`] || 0) + 1;
+      c[`a:${a}`] = (c[`a:${a}`] || 0) + 1;
+    }
+    return c;
+  }, [allRows]);
+
+  const modelCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of summaryFiltered) {
+      const k = (r.model_no || "—").trim();
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    const list = Array.from(m, ([model, count]) => ({ model, count }));
+    list.sort((a, b) => (sortDesc ? b.count - a.count : a.count - b.count) || a.model.localeCompare(b.model));
+    return list;
+  }, [summaryFiltered, sortDesc]);
+
+  const summaryChipBtn = (c: { key: ChipKey; label: string }) => {
+    const on = chips.has(c.key);
+    return (
+      <button
+        key={c.key}
+        type="button"
+        onClick={() => toggleChip(c.key)}
+        aria-pressed={on}
+        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+          on ? "bg-primary text-primary-foreground border-primary" : "bg-background hover:bg-muted border-border"
+        }`}
+      >
+        {c.label}
+        <span className={`ml-1.5 rounded-full px-1.5 text-[10px] ${on ? "bg-primary-foreground/20" : "bg-muted"}`}>
+          {summaryChipCounts[c.key] || 0}
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div>
