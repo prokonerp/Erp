@@ -186,6 +186,7 @@ function InstalledEquipmentPage() {
     try {
       const payload = {
         customer_id: customerId,
+        product_id: draft.product_id,
         model_no: draft.model_no.trim(),
         serial_no: draft.serial_no.trim().toUpperCase() || null,
         invoice_no: draft.invoice_no.trim() || null,
