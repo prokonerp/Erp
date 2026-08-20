@@ -260,13 +260,6 @@ function InstalledEquipmentPage() {
         <p className="text-sm text-muted-foreground">Pick a customer to see every unit installed at their sites with live warranty and AMC coverage.</p>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="list">Register</TabsTrigger>
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="list" className="space-y-4 mt-0">
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Customer</CardTitle>
