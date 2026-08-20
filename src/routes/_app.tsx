@@ -36,6 +36,7 @@ import {
   Plus,
   Tag,
   Search,
+  MonitorCheck,
 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import type { ModuleKey } from "@/lib/permissions";
@@ -133,6 +134,7 @@ function AppLayout() {
     { to: "/masters/customers", label: "Customers", icon: Users, module: "customers", group: "Masters" },
     { to: "/masters", label: "Vendors", icon: Truck, module: "customers", group: "Masters", search: { tab: "vendors" }, matchSearchTab: "vendors" },
     { to: "/masters/products", label: "Products", icon: Package, module: "customers", group: "Masters" },
+    { to: "/installed-equipment", label: "Installed Equipment", icon: MonitorCheck, module: "customers", group: "Masters" },
     { to: "/masters", label: "Employees", icon: IdCard, module: "employees", group: "Masters", search: { tab: "employees" }, matchSearchTab: "employees" },
     { to: "/payroll", label: "Salary & Attendance", icon: Wallet, module: "payroll", group: "Masters" },
     { to: "/masters", label: "Inventory", icon: Boxes, module: "customers", group: "Masters", search: { tab: "inventory" }, matchSearchTab: "inventory" },

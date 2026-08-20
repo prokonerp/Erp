@@ -82,6 +82,35 @@ function NewTicket() {
       const sp = new URLSearchParams(window.location.search);
       const amcId = sp.get("amc");
       const pmId = sp.get("pm");
+      const equipId = sp.get("equipment");
+      // Additional branch: prefill from an Installed Equipment record.
+      if (!amcId && !pmId && equipId) {
+        const sb = supabase as unknown as { from: (t: string) => any };
+        const { data: eq } = await sb.from("installed_equipment")
+          .select("id,customer_id,model_no,serial_no,invoice_no,invoice_date")
+          .eq("id", equipId).maybeSingle();
+        if (!eq) return;
+        const e = eq as { id: string; customer_id: string; model_no: string; serial_no: string | null };
+        const { data: c } = await supabase.from("customers")
+          .select("id,company,phone,email,billing_address,address,city,billing_city,sector,state")
+          .eq("id", e.customer_id).maybeSingle();
+        const cu = (c as { company?: string | null; phone?: string | null; email?: string | null; billing_address?: string | null; address?: string | null; city?: string | null; billing_city?: string | null; sector?: string | null } | null) ?? null;
+        setForm((f) => ({
+          ...f,
+          customer_id: e.customer_id,
+          customer_name: cu?.company || "",
+          customer_phone: cu?.phone || "",
+          customer_email: cu?.email || "",
+          customer_address: cu?.billing_address || cu?.address || "",
+          sector: cu?.sector || "",
+          location: cu?.billing_city || cu?.city || "",
+          product: e.model_no || "",
+          serial_no: (e.serial_no || "").toUpperCase(),
+          complaint: `Service request for ${e.model_no}${e.serial_no ? ` / ${e.serial_no}` : ""}`,
+        }));
+        setSourceMeta({ label: `Installed Equipment record${e.serial_no ? ` — ${e.serial_no}` : ""}` });
+        return;
+      }
       if (!amcId && !pmId) return;
       let resolvedAmcId = amcId || "";
       let pmDate = "";

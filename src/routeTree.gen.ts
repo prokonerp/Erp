@@ -23,6 +23,7 @@ import { Route as AppPoRouteImport } from './routes/_app/po'
 import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
 import { Route as AppNewRouteImport } from './routes/_app/new'
 import { Route as AppMastersRouteImport } from './routes/_app/masters'
+import { Route as AppInstalledEquipmentRouteImport } from './routes/_app/installed-equipment'
 import { Route as AppIndentRouteImport } from './routes/_app/indent'
 import { Route as AppImsRouteImport } from './routes/_app/ims'
 import { Route as AppImportRouteImport } from './routes/_app/import'
@@ -194,6 +195,11 @@ const AppNewRoute = AppNewRouteImport.update({
 const AppMastersRoute = AppMastersRouteImport.update({
   id: '/masters',
   path: '/masters',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInstalledEquipmentRoute = AppInstalledEquipmentRouteImport.update({
+  id: '/installed-equipment',
+  path: '/installed-equipment',
   getParentRoute: () => AppRoute,
 } as any)
 const AppIndentRoute = AppIndentRouteImport.update({
@@ -731,6 +737,7 @@ export interface FileRoutesByFullPath {
   '/import': typeof AppImportRoute
   '/ims': typeof AppImsRouteWithChildren
   '/indent': typeof AppIndentRouteWithChildren
+  '/installed-equipment': typeof AppInstalledEquipmentRoute
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
   '/payroll': typeof AppPayrollRoute
@@ -843,6 +850,7 @@ export interface FileRoutesByTo {
   '/archive': typeof AppArchiveRoute
   '/dashboard': typeof AppDashboardRoute
   '/import': typeof AppImportRoute
+  '/installed-equipment': typeof AppInstalledEquipmentRoute
   '/masters': typeof AppMastersRouteWithChildren
   '/new': typeof AppNewRoute
   '/payroll': typeof AppPayrollRoute
@@ -954,6 +962,7 @@ export interface FileRoutesById {
   '/_app/import': typeof AppImportRoute
   '/_app/ims': typeof AppImsRouteWithChildren
   '/_app/indent': typeof AppIndentRouteWithChildren
+  '/_app/installed-equipment': typeof AppInstalledEquipmentRoute
   '/_app/masters': typeof AppMastersRouteWithChildren
   '/_app/new': typeof AppNewRoute
   '/_app/payroll': typeof AppPayrollRoute
@@ -1074,6 +1083,7 @@ export interface FileRouteTypes {
     | '/import'
     | '/ims'
     | '/indent'
+    | '/installed-equipment'
     | '/masters'
     | '/new'
     | '/payroll'
@@ -1186,6 +1196,7 @@ export interface FileRouteTypes {
     | '/archive'
     | '/dashboard'
     | '/import'
+    | '/installed-equipment'
     | '/masters'
     | '/new'
     | '/payroll'
@@ -1296,6 +1307,7 @@ export interface FileRouteTypes {
     | '/_app/import'
     | '/_app/ims'
     | '/_app/indent'
+    | '/_app/installed-equipment'
     | '/_app/masters'
     | '/_app/new'
     | '/_app/payroll'
@@ -1509,6 +1521,13 @@ declare module '@tanstack/react-router' {
       path: '/masters'
       fullPath: '/masters'
       preLoaderRoute: typeof AppMastersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/installed-equipment': {
+      id: '/_app/installed-equipment'
+      path: '/installed-equipment'
+      fullPath: '/installed-equipment'
+      preLoaderRoute: typeof AppInstalledEquipmentRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/indent': {
@@ -2611,6 +2630,7 @@ interface AppRouteChildren {
   AppImportRoute: typeof AppImportRoute
   AppImsRoute: typeof AppImsRouteWithChildren
   AppIndentRoute: typeof AppIndentRouteWithChildren
+  AppInstalledEquipmentRoute: typeof AppInstalledEquipmentRoute
   AppMastersRoute: typeof AppMastersRouteWithChildren
   AppNewRoute: typeof AppNewRoute
   AppPayrollRoute: typeof AppPayrollRoute
@@ -2635,6 +2655,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppImportRoute: AppImportRoute,
   AppImsRoute: AppImsRouteWithChildren,
   AppIndentRoute: AppIndentRouteWithChildren,
+  AppInstalledEquipmentRoute: AppInstalledEquipmentRoute,
   AppMastersRoute: AppMastersRouteWithChildren,
   AppNewRoute: AppNewRoute,
   AppPayrollRoute: AppPayrollRoute,

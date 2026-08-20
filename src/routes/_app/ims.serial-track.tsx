@@ -15,6 +15,9 @@ import {
 
 export const Route = createFileRoute("/_app/ims/serial-track")({
   component: SerialTrack,
+  validateSearch: (search: Record<string, unknown>): { serial?: string } => ({
+    serial: typeof search.serial === "string" ? search.serial : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Serial Track — Global Serial Search | Prokon" },
@@ -27,6 +30,17 @@ export const Route = createFileRoute("/_app/ims/serial-track")({
 
 const splitSerials = (v: string | null | undefined): string[] =>
   (v || "").split(",").map((s) => s.trim()).filter(Boolean);
+
+type TicketLite = {
+  id: string;
+  case_id: string | null;
+  created_at: string;
+  call_type: string | null;
+  complaint: string | null;
+  status: string | null;
+  assigned_engineer_name: string | null;
+  serial_no: string | null;
+};
 
 /** Clean, business-facing label derived from txn_type + reference + notes. */
 const typeLabel = (t: Transaction): string => {
@@ -41,16 +55,41 @@ const typeLabel = (t: Transaction): string => {
 };
 
 function SerialTrack() {
+  const { serial: serialParam } = Route.useSearch();
   const [stock, setStock] = useState<StockItem[]>([]);
   const [txns, setTxns] = useState<Transaction[]>([]);
+  const [tickets, setTickets] = useState<TicketLite[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState("");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(serialParam || "");
 
   useEffect(() => {
     listWarehouses().then(setWarehouses).catch(() => {});
   }, []);
+
+  // Keep the box in sync when arriving with ?serial= from another screen.
+  useEffect(() => {
+    if (serialParam) setQ(serialParam);
+  }, [serialParam]);
+
+  // Service history: tickets logged against this serial.
+  useEffect(() => {
+    const term = q.trim();
+    if (!term) { setTickets([]); return; }
+    let alive = true;
+    const h = setTimeout(async () => {
+      const sb = supabase as unknown as { from: (t: string) => any };
+      const { data } = await sb
+        .from("tickets")
+        .select("id,case_id,created_at,call_type,complaint,status,assigned_engineer_name,serial_no")
+        .ilike("serial_no", `%${term}%`)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (alive) setTickets((data || []) as TicketLite[]);
+    }, 300);
+    return () => { alive = false; clearTimeout(h); };
+  }, [q]);
 
   // Debounced targeted search — exact match, with defensive LIKE for legacy comma rows.
   useEffect(() => {
@@ -104,6 +143,9 @@ function SerialTrack() {
 
   const party = (t: Transaction) => t.to_party || t.from_party || "—";
 
+  const ticketsFor = (serial: string) =>
+    tickets.filter((t) => (t.serial_no || "").toLowerCase().split(",").map((s) => s.trim()).includes(serial.toLowerCase()));
+
   return (
     <div className="space-y-4">
       <Card>
@@ -135,6 +177,7 @@ function SerialTrack() {
 
       {matches.map(({ serial, row }) => {
         const hist = historyFor(row);
+        const svc = ticketsFor(serial);
         const issuedTo = (row.stock_status === "issued" || row.stock_status === "returned_to_oem")
           ? (hist.slice().reverse().find((t) => t.txn_type === "good_out" || t.txn_type === "defective_out"))
           : null;
@@ -217,6 +260,40 @@ function SerialTrack() {
                   </table>
                 </div>
               )}
+
+              <div>
+                <h3 className="text-sm font-medium mb-2">Service history ({svc.length})</h3>
+                {svc.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tickets logged against this serial yet.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr className="text-left">
+                          <th className="p-2">Case ID</th>
+                          <th className="p-2">Date</th>
+                          <th className="p-2">Call Type</th>
+                          <th className="p-2">Complaint</th>
+                          <th className="p-2">Status</th>
+                          <th className="p-2">Engineer</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {svc.map((t) => (
+                          <tr key={t.id} className="border-t">
+                            <td className="p-2 whitespace-nowrap font-mono">{t.case_id || "—"}</td>
+                            <td className="p-2 whitespace-nowrap">{(t.created_at || "").slice(0, 10)}</td>
+                            <td className="p-2">{t.call_type || "—"}</td>
+                            <td className="p-2 max-w-[28rem] whitespace-pre-wrap break-words">{t.complaint || "—"}</td>
+                            <td className="p-2"><Badge variant="outline">{t.status || "—"}</Badge></td>
+                            <td className="p-2">{t.assigned_engineer_name || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         );
