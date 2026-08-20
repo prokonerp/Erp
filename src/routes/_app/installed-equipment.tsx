@@ -232,13 +232,31 @@ function InstalledEquipmentPage() {
               onChange={(id, c) => { setCustomerId(id); setCustomerName(c?.company || ""); }}
             />
           </div>
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <DialogTrigger asChild>
-              <Button disabled={!customerId} size="sm"><Plus className="h-4 w-4 mr-1" />Add Equipment</Button>
-            </DialogTrigger>
+          <Button disabled={!customerId} size="sm" onClick={openAdd}>
+            <Plus className="h-4 w-4 mr-1" />Add Equipment
+          </Button>
+          <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setEditId(null); }}>
             <DialogContent>
-              <DialogHeader><DialogTitle>Add installed equipment{customerName ? ` — ${customerName}` : ""}</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle>{editId ? "Edit" : "Add"} installed equipment{customerName ? ` — ${customerName}` : ""}</DialogTitle>
+                <DialogDescription>Pick a model from Product Master — warranty months fill in automatically and stay editable.</DialogDescription>
+              </DialogHeader>
               <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label>Model (from Product Master) *</Label>
+                  <ProductPicker
+                    value={draft.product_id}
+                    onChange={(id, p) => {
+                      const months = productWarrantyMonths(p as never);
+                      setDraft((d) => ({
+                        ...d,
+                        product_id: id,
+                        model_no: (p?.model || p?.short_name || p?.name || d.model_no || "").trim(),
+                        warranty_months: months ? String(months) : d.warranty_months,
+                      }));
+                    }}
+                  />
+                </div>
                 <div><Label>Model No *</Label><Input value={draft.model_no} onChange={(e) => setDraft({ ...draft, model_no: e.target.value })} /></div>
                 <div><Label>Serial No</Label><Input value={draft.serial_no} onChange={(e) => setDraft({ ...draft, serial_no: e.target.value })} /></div>
                 <div><Label>Invoice No</Label><Input value={draft.invoice_no} onChange={(e) => setDraft({ ...draft, invoice_no: e.target.value })} /></div>
@@ -247,6 +265,7 @@ function InstalledEquipmentPage() {
                 <div />
                 <div><Label>AMC Start</Label><Input type="date" value={draft.amc_start_date} onChange={(e) => setDraft({ ...draft, amc_start_date: e.target.value })} /></div>
                 <div><Label>AMC End</Label><Input type="date" value={draft.amc_end_date} onChange={(e) => setDraft({ ...draft, amc_end_date: e.target.value })} /></div>
+                <div className="sm:col-span-2"><Label>Remarks</Label><Input value={draft.remarks} onChange={(e) => setDraft({ ...draft, remarks: e.target.value })} /></div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
