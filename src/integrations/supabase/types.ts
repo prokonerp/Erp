@@ -2719,6 +2719,7 @@ export type Database = {
           invoice_date: string | null
           invoice_no: string | null
           model_no: string
+          product_id: string | null
           remarks: string | null
           serial_no: string | null
           updated_at: string
@@ -2734,6 +2735,7 @@ export type Database = {
           invoice_date?: string | null
           invoice_no?: string | null
           model_no: string
+          product_id?: string | null
           remarks?: string | null
           serial_no?: string | null
           updated_at?: string
@@ -2749,6 +2751,7 @@ export type Database = {
           invoice_date?: string | null
           invoice_no?: string | null
           model_no?: string
+          product_id?: string | null
           remarks?: string | null
           serial_no?: string | null
           updated_at?: string
@@ -2760,6 +2763,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "installed_equipment_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
