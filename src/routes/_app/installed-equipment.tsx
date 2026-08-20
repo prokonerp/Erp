@@ -6,13 +6,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CustomerPicker } from "@/components/CustomerPicker";
-import { Search, Plus, LifeBuoy, Eye, X } from "lucide-react";
+import { ProductPicker } from "@/components/ProductPicker";
+import { productWarrantyMonths } from "@/lib/sales";
+import { Search, Plus, LifeBuoy, Eye, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/amc";
 import {
-  listEquipmentForCustomer, warrantyEnd, coverStatus, amcStatusOf,
+  listEquipmentForCustomer, createEquipment, updateEquipment, deleteEquipment,
+  warrantyEnd, coverStatus, amcStatusOf,
   statusClass, statusLabel, type InstalledEquipment, type CoverStatus,
 } from "@/lib/installedEquipment";
 
@@ -45,8 +52,10 @@ const AMC_CHIPS: { key: ChipKey; label: string; status: CoverStatus }[] = [
 ];
 
 const emptyDraft = {
+  product_id: null as string | null,
   model_no: "", serial_no: "", invoice_no: "", invoice_date: "",
   warranty_months: "12", amc_start_date: "", amc_end_date: "",
+  remarks: "",
 };
 
 function InstalledEquipmentPage() {
@@ -58,6 +67,8 @@ function InstalledEquipmentPage() {
   const [q, setQ] = useState("");
   const [chips, setChips] = useState<Set<ChipKey>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [deleteRow, setDeleteRow] = useState<InstalledEquipment | null>(null);
   const [draft, setDraft] = useState({ ...emptyDraft });
   const [saving, setSaving] = useState(false);
 
