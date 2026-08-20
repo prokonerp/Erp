@@ -85,3 +85,28 @@ export const listEquipmentForCustomer = async (customerId: string): Promise<Inst
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
 };
+
+const table = () => (supabase as unknown as { from: (t: string) => any }).from("installed_equipment");
+
+export const createEquipment = async (input: EquipmentInput): Promise<void> => {
+  const { error } = await table().insert(input);
+  if (error) throw error;
+};
+
+export const updateEquipment = async (id: string, input: EquipmentInput): Promise<void> => {
+  const { customer_id: _ignored, ...patch } = input;
+  const { error } = await table().update(patch).eq("id", id);
+  if (error) throw error;
+};
+
+export const deleteEquipment = async (id: string): Promise<void> => {
+  const { error } = await table().delete().eq("id", id);
+  if (error) throw error;
+};
+
+/** Lookup by serial (used by the global serial search fallback). */
+export const findEquipmentBySerial = async (serial: string): Promise<InstalledEquipment[]> => {
+  const { data, error } = await table().select("*").ilike("serial_no", `%${serial}%`).limit(25);
+  if (error) throw error;
+  return (data || []) as InstalledEquipment[];
+};
