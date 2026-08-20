@@ -473,12 +473,18 @@ function InstalledEquipmentPage() {
                         </Button>
                       </td>
                       <td className="px-2 py-1 text-center whitespace-nowrap">
-                        <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(d.row)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" title="Delete" onClick={() => setDeleteRow(d.row)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {isAdmin ? (
+                          <>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(d.row)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" title="Delete" onClick={() => setDeleteRow(d.row)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -493,6 +499,69 @@ function InstalledEquipmentPage() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="summary" className="space-y-4 mt-0">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Total Installed Units</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-semibold">{allLoading ? "…" : summaryFiltered.length}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Across all customers and models{chips.size > 0 ? ` · filtered (of ${allRows.length} total)` : ""}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center justify-between gap-2">
+                <span>Model-wise breakdown</span>
+                {chips.size > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setChips(new Set())}>
+                    <X className="h-4 w-4 mr-1" />Clear filters
+                  </Button>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap gap-1.5">
+                {WARRANTY_CHIPS.map(summaryChipBtn)}
+                <span className="w-2" />
+                {AMC_CHIPS.map(summaryChipBtn)}
+              </div>
+              <div className="max-h-[65vh] overflow-auto rounded-md border">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 z-10 bg-muted">
+                    <tr className="text-left">
+                      <th className="px-2 py-1.5 w-10">Sr</th>
+                      <th className="px-2 py-1.5">Model No</th>
+                      <th className="px-2 py-1.5 w-28 text-right">
+                        <button type="button" className="inline-flex items-center gap-1" onClick={() => setSortDesc((s) => !s)}>
+                          Units <ArrowUpDown className="h-3 w-3" />
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelCounts.map((m, i) => (
+                      <tr key={m.model} className="border-t">
+                        <td className="px-2 py-1 text-muted-foreground">{i + 1}</td>
+                        <td className="px-2 py-1 font-medium">{m.model}</td>
+                        <td className="px-2 py-1 text-right">{m.count}</td>
+                      </tr>
+                    ))}
+                    {!allLoading && modelCounts.length === 0 && (
+                      <tr><td colSpan={3} className="px-2 py-8 text-center text-muted-foreground">No installed equipment matches the current filters.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <AlertDialog open={!!deleteRow} onOpenChange={(o) => { if (!o) setDeleteRow(null); }}>
         <AlertDialogContent>
