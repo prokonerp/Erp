@@ -1,18 +1,24 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CustomerPicker } from "@/components/CustomerPicker";
-import { Search, Plus, LifeBuoy, Eye, X } from "lucide-react";
+import { ProductPicker } from "@/components/ProductPicker";
+import { productWarrantyMonths } from "@/lib/sales";
+import { Search, Plus, LifeBuoy, Eye, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/amc";
 import {
-  listEquipmentForCustomer, warrantyEnd, coverStatus, amcStatusOf,
+  listEquipmentForCustomer, createEquipment, updateEquipment, deleteEquipment,
+  warrantyEnd, coverStatus, amcStatusOf,
   statusClass, statusLabel, type InstalledEquipment, type CoverStatus,
 } from "@/lib/installedEquipment";
 
@@ -45,8 +51,10 @@ const AMC_CHIPS: { key: ChipKey; label: string; status: CoverStatus }[] = [
 ];
 
 const emptyDraft = {
+  product_id: null as string | null,
   model_no: "", serial_no: "", invoice_no: "", invoice_date: "",
   warranty_months: "12", amc_start_date: "", amc_end_date: "",
+  remarks: "",
 };
 
 function InstalledEquipmentPage() {
@@ -58,6 +66,8 @@ function InstalledEquipmentPage() {
   const [q, setQ] = useState("");
   const [chips, setChips] = useState<Set<ChipKey>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [deleteRow, setDeleteRow] = useState<InstalledEquipment | null>(null);
   const [draft, setDraft] = useState({ ...emptyDraft });
   const [saving, setSaving] = useState(false);
 
@@ -128,8 +138,7 @@ function InstalledEquipmentPage() {
     if (!draft.model_no.trim()) { toast.error("Model No is required"); return; }
     setSaving(true);
     try {
-      const sb = supabase as unknown as { from: (t: string) => any };
-      const { error } = await sb.from("installed_equipment").insert({
+      const payload = {
         customer_id: customerId,
         model_no: draft.model_no.trim(),
         serial_no: draft.serial_no.trim().toUpperCase() || null,
@@ -138,16 +147,49 @@ function InstalledEquipmentPage() {
         warranty_months: Number(draft.warranty_months) || 0,
         amc_start_date: draft.amc_start_date || null,
         amc_end_date: draft.amc_end_date || null,
-      });
-      if (error) throw error;
-      toast.success("Equipment added");
+        remarks: draft.remarks.trim() || null,
+      };
+      if (editId) await updateEquipment(editId, payload);
+      else await createEquipment(payload);
+      toast.success(editId ? "Equipment updated" : "Equipment added");
       setAddOpen(false);
+      setEditId(null);
       setDraft({ ...emptyDraft });
       await load(customerId);
     } catch (e) {
       toast.error((e as { message?: string })?.message || "Could not save");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openAdd = () => { setEditId(null); setDraft({ ...emptyDraft }); setAddOpen(true); };
+
+  const openEdit = (r: InstalledEquipment) => {
+    setEditId(r.id);
+    setDraft({
+      product_id: null,
+      model_no: r.model_no || "",
+      serial_no: r.serial_no || "",
+      invoice_no: r.invoice_no || "",
+      invoice_date: (r.invoice_date || "").slice(0, 10),
+      warranty_months: String(r.warranty_months ?? 0),
+      amc_start_date: (r.amc_start_date || "").slice(0, 10),
+      amc_end_date: (r.amc_end_date || "").slice(0, 10),
+      remarks: r.remarks || "",
+    });
+    setAddOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteRow || !customerId) return;
+    try {
+      await deleteEquipment(deleteRow.id);
+      toast.success("Equipment deleted");
+      setDeleteRow(null);
+      await load(customerId);
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || "Could not delete");
     }
   };
 
@@ -189,13 +231,31 @@ function InstalledEquipmentPage() {
               onChange={(id, c) => { setCustomerId(id); setCustomerName(c?.company || ""); }}
             />
           </div>
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <DialogTrigger asChild>
-              <Button disabled={!customerId} size="sm"><Plus className="h-4 w-4 mr-1" />Add Equipment</Button>
-            </DialogTrigger>
+          <Button disabled={!customerId} size="sm" onClick={openAdd}>
+            <Plus className="h-4 w-4 mr-1" />Add Equipment
+          </Button>
+          <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setEditId(null); }}>
             <DialogContent>
-              <DialogHeader><DialogTitle>Add installed equipment{customerName ? ` — ${customerName}` : ""}</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle>{editId ? "Edit" : "Add"} installed equipment{customerName ? ` — ${customerName}` : ""}</DialogTitle>
+                <DialogDescription>Pick a model from Product Master — warranty months fill in automatically and stay editable.</DialogDescription>
+              </DialogHeader>
               <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label>Model (from Product Master) *</Label>
+                  <ProductPicker
+                    value={draft.product_id}
+                    onChange={(id, p) => {
+                      const months = productWarrantyMonths(p as never);
+                      setDraft((d) => ({
+                        ...d,
+                        product_id: id,
+                        model_no: (p?.model || p?.short_name || p?.name || d.model_no || "").trim(),
+                        warranty_months: months ? String(months) : d.warranty_months,
+                      }));
+                    }}
+                  />
+                </div>
                 <div><Label>Model No *</Label><Input value={draft.model_no} onChange={(e) => setDraft({ ...draft, model_no: e.target.value })} /></div>
                 <div><Label>Serial No</Label><Input value={draft.serial_no} onChange={(e) => setDraft({ ...draft, serial_no: e.target.value })} /></div>
                 <div><Label>Invoice No</Label><Input value={draft.invoice_no} onChange={(e) => setDraft({ ...draft, invoice_no: e.target.value })} /></div>
@@ -204,6 +264,7 @@ function InstalledEquipmentPage() {
                 <div />
                 <div><Label>AMC Start</Label><Input type="date" value={draft.amc_start_date} onChange={(e) => setDraft({ ...draft, amc_start_date: e.target.value })} /></div>
                 <div><Label>AMC End</Label><Input type="date" value={draft.amc_end_date} onChange={(e) => setDraft({ ...draft, amc_end_date: e.target.value })} /></div>
+                <div className="sm:col-span-2"><Label>Remarks</Label><Input value={draft.remarks} onChange={(e) => setDraft({ ...draft, remarks: e.target.value })} /></div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
@@ -260,6 +321,7 @@ function InstalledEquipmentPage() {
                     <th className="px-2 py-1.5">AMC Status</th>
                     <th className="px-2 py-1.5 w-16 text-center">Ticket</th>
                     <th className="px-2 py-1.5 w-14 text-center">View</th>
+                    <th className="px-2 py-1.5 w-20 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -296,10 +358,18 @@ function InstalledEquipmentPage() {
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
                       </td>
+                      <td className="px-2 py-1 text-center whitespace-nowrap">
+                        <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(d.row)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" title="Delete" onClick={() => setDeleteRow(d.row)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                   {!loading && filtered.length === 0 && (
-                    <tr><td colSpan={11} className="px-2 py-8 text-center text-muted-foreground">
+                    <tr><td colSpan={12} className="px-2 py-8 text-center text-muted-foreground">
                       {rows.length === 0 ? "No installed equipment recorded for this customer yet." : "No rows match the current search / filters."}
                     </td></tr>
                   )}
@@ -309,6 +379,21 @@ function InstalledEquipmentPage() {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={!!deleteRow} onOpenChange={(o) => { if (!o) setDeleteRow(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this equipment record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteRow?.model_no}{deleteRow?.serial_no ? ` · ${deleteRow.serial_no}` : ""} will be removed from this customer's register. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

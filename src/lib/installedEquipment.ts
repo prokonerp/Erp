@@ -14,6 +14,18 @@ export type InstalledEquipment = {
   created_at: string;
 };
 
+export type EquipmentInput = {
+  customer_id?: string;
+  model_no: string;
+  serial_no: string | null;
+  invoice_no: string | null;
+  invoice_date: string | null;
+  warranty_months: number;
+  amc_start_date: string | null;
+  amc_end_date: string | null;
+  remarks?: string | null;
+};
+
 export type CoverStatus = "active" | "expiring" | "expired" | "none";
 
 const addMonthsIso = (iso: string, months: number): string => {
@@ -70,6 +82,31 @@ export const listEquipmentForCustomer = async (customerId: string): Promise<Inst
     .eq("customer_id", customerId)
     .order("invoice_date", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []) as InstalledEquipment[];
+};
+
+const table = () => (supabase as unknown as { from: (t: string) => any }).from("installed_equipment");
+
+export const createEquipment = async (input: EquipmentInput): Promise<void> => {
+  const { error } = await table().insert(input);
+  if (error) throw error;
+};
+
+export const updateEquipment = async (id: string, input: EquipmentInput): Promise<void> => {
+  const { customer_id: _ignored, ...patch } = input;
+  const { error } = await table().update(patch).eq("id", id);
+  if (error) throw error;
+};
+
+export const deleteEquipment = async (id: string): Promise<void> => {
+  const { error } = await table().delete().eq("id", id);
+  if (error) throw error;
+};
+
+/** Lookup by serial (used by the global serial search fallback). */
+export const findEquipmentBySerial = async (serial: string): Promise<InstalledEquipment[]> => {
+  const { data, error } = await table().select("*").ilike("serial_no", `%${serial}%`).limit(25);
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
 };

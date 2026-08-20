@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, Download } from "lucide-react";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
 import { exportCSV } from "@/lib/exports";
+import { findEquipmentBySerial, warrantyEnd, coverStatus, amcStatusOf, statusClass, statusLabel, type InstalledEquipment } from "@/lib/installedEquipment";
 import {
   listWarehouses,
   TXN_TYPE_LABEL, type StockItem, type Transaction, type WarehouseLite,
@@ -59,6 +60,7 @@ function SerialTrack() {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [tickets, setTickets] = useState<TicketLite[]>([]);
+  const [equipment, setEquipment] = useState<InstalledEquipment[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState("");
@@ -76,7 +78,7 @@ function SerialTrack() {
   // Service history: tickets logged against this serial.
   useEffect(() => {
     const term = q.trim();
-    if (!term) { setTickets([]); return; }
+    if (!term) { setTickets([]); setEquipment([]); return; }
     let alive = true;
     const h = setTimeout(async () => {
       const sb = supabase as unknown as { from: (t: string) => any };
@@ -87,6 +89,10 @@ function SerialTrack() {
         .order("created_at", { ascending: true })
         .limit(200);
       if (alive) setTickets((data || []) as TicketLite[]);
+      try {
+        const eq = await findEquipmentBySerial(term);
+        if (alive) setEquipment(eq);
+      } catch { if (alive) setEquipment([]); }
     }, 300);
     return () => { alive = false; clearTimeout(h); };
   }, [q]);
@@ -169,10 +175,76 @@ function SerialTrack() {
         </CardContent>
       </Card>
 
-      {!loading && term && matches.length === 0 && (
+      {!loading && term && matches.length === 0 && equipment.length === 0 && tickets.length === 0 && (
         <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
           No serial found matching “{q.trim()}”
         </CardContent></Card>
+      )}
+
+      {/* Serials sold/installed but no longer (or never) held in IMS stock still resolve here. */}
+      {matches.length === 0 && (equipment.length > 0 || tickets.length > 0) && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex flex-wrap items-center gap-2">
+              <span className="font-mono">{equipment[0]?.serial_no || q.trim()}</span>
+              <Badge variant="outline">Not in IMS stock</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {equipment.map((e) => {
+              const wEnd = warrantyEnd(e);
+              const w = coverStatus(wEnd);
+              const a = amcStatusOf(e);
+              return (
+                <div key={e.id} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+                  <div><div className="text-xs text-muted-foreground">Model</div><div>{e.model_no || "—"}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Invoice</div>
+                    <div>{e.invoice_no || "—"}{e.invoice_date ? ` · ${e.invoice_date.slice(0, 10)}` : ""}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Warranty</div>
+                    <div><Badge variant="outline" className={statusClass(w)}>{statusLabel[w]}</Badge>
+                      {wEnd ? <span className="ml-1 text-muted-foreground">till {wEnd}</span> : null}</div></div>
+                  <div><div className="text-xs text-muted-foreground">AMC</div>
+                    <div><Badge variant="outline" className={statusClass(a)}>{statusLabel[a]}</Badge>
+                      {e.amc_end_date ? <span className="ml-1 text-muted-foreground">till {e.amc_end_date.slice(0, 10)}</span> : null}</div></div>
+                </div>
+              );
+            })}
+
+            <div>
+              <h3 className="text-sm font-medium mb-2">Service history ({tickets.length})</h3>
+              {tickets.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No tickets logged against this serial yet.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr className="text-left">
+                        <th className="p-2">Case ID</th>
+                        <th className="p-2">Date</th>
+                        <th className="p-2">Call Type</th>
+                        <th className="p-2">Complaint</th>
+                        <th className="p-2">Status</th>
+                        <th className="p-2">Engineer</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tickets.map((t) => (
+                        <tr key={t.id} className="border-t">
+                          <td className="p-2 whitespace-nowrap font-mono">{t.case_id || "—"}</td>
+                          <td className="p-2 whitespace-nowrap">{(t.created_at || "").slice(0, 10)}</td>
+                          <td className="p-2">{t.call_type || "—"}</td>
+                          <td className="p-2 max-w-[28rem] whitespace-pre-wrap break-words">{t.complaint || "—"}</td>
+                          <td className="p-2"><Badge variant="outline">{t.status || "—"}</Badge></td>
+                          <td className="p-2">{t.assigned_engineer_name || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {matches.map(({ serial, row }) => {
