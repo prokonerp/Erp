@@ -181,6 +181,23 @@ const USERS = [
     last_logout: '2026-08-14T08:55:37.671294+00:00',
     login_count: 29,
   },
+  {
+    id: 'c02d6a89-4cb0-4932-b85f-b94a560787fb',
+    name: 'Test Staff',
+    email: 'test-staff-705483@prokonhitech.com',
+    phone: null,
+    role: 'User',
+    status: 'active',
+    custom_permissions: null,
+    created_at: '2026-08-19T11:14:29.897323+00:00',
+    updated_at: '2026-08-19T11:14:40.497749+00:00',
+    password_changed_at: '2026-08-19T11:14:29.769+00:00',
+    must_change_password: false,
+    last_login: '2026-08-19T11:14:38.885042+00:00',
+    last_activity: '2026-08-19T11:14:40.497749+00:00',
+    last_logout: null,
+    login_count: 3,
+  },
 ];
 
 async function main() {
