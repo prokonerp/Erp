@@ -8,7 +8,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM auth.users u
     WHERE u.id = auth.uid()
-      AND lower(u.email) IN ('gaurav@prokonhitech.com', 'gauravarora97@gmail.com')
+      AND lower(u.email) IN ('gaurav@prokonhitech.com', 'prokonerp@gmail.com')
   );
 $$;
 
