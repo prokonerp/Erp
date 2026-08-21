@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 .output
+.vercel
 .vinxi
 .tanstack/**
 .nitro
@@ -24,6 +25,12 @@ dist-ssr
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
+
+# Supabase CLI local state
+supabase/.temp/
+
+# Data exports (business data — never commit)
+data/
 
 # Editor directories and files
 .vscode/*
