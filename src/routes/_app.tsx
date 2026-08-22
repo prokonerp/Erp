@@ -1,45 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   ChevronDown,
-  Building2,
   ChevronLeft,
   ChevronRight,
   FileText,
-  FileSpreadsheet,
   ListChecks,
   ShieldCheck,
-  Briefcase,
-  Ticket,
-  Upload,
-  Database,
-  BarChart3,
-  ClipboardList,
-  Warehouse,
-  PackageCheck,
-  Users,
-  Package,
   Send,
-  LayoutDashboard,
   Menu,
-  Store,
-  UserCog,
-  Wallet,
-  Boxes,
-  Truck,
-  IdCard,
-  Receipt,
-  Archive as ArchiveIcon,
   Plus,
-  Tag,
   Search,
-  MonitorCheck,
+  Command as CommandIcon,
 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
-import type { ModuleKey } from "@/lib/permissions";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { getMyProfile } from "@/lib/admin-users.functions";
 import { UserProfileMenu, type ProfileInfo } from "@/components/UserProfileMenu";
@@ -48,6 +25,8 @@ import { IdleTimeout } from "@/components/IdleTimeout";
 import { ClaimAdminBanner } from "@/components/AdminAccessNotices";
 import { useActivityTracker } from "@/lib/useActivityTracker";
 import { toast } from "sonner";
+import { NAV_ITEMS, QUICK_ACTIONS, GROUP_ORDER, groupForPath, type NavItem } from "@/lib/navigation";
+import { CommandPalette } from "@/components/CommandPalette";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -61,22 +40,48 @@ function AppLayout() {
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [forceChange, setForceChange] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [sidebarHidden, setSidebarHidden] = useState(false);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    Masters: false,
-    "Service Desk": false,
-    Customers: false,
-    Procurement: false,
-    "Material Movement": false,
-    Inventory: false,
-    Sales: false,
-    Intelligence: false,
-    System: false,
+  const [sidebarHidden, setSidebarHidden] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("prokon-sidebar-hidden") === "true";
   });
-  const [challanOpen, setChallanOpen] = useState(false);
-  const [grnOpen, setGrnOpen] = useState(false);
-  const [gatepassOpen, setGatepassOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const stored = window.localStorage.getItem("prokon-sidebar-groups");
+      if (stored) return JSON.parse(stored);
+    } catch {}
+    return {};
+  });
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const fetchProfile = useServerFn(getMyProfile);
+
+  // Persist sidebar state + auto-expand the active group on navigation.
+  const prevGroupRef = useRef<string | null>(null);
+  useEffect(() => {
+    window.localStorage.setItem("prokon-sidebar-hidden", String(sidebarHidden));
+  }, [sidebarHidden]);
+  useEffect(() => {
+    window.localStorage.setItem("prokon-sidebar-groups", JSON.stringify(openGroups));
+  }, [openGroups]);
+  useEffect(() => {
+    const activeGroup = groupForPath(location.pathname);
+    if (activeGroup && !openGroups[activeGroup]) {
+      setOpenGroups((s) => ({ ...s, [activeGroup]: true }));
+    }
+    prevGroupRef.current = activeGroup;
+  }, [location.pathname]);
+
+  // ⌘K / Ctrl+K global shortcut.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   async function loadProfile() {
     try {
@@ -117,52 +122,9 @@ function AppLayout() {
   if (loading) return <div className="p-8 text-muted-foreground">Loading…</div>;
   if (!session) return <Navigate to="/auth" />;
 
-  const allNav: {
-    to: string;
-    label: string;
-    icon: any;
-    search?: Record<string, string>;
-    module?: ModuleKey;
-    adminOnly?: boolean;
-    group?: string;
-    matchSearchTab?: string;
-  }[] = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/masters", label: "Company", icon: Building2, module: "customers", group: "Masters", search: { tab: "company" }, matchSearchTab: "company" },
-    { to: "/masters", label: "Branches", icon: Store, module: "customers", group: "Masters", search: { tab: "branches" }, matchSearchTab: "branches" },
-    { to: "/masters", label: "Warehouses", icon: Warehouse, module: "customers", group: "Masters", search: { tab: "warehouses" }, matchSearchTab: "warehouses" },
-    { to: "/masters/customers", label: "Customers", icon: Users, module: "customers", group: "Masters" },
-    { to: "/masters", label: "Vendors", icon: Truck, module: "customers", group: "Masters", search: { tab: "vendors" }, matchSearchTab: "vendors" },
-    { to: "/masters/products", label: "Products", icon: Package, module: "customers", group: "Masters" },
-    { to: "/installed-equipment", label: "Installed Equipment", icon: MonitorCheck, module: "customers", group: "Masters" },
-    { to: "/masters", label: "Employees", icon: IdCard, module: "employees", group: "Masters", search: { tab: "employees" }, matchSearchTab: "employees" },
-    { to: "/payroll", label: "Salary & Attendance", icon: Wallet, module: "payroll", group: "Masters" },
-    { to: "/masters", label: "Inventory", icon: Boxes, module: "customers", group: "Masters", search: { tab: "inventory" }, matchSearchTab: "inventory" },
-    { to: "/masters", label: "Accounts", icon: Wallet, module: "customers", group: "Masters", search: { tab: "accounts" }, matchSearchTab: "accounts" },
-    { to: "/masters", label: "Users & Roles", icon: UserCog, module: "customers", group: "Masters", search: { tab: "users" }, matchSearchTab: "users" },
-    { to: "/tickets", label: "Service Desk (Tickets)", icon: Ticket, module: "tickets", group: "Service Desk" },
-    { to: "/amc", label: "Contracts (AMC)", icon: ShieldCheck, module: "amc", group: "Service Desk" },
-    { to: "/crm", label: "Customers (Sales & CRM)", icon: Briefcase, module: "quotations", group: "Customers" },
-    { to: "/sales", label: "Head Sales", icon: Receipt, module: "sales", group: "Sales" },
-    { to: "/sales/quotations", label: "Quotations", icon: FileSpreadsheet, module: "quotations", group: "Sales" },
-    { to: "/sales/general-dc", label: "General DC", icon: PackageCheck, module: "general_dc", group: "Sales" },
-    { to: "/sales/invoices", label: "Invoices", icon: FileText, module: "sales", group: "Sales" },
-    { to: "/sales/payments", label: "Payments", icon: Wallet, module: "sales", group: "Sales" },
-    { to: "/sales/eway", label: "e-Way Bills", icon: Truck, module: "sales", group: "Sales" },
-    { to: "/sales/settings", label: "Sales Settings", icon: UserCog, module: "sales", group: "Sales", adminOnly: true },
-    { to: "/indent", label: "Purchase Requests (Indent)", icon: ClipboardList, module: "indent", group: "Procurement" },
-    { to: "/po", label: "Purchase Orders", icon: FileText, module: "po", group: "Procurement" },
-    { to: "/ims", label: "Inventory (IMS)", icon: Warehouse, module: "ims", group: "Inventory" },
-    { to: "/ims/defective-tags", label: "Defective Tags", icon: Tag, module: "ims", group: "Inventory" },
-    { to: "/reports", label: "Reports", icon: BarChart3, module: "reports", group: "Intelligence" },
-    { to: "/ims/serial-track", label: "Serial Track", icon: Search, module: "ims", group: "Intelligence" },
-    { to: "/import", label: "Data Import (CSV Import)", icon: Upload, adminOnly: true, group: "System" },
-    { to: "/archive", label: "Archive (Deleted Records)", icon: ArchiveIcon, adminOnly: true, group: "System" },
-  ];
-
   const navItems = permLoading
-    ? allNav
-    : allNav.filter((n) => {
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((n) => {
         if (n.adminOnly) return isAdmin;
         if (n.module) return can(n.module, "read");
         return true;
@@ -187,8 +149,6 @@ function AppLayout() {
         : "text-foreground/75 hover:bg-muted hover:text-foreground"
     }`;
 
-  const groupOrder = ["Masters", "Service Desk", "Customers", "Sales", "Procurement", "Material Movement", "Inventory", "Intelligence", "System"];
-
   const groupMap = new Map<string, typeof navItems>();
   const ungrouped: typeof navItems = [];
   for (const n of navItems) {
@@ -199,8 +159,6 @@ function AppLayout() {
       ungrouped.push(n);
     }
   }
-
-  const showMm = permLoading || can("gatepass", "read");
 
   // Derive current page title from active nav item for the header
   const currentNav = navItems.find((n) => {
@@ -274,142 +232,8 @@ function AppLayout() {
           )}
 
           {/* Grouped items */}
-          {groupOrder.map((g) => {
+          {GROUP_ORDER.filter((g) => g !== "Material Movement").map((g) => {
             const items = groupMap.get(g);
-            if (g === "Material Movement") {
-              if (!showMm) return null;
-              const isOpen = openGroups[g] !== false;
-              return (
-                <div key={g}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
-                    className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-[0.08em] px-3 py-1.5 hover:text-foreground"
-                  >
-                    {isOpen ? (
-                      <ChevronDown className="h-4 w-4 shrink-0" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0" />
-                    )}
-                    <span>{g}</span>
-                  </button>
-                  {isOpen && (
-                    <div className="space-y-0.5">
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => setGatepassOpen((v) => !v)}
-                          className={`w-full ${navLinkCls(isActive("/gatepass"))}`}
-                          aria-expanded={gatepassOpen}
-                        >
-                          <FileText className="h-4 w-4 shrink-0" />
-                          <span className="flex-1 text-left">Gate Passes</span>
-                          {gatepassOpen ? (
-                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                          )}
-                        </button>
-                        {gatepassOpen && (
-                          <div className="ml-5 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
-                            <Link
-                              to="/gatepass"
-                              className={navLinkCls(
-                                location.pathname === "/gatepass" ||
-                                  location.pathname === "/records"
-                              )}
-                            >
-                              <ListChecks className="h-4 w-4 shrink-0" />
-                              View Gate Pass History
-                            </Link>
-                            {can("gatepass", "create") && (
-                              <Link
-                                to="/gatepass/new"
-                                className={navLinkCls(
-                                  location.pathname === "/gatepass/new" ||
-                                    location.pathname === "/new"
-                                )}
-                              >
-                                <Plus className="h-4 w-4 shrink-0" />
-                                Create New Gate Pass
-                              </Link>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => setChallanOpen((v) => !v)}
-                          className={`w-full ${navLinkCls(isActive("/challan"))}`}
-                          aria-expanded={challanOpen}
-                        >
-                          <Send className="h-4 w-4 shrink-0" />
-                          <span className="flex-1 text-left">Delivery Challans</span>
-                          {challanOpen ? (
-                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                          )}
-                        </button>
-                        {challanOpen && (
-                          <div className="ml-5 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
-                            <Link
-                              to="/challan"
-                              className={navLinkCls(
-                                location.pathname === "/challan" ||
-                                  (isActive("/challan") && !isActive("/challan/new"))
-                              )}
-                            >
-                              <ListChecks className="h-4 w-4 shrink-0" />
-                              View All Delivery Challans
-                            </Link>
-                            <Link to="/challan/new" className={navLinkCls(isActive("/challan/new"))}>
-                              <Plus className="h-4 w-4 shrink-0" />
-                              Create New Delivery Challan
-                            </Link>
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => setGrnOpen((v) => !v)}
-                          className={`w-full ${navLinkCls(isActive("/grn"))}`}
-                          aria-expanded={grnOpen}
-                        >
-                          <PackageCheck className="h-4 w-4 shrink-0" />
-                          <span className="flex-1 text-left">GRNs</span>
-                          {grnOpen ? (
-                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-                          ) : (
-                            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                          )}
-                        </button>
-                        {grnOpen && (
-                          <div className="ml-5 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
-                            <Link
-                              to="/grn"
-                              className={navLinkCls(
-                                location.pathname === "/grn" ||
-                                  (isActive("/grn") && !isActive("/grn/new"))
-                              )}
-                            >
-                              <ListChecks className="h-4 w-4 shrink-0" />
-                              View All GRNs
-                            </Link>
-                            <Link to="/grn/new" className={navLinkCls(isActive("/grn/new"))}>
-                              <Plus className="h-4 w-4 shrink-0" />
-                              Create New GRN
-                            </Link>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            }
             if (!items || items.length === 0) return null;
             const isOpen = openGroups[g] !== false;
             return (
@@ -486,6 +310,18 @@ function AppLayout() {
               </p>
             )}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="hidden md:inline-flex gap-1.5 text-muted-foreground"
+            onClick={() => setPaletteOpen(true)}
+          >
+            <CommandIcon className="h-3.5 w-3.5" />
+            <span className="text-xs">Search…</span>
+            <kbd className="ml-1 inline-flex h-5 items-center rounded border bg-muted px-1 font-mono text-[10px] font-medium text-muted-foreground">
+              ⌘K
+            </kbd>
+          </Button>
           <UserProfileMenu profile={profile} onProfileChange={loadProfile} />
         </header>
 
@@ -506,6 +342,7 @@ function AppLayout() {
         }}
       />
       <IdleTimeout />
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }
