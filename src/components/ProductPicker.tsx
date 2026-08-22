@@ -27,6 +27,7 @@ export type ProductMaster = {
   default_price?: number | null;
   description?: string | null;
   active?: boolean | null;
+  item_type?: string | null;
 };
 
 type Props = {
