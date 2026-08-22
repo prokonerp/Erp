@@ -74,14 +74,26 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Prokon ERP" },
-      { name: "description", content: "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace." },
+      {
+        name: "description",
+        content:
+          "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace.",
+      },
       { name: "author", content: "Prokon Hi-Tech Systems" },
       { property: "og:title", content: "Prokon ERP" },
-      { property: "og:description", content: "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace." },
+      {
+        property: "og:description",
+        content:
+          "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "Prokon ERP" },
-      { name: "twitter:description", content: "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace." },
+      {
+        name: "twitter:description",
+        content:
+          "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace.",
+      },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
