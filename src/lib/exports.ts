@@ -1,6 +1,3 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-
 export type ExportColumn<T> = {
   header: string;
   /** Accessor returns a primitive value to render in the cell. */
@@ -52,7 +49,11 @@ export async function exportExcel<T>(name: string, cols: ExportColumn<T>[], rows
   XLSX.writeFile(wb, `${name}_${stamp()}.xlsx`);
 }
 
-export function exportPDF<T>(name: string, cols: ExportColumn<T>[], rows: T[], title?: string) {
+export async function exportPDF<T>(name: string, cols: ExportColumn<T>[], rows: T[], title?: string) {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
   const doc = new jsPDF({ orientation: cols.length > 6 ? "landscape" : "portrait", unit: "pt", format: "a4" });
   const head = [cols.map((c) => c.header)];
   const body = rows.map((r) => cols.map((c) => safeStr(c.get(r))));

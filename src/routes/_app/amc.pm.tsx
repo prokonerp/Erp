@@ -10,7 +10,6 @@ import { ArrowLeft, CheckCircle2, Circle, Download, Printer, Search, Ticket as T
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 import { fmtDate } from "@/lib/amc";
 import { usePermissions } from "@/lib/usePermissions";
 import { DateFilterBar } from "@/components/DateFilterBar";
@@ -156,7 +155,7 @@ function PMSchedule() {
     overdue: pms.filter(isOverdue).length,
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     const rows = filtered.map((p) => {
       const a = amcs[p.amc_id];
       return {
@@ -170,6 +169,7 @@ function PMSchedule() {
         "Units": (a?.units || []).map((u) => `${u.model} (${u.serial_no})`).join("; "),
       };
     });
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet(rows);
     ws["!cols"] = [{ wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 14 }, { wch: 40 }];
     const wb = XLSX.utils.book_new();

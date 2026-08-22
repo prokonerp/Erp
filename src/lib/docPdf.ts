@@ -1,6 +1,3 @@
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas-pro";
-
 const PX_PER_MM = 96 / 25.4;
 const PAGE_W_MM = 210;
 const PAGE_H_MM = 297;
@@ -251,6 +248,10 @@ export async function printElementSinglePage(el: HTMLElement, filename: string) 
  * the output matches Print Preview and always fits one A4 page.
  */
 async function buildPdfBlob(el: HTMLElement, filename: string): Promise<Blob> {
+  const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+    import("jspdf"),
+    import("html2canvas-pro"),
+  ]);
   const { iframe, root, scale, pages } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""));
   try {
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -352,6 +353,10 @@ export async function saveMultiPageElementAsPdf(
   const landscape = !!opts.landscape;
   const { iframe, idoc } = await buildMultiPageFrame(el, filename.replace(/\.pdf$/i, ""), landscape);
   try {
+    const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+      import("jspdf"),
+      import("html2canvas-pro"),
+    ]);
     const pages = Array.from(idoc.querySelectorAll<HTMLElement>(".defective-tag-page"));
     const targets = pages.length ? pages : [idoc.body];
     const pdf = new jsPDF({ orientation: landscape ? "landscape" : "portrait", unit: "mm", format: "a4" });
@@ -442,6 +447,10 @@ export async function downloadElementAsPdf(
   opts: { fitToOnePage?: boolean } = {},
 ) {
   const { fitToOnePage = true } = opts;
+  const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+    import("jspdf"),
+    import("html2canvas-pro"),
+  ]);
   const canvas = await html2canvas(el, {
     scale: 2,
     useCORS: true,

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/lib/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,10 +13,24 @@ import {
 import { hoursExcludingSundays } from "@/lib/tickets";
 import type { ModuleKey } from "@/lib/permissions";
 import { useRealtimeRefetch } from "@/lib/softDelete";
-import { EngineerWorkloadSection } from "@/components/EngineerWorkloadSection";
-import { ExecutionTimeSection } from "@/components/ExecutionTimeSection";
-import { OpenAgeSection, PerformanceSplitSection } from "@/components/OpenAgeSection";
 import { ExecutiveKpisSection } from "@/components/ExecutiveKpisSection";
+import { PerformanceSplitSection } from "@/components/PerformanceSplitSection";
+
+// Lazy-load the recharts-backed dashboard sections so recharts (~400KB) is
+// fetched only when a chart section renders, not on the initial dashboard load.
+const EngineerWorkloadSection = lazy(
+  () => import("@/components/EngineerWorkloadSection").then((m) => ({ default: m.EngineerWorkloadSection })),
+);
+const ExecutionTimeSection = lazy(
+  () => import("@/components/ExecutionTimeSection").then((m) => ({ default: m.ExecutionTimeSection })),
+);
+const OpenAgeSection = lazy(
+  () => import("@/components/OpenAgeSection").then((m) => ({ default: m.OpenAgeSection })),
+);
+
+function ChartFallback() {
+  return <div className="h-64 animate-pulse bg-muted rounded-lg" />;
+}
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -140,7 +154,9 @@ function UserGrid({ can, engineerName }: { can: (m: ModuleKey, a?: any) => boole
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">Ticket Operations Summary</h2>
             <ExecutiveKpisSection />
           </div>
-          <EngineerWorkloadSection />
+          <Suspense fallback={<ChartFallback />}>
+            <EngineerWorkloadSection />
+          </Suspense>
         </>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -159,12 +175,18 @@ function AdminGrid() {
       <ExecutiveKpisSection />
 
       {/* Section 2 · Engineer workload */}
-      <EngineerWorkloadSection />
+      <Suspense fallback={<ChartFallback />}>
+        <EngineerWorkloadSection />
+      </Suspense>
 
       {/* Section 3 · Two focused charts side-by-side */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <ExecutionTimeSection />
-        <OpenAgeSection />
+        <Suspense fallback={<ChartFallback />}>
+          <ExecutionTimeSection />
+        </Suspense>
+        <Suspense fallback={<ChartFallback />}>
+          <OpenAgeSection />
+        </Suspense>
       </div>
 
       {/* Section 4 · Performance summary: OEM vs Non-OEM + Parts */}

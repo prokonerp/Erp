@@ -31,7 +31,16 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
 }
 
 export const getRouter = () => {
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 5 * 60 * 1000, // 5 minutes — data is fresh for 5 min
+        refetchOnWindowFocus: false, // don't refetch when switching tabs
+        refetchOnReconnect: false, // don't refetch on network reconnect
+        retry: 1, // retry once instead of 3 times
+      },
+    },
+  });
 
   const router = createRouter({
     routeTree,
