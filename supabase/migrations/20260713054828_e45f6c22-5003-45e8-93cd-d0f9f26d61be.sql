@@ -1,4 +1,0 @@
-ALTER TABLE public.delivery_challans
-  ADD COLUMN IF NOT EXISTS city TEXT,
-  ADD COLUMN IF NOT EXISTS state TEXT,
-  ADD COLUMN IF NOT EXISTS pin_code TEXT;

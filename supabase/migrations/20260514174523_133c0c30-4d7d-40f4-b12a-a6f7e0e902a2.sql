@@ -1,1 +1,0 @@
-UPDATE public.gatepasses SET challan_no = REPLACE(challan_no, 'PHT/', 'PHS/') WHERE challan_no LIKE 'PHT/%';
