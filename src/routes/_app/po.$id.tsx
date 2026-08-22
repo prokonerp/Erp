@@ -18,6 +18,7 @@ import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { downloadPurchaseOrderPdf, printPurchaseOrderPdf } from "@/lib/purchaseOrderPdf";
 import { DocumentPrintView, type PrintDoc } from "@/components/DocumentPrintView";
 import { fetchCompanyProfile, DEFAULT_COMPANY_PROFILE, type CompanyProfile } from "@/lib/companyProfile";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 export const Route = createFileRoute("/_app/po/$id")({
   component: POView,
@@ -31,6 +32,7 @@ function POView() {
   const [items, setItems] = useState<POItemRow[]>([]);
   const [branch, setBranch] = useState<BranchRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmTarget, setConfirmTarget] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
   const [pdfSettings, setPdfSettings] = useState<{
     company_name: string | null;
     company_address: string | null;
@@ -79,11 +81,16 @@ function POView() {
 
   async function del() {
     if (!po) return;
-    if (!confirm("Delete this Purchase Order? This cannot be undone.")) return;
-    const { error } = await (supabase as any).from("purchase_orders").delete().eq("id", po.id);
-    if (error) return toast.error(error.message);
-    toast.success("Deleted");
-    nav({ to: "/po" });
+    setConfirmTarget({
+      title: "Delete this Purchase Order?",
+      description: "This cannot be undone. All line items and stock entries will be lost.",
+      onConfirm: async () => {
+        const { error } = await (supabase as any).from("purchase_orders").delete().eq("id", po.id);
+        if (error) return toast.error(error.message);
+        toast.success("Deleted");
+        nav({ to: "/po" });
+      },
+    });
   }
 
   if (loading) return <div className="text-sm text-muted-foreground">Loading…</div>;
@@ -275,6 +282,15 @@ function POView() {
           } as PrintDoc}
         />
       </div>
+      <ConfirmDialog
+        open={!!confirmTarget}
+        onOpenChange={(o) => !o && setConfirmTarget(null)}
+        title={confirmTarget?.title ?? ""}
+        description={confirmTarget?.description ?? ""}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={async () => { await confirmTarget?.onConfirm(); setConfirmTarget(null); }}
+      />
     </div>
   );
 }

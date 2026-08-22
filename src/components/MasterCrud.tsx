@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import {
   Table,
   TableBody,
@@ -163,20 +164,27 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
     queryClient.invalidateQueries({ queryKey: ["masters", table] });
   }
 
+  const [confirmTarget, setConfirmTarget] = useState<{ title: string; onConfirm: () => void } | null>(null);
+
   async function remove(row: any) {
-    if (!confirm(`Delete "${row[fields[0].key] ?? "this record"}"?`)) return;
-    const { error } = await supabase
-      .from(table as any)
-      .delete()
-      .eq("id", row.id);
-    if (error) return toast.error(error.message);
-    toast.success("Deleted");
-    queryClient.invalidateQueries({ queryKey: ["masters", table] });
+    setConfirmTarget({
+      title: `Delete "${row[fields[0].key] ?? "this record"}"?`,
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from(table as any)
+          .delete()
+          .eq("id", row.id);
+        if (error) return toast.error(error.message);
+        toast.success("Deleted");
+        queryClient.invalidateQueries({ queryKey: ["masters", table] });
+      },
+    });
   }
 
   const listFields = fields.filter((f) => f.showInList !== false).slice(0, 5);
 
   return (
+    <>
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>{title}</CardTitle>
@@ -304,5 +312,15 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
         )}
       </CardContent>
     </Card>
+    <ConfirmDialog
+      open={!!confirmTarget}
+      onOpenChange={(o) => !o && setConfirmTarget(null)}
+      title={confirmTarget?.title ?? ""}
+      description="This action cannot be undone."
+      confirmLabel="Delete"
+      variant="danger"
+      onConfirm={async () => { await confirmTarget?.onConfirm(); setConfirmTarget(null); }}
+    />
+  </>
   );
 }
