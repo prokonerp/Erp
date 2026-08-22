@@ -15,6 +15,7 @@ import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { AgreementDocUpload } from "@/components/AgreementDocUpload";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
+import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
 
 export const Route = createFileRoute("/_app/amc/new")({
   component: NewAmc,
@@ -28,6 +29,9 @@ type SerialLite = { id: string; serial_number: string; product_id: string };
 
 function NewAmc() {
   const navigate = useNavigate();
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => { if (!dirty) setDirty(true); };
+  const blocker = useUnsavedChanges(dirty);
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     customer_id: "" as string,
@@ -63,8 +67,11 @@ function NewAmc() {
   const [billTouched, setBillTouched] = useState(false);
   useEffect(() => {
     if (!billTouched) setForm((f) => ({ ...f, bill_date: f.start_date }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.start_date]);
+
+  // Mark dirty on any form change for the unsaved-changes guard.
+  useEffect(() => { setDirty(true); }, [form, units]);
 
   useEffect(() => {
     (async () => {
@@ -170,6 +177,7 @@ function NewAmc() {
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("AMC created");
+    setDirty(false);
     navigate({ to: "/amc/$id", params: { id: (data as { id: string }).id } });
   };
 
@@ -184,6 +192,7 @@ function NewAmc() {
         </Button>
       }
     >
+      <UnsavedChangesPrompt blocker={blocker} />
       <FormSection
         title="OEM Registration"
         defaultOpen={form.oem_call}
