@@ -82,8 +82,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "Prokon ERP" },
       { name: "twitter:description", content: "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6efeb12a-247e-4b91-ad5c-565933dd311e/id-preview-d3b83f99--ec205f8c-dfb7-433d-b565-1670511446f6.lovable.app-1778780617367.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6efeb12a-247e-4b91-ad5c-565933dd311e/id-preview-d3b83f99--ec205f8c-dfb7-433d-b565-1670511446f6.lovable.app-1778780617367.png" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
