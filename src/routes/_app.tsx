@@ -182,6 +182,14 @@ function AppLayout() {
 
   return (
     <div className="min-h-screen bg-muted/20 flex">
+      {/* Skip to content — keyboard accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
+      >
+        Skip to content
+      </a>
+
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
@@ -315,6 +323,7 @@ function AppLayout() {
             size="sm"
             className="hidden md:inline-flex gap-1.5 text-muted-foreground"
             onClick={() => setPaletteOpen(true)}
+            aria-label="Open command palette (⌘K)"
           >
             <CommandIcon className="h-3.5 w-3.5" />
             <span className="text-xs">Search…</span>
@@ -326,7 +335,7 @@ function AppLayout() {
         </header>
 
         {/* Content */}
-        <main className="p-4 md:p-6 max-w-[1600px] w-full mx-auto">
+        <main id="main-content" className="p-4 md:p-6 max-w-[1600px] w-full mx-auto" tabIndex={-1}>
           <ClaimAdminBanner />
           <Outlet />
         </main>
