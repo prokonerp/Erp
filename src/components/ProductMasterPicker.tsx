@@ -1,9 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { fetchAll } from "@/lib/fetchAll";
+import { useMemo, useState } from "react";
+import { useProducts } from "@/hooks/useMasters";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Check, ChevronsUpDown, Plus, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productShortName, productSearchBlob } from "@/lib/productNames";
@@ -44,28 +50,19 @@ type Props = {
  * Inline searchable product picker designed to live inside a row in an item table.
  * Calls onPick with the full product master record when a row is selected.
  */
-export function ProductMasterPicker({ value, onPick, placeholder = "Pick product…", className, excludeServices = false }: Props) {
+export function ProductMasterPicker({
+  value,
+  onPick,
+  placeholder = "Pick product…",
+  className,
+  excludeServices = false,
+}: Props) {
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<ProductMaster[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let alive = true;
-    fetchAll<ProductMaster>("products", (q) =>
-      q.select("id,sku,name,short_name,display_name,model,brand,category,hsn,unit,description,active,item_type,serial_tracking,is_serialized,default_price,weight_kg,warranty_applicable,warranty_duration,warranty_unit,warranty_start_from").order("model"),
-    )
-      .then((data) => {
-        if (!alive) return;
-        setRows(
-          data.filter(
-            (p) => p.active !== false && (!excludeServices || (p.item_type ?? "product") !== "service"),
-          ),
-        );
-        setLoading(false);
-      })
-      .catch(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [excludeServices]);
+  const { data: allProducts, isLoading } = useProducts();
+  const rows = (allProducts ?? []).filter(
+    (p) => p.active !== false && (!excludeServices || (p.item_type ?? "product") !== "service"),
+  ) as ProductMaster[];
 
   const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
 
@@ -78,24 +75,33 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
           size="sm"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between font-normal h-9", !selected && "text-muted-foreground", className)}
+          className={cn(
+            "w-full justify-between font-normal h-9",
+            !selected && "text-muted-foreground",
+            className,
+          )}
         >
           <span className="truncate text-xs">
-            {selected
-              ? productShortName(selected)
-              : (loading ? "Loading…" : placeholder)}
+            {selected ? productShortName(selected) : isLoading ? "Loading…" : placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[360px]" align="start">
-        <Command filter={(val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}>
+        <Command
+          filter={(val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}
+        >
           <CommandInput placeholder="Search part no, name, category…" />
           <CommandList>
             <CommandEmpty>
               <div className="py-4 px-3 text-sm space-y-2">
                 <p className="text-muted-foreground">No matching product.</p>
-                <a href="/masters/products" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                <a
+                  href="/masters/products"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                >
                   <Plus className="h-3.5 w-3.5" /> Add Product <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
@@ -107,13 +113,16 @@ export function ProductMasterPicker({ value, onPick, placeholder = "Pick product
                   <CommandItem
                     key={p.id}
                     value={`${p.id} ${blob}`}
-                    onSelect={() => { onPick(p); setOpen(false); }}
+                    onSelect={() => {
+                      onPick(p);
+                      setOpen(false);
+                    }}
                   >
-                    <Check className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
+                    <Check
+                      className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")}
+                    />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        {productShortName(p)}
-                      </div>
+                      <div className="text-sm font-medium truncate">{productShortName(p)}</div>
                       <div className="text-xs text-muted-foreground truncate">
                         {p.description || <span className="font-mono">{p.sku || "—"}</span>}
                       </div>

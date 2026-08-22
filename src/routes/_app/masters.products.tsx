@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useProducts, useCategories, useProductDetail, masterKeys } from "@/hooks/useMasters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,7 +113,6 @@ type ProductFull = ProductMaster & {
 };
 
 export function ProductMasterPage() {
-  const [rows, setRows] = useState<ProductFull[]>([]);
   const [q, setQ] = useState("");
   const [filterCategory, setFilterCategory] = useState("__all");
   const [filterBrand, setFilterBrand] = useState("__all");
@@ -121,7 +122,6 @@ export function ProductMasterPage() {
   const [tab, setTab] = useState<"details" | "serials" | "bundle" | "opening">("details");
   const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [parentLinks, setParentLinks] = useState<Array<{ parent_product_id: string; active: boolean }>>([]);
@@ -140,15 +140,26 @@ export function ProductMasterPage() {
   const { isAdmin } = useIsAdmin();
   useEffect(() => { listWarehouses().then(setWarehouseList).catch(() => {}); }, []);
 
-  const load = async () => {
-    const { data } = await supabase.from("products").select("*").order("name");
-    setRows((data || []) as unknown as ProductFull[]);
-  };
-  const loadCategories = async () => {
-    const { data } = await supabase.from("product_categories" as any).select("name").order("name");
-    setDbCategories(((data || []) as unknown as { name: string }[]).map((c) => c.name));
-  };
-  useEffect(() => { load(); loadCategories(); }, []);
+  const queryClient = useQueryClient();
+
+  const { data: productsData } = useProducts();
+  const rows = (productsData ?? []) as ProductFull[];
+
+  const { data: dbCategoriesData } = useCategories();
+  const dbCategories = dbCategoriesData ?? [];
+
+  // Full row for the edit form (list view only carries list columns).
+  const { data: editingDetail } = useProductDetail(open && editingId ? editingId : null);
+
+  useEffect(() => {
+    if (editingId && editingDetail) {
+      const p = editingDetail as unknown as ProductFull;
+      setForm(productToForm(p));
+      loadLinksForEdit(p);
+      loadOpeningStockForEdit(p);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingId, editingDetail]);
 
   const categoryOptions = useMemo(() => {
     const merged = Array.from(new Set([...DEFAULT_CATEGORIES, ...dbCategories]));
@@ -181,7 +192,7 @@ export function ProductMasterPage() {
     toast.success("Category added");
     setNewCatName("");
     setAddCatOpen(false);
-    await loadCategories();
+    queryClient.invalidateQueries({ queryKey: masterKeys.categories() });
     setForm((f) => ({ ...f, category: name }));
   }
 
@@ -246,7 +257,12 @@ export function ProductMasterPage() {
   }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(p: ProductFull) {
-    setForm({
+    setEditingId(p.id);
+    setOpen(true);
+  }
+
+  function productToForm(p: ProductFull): FormState {
+    return {
       name: p.name || "",
       sku: "",
       item_type: (p as any).item_type === "service" ? "service" : "product",
@@ -271,11 +287,7 @@ export function ProductMasterPage() {
       warranty_start_from: p.warranty_start_from || "Invoice Date",
       warranty_manual_override: p.warranty_manual_override !== false,
       parent_tagging_required: !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY,
-    });
-    setEditingId(p.id);
-    setOpen(true);
-    loadLinksForEdit(p);
-    loadOpeningStockForEdit(p);
+    };
   }
 
   async function loadOpeningStockForEdit(p: ProductFull) {
@@ -512,7 +524,7 @@ export function ProductMasterPage() {
       }
     }
 
-    await load();
+    queryClient.invalidateQueries({ queryKey: masterKeys.products() });
     if (addAnother) resetForm();
     else { setOpen(false); resetForm(); }
   }
@@ -572,7 +584,8 @@ export function ProductMasterPage() {
     if (!confirm("Delete this product?")) return;
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("Deleted"); load();
+    toast.success("Deleted");
+    queryClient.invalidateQueries({ queryKey: masterKeys.products() });
   }
 
   async function onImport(file: File) {
@@ -646,7 +659,7 @@ export function ProductMasterPage() {
       if (mappings.length) parts.push(`${mappings.length} parent mapping(s) added (inactive by default — activate on edit)`);
       if (unresolved) parts.push(`${unresolved} parent reference(s) could not be matched`);
       toast.success(parts.join(" · "));
-      load();
+      queryClient.invalidateQueries({ queryKey: masterKeys.products() });
     } catch (e: any) { toast.error(e?.message || "Import failed"); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
   }

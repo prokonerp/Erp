@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCustomers, useCustomerDetail, masterKeys } from "@/hooks/useMasters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,49 +22,34 @@ export const Route = createFileRoute("/_app/masters/customers")({
 });
 
 export function CustomerMasterPage() {
-  const [rows, setRows] = useState<Customer[]>([]);
-  const [totalCount, setTotalCount] = useState<number>(0);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Customer | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
-  const load = async () => {
-    // Supabase caps a single response at 1000 rows. Page through to load everything.
-    const PAGE = 1000;
-    let from = 0;
-    const all: any[] = [];
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const { data, count, error } = await supabase
-        .from("customers")
-        .select("*", { count: "exact" })
-        .order("company")
-        .range(from, from + PAGE - 1);
-      if (error) break;
-      const batch = data || [];
-      all.push(...batch);
-      if (count != null) setTotalCount(count);
-      if (batch.length < PAGE) break;
-      from += PAGE;
-    }
-    setRows(all as unknown as Customer[]);
-  };
-  useEffect(() => { load(); }, []);
+  const { data: customersData } = useCustomers();
+  const rows = customersData?.rows ?? [];
+  const totalCount = customersData?.count ?? rows.length;
+
+  // Full row for the edit form (list view only carries list columns).
+  const { data: editingDetail } = useCustomerDetail(open && editingId ? editingId : null);
+  const editing = editingId ? (editingDetail ?? null) : null;
 
   const filtered = useMemo(() => rows.filter((c) => {
     const s = q.toLowerCase();
     return !s || [c.company, c.contact_name, c.phone, c.email, c.gst, c.state].some((v) => (v || "").toLowerCase().includes(s));
   }), [rows, q]);
 
-  function startNew() { setEditing(null); setOpen(true); }
-  function startEdit(c: Customer) { setEditing(c); setOpen(true); }
+  function startNew() { setEditingId(null); setOpen(true); }
+  function startEdit(c: Customer) { setEditingId(c.id); setOpen(true); }
 
   async function del(id: string) {
     if (!confirm("Delete this customer?")) return;
     const { error } = await supabase.from("customers").delete().eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("Deleted"); load();
+    toast.success("Deleted");
+    queryClient.invalidateQueries({ queryKey: masterKeys.customers() });
   }
 
   async function onImport(file: File) {
@@ -98,7 +85,7 @@ export function CustomerMasterPage() {
       const { error } = await supabase.from("customers").insert(payload as any);
       if (error) return toast.error(error.message);
       toast.success(`Imported ${payload.length} customer(s)`);
-      load();
+      queryClient.invalidateQueries({ queryKey: masterKeys.customers() });
     } catch (e: any) { toast.error(e?.message || "Import failed"); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
   }
@@ -170,10 +157,10 @@ export function CustomerMasterPage() {
 
       <CustomerFormDialog
         open={open}
-        onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}
+        onOpenChange={(o) => { setOpen(o); if (!o) setEditingId(null); }}
         editing={editing}
         allowSaveAndNew
-        onSaved={() => { load(); }}
+        onSaved={() => { queryClient.invalidateQueries({ queryKey: masterKeys.customers() }); }}
       />
     </div>
   );

@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchAll } from "@/lib/fetchAll";
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCustomers, masterKeys } from "@/hooks/useMasters";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Customer } from "@/lib/crm";
@@ -16,25 +24,21 @@ type Props = {
   className?: string;
 };
 
-export function CustomerPicker({ value, onChange, required, placeholder = "Search by name, mobile or GST…", className }: Props) {
+export function CustomerPicker({
+  value,
+  onChange,
+  required,
+  placeholder = "Search by name, mobile or GST…",
+  className,
+}: Props) {
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [seedCompany, setSeedCompany] = useState("");
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    let alive = true;
-    fetchAll<Customer>("customers", (q) => q.select("*").order("company"))
-      .then((data) => {
-        if (!alive) return;
-        setRows(data);
-        setLoading(false);
-      })
-      .catch(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
+  const { data, isLoading } = useCustomers();
+  const rows = data?.rows ?? [];
 
   const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
 
@@ -45,7 +49,7 @@ export function CustomerPicker({ value, onChange, required, placeholder = "Searc
   }
 
   function handleSaved(created: Customer) {
-    setRows((prev) => [...prev.filter((r) => r.id !== created.id), created].sort((a, b) => (a.company || "").localeCompare(b.company || "")));
+    queryClient.invalidateQueries({ queryKey: masterKeys.customers() });
     onChange(created.id, created);
     setSearch("");
     setAddOpen(false);
@@ -61,24 +65,40 @@ export function CustomerPicker({ value, onChange, required, placeholder = "Searc
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className={cn("w-full justify-between font-normal", !selected && "text-muted-foreground", required && !selected && "border-destructive/40", className)}
+            className={cn(
+              "w-full justify-between font-normal",
+              !selected && "text-muted-foreground",
+              required && !selected && "border-destructive/40",
+              className,
+            )}
           >
             <span className="truncate">
               {selected ? (
                 <>
                   <span className="font-medium">{selected.company}</span>
-                  {selected.phone ? <span className="text-muted-foreground ml-2">· {selected.phone}</span> : null}
+                  {selected.phone ? (
+                    <span className="text-muted-foreground ml-2">· {selected.phone}</span>
+                  ) : null}
                 </>
-              ) : (loading ? "Loading customers…" : placeholder)}
+              ) : isLoading ? (
+                "Loading customers…"
+              ) : (
+                placeholder
+              )}
             </span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[320px]" align="start">
-          <Command
-            filter={(val, s) => (val.toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}
-          >
-            <CommandInput placeholder="Search by name, mobile, GST…" value={search} onValueChange={setSearch} />
+        <PopoverContent
+          className="p-0 w-[--radix-popover-trigger-width] min-w-[320px]"
+          align="start"
+        >
+          <Command filter={(val, s) => (val.toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}>
+            <CommandInput
+              placeholder="Search by name, mobile, GST…"
+              value={search}
+              onValueChange={setSearch}
+            />
             <CommandList>
               <CommandEmpty>
                 <div className="py-4 px-3 text-sm space-y-2">
@@ -91,14 +111,22 @@ export function CustomerPicker({ value, onChange, required, placeholder = "Searc
               <CommandGroup heading={`${rows.length} customers`}>
                 {rows.map((c) => {
                   const cAny = c as Customer & { city?: string };
-                  const searchBlob = [c.company, c.contact_name, c.phone, c.gst, cAny.city, c.state].filter(Boolean).join(" ").toLowerCase();
+                  const searchBlob = [c.company, c.contact_name, c.phone, c.gst, cAny.city, c.state]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLowerCase();
                   return (
                     <CommandItem
                       key={c.id}
                       value={`${c.id} ${searchBlob}`}
-                      onSelect={() => { onChange(c.id, c); setOpen(false); }}
+                      onSelect={() => {
+                        onChange(c.id, c);
+                        setOpen(false);
+                      }}
                     >
-                      <Check className={cn("mr-2 h-4 w-4", value === c.id ? "opacity-100" : "opacity-0")} />
+                      <Check
+                        className={cn("mr-2 h-4 w-4", value === c.id ? "opacity-100" : "opacity-0")}
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{c.company}</div>
                         <div className="text-xs text-muted-foreground truncate">

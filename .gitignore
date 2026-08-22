@@ -42,3 +42,4 @@ data/
 *.njsproj
 *.sln
 *.sw?
+.env*
