@@ -11,10 +11,12 @@ import { Plus, Trash2, Save, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { type IncentiveRule, type Incentive, fmtMoney, fmtDate, computeIncentive } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/_app/crm/incentives")({ component: IncentivesPage });
 
 function IncentivesPage() {
+  const confirm = useConfirm();
   const [rules, setRules] = useState<IncentiveRule[]>([]);
   const [payouts, setPayouts] = useState<Incentive[]>([]);
   const [preview, setPreview] = useState<string>("1000000");
@@ -34,7 +36,13 @@ function IncentivesPage() {
   };
   const addRule = () => setRules([...rules, { id: crypto.randomUUID(), label: "New tier", min_value: 0, max_value: null, percent: 0, active: true, sort_order: rules.length + 1 } as IncentiveRule]);
   const delRule = async (id: string) => {
-    if (!confirm("Delete this tier?")) return;
+    const ok = await confirm({
+      title: "Delete this tier?",
+      description: "Payouts already recorded are not affected.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     await supabase.from("incentive_rules").delete().eq("id", id);
     load();
   };

@@ -1,9 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { fetchAll } from "@/lib/fetchAll";
+import { useMemo, useState } from "react";
+import { useProducts } from "@/hooks/useMasters";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Check, ChevronsUpDown, Plus, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productShortName, productSearchBlob } from "@/lib/productNames";
@@ -21,6 +27,7 @@ export type ProductMaster = {
   default_price?: number | null;
   description?: string | null;
   active?: boolean | null;
+  item_type?: string | null;
 };
 
 type Props = {
@@ -31,22 +38,17 @@ type Props = {
   className?: string;
 };
 
-export function ProductPicker({ value, onChange, required, placeholder = "Search by model name…", className }: Props) {
+export function ProductPicker({
+  value,
+  onChange,
+  required,
+  placeholder = "Search by model name…",
+  className,
+}: Props) {
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<ProductMaster[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let alive = true;
-    fetchAll<ProductMaster>("products", (q) => q.select("*").order("name"))
-      .then((data) => {
-        if (!alive) return;
-        setRows(data.filter((p) => p.active !== false));
-        setLoading(false);
-      })
-      .catch(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
+  const { data: allProducts, isLoading } = useProducts();
+  const rows = (allProducts ?? []).filter((p) => p.active !== false);
 
   const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
 
@@ -58,12 +60,21 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between font-normal", !selected && "text-muted-foreground", required && !selected && "border-destructive/40", className)}
+          className={cn(
+            "w-full justify-between font-normal",
+            !selected && "text-muted-foreground",
+            required && !selected && "border-destructive/40",
+            className,
+          )}
         >
           <span className="truncate">
             {selected ? (
               <span className="font-medium">{productShortName(selected)}</span>
-            ) : (loading ? "Loading models…" : placeholder)}
+            ) : isLoading ? (
+              "Loading models…"
+            ) : (
+              placeholder
+            )}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -95,13 +106,16 @@ export function ProductPicker({ value, onChange, required, placeholder = "Search
                   <CommandItem
                     key={p.id}
                     value={`${p.id} ${blob}`}
-                    onSelect={() => { onChange(p.id, p); setOpen(false); }}
+                    onSelect={() => {
+                      onChange(p.id, p);
+                      setOpen(false);
+                    }}
                   >
-                    <Check className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")} />
+                    <Check
+                      className={cn("mr-2 h-4 w-4", value === p.id ? "opacity-100" : "opacity-0")}
+                    />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">
-                        {productShortName(p)}
-                      </div>
+                      <div className="font-medium truncate">{productShortName(p)}</div>
                       <div className="text-xs text-muted-foreground truncate">
                         {p.description || "—"}
                       </div>

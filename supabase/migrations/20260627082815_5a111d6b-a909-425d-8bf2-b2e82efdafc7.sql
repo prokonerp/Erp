@@ -1,1 +1,0 @@
-ALTER TABLE public.amcs ALTER COLUMN duration_years TYPE numeric;

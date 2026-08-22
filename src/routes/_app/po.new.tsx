@@ -22,6 +22,7 @@ import {
   type POItemDraft,
 } from "@/lib/purchaseOrder";
 import { productDisplayName } from "@/lib/productNames";
+import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
 
 export const Route = createFileRoute("/_app/po/new")({
   component: NewPO,
@@ -30,6 +31,9 @@ export const Route = createFileRoute("/_app/po/new")({
 
 function NewPO() {
   const nav = useNavigate();
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => { if (!dirty) setDirty(true); };
+  const { blocker, markClean } = useUnsavedChanges(dirty);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [branchId, setBranchId] = useState<string>("");
   const [vendor, setVendor] = useState<Vendor | null>(null);
@@ -145,6 +149,9 @@ function NewPO() {
       if (e2) throw e2;
 
       toast.success(`PO ${po.po_no || ""} ${status === "approved" ? "approved" : "saved"}`);
+      // Clear the guard synchronously BEFORE navigating (see useUnsavedChanges).
+      markClean();
+      setDirty(false);
       nav({ to: "/po/$id", params: { id: po.id } });
     } catch (e: any) {
       toast.error(e.message || "Save failed");
@@ -157,7 +164,8 @@ function NewPO() {
   const isCustomPay = !PAY_OPTS.includes(payTerms);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onInput={markDirty}>
+      <UnsavedChangesPrompt blocker={blocker} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">New Purchase Order</h2>
         <div className="flex gap-2">

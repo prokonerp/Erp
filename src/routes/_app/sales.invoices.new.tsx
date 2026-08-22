@@ -37,6 +37,7 @@ import { useIsAdmin } from "@/lib/useRole";
 import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 import { GDC_PREFILL_KEY, updateGeneralDc, type GeneralDcInvoicePrefill } from "@/lib/generalDc";
+import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
 
 export const Route = createFileRoute("/_app/sales/invoices/new")({
   component: NewInvoice,
@@ -45,6 +46,9 @@ export const Route = createFileRoute("/_app/sales/invoices/new")({
 
 function NewInvoice() {
   const nav = useNavigate();
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => { if (!dirty) setDirty(true); };
+  const { blocker, markClean } = useUnsavedChanges(dirty);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [branchId, setBranchId] = useState<string>("");
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -298,6 +302,9 @@ function NewInvoice() {
       }
 
       toast.success(`Invoice ${inv.invoice_no || ""} ${status === "issued" ? "issued" : "saved"}`);
+      // Clear the guard synchronously BEFORE navigating (see useUnsavedChanges).
+      markClean();
+      setDirty(false);
       nav({ to: "/sales/invoices/$id", params: { id: inv.id } });
     } catch (e: any) {
       toast.error(e.message || "Save failed");
@@ -307,7 +314,8 @@ function NewInvoice() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onInput={markDirty}>
+      <UnsavedChangesPrompt blocker={blocker} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">New Invoice</h1>
         <div className="flex gap-2">
@@ -340,7 +348,7 @@ function NewInvoice() {
             </div>
             <div>
               <Label className="text-xs">Customer *</Label>
-              <CustomerPicker value={customer?.id} onChange={(_id, c) => setCustomer(c)} />
+              <CustomerPicker value={customer?.id} onChange={(_id, c) => { setCustomer(c); markDirty(); }} />
               {gstinError && <p className="text-xs text-destructive mt-1">{gstinError}</p>}
             </div>
             <div>
@@ -428,7 +436,7 @@ function NewInvoice() {
       <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Items</CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setItems((a) => [...a, emptyItem()])}><Plus className="h-4 w-4 mr-1" />Add row</Button>
+          <Button size="sm" variant="outline" onClick={() => { setItems((a) => [...a, emptyItem()]); markDirty(); }}><Plus className="h-4 w-4 mr-1" />Add row</Button>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -523,7 +531,7 @@ function NewInvoice() {
                       </td>
                       <td className="p-2 text-right font-medium">{inr(b?.line_total || 0)}</td>
                       <td className="p-2 text-right">
-                        <Button size="icon" variant="ghost" onClick={() => setItems((a) => a.filter((_, i) => i !== idx))}>
+                        <Button size="icon" variant="ghost" onClick={() => { setItems((a) => a.filter((_, i) => i !== idx)); markDirty(); }}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </td>

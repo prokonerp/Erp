@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useProducts, useCategories, useProductDetail, masterKeys } from "@/hooks/useMasters";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,13 +15,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Pencil, Trash2, Save, X, Upload, ListOrdered, ShieldCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, Save, X, Upload, ListOrdered, ShieldCheck, Package } from "lucide-react";
 import { toast } from "sonner";
 import { ExportButtons } from "@/components/ExportButtons";
 import { toTitleCaseSmart, upperTrim } from "@/lib/text";
 import { parseCSV } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import type { ProductMaster } from "@/components/ProductPicker";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { SerialsManager } from "@/components/SerialsManager";
 import { fetchBundleChildrenRaw, saveBundleForParent, type BundleChildRow } from "@/lib/productBundles";
 import {
@@ -111,7 +117,6 @@ type ProductFull = ProductMaster & {
 };
 
 export function ProductMasterPage() {
-  const [rows, setRows] = useState<ProductFull[]>([]);
   const [q, setQ] = useState("");
   const [filterCategory, setFilterCategory] = useState("__all");
   const [filterBrand, setFilterBrand] = useState("__all");
@@ -121,7 +126,6 @@ export function ProductMasterPage() {
   const [tab, setTab] = useState<"details" | "serials" | "bundle" | "opening">("details");
   const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
   const [parentLinks, setParentLinks] = useState<Array<{ parent_product_id: string; active: boolean }>>([]);
@@ -140,15 +144,26 @@ export function ProductMasterPage() {
   const { isAdmin } = useIsAdmin();
   useEffect(() => { listWarehouses().then(setWarehouseList).catch(() => {}); }, []);
 
-  const load = async () => {
-    const { data } = await supabase.from("products").select("*").order("name");
-    setRows((data || []) as unknown as ProductFull[]);
-  };
-  const loadCategories = async () => {
-    const { data } = await supabase.from("product_categories" as any).select("name").order("name");
-    setDbCategories(((data || []) as unknown as { name: string }[]).map((c) => c.name));
-  };
-  useEffect(() => { load(); loadCategories(); }, []);
+  const queryClient = useQueryClient();
+
+  const { data: productsData } = useProducts();
+  const rows = (productsData ?? []) as ProductFull[];
+
+  const { data: dbCategoriesData } = useCategories();
+  const dbCategories = dbCategoriesData ?? [];
+
+  // Full row for the edit form (list view only carries list columns).
+  const { data: editingDetail } = useProductDetail(open && editingId ? editingId : null);
+
+  useEffect(() => {
+    if (editingId && editingDetail) {
+      const p = editingDetail as unknown as ProductFull;
+      setForm(productToForm(p));
+      loadLinksForEdit(p);
+      loadOpeningStockForEdit(p);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingId, editingDetail]);
 
   const categoryOptions = useMemo(() => {
     const merged = Array.from(new Set([...DEFAULT_CATEGORIES, ...dbCategories]));
@@ -181,7 +196,7 @@ export function ProductMasterPage() {
     toast.success("Category added");
     setNewCatName("");
     setAddCatOpen(false);
-    await loadCategories();
+    queryClient.invalidateQueries({ queryKey: masterKeys.categories() });
     setForm((f) => ({ ...f, category: name }));
   }
 
@@ -246,7 +261,12 @@ export function ProductMasterPage() {
   }
   function startNew() { resetForm(); setOpen(true); }
   function startEdit(p: ProductFull) {
-    setForm({
+    setEditingId(p.id);
+    setOpen(true);
+  }
+
+  function productToForm(p: ProductFull): FormState {
+    return {
       name: p.name || "",
       sku: "",
       item_type: (p as any).item_type === "service" ? "service" : "product",
@@ -271,11 +291,7 @@ export function ProductMasterPage() {
       warranty_start_from: p.warranty_start_from || "Invoice Date",
       warranty_manual_override: p.warranty_manual_override !== false,
       parent_tagging_required: !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY,
-    });
-    setEditingId(p.id);
-    setOpen(true);
-    loadLinksForEdit(p);
-    loadOpeningStockForEdit(p);
+    };
   }
 
   async function loadOpeningStockForEdit(p: ProductFull) {
@@ -512,7 +528,7 @@ export function ProductMasterPage() {
       }
     }
 
-    await load();
+    queryClient.invalidateQueries({ queryKey: masterKeys.products() });
     if (addAnother) resetForm();
     else { setOpen(false); resetForm(); }
   }
@@ -568,12 +584,7 @@ export function ProductMasterPage() {
     URL.revokeObjectURL(url);
   }
 
-  async function del(id: string) {
-    if (!confirm("Delete this product?")) return;
-    const { error } = await supabase.from("products").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Deleted"); load();
-  }
+  // Delete is handled by ConfirmDialog + deleteTarget state
 
   async function onImport(file: File) {
     try {
@@ -646,94 +657,186 @@ export function ProductMasterPage() {
       if (mappings.length) parts.push(`${mappings.length} parent mapping(s) added (inactive by default — activate on edit)`);
       if (unresolved) parts.push(`${unresolved} parent reference(s) could not be matched`);
       toast.success(parts.join(" · "));
-      load();
+      queryClient.invalidateQueries({ queryKey: masterKeys.products() });
     } catch (e: any) { toast.error(e?.message || "Import failed"); }
     finally { if (fileRef.current) fileRef.current.value = ""; }
   }
 
+  const [deleteTarget, setDeleteTarget] = useState<ProductFull | null>(null);
+
+  const productColumns: ColumnDef<ProductFull>[] = [
+    {
+      key: "model",
+      header: "Model",
+      sortable: true,
+      render: (p) => <span className="font-medium font-mono">{p.model || p.name || "\u2014"}</span>,
+    },
+    {
+      key: "category",
+      header: "Category",
+      sortable: true,
+      render: (p) => p.category || "\u2014",
+    },
+    {
+      key: "brand",
+      header: "Brand",
+      sortable: true,
+      render: (p) => <span className="text-xs">{p.brand || "\u2014"}</span>,
+    },
+    {
+      key: "serial_tracking",
+      header: "Serial",
+      render: (p) =>
+        p.serial_tracking ? (
+          <Badge variant="secondary">
+            <ListOrdered className="h-3 w-3 mr-1" />
+            Yes
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">No</span>
+        ),
+    },
+    {
+      key: "warranty_applicable",
+      header: "Warranty",
+      render: (p) =>
+        p.warranty_applicable ? (
+          <Badge variant="secondary">
+            <ShieldCheck className="h-3 w-3 mr-1" />
+            {p.warranty_duration}
+            {p.warranty_unit === "Years" ? "y" : "m"}
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">No</span>
+        ),
+    },
+    {
+      key: "default_price",
+      header: "Price",
+      align: "right",
+      sortable: true,
+      render: (p) =>
+        p.default_price != null
+          ? `\u20B9${Number(p.default_price).toLocaleString("en-IN")}`
+          : "\u2014",
+    },
+    {
+      key: "_actions",
+      header: "Actions",
+      align: "right",
+      render: (p) => (
+        <>
+          {p.serial_tracking && (
+            <Button
+              size="icon"
+              variant="ghost"
+              title="Manage Serials"
+              aria-label={`Manage serials for ${p.model || p.name}`}
+              onClick={() => setSerialsFor(p)}
+            >
+              <ListOrdered className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={`Edit ${p.model || p.name}`}
+            onClick={() => startEdit(p)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={`Delete ${p.model || p.name}`}
+            onClick={() => setDeleteTarget(p)}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </>
+      ),
+      className: "w-32",
+    },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold">Product Master</h1>
-          <p className="text-sm text-muted-foreground">Single source of truth for products used across Gatepass, Sales, AMC, Service, Inventory and Reports.</p>
-        </div>
-        <div className="flex gap-2">
-          <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])} />
-          <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4 mr-1" />Import CSV</Button>
-          <Button variant="outline" size="sm" onClick={downloadCompatibilityReport}>Spare Parts Report</Button>
-          <ExportButtons
-            name="Prokon_Products"
-            title="Product Master"
-            rows={filtered}
-            columns={[
-              { header: "Model", get: (p) => p.model || p.name },
-              { header: "Category", get: (p) => p.category || "" },
-              { header: "Brand", get: (p) => p.brand || "" },
-              { header: "Unit", get: (p) => p.unit },
-              { header: "HSN", get: (p) => p.hsn || "" },
-              { header: "Price", get: (p) => p.default_price ?? "" },
-              { header: "Active", get: (p) => p.active === false ? "No" : "Yes" },
-              { header: "Description", get: (p) => p.description || "" },
-            ]}
-          />
-          <Button size="sm" onClick={startNew}><Plus className="h-4 w-4 mr-1" />New Product</Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Product Master"
+        description="Single source of truth for products used across Gatepass, Sales, AMC, Service, Inventory and Reports."
+        crumbs={[{ label: "Masters" }, { label: "Products" }]}
+        actions={
+          <>
+            <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])} />
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4 mr-1" />Import CSV</Button>
+            <Button variant="outline" size="sm" onClick={downloadCompatibilityReport}>Spare Parts Report</Button>
+            <ExportButtons
+              name="Prokon_Products"
+              title="Product Master"
+              rows={filtered}
+              columns={[
+                { header: "Model", get: (p) => p.model || p.name },
+                { header: "Category", get: (p) => p.category || "" },
+                { header: "Brand", get: (p) => p.brand || "" },
+                { header: "Unit", get: (p) => p.unit },
+                { header: "HSN", get: (p) => p.hsn || "" },
+                { header: "Price", get: (p) => p.default_price ?? "" },
+                { header: "Active", get: (p) => p.active === false ? "No" : "Yes" },
+                { header: "Description", get: (p) => p.description || "" },
+              ]}
+            />
+            <Button size="sm" onClick={startNew}><Plus className="h-4 w-4 mr-1" />New Product</Button>
+          </>
+        }
+      />
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base">All Products ({rows.length})</CardTitle>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Category" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all">All Categories</SelectItem>
-                {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={filterBrand} onValueChange={setFilterBrand}>
-              <SelectTrigger className="w-40"><SelectValue placeholder="Brand" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all">All Brands</SelectItem>
-                {brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Input placeholder="Search model / brand / category…" value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
+      <DataTable
+        columns={productColumns}
+        data={filtered}
+        emptyIcon={Package}
+        emptyTitle={q || filterCategory !== "__all" || filterBrand !== "__all" ? "No products match your filters" : "No products yet"}
+        emptyHint={q || filterCategory !== "__all" || filterBrand !== "__all" ? "Try clearing your search or filter." : "Click New Product or Import CSV to add your first product."}
+        emptyAction={!(q || filterCategory !== "__all" || filterBrand !== "__all") ? <Button size="sm" onClick={startNew}><Plus className="h-4 w-4 mr-1" />New Product</Button> : undefined}
+        toolbar={
+          <div className="flex items-center gap-2 flex-wrap w-full">
+            <span className="text-sm font-medium">All Products ({rows.length})</span>
+            <div className="ml-auto flex items-center gap-2">
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="w-40 h-8"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">All Categories</SelectItem>
+                  {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={filterBrand} onValueChange={setFilterBrand}>
+                <SelectTrigger className="w-40 h-8"><SelectValue placeholder="Brand" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">All Brands</SelectItem>
+                  {brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Input placeholder="Search model / brand / category\u2026" value={q} onChange={(e) => setQ(e.target.value)} className="w-64 h-8 text-xs" />
+            </div>
           </div>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader><TableRow>
-              <TableHead>Model</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Brand</TableHead>
-              <TableHead>Serial</TableHead>
-              <TableHead>Warranty</TableHead>
-              <TableHead className="text-right">Price</TableHead>
-              <TableHead className="w-32 text-right">Actions</TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
-              {filtered.map((p) => (
-                <TableRow key={p.id} className={cn(p.active === false && "opacity-50")}>
-                  <TableCell className="font-medium font-mono">{p.model || p.name || "—"}</TableCell>
-                  <TableCell>{p.category || "—"}</TableCell>
-                  <TableCell className="text-xs">{p.brand || "—"}</TableCell>
-                  <TableCell>{p.serial_tracking ? <Badge variant="secondary"><ListOrdered className="h-3 w-3 mr-1" />Yes</Badge> : <span className="text-xs text-muted-foreground">No</span>}</TableCell>
-                  <TableCell>{p.warranty_applicable ? <Badge variant="secondary"><ShieldCheck className="h-3 w-3 mr-1" />{p.warranty_duration}{p.warranty_unit === "Years" ? "y" : "m"}</Badge> : <span className="text-xs text-muted-foreground">No</span>}</TableCell>
-                  <TableCell className="text-right">{p.default_price != null ? `₹${Number(p.default_price).toLocaleString("en-IN")}` : "—"}</TableCell>
-                  <TableCell className="text-right">
-                    {p.serial_tracking && <Button size="icon" variant="ghost" title="Manage Serials" onClick={() => setSerialsFor(p)}><ListOrdered className="h-4 w-4" /></Button>}
-                    <Button size="icon" variant="ghost" onClick={() => startEdit(p)}><Pencil className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" onClick={() => del(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No products. Click <b>New Product</b> or <b>Import CSV</b>.</TableCell></TableRow>}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        }
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={`Delete "${deleteTarget?.model || (deleteTarget?.name ?? "")}"?`}
+        description="This permanently removes the product. Linked data (serials, stock, indents) may be affected."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          const { error } = await supabase.from("products").delete().eq("id", deleteTarget.id);
+          if (error) { toast.error(error.message); return; }
+          toast.success("Deleted");
+          setDeleteTarget(null);
+          queryClient.invalidateQueries({ queryKey: masterKeys.products() });
+        }}
+      />
 
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
         <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-0">

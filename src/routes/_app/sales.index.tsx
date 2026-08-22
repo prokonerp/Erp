@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Receipt, Wallet, Truck, FileText, IndianRupee, AlertCircle, CheckCircle2, Clock,
-  TrendingUp, Users, Package, ShoppingCart, ArrowRightLeft, Activity, RotateCcw, PackageCheck,
+  TrendingUp, ShoppingCart, ArrowRightLeft, Activity, RotateCcw, PackageCheck,
 } from "lucide-react";
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, CartesianGrid,
-} from "recharts";
 import { inr, statusMeta, fetchBranches, type InvoiceRow, type BranchRow } from "@/lib/sales";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+
+// Lazy-load the recharts-backed charts section (~400KB) so the sales dashboard
+// KPI cards and tables render immediately, without waiting on recharts.
+const SalesDashboardCharts = lazy(() => import("@/components/SalesDashboardCharts"));
 
 export const Route = createFileRoute("/_app/sales/")({
   component: HeadSalesDashboard,
@@ -29,7 +31,6 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const daysAgoIso = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
 const fmtMonth = (d: string) => d.slice(0, 7);
 const monthLabel = (ym: string) => { const [y, m] = ym.split("-"); return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-IN", { month: "short", year: "2-digit" }); };
-const compactInr = (v: number) => (v >= 100000 ? `${(v / 100000).toFixed(1)}L` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v));
 
 function Kpi({ icon: Icon, label, value, hint, tone = "" }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string | number; hint?: string; tone?: string }) {
   return (
@@ -285,55 +286,9 @@ function HeadSalesDashboard() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Monthly Sales (last 12 months)</CardTitle></CardHeader>
-        <CardContent className="h-64">
-          {loading ? <div className="text-sm text-muted-foreground">Loading…</div> : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlySeries} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={compactInr} />
-                <Tooltip formatter={(v: number) => inr(v)} />
-                <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" />Top Customers</CardTitle></CardHeader>
-          <CardContent className="h-64">
-            {loading ? <div className="text-sm text-muted-foreground">Loading…</div> : topCustomers.length === 0 ? <div className="text-sm text-muted-foreground">No data</div> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topCustomers} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 0 }}>
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={compactInr} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
-                  <Tooltip formatter={(v: number) => inr(v)} />
-                  <Bar dataKey="total" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Package className="h-4 w-4" />Top Products</CardTitle></CardHeader>
-          <CardContent className="h-64">
-            {loading ? <div className="text-sm text-muted-foreground">Loading…</div> : topProducts.length === 0 ? <div className="text-sm text-muted-foreground">No data</div> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topProducts} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 0 }}>
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={compactInr} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={160} />
-                  <Tooltip formatter={(v: number) => inr(v)} />
-                  <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
+        <SalesDashboardCharts loading={loading} monthlySeries={monthlySeries} topCustomers={topCustomers} topProducts={topProducts} />
+      </Suspense>
 
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Activity className="h-4 w-4" />Recent Activity</CardTitle></CardHeader>
@@ -370,7 +325,7 @@ function HeadSalesDashboard() {
                       <td className="p-2">{r.buyer_name || "—"}</td>
                       <td className="p-2 text-right font-medium">{inr(r.total)}</td>
                       <td className="p-2 text-right">{inr(r.total_paid)}</td>
-                      <td className="p-2"><span className={"inline-block px-2 py-0.5 rounded-full text-xs " + s.tone}>{s.label}</span></td>
+                      <td className="p-2"><StatusBadge tone={s.badgeTone}>{s.label}</StatusBadge></td>
                     </tr>
                   );
                 })}

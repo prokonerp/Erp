@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PageLoader } from "@/components/shared/skeletons";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, docStatusSettled, emptyOracleDocs, formatAge, indentClosedAt, indentStatusFromOracles, normalizeOracle, syncTicketGoodPartsFromIndent, type Indent, type IndentType, type OracleBlock, type OraclePendingDocs } from "@/lib/indent";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
+import { useConfirm } from "@/hooks/useConfirm";
 import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeline";
 import { useIsAdmin } from "@/lib/useRole";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
@@ -25,6 +27,7 @@ export const Route = createFileRoute("/_app/indent/$id")({
 function IndentDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [i, setI] = useState<Indent | null>(null);
   const [busy, setBusy] = useState(false);
   const [defParts, setDefParts] = useState<Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>>([]);
@@ -292,7 +295,14 @@ function IndentDetail() {
   };
 
   const del = async () => {
-    if (!i || !confirm("Delete this Indent?")) return;
+    if (!i) return;
+    const ok = await confirm({
+      title: "Delete this Indent?",
+      description: "The indent will be moved to the Archive, where an admin can restore it for 30 days.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { softDelete } = await import("@/lib/softDelete");
     const { error } = await softDelete("indents", i.id);
     if (error) return toast.error(error.message);
@@ -727,7 +737,7 @@ function IndentDetail() {
     navigate({ to: "/grn/customer/new" });
   };
 
-  if (!i) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  if (!i) return <PageLoader />;
   const oem = getOemLogo(i.company);
   const indStatus = indentStatusFromOracles(i.oracles_data);
   const closedAt = indentClosedAt(i.oracles_data);

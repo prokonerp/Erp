@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { PageLoader } from "@/components/shared/skeletons";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { downloadPurchaseOrderPdf, printPurchaseOrderPdf } from "@/lib/purchaseOrderPdf";
 import { DocumentPrintView, type PrintDoc } from "@/components/DocumentPrintView";
 import { fetchCompanyProfile, DEFAULT_COMPANY_PROFILE, type CompanyProfile } from "@/lib/companyProfile";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 
 export const Route = createFileRoute("/_app/po/$id")({
   component: POView,
@@ -31,6 +34,7 @@ function POView() {
   const [items, setItems] = useState<POItemRow[]>([]);
   const [branch, setBranch] = useState<BranchRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmTarget, setConfirmTarget] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
   const [pdfSettings, setPdfSettings] = useState<{
     company_name: string | null;
     company_address: string | null;
@@ -79,14 +83,19 @@ function POView() {
 
   async function del() {
     if (!po) return;
-    if (!confirm("Delete this Purchase Order? This cannot be undone.")) return;
-    const { error } = await (supabase as any).from("purchase_orders").delete().eq("id", po.id);
-    if (error) return toast.error(error.message);
-    toast.success("Deleted");
-    nav({ to: "/po" });
+    setConfirmTarget({
+      title: "Delete this Purchase Order?",
+      description: "This cannot be undone. All line items and stock entries will be lost.",
+      onConfirm: async () => {
+        const { error } = await (supabase as any).from("purchase_orders").delete().eq("id", po.id);
+        if (error) return toast.error(error.message);
+        toast.success("Deleted");
+        nav({ to: "/po" });
+      },
+    });
   }
 
-  if (loading) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  if (loading) return <PageLoader />;
   if (!po) return <div className="text-sm text-muted-foreground">PO not found.</div>;
 
   const sm = poStatusMeta(po.status);
@@ -98,7 +107,7 @@ function POView() {
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" asChild><Link to="/po"><ArrowLeft className="h-4 w-4 mr-1" />Back</Link></Button>
           <h2 className="text-lg font-semibold font-mono">{po.po_no || po.id.slice(0, 8)}</h2>
-          <span className={"inline-block px-2 py-0.5 rounded-full text-xs " + sm.tone}>{sm.label}</span>
+          <StatusBadge tone={sm.badgeTone}>{sm.label}</StatusBadge>
         </div>
         <div className="flex flex-wrap gap-2">
           {po.status === "draft" && (
@@ -275,6 +284,15 @@ function POView() {
           } as PrintDoc}
         />
       </div>
+      <ConfirmDialog
+        open={!!confirmTarget}
+        onOpenChange={(o) => !o && setConfirmTarget(null)}
+        title={confirmTarget?.title ?? ""}
+        description={confirmTarget?.description ?? ""}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={async () => { await confirmTarget?.onConfirm(); setConfirmTarget(null); }}
+      />
     </div>
   );
 }

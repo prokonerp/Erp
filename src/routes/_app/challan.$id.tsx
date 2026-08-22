@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { PageLoader } from "@/components/shared/skeletons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Printer, Download, Ban, Pencil } from "lucide-react";
@@ -9,6 +10,7 @@ import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { useIsAdmin } from "@/lib/useRole";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 import type { CompanyProfile } from "@/lib/companyProfile";
@@ -20,6 +22,7 @@ export const Route = createFileRoute("/_app/challan/$id")({
 });
 
 function ChallanView() {
+  const confirm = useConfirm();
   const { id } = Route.useParams();
   const [c, setC] = useState<DeliveryChallan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,7 +51,7 @@ function ChallanView() {
     return () => clearTimeout(t);
   }, [c, company, autoDownloaded]);
 
-  if (!c || !company) return <div className="text-muted-foreground">Loading…</div>;
+  if (!c || !company) return <PageLoader />;
   const isOem = c.doc_type === "oem";
   const oemLogo = isOem ? (c.oem_logo_url ? { url: c.oem_logo_url, alt: c.party_name || "OEM" } : getOemLogo(c.party_name)) : null;
   const status = c.status || "Challan Generated";
@@ -69,7 +72,13 @@ function ChallanView() {
 
   const handleCancel = async () => {
     if (!isActive) return;
-    if (!confirm("Cancel this submitted Delivery Challan?\n\nRelated stock ledger entries will be reversed.")) return;
+    const ok = await confirm({
+      title: "Cancel this submitted Delivery Challan?",
+      description: "The challan will be marked Cancelled and its related stock ledger entries reversed.",
+      confirmLabel: "Cancel Challan",
+      variant: "danger",
+    });
+    if (!ok) return;
     setBusy(true);
     const { error } = await supabase
       .from("delivery_challans" as never)

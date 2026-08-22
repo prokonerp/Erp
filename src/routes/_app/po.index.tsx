@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search } from "lucide-react";
 import { inrPO, poStatusMeta, PO_STATUSES, type PORow, type POStatus } from "@/lib/purchaseOrder";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 
 export const Route = createFileRoute("/_app/po/")({
   component: POList,
@@ -97,7 +98,7 @@ function POList() {
                     {r.delivery_date ? <span className="text-muted-foreground"> · {r.delivery_date}</span> : null}
                   </td>
                   <td className="p-2 text-right font-medium">{inrPO(r.total)}</td>
-                  <td className="p-2"><span className={"inline-block px-2 py-0.5 rounded-full text-xs " + sm.tone}>{sm.label}</span></td>
+                  <td className="p-2"><StatusBadge tone={sm.badgeTone}>{sm.label}</StatusBadge></td>
                 </tr>
               );
             })}

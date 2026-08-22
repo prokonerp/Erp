@@ -12,6 +12,7 @@ import { Plus, Trash2, Save, Star } from "lucide-react";
 import { toast } from "sonner";
 import { INDIAN_STATES, type CrmSettings, type QuoteTermsTemplate } from "@/lib/crm";
 import { OemLogoSettings } from "@/components/OemLogoSettings";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/_app/crm/settings")({
   component: CrmSettingsPage,
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/_app/crm/settings")({
 });
 
 function CrmSettingsPage() {
+  const confirm = useConfirm();
   const [s, setS] = useState<CrmSettings>({
     id: 1, business_state: "Haryana", business_gstin: "",
     default_terms: "", default_customer_notes: "Thanks for your business.",
@@ -55,7 +57,13 @@ function CrmSettingsPage() {
   };
   const addTpl = () => setTpls([...tpls, { id: crypto.randomUUID(), name: "New template", body: "", is_default: false, sort_order: tpls.length + 1 } as QuoteTermsTemplate]);
   const delTpl = async (id: string) => {
-    if (!confirm("Delete this template?")) return;
+    const ok = await confirm({
+      title: "Delete this template?",
+      description: "Quotations already using it are not affected.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     await supabase.from("quote_terms_templates").delete().eq("id", id);
     load();
   };

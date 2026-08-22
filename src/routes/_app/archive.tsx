@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Archive as ArchiveIcon, RotateCcw, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { restoreRecord, purgeRecord, useRealtimeRefetch, type ArchivableTable } from "@/lib/softDelete";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/_app/archive")({
   component: ArchivePage,
@@ -82,6 +83,7 @@ function ArchivePage() {
 }
 
 function ArchiveTable({ table, title }: { table: ArchivableTable; title: string }) {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<Row[] | null>(null);
 
   const load = useCallback(async () => {
@@ -137,7 +139,13 @@ function ArchiveTable({ table, title }: { table: ArchivableTable; title: string 
   };
 
   const purge = async (id: string, label: string) => {
-    if (!confirm(`Permanently delete ${label}? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: `Permanently delete ${label}?`,
+      description: "This cannot be undone. The record will be erased immediately, before its 30-day auto-purge.",
+      confirmLabel: "Delete Forever",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { error } = await purgeRecord(table, id);
     if (error) return toast.error(error.message);
     toast.success("Permanently deleted");

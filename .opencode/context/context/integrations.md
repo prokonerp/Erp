@@ -2,17 +2,11 @@
 
 ## Supabase (primary backend)
 - Postgres + RLS, Auth (email/password), Storage buckets (ticket-attachments, amc-agreements, oem-logos), Realtime (tickets, indents, amcs).
-- Project: `vimkodursmcsaptrrzbl` (`https://vimkodursmcsaptrrzbl.supabase.co`).
+- Project: `cqjmcfwsrljxhixzfgpk` (`https://cqjmcfwsrljxhixzfgpk.supabase.co`) — migrated from the old Lovable Cloud project (`vimkodursmcsaptrrzbl`, now read-only).
 - Clients:
   - Browser: `src/integrations/supabase/client.ts` (VITE_SUPABASE_URL + VITE_SUPABASE_PUBLISHABLE_KEY; lazy Proxy singleton).
   - Server admin: `src/integrations/supabase/client.server.ts` (SUPABASE_SERVICE_ROLE_KEY — bypasses RLS).
-  - MCP per-request: `src/lib/mcp/supabase.ts` (key-set JSON parsing, forwards OAuth token).
 - Middleware: `auth-attacher.ts` (client) + `auth-middleware.ts` (server, getClaims verification).
-
-## MCP (Model Context Protocol) — AI tool access
-- Endpoint `/mcp`; auto-generated routes by Lovable MCP Vite plugin (`mcpPlugin()` in vite.config.ts).
-- OAuth: Supabase auth v1 issuer, `acceptedAudiences: "authenticated"`; consent flow at `/.lovable/oauth/consent`; metadata at `/.well-known/oauth-protected-resource`.
-- Read-only tools: list_tickets, get_ticket, list_invoices, search_customers, stock_lookup.
 
 ## WhatsApp
 - Template system: `wa_templates` (engineer_assign, oow_quotation, ticket_closed) with placeholder tokens auto-filled per record.
@@ -33,8 +27,7 @@
 - `xlsx` library: CSV import (customers, installed equipment) and Excel export (PM schedule, ticket lists, reports).
 
 ## Deployment (see deployment.md)
-- Cloudflare Workers via wrangler + @cloudflare/vite-plugin; Lovable Cloud pipeline drives deploys (no in-repo CI).
+- Vercel (Nitro `vercel` preset, GitHub integration) — see deployment.md.
 
 ## Other
-- `@lovable.dev/vite-tanstack-config` — Lovable scaffolding plugin (component tagger, env injection, MCP plugin).
 - react-hook-form for forms; recharts for dashboards/charts; sonner toasts; date-fns.

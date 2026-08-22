@@ -1,22 +1,39 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePermissions } from "@/lib/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { CardSkeleton } from "@/components/shared/skeletons";
 import {
   Ticket, ShieldCheck, ClipboardList, Briefcase, Warehouse, Truck,
   Plus, ExternalLink, AlertTriangle, CheckCircle2, Clock, Activity,
-  TrendingUp, FileText, PackageCheck, Send, LayoutDashboard, CalendarCheck,
+  TrendingUp, FileText, PackageCheck, Send, CalendarCheck,
 } from "lucide-react";
 import { hoursExcludingSundays } from "@/lib/tickets";
 import type { ModuleKey } from "@/lib/permissions";
 import { useRealtimeRefetch } from "@/lib/softDelete";
-import { EngineerWorkloadSection } from "@/components/EngineerWorkloadSection";
-import { ExecutionTimeSection } from "@/components/ExecutionTimeSection";
-import { OpenAgeSection, PerformanceSplitSection } from "@/components/OpenAgeSection";
 import { ExecutiveKpisSection } from "@/components/ExecutiveKpisSection";
+import { PerformanceSplitSection } from "@/components/PerformanceSplitSection";
+
+// Lazy-load the recharts-backed dashboard sections so recharts (~400KB) is
+// fetched only when a chart section renders, not on the initial dashboard load.
+const EngineerWorkloadSection = lazy(
+  () => import("@/components/EngineerWorkloadSection").then((m) => ({ default: m.EngineerWorkloadSection })),
+);
+const ExecutionTimeSection = lazy(
+  () => import("@/components/ExecutionTimeSection").then((m) => ({ default: m.ExecutionTimeSection })),
+);
+const OpenAgeSection = lazy(
+  () => import("@/components/OpenAgeSection").then((m) => ({ default: m.OpenAgeSection })),
+);
+
+function ChartFallback() {
+  return <div className="h-64 animate-pulse bg-muted rounded-lg" />;
+}
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -44,29 +61,35 @@ function DashboardPage() {
   }, []);
 
   if (permLoading) {
-    return <div className="p-8 text-muted-foreground">Loading dashboard…</div>;
+    return (
+      <div className="space-y-5" aria-busy="true">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-3 w-64" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-5">
-      <header className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-md bg-primary/10 text-primary shrink-0">
-            <LayoutDashboard className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold leading-tight">
-              {isAdmin ? "Admin Overview" : `Welcome${profile?.name ? `, ${profile.name}` : ""}`}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              {isAdmin
-                ? "Enterprise-wide view across all modules"
-                : "Your personal operational view, filtered to your assigned modules"}
-            </p>
-          </div>
-        </div>
-        {isAdmin && <Badge variant="default" className="bg-purple-100 text-purple-800 hover:bg-purple-100">Administrator</Badge>}
-      </header>
+      <PageHeader
+        title={isAdmin ? "Admin Overview" : `Welcome${profile?.name ? `, ${profile.name}` : ""}`}
+        description={
+          isAdmin
+            ? "Enterprise-wide view across all modules"
+            : "Your personal operational view, filtered to your assigned modules"
+        }
+        crumbs={[{ label: "Home" }, { label: "Dashboard" }]}
+        actions={
+          isAdmin ? <StatusBadge tone="primary">Administrator</StatusBadge> : undefined
+        }
+      />
 
       <QuickActions can={can} isAdmin={isAdmin} />
 
@@ -140,7 +163,9 @@ function UserGrid({ can, engineerName }: { can: (m: ModuleKey, a?: any) => boole
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">Ticket Operations Summary</h2>
             <ExecutiveKpisSection />
           </div>
-          <EngineerWorkloadSection />
+          <Suspense fallback={<ChartFallback />}>
+            <EngineerWorkloadSection />
+          </Suspense>
         </>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -159,12 +184,18 @@ function AdminGrid() {
       <ExecutiveKpisSection />
 
       {/* Section 2 · Engineer workload */}
-      <EngineerWorkloadSection />
+      <Suspense fallback={<ChartFallback />}>
+        <EngineerWorkloadSection />
+      </Suspense>
 
       {/* Section 3 · Two focused charts side-by-side */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <ExecutionTimeSection />
-        <OpenAgeSection />
+        <Suspense fallback={<ChartFallback />}>
+          <ExecutionTimeSection />
+        </Suspense>
+        <Suspense fallback={<ChartFallback />}>
+          <OpenAgeSection />
+        </Suspense>
       </div>
 
       {/* Section 4 · Performance summary: OEM vs Non-OEM + Parts */}

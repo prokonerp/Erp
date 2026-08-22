@@ -1,6 +1,4 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import QRCode from "qrcode";
+import type jsPDF from "jspdf";
 import { amountInWords, hsnSummary, upiPaymentUri } from "@/lib/gst";
 import type { InvoiceRow, InvoiceItemRow, BranchRow } from "@/lib/sales";
 import { inr } from "@/lib/sales";
@@ -17,7 +15,7 @@ type Customer = {
   email?: string | null;
 };
 
-async function qrDataUrl(text: string, size = 160): Promise<string> {
+async function qrDataUrl(QRCode: typeof import("qrcode"), text: string, size = 160): Promise<string> {
   try {
     return await QRCode.toDataURL(text, { width: size, margin: 1 });
   } catch {
@@ -60,6 +58,11 @@ export async function renderInvoicePdf(args: {
   showSupplyFrom?: boolean;
   meta?: { vehicle_no?: string | null; po_no?: string | null; po_date?: string | null; payment_terms?: string | null };
 }): Promise<jsPDF> {
+  const [{ default: jsPDF }, { default: autoTable }, QRCode] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+    import("qrcode"),
+  ]);
   const { invoice, items, branch, customer } = args;
   const themeColor = args.themeColor || "#000000";
   const [tr, tg, tb] = hexToRgb(themeColor);
@@ -424,10 +427,10 @@ export async function renderInvoicePdf(args: {
       amount: invoice.total,
       note: invoice.invoice_no || "Invoice",
     });
-    const qr = await qrDataUrl(uri, 200);
+    const qr = await qrDataUrl(QRCode, uri, 200);
     if (qr) doc.addImage(qr, "PNG", margin + col1W + (col2W - qrSize) / 2, y + 18, qrSize, qrSize);
   } else if (invoice.qr_payload) {
-    const qr = await qrDataUrl(invoice.qr_payload, 200);
+    const qr = await qrDataUrl(QRCode, invoice.qr_payload, 200);
     if (qr) doc.addImage(qr, "PNG", margin + col1W + (col2W - qrSize) / 2, y + 18, qrSize, qrSize);
   }
 

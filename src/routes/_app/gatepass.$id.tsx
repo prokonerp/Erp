@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { PageLoader } from "@/components/shared/skeletons";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +36,7 @@ function GatepassView() {
       .then(({ data }) => setG(data as unknown as Gatepass));
   }, [id]);
 
-  if (!g) return <div className="text-muted-foreground">Loading…</div>;
+  if (!g) return <PageLoader />;
 
   const Copy = ({ label }: { label: string }) => (
     <div className="bg-white text-black mx-auto max-w-3xl p-6 border print:border-0 print:shadow-none print:p-2 shadow-sm copy-block">

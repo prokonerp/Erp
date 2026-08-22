@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { fetchSalesOrders, soStatusMeta, type SalesOrder } from "@/lib/salesOrders";
 import { inr } from "@/lib/sales";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 
 export const Route = createFileRoute("/_app/sales/orders")({ component: SalesOrdersList });
 
@@ -56,7 +56,7 @@ function SalesOrdersList() {
                       <td className="p-2">{r.so_date}</td>
                       <td className="p-2">{r.buyer_name || "—"}</td>
                       <td className="p-2 text-right font-medium">{inr(r.total)}</td>
-                      <td className="p-2"><Badge className={st.tone} variant="outline">{st.label}</Badge></td>
+                      <td className="p-2"><StatusBadge tone={st.badgeTone}>{st.label}</StatusBadge></td>
                     </tr>
                   );
                 })}

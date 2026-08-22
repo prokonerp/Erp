@@ -1,2 +1,0 @@
-ALTER TABLE public.installed_equipment ADD COLUMN IF NOT EXISTS product_id uuid REFERENCES public.products(id) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS installed_equipment_product_id_idx ON public.installed_equipment(product_id);

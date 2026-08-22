@@ -24,6 +24,7 @@ import {
 import type { QuoteTermsTemplate } from "@/lib/crm";
 import { getCurrentUserName } from "@/lib/currentUser";
 import { productDisplayName } from "@/lib/productNames";
+import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
 
 export const Route = createFileRoute("/_app/crm/quotations/new")({
   component: NewQuotation,
@@ -46,6 +47,9 @@ type StockRow = { product_id: string | null; quantity: number; warehouse: string
 function NewQuotation() {
   const nav = useNavigate();
   const { clone: cloneId } = useSearch({ from: "/_app/crm/quotations/new" });
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => { if (!dirty) setDirty(true); };
+  const { blocker, markClean } = useUnsavedChanges(dirty);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [branches, setBranches] = useState<BranchRow[]>([]);
@@ -353,8 +357,9 @@ function NewQuotation() {
     }
   };
 
-  const onSaveDraft = async () => { const id = await save(); if (id) nav({ to: "/crm/quotations/$id", params: { id } }); };
-  const onSaveSend = async () => { const id = await save({ andSend: true }); if (id) nav({ to: "/crm/quotations/$id", params: { id } }); };
+  // markClean() clears the nav guard synchronously (see useUnsavedChanges).
+  const onSaveDraft = async () => { const id = await save(); if (id) { markClean(); setDirty(false); nav({ to: "/crm/quotations/$id", params: { id } }); } };
+  const onSaveSend = async () => { const id = await save({ andSend: true }); if (id) { markClean(); setDirty(false); nav({ to: "/crm/quotations/$id", params: { id } }); } };
 
   const rowKeyDown = (e: React.KeyboardEvent, i: number) => {
     if (e.key === "Enter" && !e.shiftKey && (e.target as HTMLElement).tagName !== "TEXTAREA") {
@@ -364,7 +369,8 @@ function NewQuotation() {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" onInput={markDirty}>
+      <UnsavedChangesPrompt blocker={blocker} />
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Link to="/crm/quotations"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>

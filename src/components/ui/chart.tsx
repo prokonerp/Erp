@@ -1,7 +1,13 @@
 import * as React from "react";
-import * as RechartsPrimitive from "recharts";
+import { use } from "react";
+import type * as RechartsPrimitive from "recharts";
 
 import { cn } from "@/lib/utils";
+
+// Load recharts lazily. The library (~400KB) is fetched only when a chart
+// component actually renders. All components share this single promise, so
+// Vite emits one chunk and it downloads exactly once.
+const rechartsModule = import("recharts");
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
@@ -39,6 +45,7 @@ const ChartContainer = React.forwardRef<
     children: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>["children"];
   }
 >(({ id, className, children, config, ...props }, ref) => {
+  const Recharts = use(rechartsModule);
   const uniqueId = React.useId();
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`;
 
@@ -54,7 +61,7 @@ const ChartContainer = React.forwardRef<
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <RechartsPrimitive.ResponsiveContainer>{children}</RechartsPrimitive.ResponsiveContainer>
+        <Recharts.ResponsiveContainer>{children}</Recharts.ResponsiveContainer>
       </div>
     </ChartContext.Provider>
   );
@@ -90,7 +97,11 @@ ${colorConfig
   );
 };
 
-const ChartTooltip = RechartsPrimitive.Tooltip;
+function ChartTooltip(props: Omit<React.ComponentProps<typeof RechartsPrimitive.Tooltip>, "ref">) {
+  const Recharts = use(rechartsModule);
+  return <Recharts.Tooltip {...props} />;
+}
+ChartTooltip.displayName = "ChartTooltip";
 
 const ChartTooltipContent = React.forwardRef<
   HTMLDivElement,
@@ -238,7 +249,11 @@ const ChartTooltipContent = React.forwardRef<
 );
 ChartTooltipContent.displayName = "ChartTooltip";
 
-const ChartLegend = RechartsPrimitive.Legend;
+function ChartLegend(props: Omit<React.ComponentProps<typeof RechartsPrimitive.Legend>, "ref">) {
+  const Recharts = use(rechartsModule);
+  return <Recharts.Legend {...props} />;
+}
+ChartLegend.displayName = "ChartLegend";
 
 const ChartLegendContent = React.forwardRef<
   HTMLDivElement,

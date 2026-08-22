@@ -1,2 +1,0 @@
-ALTER TABLE public.products ADD COLUMN IF NOT EXISTS parent_tagging_required boolean NOT NULL DEFAULT false;
-UPDATE public.products SET parent_tagging_required = true WHERE category = 'Spare Parts' AND parent_tagging_required = false;

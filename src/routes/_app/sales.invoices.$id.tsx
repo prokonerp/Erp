@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { PageLoader } from "@/components/shared/skeletons";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import {
   type InvoiceRow,
 } from "@/lib/sales";
 import { mockIrnPayload } from "@/lib/gst";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { downloadInvoicePdf, printInvoicePdf } from "@/lib/invoicePdf";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
@@ -156,7 +158,7 @@ function InvoiceView() {
     load();
   }
 
-  if (loading || !inv || !company) return <div className="p-6 text-muted-foreground">Loading…</div>;
+  if (loading || !inv || !company) return <PageLoader />;
 
   const s = statusMeta(inv.status);
   const due = Math.max(0, Number(inv.total) - Number(inv.total_paid));
@@ -174,9 +176,9 @@ function InvoiceView() {
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => nav({ to: "/sales/invoices" })}><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
           <h1 className="text-2xl font-bold">{inv.invoice_no || "Invoice"}</h1>
-          <span className={"inline-block px-2 py-0.5 rounded-full text-xs " + s.tone}>{s.label}</span>
-          {inv.irn && <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-800">e-Invoice ✓</span>}
-          {inv.ewaybill_no && <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-800">e-Way ✓</span>}
+          <StatusBadge tone={s.badgeTone}>{s.label}</StatusBadge>
+          {inv.irn && <StatusBadge tone="success">e-Invoice ✓</StatusBadge>}
+          {inv.ewaybill_no && <StatusBadge tone="info">e-Way ✓</StatusBadge>}
         </div>
         <div className="flex flex-wrap gap-2">
           {inv.status === "draft" && (

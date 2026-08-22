@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Download, Eye, FileText, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 
 const BUCKET = "amc-agreements";
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -21,6 +22,7 @@ export function AgreementDocUpload({
   disabled?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [previewData, setPreviewData] = useState<ArrayBuffer | null>(null);
 
@@ -100,7 +102,13 @@ export function AgreementDocUpload({
 
   const remove = async () => {
     if (!path) return;
-    if (!confirm("Remove uploaded agreement?")) return;
+    const ok = await confirm({
+      title: "Remove uploaded agreement?",
+      description: "The PDF will be deleted from storage. You can upload a replacement afterwards.",
+      confirmLabel: "Remove",
+      variant: "danger",
+    });
+    if (!ok) return;
     setBusy(true);
     await supabase.storage.from(BUCKET).remove([path]);
     setBusy(false);

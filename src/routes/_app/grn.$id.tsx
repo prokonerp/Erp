@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { PageLoader } from "@/components/shared/skeletons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Printer, Download, CheckCircle2, Ban, Pencil } from "lucide-react";
@@ -9,6 +10,7 @@ import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { useIsAdmin } from "@/lib/useRole";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
@@ -20,6 +22,7 @@ export const Route = createFileRoute("/_app/grn/$id")({
 });
 
 function GrnView() {
+  const confirm = useConfirm();
   const { id } = Route.useParams();
   const [g, setG] = useState<Grn | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,7 +81,7 @@ function GrnView() {
     })();
   }, [g?.id, g?.grn_no]);
 
-  if (!g) return <div className="text-muted-foreground">Loading…</div>;
+  if (!g) return <PageLoader />;
   const isOem = g.category === "oem";
   const oemLogo = isOem ? (g.oem_logo_url ? { url: g.oem_logo_url, alt: g.source_name || "OEM" } : getOemLogo(g.source_name)) : null;
   const backTo = `/grn/${g.category}` as "/grn/customer" | "/grn/oem" | "/grn/general";
@@ -99,7 +102,13 @@ function GrnView() {
 
   const handleSubmit = async () => {
     if (!isDraft) return;
-    if (!confirm("Submit this GRN?\n\nThis will lock the document and post the received stock to the IMS Stock Ledger.")) return;
+    const ok = await confirm({
+      title: "Submit this GRN?",
+      description: "The GRN is locked and the received stock is posted to the IMS Stock Ledger.",
+      confirmLabel: "Submit GRN",
+      variant: "danger",
+    });
+    if (!ok) return;
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
     const { data, error } = await supabase
@@ -116,7 +125,13 @@ function GrnView() {
 
   const handleCancel = async () => {
     if (!isSubmitted) return;
-    if (!confirm("Cancel this submitted GRN?\n\nRelated stock ledger entries will be reversed.")) return;
+    const ok = await confirm({
+      title: "Cancel this submitted GRN?",
+      description: "The GRN is marked Cancelled and its related stock ledger entries are reversed.",
+      confirmLabel: "Cancel GRN",
+      variant: "danger",
+    });
+    if (!ok) return;
     setBusy(true);
     const { error } = await supabase
       .from("grns" as never)

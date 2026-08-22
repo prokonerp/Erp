@@ -1,3 +1,0 @@
-ALTER TABLE public.invoice_settings
-  ADD COLUMN IF NOT EXISTS theme_color TEXT NOT NULL DEFAULT '#000000',
-  ADD COLUMN IF NOT EXISTS copy_label TEXT NOT NULL DEFAULT 'Original Copy';

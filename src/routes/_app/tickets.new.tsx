@@ -19,6 +19,7 @@ import type { PartLine } from "@/lib/tickets";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { ComplaintPicker } from "@/components/ComplaintPicker";
+import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -62,6 +63,8 @@ function NewTicket() {
   const [goodParts, setGoodParts] = useState<PartLine[]>([]);
   const dirtyRef = useRef(false);
   const submittedRef = useRef(false);
+  const [dirty, setDirty] = useState(false);
+  const { blocker, markClean } = useUnsavedChanges(dirty);
 
   useEffect(() => {
     supabase.from("call_type_master").select("name").order("name").then(({ data }) => {
@@ -187,7 +190,7 @@ function NewTicket() {
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
   // Any user change marks the form dirty so the auto-save effect below fires.
-  useEffect(() => { dirtyRef.current = true; }, [form, defectiveOn, defectiveParts, goodOn, goodParts]);
+  useEffect(() => { dirtyRef.current = true; setDirty(true); }, [form, defectiveOn, defectiveParts, goodOn, goodParts]);
 
   // Ticket creation is explicit — no auto-save/navigation on customer select.
   // Selecting a client only populates fields; the user must click "Create Ticket".
@@ -284,6 +287,9 @@ function NewTicket() {
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Ticket created");
+    // Clear the guard synchronously BEFORE navigating (see useUnsavedChanges).
+    markClean();
+    setDirty(false);
     navigate({ to: "/tickets/$id", params: { id: (data as { id: string }).id } });
   };
 
@@ -294,10 +300,11 @@ function NewTicket() {
       storageKey="ticket-form-density"
       actions={
         <Button size="sm" onClick={submit} disabled={busy}>
-          {busy ? "Saving…" : "Create Ticket"}
+          {busy ? "Saving\u2026" : "Create Ticket"}
         </Button>
       }
     >
+      <UnsavedChangesPrompt blocker={blocker} />
       {(form.special_instruction.trim() || form.preferred_visit_datetime || sourceMeta?.label) && (
         <div className="flex flex-wrap items-center gap-2">
           {form.special_instruction.trim() && (

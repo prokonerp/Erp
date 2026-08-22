@@ -4,11 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useConfirm } from "@/hooks/useConfirm";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
-export function UserRolesPanel({ isAdmin }: { isAdmin: boolean }) {
+export function UserRolesPanel({ isAdmin }: { isAdmin: boolean }) {  const confirm = useConfirm();
+
   const [rows, setRows] = useState<any[]>([]);
   const [uid, setUid] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
@@ -30,7 +32,13 @@ export function UserRolesPanel({ isAdmin }: { isAdmin: boolean }) {
   }
 
   async function remove(id: string) {
-    if (!confirm("Remove this role?")) return;
+    const ok = await confirm({
+      title: "Remove this role?",
+      description: "The role is unassigned from the user but the role itself is kept.",
+      confirmLabel: "Remove",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("user_roles").delete().eq("id", id);
     if (error) return toast.error(error.message);
     load();

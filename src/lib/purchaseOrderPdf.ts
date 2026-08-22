@@ -1,5 +1,4 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import type jsPDF from "jspdf";
 import { amountInWords } from "@/lib/gst";
 import { type PORow, type POItemRow } from "@/lib/purchaseOrder";
 import type { BranchRow } from "@/lib/sales";
@@ -25,7 +24,7 @@ function inrPdf(n: number | null | undefined): string {
   return "Rs. " + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function renderPurchaseOrderPdf(args: {
+export async function renderPurchaseOrderPdf(args: {
   po: PORow;
   items: POItemRow[];
   branch: BranchRow | null;
@@ -37,7 +36,11 @@ export function renderPurchaseOrderPdf(args: {
     phone?: string | null;
     email?: string | null;
   } | null;
-}): jsPDF {
+}): Promise<jsPDF> {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
   const { po, items, branch } = args;
   const themeColor = args.themeColor || "#1f3864";
   const [tr, tg, tb] = hexToRgb(themeColor);
@@ -223,14 +226,14 @@ export function renderPurchaseOrderPdf(args: {
 }
 
 export async function printPurchaseOrderPdf(args: Parameters<typeof renderPurchaseOrderPdf>[0]): Promise<void> {
-  const doc = renderPurchaseOrderPdf(args);
+  const doc = await renderPurchaseOrderPdf(args);
   const blob = doc.output("blob");
   const url = URL.createObjectURL(blob);
   const win = window.open(url, "_blank");
   if (win) setTimeout(() => { try { win.focus(); win.print(); } catch { /* ignore */ } }, 500);
 }
 
-export function downloadPurchaseOrderPdf(args: Parameters<typeof renderPurchaseOrderPdf>[0], filename: string): void {
-  const doc = renderPurchaseOrderPdf(args);
+export async function downloadPurchaseOrderPdf(args: Parameters<typeof renderPurchaseOrderPdf>[0], filename: string): Promise<void> {
+  const doc = await renderPurchaseOrderPdf(args);
   doc.save(filename);
 }

@@ -1,3 +1,0 @@
-ALTER TABLE public.invoices
-  ADD COLUMN IF NOT EXISTS po_number TEXT,
-  ADD COLUMN IF NOT EXISTS po_date DATE;

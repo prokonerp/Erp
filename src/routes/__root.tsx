@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -10,6 +11,10 @@ import {
 
 import appCss from "../styles.css?url";
 import { Toaster } from "sonner";
+import { ThemeProvider } from "@/lib/theme";
+
+/** Applies the persisted appearance classes before first paint (no flash). */
+const themeBootScript = `(function(){try{var t=localStorage.getItem("prokon-theme");var d=document.documentElement.classList;if(t==="dark"){d.add("dark");}else if(t==="light"){/* plain light */}else if(t==="system"){if(matchMedia("(prefers-color-scheme: dark)").matches)d.add("dark");}else{d.add("theme-balanced");}}catch(e){}})();`;
 
 function NotFoundComponent() {
   return (
@@ -74,16 +79,26 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Prokon ERP" },
-      { name: "description", content: "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace." },
+      {
+        name: "description",
+        content:
+          "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace.",
+      },
       { name: "author", content: "Prokon Hi-Tech Systems" },
       { property: "og:title", content: "Prokon ERP" },
-      { property: "og:description", content: "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace." },
+      {
+        property: "og:description",
+        content:
+          "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "Prokon ERP" },
-      { name: "twitter:description", content: "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6efeb12a-247e-4b91-ad5c-565933dd311e/id-preview-d3b83f99--ec205f8c-dfb7-433d-b565-1670511446f6.lovable.app-1778780617367.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6efeb12a-247e-4b91-ad5c-565933dd311e/id-preview-d3b83f99--ec205f8c-dfb7-433d-b565-1670511446f6.lovable.app-1778780617367.png" },
+      {
+        name: "twitter:description",
+        content:
+          "Prokon ERP — sales, service, inventory and procurement in one enterprise workspace.",
+      },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -109,6 +124,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
       <body>
         {children}
@@ -123,8 +139,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
-      <Toaster richColors position="top-right" />
+      <ThemeProvider>
+        <Suspense fallback={<div />}>
+          <Outlet />
+        </Suspense>
+        <Toaster richColors position="top-right" />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

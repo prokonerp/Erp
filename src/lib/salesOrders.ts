@@ -82,13 +82,20 @@ export type SalesOrder = {
   updated_at: string;
 };
 
-export const SO_STATUSES: { value: SoStatus; label: string; tone: string }[] = [
-  { value: "draft",     label: "Draft",     tone: "bg-slate-200 text-slate-800" },
-  { value: "confirmed", label: "Confirmed", tone: "bg-blue-100 text-blue-800" },
-  { value: "partial",   label: "Partially Delivered", tone: "bg-amber-100 text-amber-800" },
-  { value: "delivered", label: "Delivered", tone: "bg-emerald-100 text-emerald-800" },
-  { value: "invoiced",  label: "Invoiced",  tone: "bg-purple-100 text-purple-800" },
-  { value: "cancelled", label: "Cancelled", tone: "bg-rose-100 text-rose-700" },
+/** `tone` is the legacy light-only class string; new UI should prefer the
+ *  theme-aware `badgeTone` with <StatusBadge />. */
+export const SO_STATUSES: {
+  value: SoStatus;
+  label: string;
+  tone: string;
+  badgeTone: "neutral" | "info" | "warning" | "success" | "danger" | "primary";
+}[] = [
+  { value: "draft",     label: "Draft",     tone: "bg-slate-200 text-slate-800", badgeTone: "neutral" },
+  { value: "confirmed", label: "Confirmed", tone: "bg-blue-100 text-blue-800", badgeTone: "info" },
+  { value: "partial",   label: "Partially Delivered", tone: "bg-amber-100 text-amber-800", badgeTone: "warning" },
+  { value: "delivered", label: "Delivered", tone: "bg-emerald-100 text-emerald-800", badgeTone: "success" },
+  { value: "invoiced",  label: "Invoiced",  tone: "bg-purple-100 text-purple-800", badgeTone: "primary" },
+  { value: "cancelled", label: "Cancelled", tone: "bg-rose-100 text-rose-700", badgeTone: "danger" },
 ];
 
 export function soStatusMeta(s: SoStatus) {

@@ -1,1 +1,0 @@
-DELETE FROM public.customers WHERE company = 'Zeta Test Industries' AND email = 'ravi@zetatest.in';

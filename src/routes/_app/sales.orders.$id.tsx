@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { PageLoader } from "@/components/shared/skeletons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, FileText, Receipt, Truck } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchSalesOrder, SO_STATUSES, soStatusMeta, type SalesOrder, type SoStatus } from "@/lib/salesOrders";
 import { inr } from "@/lib/sales";
 import { createChallanFromSalesOrder, createInvoiceFromSalesOrder } from "@/lib/documentFlow.writers";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 
@@ -25,7 +26,7 @@ function SalesOrderDetail() {
   const load = () => fetchSalesOrder(id).then(setSo).catch((e) => toast.error(e.message));
   useEffect(() => { load(); getDocumentHeader().then(setCompany).catch(() => {}); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!so || !company) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  if (!so || !company) return <PageLoader />;
 
   const st = soStatusMeta(so.status);
   console.log("HEADER DATA:", company);
@@ -64,7 +65,7 @@ function SalesOrderDetail() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <Link to="/sales/orders"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
         <div className="flex gap-2 flex-wrap items-center">
-          <Badge variant="outline" className={st.tone}>{st.label}</Badge>
+          <StatusBadge tone={st.badgeTone}>{st.label}</StatusBadge>
           <Select value={so.status} onValueChange={(v) => setStatus(v as SoStatus)}>
             <SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger>
             <SelectContent>{SO_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>

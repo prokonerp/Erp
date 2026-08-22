@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/_app/crm/bundles")({
 });
 
 function BundlesSettings() {
+  const confirm = useConfirm();
   const [bundles, setBundles] = useState<UpsBundle[]>([]);
   const [batteries, setBatteries] = useState<Battery[]>([]);
   const [products, setProducts] = useState<ProductMaster[]>([]);
@@ -91,7 +93,13 @@ function BundlesSettings() {
     toast.success("Bundle saved");
   }
   async function delBundle(id: string) {
-    if (!confirm("Delete this bundle?")) return;
+    const ok = await confirm({
+      title: "Delete this bundle?",
+      description: "The bundle definition is removed. Products already in it are unaffected.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     if (String(id).startsWith("draft-")) {
       setBundles((prev) => prev.filter((b) => b.id !== id));
       return;
@@ -148,7 +156,13 @@ function BundlesSettings() {
     toast.success("Battery saved");
   }
   async function delBattery(id: string) {
-    if (!confirm("Delete this battery?")) return;
+    const ok = await confirm({
+      title: "Delete this battery?",
+      description: "The battery is removed from the catalog.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("battery_catalog" as any).delete().eq("id", id);
     if (error) return toast.error(error.message);
     setBatteries((prev) => prev.filter((b) => b.id !== id));

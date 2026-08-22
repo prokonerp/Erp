@@ -15,6 +15,7 @@ import { QuickAttendanceToday } from "@/components/QuickAttendanceToday";
 import { ModuleGate } from "@/components/ModuleGate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import {
   AlertTriangle, BadgeIndianRupee, CalendarDays, CheckCircle2, ChevronDown, ChevronRight,
   CircleCheck, History, IndianRupee, Loader2, Lock, LockOpen, Plus, RefreshCw, Undo2, Users, Wallet,
@@ -71,6 +72,7 @@ function rowTint(code: AttCode, hours: number | null, dayValue: number, sunday: 
 }
 
 function PayrollPage() {
+  const confirm = useConfirm();
   const { isAdmin } = useIsAdmin();
   const { tab } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -248,7 +250,13 @@ function PayrollPage() {
 
   async function undoMonth(empId: string | null, label: string) {
     if (!guard()) return;
-    if (!confirm(`Clear all attendance for ${label} in ${MONTHS[month - 1]} ${year}? This can be reviewed in Edit History.`)) return;
+    const ok = await confirm({
+      title: `Clear all attendance for ${label}?`,
+      description: `This clears every attendance entry for ${MONTHS[month - 1]} ${year}. The changes are recorded in Edit History and can be undone.`,
+      confirmLabel: "Clear All",
+      variant: "danger",
+    });
+    if (!ok) return;
     try { const n = await clearAttendance(year, month, empId); toast.success(`Cleared ${n} attendance entr(ies)`); await load(); }
     catch (e: any) { toast.error(e.message); }
   }
@@ -302,7 +310,13 @@ function PayrollPage() {
   async function deleteRecord(r: ComputedRow) {
     if (!isAdmin || !r.record) return;
     if (r.record.status === "paid") return toast.error("Paid salary records cannot be deleted");
-    if (!confirm(`Delete salary record for ${r.emp.name}?`)) return;
+    const ok = await confirm({
+      title: "Delete salary record?",
+      description: `Permanently remove the salary record for ${r.emp.name}.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("salary_records").delete().eq("id", r.record.id);
     if (error) return toast.error(error.message);
     setRecords(await listSalaryRecords(year, month));
