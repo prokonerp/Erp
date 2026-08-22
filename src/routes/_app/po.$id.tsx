@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { PageLoader } from "@/components/shared/skeletons";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { downloadPurchaseOrderPdf, printPurchaseOrderPdf } from "@/lib/purchaseO
 import { DocumentPrintView, type PrintDoc } from "@/components/DocumentPrintView";
 import { fetchCompanyProfile, DEFAULT_COMPANY_PROFILE, type CompanyProfile } from "@/lib/companyProfile";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 
 export const Route = createFileRoute("/_app/po/$id")({
   component: POView,
@@ -93,7 +95,7 @@ function POView() {
     });
   }
 
-  if (loading) return <div className="text-sm text-muted-foreground">Loading…</div>;
+  if (loading) return <PageLoader />;
   if (!po) return <div className="text-sm text-muted-foreground">PO not found.</div>;
 
   const sm = poStatusMeta(po.status);
@@ -105,7 +107,7 @@ function POView() {
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" asChild><Link to="/po"><ArrowLeft className="h-4 w-4 mr-1" />Back</Link></Button>
           <h2 className="text-lg font-semibold font-mono">{po.po_no || po.id.slice(0, 8)}</h2>
-          <span className={"inline-block px-2 py-0.5 rounded-full text-xs " + sm.tone}>{sm.label}</span>
+          <StatusBadge tone={sm.badgeTone}>{sm.label}</StatusBadge>
         </div>
         <div className="flex flex-wrap gap-2">
           {po.status === "draft" && (

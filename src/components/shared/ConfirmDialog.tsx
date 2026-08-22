@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -45,6 +46,11 @@ export function ConfirmDialog({
     try {
       setPending(true);
       await onConfirm();
+    } catch (e: any) {
+      // Callers normally toast their own errors; this is the safety net so a
+      // thrown error never leaves the dialog stuck open with an unhandled
+      // rejection.
+      toast.error(e?.message || "Action failed. Please try again.");
     } finally {
       setPending(false);
     }

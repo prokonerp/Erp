@@ -49,7 +49,7 @@ function NewQuotation() {
   const { clone: cloneId } = useSearch({ from: "/_app/crm/quotations/new" });
   const [dirty, setDirty] = useState(false);
   const markDirty = () => { if (!dirty) setDirty(true); };
-  const blocker = useUnsavedChanges(dirty);
+  const { blocker, markClean } = useUnsavedChanges(dirty);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [branches, setBranches] = useState<BranchRow[]>([]);
@@ -357,8 +357,9 @@ function NewQuotation() {
     }
   };
 
-  const onSaveDraft = async () => { const id = await save(); if (id) { setDirty(false); nav({ to: "/crm/quotations/$id", params: { id } }); } };
-  const onSaveSend = async () => { const id = await save({ andSend: true }); if (id) { setDirty(false); nav({ to: "/crm/quotations/$id", params: { id } }); } };
+  // markClean() clears the nav guard synchronously (see useUnsavedChanges).
+  const onSaveDraft = async () => { const id = await save(); if (id) { markClean(); setDirty(false); nav({ to: "/crm/quotations/$id", params: { id } }); } };
+  const onSaveSend = async () => { const id = await save({ andSend: true }); if (id) { markClean(); setDirty(false); nav({ to: "/crm/quotations/$id", params: { id } }); } };
 
   const rowKeyDown = (e: React.KeyboardEvent, i: number) => {
     if (e.key === "Enter" && !e.shiftKey && (e.target as HTMLElement).tagName !== "TEXTAREA") {

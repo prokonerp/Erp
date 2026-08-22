@@ -1,9 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { PageLoader } from "@/components/shared/skeletons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useConfirm } from "@/hooks/useConfirm";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -140,7 +142,8 @@ function formatPreferred(dt: string | null): string {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear().toString().slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function TicketDetail() {
+function TicketDetail() {  const confirm = useConfirm();
+
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const [t, setT] = useState<Ticket | null>(null);
@@ -314,7 +317,7 @@ function TicketDetail() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [saveStatus]);
 
-  if (!t) return <div className="p-6 text-muted-foreground">Loading…</div>;
+  if (!t) return <PageLoader />;
 
   const update = (patch: Partial<Ticket>) => {
     dirtyRef.current = true;
@@ -567,7 +570,13 @@ function TicketDetail() {
   };
 
   const del = async () => {
-    if (!confirm(`Delete ticket ${t.case_id}?`)) return;
+    const ok = await confirm({
+      title: `Delete ticket ${t.case_id}?`,
+      description: "This hides the ticket from listings (soft delete). An admin can restore it from the Archive for 30 days.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { softDelete } = await import("@/lib/softDelete");
     const { error } = await softDelete("tickets", t.id);
     if (error) return toast.error(error.message);

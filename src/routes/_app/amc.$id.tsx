@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { PageLoader } from "@/components/shared/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ import { waOpen } from "@/lib/tickets";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
 import { softDelete } from "@/lib/softDelete";
+import { useConfirm } from "@/hooks/useConfirm";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -31,6 +33,7 @@ export const Route = createFileRoute("/_app/amc/$id")({
 function AmcDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { isAdmin } = useIsAdmin();
   const [a, setA] = useState<Amc | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,7 +66,7 @@ function AmcDetail() {
     /* eslint-disable-next-line */
   }, [id]);
 
-  if (!a) return <div className="text-muted-foreground">Loading…</div>;
+  if (!a) return <PageLoader />;
 
   const status = amcStatus(a.end_date);
 
@@ -144,6 +147,13 @@ function AmcDetail() {
   };
 
   const doDelete = async () => {
+    const ok = await confirm({
+      title: "Delete this AMC?",
+      description: "The agreement will be moved to the Archive, where an admin can restore it for 30 days.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     setBusy(true);
     const { error } = await softDelete("amcs", a.id);
     setBusy(false);
@@ -153,7 +163,12 @@ function AmcDetail() {
   };
 
   const renew = async () => {
-    if (!confirm(`Create a renewal AMC for ${a.client_name}?`)) return;
+    const ok = await confirm({
+      title: `Create a renewal AMC for ${a.client_name}?`,
+      description: "The new agreement starts the day after the current one ends and inherits its duration.",
+      confirmLabel: "Create Renewal",
+    });
+    if (!ok) return;
     setBusy(true);
     const startNew = a.end_date; // continues from previous end
     const next = new Date(startNew + "T00:00:00");

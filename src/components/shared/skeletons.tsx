@@ -1,5 +1,31 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Centered, branded full-page loading state.
+ * Drop-in replacement for the old `<div>Loading…</div>` guards so every
+ * page gates on a consistent, accessible spinner instead of bare text.
+ */
+export function PageLoader({
+  label = "Loading…",
+  className,
+}: {
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn("flex min-h-[40vh] w-full flex-col items-center justify-center gap-3", className)}
+      aria-busy="true"
+      aria-label={label}
+      role="status"
+    >
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <p className="text-sm text-muted-foreground">{label}</p>
+    </div>
+  );
+}
 
 /** Row-shaped skeleton matching a data table's visual rhythm. */
 export function TableSkeleton({ rows = 8, className }: { rows?: number; className?: string }) {

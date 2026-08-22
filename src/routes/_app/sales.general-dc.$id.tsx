@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { PageLoader } from "@/components/shared/skeletons";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -195,7 +196,7 @@ function GeneralDcDetail() {
     nav({ to: "/sales/invoices/new" });
   }
 
-  if (!dc) return <div className="p-6 text-muted-foreground">Loading…</div>;
+  if (!dc) return <PageLoader />;
 
   return (
     <div className="space-y-4">

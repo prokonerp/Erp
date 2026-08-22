@@ -48,7 +48,7 @@ function NewInvoice() {
   const nav = useNavigate();
   const [dirty, setDirty] = useState(false);
   const markDirty = () => { if (!dirty) setDirty(true); };
-  const blocker = useUnsavedChanges(dirty);
+  const { blocker, markClean } = useUnsavedChanges(dirty);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [branchId, setBranchId] = useState<string>("");
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -302,6 +302,8 @@ function NewInvoice() {
       }
 
       toast.success(`Invoice ${inv.invoice_no || ""} ${status === "issued" ? "issued" : "saved"}`);
+      // Clear the guard synchronously BEFORE navigating (see useUnsavedChanges).
+      markClean();
       setDirty(false);
       nav({ to: "/sales/invoices/$id", params: { id: inv.id } });
     } catch (e: any) {

@@ -19,6 +19,7 @@ import {
 import { usePermissions } from "@/lib/usePermissions";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { getMyProfile } from "@/lib/admin-users.functions";
+import { PageLoader } from "@/components/shared/skeletons";
 import { UserProfileMenu, type ProfileInfo } from "@/components/UserProfileMenu";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { IdleTimeout } from "@/components/IdleTimeout";
@@ -27,6 +28,7 @@ import { useActivityTracker } from "@/lib/useActivityTracker";
 import { toast } from "sonner";
 import { NAV_ITEMS, QUICK_ACTIONS, GROUP_ORDER, groupForPath, type NavItem } from "@/lib/navigation";
 import { CommandPalette } from "@/components/CommandPalette";
+import { ConfirmProvider } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -119,7 +121,7 @@ function AppLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
-  if (loading) return <div className="p-8 text-muted-foreground">Loading…</div>;
+  if (loading) return <PageLoader label="Loading your workspace…" />;
   if (!session) return <Navigate to="/auth" />;
 
   const navItems = permLoading
@@ -130,7 +132,11 @@ function AppLayout() {
         return true;
       });
 
-  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + "/");
+  const isActive = (path: string, exclude?: string[]) => {
+    if (exclude?.some((p) => location.pathname === p || location.pathname.startsWith(p + "/")))
+      return false;
+    return location.pathname === path || location.pathname.startsWith(path + "/");
+  };
   const currentSearchTab = (() => {
     if (typeof window === "undefined") return undefined;
     const sp = new URLSearchParams(window.location.search);
@@ -143,7 +149,7 @@ function AppLayout() {
     return currentSearchTab === tab;
   };
   const navLinkCls = (active: boolean) =>
-    `relative flex items-center gap-2.5 pl-4 pr-3 py-1.5 rounded-md text-[13px] transition-colors ${
+    `relative flex items-center gap-2.5 pl-4 pr-3 py-1.5 rounded-md text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar ${
       active
         ? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-full before:bg-primary"
         : "text-foreground/75 hover:bg-muted hover:text-foreground"
@@ -160,28 +166,35 @@ function AppLayout() {
     }
   }
 
-  // Derive current page title from active nav item for the header
-  const currentNav = navItems.find((n) => {
-    if (n.to === "/masters" && location.pathname === "/masters") {
-      return isMasterTabActive(n.to, n.matchSearchTab);
-    }
-    return location.pathname === n.to || location.pathname.startsWith(n.to + "/");
-  });
+  // Derive current page title from active nav item for the header.
+  // Longest-prefix match wins so /gatepass/new titles as "New Gate Pass",
+  // not "Gate Passes"; excludeActive keeps parents from stealing the match.
+  const currentNav = [...navItems]
+    .sort((a, b) => b.to.length - a.to.length)
+    .find((n) => {
+      if (n.excludeActive?.some((p) => location.pathname === p || location.pathname.startsWith(p + "/")))
+        return false;
+      if (n.to === "/masters" && location.pathname === "/masters") {
+        return isMasterTabActive(n.to, n.matchSearchTab);
+      }
+      return location.pathname === n.to || location.pathname.startsWith(n.to + "/");
+    });
   let pageTitle = currentNav?.label ?? "Dashboard";
   let pageGroup = currentNav?.group;
   if (isActive("/gatepass")) {
-    pageGroup = "Gate Passes";
-    if (location.pathname === "/gatepass/new" || location.pathname === "/new") {
+    pageGroup = "Material Movement";
+    if (location.pathname === "/gatepass/new") {
       pageTitle = "Create New Gate Pass";
-    } else if (location.pathname === "/gatepass" || location.pathname === "/records") {
-      pageTitle = "View Gate Pass History";
+    } else if (location.pathname === "/gatepass") {
+      pageTitle = "Gate Pass History";
     } else if (location.pathname.startsWith("/gatepass/")) {
       pageTitle = "Gate Pass Detail";
     }
   }
 
   return (
-    <div className="min-h-screen bg-muted/20 flex">
+    <ConfirmProvider>
+      <div className="min-h-screen bg-muted/20 flex">
       {/* Skip to content — keyboard accessibility */}
       <a
         href="#main-content"
@@ -193,7 +206,7 @@ function AppLayout() {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden print:hidden"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -201,9 +214,10 @@ function AppLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:relative inset-y-0 left-0 z-50 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden transition-all duration-200 ${
+        className={`fixed lg:relative inset-y-0 left-0 z-50 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden transition-[width,transform] duration-200 print:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         } ${sidebarHidden ? "lg:w-0 lg:border-r-0" : "lg:w-60 shrink-0"} w-60`}
+        data-print="hide"
       >
         {/* Logo */}
         <div className="h-14 border-b border-sidebar-border flex items-center justify-between px-4">
@@ -231,7 +245,12 @@ function AppLayout() {
           {ungrouped.length > 0 && (
             <div className="space-y-0.5">
               {ungrouped.map((n) => (
-                <Link key={n.to} to={n.to} className={navLinkCls(isActive(n.to))}>
+                <Link
+                  key={n.to}
+                  to={n.to}
+                  onClick={() => setMobileOpen(false)}
+                  className={navLinkCls(isActive(n.to))}
+                >
                   <n.icon className="h-4 w-4 shrink-0" />
                   {n.label}
                 </Link>
@@ -240,7 +259,7 @@ function AppLayout() {
           )}
 
           {/* Grouped items */}
-          {GROUP_ORDER.filter((g) => g !== "Material Movement").map((g) => {
+          {GROUP_ORDER.map((g) => {
             const items = groupMap.get(g);
             if (!items || items.length === 0) return null;
             const isOpen = openGroups[g] !== false;
@@ -265,10 +284,11 @@ function AppLayout() {
                         key={`${n.to}-${n.matchSearchTab ?? ""}`}
                         to={n.to}
                         search={n.search as any}
+                        onClick={() => setMobileOpen(false)}
                         className={navLinkCls(
                           n.group === "Masters"
                             ? isMasterTabActive(n.to, n.matchSearchTab)
-                            : isActive(n.to)
+                            : isActive(n.to, n.excludeActive)
                         )}
                       >
                         <n.icon className="h-4 w-4 shrink-0" />
@@ -352,6 +372,7 @@ function AppLayout() {
       />
       <IdleTimeout />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-    </div>
+      </div>
+    </ConfirmProvider>
   );
 }

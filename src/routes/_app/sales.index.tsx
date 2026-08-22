@@ -11,6 +11,7 @@ import {
   TrendingUp, ShoppingCart, ArrowRightLeft, Activity, RotateCcw, PackageCheck,
 } from "lucide-react";
 import { inr, statusMeta, fetchBranches, type InvoiceRow, type BranchRow } from "@/lib/sales";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 
 // Lazy-load the recharts-backed charts section (~400KB) so the sales dashboard
 // KPI cards and tables render immediately, without waiting on recharts.
@@ -324,7 +325,7 @@ function HeadSalesDashboard() {
                       <td className="p-2">{r.buyer_name || "—"}</td>
                       <td className="p-2 text-right font-medium">{inr(r.total)}</td>
                       <td className="p-2 text-right">{inr(r.total_paid)}</td>
-                      <td className="p-2"><span className={"inline-block px-2 py-0.5 rounded-full text-xs " + s.tone}>{s.label}</span></td>
+                      <td className="p-2"><StatusBadge tone={s.badgeTone}>{s.label}</StatusBadge></td>
                     </tr>
                   );
                 })}

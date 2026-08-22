@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useConfirm } from "@/hooks/useConfirm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -15,7 +16,8 @@ export const Route = createFileRoute("/_app/tickets/settings")({
   component: TicketSettings,
 });
 
-function TicketSettings() {
+function TicketSettings() {  const confirm = useConfirm();
+
   const { isAdmin } = useIsAdmin();
   const [prefix, setPrefix] = useState("TKT");
   const [savingPrefix, setSavingPrefix] = useState(false);
@@ -52,7 +54,13 @@ function TicketSettings() {
   };
 
   const delType = async (id: string) => {
-    if (!confirm("Delete this call type?")) return;
+    const ok = await confirm({
+      title: "Delete this call type?",
+      description: "Call types already attached to tickets are not affected.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("call_type_master").delete().eq("id", id);
     if (error) return toast.error(error.message);
     load();

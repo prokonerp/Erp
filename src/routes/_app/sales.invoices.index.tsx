@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, FileText } from "lucide-react";
 import {
   inr,
@@ -15,6 +16,7 @@ import { useDebounced, pageRange } from "@/lib/sales.hooks";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { PermButton } from "@/components/PermGate";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 
 export const Route = createFileRoute("/_app/sales/invoices/")({
@@ -29,7 +31,9 @@ function InvoiceList() {
   const pageSize = 50;
   const debouncedQ = useDebounced(q.trim(), 300);
   // Reset paging when filters change.
-  useMemo(() => setPage(0), [debouncedQ, status]);
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedQ, status]);
 
   const query = useQuery({
     queryKey: ["invoices", { status, q: debouncedQ, page, pageSize }],
@@ -121,11 +125,7 @@ function InvoiceList() {
       header: "Status",
       render: (r) => {
         const s = statusMeta(r.status);
-        return (
-          <span className={"inline-block px-2 py-0.5 rounded-full text-xs " + s.tone}>
-            {s.label}
-          </span>
-        );
+        return <StatusBadge tone={s.badgeTone}>{s.label}</StatusBadge>;
       },
     },
     {
@@ -166,6 +166,7 @@ function InvoiceList() {
         columns={columns}
         data={rows}
         isLoading={query.isLoading}
+        totalRecords={total ?? undefined}
         emptyIcon={FileText}
         emptyTitle={q || status !== "all" ? "No invoices match your filters" : "No invoices yet"}
         emptyHint={
@@ -200,18 +201,22 @@ function InvoiceList() {
                 className="pl-8 w-72 h-9"
               />
             </div>
-            <select
-              className="h-9 rounded-md border bg-background px-2 text-sm"
+            <Select
               value={status}
-              onChange={(e) => setStatus(e.target.value as any)}
+              onValueChange={(v) => setStatus(v as InvoiceStatus | "all")}
             >
-              <option value="all">All statuses</option>
-              {INVOICE_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-44 h-9">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {INVOICE_STATUSES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="ml-auto text-xs text-muted-foreground">
               <span className="mr-3">
                 Page total: <b>{inr(totals.total)}</b>

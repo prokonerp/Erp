@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
+import { PageLoader } from "@/components/shared/skeletons";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -45,7 +46,7 @@ function AuthPage() {
     void navigate({ to: target, search: {} });
   }, [session, next, pathname, navigate]);
 
-  if (loading) return <div className="p-8">Loading…</div>;
+  if (loading) return <PageLoader />;
 
 
   const signIn = async () => {

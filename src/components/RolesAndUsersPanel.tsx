@@ -41,6 +41,7 @@ import { Trash2, Plus, KeyRound, Pencil, ShieldAlert, Boxes } from "lucide-react
 import { toast } from "sonner";
 import { ModuleKey, ModulePerm, EMPTY_PERM } from "@/lib/permissions";
 import { useModules, type AppModule } from "@/lib/useModules";
+import { useConfirm } from "@/hooks/useConfirm";
 import {
   Select,
   SelectContent,
@@ -132,6 +133,7 @@ export function RolesAndUsersPanel({ isAdmin }: { isAdmin: boolean }) {
 
 /* ---------------- Roles + permission matrix ---------------- */
 function RolesSection() {
+  const confirm = useConfirm();
   const [roles, setRoles] = useState<Role[]>([]);
   const [perms, setPerms] = useState<Perm[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -173,7 +175,13 @@ function RolesSection() {
 
   async function deleteRole(r: Role) {
     if (r.is_system) return toast.error("System roles cannot be deleted");
-    if (!confirm(`Delete role "${r.name}"?`)) return;
+    const ok = await confirm({
+      title: `Delete role "${r.name}"?`,
+      description: "Users assigned to this role lose those permissions until reassigned.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("app_roles").delete().eq("id", r.id);
     if (error) return toast.error(error.message);
     toast.success("Deleted");
@@ -379,6 +387,7 @@ function PermissionMatrix({
 
 /* ---------------- Users section ---------------- */
 function UsersSection() {
+  const confirm = useConfirm();
   const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [authUsers, setAuthUsers] = useState<
     { id: string; email: string | null; last_sign_in_at: string | null | undefined }[]
@@ -573,7 +582,13 @@ function UsersSection() {
                             size="icon"
                             variant="ghost"
                             onClick={async () => {
-                              if (!confirm(`Delete user ${u.email ?? u.user_id}?`)) return;
+                              const ok = await confirm({
+                                title: `Delete user ${u.email ?? u.user_id}?`,
+                                description: "The user's account and session will be removed. This cannot be undone.",
+                                confirmLabel: "Delete",
+                                variant: "danger",
+                              });
+                              if (!ok) return;
                               try {
                                 await callDel({ data: { user_id: u.user_id } });
                                 toast.success("Deleted");
@@ -851,6 +866,7 @@ function PasswordDialog({
 }
 /* ---------------- Modules registry ---------------- */
 function ModulesSection() {
+  const confirm = useConfirm();
   const { modules, loading, reload } = useModules({ includeInactive: true });
   const [busy, setBusy] = useState(false);
   const [k, setK] = useState("");
@@ -881,7 +897,13 @@ function ModulesSection() {
   }
 
   async function remove(m: AppModule) {
-    if (!confirm(`Delete module "${m.label}"? This will remove all role permissions for it.`)) return;
+    const ok = await confirm({
+      title: `Delete module "${m.label}"?`,
+      description: "This removes the module and all role permissions tied to it. Existing data is unaffected.",
+      confirmLabel: "Delete Module",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("app_modules").delete().eq("key", m.key);
     if (error) return toast.error(error.message);
     await supabase.from("role_module_permissions").delete().eq("module", m.key);

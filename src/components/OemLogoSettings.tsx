@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2, Upload, ArrowUp, ArrowDown, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listOemLogos, withSignedUrls, uploadLogoFile, deleteLogoFile,
@@ -16,6 +17,7 @@ import {
 import { useIsAdmin } from "@/lib/useRole";
 
 export function OemLogoSettings() {
+  const confirm = useConfirm();
   const { isAdmin } = useIsAdmin();
   const [rows, setRows] = useState<OemLogoWithUrl[]>([]);
   const [busy, setBusy] = useState(false);
@@ -60,7 +62,13 @@ export function OemLogoSettings() {
   };
 
   const remove = async (row: OemLogoWithUrl) => {
-    if (!confirm(`Delete logo "${row.oem_name}"?`)) return;
+    const ok = await confirm({
+      title: `Delete logo "${row.oem_name}"?`,
+      description: "The logo file is removed from storage and the brand logo is cleared.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("oem_logos").delete().eq("id", row.id);
     if (error) return toast.error(error.message);
     await deleteLogoFile(row.logo_path);

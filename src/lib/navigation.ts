@@ -28,6 +28,8 @@ import {
   Search,
   Upload,
   Archive,
+  Plus,
+  Send,
   type LucideIcon,
 } from "lucide-react";
 import type { ModuleKey } from "./permissions";
@@ -41,6 +43,12 @@ export type NavItem = {
   adminOnly?: boolean;
   group?: string;
   matchSearchTab?: string;
+  /**
+   * Path prefixes that should NOT activate this item even though they fall
+   * under `to`. Lets a list item and its sibling "New …" item highlight
+   * independently (e.g. /gatepass stays dark on /gatepass/new).
+   */
+  excludeActive?: string[];
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -194,6 +202,51 @@ export const NAV_ITEMS: NavItem[] = [
     group: "Procurement",
   },
   { to: "/po", label: "Purchase Orders", icon: FileText, module: "po", group: "Procurement" },
+  {
+    to: "/gatepass",
+    label: "Gate Passes",
+    icon: FileText,
+    module: "gatepass",
+    group: "Material Movement",
+    excludeActive: ["/gatepass/new"],
+  },
+  {
+    to: "/gatepass/new",
+    label: "New Gate Pass",
+    icon: Plus,
+    module: "gatepass",
+    group: "Material Movement",
+  },
+  {
+    to: "/challan",
+    label: "Delivery Challans",
+    icon: Send,
+    module: "gatepass",
+    group: "Material Movement",
+    excludeActive: ["/challan/new"],
+  },
+  {
+    to: "/challan/new",
+    label: "New Delivery Challan",
+    icon: PackageCheck,
+    module: "gatepass",
+    group: "Material Movement",
+  },
+  {
+    to: "/grn",
+    label: "GRNs (Goods Receipt)",
+    icon: PackageCheck,
+    module: "gatepass",
+    group: "Material Movement",
+    excludeActive: ["/grn/new"],
+  },
+  {
+    to: "/grn/new",
+    label: "New GRN",
+    icon: ClipboardList,
+    module: "gatepass",
+    group: "Material Movement",
+  },
   { to: "/ims", label: "Inventory (IMS)", icon: Warehouse, module: "ims", group: "Inventory" },
   {
     to: "/ims/defective-tags",

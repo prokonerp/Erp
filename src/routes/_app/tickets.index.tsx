@@ -26,6 +26,7 @@ import { useIsAdmin } from "@/lib/useRole";
 import { FormPageHeader } from "@/components/FormPageHeader";
 import { softDelete as softDeleteRow, useRealtimeRefetch } from "@/lib/softDelete";
 import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
+import { useConfirm } from "@/hooks/useConfirm";
 
 const PRIORITY_DOT: Record<string, string> = {
   P1: "bg-red-500",
@@ -796,6 +797,7 @@ function RowActions({
   onNotifyEngineer: (r: Row) => void;
   onSoftDelete: (r: Row) => void;
 }) {
+  const confirm = useConfirm();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -885,8 +887,14 @@ function RowActions({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
-              onClick={() => {
-                if (confirm(`Delete ticket ${r.case_id}? This will hide it from listings (soft delete).`)) onSoftDelete(r);
+              onClick={async () => {
+                const ok = await confirm({
+                  title: `Delete ticket ${r.case_id}?`,
+                  description: "This hides the ticket from listings (soft delete). An admin can restore it from the Archive for 30 days.",
+                  confirmLabel: "Delete",
+                  variant: "danger",
+                });
+                if (ok) onSoftDelete(r);
               }}
             >
               <Trash2 className="h-4 w-4 mr-2" />Delete

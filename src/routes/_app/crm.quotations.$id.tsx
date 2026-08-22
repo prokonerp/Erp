@@ -1,6 +1,7 @@
 import { productDisplayName } from "@/lib/productNames";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PageLoader } from "@/components/shared/skeletons";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -379,7 +380,7 @@ function QuoteEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action, q, settings, company]);
 
-  if (!q || !settings || !company) return <div className="text-muted-foreground">Loading…</div>;
+  if (!q || !settings || !company) return <PageLoader />;
 
   const STATUSES: QuoteStatus[] = ["draft", "sent", "accepted", "declined", "expired", "invoiced"];
 

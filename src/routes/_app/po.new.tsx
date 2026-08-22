@@ -33,7 +33,7 @@ function NewPO() {
   const nav = useNavigate();
   const [dirty, setDirty] = useState(false);
   const markDirty = () => { if (!dirty) setDirty(true); };
-  const blocker = useUnsavedChanges(dirty);
+  const { blocker, markClean } = useUnsavedChanges(dirty);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [branchId, setBranchId] = useState<string>("");
   const [vendor, setVendor] = useState<Vendor | null>(null);
@@ -149,6 +149,8 @@ function NewPO() {
       if (e2) throw e2;
 
       toast.success(`PO ${po.po_no || ""} ${status === "approved" ? "approved" : "saved"}`);
+      // Clear the guard synchronously BEFORE navigating (see useUnsavedChanges).
+      markClean();
       setDirty(false);
       nav({ to: "/po/$id", params: { id: po.id } });
     } catch (e: any) {

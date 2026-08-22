@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { ChevronDown, ChevronRight, Wallet } from "lucide-react";
 import {
   MONTHS, type Advance, type AdvancePayment, type Employee,
@@ -28,6 +29,7 @@ const period = (y: number | null, m: number | null) => (y && m ? `${MONTHS[m - 1
 
 /** Per-employee advance ledger: schedule, installments paid/pending, balance and admin overrides. */
 export function AdvanceLedger({ employees, advances, payments, year, month, isAdmin, onChanged }: Props) {
+  const confirm = useConfirm();
   const [open, setOpen] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [edit, setEdit] = useState<Advance | null>(null);
@@ -168,13 +170,27 @@ export function AdvanceLedger({ employees, advances, payments, year, month, isAd
                                               )}
                                               {!s.closed && (
                                                 <Button size="sm" variant="ghost" className="h-6 px-2 text-xs"
-                                                  onClick={() => {
-                                                    const recover = confirm(`Close this advance.\n\nOK = mark balance ₹${money(s.balance)} as fully recovered.\nCancel = write off the balance.`);
+                                                  onClick={async () => {
+                                                    const recover = await confirm({
+                                                      title: "Close this advance?",
+                                                      description: `Balance ₹${money(s.balance)} — "Mark Recovered" records it as fully recovered; "Write Off" removes the remaining balance.`,
+                                                      confirmLabel: "Mark Recovered",
+                                                      cancelLabel: "Write Off",
+                                                      variant: "danger",
+                                                    });
                                                     void act(() => closeAdvance(a, recover, year, month), "Advance closed");
                                                   }}>Close</Button>
                                               )}
                                               <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-destructive"
-                                                onClick={() => { if (confirm("Delete this advance and its recovery history?")) void act(() => deleteAdvance(a.id), "Advance deleted"); }}>Del</Button>
+                                                onClick={async () => {
+                                                  const ok = await confirm({
+                                                    title: "Delete this advance?",
+                                                    description: "The advance and its full recovery history are permanently removed.",
+                                                    confirmLabel: "Delete",
+                                                    variant: "danger",
+                                                  });
+                                                  if (ok) void act(() => deleteAdvance(a.id), "Advance deleted");
+                                                }}>Del</Button>
                                             </div>
                                           </TableCell>
                                         )}

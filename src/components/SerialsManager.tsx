@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Save, X, Pencil, Upload, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/hooks/useConfirm";
 import { upperTrim } from "@/lib/text";
 
 type Product = {
@@ -59,6 +60,7 @@ function addDuration(start: string, qty: number, unit: string): string {
 }
 
 export function SerialsManager({ product }: { product: Product }) {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<Serial[]>([]);
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([]);
   const [customers, setCustomers] = useState<{ id: string; company: string | null; contact_name: string | null }[]>([]);
@@ -141,7 +143,13 @@ export function SerialsManager({ product }: { product: Product }) {
   }
 
   async function del(id: string) {
-    if (!confirm("Delete this serial?")) return;
+    const ok = await confirm({
+      title: "Delete this serial?",
+      description: "The serial is permanently removed from the catalog.",
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!ok) return;
     const { error } = await supabase.from("serials").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Deleted"); load();

@@ -129,12 +129,22 @@ export const emptyItem = (): ItemDraft => ({
   part_name: null,
 });
 
-export const INVOICE_STATUSES: { value: InvoiceStatus; label: string; tone: string }[] = [
-  { value: "draft", label: "Draft", tone: "bg-slate-200 text-slate-800" },
-  { value: "issued", label: "Issued", tone: "bg-blue-100 text-blue-800" },
-  { value: "partial", label: "Partially Paid", tone: "bg-amber-100 text-amber-800" },
-  { value: "paid", label: "Paid", tone: "bg-emerald-100 text-emerald-800" },
-  { value: "cancelled", label: "Cancelled", tone: "bg-rose-100 text-rose-700" },
+/**
+ * Invoice status metadata. `tone` is the legacy light-only class string kept
+ * for older call sites; new UI should use the theme-aware `badgeTone` with
+ * <StatusBadge /> so colors stay correct in balanced/dark themes.
+ */
+export const INVOICE_STATUSES: {
+  value: InvoiceStatus;
+  label: string;
+  tone: string;
+  badgeTone: "neutral" | "info" | "warning" | "success" | "danger";
+}[] = [
+  { value: "draft", label: "Draft", tone: "bg-slate-200 text-slate-800", badgeTone: "neutral" },
+  { value: "issued", label: "Issued", tone: "bg-blue-100 text-blue-800", badgeTone: "info" },
+  { value: "partial", label: "Partially Paid", tone: "bg-amber-100 text-amber-800", badgeTone: "warning" },
+  { value: "paid", label: "Paid", tone: "bg-emerald-100 text-emerald-800", badgeTone: "success" },
+  { value: "cancelled", label: "Cancelled", tone: "bg-rose-100 text-rose-700", badgeTone: "danger" },
 ];
 
 export function statusMeta(s: InvoiceStatus) {

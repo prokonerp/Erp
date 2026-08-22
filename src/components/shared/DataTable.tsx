@@ -47,11 +47,6 @@ type SortState = { key: string; dir: "asc" | "desc" } | null;
 
 type Density = "comfortable" | "compact";
 
-const ROW_DENSITY: Record<Density, string> = {
-  comfortable: "px-4 py-3",
-  compact: "px-3 py-1.5",
-};
-
 const CELL_DENSITY: Record<Density, string> = {
   comfortable: "px-4 py-3",
   compact: "px-3 py-1.5",
@@ -61,6 +56,15 @@ const HEADER_DENSITY: Record<Density, string> = {
   comfortable: "px-4 py-2.5",
   compact: "px-3 py-1.5",
 };
+
+const DENSITY_STORAGE_KEY = "prokon-table-density";
+
+function readStoredDensity(): Density {
+  if (typeof window === "undefined") return "comfortable";
+  return window.localStorage.getItem(DENSITY_STORAGE_KEY) === "compact"
+    ? "compact"
+    : "comfortable";
+}
 
 export function DataTable<T extends Record<string, any>>({
   columns,
@@ -77,6 +81,7 @@ export function DataTable<T extends Record<string, any>>({
   emptyAction,
   footer,
   toolbar,
+  totalRecords,
   className,
   cardClassName,
 }: {
@@ -96,11 +101,17 @@ export function DataTable<T extends Record<string, any>>({
   emptyAction?: ReactNode;
   footer?: ReactNode;
   toolbar?: ReactNode;
+  /**
+   * True total for server-paginated tables. When omitted the current
+   * `data.length` is shown; pass this so paginated lists don't display
+   * "50 records" for a 5,000-row dataset.
+   */
+  totalRecords?: number;
   className?: string;
   cardClassName?: string;
 }) {
   const [internalSort, setInternalSort] = useState<SortState>(null);
-  const [internalDensity, setInternalDensity] = useState<Density>("comfortable");
+  const [internalDensity, setInternalDensity] = useState<Density>(readStoredDensity);
 
   const sort = controlledSort ?? internalSort;
   const density = controlledDensity ?? internalDensity;
@@ -113,6 +124,15 @@ export function DataTable<T extends Record<string, any>>({
     })();
     if (onSortChange) onSortChange(next);
     else setInternalSort(next);
+  }
+
+  function changeDensity(d: Density) {
+    setInternalDensity(d);
+    try {
+      window.localStorage.setItem(DENSITY_STORAGE_KEY, d);
+    } catch {
+      /* private mode etc. — non-fatal */
+    }
   }
 
   const sortedData = useMemo(() => {
@@ -162,6 +182,7 @@ export function DataTable<T extends Record<string, any>>({
                 <tr>
                   {columns.map((col) => {
                     const isRight = col.align === "right";
+                    const isActiveCol = sort?.key === col.key;
                     return (
                       <th
                         key={col.key}
@@ -169,17 +190,35 @@ export function DataTable<T extends Record<string, any>>({
                           "whitespace-nowrap font-medium",
                           HEADER_DENSITY[density],
                           isRight && "text-right",
-                          col.sortable && "cursor-pointer select-none hover:text-foreground",
                           col.headerClassName,
                         )}
-                        onClick={col.sortable ? () => toggleSort(col.key) : undefined}
+                        aria-sort={
+                          col.sortable
+                            ? isActiveCol
+                              ? sort!.dir === "asc"
+                                ? "ascending"
+                                : "descending"
+                              : "none"
+                            : undefined
+                        }
                       >
-                        <span className={cn("inline-flex items-center gap-1", isRight && "float-right")}>
-                          {col.header}
-                          {col.sortable && (
-                            <SortIndicator active={sort?.key === col.key} dir={sort?.key === col.key ? sort!.dir : null} />
-                          )}
-                        </span>
+                        {col.sortable ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleSort(col.key)}
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                              isRight && "float-right",
+                            )}
+                          >
+                            {col.header}
+                            <SortIndicator active={isActiveCol} dir={isActiveCol ? sort!.dir : null} />
+                          </button>
+                        ) : (
+                          <span className={cn("inline-flex items-center gap-1", isRight && "float-right")}>
+                            {col.header}
+                          </span>
+                        )}
                       </th>
                     );
                   })}
@@ -223,10 +262,11 @@ export function DataTable<T extends Record<string, any>>({
         {footer && (
           <div className="flex items-center justify-between border-t bg-muted/30 px-4 py-2">
             <span className="text-xs text-muted-foreground">
-              {data.length.toLocaleString()} record{data.length === 1 ? "" : "s"}
+              {(totalRecords ?? data.length).toLocaleString()} record
+              {(totalRecords ?? data.length) === 1 ? "" : "s"}
             </span>
             <div className="flex items-center gap-3">
-              <DensityToggle density={density} onChange={controlledDensity ? undefined : setInternalDensity} />
+              <DensityToggle density={density} onChange={controlledDensity ? undefined : changeDensity} />
               {footer}
             </div>
           </div>

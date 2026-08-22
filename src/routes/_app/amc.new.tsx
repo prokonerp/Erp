@@ -31,7 +31,7 @@ function NewAmc() {
   const navigate = useNavigate();
   const [dirty, setDirty] = useState(false);
   const markDirty = () => { if (!dirty) setDirty(true); };
-  const blocker = useUnsavedChanges(dirty);
+  const { blocker, markClean } = useUnsavedChanges(dirty);
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     customer_id: "" as string,
@@ -177,6 +177,8 @@ function NewAmc() {
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("AMC created");
+    // Clear the guard synchronously BEFORE navigating (see useUnsavedChanges).
+    markClean();
     setDirty(false);
     navigate({ to: "/amc/$id", params: { id: (data as { id: string }).id } });
   };

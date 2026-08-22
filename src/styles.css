@@ -406,6 +406,36 @@ button[role="combobox"][name*="uom" i],
   html {
     background-color: var(--color-background);
     font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    scroll-behavior: smooth;
+  }
+
+  /* Theme-aware text selection */
+  ::selection {
+    background: color-mix(in oklab, var(--ring) 28%, transparent);
+  }
+
+  /* Slim, theme-aware scrollbars for a more polished enterprise feel.
+   * Uses the muted-foreground token so it reads well in light/balanced/dark. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+    background-clip: content-box;
   }
 }
 
@@ -414,7 +444,7 @@ body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background-image: url("/__l5e/assets-v1/13531d01-f038-4584-8023-5ab21c3f1f48/prokon-logo.jpeg");
+  background-image: url("/prokon-logo.jpeg");
   background-repeat: no-repeat;
   background-position: center;
   background-size: min(60vw, 640px) auto;
@@ -423,7 +453,40 @@ body::before {
   z-index: -1;
 }
 
+/* =========================
+ * Print styles (Phase 6)
+ * Hides app chrome and produces clean, paper-friendly documents.
+ * Document views (invoices, POs, DCs, challans) rely on their own
+ * white containers; here we just strip the shell and preserve colors.
+ * ========================= */
 @media print {
-  body::before { display: none; }
-  body { margin: 0; }
+  /* Strip the global watermark + any explicitly-marked chrome */
+  body::before { display: none !important; }
+  body { margin: 0; background: #fff !important; }
+
+  .no-print,
+  [data-print="hide"] { display: none !important; }
+
+  /* Full-bleed content: drop the centered max-width + padding */
+  main#main-content {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Preserve status-badge / table-header background colors in print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Avoid breaking a card/row awkwardly across pages */
+  .fk-section,
+  table,
+  tr,
+  .print-keep-together {
+    break-inside: avoid;
+  }
+
+  @page { margin: 14mm; }
 }

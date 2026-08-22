@@ -64,7 +64,7 @@ function NewTicket() {
   const dirtyRef = useRef(false);
   const submittedRef = useRef(false);
   const [dirty, setDirty] = useState(false);
-  const blocker = useUnsavedChanges(dirty);
+  const { blocker, markClean } = useUnsavedChanges(dirty);
 
   useEffect(() => {
     supabase.from("call_type_master").select("name").order("name").then(({ data }) => {
@@ -287,6 +287,8 @@ function NewTicket() {
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Ticket created");
+    // Clear the guard synchronously BEFORE navigating (see useUnsavedChanges).
+    markClean();
     setDirty(false);
     navigate({ to: "/tickets/$id", params: { id: (data as { id: string }).id } });
   };
