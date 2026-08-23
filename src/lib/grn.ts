@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllWith } from "@/lib/fetchAll";
 
 export type GrnCategory = "customer" | "oem" | "general";
 export type GrnStatus = "Draft" | "Submitted" | "Cancelled";
@@ -103,19 +104,15 @@ export const CATEGORY_LABEL: Record<GrnCategory, string> = {
 };
 
 export async function fetchGrns(category: GrnCategory) {
-  const { data, error } = await supabase
-    .from("grns" as never)
-    .select("*").eq("category", category).order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data || []) as unknown as Grn[];
+  // B-11: page past the 1000-row server cap.
+  return fetchAllWith<Grn>((q) =>
+    q.from("grns").select("*").eq("category", category).order("created_at", { ascending: false }));
 }
 
 export async function fetchAllGrns() {
-  const { data, error } = await supabase
-    .from("grns" as never)
-    .select("*").order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data || []) as unknown as Grn[];
+  // B-11: page past the 1000-row server cap.
+  return fetchAllWith<Grn>((q) =>
+    q.from("grns").select("*").order("created_at", { ascending: false }));
 }
 
 export async function fetchGrn(id: string) {

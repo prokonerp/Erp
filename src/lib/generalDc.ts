@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { docStatusSettled } from "@/lib/indent";
+import { istTodayIso } from "@/lib/dateRange";
 
 export type GeneralDcItem = {
   product_id: string | null;
@@ -211,5 +212,5 @@ export function stageReturnGrnPrefill(dc: GeneralDcRow, warehouseNames: Record<s
 /** Overdue = returnable, still out, and the expected return date has passed. */
 export function isReturnOverdue(dc: GeneralDcRow): boolean {
   if (!dc.expected_return_date) return false;
-  return dc.expected_return_date < new Date().toISOString().slice(0, 10);
+  return dc.expected_return_date < istTodayIso();
 }

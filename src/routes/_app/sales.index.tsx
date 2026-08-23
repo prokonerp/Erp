@@ -11,6 +11,7 @@ import {
   TrendingUp, ShoppingCart, ArrowRightLeft, Activity, RotateCcw, PackageCheck,
 } from "lucide-react";
 import { inr, statusMeta, fetchBranches, type InvoiceRow, type BranchRow } from "@/lib/sales";
+import { istTodayIso, daysAgoIst } from "@/lib/dateRange";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 
 // Lazy-load the recharts-backed charts section (~400KB) so the sales dashboard
@@ -27,8 +28,8 @@ type SoRow = { id: string; status: string; salesperson: string | null; branch_id
 type InvSlim = { id: string; status: string; total: number | null; total_paid: number | null; invoice_date: string | null; branch_id: string | null; buyer_name: string | null; buyer_state: string | null; customer_id: string | null; sales_order_id: string | null };
 type ItemSlim = { description: string | null; qty: number | null; line_total: number | null; invoice_id: string };
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
-const daysAgoIso = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+const todayIso = () => istTodayIso();
+const daysAgoIso = (n: number) => daysAgoIst(n);
 const fmtMonth = (d: string) => d.slice(0, 7);
 const monthLabel = (ym: string) => { const [y, m] = ym.split("-"); return new Date(Number(y), Number(m) - 1, 1).toLocaleString("en-IN", { month: "short", year: "2-digit" }); };
 

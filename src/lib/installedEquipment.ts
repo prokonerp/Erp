@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetchAll";
 import { productWarrantyMonths } from "@/lib/sales";
+import { localDateIso } from "@/lib/dateRange";
 
 export type InstalledEquipment = {
   id: string;
@@ -143,7 +144,7 @@ const toIso = (s: string): string | null => {
     return `${y}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   }
   const d = new Date(t);
-  return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+  return isNaN(d.getTime()) ? null : localDateIso(d);
 };
 
 const addMonths = (iso: string, months: number) => addMonthsIso(iso, months);

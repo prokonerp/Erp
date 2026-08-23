@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, ClipboardPaste, Upload, PackageOpen, Plus, Trash2 } from "lucide-react";
 import { listWarehouses, type WarehouseLite } from "@/lib/ims";
 import { cn } from "@/lib/utils";
+import { istTodayIso } from "@/lib/dateRange";
 
 export type OpeningStockRow = {
   warehouse_id: string;
@@ -35,7 +36,7 @@ export const emptyOpeningRow = (): OpeningStockRow => ({
 
 export const emptyOpeningStock = (): OpeningStockState => ({
   enabled: false,
-  date: new Date().toISOString().slice(0, 10),
+  date: istTodayIso(),
   rows: [emptyOpeningRow()],
 });
 

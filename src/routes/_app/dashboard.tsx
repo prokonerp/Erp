@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { istTodayIso, daysAgoIst } from "@/lib/dateRange";
 import { usePermissions } from "@/lib/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -347,16 +348,19 @@ function AmcWidget() {
   useRealtimeRefetch("amcs", load);
 
   const k = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const in30 = new Date(today); in30.setDate(in30.getDate() + 30);
+    // B-13: compare calendar dates as IST strings — parsing date-only values
+    // with new Date() puts them at UTC midnight, which flips contracts
+    // expiring "today" into the wrong bucket for IST.
+    const today = istTodayIso();
+    const in30 = daysAgoIst(-30);
     const a = amcs || []; const p = pms || [];
-    const active = a.filter((x) => x.end_date && new Date(x.end_date) >= today);
+    const active = a.filter((x) => x.end_date && x.end_date >= today);
     const expiring = a.filter((x) => {
       if (!x.end_date) return false;
-      const d = new Date(x.end_date); return d >= today && d <= in30;
+      return x.end_date >= today && x.end_date <= in30;
     });
-    const expired = a.filter((x) => x.end_date && new Date(x.end_date) < today);
-    const pmDue = p.filter((v) => !v.completed_at && new Date(v.scheduled_date) <= in30).length;
+    const expired = a.filter((x) => x.end_date && x.end_date < today);
+    const pmDue = p.filter((v) => !v.completed_at && v.scheduled_date <= in30).length;
     return { active: active.length, expiring: expiring.length, expired: expired.length, pmDue };
   }, [amcs, pms]);
 

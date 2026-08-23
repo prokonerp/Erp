@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { istTodayIso } from "@/lib/dateRange";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,7 +33,7 @@ function NewAmc() {
   const [dirty, setDirty] = useState(false);
   const markDirty = () => { if (!dirty) setDirty(true); };
   const { blocker, markClean } = useUnsavedChanges(dirty);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = istTodayIso();
   const [form, setForm] = useState({
     customer_id: "" as string,
     client_name: "",

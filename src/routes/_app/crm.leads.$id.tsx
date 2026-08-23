@@ -13,6 +13,7 @@ import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail,
 import { toast } from "sonner";
 import { type Lead, type LeadActivity, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel } from "@/lib/crm";
 import { useLeadAssignment } from "@/lib/useLeadAssignment";
+import { istTodayIso } from "@/lib/dateRange";
 import { AdminOnlySection } from "@/components/AdminAccessNotices";
 import { waOpen } from "@/lib/tickets";
 
@@ -120,7 +121,7 @@ function LeadDetail() {
     // 1. update lead
     const { error } = await supabase.from("leads").update({
       status: "won", closed_value: v,
-      closed_at: new Date().toISOString().slice(0, 10),
+      closed_at: istTodayIso(),
       closed_remarks: wonRemarks.trim() || null,
     } as any).eq("id", id);
     if (error) { setBusy(false); return toast.error(error.message); }
@@ -144,7 +145,7 @@ function LeadDetail() {
     setBusy(true);
     const { error } = await supabase.from("leads").update({
       status: "lost",
-      closed_at: new Date().toISOString().slice(0, 10),
+      closed_at: istTodayIso(),
       lost_reason: lostReason,
       closed_remarks: lostRemarks.trim(),
     } as any).eq("id", id);

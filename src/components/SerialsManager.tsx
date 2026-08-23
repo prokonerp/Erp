@@ -11,6 +11,7 @@ import { Plus, Trash2, Save, X, Pencil, Upload, LayoutGrid } from "lucide-react"
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { upperTrim } from "@/lib/text";
+import { localDateIso } from "@/lib/dateRange";
 
 type Product = {
   id: string;
@@ -56,7 +57,7 @@ function addDuration(start: string, qty: number, unit: string): string {
   if (unit === "Years") d.setFullYear(d.getFullYear() + qty);
   else d.setMonth(d.getMonth() + qty);
   d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return localDateIso(d);
 }
 
 export function SerialsManager({ product }: { product: Product }) {

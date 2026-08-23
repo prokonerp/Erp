@@ -1,5 +1,6 @@
 import {
   computeTotals,
+  apportionHeaderDiscount,
   stateCodeFromGSTIN,
   stateNameFromCode,
   isValidGSTIN,
@@ -85,6 +86,77 @@ describe("gst/computeTotals — interstate", () => {
     expect(r.cgst).toBe(0);
     expect(r.sgst).toBe(0);
     expect(r.total).toBe(1180);
+  });
+});
+
+describe("gst/computeTotals — header discount apportionment (B-03)", () => {
+  it("reduces line taxable values so Σ(lines) equals the discounted header", () => {
+    const r = computeTotals({
+      sellerStateCode: "29",
+      buyerStateCode: "29",
+      items: [{ qty: 10, rate: 100, gst_rate: 18 }],
+      headerDiscount: 100,
+      roundOff: true,
+    });
+    expect(r.subtotal).toBe(1000);
+    expect(r.discount).toBe(100);
+    expect(r.taxable_value).toBe(900);
+    const sumLines = r.items.reduce((s, b) => s + b.taxable_value, 0);
+    expect(sumLines).toBeCloseTo(r.taxable_value, 2);
+    // GST must be charged on the post-discount value
+    expect(r.cgst).toBe(81);
+    expect(r.sgst).toBe(81);
+    expect(r.total).toBe(1062);
+  });
+
+  it("splits evenly when lines have equal value", () => {
+    const r = computeTotals({
+      sellerStateCode: "29",
+      buyerStateCode: "07",
+      items: [
+        { qty: 1, rate: 100, gst_rate: 18 },
+        { qty: 2, rate: 50, gst_rate: 18 },
+      ],
+      headerDiscount: 30,
+      roundOff: false,
+    });
+    expect(r.taxable_value).toBe(170);
+    expect(r.igst).toBeCloseTo(30.6, 2);
+  });
+
+  it("largest-remainder keeps paise exact across uneven lines", () => {
+    const items = [
+      { qty: 1, rate: 100, gst_rate: 0 },
+      { qty: 1, rate: 100, gst_rate: 0 },
+    ];
+    const r = computeTotals({
+      sellerStateCode: "29",
+      buyerStateCode: "07",
+      items,
+      headerDiscount: 10.01,
+      roundOff: false,
+    });
+    expect(r.taxable_value).toBe(189.99);
+    const sumLines = r.items.reduce((s, b) => s + b.taxable_value, 0);
+    expect(sumLines).toBeCloseTo(189.99, 2);
+  });
+
+  it("apportionHeaderDiscount never discounts a line below zero", () => {
+    const out = apportionHeaderDiscount(
+      [{ qty: 1, rate: 10, gst_rate: 0 }, { qty: 1, rate: 90, gst_rate: 0 }],
+      500,
+      false,
+    );
+    expect(out.every((b) => b.taxable_value >= 0)).toBe(true);
+    const sum = out.reduce((s, b) => s + b.taxable_value, 0);
+    expect(sum).toBeCloseTo(0, 2);
+  });
+
+  it("returns unchanged breakups when there is no header discount", () => {
+    const items = [{ qty: 2, rate: 50, gst_rate: 18 }];
+    const out = apportionHeaderDiscount(items, 0, true);
+    expect(out[0].taxable_value).toBe(100);
+    expect(out[0].igst).toBe(18);
   });
 });
 

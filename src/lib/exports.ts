@@ -4,6 +4,8 @@ export type ExportColumn<T> = {
   get: (row: T) => string | number | null | undefined;
 };
 
+import { istTodayIso } from "@/lib/dateRange";
+
 const safeStr = (v: unknown): string => {
   if (v === null || v === undefined) return "";
   if (v instanceof Date) return v.toISOString();
@@ -20,7 +22,7 @@ const downloadBlob = (blob: Blob, filename: string) => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
-const stamp = () => new Date().toISOString().slice(0, 10);
+const stamp = () => istTodayIso();
 
 export function exportCSV<T>(name: string, cols: ExportColumn<T>[], rows: T[]) {
   const esc = (s: string) => {

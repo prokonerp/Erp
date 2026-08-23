@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { istTodayIso, daysAgoIst } from "@/lib/dateRange";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
@@ -154,8 +155,8 @@ function ReportsPage() {
     return true;
   }), [enriched, wh, q]);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const today = istTodayIso();
+  const in30 = daysAgoIst(-30);
   const warrantyRows = useMemo(() => filtered.filter((r) => r.warranty_end_date), [filtered]);
   function warrantyState(end: string) {
     if (end < today) return { label: "Expired", cls: "bg-red-100 text-red-800" };

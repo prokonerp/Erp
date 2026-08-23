@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, FilePlus2 } from "lucide-react";
 import { fmtDate } from "@/lib/amc";
+import { localDateIso } from "@/lib/dateRange";
 
 export const Route = createFileRoute("/_app/amc/oem/$source/$id")({
   component: OemDetail,
@@ -35,7 +36,7 @@ function deriveExpiry(purchase: string | null): string | null {
   const d = new Date(purchase + "T00:00:00");
   d.setFullYear(d.getFullYear() + 1);
   d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return localDateIso(d);
 }
 
 function statusOf(expiry: string | null) {

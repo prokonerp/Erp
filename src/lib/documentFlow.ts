@@ -8,6 +8,7 @@
 import type { Quotation, QuoteItem } from "@/lib/crm";
 import type { SalesOrder, SoItem } from "@/lib/salesOrders";
 import type { DeliveryChallan, ChallanItem } from "@/lib/challan";
+import { istTodayIso } from "@/lib/dateRange";
 
 // -------- Quotation → Sales Order --------
 
@@ -32,7 +33,7 @@ export type NewSalesOrder = Omit<
 export function quoteToSalesOrder(q: Quotation): NewSalesOrder {
   const items = (q.items || []).map(quoteItemToSoItem);
   return {
-    so_date: new Date().toISOString().slice(0, 10),
+    so_date: istTodayIso(),
     valid_until: q.expiry_date,
     expected_delivery: null,
     branch_id: q.branch_id,
@@ -105,7 +106,7 @@ export function salesOrderToDeliveryChallan(so: SalesOrder): NewDeliveryChallan 
   return {
     doc_type: "customer",
     status: "Draft",
-    challan_date: new Date().toISOString().slice(0, 10),
+    challan_date: istTodayIso(),
     dispatch_date: null,
     reference_no: so.so_no,
     sales_order_no: so.so_no,
@@ -151,7 +152,7 @@ export function salesOrderToInvoice(so: SalesOrder): NewInvoicePayload {
   return {
     branch_id: so.branch_id,
     customer_id: so.customer_id,
-    invoice_date: new Date().toISOString().slice(0, 10),
+    invoice_date: istTodayIso(),
     billing_address: so.billing_address,
     shipping_address: so.shipping_address,
     place_of_supply: so.place_of_supply,
@@ -188,7 +189,7 @@ export function deliveryChallanToInvoice(
   return {
     branch_id: null,
     customer_id: null,
-    invoice_date: new Date().toISOString().slice(0, 10),
+    invoice_date: istTodayIso(),
     billing_address: dc.delivery_address,
     shipping_address: dc.delivery_address,
     place_of_supply: null,

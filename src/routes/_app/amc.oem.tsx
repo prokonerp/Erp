@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Eye, FilePlus2, Search } from "lucide-react";
 import { fmtDate } from "@/lib/amc";
+import { istTodayIso, localDateIso } from "@/lib/dateRange";
 
 export const Route = createFileRoute("/_app/amc/oem")({
   component: AmcOemData,
@@ -35,7 +36,7 @@ function deriveExpiry(purchase: string | null): string | null {
   const d = new Date(purchase + "T00:00:00");
   d.setFullYear(d.getFullYear() + 1);
   d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return localDateIso(d);
 }
 
 function statusOf(expiry: string | null): { label: string; cls: string } {
@@ -59,7 +60,7 @@ function AmcOemData() {
 
   const load = async () => {
     setLoading(true);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = istTodayIso();
 
     // 1. OEM sources
     const [tk, am, pm] = await Promise.all([

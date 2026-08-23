@@ -7,9 +7,15 @@ import { supabase } from "@/integrations/supabase/client";
  * Usage:
  *   const rows = await fetchAll("customers", (q) => q.select("*").order("company"));
  */
-export async function fetchAll<T = any>(
-  table: string,
-  build: (q: any) => any,
+/**
+ * Fetch ALL rows for a Supabase query, bypassing the default 1000-row cap
+ * by paging through with .range() in batches of `pageSize`.
+ *
+ * Usage:
+ *   const rows = await fetchAllWith<Grn>((q) => q.from("grns").select("*").order("created_at"));
+ */
+export async function fetchAllWith<T = any>(
+  build: (sbClient: any) => any,
   pageSize = 1000,
 ): Promise<T[]> {
   const all: T[] = [];
@@ -17,7 +23,7 @@ export async function fetchAll<T = any>(
   // Safety cap to avoid runaway loops
   for (let i = 0; i < 1000; i++) {
     const to = from + pageSize - 1;
-    const q = build((supabase as any).from(table)).range(from, to);
+    const q = build(supabase).range(from, to);
     const { data, error } = await q;
     if (error) throw error;
     const batch = (data || []) as T[];
@@ -26,4 +32,12 @@ export async function fetchAll<T = any>(
     from += pageSize;
   }
   return all;
+}
+
+export async function fetchAll<T = any>(
+  table: string,
+  build: (q: any) => any,
+  pageSize = 1000,
+): Promise<T[]> {
+  return fetchAllWith<T>((client) => build(client.from(table)), pageSize);
 }

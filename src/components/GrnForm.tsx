@@ -18,6 +18,7 @@ import type { Customer } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { BranchPicker } from "@/components/BranchPicker";
 import { listWarehouses, type WarehouseLite } from "@/lib/ims";
+import { istTodayIso } from "@/lib/dateRange";
 import { getCurrentUserName } from "@/lib/currentUser";
 
 const custCode = (id: string) => `CUST-${id.slice(0, 6).toUpperCase()}`;
@@ -44,7 +45,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   const [warehouseId, setWarehouseId] = useState<string | null>(null);
   const [form, setForm] = useState({
     status: "Draft",
-    grn_date: new Date().toISOString().slice(0, 10),
+    grn_date: istTodayIso(),
     receipt_date: "",
     reference_no: "",
     source_doc_type:
@@ -221,6 +222,14 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         return;
       }
       const r = data as Record<string, unknown>;
+      // B-08: only Draft GRNs are editable. A Submitted GRN has already been
+      // posted to inventory — editing it here would double-post stock and
+      // serials. Corrections go through the admin reverse flow instead.
+      if ((r.status as string | undefined)?.toLowerCase() === "submitted") {
+        toast.error("This GRN has already been submitted — stock has been posted. Use Admin → Reverse if a correction is needed.");
+        navigate({ to: "/grn/$id", params: { id: editId } });
+        return;
+      }
       setCategory((r.category as GrnCategory) || "customer");
       const arr = Array.isArray(r.items) ? (r.items as GrnItem[]) : [];
       setItems(arr.length > 0 ? arr.map((it) => ({ ...emptyGrnItem(), ...it })) : [emptyGrnItem()]);
@@ -302,13 +311,22 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     if (clean.length === 0) { toast.error("Add at least one material row"); return false; }
     for (let i = 0; i < clean.length; i++) {
       const it = clean[i];
-      const qty = Math.max(1, Math.floor(parseFloat(it.qty_received) || 1));
+      // B-09: never coerce a blank/garbage quantity into a unit — validate it.
+      const rawQty = parseFloat(it.qty_received);
+      if (!Number.isFinite(rawQty) || rawQty <= 0) {
+        toast.error(`Row ${i + 1}: enter a valid received quantity`);
+        return false;
+      }
       const list = (it.serials && it.serials.length
         ? it.serials
         : (it.serial_no || "").split(",")).map((s) => s.trim()).filter(Boolean);
       if (list.length === 0) continue; // non-serialized row
-      if (list.length !== qty) {
-        toast.error(`Row ${i + 1}: enter one serial number per unit (${qty} required)`);
+      if (!Number.isInteger(rawQty)) {
+        toast.error(`Row ${i + 1}: serialized rows need a whole-number quantity (got ${rawQty})`);
+        return false;
+      }
+      if (list.length !== rawQty) {
+        toast.error(`Row ${i + 1}: enter one serial number per unit (${rawQty} required)`);
         return false;
       }
       if (new Set(list.map((s) => s.toLowerCase())).size !== list.length) {
@@ -354,6 +372,23 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     setBusy(true);
     const approverName = approve ? await getCurrentUserName() : "";
     if (editId) {
+      // B-08 (defense-in-depth): re-verify server-side state right before
+      // writing — someone else may have submitted this GRN while we edited.
+      const { data: currentRow, error: statusCheckErr } = await supabase
+        .from("grns" as never)
+        .select("status")
+        .eq("id", editId)
+        .maybeSingle();
+      if (statusCheckErr) {
+        setBusy(false);
+        return toast.error(statusCheckErr.message);
+      }
+      if ((currentRow as { status?: string } | null)?.status?.toLowerCase() === "submitted") {
+        setBusy(false);
+        toast.error("This GRN was just submitted by someone else — stock is already posted. Edit blocked.");
+        navigate({ to: "/grn/$id", params: { id: editId } });
+        return;
+      }
       const updatePayload = {
         ...form,
         warehouse_name: warehouseName,

@@ -489,7 +489,27 @@ export async function saveAttendance(rows: AttendanceWrite[], action = "edit"): 
     };
   });
   const { error: aErr } = await supabase.from("attendance_audit").insert(audit);
-  if (aErr) throw aErr;
+  if (aErr) {
+    // B-24: never keep attendance changes without their audit trail — roll
+    // the cells back to their previous values before surfacing the error.
+    const rollback = rows.map((r) => {
+      const [y, m, d] = r.work_date.split("-").map(Number);
+      const old = prev.get(`${r.employee_id}|${r.work_date}`);
+      if (!old) {
+        return supabase.from("attendance").delete().eq("employee_id", r.employee_id).eq("work_date", r.work_date);
+      }
+      return supabase.from("attendance").upsert({
+        employee_id: r.employee_id, work_date: r.work_date,
+        code: old.code, work_hours: old.work_hours,
+        day_value: old.day_value ?? dayValueFor(old.code as AttCode, old.work_hours, isSundayDate(y, m, d)),
+        is_sunday: isSundayDate(y, m, d), updated_by: actor.id,
+      }, { onConflict: "employee_id,work_date" });
+    });
+    try { await Promise.all(rollback); } catch (rbErr) {
+      console.error("ATTENTION: attendance audit failed AND rollback failed — manual review needed:", rbErr);
+    }
+    throw new Error(`Attendance was not saved (audit recording failed): ${aErr.message}`);
+  }
   return batchId;
 }
 
@@ -573,7 +593,12 @@ export async function clearAttendance(year: number, month: number, employeeId: s
   let del = supabase.from("attendance").delete().gte("work_date", from).lte("work_date", to);
   if (employeeId) del = del.eq("employee_id", employeeId);
   const { error: dErr } = await del;
-  if (dErr) throw dErr;
+  if (dErr) {
+    // B-24: the audit batch describes a deletion that did NOT happen —
+    // remove it so history stays truthful, then surface the failure.
+    await supabase.from("attendance_audit").delete().eq("batch_id", batchId);
+    throw dErr;
+  }
   return rows.length;
 }
 
@@ -682,7 +707,17 @@ export async function skipAdvanceMonth(a: Advance, year: number, month: number) 
     .from("employee_advances")
     .update({ emi_months: Math.max(1, Number(a.emi_months ?? 1)) + 1 })
     .eq("id", a.id);
-  if (error) throw error;
+  if (error) {
+    // B-24: paired-write compensation — remove the skip row if the schedule
+    // extension failed so the two tables stay consistent.
+    try {
+      await supabase.from("advance_payments").delete()
+        .eq("advance_id", a.id).eq("period_year", year).eq("period_month", month).eq("kind", "skip");
+    } catch (cleanupErr) {
+      console.error("skipAdvanceMonth cleanup failed — manual review needed:", cleanupErr);
+    }
+    throw error;
+  }
 }
 
 /** Admin override: edit EMI amount / installments / start period. */
@@ -710,7 +745,19 @@ export async function closeAdvance(a: Advance, recoverBalance: boolean, year: nu
       ...(recoverBalance ? { paid_amount: s.total, paid_installments: Number(a.paid_installments ?? 0) + (s.balance > 0 ? 1 : 0) } : {}),
     })
     .eq("id", a.id);
-  if (error) throw error;
+  if (error) {
+    // B-24: keep payment + advance consistent — drop the closing payment we
+    // just wrote if the advance row could not be closed.
+    if (recoverBalance && s.balance > 0) {
+      try {
+        await supabase.from("advance_payments").delete()
+          .eq("advance_id", a.id).eq("period_year", year).eq("period_month", month).eq("kind", "closing");
+      } catch (cleanupErr) {
+        console.error("closeAdvance cleanup failed — manual review needed:", cleanupErr);
+      }
+    }
+    throw error;
+  }
 }
 
 export async function deleteAdvance(id: string) {

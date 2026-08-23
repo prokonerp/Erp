@@ -23,6 +23,7 @@ import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quo
 import { ExportButtons } from "@/components/ExportButtons";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { cn } from "@/lib/utils";
+import { istTodayIso } from "@/lib/dateRange";
 import { useDebounced } from "@/lib/sales.hooks";
 
 export const Route = createFileRoute("/_app/crm/quotations")({ component: Page });
@@ -63,7 +64,7 @@ function QuotesList() {
     if (!custId) return toast.error("Select customer");
     const cust = cmap[custId] || (await fetchCustomersByIds([custId]))[0];
     const { data: u } = await supabase.auth.getUser();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = istTodayIso();
     const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);
     const { data, error } = await supabase.from("quotations").insert({
       customer_id: custId, owner_id: u.user!.id,
@@ -337,7 +338,7 @@ function QuotesWorkspace() {
     try {
       const last = sessionStorage.getItem("quotes_last_selected");
       if (last) setSelectedId(last);
-    } catch {}
+    } catch { /* private-mode browsing: ignore */ }
   }, []);
 
   // Auto-select first item when list changes and nothing selected.
@@ -348,7 +349,7 @@ function QuotesWorkspace() {
   // Fetch selected quote details (with cache).
   useEffect(() => {
     if (!selectedId) { setSelected(null); return; }
-    try { sessionStorage.setItem("quotes_last_selected", selectedId); } catch {}
+    try { sessionStorage.setItem("quotes_last_selected", selectedId); } catch { /* private-mode browsing: ignore */ }
     const cached = cacheRef.current.get(selectedId);
     if (cached) { setSelected(cached); return; }
     setSelLoading(true);
@@ -394,7 +395,7 @@ function QuotesWorkspace() {
     if (!newCustId) return toast.error("Select customer");
     const cust = cmap[newCustId] || (await fetchCustomersByIds([newCustId]))[0];
     const { data: u } = await supabase.auth.getUser();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = istTodayIso();
     const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);
     const { data, error } = await supabase.from("quotations").insert({
       customer_id: newCustId, owner_id: u.user!.id,
@@ -434,9 +435,11 @@ function QuotesWorkspace() {
     if (!selected) return;
     setConverting(true);
     try {
+      // createSalesOrderFromQuote already flips the quote to "accepted" and
+      // links converted_to_so_id — the old extra status write here was
+      // redundant and unchecked (double-write race, finding #39).
       const so = await createSalesOrderFromQuote(selected);
       toast.success(`Sales Order ${so.so_no || ""} created`);
-      await supabase.from("quotations").update({ status: "accepted" }).eq("id", selected.id);
       nav({ to: "/sales/orders/$id", params: { id: so.id } });
     } catch (e: any) {
       toast.error(e?.message || "Failed to convert");

@@ -64,7 +64,11 @@ function CrmSettingsPage() {
       variant: "danger",
     });
     if (!ok) return;
-    await supabase.from("quote_terms_templates").delete().eq("id", id);
+    const { error } = await supabase.from("quote_terms_templates").delete().eq("id", id);
+    if (error) {
+      toast.error(`Delete failed: ${error.message}`);
+      return;
+    }
     load();
   };
   const saveTpls = async () => {

@@ -1,3 +1,5 @@
+import { stateCodeFromGSTIN } from "@/lib/gst";
+
 export type Customer = {
   id: string;
   company: string;
@@ -258,6 +260,23 @@ export function lineTax(it: QuoteItem): number {
   return +((lineAmount(it) * Number(it.tax_percent || 0)) / 100).toFixed(2);
 }
 
+/**
+ * B-04: single source of truth for intra- vs inter-state supply.
+ * GSTIN state codes win when both sides are known (matching the invoice
+ * engine); free-text state names are only the fallback.
+ */
+export function isIntraSupply(opts: {
+  seller_gstin?: string | null;
+  buyer_gstin?: string | null;
+  place_of_supply?: string | null;
+  business_state: string;
+}): boolean {
+  const sellerCode = opts.seller_gstin ? stateCodeFromGSTIN(opts.seller_gstin) : null;
+  const buyerCode = opts.buyer_gstin ? stateCodeFromGSTIN(opts.buyer_gstin) : null;
+  if (sellerCode && buyerCode) return sellerCode === buyerCode;
+  return (opts.place_of_supply || "").trim().toLowerCase() === opts.business_state.trim().toLowerCase();
+}
+
 export function computeQuoteTotals(q: {
   items: QuoteItem[];
   discount_amount: number;
@@ -267,11 +286,22 @@ export function computeQuoteTotals(q: {
   round_off: number;
   place_of_supply: string | null;
   business_state: string;
+  /** B-04: GSTINs take precedence over free-text state names when deciding
+   *  intra vs inter-state — the invoice engine (gst.ts) derives the tax type
+   *  from GSTIN codes, so the quote must use the identical rule or a quote can
+   *  show CGST+SGST while its invoice charges IGST. */
+  seller_gstin?: string | null;
+  buyer_gstin?: string | null;
 }) {
   const subtotal = +q.items.reduce((s, it) => s + lineAmount(it), 0).toFixed(2);
   const total_tax = +q.items.reduce((s, it) => s + lineTax(it), 0).toFixed(2);
 
-  const intra = (q.place_of_supply || "").trim().toLowerCase() === q.business_state.trim().toLowerCase();
+  const intra = isIntraSupply({
+    seller_gstin: q.seller_gstin,
+    buyer_gstin: q.buyer_gstin,
+    place_of_supply: q.place_of_supply,
+    business_state: q.business_state,
+  });
   const cgst_amount = intra ? +(total_tax / 2).toFixed(2) : 0;
   const sgst_amount = intra ? +(total_tax - cgst_amount).toFixed(2) : 0;
   const igst_amount = intra ? 0 : total_tax;

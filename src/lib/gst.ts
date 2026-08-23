@@ -76,23 +76,95 @@ export function computeLine(
   };
 }
 
+/**
+ * Distribute a header-level discount across line items so that the sum of the
+ * per-line taxable values equals the invoice-level taxable value (B-03).
+ *
+ * Without this, an invoice with a header discount saves line items whose
+ * taxable_value still add up to the *undiscounted* subtotal — the printed
+ * header and the stored item rows disagree, which breaks GSTR-1 item-wise
+ * filing.
+ *
+ * The discount is shared in proportion to each line's taxable value, using
+ * integer-paise largest-remainder rounding so the shares always sum to exactly
+ * the header discount (no drift), and no line is discounted below zero.
+ */
+export function apportionHeaderDiscount(
+  items: GstItemInput[],
+  headerDiscount: number,
+  isInterstate: boolean,
+): GstItemBreakup[] {
+  const breakups = items.map((it) => computeLine(it, isInterstate));
+  const disc = r2(Number(headerDiscount) || 0);
+  if (disc <= 0) return breakups;
+  const subtotal = r2(breakups.reduce((s, b) => s + b.taxable_value, 0));
+  if (subtotal <= 0) return breakups;
+
+  const totalPaise = Math.round(disc * 100);
+  const exact = breakups.map((b) => (b.taxable_value / subtotal) * totalPaise);
+  const paise = exact.map((x) => Math.floor(x));
+  let rem = totalPaise - paise.reduce((s, x) => s + x, 0);
+
+  // Give leftover paise to the lines with the largest fractional remainder.
+  const order = exact
+    .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (let k = 0; rem > 0 && order.length > 0; k++) {
+    paise[order[k % order.length].i] += 1;
+    rem--;
+  }
+
+  // Never discount a line below zero taxable value.
+  for (let i = 0; i < paise.length; i++) {
+    const maxPaise = Math.round(breakups[i].taxable_value * 100);
+    if (paise[i] > maxPaise) paise[i] = maxPaise;
+  }
+
+  return breakups.map((b, i) => {
+    const taxable = r2(b.taxable_value - paise[i] / 100);
+    const gstAmt = r2((taxable * (Number(items[i].gst_rate) || 0)) / 100);
+    const cessAmt = r2((taxable * (Number(items[i].cess_rate) || 0)) / 100);
+    const cgst = isInterstate ? 0 : r2(gstAmt / 2);
+    const sgst = isInterstate ? 0 : r2(gstAmt - cgst);
+    const igst = isInterstate ? gstAmt : 0;
+    return {
+      taxable_value: taxable,
+      cgst,
+      sgst,
+      igst,
+      cess: cessAmt,
+      line_total: r2(taxable + cgst + sgst + igst + cessAmt),
+    };
+  });
+}
+
 export function computeTotals(args: {
   sellerStateCode: string | null | undefined;
   buyerStateCode: string | null | undefined;
   items: GstItemInput[];
   headerDiscount?: number;
   roundOff?: boolean;
-}): GstTotals {
-  const isInterstate =
+}): GstTotals {  const isInterstate =
     !!args.sellerStateCode && !!args.buyerStateCode && args.sellerStateCode !== args.buyerStateCode;
-  const breakups = args.items.map((it) => computeLine(it, isInterstate));
-  const subtotal = r2(breakups.reduce((s, b) => s + b.taxable_value, 0));
+  // B-03: a header-level discount must be pushed into the line breakups so
+  // that Σ(line.taxable_value) equals the invoice-level taxable value and
+  // GST is computed on the post-discount amount. Without this, stored
+  // invoice_items disagree with the invoice header (GSTR-1 mismatch).
+  const headerDisc = r2(Number(args.headerDiscount) || 0);
+  const preDiscountBreakups = args.items.map((it) => computeLine(it, isInterstate));
+  const breakups =
+    headerDisc > 0
+      ? apportionHeaderDiscount(args.items, headerDisc, isInterstate)
+      : preDiscountBreakups;
+  const subtotal = r2(preDiscountBreakups.reduce((s, b) => s + b.taxable_value, 0));
   const cgst = r2(breakups.reduce((s, b) => s + b.cgst, 0));
   const sgst = r2(breakups.reduce((s, b) => s + b.sgst, 0));
   const igst = r2(breakups.reduce((s, b) => s + b.igst, 0));
   const cess = r2(breakups.reduce((s, b) => s + b.cess, 0));
-  const headerDisc = Number(args.headerDiscount) || 0;
-  const taxable = r2(subtotal - headerDisc);
+  // With apportioned breakups the discounted lines already carry the header
+  // discount — derive the invoice taxable value from them so header and
+  // line items can never disagree (B-03).
+  const taxable = r2(breakups.reduce((s, b) => s + b.taxable_value, 0));
   const gross = r2(taxable + cgst + sgst + igst + cess);
   const rounded = args.roundOff === false ? gross : Math.round(gross);
   const round_off = r2(rounded - gross);

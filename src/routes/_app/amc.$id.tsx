@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { type Amc, type AmcUnit, addYears, amcStatus, fmtDate, fmtMonthYear, generatePMDates, statusBadgeClass, statusLabel } from "@/lib/amc";
 import { AgreementDocUpload } from "@/components/AgreementDocUpload";
 import { getOemLogo } from "@/lib/oemLogos";
+import { istTodayIso, localDateIso } from "@/lib/dateRange";
 import { waOpen } from "@/lib/tickets";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
@@ -173,7 +174,7 @@ function AmcDetail() {
     const startNew = a.end_date; // continues from previous end
     const next = new Date(startNew + "T00:00:00");
     next.setDate(next.getDate() + 1);
-    const startStr = next.toISOString().slice(0, 10);
+    const startStr = localDateIso(next);
     const endStr = addYears(startStr, a.duration_years);
     const { data: userData } = await supabase.auth.getUser();
     const { data, error } = await supabase.from("amcs").insert({
@@ -501,7 +502,7 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-3">
         <div><b>Agreement No:</b> {a.agreement_no}</div>
-        <div className="text-right"><b>Date:</b> {fmtDate(new Date().toISOString().slice(0, 10))}</div>
+        <div className="text-right"><b>Date:</b> {fmtDate(istTodayIso())}</div>
         <div><b>Start:</b> {fmtDate(a.start_date)}</div>
         <div className="text-right"><b>End:</b> {fmtDate(a.end_date)}</div>
         <div><b>Duration:</b> {a.duration_years === 0.5 ? "6 Months" : `${a.duration_years} Year${a.duration_years > 1 ? "s" : ""}`}</div>

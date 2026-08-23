@@ -344,10 +344,17 @@ function TicketDetail() {  const confirm = useConfirm();
 
   const logActivity = async (kind: string, notes: string, from_status?: string, to_status?: string, special?: boolean) => {
     const { data: u } = await supabase.auth.getUser();
-    await supabase.from("ticket_activities").insert({
+    // B-16: activity history is the audit trail for status changes — a failed
+    // insert must be visible. We warn instead of throwing so an already-applied
+    // status change isn't misreported as failed.
+    const { error } = await supabase.from("ticket_activities").insert({
       ticket_id: t.id, kind, notes, from_status: from_status ?? null, to_status: to_status ?? null,
       actor: u.user?.id ?? null, special_instruction: !!special,
     } as never);
+    if (error) {
+      console.error("ticket_activities insert failed:", error.message);
+      toast.warning(`Action done, but recording it in ticket history failed: ${error.message}`);
+    }
   };
 
   const launchTicketWhatsApp = async (phone: string | null | undefined, message: string, recipientLabel: string) => {

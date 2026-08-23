@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Save, ArrowLeft, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { INDENT_TYPES, buildOraclesFromDefectiveParts, buildOraclesFromSelectedList, syncTicketGoodPartsFromIndent, type IndentType, type OracleBlock } from "@/lib/indent";
+import { istTodayIso } from "@/lib/dateRange";
 import { getOemLogo } from "@/lib/oemLogos";
 import { OracleBlockEditor } from "@/components/OracleBlockEditor";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -44,7 +45,7 @@ type Form = {
 };
 
 const blank: Form = {
-  indent_date: new Date().toISOString().slice(0, 10),
+  indent_date: istTodayIso(),
   ticket_id: "",
   indent_city: "",
   case_id: "",

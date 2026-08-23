@@ -1,4 +1,5 @@
 import { productDisplayName } from "@/lib/productNames";
+import { istTodayIso } from "@/lib/dateRange";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageLoader } from "@/components/shared/skeletons";
@@ -107,7 +108,7 @@ function QuoteEditor() {
       quote.quote_no = "";
       quote.reference_no = null;
       quote.status = "draft";
-      quote.quote_date = new Date().toISOString().slice(0, 10);
+      quote.quote_date = istTodayIso();
       quote.expiry_date = computeExpiryDate(quote.quote_date, quote.validity_days || DEFAULT_VALIDITY_DAYS);
     }
     setQ(quote);
@@ -216,8 +217,10 @@ function QuoteEditor() {
       round_off: q.round_off || 0,
       place_of_supply: q.place_of_supply,
       business_state: settings.business_state,
+      seller_gstin: settings.business_gstin,
+      buyer_gstin: customer?.gst ?? null,
     });
-  }, [q, settings]);
+  }, [q, settings, customer]);
 
   const setItem = (idx: number, patch: Partial<QuoteItem>) => {
     if (!q) return;

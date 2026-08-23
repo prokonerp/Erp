@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { istTodayIso } from "@/lib/dateRange";
 import { ProductPicker } from "@/components/ProductPicker";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { BranchPicker } from "@/components/BranchPicker";
@@ -26,7 +27,7 @@ export function GatepassNewForm() {
     person_name: "", person_company: "", contact_no: "", vehicle_no: "",
     destination: "", purpose: "", return_type: "Non-Returnable",
     prepared_by: "", authorised_by: "", remarks: "",
-    gatepass_date: new Date().toISOString().slice(0, 10),
+    gatepass_date: istTodayIso(),
     gatepass_time: new Date().toTimeString().slice(0, 5),
   });
   const [busy, setBusy] = useState(false);

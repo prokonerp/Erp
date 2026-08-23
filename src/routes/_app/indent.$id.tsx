@@ -45,6 +45,9 @@ function IndentDetail() {
   const [forceCloseAllOpen, setForceCloseAllOpen] = useState(false);
   const hydratedRef = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** B-21: monotonically increasing token — only the newest autosave may
+   *  update the "saving/saved/error" indicator or count as complete. */
+  const autoSaveSeq = useRef(0);
   const storageKey = `indent:collapsed:${id}`;
   const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>(() => {
     if (typeof window === "undefined") return {};
@@ -185,11 +188,17 @@ function IndentDetail() {
   useEffect(() => {
     if (!oracleKeys) { setDupOracle({}); return; }
     const wanted = new Set(oracleKeys.split(","));
-    (async () => {
-      const { data } = await supabase
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
         .from("indents" as never)
         .select("id, indent_no, oracles_data")
         .neq("id", id);
+      if (cancelled) return;
+      if (error) {
+        console.error("Duplicate-oracle lookup failed:", error.message);
+        return;
+      }
       const out: Record<string, string> = {};
       for (const row of (data || []) as unknown as Array<{ id: string; indent_no: string | null; oracles_data: OracleBlock[] | null }>) {
         for (const o of row.oracles_data || []) {
@@ -199,9 +208,15 @@ function IndentDetail() {
       }
       setDupOracle(out);
     })();
+    return () => { cancelled = true; };
   }, [oracleKeys, id]);
 
   const update = (p: Partial<Indent>) => setI((s) => (s ? { ...s, ...p } : s));
+
+  /** Always-current snapshot for the debounced saver — an in-flight autosave
+   *  must write the NEWEST local state, never a stale closure value (B-21). */
+  const latestIRef = useRef(i);
+  latestIRef.current = i;
 
   /** Debounced auto-save. Skips until the record has hydrated and only fires
    *  when we have a valid Indent Type (required by DB validation). */
@@ -209,28 +224,39 @@ function IndentDetail() {
     if (!hydratedRef.current || !i) return;
     if (!i.indent_type) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    const seq = ++autoSaveSeq.current;
     setAutoSaveState("saving");
     saveTimer.current = setTimeout(async () => {
-      const { error } = await supabase.from("indents" as never).update({
-        indent_date: i.indent_date,
-        indent_city: i.indent_city,
-        case_id: i.case_id,
-        oem_case_id: i.oem_case_id,
-        company: i.company,
-        problem_reported: i.problem_reported,
-        indent_type: i.indent_type,
-        oracles_data: i.oracles_data || [],
-        engineer_name: i.engineer_name,
-        remarks: i.remarks,
-        product_model: i.product_model,
-        product_serial: i.product_serial,
-      } as never).eq("id", i.id);
-      if (error) { setAutoSaveState("error"); return; }
-      await syncTicketGoodPartsFromIndent(supabase, {
-        id: i.id, indent_no: i.indent_no, ticket_id: i.ticket_id,
-        oracles_data: i.oracles_data || [],
-      });
-      setAutoSaveState("saved");
+      // Re-read the freshest local state at execution time.
+      const snap = latestIRef.current;
+      if (!snap?.indent_type) return;
+      try {
+        const { error } = await supabase.from("indents" as never).update({
+          indent_date: snap.indent_date,
+          indent_city: snap.indent_city,
+          case_id: snap.case_id,
+          oem_case_id: snap.oem_case_id,
+          company: snap.company,
+          problem_reported: snap.problem_reported,
+          indent_type: snap.indent_type,
+          oracles_data: snap.oracles_data || [],
+          engineer_name: snap.engineer_name,
+          remarks: snap.remarks,
+          product_model: snap.product_model,
+          product_serial: snap.product_serial,
+        } as never).eq("id", snap.id);
+        if (seq !== autoSaveSeq.current) return; // superseded meanwhile
+        if (error) { setAutoSaveState("error"); console.error("Autosave failed:", error.message); return; }
+        await syncTicketGoodPartsFromIndent(supabase, {
+          id: snap.id, indent_no: snap.indent_no, ticket_id: snap.ticket_id,
+          oracles_data: snap.oracles_data || [],
+        });
+        if (seq !== autoSaveSeq.current) return;
+        setAutoSaveState("saved");
+      } catch (e) {
+        console.error("Autosave failed:", e);
+        if (seq === autoSaveSeq.current) setAutoSaveState("error");
+      }
     }, 2500);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [i]);
@@ -411,7 +437,7 @@ function IndentDetail() {
         if (m) modelSet.add(m);
       }
     }
-    let prodByModel: Record<string, { id?: string; name?: string; model?: string; description?: string; unit?: string; hsn?: string; default_price?: number | null; weight_kg?: number | null }> = {};
+    const prodByModel: Record<string, { id?: string; name?: string; model?: string; description?: string; unit?: string; hsn?: string; default_price?: number | null; weight_kg?: number | null }> = {};
     const ticketModel = cleanModel(i.product_model || "");
     if (ticketModel) modelSet.add(ticketModel);
     if (modelSet.size > 0) {
@@ -529,7 +555,7 @@ function IndentDetail() {
         }
       }
     }
-    let prodByModel: Record<string, { id?: string; name?: string; description?: string; unit?: string; hsn?: string }> = {};
+    const prodByModel: Record<string, { id?: string; name?: string; description?: string; unit?: string; hsn?: string }> = {};
     if (modelSet.size > 0) {
       const { data: prods } = await supabase.from("products")
         .select("id,name,model,description,unit,hsn")

@@ -14,6 +14,7 @@ import {
   type WarehouseLite,
   type Transaction,
 } from "@/lib/ims";
+import { localDateIso } from "@/lib/dateRange";
 
 // Lazy-load the recharts-backed charts section (~400KB) so the IMS dashboard
 // table and stat cards render immediately, without waiting on recharts.
@@ -109,7 +110,7 @@ function Dashboard() {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   for (let i = 29; i >= 0; i--) {
     const d = new Date(today); d.setDate(today.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = localDateIso(d);
     days.push({ key, label: `${d.getDate()}/${d.getMonth() + 1}`, in: 0, out: 0 });
   }
   const idx = new Map(days.map((d, i) => [d.key, i]));

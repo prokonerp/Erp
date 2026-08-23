@@ -59,11 +59,14 @@ function TransferDetail() {
       if (patch.status === "received" || patch.status === "completed") {
         final.received_by = uid || null; final.received_at = new Date().toISOString();
       }
-      await updateTransfer(t!.id, final);
+      // B-20: conditional on the status the user was looking at — a stale
+      // tab or a double-click cannot re-apply an already-applied transition.
+      await updateTransfer(t!.id, final, t!.status);
       toast.success(msg);
       await load();
     } catch (e: any) {
       toast.error(e?.message || "Failed");
+      await load(); // refresh to whatever the current truth is
     } finally { setBusy(false); }
   }
 

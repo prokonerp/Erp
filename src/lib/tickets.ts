@@ -35,18 +35,30 @@ export const PRIORITY_COLOR: Record<string, string> = {
   P5: "bg-zinc-100 text-zinc-700",
 };
 
-/** Hours elapsed between two dates, EXCLUDING any time that falls on Sunday (local). */
+/**
+ * Hours elapsed between two dates, EXCLUDING any time that falls on a Sunday.
+ * B-15: "Sunday" is decided by the IST business calendar (Asia/Kolkata), not
+ * the viewer's device timezone — HQ and field staff abroad see identical SLA
+ * numbers. India has no DST, so IST wall-clock == UTC shifted by −5h30m,
+ * letting us walk exact IST-midnight boundaries without Intl overhead.
+ */
 export function hoursExcludingSundays(fromISO: string, to: Date = new Date()): number {
+  const IST_OFFSET_MS = 5.5 * 3_600_000;
   const from = new Date(fromISO);
   if (isNaN(from.getTime()) || to <= from) return 0;
+  // IST wall-clock of an instant == instant + 5h30m, read as UTC.
+  const istDayOfWeek = (t: Date): number => new Date(t.getTime() + IST_OFFSET_MS).getUTCDay();
   let total = 0;
-  // Walk segment-by-segment between day boundaries so we can skip Sundays entirely.
-  let cursor = new Date(from);
+  let cursor = from;
   while (cursor < to) {
-    const next = new Date(cursor);
-    next.setHours(24, 0, 0, 0); // start of next day (local)
-    const segEnd = next < to ? next : to;
-    if (cursor.getDay() !== 0) {
+    // Find the next IST midnight. In the shifted (+5:30) frame it's the next
+    // UTC midnight; shift back to get the real instant (== 18:30 UTC).
+    const shifted = new Date(cursor.getTime() + IST_OFFSET_MS);
+    const nextIstMidnightMs =
+      Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() + 1) -
+      IST_OFFSET_MS;
+    const segEnd = new Date(Math.min(nextIstMidnightMs, to.getTime()));
+    if (istDayOfWeek(cursor) !== 0) {
       total += (segEnd.getTime() - cursor.getTime()) / 3_600_000;
     }
     cursor = segEnd;

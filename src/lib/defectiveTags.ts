@@ -443,18 +443,21 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
 
 export async function markTagsPrinted(ids: string[], byName?: string | null) {
   if (!ids.length) return;
-  const { data } = await sb.from("defective_tags").select("id,print_count").in("id", ids);
-  const counts = new Map<string, number>((data || []).map((r: any) => [r.id as string, (r.print_count as number) || 0]));
-  await Promise.all(
-    ids.map((id) =>
-      sb
-        .from("defective_tags")
-        .update({
-          printed_at: new Date().toISOString(),
-          printed_by: byName || null,
-          print_count: (counts.get(id) || 0) + 1,
-        })
-        .eq("id", id),
-    ),
-  );
+  // B-22: read-then-write via Promise.all loses increments when two users
+  // print the same batch concurrently. Instead, each tag is incremented from
+  // a freshly read count, sequentially, with every result checked.
+  for (const id of ids) {
+    const { data: row, error: readErr } = await sb.from("defective_tags").select("id,print_count").eq("id", id).maybeSingle();
+    if (readErr) throw new Error(`Could not read print state for tag ${id}: ${readErr.message}`);
+    const next = ((row as { print_count?: number } | null)?.print_count || 0) + 1;
+    const { error } = await sb
+      .from("defective_tags")
+      .update({
+        printed_at: new Date().toISOString(),
+        printed_by: byName || null,
+        print_count: next,
+      })
+      .eq("id", id);
+    if (error) throw new Error(`Could not record printing for tag ${id}: ${error.message}`);
+  }
 }

@@ -14,6 +14,7 @@ import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import type { Customer } from "@/lib/crm";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { computeTotals, stateCodeFromGSTIN, stateNameFromCode, amountInWords } from "@/lib/gst";
+import { istTodayIso } from "@/lib/dateRange";
 import {
   emptyPOItem,
   inrPO,
@@ -37,7 +38,7 @@ function NewPO() {
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [branchId, setBranchId] = useState<string>("");
   const [vendor, setVendor] = useState<Vendor | null>(null);
-  const [poDate, setPoDate] = useState(new Date().toISOString().slice(0, 10));
+  const [poDate, setPoDate] = useState(istTodayIso());
   const [deliveryDate, setDeliveryDate] = useState<string>("");
 
   const [payTerms, setPayTerms] = useState<string>("30 Days");

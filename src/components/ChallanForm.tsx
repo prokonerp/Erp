@@ -16,6 +16,7 @@ import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer } from "@/lib/crm";
+import { istTodayIso } from "@/lib/dateRange";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { getCurrentUserName } from "@/lib/currentUser";
 import { productDisplayName } from "@/lib/productNames";
@@ -42,7 +43,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const lastPayloadRef = useRef<string>("");
   const [form, setForm] = useState({
     status: "Challan Generated",
-    challan_date: new Date().toISOString().slice(0, 10),
+    challan_date: istTodayIso(),
     dispatch_date: "",
     reference_no: "",
     gate_pass_no: "",
@@ -213,6 +214,15 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         return;
       }
       const r = data as Record<string, unknown>;
+      // Sweep fix (B-08 class): once dispatched, stock has been posted against
+      // these exact items — editing them would silently desync inventory.
+      // Cancelled challans are reversed/terminal and equally non-editable.
+      const st = (r.status as string) || "";
+      if (st === "Dispatched" || st === "Cancelled") {
+        toast.error(`This challan is ${st} — stock is already posted. Editing is blocked.`);
+        navigate({ to: "/challan/$id", params: { id: editId } });
+        return;
+      }
       setDcType((r.doc_type as DocType) || "customer");
       const arr = Array.isArray(r.items) ? (r.items as ChallanItem[]) : [];
       setItems(arr.length > 0 ? arr.map((it) => ({ ...emptyItem(), ...it })) : [emptyItem()]);
@@ -255,6 +265,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       }));
       setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId]);
 
   // ---------------------- Auto-save engine ----------------------

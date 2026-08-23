@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, Save, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { type IncentiveRule, type Incentive, fmtMoney, fmtDate, computeIncentive } from "@/lib/crm";
+import { istTodayIso } from "@/lib/dateRange";
 import { ExportButtons } from "@/components/ExportButtons";
 import { useConfirm } from "@/hooks/useConfirm";
 
@@ -43,7 +44,11 @@ function IncentivesPage() {
       variant: "danger",
     });
     if (!ok) return;
-    await supabase.from("incentive_rules").delete().eq("id", id);
+    const { error } = await supabase.from("incentive_rules").delete().eq("id", id);
+    if (error) {
+      toast.error(`Delete failed: ${error.message}`);
+      return;
+    }
     load();
   };
 
@@ -58,7 +63,7 @@ function IncentivesPage() {
   };
 
   const markPaid = async (id: string) => {
-    await supabase.from("incentives").update({ status: "paid", paid_at: new Date().toISOString().slice(0, 10) } as any).eq("id", id);
+    await supabase.from("incentives").update({ status: "paid", paid_at: istTodayIso() } as any).eq("id", id);
     toast.success("Marked paid"); load();
   };
 

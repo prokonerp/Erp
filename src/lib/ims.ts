@@ -256,9 +256,22 @@ export async function createTransfer(input: Partial<Transfer>): Promise<Transfer
   return data as Transfer;
 }
 
-export async function updateTransfer(id: string, patch: Partial<Transfer>): Promise<void> {
-  const { error } = await sb.from("ims_transfers").update(patch).eq("id", id);
+/**
+ * Update a transfer with an optimistic-lock guard (B-20): when
+ * `expectedStatus` is given, the write only lands if the row still has that
+ * status — two admins double-approving (or one acting on a stale screen)
+ * can no longer both transition the same transfer.
+ */
+export async function updateTransfer(id: string, patch: Partial<Transfer>, expectedStatus?: Transfer["status"] | null): Promise<void> {
+  let q = sb.from("ims_transfers").update(patch).eq("id", id);
+  if (expectedStatus) q = q.eq("status", expectedStatus);
+  const { data, error } = await q.select("id");
   if (error) throw error;
+  if (expectedStatus && (!data || data.length === 0)) {
+    throw new Error(
+      "This transfer was just updated by someone else — refresh to see its current status.",
+    );
+  }
 }
 
 export async function deleteTransfer(id: string): Promise<void> {
@@ -374,6 +387,14 @@ export async function findAvailableStockBySerial(
 /**
  * Issue a stock item to a ticket: marks the item `issued` and writes a
  * `good_out` (or `defective_out`) transaction with full traceability.
+ *
+ * B-07 hardening:
+ *  - The stock row is claimed FIRST with a conditional update that refuses
+ *    items already marked `issued` — issuing the same serial to two tickets
+ *    can no longer succeed twice.
+ *  - If the traceability transaction fails afterwards, the claim is rolled
+ *    back so stock isn't marked issued without its audit trail.
+ *  - Every write result is checked; nothing is silently ignored.
  */
 export async function issueStockToTicket(input: {
   stockItemId: string;
@@ -388,14 +409,36 @@ export async function issueStockToTicket(input: {
   oem?: string | null;
   qty?: number;
 }): Promise<void> {
-  const { data: stock } = await sb.from("ims_stock_items").select("*").eq("id", input.stockItemId).maybeSingle();
-  const txnType = (stock?.stock_type === "defective") ? "defective_out" : "good_out";
+  const { data: stock, error: loadErr } = await sb.from("ims_stock_items").select("*").eq("id", input.stockItemId).maybeSingle();
+  if (loadErr) throw loadErr;
+  if (!stock) throw new Error("Stock item not found — it may have been deleted.");
+  if (stock.stock_status === "issued") {
+    throw new Error(
+      `Serial ${input.partSerialNo || stock.part_serial_no || ""} is already issued${stock.ticket_id ? ` (ticket ${stock.ticket_id})` : ""} and cannot be issued again.`,
+    );
+  }
+
+  const txnType = (stock.stock_type === "defective") ? "defective_out" : "good_out";
   const refParts = [
     input.ticketNo ? `Ticket ${input.ticketNo}` : null,
     input.caseId ? `Case ${input.caseId}` : null,
     input.engineer ? `Engineer ${input.engineer}` : null,
   ].filter(Boolean).join(" · ");
-  await sb.from("ims_transactions").insert({
+
+  // Claim first: conditional update loses the race if another user just
+  // issued this serial (affected-rows check below).
+  const { data: claimedRows, error: claimErr } = await sb.from("ims_stock_items").update({
+    stock_status: "issued",
+    ticket_id: input.ticketId,
+    customer_name: input.customerName ?? null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", input.stockItemId).neq("stock_status", "issued").select("id");
+  if (claimErr) throw claimErr;
+  if (!claimedRows || claimedRows.length === 0) {
+    throw new Error(`Serial ${input.partSerialNo || stock.part_serial_no || ""} was just issued by someone else.`);
+  }
+
+  const { error: txnError } = await sb.from("ims_transactions").insert({
     txn_type: txnType,
     stock_item_id: input.stockItemId,
     part_name: input.partName ?? stock?.part_name ?? null,
@@ -411,10 +454,14 @@ export async function issueStockToTicket(input: {
     reference: refParts || (input.ticketNo || input.caseId || null),
     notes: "Auto-issued from Ticket → Parts Used confirmation",
   });
-  await sb.from("ims_stock_items").update({
-    stock_status: "issued",
-    ticket_id: input.ticketId,
-    customer_name: input.customerName ?? null,
-    updated_at: new Date().toISOString(),
-  }).eq("id", input.stockItemId);
+  if (txnError) {
+    // Roll back the claim — never mark stock issued without its audit trail.
+    await sb.from("ims_stock_items").update({
+      stock_status: stock.stock_status,
+      ticket_id: stock.ticket_id ?? null,
+      customer_name: stock.customer_name ?? null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", input.stockItemId);
+    throw new Error(`Stock issue recorded failed, transaction log could not be written: ${txnError.message}`);
+  }
 }

@@ -15,6 +15,7 @@ import { BundleApplyDialog } from "@/components/BundleApplyDialog";
 import { fetchBundleChildrenRaw } from "@/lib/productBundles";
 import { SerialMultiPicker } from "@/components/SerialMultiPicker";
 import type { Customer } from "@/lib/crm";
+import { istTodayIso } from "@/lib/dateRange";
 import {
   fetchBranches,
   emptyItem,
@@ -52,7 +53,7 @@ function NewInvoice() {
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [branchId, setBranchId] = useState<string>("");
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [invoiceDate, setInvoiceDate] = useState(istTodayIso());
   const [dueDate, setDueDate] = useState<string>("");
   const [poNumber, setPoNumber] = useState("");
   const [poDate, setPoDate] = useState("");
@@ -182,9 +183,17 @@ function NewInvoice() {
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.warehouse_id) return toast.error(`Line ${i + 1}: select a warehouse`);
+      // B-10: serialized lines must bill whole units and match serials exactly.
+      const qtyNum = Number(it.qty);
+      if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+        return toast.error(`Line ${i + 1}: quantity must be a number greater than zero`);
+      }
       if (it.is_serialized) {
-        if (it.serial_numbers.length !== Math.floor(Number(it.qty))) {
-          return toast.error(`Line ${i + 1}: select ${Math.floor(Number(it.qty))} serial number(s)`);
+        if (!Number.isInteger(qtyNum)) {
+          return toast.error(`Line ${i + 1}: serialized products need a whole-number quantity (got ${qtyNum})`);
+        }
+        if (it.serial_numbers.length !== qtyNum) {
+          return toast.error(`Line ${i + 1}: select ${qtyNum} serial number(s)`);
         }
       }
     }
@@ -197,20 +206,27 @@ function NewInvoice() {
     // Converted General DCs already consumed the stock — skip the check.
     const wname = (id: string | null) => warehouses.find((w) => w.id === id)?.name ?? null;
     let short: Shortfall[] = [];
-    try {
-      if (fromGeneralDc) throw new Error("skip");
-      short = await findShortfalls(
-        items
-          .filter((it) => !it.is_serialized && it.product_id && it.part_model_no)
-          .map((it) => ({
-            model: it.part_model_no as string,
-            label: it.description || it.part_model_no,
-            warehouseId: it.warehouse_id,
-            warehouseName: wname(it.warehouse_id),
-            qty: Number(it.qty) || 0,
-          })),
-      );
-    } catch { /* availability check is best-effort; DB still enforces */ }
+    if (!fromGeneralDc) {
+      try {
+        short = await findShortfalls(
+          items
+            .filter((it) => !it.is_serialized && it.product_id && it.part_model_no)
+            .map((it) => ({
+              model: it.part_model_no as string,
+              label: it.description || it.part_model_no,
+              warehouseId: it.warehouse_id,
+              warehouseName: wname(it.warehouse_id),
+              qty: Number(it.qty) || 0,
+            })),
+        );
+      } catch (e) {
+        // B-16: never skip the stock check silently — warn loudly and stop.
+        console.error("Stock availability check failed:", e);
+        return toast.error(
+          "Could not verify stock availability. Please retry — continuing without this check could oversell inventory.",
+        );
+      }
+    }
 
     if (short.length > 0) {
       if (!isAdmin) return toast.error(blockMessage(short[0]));
@@ -232,6 +248,25 @@ function NewInvoice() {
     if (!customer || !branch) return;
     setSaving(true);
     try {
+      // B-01: retry-safety — if a previous attempt already invoiced this
+      // General DC (e.g. the DC status flip failed), go to that invoice
+      // instead of creating a duplicate.
+      if (fromGeneralDc?.id) {
+        const { data: existingInv, error: dupErr } = await supabase
+          .from("invoices")
+          .select("id, invoice_no")
+          .eq("source_general_dc_id", fromGeneralDc.id)
+          .limit(1)
+          .maybeSingle();
+        if (dupErr) throw dupErr;
+        if (existingInv) {
+          toast.info(`This General DC was already invoiced (${existingInv.invoice_no || existingInv.id}).`);
+          markClean();
+          setDirty(false);
+          nav({ to: "/sales/invoices/$id", params: { id: (existingInv as { id: string }).id } });
+          return;
+        }
+      }
       const company = await getCompany();
       const invoicePayload: any = {
         invoice_date: invoiceDate,
@@ -282,23 +317,46 @@ function NewInvoice() {
         return { ...row, invoice_id: inv.id, sr_no: i + 1 };
       });
       const { error: e2 } = await supabase.from("invoice_items").insert(itemRows);
-      if (e2) throw e2;
+      if (e2) {
+        // Compensating cleanup: never leave an orphan invoice header without
+        // its line items — a retry would treat the broken invoice as done.
+        await supabase.from("invoices").delete().eq("id", inv.id);
+        throw new Error(`Invoice items could not be saved (header rolled back): ${e2.message}`);
+      }
 
       if (allowNegative && short.length > 0) {
-        await logNegativeOverrides({
-          documentType: "invoice",
-          documentId: inv.id,
-          documentNo: inv.invoice_no,
-          shortfalls: short,
-          reason,
-        });
+        try {
+          await logNegativeOverrides({
+            documentType: "invoice",
+            documentId: inv.id,
+            documentNo: inv.invoice_no,
+            shortfalls: short,
+            reason,
+          });
+        } catch (logErr) {
+          // B-16: the invoice exists — do NOT fail the whole flow, but the
+          // missing audit trail must be surfaced.
+          console.error("Negative-stock override logging failed:", logErr);
+          toast.error(
+            `Invoice ${inv.invoice_no || ""} was saved, but recording the negative-stock approval failed (${(logErr as Error).message}). Ask an admin to review this invoice.`,
+          );
+        }
       }
 
       if (fromGeneralDc) {
-        await updateGeneralDc(fromGeneralDc.id, {
-          status: "Converted",
-          converted_invoice_id: inv.id,
-        }).catch(() => {});
+        // B-01: this flip is what prevents double-billing a DC — a failure
+        // must never be swallowed. Retry is safe (the dup-check above
+        // redirects to the already-created invoice).
+        try {
+          await updateGeneralDc(fromGeneralDc.id, {
+            status: "Converted",
+            converted_invoice_id: inv.id,
+          });
+        } catch (gdcErr) {
+          throw new Error(
+            `Invoice ${inv.invoice_no || ""} was created, but marking the General DC as Converted failed: ${(gdcErr as Error).message}. Open the DC and convert it manually — do NOT invoice it again.`,
+          );
+        }
       }
 
       toast.success(`Invoice ${inv.invoice_no || ""} ${status === "issued" ? "issued" : "saved"}`);

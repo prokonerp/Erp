@@ -22,6 +22,11 @@ export type PrintItem = {
   rate: number;
   gst_percent: number;
   amount: number; // pre-tax line total (qty * rate - line discount)
+  /** B-26: stored per-line tax values — used verbatim when present so the
+   *  printed document can never disagree with the saved record. */
+  cgst_amount?: number;
+  sgst_amount?: number;
+  igst_amount?: number;
 };
 
 export type PrintTotals = {
@@ -79,7 +84,7 @@ const fmtDate = (iso?: string | null) => {
 const cleanAddress = (raw?: string | null) => {
   if (!raw) return "";
   const stripped = raw.replace(
-    /^\s*(sales\s*office|regd\.?\s*office|registered\s*office)\s*[:\-]\s*/i,
+    /^\s*(sales\s*office|regd\.?\s*office|registered\s*office)\s*[:-]\s*/i,
     "",
   );
   return stripped
@@ -294,8 +299,14 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
         </thead>
         <tbody>
           {doc.items.map((it, i) => {
-            const half = +((it.amount * (it.gst_percent || 0)) / 200).toFixed(2);
-            const igst = +((it.amount * (it.gst_percent || 0)) / 100).toFixed(2);
+            // Prefer stored breakup values; fall back to computing for
+            // documents that never persist line-level tax (quotes / POs).
+            const half = it.cgst_amount != null || it.sgst_amount != null
+              ? (it.cgst_amount ?? 0) || (it.sgst_amount ?? 0)
+              : +((it.amount * (it.gst_percent || 0)) / 200).toFixed(2);
+            const igst = it.igst_amount != null
+              ? it.igst_amount
+              : +((it.amount * (it.gst_percent || 0)) / 100).toFixed(2);
             return (
               <tr key={i}>
                 <td className="text-center">{i + 1}</td>

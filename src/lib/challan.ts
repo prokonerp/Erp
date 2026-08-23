@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllWith } from "@/lib/fetchAll";
 
 export type ChallanItem = {
   product_id?: string;
@@ -81,19 +82,15 @@ export const emptyItem = (): ChallanItem => ({
 });
 
 export async function fetchChallans(docType: DocType) {
-  const { data, error } = await supabase
-    .from("delivery_challans" as never)
-    .select("*").eq("doc_type", docType).order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data || []) as unknown as DeliveryChallan[];
+  // B-11: page past the 1000-row server cap.
+  return fetchAllWith<DeliveryChallan>((q) =>
+    q.from("delivery_challans").select("*").eq("doc_type", docType).order("created_at", { ascending: false }));
 }
 
 export async function fetchAllChallans() {
-  const { data, error } = await supabase
-    .from("delivery_challans" as never)
-    .select("*").order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data || []) as unknown as DeliveryChallan[];
+  // B-11: page past the 1000-row server cap.
+  return fetchAllWith<DeliveryChallan>((q) =>
+    q.from("delivery_challans").select("*").order("created_at", { ascending: false }));
 }
 
 export async function fetchUserNameMap(ids: string[]): Promise<Record<string, string>> {

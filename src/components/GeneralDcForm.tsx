@@ -15,6 +15,7 @@ import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 import type { Customer } from "@/lib/crm";
 import { fetchBranches, inr, type BranchRow } from "@/lib/sales";
 import { productShortName } from "@/lib/productNames";
+import { istTodayIso } from "@/lib/dateRange";
 import { useIsAdmin } from "@/lib/useRole";
 import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
 import { emptyGeneralDcItem, gdcTotal, insertGeneralDc, updateGeneralDc, type GeneralDcItem, type GeneralDcRow } from "@/lib/generalDc";
@@ -27,7 +28,7 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   const [branchId, setBranchId] = useState(existing?.branch_id ?? "");
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [dcDate, setDcDate] = useState(existing?.dc_date ?? new Date().toISOString().slice(0, 10));
+  const [dcDate, setDcDate] = useState(existing?.dc_date ?? istTodayIso());
   const [returnable, setReturnable] = useState(!!existing?.returnable);
   const [expectedReturn, setExpectedReturn] = useState(existing?.expected_return_date ?? "");
   const [billing, setBilling] = useState(existing?.billing_address ?? "");
@@ -61,6 +62,17 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
 
   const skipAddrSync = useRef(isEdit);
 
+  // Sweep fix (B-08 class): an Issued GDC has already consumed stock, and
+  // Cancelled/Converted are terminal — editing their items would silently
+  // desync inventory. The DB guards status transitions; this guards edits.
+  useEffect(() => {
+    const st = existing?.status;
+    if (st && ["Issued", "Cancelled", "Converted"].includes(st)) {
+      toast.error(`This General DC is ${st} — stock is already posted. Editing is blocked.`);
+      nav({ to: "/sales/general-dc/$id", params: { id: existing!.id } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (!existing?.customer_id) return;
     supabase.from("customers").select("*").eq("id", existing.customer_id).maybeSingle()
@@ -95,9 +107,16 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
       const it = items[i];
       if (!it.product_id) return `Line ${i + 1}: pick a product`;
       if (!it.warehouse_id) return `Line ${i + 1}: select a warehouse`;
-      if (!(Number(it.qty) > 0)) return `Line ${i + 1}: quantity must be greater than 0`;
-      if (it.is_serialized && it.serial_numbers.length !== Math.floor(Number(it.qty))) {
-        return `Line ${i + 1}: select ${Math.floor(Number(it.qty))} serial number(s)`;
+      const qtyNum = Number(it.qty);
+      if (!(qtyNum > 0)) return `Line ${i + 1}: quantity must be greater than 0`;
+      // B-10: serialized lines must bill whole units and match serials exactly.
+      if (it.is_serialized) {
+        if (!Number.isInteger(qtyNum)) {
+          return `Line ${i + 1}: serialized products need a whole-number quantity (got ${qtyNum})`;
+        }
+        if (it.serial_numbers.length !== qtyNum) {
+          return `Line ${i + 1}: select ${qtyNum} serial number(s)`;
+        }
       }
     }
     const all = items.flatMap((it) => it.serial_numbers);
@@ -123,7 +142,13 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
               qty: Number(it.qty) || 0,
             })),
         );
-      } catch { /* DB still enforces */ }
+      } catch (e) {
+        // B-16: never skip the stock check silently — warn loudly and stop.
+        console.error("Stock availability check failed:", e);
+        return toast.error(
+          "Could not verify stock availability. Please retry — continuing without this check could oversell inventory.",
+        );
+      }
       if (short.length > 0) {
         if (!isAdmin) return toast.error(blockMessage(short[0]));
         setShortfalls(short);
@@ -165,13 +190,22 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
         ? await updateGeneralDc(existing.id, payload)
         : await insertGeneralDc(payload);
       if (allowNegative && short.length > 0) {
-        await logNegativeOverrides({
-          documentType: "dc",
-          documentId: row.id,
-          documentNo: row.dc_no,
-          shortfalls: short,
-          reason,
-        }).catch(() => {});
+        try {
+          await logNegativeOverrides({
+            documentType: "dc",
+            documentId: row.id,
+            documentNo: row.dc_no,
+            shortfalls: short,
+            reason,
+          });
+        } catch (logErr) {
+          // B-16: negative-stock overrides MUST leave an audit trail. The DC
+          // itself is saved, so tell the user exactly what needs fixing.
+          console.error("Negative-stock override logging failed:", logErr);
+          toast.error(
+            `${row.dc_no} was saved, but recording the negative-stock approval failed (${(logErr as Error).message}). Ask an admin to review this document.`,
+          );
+        }
       }
       toast.success(`${row.dc_no} ${status === "Issued" ? "issued" : isEdit ? "updated" : "saved as draft"}`);
       nav({ to: "/sales/general-dc/$id", params: { id: row.id } });

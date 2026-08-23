@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { fmtDate } from "@/lib/amc";
 import { usePermissions } from "@/lib/usePermissions";
 import { DateFilterBar } from "@/components/DateFilterBar";
-import { type DateRange, type RangeMode, currentMonth, resolveRange, inRange } from "@/lib/dateRange";
+import { type DateRange, type RangeMode, currentMonth, resolveRange, inRange, localDateIso, istTodayIso } from "@/lib/dateRange";
 
 export const Route = createFileRoute("/_app/amc/pm")({
   component: PMSchedule,
@@ -93,7 +93,7 @@ function PMSchedule() {
     if (filter === "done" && !p.completed_at) return false;
     if (filter === "overdue" && !isOverdue(p)) return false;
     if (selectedDate) {
-      const sel = selectedDate.toISOString().slice(0, 10);
+      const sel = localDateIso(selectedDate);
       if (p.scheduled_date !== sel) return false;
     }
     if (dateInput && p.scheduled_date !== dateInput) return false;
@@ -174,7 +174,7 @@ function PMSchedule() {
     ws["!cols"] = [{ wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 22 }, { wch: 14 }, { wch: 40 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "PM Schedule");
-    XLSX.writeFile(wb, `PM_Schedule_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(wb, `PM_Schedule_${istTodayIso()}.xlsx`);
   };
 
   return (

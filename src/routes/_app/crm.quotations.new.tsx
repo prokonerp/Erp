@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { istTodayIso, localDateIso } from "@/lib/dateRange";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ import type { ProductMaster } from "@/components/ProductPicker";
 import { fetchBranches, productWarrantyMonths, type BranchRow } from "@/lib/sales";
 import {
   type Customer, type QuoteItem,
-  fmtMoney, computeQuoteTotals, lineAmount, INDIAN_STATES,
+  fmtMoney, computeQuoteTotals, lineAmount, isIntraSupply, INDIAN_STATES,
   computeExpiryDate, DEFAULT_VALIDITY_DAYS,
 } from "@/lib/crm";
 import type { QuoteTermsTemplate } from "@/lib/crm";
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/_app/crm/quotations/new")({
   }),
 });
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => istTodayIso();
 const emptyRow = (): QuoteItem => ({ description: "", qty: 1, unit: "Nos", rate: 0, discount_percent: 0, tax_percent: 18, amount: 0 });
 
 type StockRow = { product_id: string | null; quantity: number; warehouse: string | null };
@@ -76,6 +77,7 @@ function NewQuotation() {
   const [tcsPercent, setTcsPercent] = useState(0);
   const [roundOff, setRoundOff] = useState(0);
   const [businessState, setBusinessState] = useState("Haryana");
+  const [businessGstin, setBusinessGstin] = useState<string | null>(null);
   const [notes, setNotes] = useState("Thanks for your business.");
   const [terms, setTerms] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -99,8 +101,9 @@ function NewQuotation() {
     }).catch(() => {});
 
     supabase.from("crm_settings").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
-      const s = data as { business_state?: string; default_terms?: string; default_customer_notes?: string } | null;
+      const s = data as { business_state?: string; business_gstin?: string | null; default_terms?: string; default_customer_notes?: string } | null;
       if (s?.business_state) setBusinessState(s.business_state);
+      if (s?.business_gstin) setBusinessGstin(s.business_gstin);
       if (!cloneId && s?.default_terms) setTerms(s.default_terms);
       if (!cloneId && s?.default_customer_notes) setNotes(s.default_customer_notes);
     });
@@ -183,7 +186,8 @@ function NewQuotation() {
     items, discount_amount: discountAmount, shipping_charges: shippingCharges,
     adjustment, tcs_percent: tcsPercent, round_off: roundOff,
     place_of_supply: placeOfSupply, business_state: businessState,
-  }), [items, discountAmount, shippingCharges, adjustment, tcsPercent, roundOff, placeOfSupply, businessState]);
+    seller_gstin: businessGstin, buyer_gstin: customer?.gst ?? null,
+  }), [items, discountAmount, shippingCharges, adjustment, tcsPercent, roundOff, placeOfSupply, businessState, businessGstin, customer]);
 
   const stockFor = (productId?: string | null) => {
     if (!productId) return null;
@@ -339,7 +343,7 @@ function NewQuotation() {
             source: "Direct Quotation",
             status: "quoted",
             expected_value: totals.total,
-            next_followup: followup.toISOString().slice(0, 10),
+            next_followup: localDateIso(followup),
           } as never)
           .select("id")
           .single();
@@ -456,7 +460,7 @@ function NewQuotation() {
                 <SelectContent>{INDIAN_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
               <div className="text-[10px] text-muted-foreground mt-0.5">
-                {(placeOfSupply || "").toLowerCase() === businessState.toLowerCase() ? "CGST + SGST" : "IGST"}
+                {isIntraSupply({ seller_gstin: businessGstin, buyer_gstin: customer?.gst ?? null, place_of_supply: placeOfSupply, business_state: businessState }) ? "CGST + SGST" : "IGST"}
               </div>
             </div>
             <div><Label className="text-xs">Payment terms</Label><Input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="50% advance…" className="h-8 text-sm" /></div>
