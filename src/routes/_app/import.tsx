@@ -11,6 +11,7 @@ import { parseCSV, buildCSV, downloadCSV } from "@/lib/csv";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { stateFromGSTIN } from "@/lib/india";
 import { useIsAdmin } from "@/lib/useRole";
+import { importEquipmentRows } from "@/lib/installedEquipment";
 import { FormPageHeader } from "@/components/FormPageHeader";
 
 export const Route = createFileRoute("/_app/import")({
@@ -40,7 +41,8 @@ type FieldDef = {
 type ModuleKey =
   | "customers" | "vendors" | "products" | "employees"
   | "branches" | "warehouses" | "oem_brand_master" | "product_categories"
-  | "call_type_master" | "amcs" | "tickets" | "pm_visits";
+  | "call_type_master" | "amcs" | "tickets" | "pm_visits"
+  | "installed_equipment";
 
 type ModuleDef = {
   label: string;
@@ -239,6 +241,24 @@ const MODULES: Record<ModuleKey, ModuleDef> = {
       { key: "notes", label: "Notes", type: "text", example: "Quarterly PM" },
     ],
   },
+  installed_equipment: {
+    label: "Installed Equipment",
+    table: "installed_equipment",
+    // Headers mirror importEquipmentRows(); customer is resolved by name/code,
+    // warranty defaults from Product Master, AMC End = AMC Start + AMC Months
+    // (12 when omitted). Rows are imported via the dedicated handler.
+    fields: [
+      { key: "Customer", label: "Customer (Company or Code)", type: "text", required: true, virtual: true, example: "Acme Pvt Ltd" },
+      { key: "Model No", label: "Model No", type: "upper", required: true, virtual: true, example: "LUM-1050" },
+      { key: "Serial No", label: "Serial No", type: "text", virtual: true, example: "SN00123" },
+      { key: "Invoice No", label: "Invoice No", type: "text", virtual: true, example: "INV-2026-001" },
+      { key: "Invoice Date", label: "Invoice Date (DD/MM/YYYY or YYYY-MM-DD)", type: "text", virtual: true, example: "15/03/2026" },
+      { key: "Warranty Months", label: "Warranty Months (blank = from Product Master)", type: "number", virtual: true, example: "12" },
+      { key: "AMC Start Date", label: "AMC Start Date", type: "text", virtual: true, example: "15/03/2027" },
+      { key: "AMC Months", label: "AMC Months (blank = 12)", type: "number", virtual: true, example: "12" },
+      { key: "Remarks", label: "Remarks", type: "text", virtual: true, example: "" },
+    ],
+  },
 };
 
 /* ---------- transforms + validation ---------- */
@@ -372,6 +392,22 @@ function ImportPage() {
     const uid = u.user?.id ?? null;
     const failed: { row: number; reason: string }[] = [];
     let ok = 0;
+
+    // Installed Equipment has its own importer (customer resolution, product-
+    // master warranty defaults, serial dedup, AMC end-date calc) — run it once
+    // over all rows so its per-row line numbers stay accurate.
+    if (mod === "installed_equipment") {
+      const res = await importEquipmentRows(rows);
+      const failedRows = [
+        ...res.failed,
+        ...res.skipped.map((s) => ({ row: s.row, reason: `${s.reason} (skipped)` })),
+      ];
+      setResult({ ok: res.imported, failed: failedRows });
+      setBusy(false);
+      if (failedRows.length === 0) toast.success(`Imported ${res.imported} record(s)`);
+      else toast.warning(`Imported ${res.imported}, failed/skipped ${failedRows.length}`);
+      return;
+    }
 
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];

@@ -20,6 +20,8 @@ import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { ComplaintPicker } from "@/components/ComplaintPicker";
 import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
+import { warrantyEnd } from "@/lib/installedEquipment";
+import { localDateIso } from "@/lib/dateRange";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -90,16 +92,28 @@ function NewTicket() {
       if (!amcId && !pmId && equipId) {
         const sb = supabase as unknown as { from: (t: string) => any };
         const { data: eq } = await sb.from("installed_equipment")
-          .select("id,customer_id,model_no,serial_no,invoice_no,invoice_date")
+          .select("id,customer_id,model_no,serial_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date")
           .eq("id", equipId).maybeSingle();
         if (!eq) return;
-        const e = eq as { id: string; customer_id: string; model_no: string; serial_no: string | null };
+        const e = eq as {
+          id: string; customer_id: string; model_no: string; serial_no: string | null;
+          invoice_date: string | null; warranty_months: number | null;
+          amc_start_date: string | null; amc_end_date: string | null;
+        };
+        // Auto-pick call type from coverage: Warranty wins while active,
+        // then AMC; OOW is left as the manual default when neither applies.
+        const today = localDateIso(new Date());
+        const wEnd = warrantyEnd(e as never);
+        let callType = "OOW";
+        if (e.invoice_date && wEnd && e.invoice_date.slice(0, 10) <= today && today <= wEnd) callType = "Warranty";
+        else if (e.amc_start_date && e.amc_end_date && e.amc_start_date.slice(0, 10) <= today && today <= e.amc_end_date.slice(0, 10)) callType = "AMC";
         const { data: c } = await supabase.from("customers")
           .select("id,company,phone,email,billing_address,address,city,billing_city,sector,state")
           .eq("id", e.customer_id).maybeSingle();
         const cu = (c as { company?: string | null; phone?: string | null; email?: string | null; billing_address?: string | null; address?: string | null; city?: string | null; billing_city?: string | null; sector?: string | null } | null) ?? null;
         setForm((f) => ({
           ...f,
+          call_type: callType,
           customer_id: e.customer_id,
           customer_name: cu?.company || "",
           customer_phone: cu?.phone || "",
@@ -111,7 +125,7 @@ function NewTicket() {
           serial_no: (e.serial_no || "").toUpperCase(),
           complaint: `Service request for ${e.model_no}${e.serial_no ? ` / ${e.serial_no}` : ""}`,
         }));
-        setSourceMeta({ label: `Installed Equipment record${e.serial_no ? ` — ${e.serial_no}` : ""}` });
+        setSourceMeta({ label: `Installed Equipment record${e.serial_no ? ` — ${e.serial_no}` : ""}${callType !== "OOW" ? ` (${callType} cover detected)` : ""}` });
         return;
       }
       if (!amcId && !pmId) return;

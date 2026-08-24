@@ -33,7 +33,10 @@ export type EquipmentInput = {
 
 export type CoverStatus = "active" | "expiring" | "expired" | "none";
 
-const addMonthsIso = (iso: string, months: number): string => {
+/** Default AMC period applied on equipment entry / import when none is given. */
+export const DEFAULT_AMC_MONTHS = 12;
+
+export const addMonthsIso = (iso: string, months: number): string => {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
   const idx = m - 1 + months;
   const year = y + Math.floor(idx / 12);
@@ -41,6 +44,19 @@ const addMonthsIso = (iso: string, months: number): string => {
   const last = new Date(year, month + 1, 0).getDate();
   const day = Math.min(d, last);
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+
+/** Exact inverse of addMonthsIso: returns m where start+m===end, else null. */
+export const monthsBetweenIso = (startIso: string, endIso: string): number | null => {
+  if (!startIso || !endIso) return null;
+  const s = startIso.slice(0, 10);
+  const e = endIso.slice(0, 10);
+  for (let m = 1; m <= 600; m++) {
+    if (addMonthsIso(s, m) === e) return m;
+    // stop early once we overshoot the end date
+    if (addMonthsIso(s, m) > e) break;
+  }
+  return null;
 };
 
 /** Warranty end = invoice date + warranty months. Null when either is missing. */
@@ -202,7 +218,9 @@ export const importEquipmentRows = async (rows: Record<string, string>[]): Promi
     const csvWarranty = pick(r, ["Warranty Months", "Warranty (Months)", "Warranty"]);
     const warranty = csvWarranty ? Number(csvWarranty) || 0 : productWarrantyMonths(prod);
     const amcStart = toIso(pick(r, ["AMC Start Date", "AMC Start"]));
-    const amcMonths = Number(pick(r, ["AMC Months", "AMC Duration"])) || 0;
+    const amcMonthsRaw = Number(pick(r, ["AMC Months", "AMC Duration"])) || 0;
+    // Default to 12 months when a start date is given without an explicit period.
+    const amcMonths = amcMonthsRaw || (amcStart ? DEFAULT_AMC_MONTHS : 0);
 
     const payload: EquipmentInput = {
       customer_id: customerId,

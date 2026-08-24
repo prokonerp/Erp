@@ -13,17 +13,18 @@ import {
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
 import { productWarrantyMonths } from "@/lib/sales";
-import { Search, Plus, LifeBuoy, Eye, X, Pencil, Trash2, Upload, ArrowUpDown } from "lucide-react";
+import { Search, Plus, LifeBuoy, Eye, X, Pencil, Trash2, Upload, FileDown, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/amc";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { parseCSV } from "@/lib/csv";
+import { parseCSV, buildCSV, downloadCSV } from "@/lib/csv";
 import { useIsAdmin } from "@/lib/useRole";
 import {
   listEquipmentForCustomer, createEquipment, updateEquipment, deleteEquipment,
   warrantyEnd, coverStatus, amcStatusOf,
   importEquipmentRows, type ImportOutcome,
   statusClass, statusLabel, type InstalledEquipment, type CoverStatus,
+  addMonthsIso, monthsBetweenIso, DEFAULT_AMC_MONTHS,
 } from "@/lib/installedEquipment";
 
 export const Route = createFileRoute("/_app/installed-equipment")({
@@ -58,8 +59,29 @@ const emptyDraft = {
   product_id: null as string | null,
   model_no: "", serial_no: "", invoice_no: "", invoice_date: "",
   warranty_months: "12", amc_start_date: "", amc_end_date: "",
+  amc_months: String(DEFAULT_AMC_MONTHS),
   remarks: "",
 };
+
+const EQUIPMENT_CSV_HEADERS = [
+  "Customer", "Model No", "Serial No", "Invoice No", "Invoice Date",
+  "Warranty Months", "AMC Start Date", "AMC Months", "Remarks",
+];
+
+function downloadEquipmentTemplate() {
+  const csv = buildCSV(EQUIPMENT_CSV_HEADERS, [{
+    Customer: "Acme Pvt Ltd",
+    "Model No": "LUM-1050",
+    "Serial No": "SN00123",
+    "Invoice No": "INV-2026-001",
+    "Invoice Date": "15/03/2026",
+    "Warranty Months": "12",
+    "AMC Start Date": "15/03/2027",
+    "AMC Months": "12",
+    Remarks: "",
+  }]);
+  downloadCSV("Prokon_installed_equipment_template.csv", csv);
+}
 
 function InstalledEquipmentPage() {
   const navigate = useNavigate();
@@ -193,8 +215,34 @@ function InstalledEquipmentPage() {
 
   const openAdd = () => { setEditId(null); setDraft({ ...emptyDraft }); setAddOpen(true); };
 
+  // AMC End auto-fills from Start + Period (months). Manual edits stick until
+  // Start or Period changes again.
+  const setAmcStart = (v: string) =>
+    setDraft((d) => {
+      const months = Number(d.amc_months) || 0;
+      return {
+        ...d,
+        amc_start_date: v,
+        amc_end_date: v && months > 0 ? addMonthsIso(v, months) : d.amc_end_date,
+      };
+    });
+
+  const setAmcMonths = (v: string) =>
+    setDraft((d) => {
+      const months = Number(v) || 0;
+      return {
+        ...d,
+        amc_months: v,
+        amc_end_date: d.amc_start_date && months > 0 ? addMonthsIso(d.amc_start_date, months) : d.amc_end_date,
+      };
+    });
+
   const openEdit = (r: InstalledEquipment) => {
     setEditId(r.id);
+    const start = (r.amc_start_date || "").slice(0, 10);
+    const end = (r.amc_end_date || "").slice(0, 10);
+    // Show the period that reproduces this row's stored dates; blank if custom.
+    const derivedMonths = start ? monthsBetweenIso(start, end) : null;
     setDraft({
       product_id: null,
       model_no: r.model_no || "",
@@ -202,8 +250,9 @@ function InstalledEquipmentPage() {
       invoice_no: r.invoice_no || "",
       invoice_date: (r.invoice_date || "").slice(0, 10),
       warranty_months: String(r.warranty_months ?? 0),
-      amc_start_date: (r.amc_start_date || "").slice(0, 10),
-      amc_end_date: (r.amc_end_date || "").slice(0, 10),
+      amc_start_date: start,
+      amc_months: derivedMonths != null ? String(derivedMonths) : "",
+      amc_end_date: end,
       remarks: r.remarks || "",
     });
     setAddOpen(true);
@@ -281,6 +330,9 @@ function InstalledEquipmentPage() {
           <Button variant="outline" size="sm" disabled={importing} onClick={() => fileRef.current?.click()}>
             <Upload className="h-4 w-4 mr-1" />{importing ? "Importing…" : "Import CSV"}
           </Button>
+          <Button variant="outline" size="sm" onClick={downloadEquipmentTemplate} title="Download a sample CSV with the expected columns">
+            <FileDown className="h-4 w-4 mr-1" />Sample CSV
+          </Button>
           <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setEditId(null); }}>
             <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
@@ -309,8 +361,16 @@ function InstalledEquipmentPage() {
                 <div><Label>Invoice Date</Label><Input type="date" value={draft.invoice_date} onChange={(e) => setDraft({ ...draft, invoice_date: e.target.value })} /></div>
                 <div><Label>Warranty (months)</Label><Input type="number" value={draft.warranty_months} onChange={(e) => setDraft({ ...draft, warranty_months: e.target.value })} /></div>
                 <div />
-                <div><Label>AMC Start</Label><Input type="date" value={draft.amc_start_date} onChange={(e) => setDraft({ ...draft, amc_start_date: e.target.value })} /></div>
-                <div><Label>AMC End</Label><Input type="date" value={draft.amc_end_date} onChange={(e) => setDraft({ ...draft, amc_end_date: e.target.value })} /></div>
+                <div><Label>AMC Start</Label><Input type="date" value={draft.amc_start_date} onChange={(e) => setAmcStart(e.target.value)} /></div>
+                <div>
+                  <Label>AMC Period (months)</Label>
+                  <Input type="number" min="0" value={draft.amc_months} onChange={(e) => setAmcMonths(e.target.value)} placeholder="e.g. 12" />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Fills AMC End automatically — still editable.</p>
+                </div>
+                <div>
+                  <Label>AMC End {Number(draft.amc_months) > 0 && draft.amc_start_date ? "(auto)" : ""}</Label>
+                  <Input type="date" value={draft.amc_end_date} onChange={(e) => setDraft({ ...draft, amc_end_date: e.target.value })} />
+                </div>
                 <div className="sm:col-span-2"><Label>Remarks</Label><Input value={draft.remarks} onChange={(e) => setDraft({ ...draft, remarks: e.target.value })} /></div>
               </div>
               <DialogFooter>
@@ -398,6 +458,7 @@ function InstalledEquipmentPage() {
                     <th className="px-2 py-1.5 text-right">Warranty (M)</th>
                     <th className="px-2 py-1.5">Warranty Status</th>
                     <th className="px-2 py-1.5">AMC Start</th>
+                    <th className="px-2 py-1.5">AMC End</th>
                     <th className="px-2 py-1.5">AMC Status</th>
                     <th className="px-2 py-1.5 w-16 text-center">Ticket</th>
                     <th className="px-2 py-1.5 w-14 text-center">View</th>
@@ -418,6 +479,7 @@ function InstalledEquipmentPage() {
                         {d.wEnd && <span className="ml-1 text-muted-foreground">{fmtDate(d.wEnd)}</span>}
                       </td>
                       <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.amc_start_date) || "—"}</td>
+                      <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.amc_end_date) || "—"}</td>
                       <td className="px-2 py-1">
                         <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusClass(d.a)}`}>{statusLabel[d.a]}</Badge>
                       </td>
@@ -455,7 +517,7 @@ function InstalledEquipmentPage() {
                     </tr>
                   ))}
                   {!loading && filtered.length === 0 && (
-                    <tr><td colSpan={12} className="px-2 py-8 text-center text-muted-foreground">
+                    <tr><td colSpan={13} className="px-2 py-8 text-center text-muted-foreground">
                       {rows.length === 0 ? "No installed equipment recorded for this customer yet." : "No rows match the current search / filters."}
                     </td></tr>
                   )}
