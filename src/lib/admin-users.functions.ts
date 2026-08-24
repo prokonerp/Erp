@@ -23,18 +23,63 @@ async function hashPassword(userId: string, pw: string): Promise<string> {
 
 async function recordPasswordHistory(supabaseAdmin: any, userId: string, pw: string) {
   const hash = await hashPassword(userId, pw);
-  await supabaseAdmin.from("password_history").insert({ user_id: userId, password_hash: hash });
-  const { data: extras } = await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("password_history")
-    .select("id")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .range(HISTORY_LIMIT, HISTORY_LIMIT + 100);
-  if (extras && extras.length) {
-    await supabaseAdmin
+    .insert({ user_id: userId, password_hash: hash });
+  // History is a reuse-guard only — never block the password change on it,
+  // but log loudly so silent failures can't erode the policy.
+  if (error) console.error("[password] failed to record history:", error.message);
+  else {
+    const { data: extras } = await supabaseAdmin
       .from("password_history")
-      .delete()
-      .in("id", extras.map((r: any) => r.id));
+      .select("id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .range(HISTORY_LIMIT, HISTORY_LIMIT + 100);
+    if (extras && extras.length) {
+      await supabaseAdmin
+        .from("password_history")
+        .delete()
+        .in("id", extras.map((r: any) => r.id));
+    }
+  }
+}
+
+/**
+ * Marks a password as freshly changed for a user. Uses upsert so it works even
+ * if the app_users row is missing (users created outside the app), and throws
+ * on failure — a silently-failed flag update is what caused the forced-change
+ * dialog to reappear on every login.
+ */
+async function markPasswordChanged(
+  supabaseAdmin: any,
+  userId: string,
+  patch: Record<string, any> = {},
+) {
+  const payload = {
+    user_id: userId,
+    password_changed_at: new Date().toISOString(),
+    must_change_password: false,
+    ...patch,
+  };
+  const { data: existing } = await supabaseAdmin
+    .from("app_users")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existing) {
+    const { error } = await supabaseAdmin
+      .from("app_users")
+      .update({
+        password_changed_at: payload.password_changed_at,
+        must_change_password: false,
+        ...patch,
+      })
+      .eq("user_id", userId);
+    if (error) throw new Error(`Could not save password change date: ${error.message}`);
+  } else {
+    const { error } = await supabaseAdmin.from("app_users").upsert(payload);
+    if (error) throw new Error(`Could not create profile row: ${error.message}`);
   }
 }
 
@@ -114,6 +159,17 @@ export const createAppUser = createServerFn({ method: "POST" })
       must_change_password: false,
     });
     if (upErr) throw new Error(upErr.message);
+    await markPasswordChanged(
+      supabaseAdmin,
+      uid,
+      {
+        name: data.name ?? null,
+        email: data.email,
+        phone: data.phone ?? null,
+        role_id: data.role_id ?? null,
+        status: data.status ?? "active",
+      },
+    );
     await recordPasswordHistory(supabaseAdmin, uid, data.password);
     if (data.is_admin) {
       await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: "admin" });
@@ -175,10 +231,7 @@ export const setUserPassword = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     await recordPasswordHistory(supabaseAdmin, data.user_id, data.password);
-    await supabaseAdmin
-      .from("app_users")
-      .update({ password_changed_at: new Date().toISOString(), must_change_password: false })
-      .eq("user_id", data.user_id);
+    await markPasswordChanged(supabaseAdmin, data.user_id);
     return { ok: true };
   });
 
@@ -214,26 +267,40 @@ export const changeOwnPassword = createServerFn({ method: "POST" })
       process.env.SUPABASE_PUBLISHABLE_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
+    // Verify the current password by signing in. Map the REAL failure reason —
+    // collapsing every error into "Current password is incorrect" made users
+    // retry endlessly (rate limits looked like wrong-password errors).
     const { error: signErr } = await checker.auth.signInWithPassword({
       email,
       password: data.current_password,
     });
-    if (signErr) throw new Error("Current password is incorrect");
+    if (signErr) {
+      const msg = (signErr as any).message ?? "";
+      const status = (signErr as any).status;
+      if (status === 429 || /rate|too many/i.test(msg)) {
+        throw new Error("Too many attempts. Please wait a minute and try again.");
+      }
+      if (/invalid login credentials|invalid_credentials/i.test(msg)) {
+        throw new Error("Current password is incorrect");
+      }
+      if (/email not confirmed/i.test(msg)) {
+        throw new Error("Account email is not confirmed; contact your administrator.");
+      }
+      throw new Error(`Could not verify current password: ${msg || "sign-in failed"}`);
+    }
     if (await isInHistory(supabaseAdmin, context.userId, data.new_password)) {
       throw new Error("New password cannot match any of the last 5 passwords");
     }
+    // NOTE: an admin password update revokes all existing sessions for this
+    // user — the client signs out cleanly right after this succeeds.
     const { error } = await supabaseAdmin.auth.admin.updateUserById(context.userId, {
       password: data.new_password,
     });
     if (error) throw new Error(error.message);
     await recordPasswordHistory(supabaseAdmin, context.userId, data.new_password);
-    await supabaseAdmin
-      .from("app_users")
-      .update({
-        password_changed_at: new Date().toISOString(),
-        must_change_password: false,
-      })
-      .eq("user_id", context.userId);
+    // Must never fail silently — a skipped update here re-triggers the forced
+    // "password expired / must be changed" dialog on every login.
+    await markPasswordChanged(supabaseAdmin, context.userId);
     return { ok: true };
   });
 

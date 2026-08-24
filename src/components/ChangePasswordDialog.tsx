@@ -47,6 +47,18 @@ export function ChangePasswordDialog({
     try {
       await call({ data: { current_password: cur, new_password: next } });
       toast.success("Password updated");
+      // A password update revokes all sessions server-side, so the old
+      // refresh token would die at a random moment mid-work. Re-authenticate
+      // cleanly right away instead.
+      try {
+        const { supabase } = await import("@/integrations/supabase/client");
+        await supabase.auth.signOut();
+        sessionStorage.setItem("password-changed", "1");
+        window.location.href = "/auth";
+        return;
+      } catch {
+        // fall through to normal close if local cleanup fails
+      }
       setCur(""); setNext(""); setConfirm("");
       onChanged?.();
       onOpenChange(false);

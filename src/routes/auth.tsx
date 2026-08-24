@@ -31,6 +31,12 @@ function AuthPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (sessionStorage.getItem("password-changed")) {
+      sessionStorage.removeItem("password-changed");
+      toast.success("Password updated. Please sign in with your new password.", {
+        duration: 8000,
+      });
+    }
     if (sessionStorage.getItem("idle-session-expired")) {
       sessionStorage.removeItem("idle-session-expired");
       toast.info(
