@@ -13,6 +13,7 @@ import { ProductPicker, type ProductMaster } from "@/components/ProductPicker";
 import { fetchAll } from "@/lib/fetchAll";
 import type { UpsBundle, Battery, BatteryTier, BundleItem } from "@/lib/upsBundle";
 import { TIER_LABEL } from "@/lib/upsBundle";
+import { PageHeader } from "@/components/crm/PageHeader";
 
 export const Route = createFileRoute("/_app/crm/bundles")({
   component: BundlesSettings,
@@ -174,26 +175,32 @@ function BundlesSettings() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-bold">Smart Sales — Bundles & Battery Catalog</h1>
-        <p className="text-sm text-muted-foreground">
-          Define what accessories auto-suggest when a UPS is added to a quote, and manage the battery catalog used by the recommendation engine.
-        </p>
-      </div>
+      <PageHeader
+        title="Smart Sales — Bundles & Battery Catalog"
+        description="Define what accessories auto-suggest when a UPS is added to a quote, and manage the battery catalog used by the recommendation engine."
+        group="Customers (Sales & CRM)"
+        icon={Zap}
+      />
 
       <Card>
-        <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Zap className="h-4 w-4 text-blue-600" /> UPS Bundles
-          </CardTitle>
-          <Button size="sm" onClick={addBundle}>
+        <CardHeader className="pb-3 flex flex-row items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700">
+              <Zap className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <CardTitle className="text-base font-semibold">UPS Bundles</CardTitle>
+              <p className="text-xs text-muted-foreground">Accessories that auto-suggest when a UPS is added to a quote.</p>
+            </div>
+          </div>
+          <Button size="sm" className="h-8" onClick={addBundle}>
             <Plus className="h-4 w-4 mr-1" />New bundle
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
           {bundles.length === 0 && <div className="text-sm text-muted-foreground">No bundles yet.</div>}
           {bundles.map((b) => (
-            <div key={b.id} className="rounded-md border p-3 space-y-3">
+            <div key={b.id} className="rounded-md border p-3 space-y-3 transition-shadow hover:shadow-sm bg-background">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
                 <div className="md:col-span-5">
                   <Label className="text-xs">UPS (parent product)</Label>
@@ -273,11 +280,17 @@ function BundlesSettings() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <BatteryIcon className="h-4 w-4 text-emerald-600" /> Battery Catalog
-          </CardTitle>
-          <Button size="sm" onClick={addBattery}>
+        <CardHeader className="pb-3 flex flex-row items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
+              <BatteryIcon className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <CardTitle className="text-base font-semibold">Battery Catalog</CardTitle>
+              <p className="text-xs text-muted-foreground">Batteries used by the backup-time recommendation engine.</p>
+            </div>
+          </div>
+          <Button size="sm" className="h-8" onClick={addBattery}>
             <Plus className="h-4 w-4 mr-1" />New battery
           </Button>
         </CardHeader>
@@ -285,7 +298,7 @@ function BundlesSettings() {
           {batteries.length === 0 && <div className="text-sm text-muted-foreground">No batteries yet.</div>}
           <div className="space-y-2">
             {batteries.map((b) => (
-              <div key={b.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end rounded border p-2 bg-white">
+              <div key={b.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end rounded border p-2 bg-white transition-shadow hover:shadow-sm">
                 <div className="md:col-span-3">
                   <Label className="text-[11px]">Linked product (optional)</Label>
                   <ProductPicker
@@ -357,9 +370,9 @@ function BundlesSettings() {
         </CardContent>
       </Card>
 
-      <p className="text-xs text-muted-foreground">
-        Backup formula: <span className="font-mono">(V × Ah × Qty × 0.8) ÷ Load(W)</span>. Recommendations pick the cheapest option per tier meeting the desired backup.
-      </p>
+      <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+        Backup formula: <span className="font-mono text-foreground">(V × Ah × Qty × 0.8) ÷ Load(W)</span>. Recommendations pick the cheapest option per tier meeting the desired backup.
+      </div>
     </div>
   );
 }

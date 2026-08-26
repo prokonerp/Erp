@@ -2,6 +2,8 @@ import type jsPDF from "jspdf";
 import { amountInWords } from "@/lib/gst";
 import { type PORow, type POItemRow } from "@/lib/purchaseOrder";
 import type { BranchRow } from "@/lib/sales";
+import type { CompanyProfile } from "@/lib/companyProfile";
+import { getDocumentHeader } from "@/lib/letterhead";
 
 function hexToRgb(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
@@ -36,12 +38,14 @@ export async function renderPurchaseOrderPdf(args: {
     phone?: string | null;
     email?: string | null;
   } | null;
+  /** Resolved letterhead (from the print dialog). Takes priority over everything. */
+  header?: CompanyProfile | null;
 }): Promise<jsPDF> {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),
   ]);
-  const { po, items, branch } = args;
+  const { po, items, branch: _branch } = args; // kept for API compat; identity comes from Company Master
   const themeColor = args.themeColor || "#1f3864";
   const [tr, tg, tb] = hexToRgb(themeColor);
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
@@ -51,13 +55,15 @@ export async function renderPurchaseOrderPdf(args: {
 
   doc.setDrawColor(tr, tg, tb).setLineWidth(0.7);
 
-  // Resolve company (settings override branch). Never fall back to warehouse.name for company_name.
-  const s = args.settings || {};
-  const companyName = (s.company_name || "Prokon Hi-Tech Systems").toString();
-  const companyAddress = (s.company_address || branch?.address || "").toString();
-  const companyGstin = branch?.gstin || "";
-  const companyPhone = s.phone || branch?.phone || "";
-  const companyEmail = s.email || branch?.email || "";
+  // Resolve company — single source of truth is the Company Master
+  // (optionally overridden by the print-dialog letterhead choice).
+  // No hardcoded name fallback; if the master is empty we print blanks.
+  const co: CompanyProfile = args.header ?? (await getDocumentHeader());
+  const companyName = (co.name || "").toString();
+  const companyAddress = (co.registered_office_address || co.regd_address || "").toString();
+  const companyGstin = co.gstin || "";
+  const companyPhone = co.phone || "";
+  const companyEmail = co.email || "";
 
   // Header
   let y = margin;

@@ -4,24 +4,51 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CALL_TYPES, PRIORITIES } from "@/lib/tickets";
 import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Plus, CalendarClock, Check, Loader2, AlertCircle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { Trash2 } from "lucide-react";
 import type { PartLine } from "@/lib/tickets";
-import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
+import {
+  FormShell,
+  FormSection,
+  FormGrid,
+  FormField,
+  StickyMobileActions,
+} from "@/components/form-kit";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { ComplaintPicker } from "@/components/ComplaintPicker";
 import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
-import { warrantyEnd } from "@/lib/installedEquipment";
+import {
+  warrantyEnd,
+  findEquipmentBySerialExact,
+  findProductByModel,
+  getOrCreateEquipmentForTicket,
+  listEquipmentForCustomer,
+  type InstalledEquipment,
+} from "@/lib/installedEquipment";
 import { localDateIso } from "@/lib/dateRange";
+import { fmtDate } from "@/lib/amc";
 
 export const Route = createFileRoute("/_app/tickets/new")({
   component: NewTicket,
@@ -33,10 +60,23 @@ function NewTicket() {
   const [callTypes, setCallTypes] = useState<string[]>([...CALL_TYPES]);
   const [addingType, setAddingType] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
-  const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
+  const [oemBrands, setOemBrands] = useState<string[]>([
+    "APC",
+    "Luminous",
+    "Microtek",
+    "Eaton",
+    "Exide",
+    "Quanta",
+  ]);
   const [addingBrand, setAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState("");
-  const [sourceMeta, setSourceMeta] = useState<{ source?: "amc" | "pm"; amc_id?: string; pm_visit_id?: string; label?: string } | null>(null);
+  const [sourceMeta, setSourceMeta] = useState<{
+    source?: "amc" | "pm";
+    amc_id?: string;
+    pm_visit_id?: string;
+    label?: string;
+    sublabel?: string;
+  } | null>(null);
   const [form, setForm] = useState({
     case_id: "",
     call_type: "OOW" as string,
@@ -66,21 +106,111 @@ function NewTicket() {
   const dirtyRef = useRef(false);
   const submittedRef = useRef(false);
   const [dirty, setDirty] = useState(false);
+  const [sourceEquipId, setSourceEquipId] = useState<string | null>(null);
   const { blocker, markClean } = useUnsavedChanges(dirty);
+  const [customerEquipment, setCustomerEquipment] = useState<InstalledEquipment[]>([]);
+  const [equipLoading, setEquipLoading] = useState(false);
+
+  // Pull a registered installed-equipment unit into the form by its record.
+  // Shared by the `?equipment=<id>` deep link (from the Installed Equipment page)
+  // AND the serial lookup below, so the pull behavior is identical regardless
+  // of entry point.
+  const applyEquipmentPrefill = async (e: {
+    id: string;
+    customer_id: string;
+    model_no: string;
+    serial_no: string | null;
+    invoice_date: string | null;
+    warranty_months: number | null;
+    amc_start_date: string | null;
+    amc_end_date: string | null;
+  }) => {
+    const today = localDateIso(new Date());
+    const wEnd = warrantyEnd(e as never);
+    let callType = "OOW";
+    if (e.invoice_date && wEnd && e.invoice_date.slice(0, 10) <= today && today <= wEnd)
+      callType = "Warranty";
+    else if (
+      e.amc_start_date &&
+      e.amc_end_date &&
+      e.amc_start_date.slice(0, 10) <= today &&
+      today <= e.amc_end_date.slice(0, 10)
+    )
+      callType = "AMC";
+    const { data: c } = await supabase
+      .from("customers")
+      .select("id,company,phone,email,billing_address,address,city,billing_city,sector,state")
+      .eq("id", e.customer_id)
+      .maybeSingle();
+    const cu =
+      (c as {
+        company?: string | null;
+        phone?: string | null;
+        email?: string | null;
+        billing_address?: string | null;
+        address?: string | null;
+        city?: string | null;
+        billing_city?: string | null;
+        sector?: string | null;
+      } | null) ?? null;
+    // Resolve product_id from Product Master so the ProductPicker shows the model
+    let resolvedProductId = "";
+    let resolvedBrand = "";
+    try {
+      const prod = await findProductByModel(e.model_no);
+      if (prod) {
+        resolvedProductId = prod.id;
+        resolvedBrand = prod.brand || "";
+      }
+    } catch {
+      // Non-fatal: the model text still gets set, just not the picker value
+    }
+    setForm((f) => ({
+      ...f,
+      call_type: callType,
+      customer_id: e.customer_id,
+      customer_name: cu?.company || "",
+      customer_phone: cu?.phone || "",
+      customer_email: cu?.email || "",
+      customer_address: cu?.billing_address || cu?.address || "",
+      sector: cu?.sector || "",
+      location: cu?.billing_city || cu?.city || "",
+      product_id: resolvedProductId,
+      product: e.model_no || "",
+      ...(resolvedBrand ? { oem_brand: resolvedBrand } : {}),
+      serial_no: (e.serial_no || "").toUpperCase(),
+      complaint: `Service request for ${e.model_no}${e.serial_no ? ` / ${e.serial_no}` : ""}`,
+    }));
+    setSourceMeta({
+      label: `Installed Equipment record${e.serial_no ? ` — ${e.serial_no}` : ""}`,
+      sublabel:
+        callType !== "OOW"
+          ? `${callType === "Warranty" ? "Warranty" : "AMC"} active until ${callType === "Warranty" ? fmtDate(wEnd) : fmtDate(e.amc_end_date)}`
+          : undefined,
+    });
+  };
 
   useEffect(() => {
-    supabase.from("call_type_master").select("name").order("name").then(({ data }) => {
-      if (data && data.length) {
-        const names = (data as { name: string }[]).map((r) => r.name);
-        setCallTypes(Array.from(new Set([...names, ...CALL_TYPES])));
-      }
-    });
-    supabase.from("oem_brand_master" as never).select("name").order("name").then(({ data }) => {
-      if (data && (data as { name: string }[]).length) {
-        const names = (data as { name: string }[]).map((r) => r.name);
-        setOemBrands(Array.from(new Set(names)));
-      }
-    });
+    supabase
+      .from("call_type_master")
+      .select("name")
+      .order("name")
+      .then(({ data }) => {
+        if (data && data.length) {
+          const names = (data as { name: string }[]).map((r) => r.name);
+          setCallTypes(Array.from(new Set([...names, ...CALL_TYPES])));
+        }
+      });
+    supabase
+      .from("oem_brand_master" as never)
+      .select("name")
+      .order("name")
+      .then(({ data }) => {
+        if (data && (data as { name: string }[]).length) {
+          const names = (data as { name: string }[]).map((r) => r.name);
+          setOemBrands(Array.from(new Set(names)));
+        }
+      });
     // Prefill from AMC/PM via URL params: ?amc=<id> or ?pm=<id>
     (async () => {
       if (typeof window === "undefined") return;
@@ -88,76 +218,89 @@ function NewTicket() {
       const amcId = sp.get("amc");
       const pmId = sp.get("pm");
       const equipId = sp.get("equipment");
-      // Additional branch: prefill from an Installed Equipment record.
+      // Deep link from the Installed Equipment page — prefill the unit + customer + coverage.
       if (!amcId && !pmId && equipId) {
         const sb = supabase as unknown as { from: (t: string) => any };
-        const { data: eq } = await sb.from("installed_equipment")
-          .select("id,customer_id,model_no,serial_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date")
-          .eq("id", equipId).maybeSingle();
+        const { data: eq } = await sb
+          .from("installed_equipment")
+          .select(
+            "id,customer_id,model_no,serial_no,invoice_date,warranty_months,amc_start_date,amc_end_date",
+          )
+          .eq("id", equipId)
+          .maybeSingle();
         if (!eq) return;
         const e = eq as {
-          id: string; customer_id: string; model_no: string; serial_no: string | null;
-          invoice_date: string | null; warranty_months: number | null;
-          amc_start_date: string | null; amc_end_date: string | null;
+          id: string;
+          customer_id: string;
+          model_no: string;
+          serial_no: string | null;
+          invoice_date: string | null;
+          warranty_months: number | null;
+          amc_start_date: string | null;
+          amc_end_date: string | null;
         };
-        // Auto-pick call type from coverage: Warranty wins while active,
-        // then AMC; OOW is left as the manual default when neither applies.
-        const today = localDateIso(new Date());
-        const wEnd = warrantyEnd(e as never);
-        let callType = "OOW";
-        if (e.invoice_date && wEnd && e.invoice_date.slice(0, 10) <= today && today <= wEnd) callType = "Warranty";
-        else if (e.amc_start_date && e.amc_end_date && e.amc_start_date.slice(0, 10) <= today && today <= e.amc_end_date.slice(0, 10)) callType = "AMC";
-        const { data: c } = await supabase.from("customers")
-          .select("id,company,phone,email,billing_address,address,city,billing_city,sector,state")
-          .eq("id", e.customer_id).maybeSingle();
-        const cu = (c as { company?: string | null; phone?: string | null; email?: string | null; billing_address?: string | null; address?: string | null; city?: string | null; billing_city?: string | null; sector?: string | null } | null) ?? null;
-        setForm((f) => ({
-          ...f,
-          call_type: callType,
-          customer_id: e.customer_id,
-          customer_name: cu?.company || "",
-          customer_phone: cu?.phone || "",
-          customer_email: cu?.email || "",
-          customer_address: cu?.billing_address || cu?.address || "",
-          sector: cu?.sector || "",
-          location: cu?.billing_city || cu?.city || "",
-          product: e.model_no || "",
-          serial_no: (e.serial_no || "").toUpperCase(),
-          complaint: `Service request for ${e.model_no}${e.serial_no ? ` / ${e.serial_no}` : ""}`,
-        }));
-        setSourceMeta({ label: `Installed Equipment record${e.serial_no ? ` — ${e.serial_no}` : ""}${callType !== "OOW" ? ` (${callType} cover detected)` : ""}` });
+        setSourceEquipId(e.id);
+        await applyEquipmentPrefill(e);
         return;
       }
       if (!amcId && !pmId) return;
       let resolvedAmcId = amcId || "";
       let pmDate = "";
       if (pmId) {
-        const { data: pm } = await supabase.from("pm_visits").select("id,amc_id,scheduled_date").eq("id", pmId).maybeSingle();
+        const { data: pm } = await supabase
+          .from("pm_visits")
+          .select("id,amc_id,scheduled_date")
+          .eq("id", pmId)
+          .maybeSingle();
         const pmRow = pm as { id: string; amc_id: string; scheduled_date: string } | null;
-        if (pmRow) { resolvedAmcId = pmRow.amc_id; pmDate = pmRow.scheduled_date; }
+        if (pmRow) {
+          resolvedAmcId = pmRow.amc_id;
+          pmDate = pmRow.scheduled_date;
+        }
       }
       if (!resolvedAmcId) return;
-      const { data: amc } = await supabase.from("amcs")
-        .select("id,agreement_no,customer_id,client_name,client_company,contact_no,email,client_address,units")
-        .eq("id", resolvedAmcId).maybeSingle();
+      const { data: amc } = await supabase
+        .from("amcs")
+        .select(
+          "id,agreement_no,customer_id,client_name,client_company,contact_no,email,client_address,units",
+        )
+        .eq("id", resolvedAmcId)
+        .maybeSingle();
       if (!amc) return;
       const a = amc as {
-        id: string; agreement_no: string; customer_id: string | null;
-        client_name: string; client_company: string | null; contact_no: string | null; email: string | null;
-        client_address: string | null; units: { model: string; serial_no: string }[];
+        id: string;
+        agreement_no: string;
+        customer_id: string | null;
+        client_name: string;
+        client_company: string | null;
+        contact_no: string | null;
+        email: string | null;
+        client_address: string | null;
+        units: { model: string; serial_no: string }[];
       };
-      type CustLite = { city?: string | null; billing_city?: string | null; sector?: string | null; phone?: string | null; email?: string | null; company?: string | null; billing_address?: string | null; address?: string | null };
+      type CustLite = {
+        city?: string | null;
+        billing_city?: string | null;
+        sector?: string | null;
+        phone?: string | null;
+        email?: string | null;
+        company?: string | null;
+        billing_address?: string | null;
+        address?: string | null;
+      };
       let cust: CustLite | null = null;
       if (a.customer_id) {
-        const { data: c } = await supabase.from("customers")
+        const { data: c } = await supabase
+          .from("customers")
           .select("id,company,phone,email,billing_address,address,city,billing_city,sector,state")
-          .eq("id", a.customer_id).maybeSingle();
+          .eq("id", a.customer_id)
+          .maybeSingle();
         cust = (c as CustLite | null) ?? null;
       }
       const firstUnit = (a.units || [])[0] || { model: "", serial_no: "" };
       setForm((f) => ({
         ...f,
-        call_type: pmId ? "AMC" : (f.call_type || "AMC"),
+        call_type: pmId ? "AMC" : f.call_type || "AMC",
         customer_id: a.customer_id || "",
         customer_name: cust?.company || a.client_company || a.client_name || "",
         customer_phone: cust?.phone || a.contact_no || "",
@@ -180,6 +323,28 @@ function NewTicket() {
     })();
   }, []);
 
+  // Load installed equipment when a customer is selected, so the user can pick
+  // a unit from their register or fall back to Product Master.
+  useEffect(() => {
+    if (!form.customer_id) {
+      setCustomerEquipment([]);
+      return;
+    }
+    const controller = new AbortController();
+    setEquipLoading(true);
+    listEquipmentForCustomer(form.customer_id)
+      .then((data) => {
+        if (!controller.signal.aborted) setCustomerEquipment(data);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setCustomerEquipment([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setEquipLoading(false);
+      });
+    return () => controller.abort();
+  }, [form.customer_id]);
+
   const addCallType = async () => {
     const n = newTypeName.trim();
     if (!n) return;
@@ -187,7 +352,8 @@ function NewTicket() {
     if (error) return toast.error(error.message);
     setCallTypes((prev) => Array.from(new Set([...prev, n])));
     setForm((f) => ({ ...f, call_type: n }));
-    setNewTypeName(""); setAddingType(false);
+    setNewTypeName("");
+    setAddingType(false);
     toast.success("Call type added");
   };
 
@@ -198,13 +364,34 @@ function NewTicket() {
     if (error) return toast.error(error.message);
     setOemBrands((prev) => Array.from(new Set([...prev, n])));
     setForm((f) => ({ ...f, oem_brand: n }));
-    setNewBrandName(""); setAddingBrand(false);
+    setNewBrandName("");
+    setAddingBrand(false);
     toast.success("OEM brand added");
   };
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
   // Any user change marks the form dirty so the auto-save effect below fires.
-  useEffect(() => { dirtyRef.current = true; setDirty(true); }, [form, defectiveOn, defectiveParts, goodOn, goodParts]);
+  useEffect(() => {
+    dirtyRef.current = true;
+    setDirty(true);
+  }, [form, defectiveOn, defectiveParts, goodOn, goodParts]);
+
+  // Pull the registered unit (model + customer + coverage) when a serial is typed.
+  const lookupBySerial = async () => {
+    const s = form.serial_no.trim();
+    if (!s) return;
+    try {
+      const eqs = await findEquipmentBySerialExact(s);
+      if (!eqs.length) return;
+      if (eqs.length > 1)
+        toast.info(
+          `Multiple units share this serial — using the first match (${eqs[0].serial_no || "—"}).`,
+        );
+      await applyEquipmentPrefill(eqs[0]);
+    } catch {
+      // lookup failures must never block ticket entry
+    }
+  };
 
   // Ticket creation is explicit — no auto-save/navigation on customer select.
   // Selecting a client only populates fields; the user must click "Create Ticket".
@@ -224,7 +411,8 @@ function NewTicket() {
   const mkUpd = (setter: PartSetter) => (i: number, p: Partial<PartLine>) =>
     setter((rows) => rows.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   const mkAdd = (setter: PartSetter) => () => setter((rows) => [...rows, { name: "", qty: "1" }]);
-  const mkDel = (setter: PartSetter) => (i: number) => setter((rows) => rows.filter((_, idx) => idx !== i));
+  const mkDel = (setter: PartSetter) => (i: number) =>
+    setter((rows) => rows.filter((_, idx) => idx !== i));
   const updDef = mkUpd(setDefectiveParts);
   const addDef = mkAdd(setDefectiveParts);
   const delDef = mkDel(setDefectiveParts);
@@ -248,7 +436,8 @@ function NewTicket() {
     }
     if (defectiveOn) {
       const valid = defectiveParts.some((p) => (p.name || "").trim());
-      if (!valid) return toast.error("Add at least one Defective Part Received or turn the section off");
+      if (!valid)
+        return toast.error("Add at least one Defective Part Received or turn the section off");
     }
     if (goodOn) {
       const valid = goodParts.some((p) => (p.name || "").trim());
@@ -258,11 +447,32 @@ function NewTicket() {
     const { data: u } = await supabase.auth.getUser();
     let raisedByName: string | null = null;
     if (u.user?.id) {
-      const { data: au } = await supabase.from("app_users").select("name").eq("user_id", u.user.id).maybeSingle();
+      const { data: au } = await supabase
+        .from("app_users")
+        .select("name")
+        .eq("user_id", u.user.id)
+        .maybeSingle();
       raisedByName = (au as { name?: string } | null)?.name?.trim() || null;
     }
     const { product_id: _pid, ...rest } = form;
     void _pid;
+    // Link / reverse-link to Installed Equipment (internal only): attach the
+    // matching equipment row, creating one if this serial isn't already on file
+    // for the selected customer. This keeps the Installed Equipment register in
+    // sync even when the entry point is a complaint ticket.
+    let equipmentId: string | null = sourceEquipId;
+    if (!equipmentId && form.customer_id && form.serial_no.trim() && form.product.trim()) {
+      try {
+        equipmentId = await getOrCreateEquipmentForTicket({
+          customer_id: form.customer_id,
+          model_no: form.product,
+          serial_no: form.serial_no,
+        });
+      } catch {
+        // Non-fatal: ticket is still created, just without the equipment link.
+        toast.error("Could not link this ticket to Installed Equipment");
+      }
+    }
     const payload = {
       ...rest,
       customer_id: form.customer_id || null,
@@ -287,9 +497,10 @@ function NewTicket() {
       source: sourceMeta?.source ?? null,
       amc_id: sourceMeta?.amc_id ?? null,
       pm_visit_id: sourceMeta?.pm_visit_id ?? null,
+      equipment_id: equipmentId,
       // Legacy field kept in sync for back-compat (true if either section is enabled)
       parts_used: defectiveOn || goodOn,
-      parts_details: goodOn ? goodParts : (defectiveOn ? defectiveParts : []),
+      parts_details: goodOn ? goodParts : defectiveOn ? defectiveParts : [],
       defective_parts_received: defectiveOn,
       defective_parts_details: defectiveOn ? defectiveParts : [],
       good_parts_used: goodOn,
@@ -297,7 +508,11 @@ function NewTicket() {
     };
     // CASE ID is always auto-generated server-side
     delete (payload as Record<string, unknown>).case_id;
-    const { data, error } = await supabase.from("tickets").insert(payload as never).select("id").single();
+    const { data, error } = await supabase
+      .from("tickets")
+      .insert(payload as never)
+      .select("id")
+      .single();
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Ticket created");
@@ -330,12 +545,22 @@ function NewTicket() {
           {form.preferred_visit_datetime && (
             <div className="inline-flex items-center gap-2 rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-blue-700 animate-pulse">
               <CalendarClock className="h-3 w-3" />
-              Preferred Visit: {new Date(form.preferred_visit_datetime).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              Preferred Visit:{" "}
+              {new Date(form.preferred_visit_datetime).toLocaleString("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </div>
           )}
           {sourceMeta?.label && (
             <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-1 text-xs">
               <span className="font-medium">Source:</span> {sourceMeta.label}
+              {sourceMeta.sublabel && (
+                <span className="ml-1 text-emerald-700">• {sourceMeta.sublabel}</span>
+              )}
             </div>
           )}
         </div>
@@ -347,19 +572,42 @@ function NewTicket() {
             <Input value={form.case_id} readOnly disabled placeholder="Auto" className="bg-muted" />
           </FormField>
           <FormField label="Call Type" required name="call_type" size="sm">
-            <Select value={form.call_type} onValueChange={(v) => { if (v === "__add__") { setAddingType(true); return; } set({ call_type: v }); }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={form.call_type}
+              onValueChange={(v) => {
+                if (v === "__add__") {
+                  setAddingType(true);
+                  return;
+                }
+                set({ call_type: v });
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {callTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                <SelectItem value="__add__"><span className="text-primary">+ Add New Call Type</span></SelectItem>
+                {callTypes.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__add__">
+                  <span className="text-primary">+ Add New Call Type</span>
+                </SelectItem>
               </SelectContent>
             </Select>
           </FormField>
           <FormField label="Priority" name="priority" size="xs">
             <Select value={form.priority} onValueChange={(v) => set({ priority: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                {PRIORITIES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </FormField>
@@ -367,7 +615,14 @@ function NewTicket() {
             <div className="flex items-center gap-2 h-9">
               <Switch
                 checked={form.oem_call}
-                onCheckedChange={(v) => set({ oem_call: v, oem_brand: v ? form.oem_brand : "", oem_ref_id: v ? form.oem_ref_id : "", oem_purchase_date: v ? form.oem_purchase_date : "" })}
+                onCheckedChange={(v) =>
+                  set({
+                    oem_call: v,
+                    oem_brand: v ? form.oem_brand : "",
+                    oem_ref_id: v ? form.oem_ref_id : "",
+                    oem_purchase_date: v ? form.oem_purchase_date : "",
+                  })
+                }
               />
               <span className="text-xs text-muted-foreground">{form.oem_call ? "Yes" : "No"}</span>
             </div>
@@ -376,19 +631,44 @@ function NewTicket() {
           {form.oem_call && (
             <>
               <FormField label="OEM Brand" required name="oem_brand">
-                <Select value={form.oem_brand} onValueChange={(v) => { if (v === "__add__") { setAddingBrand(true); return; } set({ oem_brand: v }); }}>
-                  <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
+                <Select
+                  value={form.oem_brand}
+                  onValueChange={(v) => {
+                    if (v === "__add__") {
+                      setAddingBrand(true);
+                      return;
+                    }
+                    set({ oem_brand: v });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select brand" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {oemBrands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                    <SelectItem value="__add__"><span className="text-primary">+ Add New Brand</span></SelectItem>
+                    {oemBrands.map((b) => (
+                      <SelectItem key={b} value={b}>
+                        {b}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__add__">
+                      <span className="text-primary">+ Add New Brand</span>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </FormField>
               <FormField label="OEM Ref ID" required name="oem_ref_id">
-                <Input value={form.oem_ref_id} onChange={(e) => set({ oem_ref_id: e.target.value })} placeholder="OEM reference id" />
+                <Input
+                  value={form.oem_ref_id}
+                  onChange={(e) => set({ oem_ref_id: e.target.value })}
+                  placeholder="OEM reference id"
+                />
               </FormField>
               <FormField label="OEM Purchase Date" required name="oem_purchase_date">
-                <Input type="date" value={form.oem_purchase_date} onChange={(e) => set({ oem_purchase_date: e.target.value })} />
+                <Input
+                  type="date"
+                  value={form.oem_purchase_date}
+                  onChange={(e) => set({ oem_purchase_date: e.target.value })}
+                />
               </FormField>
             </>
           )}
@@ -411,31 +691,113 @@ function NewTicket() {
                   customer_address: c?.billing_address || c?.address || "",
                   sector: cAny.sector || "",
                   location: cAny.billing_city || cAny.city || c?.state || "",
+                  // Reset product-specific fields so stale data from a different
+                  // customer doesn't carry over. User picks fresh equipment/model.
+                  product_id: "",
+                  product: "",
+                  serial_no: "",
+                  call_type: "OOW",
+                  oem_brand: "",
+                  oem_ref_id: "",
+                  oem_purchase_date: "",
+                  oem_call: false,
+                  complaint: "",
                 });
+                setSourceEquipId(null);
+                setSourceMeta(null);
               }}
             />
           </FormField>
           <FormField label="Contact Number" name="customer_phone" size="sm">
-            <Input value={form.customer_phone} onChange={(e) => set({ customer_phone: e.target.value })} />
+            <Input
+              value={form.customer_phone}
+              onChange={(e) => set({ customer_phone: e.target.value })}
+            />
           </FormField>
           <FormField label="Email" name="customer_email" size="md">
-            <Input type="email" value={form.customer_email} onChange={(e) => set({ customer_email: e.target.value })} />
+            <Input
+              type="email"
+              value={form.customer_email}
+              onChange={(e) => set({ customer_email: e.target.value })}
+            />
           </FormField>
           <FormField label="Sector / Colony" name="sector" size="sm">
-            <Input value={form.sector} onChange={(e) => set({ sector: e.target.value })} placeholder="e.g. Sector 61" />
+            <Input
+              value={form.sector}
+              onChange={(e) => set({ sector: e.target.value })}
+              placeholder="e.g. Sector 61"
+            />
           </FormField>
           <FormField label="City / Area" name="location" size="sm">
-            <Input value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="City" />
+            <Input
+              value={form.location}
+              onChange={(e) => set({ location: e.target.value })}
+              placeholder="City"
+            />
           </FormField>
           <FormField label="Address" size="lg">
-            <Input value={form.customer_address} onChange={(e) => set({ customer_address: e.target.value })} placeholder="Street, area, landmark" />
+            <Input
+              value={form.customer_address}
+              onChange={(e) => set({ customer_address: e.target.value })}
+              placeholder="Street, area, landmark"
+            />
           </FormField>
         </FormGrid>
       </FormSection>
 
       <FormSection title="Product & Issue" defaultOpen>
         <FormGrid>
-          <FormField label="Model" name="product" size="md">
+          {form.customer_id && customerEquipment.length > 0 && (
+            <FormField label="Pick from" size="md">
+              <Select
+                value=""
+                onValueChange={async (val) => {
+                  const eq = customerEquipment.find((e) => e.id === val);
+                  if (eq) {
+                    setSourceEquipId(eq.id);
+                    await applyEquipmentPrefill(eq);
+                  }
+                }}
+                disabled={equipLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={equipLoading ? "Loading equipment…" : "Select installed unit →"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {customerEquipment.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{e.model_no || "—"}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {e.serial_no || "No serial"} · {fmtDate(e.invoice_date) || "No date"}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+          {form.call_type !== "OOW" && (
+            <FormField label="Coverage" size="lg">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                    form.call_type === "Warranty"
+                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20"
+                      : "bg-blue-50 text-blue-700 ring-1 ring-blue-600/20",
+                  )}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {form.call_type === "Warranty" ? "Warranty cover active" : "AMC cover active"}
+                </span>
+              </div>
+            </FormField>
+          )}
+          <FormField label="Model" name="product" size={customerEquipment.length > 0 ? "md" : "lg"}>
             <ProductPicker
               value={form.product_id}
               onChange={(id, p) => {
@@ -450,16 +812,33 @@ function NewTicket() {
             />
           </FormField>
           <FormField label="Serial Number" name="serial_no" size="sm">
-            <Input value={form.serial_no} onChange={(e) => set({ serial_no: e.target.value.toUpperCase() })} placeholder="APC2024XYZ" className="font-mono" />
+            <Input
+              value={form.serial_no}
+              onChange={(e) => set({ serial_no: e.target.value.toUpperCase() })}
+              onBlur={() => void lookupBySerial()}
+              placeholder="APC2024XYZ"
+              className="font-mono"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              If this serial is in Installed Equipment, the model and customer auto-fill.
+            </p>
           </FormField>
           <FormField label="Preferred Visit" hint="optional" size="md">
-            <DateTimePicker value={form.preferred_visit_datetime} onChange={(v) => set({ preferred_visit_datetime: v })} />
+            <DateTimePicker
+              value={form.preferred_visit_datetime}
+              onChange={(v) => set({ preferred_visit_datetime: v })}
+            />
           </FormField>
           <FormField label="Complaint / Issue Description" size="md">
             <ComplaintPicker value={form.complaint} onChange={(v) => set({ complaint: v })} />
           </FormField>
           <FormField label="Special Instruction" hint="visible as blinking ribbon" size="full">
-            <Textarea rows={2} value={form.special_instruction} onChange={(e) => set({ special_instruction: e.target.value })} placeholder="Critical handling notes (optional)" />
+            <Textarea
+              rows={2}
+              value={form.special_instruction}
+              onChange={(e) => set({ special_instruction: e.target.value })}
+              placeholder="Critical handling notes (optional)"
+            />
           </FormField>
         </FormGrid>
       </FormSection>
@@ -470,38 +849,70 @@ function NewTicket() {
         defaultOpen={defectiveOn}
         right={
           <div className="flex items-center gap-2">
-            <Switch checked={defectiveOn} onCheckedChange={(v) => { setDefectiveOn(v); if (!v) setDefectiveParts([]); else if (defectiveParts.length === 0) addDef(); }} />
+            <Switch
+              checked={defectiveOn}
+              onCheckedChange={(v) => {
+                setDefectiveOn(v);
+                if (!v) setDefectiveParts([]);
+                else if (defectiveParts.length === 0) addDef();
+              }}
+            />
             <span className="text-xs text-muted-foreground">{defectiveOn ? "ON" : "OFF"}</span>
           </div>
         }
       >
         {defectiveOn ? (
           <div className="space-y-2">
-            {defectiveParts.length === 0 && <p className="text-sm text-muted-foreground">No defective parts added yet.</p>}
+            {defectiveParts.length === 0 && (
+              <p className="text-sm text-muted-foreground">No defective parts added yet.</p>
+            )}
             {defectiveParts.map((p, i) => (
               <div key={i} className="rounded-md border p-2">
                 <FormGrid>
                   <FormField label="Oracle #" size="sm">
-                    <Input value={p.oracle_no || ""} onChange={(e) => updDef(i, { oracle_no: e.target.value.toUpperCase() })} placeholder="ORA-001" className="font-mono" />
+                    <Input
+                      value={p.oracle_no || ""}
+                      onChange={(e) => updDef(i, { oracle_no: e.target.value.toUpperCase() })}
+                      placeholder="ORA-001"
+                      className="font-mono"
+                    />
                   </FormField>
                   <FormField label="Part / Item" size="sm">
                     <TicketPartPicker
                       ticketProduct={form.product}
                       value={p.model_no || p.name}
-                      onSelect={(item) => updDef(i, { name: item.name, model_no: item.model || item.name })}
+                      onSelect={(item) =>
+                        updDef(i, { name: item.name, model_no: item.model || item.name })
+                      }
                     />
                   </FormField>
                   <FormField label="Model / Part No" size="sm">
-                    <Input value={p.model_no || ""} onChange={(e) => updDef(i, { model_no: e.target.value })} className="font-mono" />
+                    <Input
+                      value={p.model_no || ""}
+                      onChange={(e) => updDef(i, { model_no: e.target.value })}
+                      className="font-mono"
+                    />
                   </FormField>
                   <FormField label="Serial No" size="sm">
-                    <Input value={p.serial || ""} onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })} className="font-mono" />
+                    <Input
+                      value={p.serial || ""}
+                      onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })}
+                      className="font-mono"
+                    />
                   </FormField>
                   <FormField label="Qty" size="xs">
-                    <Input value={p.qty} onChange={(e) => updDef(i, { qty: e.target.value })} maxLength={3} className="w-16 text-center" />
+                    <Input
+                      value={p.qty}
+                      onChange={(e) => updDef(i, { qty: e.target.value })}
+                      maxLength={3}
+                      className="w-16 text-center"
+                    />
                   </FormField>
                   <FormField label="Remarks" size="sm">
-                    <Input value={p.remarks || ""} onChange={(e) => updDef(i, { remarks: e.target.value })} />
+                    <Input
+                      value={p.remarks || ""}
+                      onChange={(e) => updDef(i, { remarks: e.target.value })}
+                    />
                   </FormField>
                   <FormField label=" " size="xs">
                     <Button type="button" size="icon" variant="ghost" onClick={() => delDef(i)}>
@@ -512,7 +923,8 @@ function NewTicket() {
               </div>
             ))}
             <Button type="button" size="sm" variant="outline" onClick={addDef}>
-              <Plus className="h-4 w-4 mr-1" />Add defective part
+              <Plus className="h-4 w-4 mr-1" />
+              Add defective part
             </Button>
           </div>
         ) : null}
@@ -524,14 +936,23 @@ function NewTicket() {
         defaultOpen={goodOn}
         right={
           <div className="flex items-center gap-2">
-            <Switch checked={goodOn} onCheckedChange={(v) => { setGoodOn(v); if (!v) setGoodParts([]); else if (goodParts.length === 0) addGood(); }} />
+            <Switch
+              checked={goodOn}
+              onCheckedChange={(v) => {
+                setGoodOn(v);
+                if (!v) setGoodParts([]);
+                else if (goodParts.length === 0) addGood();
+              }}
+            />
             <span className="text-xs text-muted-foreground">{goodOn ? "ON" : "OFF"}</span>
           </div>
         }
       >
         {goodOn ? (
           <div className="space-y-2">
-            {goodParts.length === 0 && <p className="text-sm text-muted-foreground">No good parts added yet.</p>}
+            {goodParts.length === 0 && (
+              <p className="text-sm text-muted-foreground">No good parts added yet.</p>
+            )}
             {goodParts.map((p, i) => (
               <div key={i} className="rounded-md border p-2">
                 <FormGrid>
@@ -539,20 +960,38 @@ function NewTicket() {
                     <TicketPartPicker
                       ticketProduct={form.product}
                       value={p.model_no || p.name}
-                      onSelect={(item) => updGood(i, { name: item.name, model_no: item.model || item.name })}
+                      onSelect={(item) =>
+                        updGood(i, { name: item.name, model_no: item.model || item.name })
+                      }
                     />
                   </FormField>
                   <FormField label="Model / Part No" size="sm">
-                    <Input value={p.model_no || ""} onChange={(e) => updGood(i, { model_no: e.target.value })} className="font-mono" />
+                    <Input
+                      value={p.model_no || ""}
+                      onChange={(e) => updGood(i, { model_no: e.target.value })}
+                      className="font-mono"
+                    />
                   </FormField>
                   <FormField label="Serial No" size="sm">
-                    <Input value={p.serial || ""} onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })} className="font-mono" />
+                    <Input
+                      value={p.serial || ""}
+                      onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })}
+                      className="font-mono"
+                    />
                   </FormField>
                   <FormField label="Qty" size="xs">
-                    <Input value={p.qty} onChange={(e) => updGood(i, { qty: e.target.value })} maxLength={3} className="w-16 text-center" />
+                    <Input
+                      value={p.qty}
+                      onChange={(e) => updGood(i, { qty: e.target.value })}
+                      maxLength={3}
+                      className="w-16 text-center"
+                    />
                   </FormField>
                   <FormField label="Remarks" size="sm">
-                    <Input value={p.remarks || ""} onChange={(e) => updGood(i, { remarks: e.target.value })} />
+                    <Input
+                      value={p.remarks || ""}
+                      onChange={(e) => updGood(i, { remarks: e.target.value })}
+                    />
                   </FormField>
                   <FormField label=" " size="xs">
                     <Button type="button" size="icon" variant="ghost" onClick={() => delGood(i)}>
@@ -563,40 +1002,71 @@ function NewTicket() {
               </div>
             ))}
             <Button type="button" size="sm" variant="outline" onClick={addGood}>
-              <Plus className="h-4 w-4 mr-1" />Add good part
+              <Plus className="h-4 w-4 mr-1" />
+              Add good part
             </Button>
           </div>
         ) : null}
       </FormSection>
 
       <div className="hidden sm:flex justify-end gap-2 pt-2">
-        <Button onClick={submit} disabled={busy}>{busy ? "Saving…" : "Create Ticket"}</Button>
+        <Button onClick={submit} disabled={busy}>
+          {busy ? "Saving…" : "Create Ticket"}
+        </Button>
       </div>
 
       <Dialog open={addingType} onOpenChange={setAddingType}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add New Call Type</DialogTitle></DialogHeader>
-          <Input autoFocus value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} placeholder="Call type name" onKeyDown={(e) => e.key === "Enter" && addCallType()} />
+          <DialogHeader>
+            <DialogTitle>Add New Call Type</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={newTypeName}
+            onChange={(e) => setNewTypeName(e.target.value)}
+            placeholder="Call type name"
+            onKeyDown={(e) => e.key === "Enter" && addCallType()}
+          />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddingType(false)}>Cancel</Button>
-            <Button onClick={addCallType}><Plus className="h-4 w-4 mr-1" />Add</Button>
+            <Button variant="outline" onClick={() => setAddingType(false)}>
+              Cancel
+            </Button>
+            <Button onClick={addCallType}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={addingBrand} onOpenChange={setAddingBrand}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add New OEM Brand</DialogTitle></DialogHeader>
-          <Input autoFocus value={newBrandName} onChange={(e) => setNewBrandName(e.target.value)} placeholder="Brand name" onKeyDown={(e) => e.key === "Enter" && addOemBrand()} />
+          <DialogHeader>
+            <DialogTitle>Add New OEM Brand</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={newBrandName}
+            onChange={(e) => setNewBrandName(e.target.value)}
+            placeholder="Brand name"
+            onKeyDown={(e) => e.key === "Enter" && addOemBrand()}
+          />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddingBrand(false)}>Cancel</Button>
-            <Button onClick={addOemBrand}><Plus className="h-4 w-4 mr-1" />Add</Button>
+            <Button variant="outline" onClick={() => setAddingBrand(false)}>
+              Cancel
+            </Button>
+            <Button onClick={addOemBrand}>
+              <Plus className="h-4 w-4 mr-1" />
+              Add
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <StickyMobileActions>
-        <Button onClick={submit} disabled={busy} className="flex-1">{busy ? "Saving…" : "Create Ticket"}</Button>
+        <Button onClick={submit} disabled={busy} className="flex-1">
+          {busy ? "Saving…" : "Create Ticket"}
+        </Button>
       </StickyMobileActions>
     </FormShell>
   );

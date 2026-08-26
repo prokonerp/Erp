@@ -18,6 +18,10 @@ export type CompanyProfile = {
   bank_account_number: string | null;
   bank_ifsc: string | null;
   bank_branch: string | null;
+  /** Optional: circular company seal + signed signature image (data or public URL).
+   *  Rendered above "Authorized Signatory" when present. Safe to leave unset —
+   *  the column simply may not exist yet; the template hides the image then. */
+  seal_url?: string | null;
 };
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {

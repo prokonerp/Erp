@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCustomers, masterKeys } from "@/hooks/useMasters";
+import { useCustomersForPicker, masterKeys } from "@/hooks/useMasters";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -33,14 +34,39 @@ export function CustomerPicker({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [seedCompany, setSeedCompany] = useState("");
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useCustomers();
-  const rows = data?.rows ?? [];
+  // Debounce search -> server query (150ms) to avoid firing on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search), 150);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
+  const { data, isLoading } = useCustomersForPicker(debounced);
+  const rows = (data as any)?.rows ?? [];
+
+  // Selected may not be in the current 25-row window; fetch it separately for display
+  const [selectedFallback, setSelectedFallback] = useState<Customer | null>(null);
+  const selected = useMemo(() => rows.find((r: any) => r.id === value) || selectedFallback, [rows, value, selectedFallback]);
+
+  useEffect(() => {
+    if (!value || rows.find((r: any) => r.id === value) || selectedFallback?.id === value) return;
+    let active = true;
+    supabase
+      .from("customers")
+      .select("id, company, contact_name, phone, gst, state, city")
+      .eq("id", value)
+      .single()
+      .then(({ data }) => {
+        if (active && data) setSelectedFallback(data as unknown as Customer);
+      });
+    return () => {
+      active = false;
+    };
+  }, [value, rows, selectedFallback]);
 
   function openQuickAdd() {
     setSeedCompany(search.trim());
@@ -93,23 +119,27 @@ export function CustomerPicker({
           className="p-0 w-[--radix-popover-trigger-width] min-w-[320px]"
           align="start"
         >
-          <Command filter={(val, s) => (val.toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}>
+          <Command shouldFilter={false}>
             <CommandInput
               placeholder="Search by name, mobile, GST…"
               value={search}
               onValueChange={setSearch}
             />
             <CommandList>
-              <CommandEmpty>
-                <div className="py-4 px-3 text-sm space-y-2">
-                  <p className="text-muted-foreground">No matching customer.</p>
-                  <Button type="button" size="sm" variant="secondary" onClick={openQuickAdd}>
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Add New Customer
-                  </Button>
-                </div>
-              </CommandEmpty>
-              <CommandGroup heading={`${rows.length} customers`}>
-                {rows.map((c) => {
+              {isLoading ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">Searching…</div>
+              ) : (
+                <CommandEmpty>
+                  <div className="py-4 px-3 text-sm space-y-2">
+                    <p className="text-muted-foreground">No matching customer.</p>
+                    <Button type="button" size="sm" variant="secondary" onClick={openQuickAdd}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Add New Customer
+                    </Button>
+                  </div>
+                </CommandEmpty>
+              )}
+              <CommandGroup heading={debounced ? `${rows.length} matches` : `${rows.length} customers — type to search`}>
+                {rows.map((c: any) => {
                   const cAny = c as Customer & { city?: string };
                   const searchBlob = [c.company, c.contact_name, c.phone, c.gst, cAny.city, c.state]
                     .filter(Boolean)

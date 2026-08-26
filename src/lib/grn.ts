@@ -40,6 +40,7 @@ export type Grn = {
   grn_no: string;
   category: GrnCategory;
   status: GrnStatus;
+  branch_id?: string | null;
   grn_date: string;
   receipt_date: string | null;
   reference_no: string | null;

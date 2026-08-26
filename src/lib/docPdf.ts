@@ -2,6 +2,8 @@ const PX_PER_MM = 96 / 25.4;
 const PAGE_W_MM = 210;
 const PAGE_H_MM = 297;
 const MARGIN_MM = 10;
+const PAGE_W_PX = Math.round(PAGE_W_MM * PX_PER_MM);
+const PAGE_H_PX = Math.round(PAGE_H_MM * PX_PER_MM);
 const CONTENT_W_PX = Math.round((PAGE_W_MM - MARGIN_MM * 2) * PX_PER_MM);
 const CONTENT_H_PX = Math.round((PAGE_H_MM - MARGIN_MM * 2) * PX_PER_MM);
 
@@ -50,7 +52,12 @@ const MIN_READABLE_SCALE = 0.7;
  * (totals, bank details, terms, notes, signature) print once after the last
  * item row. A row is never split across pages.
  */
-function paginateDoc(idoc: Document, root: HTMLElement): HTMLElement[] | null {
+function paginateDoc(
+  idoc: Document,
+  root: HTMLElement,
+  pageW = CONTENT_W_PX,
+  pageH = CONTENT_H_PX,
+): HTMLElement[] | null {
   // The document body is whichever element directly contains the item table
   // (the parent may be a plain print wrapper around the .doc-print block).
   const table = root.querySelector("table.items") as HTMLTableElement | null;
@@ -78,7 +85,7 @@ function paginateDoc(idoc: Document, root: HTMLElement): HTMLElement[] | null {
     return { page, tb, t };
   };
   const holder = idoc.createElement("div");
-  holder.style.cssText = `width:${CONTENT_W_PX}px;position:absolute;left:-99999px;top:0;`;
+  holder.style.cssText = `width:${pageW}px;position:absolute;left:-99999px;top:0;`;
   idoc.body.appendChild(holder);
   const pages: HTMLElement[] = [];
   let cur = makePage();
@@ -87,7 +94,7 @@ function paginateDoc(idoc: Document, root: HTMLElement): HTMLElement[] | null {
   while (i < rows.length) {
     const row = rows[i].cloneNode(true) as HTMLElement;
     cur.tb.appendChild(row);
-    if (cur.page.scrollHeight > CONTENT_H_PX && cur.tb.children.length > 1) {
+    if (cur.page.scrollHeight > pageH && cur.tb.children.length > 1) {
       cur.tb.removeChild(row);
       pages.push(cur.page);
       holder.removeChild(cur.page);
@@ -100,7 +107,7 @@ function paginateDoc(idoc: Document, root: HTMLElement): HTMLElement[] | null {
   // Trailing blocks follow the last item row; if they don't fit, move to a new page.
   const tailClones = tailNodes.map((n) => n.cloneNode(true) as HTMLElement);
   for (const n of tailClones) cur.page.appendChild(n);
-  if (cur.page.scrollHeight > CONTENT_H_PX) {
+  if (cur.page.scrollHeight > pageH) {
     for (const n of tailClones) cur.page.removeChild(n);
     pages.push(cur.page);
     holder.removeChild(cur.page);
@@ -128,24 +135,33 @@ function paginateDoc(idoc: Document, root: HTMLElement): HTMLElement[] | null {
 
 async function buildPrintFrame(el: HTMLElement, docTitle: string) {
   const head = collectCssText();
+  // Self-margined documents (e.g. .inv-print) carry their own page margins and
+  // a full-bleed outer frame. Printing them with @page margin:0 suppresses the
+  // browser's header/footer (timestamp, page title, URL, page numbers) entirely.
+  const zeroMargin =
+    /(^|\s)inv-print(\s|$)/.test(el.firstElementChild?.className || "") ||
+    !!el.querySelector?.(".inv-print");
+  const frameW = zeroMargin ? PAGE_W_PX : CONTENT_W_PX;
+  const frameH = zeroMargin ? PAGE_H_PX : CONTENT_H_PX;
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText = `position:fixed;right:0;bottom:0;width:${CONTENT_W_PX}px;height:${CONTENT_H_PX}px;border:0;opacity:0;pointer-events:none;`;
+  iframe.style.cssText = `position:fixed;right:0;bottom:0;width:${frameW}px;height:${frameH}px;border:0;opacity:0;pointer-events:none;`;
   document.body.appendChild(iframe);
   const idoc = iframe.contentDocument!;
   const win = iframe.contentWindow!;
   idoc.open();
   idoc.write(
     `<!doctype html><html><head><meta charset="utf-8"><title>${docTitle}</title>${head}` +
-      `<style>html,body{background:#fff;margin:0;padding:0;width:${CONTENT_W_PX}px}` +
-      `#pdf-shell{width:${CONTENT_W_PX}px}` +
-      `#pdf-root{width:${CONTENT_W_PX}px;transform-origin:top left}` +
-        `#pdf-root>*{display:block !important}` +
+      `<style>html,body{background:#fff;margin:0;padding:0;width:${frameW}px}` +
+      `#pdf-shell{width:${frameW}px}` +
+      `#pdf-root{width:${frameW}px;transform-origin:top left;` +
+      `${zeroMargin ? `padding:${MARGIN_MM}mm 0;` : ""}}` +
+      `#pdf-root>*{display:block !important}` +
       `.pdf-page{page-break-after:always;break-after:page}` +
       `.pdf-page:last-child{page-break-after:auto;break-after:auto}` +
       `.pdf-page tr{page-break-inside:avoid;break-inside:avoid}` +
-      `@media print{@page{size:A4;margin:${MARGIN_MM}mm}html,body{width:auto}` +
-      `#pdf-shell,#pdf-root{width:${CONTENT_W_PX}px}}</style>` +
+      `@media print{@page{size:A4;margin:${zeroMargin ? 0 : MARGIN_MM}mm}html,body{width:auto}` +
+      `#pdf-shell,#pdf-root{width:${frameW}px}}</style>` +
       `</head><body><div id="pdf-shell"><div id="pdf-root">${el.outerHTML}</div></div></body></html>`,
   );
   idoc.close();
@@ -174,39 +190,42 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string) {
   const shell = idoc.getElementById("pdf-shell") as HTMLElement;
   // Shrink-to-fit onto one A4 page, but only down to a readable minimum.
   let scale = 1;
-  if (root.scrollHeight > CONTENT_H_PX) {
-    scale = CONTENT_H_PX / root.scrollHeight;
+  if (root.scrollHeight > frameH) {
+    scale = frameH / root.scrollHeight;
     // Lay out wider so that after the CSS scale the content still spans the
     // full printable width (no blank left/right margins), then re-clamp.
-    root.style.width = `${CONTENT_W_PX / scale}px`;
-    scale = Math.min(1, CONTENT_H_PX / root.scrollHeight);
+    root.style.width = `${frameW / scale}px`;
+    scale = Math.min(1, frameH / root.scrollHeight);
   }
   let pages: HTMLElement[] | null = null;
   const fitScale = scale;
   if (scale < MIN_READABLE_SCALE) {
     // Too tall to shrink readably — split into real pages at 100% size.
-    root.style.width = `${CONTENT_W_PX}px`;
+    root.style.width = `${frameW}px`;
     scale = 1;
-    pages = paginateDoc(idoc, root);
+    pages = paginateDoc(idoc, root, frameW, frameH);
     // Not splittable (e.g. only a couple of item rows) — fall back to shrinking.
     if (!pages) scale = fitScale;
   }
   if (!pages && scale < 1) {
-    root.style.width = `${CONTENT_W_PX / scale}px`;
+    root.style.width = `${frameW / scale}px`;
     root.style.transform = `scale(${scale})`;
     shell.style.height = `${Math.ceil(root.scrollHeight * scale)}px`;
     shell.style.overflow = "hidden";
   } else {
-    root.style.width = `${CONTENT_W_PX}px`;
+    root.style.width = `${frameW}px`;
   }
-  return { iframe, idoc, win, root, shell, scale, pages };
+  return { iframe, idoc, win, root, shell, scale, pages, zeroMargin, frameW, frameH };
 }
 
 /** Save a Blob, offering a native "Save as…" location picker when supported. */
 async function saveBlobWithPicker(blob: Blob, filename: string) {
   const anyWin = window as unknown as {
     showSaveFilePicker?: (opts: unknown) => Promise<{
-      createWritable: () => Promise<{ write: (d: Blob) => Promise<void>; close: () => Promise<void> }>;
+      createWritable: () => Promise<{
+        write: (d: Blob) => Promise<void>;
+        close: () => Promise<void>;
+      }>;
     }>;
   };
   if (typeof anyWin.showSaveFilePicker === "function") {
@@ -252,22 +271,27 @@ async function buildPdfBlob(el: HTMLElement, filename: string): Promise<Blob> {
     import("jspdf"),
     import("html2canvas-pro"),
   ]);
-  const { iframe, root, scale, pages } = await buildPrintFrame(el, filename.replace(/\.pdf$/i, ""));
+  const { iframe, root, scale, pages, zeroMargin, frameW, frameH } = await buildPrintFrame(
+    el,
+    filename.replace(/\.pdf$/i, ""),
+  );
   try {
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const availW = PAGE_W_MM - MARGIN_MM * 2;
-    const availH = PAGE_H_MM - MARGIN_MM * 2;
+    const availW = zeroMargin ? PAGE_W_MM : PAGE_W_MM - MARGIN_MM * 2;
+    const availH = zeroMargin ? PAGE_H_MM : PAGE_H_MM - MARGIN_MM * 2;
+    const drawX = zeroMargin ? 0 : MARGIN_MM;
+    const drawY = zeroMargin ? 0 : MARGIN_MM;
 
     // Capture at natural (untransformed) size so html2canvas never sees a CSS
     // transform; jsPDF then draws each page at FULL printable width.
-    const naturalW = Math.round(CONTENT_W_PX / (scale || 1));
+    const naturalW = Math.round(frameW / (scale || 1));
     root.style.transform = "none";
     if (!pages) root.style.width = `${naturalW}px`;
 
     const targets: HTMLElement[] = pages && pages.length ? pages : [root];
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i];
-      const w = pages ? CONTENT_W_PX : naturalW;
+      const w = pages ? frameW : naturalW;
       const canvas = await html2canvas(target, {
         scale: 2,
         useCORS: true,
@@ -280,7 +304,7 @@ async function buildPdfBlob(el: HTMLElement, filename: string): Promise<Blob> {
       const imgW = availW; // always full page width — no side margins
       const imgH = Math.min(availH, (canvas.height * imgW) / canvas.width);
       if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, "JPEG", MARGIN_MM, MARGIN_MM, imgW, imgH);
+      pdf.addImage(imgData, "JPEG", drawX, drawY, imgW, imgH);
     }
     return pdf.output("blob");
   } finally {
@@ -338,7 +362,11 @@ export async function printMultiPageElement(
   filename: string,
   opts: { landscape?: boolean } = {},
 ) {
-  const { iframe, win } = await buildMultiPageFrame(el, filename.replace(/\.pdf$/i, ""), !!opts.landscape);
+  const { iframe, win } = await buildMultiPageFrame(
+    el,
+    filename.replace(/\.pdf$/i, ""),
+    !!opts.landscape,
+  );
   win.focus();
   win.print();
   setTimeout(() => iframe.remove(), 1000);
@@ -351,7 +379,11 @@ export async function saveMultiPageElementAsPdf(
   opts: { landscape?: boolean } = {},
 ) {
   const landscape = !!opts.landscape;
-  const { iframe, idoc } = await buildMultiPageFrame(el, filename.replace(/\.pdf$/i, ""), landscape);
+  const { iframe, idoc } = await buildMultiPageFrame(
+    el,
+    filename.replace(/\.pdf$/i, ""),
+    landscape,
+  );
   try {
     const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
       import("jspdf"),
@@ -359,7 +391,11 @@ export async function saveMultiPageElementAsPdf(
     ]);
     const pages = Array.from(idoc.querySelectorAll<HTMLElement>(".defective-tag-page"));
     const targets = pages.length ? pages : [idoc.body];
-    const pdf = new jsPDF({ orientation: landscape ? "landscape" : "portrait", unit: "mm", format: "a4" });
+    const pdf = new jsPDF({
+      orientation: landscape ? "landscape" : "portrait",
+      unit: "mm",
+      format: "a4",
+    });
     const availW = (landscape ? PAGE_H_MM : PAGE_W_MM) - MARGIN_MM * 2;
     const availH = (landscape ? PAGE_W_MM : PAGE_H_MM) - MARGIN_MM * 2;
     for (let i = 0; i < targets.length; i++) {
@@ -393,6 +429,11 @@ export async function saveMultiPageElementAsPdf(
 export async function printElementToPdf(el: HTMLElement, filename: string) {
   const docTitle = filename.replace(/\.pdf$/i, "");
   const head = collectCssText();
+  // Self-margined documents (.inv-print) print with @page margin:0 so the
+  // browser can never inject its header/footer (date, title, URL, page no.).
+  const zeroMargin =
+    /(^|\s)inv-print(\s|$)/.test(el.firstElementChild?.className || "") ||
+    !!el.querySelector?.(".inv-print");
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.cssText =
@@ -405,7 +446,7 @@ export async function printElementToPdf(el: HTMLElement, filename: string) {
     `<!doctype html><html><head><meta charset="utf-8"><title>${docTitle}</title>${head}` +
       `<style>html,body{background:#fff;margin:0;padding:0}` +
       `#pdf-root,#pdf-root>*{display:block !important}` +
-      `@media print{@page{size:A4;margin:10mm}}</style>` +
+      `@media print{@page{size:A4;margin:${zeroMargin ? 0 : 10}mm}}</style>` +
       `</head><body><div id="pdf-root">${el.outerHTML}</div></body></html>`,
   );
   idoc.close();

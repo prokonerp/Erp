@@ -4,6 +4,8 @@ import type { InvoiceRow, InvoiceItemRow, BranchRow } from "@/lib/sales";
 import { inr } from "@/lib/sales";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { getCompany } from "@/lib/letterhead";
+import { lookupWarehouseNames } from "@/lib/documentHeader";
+import { INVOICE_TERMS_FALLBACK } from "@/lib/printDefaults";
 
 type Customer = {
   company: string;
@@ -77,7 +79,6 @@ export async function renderInvoicePdf(args: {
 
   // ============ RESOLVE COMPANY (Company Master only; no branch/settings fallback) ============
   const company = await getCompany();
-  console.log("HEADER DATA:", company);
   const companyName = company.name.toString();
   const companyAddress = company.regd_address.toString();
   const companyGstin = company.gstin || "";
@@ -136,13 +137,22 @@ export async function renderInvoicePdf(args: {
 
   y += headerH;
 
-  // ============ OPTIONAL: SUPPLY FROM (warehouse/branch, small text) ============
-  if (args.showSupplyFrom && branch?.name) {
-    const supplyH = 12;
-    doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(90, 90, 90);
-    doc.text(`Supply From: ${branch.name}`, margin + 4, y + 8);
-    doc.setTextColor(0, 0, 0);
-    y += supplyH;
+  // ============ OPTIONAL: SUPPLY FROM (actual warehouses on the lines, small text) ============
+  if (args.showSupplyFrom) {
+    let supplyText = branch?.name ? `Supply From: ${branch.name}` : "";
+    try {
+      const whIds = items.map((it) => (it as unknown as { warehouse_id?: string | null }).warehouse_id);
+      const names = await lookupWarehouseNames(whIds);
+      const uniq = Array.from(new Set(whIds.map((id) => names[id as string]).filter(Boolean)));
+      if (uniq.length) supplyText = `Supplied From: ${uniq.join("  ·  ")}`;
+    } catch { /* decoration only */ }
+    if (supplyText) {
+      const supplyH = 12;
+      doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(90, 90, 90);
+      doc.text(supplyText, margin + 4, y + 8);
+      doc.setTextColor(0, 0, 0);
+      y += supplyH;
+    }
   }
 
   // ============ META (2 col grid) ============
@@ -409,7 +419,7 @@ export async function renderInvoicePdf(args: {
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal").setFontSize(8);
   const termsText = invoice.terms || branch?.invoice_footer ||
-    "1. Goods once sold will not be taken back\n2. Interest @18% p.a. applicable on delayed payments\n3. Subject to Haryana Jurisdiction";
+    INVOICE_TERMS_FALLBACK.join("\n");
   const termsLines = textLines(doc, termsText, col1W - 12);
   termsLines.forEach((ln, i) => doc.text(ln, margin + 6, y + 26 + i * 10));
 

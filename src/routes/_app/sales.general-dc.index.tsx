@@ -37,6 +37,8 @@ import { inr } from "@/lib/sales";
 import { usePermissions } from "@/lib/usePermissions";
 import { saveElementAsPdf } from "@/lib/docPdf";
 import { GeneralDcPrintView } from "@/components/GeneralDcPrintView";
+import { headerToCompanyProfile } from "@/lib/documentHeader";
+import { usePrintOptions } from "@/components/PrintOptionsDialog";
 import {
   CompanyProfile,
   DEFAULT_COMPANY_PROFILE,
@@ -218,6 +220,23 @@ function RowActions({
   const [pdfPending, setPdfPending] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const downloadingRef = useRef(false);
+  const printer = usePrintOptions();
+  const [printCompany, setPrintCompany] = useState<CompanyProfile | null>(null);
+  const effectiveCompany = printCompany ?? company;
+
+  /** Ask which office letterhead to stamp, then start the PDF download. */
+  const handleDownloadPdf = async () => {
+    const choice = await printer.ask({
+      docType: "general_dc",
+      title: "Download General DC PDF",
+      description: "Choose which office details appear on the challan letterhead.",
+      allowCopyLabel: false,
+      allowSupplyFrom: false,
+    });
+    if (!choice) return;
+    setPrintCompany(headerToCompanyProfile(choice.header));
+    setPdfPending(true);
+  };
 
   useEffect(() => {
     if (!pdfPending || !printRef.current || downloadingRef.current) return;
@@ -236,7 +255,7 @@ function RowActions({
         if (active) setPdfPending(false);
       });
     return () => { active = false; };
-  }, [pdfPending, dc, company, warehouseNames]);
+  }, [pdfPending, dc, effectiveCompany, warehouseNames]);
 
   const handleDelete = async () => {
     try {
@@ -313,7 +332,7 @@ function RowActions({
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
-            onClick={() => setPdfPending(true)}
+            onClick={() => void handleDownloadPdf()}
             className="flex items-center gap-2"
           >
             <Download className="h-4 w-4" /> PDF
@@ -359,10 +378,12 @@ function RowActions({
         onConfirm={handleCancel}
       />
 
+      {printer.element}
+
       {pdfPending && (
         <div className="hidden">
           <div ref={printRef}>
-            <GeneralDcPrintView dc={dc} company={company} warehouseNames={warehouseNames} />
+            <GeneralDcPrintView dc={dc} company={effectiveCompany} warehouseNames={warehouseNames} />
           </div>
         </div>
       )}

@@ -6,6 +6,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
  * Modes:
  *  - "balanced" (app default): mid-luminance slate-indigo surfaces — the
  *    signature Prokon look; sits between light and dark.
+ *  - "comfort": softer, higher-contrast surfaces + larger text sized for
+ *    older eyes; warm neutral with the same blue accent.
  *  - "light": classic near-white surfaces.
  *  - "dark": true dark surfaces (.dark class, also enables Tailwind dark:).
  *  - "system": follows OS preference → resolves to light or dark.
@@ -15,8 +17,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
  * change / OS preference change while running.
  */
 
-export type Theme = "light" | "balanced" | "dark" | "system";
-export type ResolvedAppearance = "light" | "balanced" | "dark";
+export type Theme = "light" | "balanced" | "comfort" | "dark" | "system";
+export type ResolvedAppearance = "light" | "balanced" | "comfort" | "dark";
 
 const STORAGE_KEY = "prokon-theme";
 const DEFAULT_THEME: Theme = "balanced";
@@ -40,7 +42,9 @@ function systemPrefersDark(): boolean {
 function readStored(): Theme {
   if (typeof window === "undefined") return DEFAULT_THEME;
   const v = window.localStorage.getItem(STORAGE_KEY);
-  return v === "light" || v === "balanced" || v === "dark" || v === "system" ? v : DEFAULT_THEME;
+  return v === "light" || v === "balanced" || v === "comfort" || v === "dark" || v === "system"
+    ? v
+    : DEFAULT_THEME;
 }
 
 export function resolve(theme: Theme): ResolvedAppearance {
@@ -51,7 +55,15 @@ export function resolve(theme: Theme): ResolvedAppearance {
 function applyClasses(appearance: ResolvedAppearance) {
   const el = document.documentElement;
   el.classList.toggle("theme-balanced", appearance === "balanced");
+  el.classList.toggle("theme-comfort", appearance === "comfort");
   el.classList.toggle("dark", appearance === "dark");
+  el.dataset.appearance = appearance;
+}
+
+export function applyDataAttrs(appearance: ResolvedAppearance) {
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.appearance = appearance;
+  }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

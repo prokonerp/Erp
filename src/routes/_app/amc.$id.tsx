@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageLoader } from "@/components/shared/skeletons";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,9 @@ import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
 import { softDelete } from "@/lib/softDelete";
 import { useConfirm } from "@/hooks/useConfirm";
+import { getDocumentHeader } from "@/lib/letterhead";
+import { companySignature, type ResolvedHeader } from "@/lib/documentHeader";
+import { usePrintOptions } from "@/components/PrintOptionsDialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -42,7 +45,11 @@ function AmcDetail() {
   const [products, setProducts] = useState<Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null; description: string | null }>>([]);
   const [serials, setSerials] = useState<Array<{ id: string; serial_number: string; product_id: string }>>([]);
   const [oemBrands, setOemBrands] = useState<string[]>([]);
-  const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null>(null);
+  const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null; logo_url: string | null } | null>(null);
+  const [signature, setSignature] = useState<string>("");
+  const printer = usePrintOptions();
+  const [printHeader, setPrintHeader] = useState<ResolvedHeader | null>(null);
+  const printPendingRef = useRef(false);
 
   const load = () => supabase.from("amcs").select("*").eq("id", id).single()
     .then(({ data }) => setA(data as unknown as Amc));
@@ -61,11 +68,44 @@ function AmcDetail() {
     supabase.from("oem_brand_master").select("name").order("name").then(({ data }) => {
       setOemBrands(((data || []) as { name: string }[]).map((b) => b.name));
     });
-    supabase.from("companies").select("name,address,phone,email,website,gstin").order("created_at").limit(1).maybeSingle().then(({ data }) => {
-      setCompany((data as typeof company) ?? null);
-    });
+    // Company identity now comes exclusively from the Company Master (single source of truth).
+    getDocumentHeader().then((h) => {
+      setCompany({
+        name: h.name,
+        address: h.registered_office_address || h.regd_address,
+        phone: h.phone,
+        email: h.email,
+        website: h.website,
+        gstin: h.gstin,
+        logo_url: h.logo_url,
+      });
+    }).catch(() => {});
+    companySignature().then(setSignature).catch(() => {});
     /* eslint-disable-next-line */
   }, [id]);
+
+  // Print via the shared options dialog — resolved letterhead is applied before printing.
+  useEffect(() => {
+    if (printPendingRef.current && printHeader) {
+      printPendingRef.current = false;
+      const t = setTimeout(() => window.print(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [printHeader]);
+
+  const handlePrintAgreement = async () => {
+    const choice = await printer.ask({
+      docType: "amc_agreement",
+      title: "Print AMC Agreement",
+      description: "Choose which office details appear on the agreement letterhead.",
+      allowCopyLabel: false,
+      allowSupplyFrom: false,
+      company,
+    });
+    if (!choice) return;
+    printPendingRef.current = true;
+    setPrintHeader(choice.header);
+  };
 
   if (!a) return <PageLoader />;
 
@@ -77,12 +117,12 @@ function AmcDetail() {
   const nextPm = (a.pm_dates || []).find((d) => new Date(d + "T00:00:00") >= new Date(new Date().toDateString()));
   const unitList = a.units.map((u, i) => `${i + 1}. ${u.model} (S/N: ${u.serial_no})`).join("\n");
   const greeting = `Dear ${a.client_name || "Customer"}${a.client_company ? ` / ${a.client_company} Team` : " Team"},`;
-  const signOff =
-    `\n\nRegards,\nProkon Hi-Tech Systems\nB-505, Picasso Centre, Sector-61, Gurgaon` +
-    `\nPhone: +91-9810000000   |   Email: info@prokonhitech.com`;
+  // Signature is built from the Company Master — never hardcoded contact details.
+  const sigName = company?.name || signature.split("\n")[0] || "Prokon Hi-Tech Systems";
+  const signOff = `\n\nRegards,\n${signature || sigName}`;
 
   const renewalMsg =
-    `${greeting}\n\nThis is a gentle reminder that your AMC (Agreement No: ${a.agreement_no}) with Prokon Hi-Tech Systems ` +
+    `${greeting}\n\nThis is a gentle reminder that your AMC (Agreement No: ${a.agreement_no}) with ${sigName} ` +
     `is ${status === "expired" ? `expired on ${fmtDate(a.end_date)}` : `due for renewal on ${fmtDate(a.end_date)}`}.\n\n` +
     `Equipment Covered:\n${unitList}\n\n` +
     `Kindly confirm renewal at the earliest to ensure uninterrupted service coverage.${signOff}`;
@@ -247,7 +287,7 @@ ${body}
           <div className="flex items-center gap-2">
             <span className={`text-xs border rounded px-2 py-0.5 ${statusBadgeClass(status)}`}>{statusLabel(status)}</span>
             <Button variant="outline" size="sm" onClick={openPreview}><Eye className="h-4 w-4 mr-1" />Review Preview</Button>
-            <Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print Agreement</Button>
+            <Button variant="outline" size="sm" onClick={handlePrintAgreement}><Printer className="h-4 w-4 mr-1" />Print Agreement</Button>
             <Button variant="outline" size="sm" onClick={renew} disabled={busy}><RefreshCw className="h-4 w-4 mr-1" />Renew AMC</Button>
             <Button size="sm" onClick={save} disabled={busy}><Save className="h-4 w-4 mr-1" />Save changes</Button>
             {isAdmin && (
@@ -451,32 +491,59 @@ ${body}
       </div>
 
       {/* Print view */}
-      <PrintAgreement a={a} company={company} />
-
+      <PrintAgreement a={a} company={company} headerOverride={printHeader} />
+      {printer.element}
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 12mm; }
-          body { background: white !important; }
-          .no-print, header, nav { display: none !important; }
+          body * { visibility: hidden; }
+          .agreement-print, .agreement-print * { visibility: visible; }
+          .agreement-print { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
         }
         .agreement-print { display: none; }
-        @media print { .agreement-print { display: block !important; } }
       `}</style>
     </>
   );
 }
 
-function PrintAgreement({ a, company }: { a: Amc; company: { name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null }) {
-  const co = company ?? { name: "PROKON HI-TECH SYSTEMS", address: "B-505, Picasso Centre, Sector-61, Gurgaon", phone: "+91-98100 00000", email: "info@prokonhitech.com", website: "www.prokonhitech.com", gstin: null };
+function PrintAgreement({ a, company, headerOverride }: { a: Amc; company: { name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null; logo_url: string | null } | null; headerOverride?: ResolvedHeader | null }) {
+  // No fake fallback — if the Company Master is missing/incomplete we show a
+  // visible banner on the printed sheet instead of invented contact details.
+  const co = headerOverride
+    ? {
+        name: headerOverride.orgName,
+        address: headerOverride.addressLines.join(", "),
+        phone: headerOverride.phone,
+        email: headerOverride.email,
+        website: headerOverride.website,
+        gstin: headerOverride.gstin,
+        logo_url: headerOverride.logoUrl,
+      }
+    : company;
+  const missing: string[] = [];
+  if (!co) missing.push("record not found");
+  else {
+    if (!co.name?.trim()) missing.push("Company name");
+    if (!co.gstin?.trim()) missing.push("GSTIN");
+    if (!co.address?.trim()) missing.push("Registered office address");
+    if (!co.phone?.trim()) missing.push("Phone");
+    if (!co.email?.trim()) missing.push("Email");
+  }
   const oemLogo = getOemLogo(a.oem_brand);
   return (
     <div className="agreement-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
+      {missing.length > 0 && (
+        <div className="mb-3 border-2 border-red-600 bg-red-50 px-3 py-2 text-[11px] text-red-800">
+          <b>Company Master incomplete:</b> {missing.join(", ")}. Update Company settings before issuing this agreement.
+        </div>
+      )}
       {/* Letterhead: strict 50/50 split — logos left, company info right */}
       <div className="grid grid-cols-2 gap-0 border-b-4 border-[#1e40af] pb-3 mb-2 items-center w-full">
         <div className="flex flex-col items-start justify-center gap-2 pr-2">
           <img
-            src={prokonLogo.url}
-            alt="Prokon Hi-Tech Systems"
+            src={co?.logo_url || prokonLogo.url}
+            alt={co?.name || "Company"}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = prokonLogo.url; }}
             className="h-16 max-w-[320px] object-contain"
           />
           {oemLogo && (
@@ -488,12 +555,12 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
           )}
         </div>
         <div className="flex flex-col items-start justify-center w-full">
-          <h1 className="text-[22px] font-extrabold tracking-tight uppercase text-black leading-tight whitespace-nowrap">Prokon Hi-Tech Systems</h1>
-          {co.address && <div className="text-[11px] text-gray-800 whitespace-pre-wrap w-full">{co.address}</div>}
-          {co.phone && <div className="text-[11px] text-gray-800 w-full">Phone: {co.phone}</div>}
-          {co.email && <div className="text-[11px] text-gray-800 w-full">Email: {co.email}</div>}
-          {co.website && <div className="text-[11px] text-gray-800 w-full">Website: {co.website}</div>}
-          {co.gstin && <div className="text-[11px] text-gray-800 w-full">GSTIN: <span className="font-mono">{co.gstin}</span></div>}
+          <h1 className="text-[22px] font-extrabold tracking-tight uppercase text-black leading-tight whitespace-nowrap">{co?.name || "—"}</h1>
+          {co?.address && <div className="text-[11px] text-gray-800 whitespace-pre-wrap w-full">{co.address}</div>}
+          {co?.phone && <div className="text-[11px] text-gray-800 w-full">Phone: {co.phone}</div>}
+          {co?.email && <div className="text-[11px] text-gray-800 w-full">Email: {co.email}</div>}
+          {co?.website && <div className="text-[11px] text-gray-800 w-full">Website: {co.website}</div>}
+          {co?.gstin && <div className="text-[11px] text-gray-800 w-full">GSTIN: <span className="font-mono">{co.gstin}</span></div>}
         </div>
       </div>
       <div className="text-center mb-3">
@@ -567,7 +634,7 @@ function PrintAgreement({ a, company }: { a: Amc; company: { name: string; addre
           <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For {a.client_company || "Client"}</b></div>
         </div>
         <div>
-          <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For Prokon Hi-Tech Systems</b></div>
+          <div className="border-t border-black pt-1 text-center">Authorised Signatory<br /><b>For {co?.name || "—"}</b></div>
         </div>
       </div>
     </div>

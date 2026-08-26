@@ -4,27 +4,86 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Eye, Copy, Trash2, Search, Pencil, Send, ArrowRightLeft, FileText, Loader2, Clock, CheckCircle2, FilePlus, Printer, Download } from "lucide-react";
+import {
+  Plus,
+  MoreVertical,
+  Eye,
+  Copy,
+  Trash2,
+  Search,
+  Pencil,
+  Send,
+  ArrowRightLeft,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+  Clock,
+  CheckCircle2,
+  FilePlus,
+  Printer,
+  Download,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
-import { type Quotation, type QuoteStatus, type Customer, fmtMoney, fmtDate, quoteStatusClass, computeExpiryDate, DEFAULT_VALIDITY_DAYS, fetchCustomersByIds } from "@/lib/crm";
+import {
+  type Quotation,
+  type QuoteStatus,
+  type Customer,
+  fmtMoney,
+  fmtDate,
+  computeExpiryDate,
+  DEFAULT_VALIDITY_DAYS,
+  fetchCustomersByIds,
+} from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { cn } from "@/lib/utils";
 import { istTodayIso } from "@/lib/dateRange";
 import { useDebounced } from "@/lib/sales.hooks";
+import { PageHeader } from "@/components/crm/PageHeader";
+import { StatusBadge } from "@/components/crm/StatusBadge";
+import { EmptyState } from "@/components/crm/EmptyState";
 
 export const Route = createFileRoute("/_app/crm/quotations")({ component: Page });
 
@@ -36,6 +95,7 @@ function Page() {
 
 const STATUSES: QuoteStatus[] = ["draft", "sent", "accepted", "declined", "expired", "invoiced"];
 
+// Legacy list — kept for reference; QuotesWorkspace is the default.
 function QuotesList() {
   const nav = useNavigate();
   const [rows, setRows] = useState<Quotation[]>([]);
@@ -48,7 +108,10 @@ function QuotesList() {
   const [delId, setDelId] = useState<string | null>(null);
 
   const load = async () => {
-    const { data: a } = await supabase.from("quotations").select("*").order("created_at", { ascending: false });
+    const { data: a } = await supabase
+      .from("quotations")
+      .select("*")
+      .order("created_at", { ascending: false });
     const list = (a || []) as unknown as Quotation[];
     setRows(list);
     // Resolve only the customers referenced by these quotations — fetching the
@@ -56,7 +119,9 @@ function QuotesList() {
     const cust = await fetchCustomersByIds(list.map((r) => r.customer_id));
     setCustomers(cust);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const cmap = Object.fromEntries(customers.map((c) => [c.id, c]));
 
@@ -66,17 +131,31 @@ function QuotesList() {
     const { data: u } = await supabase.auth.getUser();
     const today = istTodayIso();
     const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);
-    const { data, error } = await supabase.from("quotations").insert({
-      customer_id: custId, owner_id: u.user!.id,
-      subject: subject || null,
-      quote_date: today, expiry_date: exp, validity_days: DEFAULT_VALIDITY_DAYS,
-      billing_address: cust?.billing_address || cust?.address || null,
-      shipping_address: cust?.shipping_address || cust?.billing_address || cust?.address || null,
-      place_of_supply: cust?.state || null,
-      items: [], subtotal: 0, gst_percent: 18, gst_amount: 0, total: 0, status: "draft",
-    } as any).select().single();
+    const { data, error } = await supabase
+      .from("quotations")
+      .insert({
+        customer_id: custId,
+        owner_id: u.user!.id,
+        subject: subject || null,
+        quote_date: today,
+        expiry_date: exp,
+        validity_days: DEFAULT_VALIDITY_DAYS,
+        billing_address: cust?.billing_address || cust?.address || null,
+        shipping_address: cust?.shipping_address || cust?.billing_address || cust?.address || null,
+        place_of_supply: cust?.state || null,
+        items: [],
+        subtotal: 0,
+        gst_percent: 18,
+        gst_amount: 0,
+        total: 0,
+        status: "draft",
+      } as any)
+      .select()
+      .single();
     if (error) return toast.error(error.message);
-    setOpen(false); setCustId(""); setSubject("");
+    setOpen(false);
+    setCustId("");
+    setSubject("");
     nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
   };
 
@@ -100,9 +179,11 @@ function QuotesList() {
 
   const filtered = rows.filter((r) => {
     const s = q.toLowerCase();
-    const matchQ = !s || r.quote_no.toLowerCase().includes(s)
-      || (r.subject || "").toLowerCase().includes(s)
-      || (cmap[r.customer_id || ""]?.company || "").toLowerCase().includes(s);
+    const matchQ =
+      !s ||
+      r.quote_no.toLowerCase().includes(s) ||
+      (r.subject || "").toLowerCase().includes(s) ||
+      (cmap[r.customer_id || ""]?.company || "").toLowerCase().includes(s);
     const matchS = statusF === "all" || r.status === statusF;
     return matchQ && matchS;
   });
@@ -130,24 +211,47 @@ function QuotesList() {
             ]}
           />
           <Select value={statusF} onValueChange={setStatusF}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All status</SelectItem>
-              {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} className="w-48" />
-          <Link to="/crm/quotations/new"><Button size="sm"><Plus className="h-4 w-4 mr-1" />New</Button></Link>
+          <Input
+            placeholder="Search…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="w-48"
+          />
+          <Link to="/crm/quotations/new">
+            <Button size="sm">
+              <Plus className="h-4 w-4 mr-1" />
+              New
+            </Button>
+          </Link>
         </div>
       </CardHeader>
       <CardContent>
         <Table>
-          <TableHeader><TableRow>
-            <TableHead>Quote#</TableHead><TableHead>Ref#</TableHead><TableHead>Date</TableHead>
-            <TableHead>Customer</TableHead><TableHead>Subject</TableHead>
-            <TableHead>Expiry</TableHead><TableHead>Status</TableHead>
-            <TableHead className="text-right">Total</TableHead><TableHead></TableHead>
-          </TableRow></TableHeader>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Quote#</TableHead>
+              <TableHead>Ref#</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Subject</TableHead>
+              <TableHead>Expiry</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Total</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
           <TableBody>
             {filtered.map((r) => (
               <TableRow key={r.id}>
@@ -157,7 +261,9 @@ function QuotesList() {
                 <TableCell>{cmap[r.customer_id || ""]?.company || "—"}</TableCell>
                 <TableCell className="max-w-[240px] truncate">{r.subject || "—"}</TableCell>
                 <TableCell>{fmtDate(r.expiry_date)}</TableCell>
-                <TableCell><Badge variant="outline" className={quoteStatusClass[r.status]}>{r.status}</Badge></TableCell>
+                <TableCell>
+                  <StatusBadge kind="quote" value={r.status} />
+                </TableCell>
                 <TableCell className="text-right">{fmtMoney(r.total)}</TableCell>
                 <TableCell className="text-right whitespace-nowrap">
                   <DropdownMenu>
@@ -167,19 +273,46 @@ function QuotesList() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id } })} className="gap-2 cursor-pointer">
+                      <DropdownMenuItem
+                        onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id } })}
+                        className="gap-2 cursor-pointer"
+                      >
                         <Eye className="h-4 w-4" /> View
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "print" } })} className="gap-2 cursor-pointer">
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          nav({
+                            to: "/crm/quotations/$id",
+                            params: { id: r.id },
+                            search: { action: "print" },
+                          })
+                        }
+                        className="gap-2 cursor-pointer"
+                      >
                         <Printer className="h-4 w-4" /> Print
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => nav({ to: "/crm/quotations/$id", params: { id: r.id }, search: { action: "download" } })} className="gap-2 cursor-pointer">
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          nav({
+                            to: "/crm/quotations/$id",
+                            params: { id: r.id },
+                            search: { action: "download" },
+                          })
+                        }
+                        className="gap-2 cursor-pointer"
+                      >
                         <Download className="h-4 w-4" /> Download PDF
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => duplicate(r)} className="gap-2 cursor-pointer">
+                      <DropdownMenuItem
+                        onSelect={() => duplicate(r)}
+                        className="gap-2 cursor-pointer"
+                      >
                         <Copy className="h-4 w-4" /> Clone
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setDelId(r.id)} className="gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950">
+                      <DropdownMenuItem
+                        onSelect={() => setDelId(r.id)}
+                        className="gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
+                      >
                         <Trash2 className="h-4 w-4" /> Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -187,7 +320,13 @@ function QuotesList() {
                 </TableCell>
               </TableRow>
             ))}
-            {filtered.length === 0 && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">No quotations</TableCell></TableRow>}
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
+                  No quotations
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
 
@@ -201,7 +340,9 @@ function QuotesList() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+              <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+                Delete
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -216,19 +357,20 @@ function QuotesList() {
 
 type QuoteListRow = Pick<
   Quotation,
-  "id" | "quote_no" | "reference_no" | "subject" | "customer_id" | "quote_date" |
-  "expiry_date" | "status" | "total" | "created_at" | "updated_at"
+  | "id"
+  | "quote_no"
+  | "reference_no"
+  | "subject"
+  | "customer_id"
+  | "quote_date"
+  | "expiry_date"
+  | "status"
+  | "total"
+  | "created_at"
+  | "updated_at"
 >;
 
 const PAGE_SIZE = 20;
-const STATUS_DOT: Record<QuoteStatus, string> = {
-  draft: "bg-gray-400",
-  sent: "bg-blue-500",
-  accepted: "bg-green-500",
-  declined: "bg-red-500",
-  expired: "bg-amber-500",
-  invoiced: "bg-purple-500",
-};
 
 function QuotesWorkspace() {
   const nav = useNavigate();
@@ -266,10 +408,11 @@ function QuotesWorkspace() {
       if (missing.length) {
         fetchCustomersByIds(missing)
           .then((fetched) => {
-            if (fetched.length) setCustomers((cur) => {
-              const have = new Set(cur.map((c) => c.id));
-              return [...cur, ...fetched.filter((c) => !have.has(c.id))];
-            });
+            if (fetched.length)
+              setCustomers((cur) => {
+                const have = new Set(cur.map((c) => c.id));
+                return [...cur, ...fetched.filter((c) => !have.has(c.id))];
+              });
           })
           .catch(() => {});
       }
@@ -314,8 +457,12 @@ function QuotesWorkspace() {
     setLoadingMore(false);
   }, [buildQuery, rows.length, loadingMore, hasMore]);
 
-  useEffect(() => { loadFirst(); }, [loadFirst]);
-  useEffect(() => { resolveCustomers(rows.map((r) => r.customer_id ?? null)); }, [rows, resolveCustomers]);
+  useEffect(() => {
+    loadFirst();
+  }, [loadFirst]);
+  useEffect(() => {
+    resolveCustomers(rows.map((r) => r.customer_id ?? null));
+  }, [rows, resolveCustomers]);
 
   // Filter by customer / amount client-side (list is already narrow).
   const filtered = useMemo(() => {
@@ -338,7 +485,9 @@ function QuotesWorkspace() {
     try {
       const last = sessionStorage.getItem("quotes_last_selected");
       if (last) setSelectedId(last);
-    } catch { /* private-mode browsing: ignore */ }
+    } catch {
+      /* private-mode browsing: ignore */
+    }
   }, []);
 
   // Auto-select first item when list changes and nothing selected.
@@ -348,10 +497,20 @@ function QuotesWorkspace() {
 
   // Fetch selected quote details (with cache).
   useEffect(() => {
-    if (!selectedId) { setSelected(null); return; }
-    try { sessionStorage.setItem("quotes_last_selected", selectedId); } catch { /* private-mode browsing: ignore */ }
+    if (!selectedId) {
+      setSelected(null);
+      return;
+    }
+    try {
+      sessionStorage.setItem("quotes_last_selected", selectedId);
+    } catch {
+      /* private-mode browsing: ignore */
+    }
     const cached = cacheRef.current.get(selectedId);
-    if (cached) { setSelected(cached); return; }
+    if (cached) {
+      setSelected(cached);
+      return;
+    }
     setSelLoading(true);
     (async () => {
       const { data } = await supabase.from("quotations").select("*").eq("id", selectedId).single();
@@ -397,17 +556,31 @@ function QuotesWorkspace() {
     const { data: u } = await supabase.auth.getUser();
     const today = istTodayIso();
     const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);
-    const { data, error } = await supabase.from("quotations").insert({
-      customer_id: newCustId, owner_id: u.user!.id,
-      subject: newSubject || null,
-      quote_date: today, expiry_date: exp, validity_days: DEFAULT_VALIDITY_DAYS,
-      billing_address: cust?.billing_address || cust?.address || null,
-      shipping_address: cust?.shipping_address || cust?.billing_address || cust?.address || null,
-      place_of_supply: cust?.state || null,
-      items: [], subtotal: 0, gst_percent: 18, gst_amount: 0, total: 0, status: "draft",
-    } as any).select().single();
+    const { data, error } = await supabase
+      .from("quotations")
+      .insert({
+        customer_id: newCustId,
+        owner_id: u.user!.id,
+        subject: newSubject || null,
+        quote_date: today,
+        expiry_date: exp,
+        validity_days: DEFAULT_VALIDITY_DAYS,
+        billing_address: cust?.billing_address || cust?.address || null,
+        shipping_address: cust?.shipping_address || cust?.billing_address || cust?.address || null,
+        place_of_supply: cust?.state || null,
+        items: [],
+        subtotal: 0,
+        gst_percent: 18,
+        gst_amount: 0,
+        total: 0,
+        status: "draft",
+      } as any)
+      .select()
+      .single();
     if (error) return toast.error(error.message);
-    setOpenNew(false); setNewCustId(""); setNewSubject("");
+    setOpenNew(false);
+    setNewCustId("");
+    setNewSubject("");
     nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
   };
 
@@ -419,13 +592,16 @@ function QuotesWorkspace() {
     if (!selected) return;
     const prev = selected.status;
     setSelected({ ...selected, status: next });
-    setRows((r) => r.map((x) => x.id === selected.id ? { ...x, status: next } : x));
+    setRows((r) => r.map((x) => (x.id === selected.id ? { ...x, status: next } : x)));
     cacheRef.current.set(selected.id, { ...selected, status: next });
-    const { error } = await supabase.from("quotations").update({ status: next }).eq("id", selected.id);
+    const { error } = await supabase
+      .from("quotations")
+      .update({ status: next })
+      .eq("id", selected.id);
     if (error) {
       toast.error(error.message);
       setSelected({ ...selected, status: prev });
-      setRows((r) => r.map((x) => x.id === selected.id ? { ...x, status: prev } : x));
+      setRows((r) => r.map((x) => (x.id === selected.id ? { ...x, status: prev } : x)));
     } else {
       toast.success(`Marked as ${next}`);
     }
@@ -460,232 +636,358 @@ function QuotesWorkspace() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-8rem)] gap-3">
-      {/* Left panel */}
-      <Card
-        className={`w-full md:w-[32%] md:min-w-[300px] flex-1 md:flex-none flex-col overflow-hidden ${selectedId ? "hidden md:flex" : "flex"}`}
-      >
-        <CardHeader className="p-3 space-y-2 border-b">
-          <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-sm">Quotations</CardTitle>
-            <Link to="/crm/quotations/new"><Button size="sm" className="h-7"><Plus className="h-3.5 w-3.5 mr-1" />New</Button></Link>
-          </div>
-          <div className="relative">
-            <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Search customer, quote, amount…"
-              className="h-8 pl-7 text-xs"
-            />
-          </div>
-          <Select value={statusF} onValueChange={setStatusF}>
-            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All status</SelectItem>
-              {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </CardHeader>
-        <div
-          ref={scrollRef} onScroll={onScroll}
-          className="flex-1 overflow-y-auto divide-y"
+    <>
+      <PageHeader
+        title="Quotations"
+        description="Draft, send and convert customer quotations. Click a row to view details."
+        group="Customers (Sales & CRM)"
+        icon={FileSpreadsheet}
+        primary={{ label: "New Quotation", to: "/crm/quotations/new", icon: Plus }}
+        className="print:hidden"
+      />
+      <div className="flex flex-col md:flex-row h-[calc(100vh-8rem)] gap-3">
+        {/* Left panel */}
+        <Card
+          className={`w-full md:w-[32%] md:min-w-[300px] flex-1 md:flex-none flex-col overflow-hidden ${selectedId ? "hidden md:flex" : "flex"}`}
         >
-          {filtered.map((r) => (
-            <QuoteRow
-              key={r.id}
-              row={r}
-              customer={cmap[r.customer_id || ""]?.company || "—"}
-              selected={r.id === selectedId}
-              onSelect={setSelectedId}
-            />
-          ))}
-          {loadingMore && (
-            <div className="p-3 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" /> Loading…
-            </div>
-          )}
-          {!loadingMore && !hasMore && filtered.length > 0 && (
-            <div className="p-3 text-center text-[11px] text-muted-foreground">End of list</div>
-          )}
-          {filtered.length === 0 && (
-            <div className="p-6 text-center text-xs text-muted-foreground">No quotations</div>
-          )}
-        </div>
-      </Card>
-
-      {/* Right panel */}
-      <Card
-        className={`flex-1 flex-col overflow-hidden ${selectedId ? "flex" : "hidden md:flex"}`}
-      >
-        {!selected && !selLoading && (
-          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            Select a quotation to view details
-          </div>
-        )}
-        {selLoading && (
-          <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
-          </div>
-        )}
-        {selected && !selLoading && (
-          <>
-            {/* Sticky header */}
-            <div className="sticky top-0 z-10 bg-background border-b p-3 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex min-w-0 items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="md:hidden shrink-0 px-2"
-                  onClick={() => setSelectedId(null)}
-                >
-                  ←
+          <CardHeader className="p-3 space-y-2 border-b">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <CardTitle className="text-sm">Quotations</CardTitle>
+                <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-muted text-[10px] font-medium text-muted-foreground tabular-nums">
+                  {filtered.length}
+                </span>
+              </div>
+              <Link to="/crm/quotations/new">
+                <Button size="sm" className="h-7">
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  New
                 </Button>
-                <div className="min-w-0">
-                  <div className="text-[11px] text-muted-foreground uppercase tracking-wide">Quotation</div>
-                  <div className="font-semibold text-base flex flex-wrap items-center gap-2">
-                    {selected.quote_no || "(unsaved)"}
-                    <Badge variant="outline" className={quoteStatusClass[selected.status]}>{selected.status}</Badge>
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {cmap[selected.customer_id || ""]?.company || "—"} • {fmtDate(selected.quote_date)}
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="text-right">
-                  <div className="text-[11px] text-muted-foreground uppercase">Total</div>
-                  <div className="font-semibold text-base">{fmtMoney(selected.total)}</div>
-                </div>
-                <div className="flex flex-wrap items-center gap-1">
-                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id } })}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" />Edit
-                  </Button>
-                  <Button size="sm" variant="outline" disabled={selected.status !== "draft"} onClick={() => changeStatus("sent")}>
-                    <Send className="h-3.5 w-3.5 mr-1" />Send
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={convert} disabled={converting}>
-                    <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />Convert
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "print" } })}>
-                    <Printer className="h-3.5 w-3.5 mr-1" />Print
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => nav({ to: "/crm/quotations/$id", params: { id: selected.id }, search: { action: "download" } })}>
-                    <Download className="h-3.5 w-3.5 mr-1" />Download
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" variant="ghost"><MoreVertical className="h-4 w-4" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => clone({ ...selected } as any)} className="gap-2">
-                        <Copy className="h-4 w-4" /> Clone
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => changeStatus("accepted")} className="gap-2">
-                        <CheckCircle2 className="h-4 w-4" /> Mark Approved
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => changeStatus("declined")} className="gap-2 text-amber-600">
-                        Reject
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setDelId(selected.id)} className="gap-2 text-red-600 focus:text-red-600">
-                        <Trash2 className="h-4 w-4" /> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
+              </Link>
             </div>
+            <div className="relative">
+              <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search customer, quote, amount…"
+                className="h-8 pl-7 text-xs"
+              />
+            </div>
+            <Select value={statusF} onValueChange={setStatusF}>
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All status</SelectItem>
+                {STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardHeader>
+          <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto divide-y">
+            {filtered.map((r) => (
+              <QuoteRow
+                key={r.id}
+                row={r}
+                customer={cmap[r.customer_id || ""]?.company || "—"}
+                selected={r.id === selectedId}
+                onSelect={setSelectedId}
+              />
+            ))}
+            {loadingMore && (
+              <div className="p-3 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+              </div>
+            )}
+            {!loadingMore && !hasMore && filtered.length > 0 && (
+              <div className="p-3 text-center text-[11px] text-muted-foreground">End of list</div>
+            )}
+            {filtered.length === 0 && (
+              <div className="py-10">
+                <EmptyState
+                  icon={FileSpreadsheet}
+                  title="No quotations yet"
+                  description="Click New to draft your first quotation."
+                />
+              </div>
+            )}
+          </div>
+        </Card>
 
-            <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="flex-1 flex flex-col overflow-hidden">
-              <TabsList className="mx-3 mt-2 self-start">
-                <TabsTrigger value="details">Details</TabsTrigger>
-                <TabsTrigger value="activity">Activity</TabsTrigger>
-              </TabsList>
-              <div className="flex-1 overflow-y-auto p-3">
-                <TabsContent value="details" className="m-0 space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                    <Field label="Customer" value={cmap[selected.customer_id || ""]?.company || "—"} />
-                    <Field label="Quote Date" value={fmtDate(selected.quote_date)} />
-                    <Field label="Salesperson" value={selected.salesperson || "—"} />
-                    <Field label="Place of Supply" value={selected.place_of_supply || "—"} />
-                    <Field label="Reference #" value={selected.reference_no || "—"} />
-                    <Field label="Expiry" value={fmtDate(selected.expiry_date)} />
-                    <Field label="Subject" value={selected.subject || "—"} />
-                    <Field label="Project" value={selected.project_name || "—"} />
-                  </div>
-
-                  <div className="border rounded-md overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-8">#</TableHead>
-                          <TableHead>Item</TableHead>
-                          <TableHead className="text-right w-20">Qty</TableHead>
-                          <TableHead className="text-right w-28">Rate</TableHead>
-                          <TableHead className="text-right w-32">Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(selected.items || []).map((it, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                            <TableCell>
-                              <div className="font-medium">{it.product_name || it.description}</div>
-                              {it.product_name && it.description && it.description !== it.product_name && (
-                                <div className="text-xs text-muted-foreground">{it.description}</div>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-right">{it.qty} {it.unit || ""}</TableCell>
-                            <TableCell className="text-right">{fmtMoney(it.rate)}</TableCell>
-                            <TableCell className="text-right">{fmtMoney(it.amount)}</TableCell>
-                          </TableRow>
-                        ))}
-                        {(selected.items || []).length === 0 && (
-                          <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-4">No items</TableCell></TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <div className="w-full max-w-sm space-y-1 text-sm">
-                      <SumRow label="Subtotal" value={fmtMoney(selected.subtotal)} />
-                      {Number(selected.discount_amount) > 0 && <SumRow label={(selected as any).discount_label || "Discount"} value={`- ${fmtMoney(selected.discount_amount)}`} />}
-                      {Number(selected.shipping_charges) > 0 && <SumRow label="Shipping" value={fmtMoney(selected.shipping_charges)} />}
-                      <SumRow label="Tax" value={fmtMoney(selected.gst_amount)} />
-                      <div className="border-t pt-1 flex justify-between font-semibold">
-                        <span>Total</span><span>{fmtMoney(selected.total)}</span>
-                      </div>
+        {/* Right panel */}
+        <Card
+          className={`flex-1 flex-col overflow-hidden ${selectedId ? "flex" : "hidden md:flex"}`}
+        >
+          {!selected && !selLoading && (
+            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+              Select a quotation to view details
+            </div>
+          )}
+          {selLoading && (
+            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
+            </div>
+          )}
+          {selected && !selLoading && (
+            <>
+              {/* Sticky header */}
+              <div className="sticky top-0 z-10 bg-background border-b p-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="md:hidden shrink-0 px-2"
+                    onClick={() => setSelectedId(null)}
+                  >
+                    ←
+                  </Button>
+                  <div className="min-w-0">
+                    <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                      Quotation
+                    </div>
+                    <div className="font-semibold text-base flex flex-wrap items-center gap-2">
+                      {selected.quote_no || "(unsaved)"}
+                      <StatusBadge kind="quote" value={selected.status} size="sm" />
+                    </div>
+                    <div className="text-sm font-semibold truncate text-foreground">
+                      {cmap[selected.customer_id || ""]?.company || "—"}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {" "}
+                        • {fmtDate(selected.quote_date)}
+                      </span>
                     </div>
                   </div>
-                </TabsContent>
-
-                <TabsContent value="activity" className="m-0">
-                  <ActivityTimeline quote={selected} />
-                </TabsContent>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="text-right">
+                    <div className="text-[11px] text-muted-foreground uppercase">Total</div>
+                    <div className="font-semibold text-base">{fmtMoney(selected.total)}</div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        nav({ to: "/crm/quotations/$id", params: { id: selected.id } })
+                      }
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={selected.status !== "draft"}
+                      onClick={() => changeStatus("sent")}
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1" />
+                      Send
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={convert} disabled={converting}>
+                      <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />
+                      Convert
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        nav({
+                          to: "/crm/quotations/$id",
+                          params: { id: selected.id },
+                          search: { action: "print" },
+                        })
+                      }
+                    >
+                      <Printer className="h-3.5 w-3.5 mr-1" />
+                      Print
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        nav({
+                          to: "/crm/quotations/$id",
+                          params: { id: selected.id },
+                          search: { action: "download" },
+                        })
+                      }
+                    >
+                      <Download className="h-3.5 w-3.5 mr-1" />
+                      Download
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="ghost">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onSelect={() => clone({ ...selected } as any)}
+                          className="gap-2"
+                        >
+                          <Copy className="h-4 w-4" /> Clone
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => changeStatus("accepted")}
+                          className="gap-2"
+                        >
+                          <CheckCircle2 className="h-4 w-4" /> Mark Approved
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => changeStatus("declined")}
+                          className="gap-2 text-amber-600"
+                        >
+                          Reject
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => setDelId(selected.id)}
+                          className="gap-2 text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
               </div>
-            </Tabs>
-          </>
-        )}
-      </Card>
 
-      <AlertDialog open={!!delId} onOpenChange={(o) => !o && setDelId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Quotation</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+              <Tabs
+                value={tab}
+                onValueChange={(v) => setTab(v as any)}
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                <TabsList aria-label="Quotation sections" className="mx-3 mt-2 self-start">
+                  <TabsTrigger value="details">Details</TabsTrigger>
+                  <TabsTrigger value="activity">Activity</TabsTrigger>
+                </TabsList>
+                <div className="flex-1 overflow-y-auto p-3">
+                  <TabsContent value="details" className="m-0 space-y-4">
+                    <div className="rounded-md bg-muted/30 p-3">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <Field
+                          label="Customer"
+                          value={cmap[selected.customer_id || ""]?.company || "—"}
+                        />
+                        <Field label="Quote Date" value={fmtDate(selected.quote_date)} />
+                        <Field label="Salesperson" value={selected.salesperson || "—"} />
+                        <Field label="Place of Supply" value={selected.place_of_supply || "—"} />
+                        <Field label="Reference #" value={selected.reference_no || "—"} />
+                        <Field label="Expiry" value={fmtDate(selected.expiry_date)} />
+                        <Field label="Subject" value={selected.subject || "—"} />
+                        <Field label="Project" value={selected.project_name || "—"} />
+                      </div>
+                    </div>
+
+                    <div className="border rounded-md overflow-x-auto">
+                      <Table>
+                        <TableHeader className="bg-muted/30">
+                          <TableRow>
+                            <TableHead className="w-8">#</TableHead>
+                            <TableHead>Item</TableHead>
+                            <TableHead className="text-right w-20">Qty</TableHead>
+                            <TableHead className="text-right w-28">Rate</TableHead>
+                            <TableHead className="text-right w-32">Amount</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(selected.items || []).map((it, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                              <TableCell>
+                                <div className="font-medium">
+                                  {it.product_name || it.description}
+                                </div>
+                                {it.product_name &&
+                                  it.description &&
+                                  it.description !== it.product_name && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {it.description}
+                                    </div>
+                                  )}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {it.qty} {it.unit || ""}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {fmtMoney(it.rate)}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums font-medium">
+                                {fmtMoney(it.amount)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {(selected.items || []).length === 0 && (
+                            <TableRow>
+                              <TableCell
+                                colSpan={5}
+                                className="text-center text-muted-foreground py-4"
+                              >
+                                No items
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <div className="w-full max-w-sm rounded-md border bg-muted/20 p-3 space-y-1 text-sm">
+                        <SumRow label="Subtotal" value={fmtMoney(selected.subtotal)} />
+                        {Number(selected.discount_amount) > 0 && (
+                          <SumRow
+                            label={(selected as any).discount_label || "Discount"}
+                            value={`- ${fmtMoney(selected.discount_amount)}`}
+                          />
+                        )}
+                        {Number(selected.shipping_charges) > 0 && (
+                          <SumRow label="Shipping" value={fmtMoney(selected.shipping_charges)} />
+                        )}
+                        <SumRow label="Tax" value={fmtMoney(selected.gst_amount)} />
+                        <div className="border-t pt-1 flex justify-between font-semibold tabular-nums">
+                          <span>Total</span>
+                          <span>{fmtMoney(selected.total)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="activity" className="m-0">
+                    <ActivityTimeline quote={selected} />
+                  </TabsContent>
+                </div>
+              </Tabs>
+            </>
+          )}
+        </Card>
+
+        <AlertDialog open={!!delId} onOpenChange={(o) => !o && setDelId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Quotation</AlertDialogTitle>
+              <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </>
   );
 }
 
 const QuoteRow = memo(function QuoteRow({
-  row, customer, selected, onSelect,
+  row,
+  customer,
+  selected,
+  onSelect,
 }: {
   row: QuoteListRow;
   customer: string;
@@ -696,6 +998,7 @@ const QuoteRow = memo(function QuoteRow({
     <button
       type="button"
       onClick={() => onSelect(row.id)}
+      aria-current={selected ? "true" : undefined}
       className={cn(
         "w-full text-left px-3 py-2 hover:bg-accent/50 transition-colors",
         selected && "bg-accent/70 border-l-2 border-primary",
@@ -703,13 +1006,19 @@ const QuoteRow = memo(function QuoteRow({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="font-medium text-sm truncate">{customer}</div>
-        <div className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT[row.status])} />
+        <StatusBadge kind="quote" value={row.status} size="sm" />
       </div>
-      <div className="flex items-center justify-between text-xs text-muted-foreground mt-0.5">
-        <span className="truncate">{row.quote_no} • {fmtDate(row.quote_date)}</span>
-        <span className="font-medium text-foreground">{fmtMoney(row.total)}</span>
+      <div className="flex items-center justify-between text-xs text-muted-foreground mt-0.5 gap-2">
+        <span className="truncate">
+          {row.quote_no} • {fmtDate(row.quote_date)}
+        </span>
+        <span className="font-medium text-foreground tabular-nums shrink-0">
+          {fmtMoney(row.total)}
+        </span>
       </div>
-      {row.subject && <div className="text-[11px] text-muted-foreground truncate mt-0.5">{row.subject}</div>}
+      {row.subject && (
+        <div className="text-[11px] text-muted-foreground truncate mt-0.5">{row.subject}</div>
+      )}
     </button>
   );
 });
@@ -733,19 +1042,45 @@ function SumRow({ label, value }: { label: string; value: string }) {
 }
 
 function ActivityTimeline({ quote }: { quote: Quotation }) {
-  const events: Array<{ icon: any; label: string; ts: string; tone: string }> = [];
-  events.push({ icon: FilePlus, label: "Quotation created", ts: quote.created_at, tone: "text-gray-600" });
+  const events: Array<{ icon: LucideIcon; label: string; ts: string; tone: string }> = [
+    {
+      icon: FilePlus,
+      label: "Quotation created",
+      ts: quote.created_at,
+      tone: "text-muted-foreground",
+    },
+  ];
   if (quote.updated_at && quote.updated_at !== quote.created_at) {
-    events.push({ icon: Pencil, label: "Last edited", ts: quote.updated_at, tone: "text-blue-600" });
+    events.push({
+      icon: Pencil,
+      label: "Last edited",
+      ts: quote.updated_at,
+      tone: "text-blue-600",
+    });
   }
   if (quote.status === "sent" || quote.status === "accepted" || quote.status === "invoiced") {
-    events.push({ icon: Send, label: "Sent to customer", ts: quote.updated_at, tone: "text-blue-600" });
+    events.push({
+      icon: Send,
+      label: "Sent to customer",
+      ts: quote.updated_at,
+      tone: "text-blue-600",
+    });
   }
   if (quote.status === "accepted" || quote.status === "invoiced") {
-    events.push({ icon: CheckCircle2, label: "Approved by customer", ts: quote.updated_at, tone: "text-green-600" });
+    events.push({
+      icon: CheckCircle2,
+      label: "Approved by customer",
+      ts: quote.updated_at,
+      tone: "text-emerald-600",
+    });
   }
   if (quote.status === "declined") {
-    events.push({ icon: Trash2, label: "Declined", ts: quote.updated_at, tone: "text-red-600" });
+    events.push({
+      icon: Trash2,
+      label: "Declined",
+      ts: quote.updated_at,
+      tone: "text-destructive",
+    });
   }
   return (
     <ol className="relative border-l pl-4 space-y-4">

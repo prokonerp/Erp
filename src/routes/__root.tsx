@@ -14,7 +14,7 @@ import { Toaster } from "sonner";
 import { ThemeProvider } from "@/lib/theme";
 
 /** Applies the persisted appearance classes before first paint (no flash). */
-const themeBootScript = `(function(){try{var t=localStorage.getItem("prokon-theme");var d=document.documentElement.classList;if(t==="dark"){d.add("dark");}else if(t==="light"){/* plain light */}else if(t==="system"){if(matchMedia("(prefers-color-scheme: dark)").matches)d.add("dark");}else{d.add("theme-balanced");}}catch(e){}})();`;
+const themeBootScript = `(function(){try{var t=localStorage.getItem("prokon-theme");var d=document.documentElement;var cls=d.classList;cls.remove("theme-balanced","theme-comfort","dark");if(t==="dark"){cls.add("dark");d.dataset.appearance="dark";}else if(t==="comfort"){cls.add("theme-comfort");d.dataset.appearance="comfort";}else if(t==="system"){if(matchMedia("(prefers-color-scheme: dark)").matches){cls.add("dark");d.dataset.appearance="dark";}else{dataset.appearance="light";}}else if(t==="light"){d.dataset.appearance="light";}else{cls.add("theme-balanced");d.dataset.appearance="balanced";}}catch(e){}})();`;
 
 function NotFoundComponent() {
   return (

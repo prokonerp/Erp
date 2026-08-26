@@ -70,7 +70,9 @@ export const coverStatus = (end: string | null | undefined): CoverStatus => {
   if (!end) return "none";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const diff = Math.floor((new Date(end.slice(0, 10) + "T00:00:00").getTime() - today.getTime()) / 86400000);
+  const diff = Math.floor(
+    (new Date(end.slice(0, 10) + "T00:00:00").getTime() - today.getTime()) / 86400000,
+  );
   if (diff < 0) return "expired";
   if (diff <= 30) return "expiring";
   return "active";
@@ -90,12 +92,14 @@ export const statusClass = (s: CoverStatus): string =>
   s === "active"
     ? "bg-green-100 text-green-800 border-green-300"
     : s === "expiring"
-    ? "bg-orange-100 text-orange-800 border-orange-300"
-    : s === "expired"
-    ? "bg-red-100 text-red-800 border-red-300"
-    : "bg-muted text-muted-foreground border-border";
+      ? "bg-orange-100 text-orange-800 border-orange-300"
+      : s === "expired"
+        ? "bg-red-100 text-red-800 border-red-300"
+        : "bg-muted text-muted-foreground border-border";
 
-export const listEquipmentForCustomer = async (customerId: string): Promise<InstalledEquipment[]> => {
+export const listEquipmentForCustomer = async (
+  customerId: string,
+): Promise<InstalledEquipment[]> => {
   const sb = supabase as unknown as { from: (t: string) => any };
   const { data, error } = await sb
     .from("installed_equipment")
@@ -107,7 +111,8 @@ export const listEquipmentForCustomer = async (customerId: string): Promise<Inst
   return (data || []) as InstalledEquipment[];
 };
 
-const table = () => (supabase as unknown as { from: (t: string) => any }).from("installed_equipment");
+const table = () =>
+  (supabase as unknown as { from: (t: string) => any }).from("installed_equipment");
 
 export const createEquipment = async (input: EquipmentInput): Promise<void> => {
   const { error } = await table().insert(input);
@@ -130,6 +135,82 @@ export const findEquipmentBySerial = async (serial: string): Promise<InstalledEq
   const { data, error } = await table().select("*").ilike("serial_no", `%${serial}%`).limit(25);
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
+};
+
+/** Exact (case-insensitive; serials are stored upper-cased) lookup by serial — used to
+ *  pull a registered unit into a ticket when its serial is typed. */
+export const findEquipmentBySerialExact = async (serial: string): Promise<InstalledEquipment[]> => {
+  const s = serial.trim().toUpperCase();
+  if (!s) return [];
+  const { data, error } = await table().select("*").eq("serial_no", s).limit(5);
+  if (error) throw error;
+  return (data || []) as InstalledEquipment[];
+};
+
+/** Resolve a Product Master row by exact model (case-insensitive). Returns the first match. */
+export const findProductByModel = async (
+  model: string,
+): Promise<{
+  id: string;
+  model: string;
+  brand: string | null;
+  name: string;
+} | null> => {
+  const m = (model || "").trim();
+  if (!m) return null;
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, name, model, brand")
+    .eq("active", true)
+    .ilike("model", m)
+    .limit(1);
+  if (error) throw error;
+  const prod = (data || [])[0];
+  return prod ? { id: prod.id, model: prod.model || "", brand: prod.brand || null, name: prod.name || "" } : null;
+};
+
+/** Exact lookup scoped to one customer — used to detect an existing unit before appending. */
+export const findEquipmentByCustomerAndSerial = async (
+  customerId: string,
+  serial: string,
+): Promise<InstalledEquipment | null> => {
+  const s = serial.trim().toUpperCase();
+  if (!customerId || !s) return null;
+  const { data, error } = await table()
+    .select("*")
+    .eq("customer_id", customerId)
+    .eq("serial_no", s)
+    .limit(1);
+  if (error) throw error;
+  return data && data[0] ? (data[0] as InstalledEquipment) : null;
+};
+
+/**
+ * Link a ticket to Installed Equipment: reuse the row if the (customer, serial)
+ * already exists, otherwise append a new row for that customer and return its id.
+ * This is the "reverse link" — raising/aissing a ticket grows the register.
+ */
+export const getOrCreateEquipmentForTicket = async (input: {
+  customer_id: string;
+  model_no: string;
+  serial_no: string;
+}): Promise<string> => {
+  const s = input.serial_no.trim().toUpperCase();
+  if (input.customer_id && s) {
+    const existing = await findEquipmentByCustomerAndSerial(input.customer_id, s);
+    if (existing) return existing.id;
+  }
+  const { data, error } = await table()
+    .insert({
+      customer_id: input.customer_id,
+      model_no: input.model_no.trim(),
+      serial_no: s || null,
+      warranty_months: 0,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return (data as { id: string }).id;
 };
 
 /** Every equipment row across all customers (used by the Summary tab). */
@@ -166,55 +247,159 @@ const toIso = (s: string): string | null => {
 const addMonths = (iso: string, months: number) => addMonthsIso(iso, months);
 
 /**
- * Import CSV rows into installed_equipment.
- * Per-row validation: customer must resolve, (customer, serial) must be unique,
- * model is matched against Product Master to fill product_id / default warranty.
+ * Import CSV rows into installed_equipment — customer-specific, exact-master matching.
+ * - Admin must have selected a customer in the UI; all rows are validated against that
+ *   customer's exact company name (as in masters) and against Product Master's exact model.
+ * - If a row's Customer or Model does not EXACTLY match masters, it is NOT inserted and
+ *   is collected as failed with true reason; rest rows continue.
+ * - Duplicate serial (customer+serial) is checked against DB and within-file; duplicates
+ *   are skipped with reason and included in exportable errors.
  */
-export const importEquipmentRows = async (rows: Record<string, string>[]): Promise<ImportOutcome> => {
+export const importEquipmentRows = async (
+  rows: Record<string, string>[],
+  opts?: { selectedCustomerId?: string | null; selectedCustomerName?: string | null },
+): Promise<ImportOutcome> => {
   const out: ImportOutcome = { imported: 0, skipped: [], failed: [] };
   if (!rows.length) return out;
 
   const customers = await fetchAll<any>("customers", (q) => q.select("id,company,customer_code"));
-  const byName = new Map<string, string>();
-  const byCode = new Map<string, string>();
+  // Exact maps (trimmed, case-sensitive) for strict validation
+  const byNameExact = new Map<string, string>();
+  const byCodeExact = new Map<string, string>();
+  // Fallback lower maps for helpful error messages
+  const byNameLower = new Map<string, string>();
   for (const c of customers) {
-    if (c.company) byName.set(String(c.company).trim().toLowerCase(), c.id);
-    if (c.customer_code) byCode.set(String(c.customer_code).trim().toLowerCase(), c.id);
+    if (c.company) {
+      const exact = String(c.company).trim();
+      if (exact) {
+        byNameExact.set(exact, c.id);
+        byNameLower.set(exact.toLowerCase(), c.id);
+      }
+    }
+    if (c.customer_code) {
+      const exact = String(c.customer_code).trim();
+      if (exact) byCodeExact.set(exact, c.id);
+    }
+  }
+  // Resolve selected customer exact name for validation
+  const selectedCustomerId = opts?.selectedCustomerId?.trim() || null;
+  let selectedCustomerName: string | null = opts?.selectedCustomerName?.trim() || null;
+  if (selectedCustomerId && !selectedCustomerName) {
+    const hit = customers.find((c) => c.id === selectedCustomerId);
+    selectedCustomerName = hit ? String(hit.company || "").trim() : null;
+  }
+  // If no explicit selection, require Customer column to exactly match masters
+  // (old behavior but now exact). If selection provided, we enforce row Customer equals selected.
+  if (!selectedCustomerId) {
+    // No customer pre-selected — will validate per-row exact match and resolve id per row
   }
 
   const products = await fetchAll<any>("products", (q) =>
-    q.select("id,name,model,short_name,warranty_applicable,warranty_duration,warranty_unit"));
-  const byModel = new Map<string, any>();
+    q.select("id,name,model,short_name,warranty_applicable,warranty_duration,warranty_unit"),
+  );
+  // Exact model map — ONLY the canonical `model` field, trimmed exact, case-sensitive
+  const byModelExact = new Map<string, any>();
+  const byModelLower = new Map<string, any>();
   for (const p of products) {
-    for (const key of [p.model, p.short_name, p.name]) {
-      const k = String(key || "").trim().toLowerCase();
-      if (k && !byModel.has(k)) byModel.set(k, p);
+    const exact = String(p.model || "").trim();
+    if (exact) {
+      if (!byModelExact.has(exact)) byModelExact.set(exact, p);
+      const low = exact.toLowerCase();
+      if (!byModelLower.has(low)) byModelLower.set(low, p);
     }
   }
 
   const existing = await listAllEquipment();
   const seen = new Set(
-    existing.filter((e) => e.serial_no).map((e) => `${e.customer_id}|${e.serial_no!.toUpperCase()}`),
+    existing
+      .filter((e) => e.serial_no)
+      .map((e) => `${e.customer_id}|${e.serial_no!.trim().toUpperCase()}`),
   );
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const line = i + 2; // header is line 1
     const custRaw = pick(r, ["Customer", "Customer Name", "Company", "Customer Code"]);
-    const model = pick(r, ["Model No", "Model", "Model Number"]);
-    if (!custRaw && !model) continue; // blank line
-    const customerId = byName.get(custRaw.toLowerCase()) || byCode.get(custRaw.toLowerCase());
-    if (!customerId) { out.failed.push({ row: line, reason: `Customer "${custRaw || "(blank)"}" not found` }); continue; }
-    if (!model) { out.failed.push({ row: line, reason: "Model No is required" }); continue; }
+    const modelRaw = pick(r, ["Model No", "Model", "Model Number"]);
+    if (!custRaw && !modelRaw) continue; // blank line
 
-    const serial = pick(r, ["Serial No", "Serial", "Serial Number"]).toUpperCase() || null;
+    // --- Customer validation (exact) ---
+    let customerId: string | null = null;
+    if (selectedCustomerId) {
+      // Customer-specific import: row's Customer must exactly equal selected customer's company (or code)
+      const rowCustTrimmed = custRaw.trim();
+      const expectedExact = selectedCustomerName || "";
+      const expectedCodeExact =
+        customers.find((c) => c.id === selectedCustomerId)?.customer_code?.trim() || "";
+      const matchesExact =
+        rowCustTrimmed === expectedExact ||
+        (expectedCodeExact && rowCustTrimmed === expectedCodeExact);
+      if (!custRaw.trim()) {
+        out.failed.push({
+          row: line,
+          reason: `Customer is required – row must contain exactly "${expectedExact}" (as in masters) for the selected customer`,
+        });
+        continue;
+      }
+      if (!matchesExact) {
+        // Provide helpful hint if case-insensitive would have matched
+        const lowerMatch = rowCustTrimmed.toLowerCase() === expectedExact.toLowerCase();
+        out.failed.push({
+          row: line,
+          reason: `Customer mismatch – row has "${custRaw}" but selected customer is "${expectedExact}"${lowerMatch ? " (case/spacing differs – must be exactly as in masters)" : ""} – must be exactly as in masters`,
+        });
+        continue;
+      }
+      customerId = selectedCustomerId;
+    } else {
+      // No pre-selection: require exact match against masters
+      const exactTrim = custRaw.trim();
+      customerId = byNameExact.get(exactTrim) || byCodeExact.get(exactTrim) || null;
+      if (!customerId) {
+        const lowerHit = byNameLower.get(exactTrim.toLowerCase());
+        out.failed.push({
+          row: line,
+          reason: lowerHit
+            ? `Customer "${custRaw}" case/spacing differs from masters – must be exactly as stored (exact: "${customers.find((c) => c.id === lowerHit)?.company}")`
+            : `Customer "${custRaw || "(blank)"}" not found in masters – must be exactly as in Customer Master`,
+        });
+        continue;
+      }
+    }
+
+    const model = modelRaw.trim();
+    if (!model) {
+      out.failed.push({ row: line, reason: "Model No is required" });
+      continue;
+    }
+
+    // --- Serial duplicate check ---
+    const serialRaw = pick(r, ["Serial No", "Serial", "Serial Number"]);
+    const serial = serialRaw.trim().toUpperCase() || null;
     if (serial) {
       const key = `${customerId}|${serial}`;
-      if (seen.has(key)) { out.skipped.push({ row: line, reason: `${serial} already exists for this customer` }); continue; }
+      if (seen.has(key)) {
+        out.skipped.push({
+          row: line,
+          reason: `Duplicate serial "${serialRaw.trim()}" already exists for this customer (checked DB + file) – not inserted`,
+        });
+        continue;
+      }
       seen.add(key);
     }
 
-    const prod = byModel.get(model.trim().toLowerCase()) || null;
+    // --- Model exact match (must be exactly as in Product Master) ---
+    const prod = byModelExact.get(model) || null;
+    if (!prod) {
+      const lowerHit = byModelLower.get(model.toLowerCase());
+      out.failed.push({
+        row: line,
+        reason: lowerHit
+          ? `Model "${model}" case/spacing differs from masters – must be exactly "${String(lowerHit.model).trim()}" as in Product Master`
+          : `Model "${model}" not found in Product Master – must be exactly as in masters (check spelling)`,
+      });
+      continue;
+    }
     const csvWarranty = pick(r, ["Warranty Months", "Warranty (Months)", "Warranty"]);
     const warranty = csvWarranty ? Number(csvWarranty) || 0 : productWarrantyMonths(prod);
     const amcStart = toIso(pick(r, ["AMC Start Date", "AMC Start"]));

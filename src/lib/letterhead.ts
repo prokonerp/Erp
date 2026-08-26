@@ -49,6 +49,15 @@ export function getDocumentHeader(): Promise<CompanyProfile> {
   return getCompany();
 }
 
-export async function shouldShowSupplyFrom(): Promise<boolean> {
-  return true;
+/** Read the stored toggle for one document type (defaults when unset). */
+export async function shouldShowSupplyFrom(docType?: LetterheadDocType): Promise<boolean> {
+  const settings = await getLetterheadSettings();
+  const key = docType ?? "invoice";
+  return settings[key]?.show_supply_from ?? DEFAULT_SETTING(key).show_supply_from;
+}
+
+export async function shouldUseLetterhead(docType?: LetterheadDocType): Promise<boolean> {
+  const settings = await getLetterheadSettings();
+  const key = docType ?? "invoice";
+  return settings[key]?.use_letterhead ?? DEFAULT_SETTING(key).use_letterhead;
 }

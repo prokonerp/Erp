@@ -137,11 +137,7 @@ function AppLayout() {
       return false;
     return location.pathname === path || location.pathname.startsWith(path + "/");
   };
-  const currentSearchTab = (() => {
-    if (typeof window === "undefined") return undefined;
-    const sp = new URLSearchParams(window.location.search);
-    return sp.get("tab") ?? undefined;
-  })();
+  const currentSearchTab = (location.search as any)?.tab as string | undefined;
   const isMasterTabActive = (path: string, tab?: string) => {
     if (path !== "/masters") return isActive(path);
     if (location.pathname !== "/masters") return false;
@@ -149,7 +145,7 @@ function AppLayout() {
     return currentSearchTab === tab;
   };
   const navLinkCls = (active: boolean) =>
-    `relative flex items-center gap-2.5 pl-4 pr-3 py-1.5 rounded-md text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar ${
+    `relative flex items-center gap-2.5 pl-4 pr-3 py-1.5 rounded-md text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar ${
       active
         ? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-full before:bg-primary"
         : "text-foreground/75 hover:bg-muted hover:text-foreground"

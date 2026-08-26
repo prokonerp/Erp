@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -58,21 +58,47 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
   // Fetch only the columns the form/list actually use (not select("*")).
   const cols = useMemo(() => ["id", ...fields.map((f) => f.key)].join(", "), [fields]);
 
+  const [page, setPage] = useState(0);
+  const pageSize = 25;
+  const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedQ(q);
+      setPage(0);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
   const rowsQuery = useQuery({
-    queryKey: ["masters", table],
+    queryKey: ["masters", table, { page, pageSize, debouncedQ, cols, orderBy }],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from(table as any)
-        .select(cols)
-        .order(orderBy, { ascending: false });
+      let query = supabase.from(table as any).select(cols, { count: "exact" });
+      if (debouncedQ) {
+        const p = `%${debouncedQ}%`;
+        // Search first 3 text-like fields server-side for instant filtering
+        const searchKeys = fields
+          .filter((f) => ["text", "title", "upper", "textarea", "email", "phone"].includes(f.type || "text"))
+          .slice(0, 3)
+          .map((f) => f.key);
+        if (searchKeys.length) {
+          query = query.or(searchKeys.map((k) => `${k}.ilike.${p}`).join(","));
+        }
+      }
+      query = query.order(orderBy, { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1);
+      const { data, error, count } = await query;
       if (error) {
         toast.error(error.message);
-        return [];
+        return { rows: [], count: 0 };
       }
-      return (data as any) ?? [];
+      return { rows: (data as any) ?? [], count: count ?? 0 };
     },
+    placeholderData: (prev: any) => prev,
+    staleTime: 30 * 1000,
   });
-  const rows = (rowsQuery.data ?? []) as any[];
+  const rows = (rowsQuery.data?.rows ?? []) as any[];
+  const totalCount = rowsQuery.data?.count ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const loading = rowsQuery.isLoading;
 
   const optionsQuery = useQuery({
@@ -262,53 +288,76 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
           </div>
         )}
 
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 max-w-sm">
+            <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} className="h-8 pl-8 text-sm" />
+          </div>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">{totalCount.toLocaleString()} total{totalCount > pageSize ? ` · Page ${page + 1} of ${pageCount}` : ""}</span>
+        </div>
+
         {loading ? (
           <div className="text-sm text-muted-foreground">Loading…</div>
         ) : rows.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No records yet.</div>
+          <div className="text-sm text-muted-foreground">{debouncedQ ? `No results for "${debouncedQ}"` : "No records yet."}</div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {listFields.map((f) => (
-                    <TableHead key={f.key}>{f.label}</TableHead>
-                  ))}
-                  {canEdit && <TableHead className="w-24">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.id}>
+          <>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
                     {listFields.map((f) => (
-                      <TableCell key={f.key} className="text-sm">
-                        {f.type === "boolean"
-                          ? r[f.key]
-                            ? "Yes"
-                            : "No"
-                          : f.type === "select"
-                            ? ((optionMap[f.key] ?? []).find((o) => o.value === r[f.key])?.label ??
-                              "—")
-                            : (r[f.key] ?? "—")}
-                      </TableCell>
+                      <TableHead key={f.key}>{f.label}</TableHead>
                     ))}
-                    {canEdit && (
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button size="icon" variant="ghost" onClick={() => startEdit(r)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" onClick={() => remove(r)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    )}
+                    {canEdit && <TableHead className="w-24">Actions</TableHead>}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((r) => (
+                    <TableRow key={r.id}>
+                      {listFields.map((f) => (
+                        <TableCell key={f.key} className="text-sm">
+                          {f.type === "boolean"
+                            ? r[f.key]
+                              ? "Yes"
+                              : "No"
+                            : f.type === "select"
+                              ? ((optionMap[f.key] ?? []).find((o) => o.value === r[f.key])?.label ?? "—")
+                              : (r[f.key] ?? "—")}
+                        </TableCell>
+                      ))}
+                      {canEdit && (
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button size="icon" variant="ghost" onClick={() => startEdit(r)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => remove(r)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {totalCount > pageSize && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs text-muted-foreground">
+                  Page {page + 1} of {pageCount} · {totalCount.toLocaleString()} records
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                    Previous
+                  </Button>
+                  <Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

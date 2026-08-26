@@ -4999,6 +4999,7 @@ export type Database = {
           defective_parts_received: boolean
           deleted_at: string | null
           deleted_by: string | null
+          equipment_id: string | null
           good_parts_details: Json
           good_parts_used: boolean
           id: string
@@ -5146,6 +5147,13 @@ export type Database = {
             columns: ["pm_visit_id"]
             isOneToOne: false
             referencedRelation: "pm_visits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "installed_equipment"
             referencedColumns: ["id"]
           },
         ]

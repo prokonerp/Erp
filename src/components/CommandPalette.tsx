@@ -18,6 +18,7 @@ const RECENTS_KEY = "prokon:recent-pages";
 const MAX_RECENTS = 5;
 const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "balanced", label: "Balanced theme", icon: Contrast },
+  { value: "comfort", label: "Comfort theme (tuned for older eyes)", icon: Sun },
   { value: "light", label: "Light theme", icon: Sun },
   { value: "dark", label: "Dark theme", icon: Moon },
   { value: "system", label: "System theme", icon: Monitor },

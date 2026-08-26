@@ -6,21 +6,44 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Ban, Download, FileText, PackageCheck, Pencil, Printer, Trash2, Zap } from "lucide-react";
+import {
+  ArrowLeft,
+  Ban,
+  Download,
+  FileText,
+  PackageCheck,
+  Pencil,
+  Printer,
+  Trash2,
+  Zap,
+} from "lucide-react";
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 import { GeneralDcPrintView } from "@/components/GeneralDcPrintView";
 import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import { usePermissions } from "@/lib/usePermissions";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { getCompany } from "@/lib/letterhead";
 import { DEFAULT_COMPANY_PROFILE, type CompanyProfile } from "@/lib/companyProfile";
+import { headerToCompanyProfile } from "@/lib/documentHeader";
+import { usePrintOptions } from "@/components/PrintOptionsDialog";
 import { inr } from "@/lib/sales";
 import { useIsAdmin } from "@/lib/useRole";
-import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
+import {
+  findShortfalls,
+  logNegativeOverrides,
+  blockMessage,
+  type Shortfall,
+} from "@/lib/negativeStock";
 import {
   GDC_PREFILL_KEY,
   cancelGeneralDc,
@@ -39,9 +62,15 @@ export const Route = createFileRoute("/_app/sales/general-dc/$id")({
   head: () => ({
     meta: [
       { title: "General Delivery Challan — Prokon ERP" },
-      { name: "description", content: "View, issue, print and convert a general delivery challan to an invoice." },
+      {
+        name: "description",
+        content: "View, issue, print and convert a general delivery challan to an invoice.",
+      },
       { property: "og:title", content: "General Delivery Challan — Prokon ERP" },
-      { property: "og:description", content: "View, issue, print and convert a general delivery challan to an invoice." },
+      {
+        property: "og:description",
+        content: "View, issue, print and convert a general delivery challan to an invoice.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -72,18 +101,27 @@ function GeneralDcDetail() {
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getGeneralDc(id).then(setDc).catch((e) => toast.error(e.message));
-    getCompany().then(setCompany).catch(() => {});
-    supabase.from("warehouses").select("id,name").then(({ data }) => {
-      const map: Record<string, string> = {};
-      for (const w of (data ?? []) as { id: string; name: string }[]) map[w.id] = w.name;
-      setWarehouseNames(map);
-    });
+    getGeneralDc(id)
+      .then(setDc)
+      .catch((e) => toast.error(e.message));
+    getCompany()
+      .then(setCompany)
+      .catch(() => {});
+    supabase
+      .from("warehouses")
+      .select("id,name")
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        for (const w of (data ?? []) as { id: string; name: string }[]) map[w.id] = w.name;
+        setWarehouseNames(map);
+      });
   }, [id]);
 
   useEffect(() => {
     if (!dc?.returnable || !dc?.dc_no) return;
-    isGdcReturned(dc.dc_no).then(setReturned).catch(() => {});
+    isGdcReturned(dc.dc_no)
+      .then(setReturned)
+      .catch(() => {});
   }, [dc?.dc_no, dc?.returnable, dc?.status]);
 
   async function issue() {
@@ -97,11 +135,13 @@ function GeneralDcDetail() {
             model: it.model_no as string,
             label: it.part_name || it.model_no,
             warehouseId: it.warehouse_id,
-            warehouseName: it.warehouse_id ? warehouseNames[it.warehouse_id] ?? null : null,
+            warehouseName: it.warehouse_id ? (warehouseNames[it.warehouse_id] ?? null) : null,
             qty: Number(it.qty) || 0,
           })),
       );
-    } catch { /* DB still enforces */ }
+    } catch {
+      /* DB still enforces */
+    }
     if (short.length > 0) {
       if (!isAdmin) return toast.error(blockMessage(short[0]));
       setShortfalls(short);
@@ -115,7 +155,10 @@ function GeneralDcDetail() {
     if (!dc) return;
     setBusy(true);
     try {
-      const row = await updateGeneralDc(dc.id, { status: "Issued", allow_negative_stock: allowNegative });
+      const row = await updateGeneralDc(dc.id, {
+        status: "Issued",
+        allow_negative_stock: allowNegative,
+      });
       if (allowNegative && short.length > 0) {
         await logNegativeOverrides({
           documentType: "dc",
@@ -134,13 +177,36 @@ function GeneralDcDetail() {
     }
   }
 
+  const printer = usePrintOptions();
+  const [printCompany, setPrintCompany] = useState<CompanyProfile | null>(null);
+
+  async function askHeader(): Promise<CompanyProfile | null> {
+    const choice = await printer.ask({
+      docType: "general_dc",
+      title: "General Delivery Challan",
+      description: "Choose which office details appear on the challan letterhead.",
+      allowCopyLabel: false,
+      allowSupplyFrom: false,
+    });
+    if (!choice) return null;
+    const mapped = headerToCompanyProfile(choice.header);
+    setPrintCompany(mapped);
+    return mapped;
+  }
+
   async function printDoc() {
     if (!printRef.current || !dc) return;
+    const chosen = await askHeader();
+    if (!chosen) return;
+    await new Promise((r) => setTimeout(r, 150)); // let the letterhead land in the DOM
     await printElementSinglePage(printRef.current, `${dc.dc_no || "general-dc"}.pdf`);
   }
 
   async function downloadPdf() {
     if (!printRef.current || !dc) return;
+    const chosen = await askHeader();
+    if (!chosen) return;
+    await new Promise((r) => setTimeout(r, 150));
     await saveElementAsPdf(printRef.current, `${dc.dc_no || "general-dc"}.pdf`);
   }
 
@@ -192,7 +258,11 @@ function GeneralDcDetail() {
         part_name: it.part_name,
       })),
     };
-    try { sessionStorage.setItem(GDC_PREFILL_KEY, JSON.stringify(payload)); } catch { /* noop */ }
+    try {
+      sessionStorage.setItem(GDC_PREFILL_KEY, JSON.stringify(payload));
+    } catch {
+      /* noop */
+    }
     nav({ to: "/sales/invoices/new" });
   }
 
@@ -200,49 +270,89 @@ function GeneralDcDetail() {
 
   return (
     <div className="space-y-4">
+      {printer.element}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" asChild>
-            <Link to="/sales/general-dc"><ArrowLeft className="h-4 w-4" /></Link>
+            <Link to="/sales/general-dc">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
           </Button>
           <h1 className="text-2xl font-bold">{dc.dc_no}</h1>
-          <Badge variant="secondary" className={tone[dc.status] || ""}>{dc.status}</Badge>
+          <Badge variant="secondary" className={tone[dc.status] || ""}>
+            {dc.status}
+          </Badge>
           <Badge variant="outline">{dc.returnable ? "Returnable" : "Non-Returnable"}</Badge>
         </div>
         <div className="flex flex-wrap gap-2">
           {dc.status === "Draft" && (
             <Button size="sm" onClick={issue} disabled={busy}>
-              <Zap className="h-4 w-4 mr-1.5" />Issue
+              <Zap className="h-4 w-4 mr-1.5" />
+              Issue
             </Button>
           )}
           {dc.status === "Draft" && can("general_dc", "edit") && (
             <Button size="sm" variant="outline" asChild>
-              <Link to="/sales/general-dc/$id/edit" params={{ id: dc.id }}><Pencil className="h-4 w-4 mr-1.5" />Edit</Link>
+              <Link to="/sales/general-dc/$id/edit" params={{ id: dc.id }}>
+                <Pencil className="h-4 w-4 mr-1.5" />
+                Edit
+              </Link>
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={printDoc}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
-          <Button size="sm" variant="outline" onClick={downloadPdf}><Download className="h-4 w-4 mr-1.5" />Download PDF</Button>
+          <Button size="sm" variant="outline" onClick={printDoc}>
+            <Printer className="h-4 w-4 mr-1.5" />
+            Print
+          </Button>
+          <Button size="sm" variant="outline" onClick={downloadPdf}>
+            <Download className="h-4 w-4 mr-1.5" />
+            Download PDF
+          </Button>
           {dc.status === "Issued" && (
-            <Button size="sm" onClick={convertToInvoice}><FileText className="h-4 w-4 mr-1.5" />Convert to Invoice</Button>
+            <Button size="sm" onClick={convertToInvoice}>
+              <FileText className="h-4 w-4 mr-1.5" />
+              Convert to Invoice
+            </Button>
           )}
           {dc.returnable && dc.status === "Issued" && !returned && (
-            <Button size="sm" variant="outline" onClick={() => { stageReturnGrnPrefill(dc, warehouseNames); nav({ to: "/grn/customer/new" }); }}>
-              <PackageCheck className="h-4 w-4 mr-1.5" />Generate Return GRN
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                stageReturnGrnPrefill(dc, warehouseNames);
+                nav({ to: "/grn/customer/new" });
+              }}
+            >
+              <PackageCheck className="h-4 w-4 mr-1.5" />
+              Generate Return GRN
             </Button>
           )}
           {dc.status === "Issued" && can("general_dc", "delete") && (
-            <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
-              <Ban className="h-4 w-4 mr-1.5" />Cancel DC
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setCancelOpen(true)}
+            >
+              <Ban className="h-4 w-4 mr-1.5" />
+              Cancel DC
             </Button>
           )}
           {dc.status === "Draft" && can("general_dc", "delete") && (
-            <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="h-4 w-4 mr-1.5" />Delete
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Delete
             </Button>
           )}
           {dc.status === "Converted" && dc.converted_invoice_id && (
             <Button size="sm" variant="outline" asChild>
-              <Link to="/sales/invoices/$id" params={{ id: dc.converted_invoice_id }}>View Invoice</Link>
+              <Link to="/sales/invoices/$id" params={{ id: dc.converted_invoice_id }}>
+                View Invoice
+              </Link>
             </Button>
           )}
         </div>
@@ -250,36 +360,61 @@ function GeneralDcDetail() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Customer</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Customer</CardTitle>
+          </CardHeader>
           <CardContent className="text-sm space-y-1">
             <div className="font-medium">{dc.customer_name || "—"}</div>
-            <div className="text-muted-foreground whitespace-pre-line">{dc.billing_address || "—"}</div>
+            <div className="text-muted-foreground whitespace-pre-line">
+              {dc.billing_address || "—"}
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Ship To</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Ship To</CardTitle>
+          </CardHeader>
           <CardContent className="text-sm text-muted-foreground whitespace-pre-line">
             {dc.shipping_address || dc.billing_address || "—"}
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Details</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Details</CardTitle>
+          </CardHeader>
           <CardContent className="text-sm space-y-1">
-            <div><span className="text-muted-foreground">Date: </span>{dc.dc_date}</div>
-            <div><span className="text-muted-foreground">Purpose: </span>{dc.purpose || "—"}</div>
+            <div>
+              <span className="text-muted-foreground">Date: </span>
+              {dc.dc_date}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Purpose: </span>
+              {dc.purpose || "—"}
+            </div>
             {dc.returnable && (
               <>
-                <div><span className="text-muted-foreground">Expected Return: </span>{dc.expected_return_date || "—"}</div>
-                <div><span className="text-muted-foreground">Return Status: </span>{returned ? "Returned (GRN settled)" : "Pending"}</div>
+                <div>
+                  <span className="text-muted-foreground">Expected Return: </span>
+                  {dc.expected_return_date || "—"}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Return Status: </span>
+                  {returned ? "Returned (GRN settled)" : "Pending"}
+                </div>
               </>
             )}
-            <div><span className="text-muted-foreground">Total: </span>{inr(gdcTotal(dc.items || []))}</div>
+            <div>
+              <span className="text-muted-foreground">Total: </span>
+              {inr(gdcTotal(dc.items || []))}
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Items</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Items</CardTitle>
+        </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
@@ -301,11 +436,19 @@ function GeneralDcDetail() {
                     <div className="font-medium">{it.part_name || it.model_no}</div>
                     <div className="text-xs text-muted-foreground">{it.model_no}</div>
                   </td>
-                  <td className="p-2 text-xs font-mono">{(it.serial_numbers || []).join(", ") || "—"}</td>
-                  <td className="p-2 text-xs">{(it.warehouse_id && warehouseNames[it.warehouse_id]) || "—"}</td>
-                  <td className="p-2 text-right">{it.qty} {it.uom}</td>
+                  <td className="p-2 text-xs font-mono">
+                    {(it.serial_numbers || []).join(", ") || "—"}
+                  </td>
+                  <td className="p-2 text-xs">
+                    {(it.warehouse_id && warehouseNames[it.warehouse_id]) || "—"}
+                  </td>
+                  <td className="p-2 text-right">
+                    {it.qty} {it.uom}
+                  </td>
                   <td className="p-2 text-right">{inr(it.unit_price)}</td>
-                  <td className="p-2 text-right font-medium">{inr((Number(it.qty) || 0) * (Number(it.unit_price) || 0))}</td>
+                  <td className="p-2 text-right font-medium">
+                    {inr((Number(it.qty) || 0) * (Number(it.unit_price) || 0))}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -340,20 +483,36 @@ function GeneralDcDetail() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this draft challan?</AlertDialogTitle>
             <AlertDialogDescription>
-              No stock has been posted for a draft, so this simply removes the record. This cannot be undone.
+              No stock has been posted for a draft, so this simply removes the record. This cannot
+              be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="rounded-md border text-sm divide-y">
-            <div className="flex justify-between p-2"><span className="text-muted-foreground">DC Number</span><span className="font-medium">{dc.dc_no || "—"}</span></div>
-            <div className="flex justify-between p-2"><span className="text-muted-foreground">Customer</span><span className="font-medium">{dc.customer_name || "—"}</span></div>
-            <div className="flex justify-between p-2"><span className="text-muted-foreground">Date</span><span className="font-medium">{dc.dc_date}</span></div>
-            <div className="flex justify-between p-2"><span className="text-muted-foreground">Status</span><span className="font-medium">{dc.status}</span></div>
+            <div className="flex justify-between p-2">
+              <span className="text-muted-foreground">DC Number</span>
+              <span className="font-medium">{dc.dc_no || "—"}</span>
+            </div>
+            <div className="flex justify-between p-2">
+              <span className="text-muted-foreground">Customer</span>
+              <span className="font-medium">{dc.customer_name || "—"}</span>
+            </div>
+            <div className="flex justify-between p-2">
+              <span className="text-muted-foreground">Date</span>
+              <span className="font-medium">{dc.dc_date}</span>
+            </div>
+            <div className="flex justify-between p-2">
+              <span className="text-muted-foreground">Status</span>
+              <span className="font-medium">{dc.status}</span>
+            </div>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => { e.preventDefault(); void doDelete(); }}
+              onClick={(e) => {
+                e.preventDefault();
+                void doDelete();
+              }}
             >
               Delete
             </AlertDialogAction>
@@ -364,7 +523,11 @@ function GeneralDcDetail() {
       {/* Print source (hidden on screen) */}
       <div className="hidden">
         <div ref={printRef}>
-          <GeneralDcPrintView dc={dc} company={company} warehouseNames={warehouseNames} />
+          <GeneralDcPrintView
+            dc={dc}
+            company={printCompany ?? company}
+            warehouseNames={warehouseNames}
+          />
         </div>
       </div>
     </div>

@@ -17,8 +17,20 @@ import { fetchBranches, inr, type BranchRow } from "@/lib/sales";
 import { productShortName } from "@/lib/productNames";
 import { istTodayIso } from "@/lib/dateRange";
 import { useIsAdmin } from "@/lib/useRole";
-import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
-import { emptyGeneralDcItem, gdcTotal, insertGeneralDc, updateGeneralDc, type GeneralDcItem, type GeneralDcRow } from "@/lib/generalDc";
+import {
+  findShortfalls,
+  logNegativeOverrides,
+  blockMessage,
+  type Shortfall,
+} from "@/lib/negativeStock";
+import {
+  emptyGeneralDcItem,
+  gdcTotal,
+  insertGeneralDc,
+  updateGeneralDc,
+  type GeneralDcItem,
+  type GeneralDcRow,
+} from "@/lib/generalDc";
 
 export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   const isEdit = !!existing;
@@ -56,7 +68,11 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
         if (def) setBranchId(def.id);
       })
       .catch((e) => toast.error(e.message));
-    supabase.from("warehouses").select("id,name").eq("status", "Active").order("name")
+    supabase
+      .from("warehouses")
+      .select("id,name")
+      .eq("status", "Active")
+      .order("name")
       .then(({ data }) => setWarehouses((data ?? []) as { id: string; name: string }[]));
   }, []);
 
@@ -75,14 +91,24 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   }, []);
   useEffect(() => {
     if (!existing?.customer_id) return;
-    supabase.from("customers").select("*").eq("id", existing.customer_id).maybeSingle()
-      .then(({ data }) => { if (data) setCustomer(data as unknown as Customer); });
+    supabase
+      .from("customers")
+      .select("*")
+      .eq("id", existing.customer_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setCustomer(data as unknown as Customer);
+      });
   }, [existing?.customer_id]);
 
   useEffect(() => {
     if (!customer) return;
-    if (skipAddrSync.current) { skipAddrSync.current = false; return; }
-    const bill = customer.billing_address || (customer as unknown as { address?: string }).address || "";
+    if (skipAddrSync.current) {
+      skipAddrSync.current = false;
+      return;
+    }
+    const bill =
+      customer.billing_address || (customer as unknown as { address?: string }).address || "";
     const ship = (customer as unknown as { shipping_address?: string }).shipping_address || bill;
     setBilling(bill);
     setShipping(ship);
@@ -172,7 +198,7 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
       const payload = {
         dc_date: dcDate,
         returnable,
-        expected_return_date: returnable ? (expectedReturn || null) : null,
+        expected_return_date: returnable ? expectedReturn || null : null,
         customer_id: customer.id,
         customer_name: customer.company,
         billing_address: billing || null,
@@ -207,7 +233,9 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
           );
         }
       }
-      toast.success(`${row.dc_no} ${status === "Issued" ? "issued" : isEdit ? "updated" : "saved as draft"}`);
+      toast.success(
+        `${row.dc_no} ${status === "Issued" ? "issued" : isEdit ? "updated" : "saved as draft"}`,
+      );
       nav({ to: "/sales/general-dc/$id", params: { id: row.id } });
     } catch (e) {
       toast.error((e as Error).message || "Save failed");
@@ -219,19 +247,25 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">{isEdit ? `Edit ${existing?.dc_no ?? "General DC"}` : "New General Delivery Challan"}</h1>
+        <h1 className="text-2xl font-bold">
+          {isEdit ? `Edit ${existing?.dc_no ?? "General DC"}` : "New General Delivery Challan"}
+        </h1>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled={saving} onClick={() => save("Draft")}>
-            <Save className="h-4 w-4 mr-1.5" />{isEdit ? "Save Changes" : "Save as Draft"}
+            <Save className="h-4 w-4 mr-1.5" />
+            {isEdit ? "Save Changes" : "Save as Draft"}
           </Button>
           <Button size="sm" disabled={saving} onClick={() => save("Issued")}>
-            <Zap className="h-4 w-4 mr-1.5" />Issue
+            <Zap className="h-4 w-4 mr-1.5" />
+            Issue
           </Button>
         </div>
       </div>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Header</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Header</CardTitle>
+        </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <Label className="text-xs">Dispatch Type *</Label>
@@ -253,14 +287,26 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
           {returnable && (
             <div>
               <Label className="text-xs">Expected Return Date</Label>
-              <Input type="date" value={expectedReturn} onChange={(e) => setExpectedReturn(e.target.value)} />
+              <Input
+                type="date"
+                value={expectedReturn}
+                onChange={(e) => setExpectedReturn(e.target.value)}
+              />
             </div>
           )}
           <div>
             <Label className="text-xs">Branch (Seller)</Label>
-            <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+            <select
+              className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+            >
               <option value="">— select —</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -269,7 +315,11 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
           </div>
           <div className="md:col-span-2">
             <Label className="text-xs">Purpose of Dispatch</Label>
-            <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="e.g. Demo unit at customer site" />
+            <Input
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+              placeholder="e.g. Demo unit at customer site"
+            />
           </div>
           <div className="md:col-span-2">
             <Label className="text-xs">Billing Address</Label>
@@ -279,11 +329,20 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
             <div className="flex items-center justify-between">
               <Label className="text-xs">Shipping Address</Label>
               <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                <input type="checkbox" checked={sameAsBilling} onChange={(e) => setSameAsBilling(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={sameAsBilling}
+                  onChange={(e) => setSameAsBilling(e.target.checked)}
+                />
                 Same as Billing Address
               </label>
             </div>
-            <Textarea rows={2} value={shipping} disabled={sameAsBilling} onChange={(e) => setShipping(e.target.value)} />
+            <Textarea
+              rows={2}
+              value={shipping}
+              disabled={sameAsBilling}
+              onChange={(e) => setShipping(e.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -291,8 +350,13 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
       <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Items</CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setItems((a) => [...a, emptyGeneralDcItem()])}>
-            <Plus className="h-4 w-4 mr-1" />Add row
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setItems((a) => [...a, emptyGeneralDcItem()])}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add row
           </Button>
         </CardHeader>
         <CardContent className="p-0">
@@ -326,7 +390,7 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
                             hsn: p.hsn || null,
                             uom: p.unit || "Nos",
                             unit_price: p.default_price != null ? Number(p.default_price) : 0,
-                            is_serialized: !!p.serial_tracking,
+                            is_serialized: !!(p as any).is_serialized,
                             serial_numbers: [],
                           })
                         }
@@ -336,7 +400,11 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
                           <Button
                             type="button"
                             size="sm"
-                            variant={it.serial_numbers.length === Math.floor(Number(it.qty)) ? "outline" : "secondary"}
+                            variant={
+                              it.serial_numbers.length === Math.floor(Number(it.qty))
+                                ? "outline"
+                                : "secondary"
+                            }
                             className="h-7 text-xs"
                             disabled={!it.warehouse_id || Number(it.qty) <= 0}
                             onClick={() => setSerialIdx(idx)}
@@ -355,26 +423,52 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
                       <select
                         className="w-full h-8 rounded-md border bg-background px-1 text-xs"
                         value={it.warehouse_id || ""}
-                        onChange={(e) => setItem(idx, { warehouse_id: e.target.value || null, serial_numbers: [] })}
+                        onChange={(e) =>
+                          setItem(idx, { warehouse_id: e.target.value || null, serial_numbers: [] })
+                        }
                       >
                         <option value="">— select —</option>
-                        {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                        {warehouses.map((w) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name}
+                          </option>
+                        ))}
                       </select>
                     </td>
                     <td className="p-2">
-                      <Input type="number" step="1" className="h-8 text-xs text-right" value={it.qty}
-                        onChange={(e) => setItem(idx, { qty: Number(e.target.value) })} />
+                      <Input
+                        type="number"
+                        step="1"
+                        className="h-8 text-xs text-right"
+                        value={it.qty}
+                        onChange={(e) => setItem(idx, { qty: Number(e.target.value) })}
+                      />
                     </td>
                     <td className="p-2">
-                      <Input className="h-8 text-xs" value={it.uom} onChange={(e) => setItem(idx, { uom: e.target.value })} />
+                      <Input
+                        className="h-8 text-xs"
+                        value={it.uom}
+                        onChange={(e) => setItem(idx, { uom: e.target.value })}
+                      />
                     </td>
                     <td className="p-2">
-                      <Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.unit_price}
-                        onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        className="h-8 text-xs text-right"
+                        value={it.unit_price}
+                        onChange={(e) => setItem(idx, { unit_price: Number(e.target.value) })}
+                      />
                     </td>
-                    <td className="p-2 text-right font-medium">{inr((Number(it.qty) || 0) * (Number(it.unit_price) || 0))}</td>
+                    <td className="p-2 text-right font-medium">
+                      {inr((Number(it.qty) || 0) * (Number(it.unit_price) || 0))}
+                    </td>
                     <td className="p-2 text-right">
-                      <Button size="icon" variant="ghost" onClick={() => setItems((a) => a.filter((_, i) => i !== idx))}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setItems((a) => a.filter((_, i) => i !== idx))}
+                      >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </td>
@@ -390,7 +484,9 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Notes &amp; Terms</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Notes &amp; Terms</CardTitle>
+        </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <Label className="text-xs">Notes</Label>

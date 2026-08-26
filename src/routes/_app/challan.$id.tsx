@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageLoader } from "@/components/shared/skeletons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,13 @@ import { useIsAdmin } from "@/lib/useRole";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { getDocumentHeader } from "@/lib/letterhead";
+import {
+  headerToCompanyProfile,
+  lookupSerialOrigins,
+  type ResolvedHeader,
+} from "@/lib/documentHeader";
+import { CHALLAN_TERMS_DEFAULT } from "@/lib/printDefaults";
+import { usePrintOptions } from "@/components/PrintOptionsDialog";
 
 export const Route = createFileRoute("/_app/challan/$id")({
   component: ChallanView,
@@ -29,12 +36,39 @@ function ChallanView() {
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
   const [company, setCompany] = useState<CompanyProfile | null>(null);
+  /** "Dispatched From" derived read-only from where the serials currently sit. */
+  const [dispatchFrom, setDispatchFrom] = useState<string>("");
+  const printer = usePrintOptions();
+  const printPendingRef = useRef(false);
 
   useEffect(() => { getDocumentHeader().then(setCompany).catch(() => {}); }, []);
 
   useEffect(() => {
     fetchChallan(id).then(setC).catch((e) => toast.error(e.message));
   }, [id]);
+
+  // Derive dispatch origins from the challan's own serials — pure SELECT, no writes.
+  useEffect(() => {
+    if (!c?.items?.length) { setDispatchFrom(""); return; }
+    const serials = (c.items || [])
+      .map((it) => ((it.good_defective_serial || it.serial_no || "") as string).trim())
+      .filter(Boolean);
+    if (!serials.length) { setDispatchFrom(""); return; }
+    let alive = true;
+    lookupSerialOrigins(serials).then(({ uniqueLabels }) => {
+      if (alive) setDispatchFrom(uniqueLabels.join("  ·  "));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [c]);
+
+  // Apply a dialog-chosen letterhead, then run the pending print/download.
+  useEffect(() => {
+    if (printPendingRef.current && company) {
+      printPendingRef.current = false;
+      const t = setTimeout(() => window.print(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [company]);
 
   // Auto-start the PDF download when opened with ?download=1 (from the
   // Indent Oracle pipeline "Download PDF" button).
@@ -58,16 +92,57 @@ function ChallanView() {
   // Legacy 'Draft' rows shouldn't exist after migration, but stay defensive.
   const isCancelled = status === "Cancelled";
   const isActive = !isCancelled;
-  console.log("HEADER DATA:", company);
 
-  const handleDownload = async () => {
-    const el = document.getElementById("print-area");
-    if (!el) return;
-    try {
-      await downloadElementAsPdf(el, `DC_${c.challan_no || c.id}.pdf`);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to generate PDF");
+  /** Ask for the letterhead office, apply it, then trigger window.print. */
+  const handlePrint = async () => {
+    const serials = (c.items || [])
+      .map((it) => ((it.good_defective_serial || it.serial_no || "") as string).trim())
+      .filter(Boolean);
+    if (!c.printed_at) {
+      // fire-and-forget audit stamp — we don't block the print dialog
+      const { data: u } = await supabase.auth.getUser();
+      void supabase
+        .from("delivery_challans" as never)
+        .update({ printed_by: u.user?.id ?? null, printed_at: new Date().toISOString() } as never)
+        .eq("id", c.id);
     }
+    const choice = await printer.smartAsk({
+      docType: "delivery_challan",
+      title: "Print Delivery Challan",
+      description: "Choose which office details appear on the challan letterhead.",
+      smartSerials: serials,
+      allowCopyLabel: false,
+      allowSupplyFrom: false,
+    });
+    if (!choice) return;
+    setCompany(headerToCompanyProfile(choice.header));
+    printPendingRef.current = true;
+  };
+
+  /** Ask for the letterhead office, apply it, then download the PDF. */
+  const handleDownload = async () => {
+    const serials = (c.items || [])
+      .map((it) => ((it.good_defective_serial || it.serial_no || "") as string).trim())
+      .filter(Boolean);
+    const choice = await printer.smartAsk({
+      docType: "delivery_challan",
+      title: "Download Challan PDF",
+      description: "Choose which office details appear on the challan letterhead.",
+      smartSerials: serials,
+      allowCopyLabel: false,
+      allowSupplyFrom: false,
+    });
+    if (!choice) return;
+    setCompany(headerToCompanyProfile(choice.header));
+    setTimeout(async () => {
+      const el = document.getElementById("print-area");
+      if (!el) return;
+      try {
+        await downloadElementAsPdf(el, `DC_${c.challan_no || c.id}.pdf`);
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Failed to generate PDF");
+      }
+    }, 150);
   };
 
   const handleCancel = async () => {
@@ -90,20 +165,9 @@ function ChallanView() {
     toast.success("Delivery Challan cancelled. Stock reversed.");
   };
 
-  const handlePrint = async () => {
-    if (!c.printed_at) {
-      // fire-and-forget audit stamp — we don't block the print dialog
-      const { data: u } = await supabase.auth.getUser();
-      void supabase
-        .from("delivery_challans" as never)
-        .update({ printed_by: u.user?.id ?? null, printed_at: new Date().toISOString() } as never)
-        .eq("id", c.id);
-    }
-    window.print();
-  };
-
   return (
     <>
+      {printer.element}
       <style>{`
         @media print {
           @page { size: A4 landscape; margin: 8mm; }
@@ -116,6 +180,9 @@ function ChallanView() {
         #print-area table { border-collapse: collapse; width: 100%; }
         #print-area th, #print-area td { border: 1px solid #333; padding: 3px 5px; font-size: 10px; vertical-align: top; }
         #print-area thead { display: table-header-group; }
+        /* Full-width boxes sit flush with the page margins — drop their side
+           borders in print so no frame line prints along the page edge. */
+        @media print { .print-open-box { border-left: none !important; border-right: none !important; } }
       `}</style>
 
       <div className="no-print mb-4 space-y-3">
@@ -209,6 +276,11 @@ function ChallanView() {
             <b>Challan No:</b> <span style={{ fontFamily: "monospace" }}>{c.challan_no}</span> &nbsp;&nbsp;
             <b>Date:</b> {c.challan_date}
           </div>
+          {dispatchFrom && (
+            <div style={{ fontSize: 10.5, marginTop: 2 }}>
+              <b>Dispatched From:</b> {dispatchFrom}
+            </div>
+          )}
         </div>
 
         {/* Consignee & Dispatch */}
@@ -394,20 +466,24 @@ function ChallanView() {
 
         {/* Remarks */}
         {(c.dispatch_remarks || c.internal_remarks) && (
-          <div style={{ fontSize: 11, marginBottom: 6, border: "1px solid #333", padding: 6 }}>
+          <div className="print-open-box" style={{ fontSize: 11, marginBottom: 6, border: "1px solid #333", padding: 6 }}>
             {c.dispatch_remarks && <div><b>Dispatch Remarks:</b> {c.dispatch_remarks}</div>}
             {c.internal_remarks && <div><b>Internal Remarks:</b> {c.internal_remarks}</div>}
           </div>
         )}
 
-        {/* Terms */}
-        <div style={{ fontSize: 10, marginBottom: 10, border: "1px solid #333", padding: 6 }}>
+        {/* Terms — record terms win; central default keeps this editable in one place */}
+        <div className="print-open-box" style={{ fontSize: 10, marginBottom: 10, border: "1px solid #333", padding: 6 }}>
           <b>Terms &amp; Conditions:</b>
-          <ol style={{ margin: "4px 0 0 18px", padding: 0 }}>
-            <li>Goods once dispatched will not be taken back without prior written consent.</li>
-            <li>Goods received in good condition by the consignee.</li>
-            <li>Subject to company dispatch policies and applicable jurisdiction.</li>
-          </ol>
+          {(() => {
+            const saved = (c as unknown as { terms?: string | null }).terms?.trim();
+            if (saved) return <div style={{ whiteSpace: "pre-line" }}>{saved}</div>;
+            return (
+              <ol style={{ margin: "4px 0 0 18px", padding: 0 }}>
+                {CHALLAN_TERMS_DEFAULT.map((t, i) => <li key={i}>{t}</li>)}
+              </ol>
+            );
+          })()}
         </div>
 
         {/* Signatures */}

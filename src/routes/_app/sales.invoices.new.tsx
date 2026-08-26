@@ -35,7 +35,12 @@ import {
 import { getCompany } from "@/lib/letterhead";
 import { productDisplayName, productShortName } from "@/lib/productNames";
 import { useIsAdmin } from "@/lib/useRole";
-import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
+import {
+  findShortfalls,
+  logNegativeOverrides,
+  blockMessage,
+  type Shortfall,
+} from "@/lib/negativeStock";
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 import { GDC_PREFILL_KEY, updateGeneralDc, type GeneralDcInvoicePrefill } from "@/lib/generalDc";
 import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
@@ -48,7 +53,9 @@ export const Route = createFileRoute("/_app/sales/invoices/new")({
 function NewInvoice() {
   const nav = useNavigate();
   const [dirty, setDirty] = useState(false);
-  const markDirty = () => { if (!dirty) setDirty(true); };
+  const markDirty = () => {
+    if (!dirty) setDirty(true);
+  };
   const { blocker, markClean } = useUnsavedChanges(dirty);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [branchId, setBranchId] = useState<string>("");
@@ -78,15 +85,29 @@ function NewInvoice() {
   const [pendingStatus, setPendingStatus] = useState<"draft" | "issued">("issued");
   // Prefill coming from an issued General Delivery Challan — stock was already
   // reduced on Issue, so the invoice must NOT deduct it a second time.
-  const [fromGeneralDc, setFromGeneralDc] = useState<{ id: string; no: string | null } | null>(null);
+  const [fromGeneralDc, setFromGeneralDc] = useState<{ id: string; no: string | null } | null>(
+    null,
+  );
 
   useEffect(() => {
     let raw: string | null = null;
-    try { raw = sessionStorage.getItem(GDC_PREFILL_KEY); } catch { /* noop */ }
+    try {
+      raw = sessionStorage.getItem(GDC_PREFILL_KEY);
+    } catch {
+      /* noop */
+    }
     if (!raw) return;
-    try { sessionStorage.removeItem(GDC_PREFILL_KEY); } catch { /* noop */ }
+    try {
+      sessionStorage.removeItem(GDC_PREFILL_KEY);
+    } catch {
+      /* noop */
+    }
     let p: GeneralDcInvoicePrefill;
-    try { p = JSON.parse(raw) as GeneralDcInvoicePrefill; } catch { return; }
+    try {
+      p = JSON.parse(raw) as GeneralDcInvoicePrefill;
+    } catch {
+      return;
+    }
     setFromGeneralDc({ id: p.general_dc_id, no: p.general_dc_no });
     if (p.branch_id) setBranchId(p.branch_id);
     if (p.billing_address) setBilling(p.billing_address);
@@ -100,29 +121,50 @@ function NewInvoice() {
       setItems(p.items.map((it) => ({ ...emptyItem(), ...it })));
     }
     if (p.customer_id) {
-      supabase.from("customers").select("*").eq("id", p.customer_id).maybeSingle()
-        .then(({ data }) => { if (data) setCustomer(data as unknown as Customer); });
+      supabase
+        .from("customers")
+        .select("*")
+        .eq("id", p.customer_id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setCustomer(data as unknown as Customer);
+        });
     }
   }, []);
 
   useEffect(() => {
-    fetchBranches().then((bs) => {
-      setBranches(bs);
-      const def = bs.find((b) => b.is_default) || bs[0];
-      if (def) setBranchId(def.id);
-    }).catch((e) => toast.error(e.message));
-    supabase.from("warehouses").select("id,name,code").eq("status", "Active").order("name")
+    fetchBranches()
+      .then((bs) => {
+        setBranches(bs);
+        const def = bs.find((b) => b.is_default) || bs[0];
+        if (def) setBranchId(def.id);
+      })
+      .catch((e) => toast.error(e.message));
+    supabase
+      .from("warehouses")
+      .select("id,name,code")
+      .eq("status", "Active")
+      .order("name")
       .then(({ data }) => setWarehouses((data ?? []) as any));
   }, []);
 
-  const branch = useMemo(() => branches.find((b) => b.id === branchId) || null, [branches, branchId]);
+  const branch = useMemo(
+    () => branches.find((b) => b.id === branchId) || null,
+    [branches, branchId],
+  );
 
   useEffect(() => {
     if (customer) {
       setBilling(customer.billing_address || (customer as any).address || "");
-      const ship = (customer as any).shipping_address || customer.billing_address || (customer as any).address || "";
+      const ship =
+        (customer as any).shipping_address ||
+        customer.billing_address ||
+        (customer as any).address ||
+        "";
       setShipping(ship);
-      setSameAsBilling(!ship || ship === (customer.billing_address || (customer as any).address || ""));
+      setSameAsBilling(
+        !ship || ship === (customer.billing_address || (customer as any).address || ""),
+      );
     }
   }, [customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -154,16 +196,20 @@ function NewInvoice() {
   const buyerCode = (customer as any)?.state_code || stateCodeFromGSTIN(customer?.gst || null);
   const sellerState = branch?.state_name || stateNameFromCode(sellerCode);
   const buyerState = customer?.state || stateNameFromCode(buyerCode);
-  const gstinError = customer?.gst && !isValidGSTIN(customer.gst)
-    ? "Buyer GSTIN format looks invalid"
-    : null;
+  const gstinError =
+    customer?.gst && !isValidGSTIN(customer.gst) ? "Buyer GSTIN format looks invalid" : null;
 
   const totals = useMemo(
     () =>
       computeTotals({
         sellerStateCode: sellerCode,
         buyerStateCode: buyerCode,
-        items: items.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate })),
+        items: items.map((i) => ({
+          qty: i.qty,
+          rate: i.rate,
+          discount_pct: i.discount_pct,
+          gst_rate: i.gst_rate,
+        })),
         headerDiscount,
         roundOff: true,
       }),
@@ -176,10 +222,13 @@ function NewInvoice() {
 
   async function save(status: "draft" | "issued") {
     if (!branchId) return toast.error("Choose a branch (seller)");
-    if (!branch?.gstin) return toast.error("Selected branch has no GSTIN — set it in Sales → Settings");
+    if (!branch?.gstin)
+      return toast.error("Selected branch has no GSTIN — set it in Sales → Settings");
     if (!customer) return toast.error("Choose a customer");
-    if (items.length === 0 || items.some((it) => !it.description.trim())) return toast.error("Every line needs a description");
-    if (items.some((it) => Number(it.gst_rate) > 0 && !it.hsn.trim())) return toast.error("HSN code is mandatory when GST > 0");
+    if (items.length === 0 || items.some((it) => !it.description.trim()))
+      return toast.error("Every line needs a description");
+    if (items.some((it) => Number(it.gst_rate) > 0 && !it.hsn.trim()))
+      return toast.error("HSN code is mandatory when GST > 0");
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.warehouse_id) return toast.error(`Line ${i + 1}: select a warehouse`);
@@ -190,7 +239,9 @@ function NewInvoice() {
       }
       if (it.is_serialized) {
         if (!Number.isInteger(qtyNum)) {
-          return toast.error(`Line ${i + 1}: serialized products need a whole-number quantity (got ${qtyNum})`);
+          return toast.error(
+            `Line ${i + 1}: serialized products need a whole-number quantity (got ${qtyNum})`,
+          );
         }
         if (it.serial_numbers.length !== qtyNum) {
           return toast.error(`Line ${i + 1}: select ${qtyNum} serial number(s)`);
@@ -199,7 +250,8 @@ function NewInvoice() {
     }
     // Prevent duplicate serials across lines
     const allSerials = items.flatMap((it) => it.serial_numbers);
-    if (new Set(allSerials).size !== allSerials.length) return toast.error("Duplicate serial numbers across lines");
+    if (new Set(allSerials).size !== allSerials.length)
+      return toast.error("Duplicate serial numbers across lines");
     if (gstinError) return toast.error(gstinError);
 
     // Non-serialized products: verify pooled availability before posting.
@@ -260,7 +312,9 @@ function NewInvoice() {
           .maybeSingle();
         if (dupErr) throw dupErr;
         if (existingInv) {
-          toast.info(`This General DC was already invoiced (${existingInv.invoice_no || existingInv.id}).`);
+          toast.info(
+            `This General DC was already invoiced (${existingInv.invoice_no || existingInv.id}).`,
+          );
           markClean();
           setDirty(false);
           nav({ to: "/sales/invoices/$id", params: { id: (existingInv as { id: string }).id } });
@@ -308,7 +362,11 @@ function NewInvoice() {
         skip_stock_posting: !!fromGeneralDc,
         source_general_dc_id: fromGeneralDc?.id ?? null,
       };
-      const { data: inv, error } = await supabase.from("invoices").insert(invoicePayload).select("id, invoice_no").single();
+      const { data: inv, error } = await supabase
+        .from("invoices")
+        .insert(invoicePayload)
+        .select("id, invoice_no")
+        .single();
       if (error) throw error;
 
       const itemRows = items.map((d, i) => {
@@ -378,40 +436,62 @@ function NewInvoice() {
         <h1 className="text-2xl font-bold">New Invoice</h1>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => save("draft")} disabled={saving}>
-            <Save className="h-4 w-4 mr-1.5" />Save Draft
+            <Save className="h-4 w-4 mr-1.5" />
+            Save Draft
           </Button>
           <Button size="sm" onClick={() => save("issued")} disabled={saving}>
-            <Zap className="h-4 w-4 mr-1.5" />Issue Invoice
+            <Zap className="h-4 w-4 mr-1.5" />
+            Issue Invoice
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Header</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Header</CardTitle>
+          </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Branch (Seller) *</Label>
-              <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+              <select
+                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+              >
                 <option value="">— select —</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name}{b.gstin ? ` · ${b.gstin}` : ""}{b.state_name ? ` · ${b.state_name}` : ""}
+                    {b.name}
+                    {b.gstin ? ` · ${b.gstin}` : ""}
+                    {b.state_name ? ` · ${b.state_name}` : ""}
                   </option>
                 ))}
               </select>
               {branch && !branch.gstin && (
-                <p className="text-xs text-destructive mt-1">Branch missing GSTIN — set it in Sales → Settings.</p>
+                <p className="text-xs text-destructive mt-1">
+                  Branch missing GSTIN — set it in Sales → Settings.
+                </p>
               )}
             </div>
             <div>
               <Label className="text-xs">Customer *</Label>
-              <CustomerPicker value={customer?.id} onChange={(_id, c) => { setCustomer(c); markDirty(); }} />
+              <CustomerPicker
+                value={customer?.id}
+                onChange={(_id, c) => {
+                  setCustomer(c);
+                  markDirty();
+                }}
+              />
               {gstinError && <p className="text-xs text-destructive mt-1">{gstinError}</p>}
             </div>
             <div>
               <Label className="text-xs">Invoice Date</Label>
-              <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+              <Input
+                type="date"
+                value={invoiceDate}
+                onChange={(e) => setInvoiceDate(e.target.value)}
+              />
             </div>
             <div>
               <Label className="text-xs">Due Date</Label>
@@ -419,7 +499,11 @@ function NewInvoice() {
             </div>
             <div>
               <Label className="text-xs">PO Number</Label>
-              <Input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="Customer PO No." />
+              <Input
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                placeholder="Customer PO No."
+              />
             </div>
             <div>
               <Label className="text-xs">PO Date</Label>
@@ -430,8 +514,14 @@ function NewInvoice() {
               <div className="flex gap-2">
                 <select
                   className="h-9 rounded-md border bg-background px-2 text-sm w-40"
-                  value={["Advance","7 Days","15 Days","30 Days"].includes(paymentTerms) ? paymentTerms : "Custom"}
-                  onChange={(e) => setPaymentTerms(e.target.value === "Custom" ? "" : e.target.value)}
+                  value={
+                    ["Advance", "7 Days", "15 Days", "30 Days"].includes(paymentTerms)
+                      ? paymentTerms
+                      : "Custom"
+                  }
+                  onChange={(e) =>
+                    setPaymentTerms(e.target.value === "Custom" ? "" : e.target.value)
+                  }
                 >
                   <option value="Advance">Advance</option>
                   <option value="7 Days">7 Days</option>
@@ -474,17 +564,35 @@ function NewInvoice() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">GST Determination</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">GST Determination</CardTitle>
+          </CardHeader>
           <CardContent className="text-sm space-y-2">
-            <div className="flex justify-between"><span className="text-muted-foreground">Seller State</span><span>{sellerState || "—"} {sellerCode && `(${sellerCode})`}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Buyer State</span><span>{buyerState || "—"} {buyerCode && `(${buyerCode})`}</span></div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Seller State</span>
+              <span>
+                {sellerState || "—"} {sellerCode && `(${sellerCode})`}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Buyer State</span>
+              <span>
+                {buyerState || "—"} {buyerCode && `(${buyerCode})`}
+              </span>
+            </div>
             <div className="pt-2 border-t">
               {totals.is_interstate ? (
-                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">Inter-state supply — IGST applies</span>
+                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                  Inter-state supply — IGST applies
+                </span>
               ) : sellerCode && buyerCode ? (
-                <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-medium">Intra-state supply — CGST + SGST</span>
+                <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-medium">
+                  Intra-state supply — CGST + SGST
+                </span>
               ) : (
-                <span className="text-xs text-muted-foreground">Pick branch and customer to determine tax type.</span>
+                <span className="text-xs text-muted-foreground">
+                  Pick branch and customer to determine tax type.
+                </span>
               )}
             </div>
           </CardContent>
@@ -494,7 +602,17 @@ function NewInvoice() {
       <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Items</CardTitle>
-          <Button size="sm" variant="outline" onClick={() => { setItems((a) => [...a, emptyItem()]); markDirty(); }}><Plus className="h-4 w-4 mr-1" />Add row</Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setItems((a) => [...a, emptyItem()]);
+              markDirty();
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add row
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -525,32 +643,44 @@ function NewInvoice() {
                           value={it.product_id}
                           onPick={(p) => {
                             setItem(idx, {
-                            product_id: p.id,
-                            description: `${(p as any).description || productDisplayName(p as any)}${coverageSuffix(p as any)}`,
-                            hsn: p.hsn || "",
-                            unit: p.unit || "Nos",
-                            gst_rate: (p as any).gst_rate ?? it.gst_rate,
-                            is_serialized: !!(p as any).serial_tracking,
-                            part_model_no: p.model,
-                            part_name: productShortName(p as any),
-                            serial_numbers: [],
+                              product_id: p.id,
+                              description: `${(p as any).description || productDisplayName(p as any)}${coverageSuffix(p as any)}`,
+                              hsn: p.hsn || "",
+                              unit: p.unit || "Nos",
+                              gst_rate: (p as any).gst_rate ?? it.gst_rate,
+                              is_serialized:
+                                !!(p as any).is_serialized,
+                              part_model_no: p.model,
+                              part_name: productShortName(p as any),
+                              serial_numbers: [],
                             });
-                            fetchBundleChildrenRaw(p.id).then((rowsB) => {
-                              if (rowsB.length > 0) {
-                                setBundleParentQty(Number(it.qty) || 1);
-                                setBundleFor(p as any);
-                                setBundleOpen(true);
-                              }
-                            }).catch(() => {});
+                            fetchBundleChildrenRaw(p.id)
+                              .then((rowsB) => {
+                                if (rowsB.length > 0) {
+                                  setBundleParentQty(Number(it.qty) || 1);
+                                  setBundleFor(p as any);
+                                  setBundleOpen(true);
+                                }
+                              })
+                              .catch(() => {});
                           }}
                         />
-                        <Input className="h-8 text-xs" placeholder="Description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="Description"
+                          value={it.description}
+                          onChange={(e) => setItem(idx, { description: e.target.value })}
+                        />
                         {it.is_serialized && (
                           <div className="flex items-center gap-2 pt-1">
                             <Button
                               type="button"
                               size="sm"
-                              variant={it.serial_numbers.length === Math.floor(Number(it.qty)) ? "outline" : "secondary"}
+                              variant={
+                                it.serial_numbers.length === Math.floor(Number(it.qty))
+                                  ? "outline"
+                                  : "secondary"
+                              }
                               className="h-7 text-xs"
                               onClick={() => setSerialPickerIdx(idx)}
                               disabled={!it.warehouse_id || Number(it.qty) <= 0}
@@ -565,31 +695,89 @@ function NewInvoice() {
                           </div>
                         )}
                       </td>
-                      <td className="p-2"><Input className="h-8 text-xs" value={it.hsn} onChange={(e) => setItem(idx, { hsn: e.target.value })} /></td>
+                      <td className="p-2">
+                        <Input
+                          className="h-8 text-xs"
+                          value={it.hsn}
+                          onChange={(e) => setItem(idx, { hsn: e.target.value })}
+                        />
+                      </td>
                       <td className="p-2">
                         <select
                           className="w-full h-8 rounded-md border bg-background px-1 text-xs"
                           value={it.warehouse_id || ""}
-                          onChange={(e) => setItem(idx, { warehouse_id: e.target.value || null, serial_numbers: [] })}
+                          onChange={(e) =>
+                            setItem(idx, {
+                              warehouse_id: e.target.value || null,
+                              serial_numbers: [],
+                            })
+                          }
                         >
                           <option value="">— select —</option>
                           {warehouses.map((w) => (
-                            <option key={w.id} value={w.id}>{w.name}</option>
+                            <option key={w.id} value={w.id}>
+                              {w.name}
+                            </option>
                           ))}
                         </select>
                       </td>
-                      <td className="p-2"><Input type="number" step="0.001" className="h-8 text-xs text-right" value={it.qty} onChange={(e) => setItem(idx, { qty: Number(e.target.value) })} /></td>
-                      <td className="p-2"><Input className="h-8 text-xs" value={it.unit} onChange={(e) => setItem(idx, { unit: e.target.value })} /></td>
-                      <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.rate} onChange={(e) => setItem(idx, { rate: Number(e.target.value) })} /></td>
-                      <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.discount_pct} onChange={(e) => setItem(idx, { discount_pct: Number(e.target.value) })} /></td>
                       <td className="p-2">
-                        <select className="w-full h-8 rounded-md border bg-background px-1 text-xs" value={it.gst_rate} onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}>
-                          {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}
+                        <Input
+                          type="number"
+                          step="0.001"
+                          className="h-8 text-xs text-right"
+                          value={it.qty}
+                          onChange={(e) => setItem(idx, { qty: Number(e.target.value) })}
+                        />
+                      </td>
+                      <td className="p-2">
+                        <Input
+                          className="h-8 text-xs"
+                          value={it.unit}
+                          onChange={(e) => setItem(idx, { unit: e.target.value })}
+                        />
+                      </td>
+                      <td className="p-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          className="h-8 text-xs text-right"
+                          value={it.rate}
+                          onChange={(e) => setItem(idx, { rate: Number(e.target.value) })}
+                        />
+                      </td>
+                      <td className="p-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          className="h-8 text-xs text-right"
+                          value={it.discount_pct}
+                          onChange={(e) => setItem(idx, { discount_pct: Number(e.target.value) })}
+                        />
+                      </td>
+                      <td className="p-2">
+                        <select
+                          className="w-full h-8 rounded-md border bg-background px-1 text-xs"
+                          value={it.gst_rate}
+                          onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}
+                        >
+                          {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => (
+                            <option key={r} value={r}>
+                              {r}%
+                            </option>
+                          ))}
                         </select>
                       </td>
                       <td className="p-2 text-right font-medium">{inr(b?.line_total || 0)}</td>
                       <td className="p-2 text-right">
-                        <Button size="icon" variant="ghost" onClick={() => { setItems((a) => a.filter((_, i) => i !== idx)); markDirty(); }}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            setItems((a) => a.filter((_, i) => i !== idx));
+                            markDirty();
+                          }}
+                        >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </td>
@@ -611,7 +799,9 @@ function NewInvoice() {
           partModelNo={items[serialPickerIdx].part_model_no}
           partName={items[serialPickerIdx].part_name}
           value={items[serialPickerIdx].serial_numbers}
-          excludeSerials={items.flatMap((it, i) => (i === serialPickerIdx ? [] : it.serial_numbers))}
+          excludeSerials={items.flatMap((it, i) =>
+            i === serialPickerIdx ? [] : it.serial_numbers,
+          )}
           onConfirm={(sns) => setItem(serialPickerIdx, { serial_numbers: sns })}
         />
       )}
@@ -628,7 +818,9 @@ function NewInvoice() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Notes & Terms</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Notes & Terms</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
             <div>
               <Label className="text-xs">Notes</Label>
@@ -639,7 +831,10 @@ function NewInvoice() {
               <Textarea
                 rows={3}
                 value={terms}
-                onChange={(e) => { setTerms(e.target.value); setTermsTouched(true); }}
+                onChange={(e) => {
+                  setTerms(e.target.value);
+                  setTermsTouched(true);
+                }}
                 placeholder="Auto-loaded from Sales Settings; edit to override for this invoice."
               />
             </div>
@@ -647,29 +842,58 @@ function NewInvoice() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Totals</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Totals</CardTitle>
+          </CardHeader>
           <CardContent className="text-sm space-y-1.5">
-            <div className="flex justify-between"><span>Subtotal</span><span>{inr(totals.subtotal)}</span></div>
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>{inr(totals.subtotal)}</span>
+            </div>
             <div className="flex items-center justify-between gap-2">
               <span>Discount</span>
-              <Input type="number" step="0.01" className="h-7 w-28 text-right text-xs" value={headerDiscount} onChange={(e) => setHeaderDiscount(Number(e.target.value))} />
+              <Input
+                type="number"
+                step="0.01"
+                className="h-7 w-28 text-right text-xs"
+                value={headerDiscount}
+                onChange={(e) => setHeaderDiscount(Number(e.target.value))}
+              />
             </div>
-            <div className="flex justify-between"><span>Taxable Value</span><span>{inr(totals.taxable_value)}</span></div>
+            <div className="flex justify-between">
+              <span>Taxable Value</span>
+              <span>{inr(totals.taxable_value)}</span>
+            </div>
             {totals.is_interstate ? (
-              <div className="flex justify-between"><span>IGST</span><span>{inr(totals.igst)}</span></div>
+              <div className="flex justify-between">
+                <span>IGST</span>
+                <span>{inr(totals.igst)}</span>
+              </div>
             ) : (
               <>
-                <div className="flex justify-between"><span>CGST</span><span>{inr(totals.cgst)}</span></div>
-                <div className="flex justify-between"><span>SGST</span><span>{inr(totals.sgst)}</span></div>
+                <div className="flex justify-between">
+                  <span>CGST</span>
+                  <span>{inr(totals.cgst)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>SGST</span>
+                  <span>{inr(totals.sgst)}</span>
+                </div>
               </>
             )}
             {totals.round_off !== 0 && (
-              <div className="flex justify-between"><span>Round Off</span><span>{inr(totals.round_off)}</span></div>
+              <div className="flex justify-between">
+                <span>Round Off</span>
+                <span>{inr(totals.round_off)}</span>
+              </div>
             )}
             <div className="flex justify-between pt-2 border-t font-bold text-base">
-              <span>Total</span><span>{inr(totals.total)}</span>
+              <span>Total</span>
+              <span>{inr(totals.total)}</span>
             </div>
-            <p className="text-xs text-muted-foreground pt-1 italic">{amountInWords(totals.total)}</p>
+            <p className="text-xs text-muted-foreground pt-1 italic">
+              {amountInWords(totals.total)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -693,7 +917,8 @@ function NewInvoice() {
               gst_rate: (pk.product as any).gst_rate ?? 18,
               warehouse_id: null,
               serial_numbers: [],
-              is_serialized: !!(pk.product as any).serial_tracking,
+              is_serialized:
+                !!(pk.product as any).is_serialized,
               part_model_no: pk.product.model ?? null,
               part_name: productShortName(pk.product as any),
             })),

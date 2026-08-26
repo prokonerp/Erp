@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { useProducts } from "@/hooks/useMasters";
+import { useEffect, useMemo, useState } from "react";
+import { useProductsForPicker } from "@/hooks/useMasters";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -29,6 +30,7 @@ export type ProductMaster = {
   active: boolean | null;
   item_type?: string | null;
   serial_tracking?: boolean | null;
+  is_serialized?: boolean | null;
   default_price?: number | null;
   weight_kg?: number | null;
   warranty_applicable?: boolean | null;
@@ -58,13 +60,40 @@ export function ProductMasterPicker({
   excludeServices = false,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search), 150);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const { data: allProducts, isLoading } = useProducts();
-  const rows = (allProducts ?? []).filter(
-    (p) => p.active !== false && (!excludeServices || (p.item_type ?? "product") !== "service"),
+  const { data: rowsData, isLoading } = useProductsForPicker(debounced);
+  const rowsAll = (rowsData as any) ?? [];
+  const rows = rowsAll.filter(
+    (p: any) =>
+      p.active !== false && (!excludeServices || (p.item_type ?? "product") !== "service"),
   ) as ProductMaster[];
 
-  const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
+  const [selectedFallback, setSelectedFallback] = useState<ProductMaster | null>(null);
+  const selected = useMemo(
+    () => rows.find((r) => r.id === value) || selectedFallback,
+    [rows, value, selectedFallback],
+  );
+  useEffect(() => {
+    if (!value || rows.find((r) => r.id === value) || selectedFallback?.id === value) return;
+    let active = true;
+    supabase
+      .from("products")
+      .select("id, name, model, short_name, display_name, brand, category, is_serialized, serial_tracking")
+      .eq("id", value)
+      .single()
+      .then(({ data }) => {
+        if (active && data) setSelectedFallback(data as unknown as ProductMaster);
+      });
+    return () => {
+      active = false;
+    };
+  }, [value, rows, selectedFallback]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -88,25 +117,34 @@ export function ProductMasterPicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[360px]" align="start">
-        <Command
-          filter={(val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}
-        >
-          <CommandInput placeholder="Search part no, name, category…" />
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search part no, name, category…"
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList>
-            <CommandEmpty>
-              <div className="py-4 px-3 text-sm space-y-2">
-                <p className="text-muted-foreground">No matching product.</p>
-                <a
-                  href="/masters/products"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add Product <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            </CommandEmpty>
-            <CommandGroup heading={`${rows.length} products`}>
+            {isLoading ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">Searching…</div>
+            ) : (
+              <CommandEmpty>
+                <div className="py-4 px-3 text-sm space-y-2">
+                  <p className="text-muted-foreground">No matching product.</p>
+                  <a
+                    href="/masters/products"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add Product{" "}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </CommandEmpty>
+            )}
+            <CommandGroup
+              heading={debounced ? `${rows.length} matches` : `${rows.length} products`}
+            >
               {rows.map((p) => {
                 const blob = productSearchBlob(p);
                 return (
