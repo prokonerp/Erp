@@ -1,27 +1,16 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 /**
- * Theme handling — class strategy on <html>, persisted in localStorage.
- *
- * Modes:
- *  - "balanced" (app default): mid-luminance slate-indigo surfaces — the
- *    signature Prokon look; sits between light and dark.
- *  - "comfort": softer, higher-contrast surfaces + larger text sized for
- *    older eyes; warm neutral with the same blue accent.
- *  - "light": classic near-white surfaces.
- *  - "dark": true dark surfaces (.dark class, also enables Tailwind dark:).
- *  - "system": follows OS preference → resolves to light or dark.
- *
- * A tiny inline script in __root.tsx applies classes BEFORE first paint
- * (no flash); this provider keeps React state in sync and re-applies on
- * change / OS preference change while running.
+ * Theme handling — locked to Navy Premium (light = glacier #F1F5F9 + navy #1E3A5F).
+ * Previous modes balanced/comfort removed per user request. Only light/dark/system remain.
+ * A tiny inline script in __root.tsx applies classes BEFORE first paint.
  */
 
-export type Theme = "light" | "balanced" | "comfort" | "dark" | "system";
-export type ResolvedAppearance = "light" | "balanced" | "comfort" | "dark";
+export type Theme = "light" | "dark" | "system";
+export type ResolvedAppearance = "light" | "dark";
 
 const STORAGE_KEY = "prokon-theme";
-const DEFAULT_THEME: Theme = "balanced";
+const DEFAULT_THEME: Theme = "light";
 
 type ThemeContextValue = {
   theme: Theme;
@@ -42,9 +31,9 @@ function systemPrefersDark(): boolean {
 function readStored(): Theme {
   if (typeof window === "undefined") return DEFAULT_THEME;
   const v = window.localStorage.getItem(STORAGE_KEY);
-  return v === "light" || v === "balanced" || v === "comfort" || v === "dark" || v === "system"
-    ? v
-    : DEFAULT_THEME;
+  // Migrate old balanced/comfort values to light (navy)
+  if (v === "balanced" || v === "comfort") return "light";
+  return v === "light" || v === "dark" || v === "system" ? v : DEFAULT_THEME;
 }
 
 export function resolve(theme: Theme): ResolvedAppearance {
@@ -54,8 +43,6 @@ export function resolve(theme: Theme): ResolvedAppearance {
 
 function applyClasses(appearance: ResolvedAppearance) {
   const el = document.documentElement;
-  el.classList.toggle("theme-balanced", appearance === "balanced");
-  el.classList.toggle("theme-comfort", appearance === "comfort");
   el.classList.toggle("dark", appearance === "dark");
   el.dataset.appearance = appearance;
 }
@@ -68,7 +55,7 @@ export function applyDataAttrs(appearance: ResolvedAppearance) {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
-  const [appearance, setAppearance] = useState<ResolvedAppearance>("balanced");
+  const [appearance, setAppearance] = useState<ResolvedAppearance>("light");
 
   // Sync with the classes the inline boot script already applied.
   useEffect(() => {

@@ -9,7 +9,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { Sun, Moon, Monitor, Contrast, Clock } from "lucide-react";
+import { Sun, Moon, Monitor, Clock } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
 import { NAV_ITEMS, QUICK_ACTIONS } from "@/lib/navigation";
 import { useTheme, type Theme } from "@/lib/theme";
@@ -17,9 +17,7 @@ import { useTheme, type Theme } from "@/lib/theme";
 const RECENTS_KEY = "prokon:recent-pages";
 const MAX_RECENTS = 5;
 const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
-  { value: "balanced", label: "Balanced theme", icon: Contrast },
-  { value: "comfort", label: "Comfort theme (tuned for older eyes)", icon: Sun },
-  { value: "light", label: "Light theme", icon: Sun },
+  { value: "light", label: "Light (Navy Premium)", icon: Sun },
   { value: "dark", label: "Dark theme", icon: Moon },
   { value: "system", label: "System theme", icon: Monitor },
 ];

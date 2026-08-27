@@ -12,7 +12,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { KeyRound, LogOut, ShieldCheck, Sun, Moon, Monitor, Contrast } from "lucide-react";
+import { KeyRound, LogOut, ShieldCheck, Sun, Moon, Monitor } from "lucide-react";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { recordLogout } from "@/lib/useActivityTracker";
 import { useTheme, type Theme as ThemeMode } from "@/lib/theme";
@@ -131,13 +131,11 @@ export function UserProfileMenu({
   );
 }
 
-/** Balanced / Comfort / Light / Dark / System selector rendered as inline menu items. */
+/** Theme selector — locked to Navy Premium (light = navy). Only Light/Dark/System remain. */
 function ThemeModeItems() {
   const { theme, setTheme } = useTheme();
   const modes: { value: ThemeMode; label: string; icon: typeof Sun; hint?: string }[] = [
-    { value: "balanced", label: "Balanced", icon: Contrast },
-    { value: "comfort", label: "Comfort", icon: Sun, hint: "Tuned for older eyes" },
-    { value: "light", label: "Light", icon: Sun },
+    { value: "light", label: "Light (Navy)", icon: Sun },
     { value: "dark", label: "Dark", icon: Moon },
     { value: "system", label: "System", icon: Monitor },
   ];
