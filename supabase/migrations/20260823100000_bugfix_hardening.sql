@@ -113,7 +113,7 @@ SET search_path = public
 AS $$
 BEGIN
   IF TG_TABLE_NAME = 'delivery_challans' THEN
-    IF OLD.status = 'Dispatched' AND NEW.items IS DISTINCT FROM OLD.items THEN
+    IF OLD.status IN ('Challan Generated','Submitted','Dispatched') AND NEW.items IS DISTINCT FROM OLD.items THEN
       RAISE EXCEPTION
         'Challan % is Dispatched — its items are frozen because stock has been posted. Cancel and re-raise instead.',
         COALESCE(OLD.challan_no, OLD.id);

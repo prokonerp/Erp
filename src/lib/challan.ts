@@ -28,7 +28,21 @@ export type ChallanItem = {
 };
 
 export type DocType = "customer" | "oem";
-export type ChallanStatus = "Draft" | "Submitted" | "Cancelled";
+export type ChallanStatus = "Draft" | "Submitted" | "Challan Generated" | "Cancelled";
+
+/** Statuses whose DCs have already posted stock (or are terminal) and must
+ *  not be edited from the form. Mirrors the settled set used by the Indent
+ *  pipeline, plus "Cancelled" which is reversed/terminal. */
+const CHALLAN_SETTLED: ReadonlySet<string> = new Set([
+  "challan generated",
+  "submitted",
+  "cancelled",
+]);
+
+/** True only when a Delivery Challan with this status may still be edited. */
+export function isChallanEditable(status: string): boolean {
+  return !CHALLAN_SETTLED.has((status || "").trim().toLowerCase());
+}
 
 export type DeliveryChallan = {
   id: string;

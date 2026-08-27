@@ -87,6 +87,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     oem_logo_url: "",
     stock_category: "good",
     indent_id: "",
+    general_dc_id: "",
   });
   const [busy, setBusy] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -192,6 +193,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       storage_location: (payload.storage_location as string) || f.storage_location,
       source_name: kind === "oem" ? (oemName || f.source_name) : f.source_name,
       indent_id: (payload.indent_id as string) || f.indent_id,
+      general_dc_id: (payload.general_dc_id as string) || f.general_dc_id,
     }));
     const preWh = (payload.warehouse_id as string | null | undefined) || null;
     if (preWh) setWarehouseId(preWh);
@@ -403,6 +405,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         branch_id: branchId,
         warehouse_id: warehouseId,
         indent_id: form.indent_id || null,
+        general_dc_id: form.general_dc_id || null,
         stock_category: category === "general" ? (form.stock_category || "good") : null,
         ...(approve
           ? {
@@ -440,6 +443,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       branch_id: branchId,
       warehouse_id: warehouseId,
       indent_id: form.indent_id || null,
+      general_dc_id: form.general_dc_id || null,
       stock_category: category === "general" ? (form.stock_category || "good") : null,
       created_by: userData.user?.id ?? null,
       ...(approve

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveUser, requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const PASSWORD_EXPIRY_DAYS = 30;
 const HISTORY_LIMIT = 5;
@@ -13,40 +13,28 @@ function validateStrong(pw: string): string | null {
   return null;
 }
 
-async function hashPassword(userId: string, pw: string): Promise<string> {
-  const enc = new TextEncoder();
-  const buf = await crypto.subtle.digest("SHA-256", enc.encode(`${userId}:${pw}`));
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
+/**
+ * Password history is hashed in Postgres (pgcrypto `crypt` + per-hash bf salt)
+ * and compared against the last HISTORY_LIMIT entries by security-definer SQL
+ * functions. The TS layer deliberately never computes, stores or reads a hash —
+ * the old client-side SHA-256 was both weak (unsalted, fast) and readable by
+ * the very user it protected.
+ */
 async function recordPasswordHistory(supabaseAdmin: any, userId: string, pw: string) {
-  const hash = await hashPassword(userId, pw);
-  const { error } = await supabaseAdmin
-    .from("password_history")
-    .insert({ user_id: userId, password_hash: hash });
+  const { error } = await supabaseAdmin.rpc("record_password_history", {
+    p_user: userId,
+    p_pw: pw,
+  });
   // History is a reuse-guard only — never block the password change on it,
   // but log loudly so silent failures can't erode the policy.
   if (error) console.error("[password] failed to record history:", error.message);
-  else {
-    const { data: extras } = await supabaseAdmin
-      .from("password_history")
-      .select("id")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .range(HISTORY_LIMIT, HISTORY_LIMIT + 100);
-    if (extras && extras.length) {
-      await supabaseAdmin
-        .from("password_history")
-        .delete()
-        .in("id", extras.map((r: any) => r.id));
-    }
-  }
 }
 
 /**
- * Marks a password as freshly changed for a user. Uses upsert so it works even
+ * Marks a password as freshly changed for a user. `mustChange` drives
+ * `must_change_password`: `false` for a self-service change, `true` when an
+ * admin sets/creates the password so the user is forced to rotate it on first
+ * use. Uses upsert so it works even
  * if the app_users row is missing (users created outside the app), and throws
  * on failure — a silently-failed flag update is what caused the forced-change
  * dialog to reappear on every login.
@@ -55,11 +43,12 @@ async function markPasswordChanged(
   supabaseAdmin: any,
   userId: string,
   patch: Record<string, any> = {},
+  mustChange = false,
 ) {
   const payload = {
     user_id: userId,
     password_changed_at: new Date().toISOString(),
-    must_change_password: false,
+    must_change_password: mustChange,
     ...patch,
   };
   const { data: existing } = await supabaseAdmin
@@ -72,7 +61,7 @@ async function markPasswordChanged(
       .from("app_users")
       .update({
         password_changed_at: payload.password_changed_at,
-        must_change_password: false,
+        must_change_password: mustChange,
         ...patch,
       })
       .eq("user_id", userId);
@@ -83,15 +72,20 @@ async function markPasswordChanged(
   }
 }
 
+/** Reuse check runs in SQL (`crypt(p_pw, stored_hash)`) over the last
+ *  HISTORY_LIMIT hashes; the plaintext never leaves this request. */
 async function isInHistory(supabaseAdmin: any, userId: string, pw: string): Promise<boolean> {
-  const hash = await hashPassword(userId, pw);
-  const { data } = await supabaseAdmin
-    .from("password_history")
-    .select("password_hash")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(HISTORY_LIMIT);
-  return (data ?? []).some((r: any) => r.password_hash === hash);
+  const { data, error } = await supabaseAdmin.rpc("check_password_reuse", {
+    p_user: userId,
+    p_pw: pw,
+  });
+  if (error) {
+    // Fail open, loudly: a broken reuse check must never make it impossible to
+    // rotate a password — that would lock every user out of the application.
+    console.error("[password] reuse check failed:", error.message);
+    return false;
+  }
+  return data === true;
 }
 
 async function assertAdmin(ctx: { supabase: any; userId: string }) {
@@ -104,7 +98,7 @@ async function assertAdmin(ctx: { supabase: any; userId: string }) {
 }
 
 export const listAuthUsers = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveUser])
   .handler(async ({ context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -122,7 +116,7 @@ export const listAuthUsers = createServerFn({ method: "GET" })
   });
 
 export const createAppUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveUser])
   .inputValidator(
     (d: {
       email: string;
@@ -132,6 +126,8 @@ export const createAppUser = createServerFn({ method: "POST" })
       role_id?: string | null;
       status?: string;
       is_admin?: boolean;
+      /** Force the user to rotate this password on first sign-in. Default true. */
+      force_change?: boolean;
     }) => d,
   )
   .handler(async ({ data, context }) => {
@@ -139,6 +135,9 @@ export const createAppUser = createServerFn({ method: "POST" })
     if (!data.email) throw new Error("Email is required");
     const v = validateStrong(data.password);
     if (v) throw new Error(v);
+    // An admin-chosen initial password is a shared secret — force a rotation
+    // unless the caller explicitly opts out.
+    const forceChange = data.force_change ?? true;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
@@ -156,7 +155,7 @@ export const createAppUser = createServerFn({ method: "POST" })
       role_id: data.role_id ?? null,
       status: data.status ?? "active",
       password_changed_at: new Date().toISOString(),
-      must_change_password: false,
+      must_change_password: forceChange,
     });
     if (upErr) throw new Error(upErr.message);
     await markPasswordChanged(
@@ -169,6 +168,7 @@ export const createAppUser = createServerFn({ method: "POST" })
         role_id: data.role_id ?? null,
         status: data.status ?? "active",
       },
+      forceChange,
     );
     await recordPasswordHistory(supabaseAdmin, uid, data.password);
     if (data.is_admin) {
@@ -178,7 +178,7 @@ export const createAppUser = createServerFn({ method: "POST" })
   });
 
 export const updateAppUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveUser])
   .inputValidator(
     (d: {
       user_id: string;
@@ -216,27 +216,37 @@ export const updateAppUser = createServerFn({ method: "POST" })
   });
 
 export const setUserPassword = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { user_id: string; password: string }) => d)
+  .middleware([requireActiveUser])
+  .inputValidator(
+    (d: {
+      user_id: string;
+      password: string;
+      /** Force the user to rotate this password on next sign-in. Default true. */
+      force_change?: boolean;
+    }) => d,
+  )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const v = validateStrong(data.password);
     if (v) throw new Error(v);
+    // An admin now knows this password — force a rotation unless the caller
+    // explicitly opts out.
+    const forceChange = data.force_change ?? true;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (await isInHistory(supabaseAdmin, data.user_id, data.password)) {
-      throw new Error("New password cannot match any of the last 5 passwords");
+      throw new Error(`New password cannot match any of the last ${HISTORY_LIMIT} passwords`);
     }
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.user_id, {
       password: data.password,
     });
     if (error) throw new Error(error.message);
     await recordPasswordHistory(supabaseAdmin, data.user_id, data.password);
-    await markPasswordChanged(supabaseAdmin, data.user_id);
+    await markPasswordChanged(supabaseAdmin, data.user_id, {}, forceChange);
     return { ok: true };
   });
 
 export const deleteAppUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveUser])
   .inputValidator((d: { user_id: string }) => d)
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
@@ -289,7 +299,7 @@ export const changeOwnPassword = createServerFn({ method: "POST" })
       throw new Error(`Could not verify current password: ${msg || "sign-in failed"}`);
     }
     if (await isInHistory(supabaseAdmin, context.userId, data.new_password)) {
-      throw new Error("New password cannot match any of the last 5 passwords");
+      throw new Error(`New password cannot match any of the last ${HISTORY_LIMIT} passwords`);
     }
     // NOTE: an admin password update revokes all existing sessions for this
     // user — the client signs out cleanly right after this succeeds.
@@ -299,8 +309,9 @@ export const changeOwnPassword = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     await recordPasswordHistory(supabaseAdmin, context.userId, data.new_password);
     // Must never fail silently — a skipped update here re-triggers the forced
-    // "password expired / must be changed" dialog on every login.
-    await markPasswordChanged(supabaseAdmin, context.userId);
+    // "password expired / must be changed" dialog on every login. This is the
+    // only path that clears must_change_password (force_change: false).
+    await markPasswordChanged(supabaseAdmin, context.userId, {}, false);
     return { ok: true };
   });
 

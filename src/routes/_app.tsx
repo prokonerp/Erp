@@ -29,9 +29,69 @@ import { toast } from "sonner";
 import { NAV_ITEMS, QUICK_ACTIONS, GROUP_ORDER, groupForPath, type NavItem } from "@/lib/navigation";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ConfirmProvider } from "@/hooks/useConfirm";
+import { ACCOUNT_NOT_ACTIVE, PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
+import { DefaultErrorComponent } from "@/router";
+
+/**
+ * Detects an account-gate denial thrown by a gated server fn. We branch on the
+ * structured `code` first, but fall back to a 401 + message-string match because
+ * the server-fn error serializer's handling of own-properties is uncertain.
+ */
+function isAccountGateError(err: unknown): { code: string } | null {
+  if (!err || typeof err !== "object") return null;
+  const e = err as Record<string, any>;
+  if (e.code === ACCOUNT_NOT_ACTIVE || e.code === PASSWORD_CHANGE_REQUIRED) {
+    return { code: e.code };
+  }
+  if (e.statusCode === 401) {
+    const msg = typeof e.message === "string" ? e.message : "";
+    if (/password change required/i.test(msg)) return { code: PASSWORD_CHANGE_REQUIRED };
+    if (/account is .*contact your administrator|no account profile found/i.test(msg)) {
+      return { code: ACCOUNT_NOT_ACTIVE };
+    }
+  }
+  return null;
+}
+
+/**
+ * Error boundary for the _app subtree. Catches account-gate denials (401s) thrown
+ * by gated server fns in descendant route loaders/handlers — previously these
+ * were swallowed into the generic error page and left the user on a broken shell.
+ */
+function AppErrorBoundary({ error }: { error: Error }) {
+  const gate = isAccountGateError(error);
+  if (gate?.code === PASSWORD_CHANGE_REQUIRED) {
+    // Non-dismissable change-password dialog over a blank shell.
+    return (
+      <div className="min-h-screen grid place-items-center bg-background">
+        <ChangePasswordDialog
+          open
+          forced
+          onOpenChange={() => {}}
+          onChanged={() => window.location.assign("/dashboard")}
+        />
+      </div>
+    );
+  }
+  if (gate?.code === ACCOUNT_NOT_ACTIVE) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-background px-4 text-center">
+        <div>
+          <h1 className="text-lg font-semibold text-foreground">Your account is disabled</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your account is disabled — contact an administrator.
+          </p>
+          <Navigate to="/auth" />
+        </div>
+      </div>
+    );
+  }
+  return <DefaultErrorComponent error={error} reset={() => {}} />;
+}
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
+  errorComponent: AppErrorBoundary,
 });
 
 function AppLayout() {
@@ -55,6 +115,7 @@ function AppLayout() {
     return {};
   });
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [gateBlocked, setGateBlocked] = useState(false);
   const fetchProfile = useServerFn(getMyProfile);
 
   // Persist sidebar state + auto-expand the active group on navigation.
@@ -111,8 +172,19 @@ function AppLayout() {
           toast.warning(msg);
         }
       }
-    } catch {
-      // ignore — profile is optional for layout rendering
+    } catch (err) {
+      // The forced-change signal is enforced server-side by requireActiveUser
+      // now, so this catch must never hide a failure again: surface it in the
+      // console instead of silently rendering a profile-less layout. If the
+      // failure is an account-gate denial, route it to the right UX.
+      const gate = isAccountGateError(err);
+      if (gate?.code === PASSWORD_CHANGE_REQUIRED) {
+        setForceChange(true);
+      } else if (gate?.code === ACCOUNT_NOT_ACTIVE) {
+        setGateBlocked(true);
+      }
+      setProfile(null);
+      console.error("[profile] getMyProfile failed:", err instanceof Error ? err.message : err);
     }
   }
 
@@ -123,6 +195,7 @@ function AppLayout() {
 
   if (loading) return <PageLoader label="Loading your workspace…" />;
   if (!session) return <Navigate to="/auth" />;
+  if (gateBlocked) return <Navigate to="/auth" />;
 
   const navItems = permLoading
     ? NAV_ITEMS

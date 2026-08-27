@@ -199,3 +199,29 @@ describe("payroll/computeRow", () => {
     expect(row.netSalary).toBe(15000);
   });
 });
+
+describe("payroll/applySundayRules — M17 missing Sat/Mon is NOT absent", () => {
+  const y = 2026, m = 1; // Jan 4 is a Sunday
+  it("keeps the Sunday credit when Saturday is missing entirely", () => {
+    const out = applySundayRules({}, y, m);
+    expect(out[4].dayValue).toBe(1);
+  });
+  it("keeps the Sunday credit when only Monday is explicitly absent", () => {
+    const att = { 5: { code: "A" as const, hours: null, dayValue: 0 } };
+    const out = applySundayRules(att, y, m);
+    expect(out[4].dayValue).toBe(1);
+  });
+  it("keeps the Sunday credit when only Saturday is explicitly absent", () => {
+    const att = { 3: { code: "A" as const, hours: null, dayValue: 0 } };
+    const out = applySundayRules(att, y, m);
+    expect(out[4].dayValue).toBe(1);
+  });
+  it("still zeroes the Sunday only when BOTH sides are explicitly absent", () => {
+    const att = {
+      3: { code: "A" as const, hours: null, dayValue: 0 },
+      5: { code: "A" as const, hours: null, dayValue: 0 },
+    };
+    const out = applySundayRules(att, y, m);
+    expect(out[4].dayValue).toBe(0);
+  });
+});

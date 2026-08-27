@@ -190,3 +190,46 @@ describe("gst/amountInWords", () => {
     );
   });
 });
+
+describe("gst/computeTotals — M20 missing state (place of supply fallback)", () => {
+  it("returns zero tax + a warning when buyer state AND place of supply are missing", () => {
+    const r = computeTotals({
+      sellerStateCode: "29",
+      buyerStateCode: null,
+      items: [{ qty: 10, rate: 100, gst_rate: 18 }],
+      roundOff: true,
+    });
+    expect(r.cgst).toBe(0);
+    expect(r.sgst).toBe(0);
+    expect(r.igst).toBe(0);
+    expect(r.taxable_value).toBe(1000);
+    expect(r.total).toBe(1000);
+    expect(r.gstWarning).toBeTruthy();
+  });
+  it("falls back to place of supply when buyer state is empty", () => {
+    const r = computeTotals({
+      sellerStateCode: "29",
+      buyerStateCode: undefined,
+      placeOfSupplyStateCode: "29",
+      items: [{ qty: 10, rate: 100, gst_rate: 18 }],
+      roundOff: true,
+    });
+    expect(r.is_interstate).toBe(false);
+    expect(r.cgst).toBe(90);
+    expect(r.sgst).toBe(90);
+    expect(r.igst).toBe(0);
+    expect(r.gstWarning).toBeUndefined();
+  });
+  it("treats an unknown place of supply as inter-state via the fallback", () => {
+    const r = computeTotals({
+      sellerStateCode: "29",
+      buyerStateCode: null,
+      placeOfSupplyStateCode: "07",
+      items: [{ qty: 10, rate: 100, gst_rate: 18 }],
+      roundOff: true,
+    });
+    expect(r.is_interstate).toBe(true);
+    expect(r.igst).toBe(180);
+    expect(r.cgst).toBe(0);
+  });
+});

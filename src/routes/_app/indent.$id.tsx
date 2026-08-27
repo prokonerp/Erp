@@ -128,9 +128,10 @@ function IndentDetail() {
     };
 
     const dcCols = "id, challan_no, challan_date, created_at, status, items, indent_id, reference_no";
+    const legacyKeys = [indentNo, i?.oracle_number].filter(Boolean) as string[];
     const dcQueries = [supabase.from("delivery_challans").select(dcCols).eq("indent_id", id)];
-    if (indentNo) {
-      dcQueries.push(supabase.from("delivery_challans").select(dcCols).eq("reference_no", indentNo).is("indent_id", null));
+    for (const k of legacyKeys) {
+      dcQueries.push(supabase.from("delivery_challans").select(dcCols).eq("reference_no", k).is("indent_id", null));
     }
     const dcResults = await Promise.all(dcQueries);
     const map: Record<string, { challan_no: string | null; challan_date: string | null; status: string | null; id: string }> = {};
@@ -151,11 +152,22 @@ function IndentDetail() {
     }
     setDcByOracle(map);
 
+    const grnCols = "id, grn_no, status, category, items, created_at";
     const { data: grnRows } = await supabase
       .from("grns" as never)
-      .select("id, grn_no, status, category, items, created_at")
+      .select(grnCols)
       .eq("indent_id", id);
-    for (const g of (grnRows || []) as unknown as Array<{ id: string; grn_no: string | null; status: string | null; category: string | null; created_at?: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+    const grnById = new Map<string, unknown>();
+    for (const g of (grnRows || []) as unknown as Array<{ id: string }>) grnById.set(g.id, g);
+    const grnLegacyKeys = [indentNo, i?.oracle_number].filter(Boolean) as string[];
+    if (grnLegacyKeys.length) {
+      const { data: grnLegacy } = await supabase
+        .from("grns" as never)
+        .select(grnCols)
+        .in("reference_no", grnLegacyKeys);
+      for (const g of (grnLegacy || []) as unknown as Array<{ id: string }>) grnById.set(g.id, g);
+    }
+    for (const g of (Array.from(grnById.values())) as unknown as Array<{ id: string; grn_no: string | null; status: string | null; category: string | null; created_at?: string | null; items: Array<{ oracle_no?: string }> | null }>) {
       if ((g.status || "").toLowerCase() === "cancelled") continue;
       const cat = (g.category || "").trim().toLowerCase();
       const kind = cat === "customer" ? ("customer_grn" as const) : ("oem_grn" as const);
@@ -511,7 +523,7 @@ function IndentDetail() {
       indent_no: i.indent_no,
       indent_date: i.indent_date,
       customer_id: customerId,
-      reference_no: i.indent_no || "",
+      reference_no: i.indent_no || i.oracle_number || "",
       internal_remarks: [
         i.indent_no ? `From Indent ${i.indent_no}` : "",
         i.remarks || "",
@@ -626,6 +638,9 @@ function IndentDetail() {
       }
       return;
     }
+    if (warehouseIdPrefill) {
+      const { data: whPrefill } = await supabase.from("warehouses").select("branch_id").eq("id", warehouseIdPrefill).maybeSingle();
+    }
     const prefill = {
       source: "indent",
       indent_id: i.id,
@@ -633,9 +648,9 @@ function IndentDetail() {
       indent_date: i.indent_date,
       oem_name: i.company || "",
       ticket_no: i.case_id || i.oem_case_id || "",
-      reference_no: i.indent_no || "",
+      reference_no: i.indent_no || i.oracle_number || "",
       source_doc_type: "OEM Dispatch",
-      source_doc_no: i.indent_no || "",
+      source_doc_no: i.indent_no || i.oracle_number || "",
       source_doc_date: i.indent_date || "",
       warehouse_id: warehouseIdPrefill,
       storage_location: warehouseNamePrefill,
@@ -740,6 +755,9 @@ function IndentDetail() {
       toast.error("Linked ticket is missing a customer. Set the customer on the ticket first.");
       return;
     }
+    if (warehouseIdPrefill) {
+      const { data: whPrefill } = await supabase.from("warehouses").select("branch_id").eq("id", warehouseIdPrefill).maybeSingle();
+    }
     const prefill = {
       source: "indent",
       indent_id: i.id,
@@ -747,9 +765,9 @@ function IndentDetail() {
       indent_date: i.indent_date,
       customer_id: customerId,
       ticket_no: i.case_id || i.oem_case_id || "",
-      reference_no: i.indent_no || "",
+      reference_no: i.indent_no || i.oracle_number || "",
       source_doc_type: "Customer Return",
-      source_doc_no: i.indent_no || "",
+      source_doc_no: i.indent_no || i.oracle_number || "",
       source_doc_date: i.indent_date || "",
       warehouse_id: warehouseIdPrefill,
       storage_location: warehouseNamePrefill,

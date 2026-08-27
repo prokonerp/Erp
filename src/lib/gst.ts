@@ -34,6 +34,7 @@ export type GstTotals = {
   total: number;
   is_interstate: boolean;
   items: GstItemBreakup[];
+  gstWarning?: string;
 };
 
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -144,8 +145,12 @@ export function computeTotals(args: {
   items: GstItemInput[];
   headerDiscount?: number;
   roundOff?: boolean;
-}): GstTotals {  const isInterstate =
-    !!args.sellerStateCode && !!args.buyerStateCode && args.sellerStateCode !== args.buyerStateCode;
+  placeOfSupplyStateCode?: string | null | undefined;
+}): GstTotals {
+  const buyerCode = args.buyerStateCode || args.placeOfSupplyStateCode || null;
+  const missingState = !buyerCode;
+  const isInterstate =
+    !!args.sellerStateCode && !!buyerCode && args.sellerStateCode !== buyerCode;
   // B-03: a header-level discount must be pushed into the line breakups so
   // that Σ(line.taxable_value) equals the invoice-level taxable value and
   // GST is computed on the post-discount amount. Without this, stored
@@ -157,9 +162,14 @@ export function computeTotals(args: {
       ? apportionHeaderDiscount(args.items, headerDisc, isInterstate)
       : preDiscountBreakups;
   const subtotal = r2(preDiscountBreakups.reduce((s, b) => s + b.taxable_value, 0));
-  const cgst = r2(breakups.reduce((s, b) => s + b.cgst, 0));
-  const sgst = r2(breakups.reduce((s, b) => s + b.sgst, 0));
-  const igst = r2(breakups.reduce((s, b) => s + b.igst, 0));
+  // When neither a buyer state nor a place of supply is known we must NOT
+  // silently assume intra-state. Zero the tax lines and warn the caller.
+  const rawCgst = r2(breakups.reduce((s, b) => s + b.cgst, 0));
+  const rawSgst = r2(breakups.reduce((s, b) => s + b.sgst, 0));
+  const rawIgst = r2(breakups.reduce((s, b) => s + b.igst, 0));
+  const cgst = missingState ? 0 : rawCgst;
+  const sgst = missingState ? 0 : rawSgst;
+  const igst = missingState ? 0 : rawIgst;
   const cess = r2(breakups.reduce((s, b) => s + b.cess, 0));
   // With apportioned breakups the discounted lines already carry the header
   // discount — derive the invoice taxable value from them so header and
@@ -180,6 +190,7 @@ export function computeTotals(args: {
     total: r2(rounded),
     is_interstate: isInterstate,
     items: breakups,
+    gstWarning: missingState ? "Buyer state / place of supply missing; GST not computed" : undefined,
   };
 }
 
