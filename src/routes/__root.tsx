@@ -13,8 +13,8 @@ import appCss from "../styles.css?url";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/lib/theme";
 
-/** Applies the persisted appearance classes before first paint (no flash). */
-const themeBootScript = `(function(){try{var t=localStorage.getItem("prokon-theme");var d=document.documentElement.classList;if(t==="dark"){d.add("dark");}else if(t==="light"){/* plain light */}else if(t==="system"){if(matchMedia("(prefers-color-scheme: dark)").matches)d.add("dark");}else{d.add("theme-balanced");}}catch(e){}})();`;
+/** Applies the persisted appearance classes before first paint (no flash). Locked to Navy Premium (light). */
+const themeBootScript = `(function(){try{var t=localStorage.getItem("prokon-theme");if(t==="balanced"||t==="comfort"){t="light";localStorage.setItem("prokon-theme","light");}var d=document.documentElement;var cls=d.classList;cls.remove("theme-balanced","theme-comfort","dark");if(t==="dark"){cls.add("dark");d.dataset.appearance="dark";}else if(t==="system"){if(matchMedia("(prefers-color-scheme: dark)").matches){cls.add("dark");d.dataset.appearance="dark";}else{d.dataset.appearance="light";}}else{d.dataset.appearance="light";}}catch(e){}})();`;
 
 function NotFoundComponent() {
   return (

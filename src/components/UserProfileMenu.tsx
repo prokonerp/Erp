@@ -12,7 +12,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { KeyRound, LogOut, ShieldCheck, Sun, Moon, Monitor, Contrast } from "lucide-react";
+import { KeyRound, LogOut, ShieldCheck, Sun, Moon, Monitor } from "lucide-react";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { recordLogout } from "@/lib/useActivityTracker";
 import { useTheme, type Theme as ThemeMode } from "@/lib/theme";
@@ -131,24 +131,24 @@ export function UserProfileMenu({
   );
 }
 
-/** Balanced / Light / Dark / System selector rendered as inline menu items. */
+/** Theme selector — locked to Navy Premium (light = navy). Only Light/Dark/System remain. */
 function ThemeModeItems() {
   const { theme, setTheme } = useTheme();
-  const modes: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
-    { value: "balanced", label: "Balanced", icon: Contrast },
-    { value: "light", label: "Light", icon: Sun },
+  const modes: { value: ThemeMode; label: string; icon: typeof Sun; hint?: string }[] = [
+    { value: "light", label: "Light (Navy)", icon: Sun },
     { value: "dark", label: "Dark", icon: Moon },
     { value: "system", label: "System", icon: Monitor },
   ];
   return (
     <div className="grid grid-cols-2 gap-1 px-2 pb-2" role="radiogroup" aria-label="Appearance">
-      {modes.map(({ value, label, icon: Icon }) => (
+      {modes.map(({ value, label, icon: Icon, hint }) => (
         <button
           key={value}
           type="button"
           role="radio"
           aria-checked={theme === value}
           onClick={() => setTheme(value)}
+          title={hint}
           className={`flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs transition-colors ${
             theme === value
               ? "border-primary/40 bg-primary/10 text-primary font-medium"
