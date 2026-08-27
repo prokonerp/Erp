@@ -48,7 +48,11 @@ export async function fetchCompanyProfile(): Promise<CompanyProfile> {
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  if (error || !data) return DEFAULT_COMPANY_PROFILE;
+  if (error) {
+    console.error("fetchCompanyProfile failed:", error);
+    throw error;
+  }
+  if (!data) return DEFAULT_COMPANY_PROFILE;
   return data as unknown as CompanyProfile;
 }
 
@@ -64,6 +68,6 @@ export async function saveCompanyProfile(patch: Partial<CompanyProfile>) {
   }
   const { error } = await supabase
     .from("company_profile" as never)
-    .insert({ ...DEFAULT_COMPANY_PROFILE, ...patch, id: undefined } as never);
+    .insert({ ...DEFAULT_COMPANY_PROFILE, ...patch, id: undefined, is_active: true } as never);
   if (error) throw error;
 }

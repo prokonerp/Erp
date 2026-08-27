@@ -162,8 +162,13 @@ export function applySundayRules(
     const e = out[d];
     const sat = d - 1 >= 1 ? out[d - 1] : undefined;
     const mon = d + 1 <= total ? out[d + 1] : undefined;
-    const satAbsent = d - 1 >= 1 ? isAbsentDay(sat) : false;
-    const monAbsent = d + 1 <= total ? isAbsentDay(mon) : false;
+    // A missing Sat/Mon is "unknown", not "absent" — only an *explicit* absent
+    // (code === "A" with no/zero hours) counts toward the sandwich rule, so a
+    // gap in the data never zeroes out a paid Sunday.
+    const isExplicitlyAbsent = (e: AttEntry | undefined): boolean =>
+      !!e && e.code === "A" && !(e.hours != null && Number(e.hours) > 0);
+    const satAbsent = d - 1 >= 1 ? isExplicitlyAbsent(sat) : false;
+    const monAbsent = d + 1 <= total ? isExplicitlyAbsent(mon) : false;
     const sandwich = satAbsent && monAbsent;
     const base = e ?? { code: "A" as AttCode, hours: null, dayValue: 0 };
     out[d] = {
@@ -442,6 +447,19 @@ export async function saveAttendance(rows: AttendanceWrite[], action = "edit"): 
       throw new Error(`Work hours must be between 0 and ${MAX_WORK_HOURS}`);
     }
   }
+  // M15: honor the period lock at the data layer before any write.
+  {
+    const periods = new Set<string>();
+    for (const r of rows) {
+      const [y, m] = r.work_date.split("-").map(Number);
+      periods.add(`${y}-${m}`);
+    }
+    for (const key of periods) {
+      const [y, m] = key.split("-").map(Number);
+      const lock = await getAttendanceLock(y, m);
+      if (lock?.locked) throw new Error("This attendance period is locked and cannot be modified.");
+    }
+  }
   const actor = await currentActor();
   const dates = rows.map((r) => r.work_date);
   const empIds = Array.from(new Set(rows.map((r) => r.employee_id)));
@@ -570,6 +588,8 @@ export async function undoBatch(batchId: string) {
 
 /** Clear attendance for an employee (or everyone when employeeId is null) for a month, with audit. */
 export async function clearAttendance(year: number, month: number, employeeId: string | null) {
+  const lock = await getAttendanceLock(year, month);
+  if (lock?.locked) throw new Error("This attendance period is locked and cannot be modified.");
   const from = isoDate(year, month, 1);
   const to = isoDate(year, month, daysInMonth(year, month));
   let q = supabase.from("attendance").select("employee_id,work_date,code,work_hours,day_value").gte("work_date", from).lte("work_date", to);
@@ -671,6 +691,18 @@ export async function settleEmiForPeriod(
       if (amount <= 0) continue;
       const s = advanceSummary(advance);
       const applied = Math.min(amount, s.balance);
+      // M16: idempotent — if a payment row already exists for this
+      // (advance, period) skip the increment/rewrite so a re-run never
+      // double-counts an installment.
+      const { data: existingPay, error: exErr } = await supabase
+        .from("advance_payments")
+        .select("id")
+        .eq("advance_id", advance.id)
+        .eq("period_year", year)
+        .eq("period_month", month)
+        .maybeSingle();
+      if (exErr) throw exErr;
+      if (existingPay) continue;
       const { error: pErr } = await supabase.from("advance_payments").upsert(
         {
           advance_id: advance.id, employee_id: empId, period_year: year, period_month: month,

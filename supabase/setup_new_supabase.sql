@@ -5074,11 +5074,11 @@ DECLARE
 BEGIN
   IF _indent_id IS NULL THEN RETURN; END IF;
 
-  SELECT COUNT(*), COUNT(*) FILTER (WHERE status='Submitted')
+  SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('Submitted','Challan Generated'))
     INTO dc_count, dc_done
     FROM public.delivery_challans WHERE indent_id = _indent_id;
 
-  SELECT COUNT(*), COUNT(*) FILTER (WHERE status='Submitted')
+  SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('Submitted','Challan Generated'))
     INTO grn_count, grn_done
     FROM public.grns WHERE indent_id = _indent_id;
 

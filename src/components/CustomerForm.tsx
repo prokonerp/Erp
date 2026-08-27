@@ -142,8 +142,8 @@ export function validateCustomerForm(form: CustomerFormState): { message: string
   if (!isValidPhone(form.phone)) return { message: "Enter a valid 10-digit mobile number", tab: "basic" };
   if (!form.email.trim()) return { message: "Email is required", tab: "basic" };
   if (!EMAIL_REGEX.test(form.email.trim())) return { message: "Enter a valid email address", tab: "basic" };
-  if (form.customer_type === "Business" && form.gst_status !== "Unregistered" && !form.gst.trim()) return { message: "GST Number is required for Business", tab: "gst" };
-  if (form.gst_status === "Regular" && !isValidGSTIN(form.gst)) return { message: "Enter a valid 15-character GSTIN", tab: "gst" };
+  if (form.gst_status !== "Unregistered" && form.gst_status !== "Consumer" && !form.gst.trim()) return { message: "GST Number is required for the selected GST treatment", tab: "gst" };
+  if ((form.gst_status === "Regular" || form.gst_status === "Composition") && !isValidGSTIN(form.gst)) return { message: "Enter a valid 15-character GSTIN", tab: "gst" };
   if (form.pan && !PAN_REGEX.test(form.pan.toUpperCase().trim())) return { message: "PAN must be 10 chars (AAAAA9999A)", tab: "gst" };
   for (let i = 0; i < form.contacts.length; i++) {
     const c = form.contacts[i];
@@ -152,6 +152,24 @@ export function validateCustomerForm(form: CustomerFormState): { message: string
     if (c.phone && !isValidPhone(c.phone)) return { message: `Contact #${i + 1}: phone must be 10 digits`, tab: "contacts" };
   }
   return null;
+}
+
+/**
+ * M9 — derive the `gst` value for the payload.
+ * Businesses with `Unregistered` treatment keep the legacy "URP" placeholder.
+ * Individuals were previously always nulled, which silently dropped a valid
+ * GSTIN. Now both types populate `gst` from the entered GSTIN whenever the
+ * treatment is not "Unregistered" and not "Consumer" (i.e. Regular/Composition).
+ * Validation lives in `validateCustomerForm` and is unchanged.
+ */
+function computeGstValue(form: CustomerFormState): string | null {
+  if (form.gst_status === "Unregistered") {
+    return form.customer_type === "Business" ? "URP" : null;
+  }
+  if (form.gst_status === "Consumer") {
+    return null;
+  }
+  return upperTrim(form.gst) || null;
 }
 
 /** Shared DB payload builder — identical for Masters page and inline modal. */
@@ -173,7 +191,7 @@ export function buildCustomerPayload(form: CustomerFormState): Record<string, an
     phone: form.phone.trim(),
     phone_area_code: form.area_code || "+91",
     email: form.email.trim().toLowerCase() || null,
-    gst: form.customer_type === "Business" ? (form.gst_status === "Unregistered" ? "URP" : (upperTrim(form.gst) || null)) : null,
+    gst: computeGstValue(form),
     gst_status: form.gst_status,
     pan: form.pan ? upperTrim(form.pan) : null,
     place_of_supply: form.place_of_supply || null,
@@ -213,9 +231,83 @@ export function buildCustomerPayload(form: CustomerFormState): Record<string, an
   };
 }
 
+/**
+ * M10 — non-null, reasonably-unique customer_code. The DB `id` is not known
+ * pre-insert, so derive a `CUST-` prefixed suffix (matching the rest of the
+ * codebase's `CUST-...` convention in ChallanForm/GrnForm) from a short uuid.
+ */
+function generateCustomerCode(): string {
+  const rand = (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`)
+    .replace(/-/g, "")
+    .slice(0, 8);
+  return `CUST-${rand}`;
+}
+
+/**
+ * M10 — duplicate-prevention guard (insert only).
+ * Returns a clear, non-destructive error message when an active match exists,
+ * otherwise null. Queries by (company + phone) when both are present and by
+ * GSTIN when a non-empty one was entered. `dup_exempt` rows are ignored (they
+ * are intentional, sanctioned duplicates). If the lookup itself errors, we log
+ * and return null so an infra problem never blocks a legitimate save.
+ */
+async function findDuplicateCustomer(form: CustomerFormState): Promise<string | null> {
+  const gst = upperTrim(form.gst);
+  const company =
+    form.customer_type === "Business"
+      ? toTitleCaseSmart(form.company)
+      : toTitleCaseSmart([form.salutation, form.first_name, form.last_name].filter(Boolean).join(" "));
+  const phone = (form.phone || "").trim();
+
+  const queries: PromiseLike<{ data: any; error: any }>[] = [];
+  if (gst) {
+    queries.push(
+      supabase.from("customers").select("id,company,phone,gst,dup_exempt").eq("gst", gst) as any,
+    );
+  }
+  if (company && phone) {
+    queries.push(
+      supabase
+        .from("customers")
+        .select("id,company,phone,gst,dup_exempt")
+        .eq("company", company)
+        .eq("phone", phone) as any,
+    );
+  }
+  if (!queries.length) return null;
+
+  try {
+    const results = await Promise.all(queries.map((q) => q));
+    for (const { data, error } of results) {
+      if (error) {
+        console.error("[saveCustomer] duplicate lookup failed:", error.message);
+        continue;
+      }
+      const match = (data || []).find((r: any) => !r.dup_exempt);
+      if (match) {
+        const byGst = gst && match.gst === gst;
+        return `A customer already exists with the same ${
+          byGst ? `GSTIN (${gst})` : "company name and phone number"
+        } (${match.company || "—"}, ${match.phone || "—"}). Please reuse the existing record instead of creating a duplicate.`;
+      }
+    }
+    return null;
+  } catch (e: any) {
+    console.error("[saveCustomer] duplicate lookup error:", e?.message || e);
+    return null;
+  }
+}
+
 /** Saves (insert or update) and returns the persisted row. */
 export async function saveCustomer(form: CustomerFormState, editingId?: string | null): Promise<Customer> {
   const payload = buildCustomerPayload(form);
+
+  if (!editingId) {
+    payload.customer_code = generateCustomerCode();
+    const dupError = await findDuplicateCustomer(form);
+    if (dupError) throw new Error(dupError);
+  }
+
   const q = editingId
     ? supabase.from("customers").update(payload as any).eq("id", editingId).select("*").single()
     : supabase.from("customers").insert(payload as any).select("*").single();
@@ -323,7 +415,7 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
         <FieldRow label="Customer Type" required labelClassName="text-[#000000]">
           <RadioGroup
             value={form.customer_type}
-            onValueChange={(v) => setForm({ ...form, customer_type: v as CustomerType })}
+            onValueChange={(v) => setForm((f) => v === "Individual" ? { ...f, customer_type: "Individual", gst: "", gst_status: "Unregistered" } : { ...f, customer_type: "Business" })}
             className="flex gap-6"
           >
             <label className="flex items-center gap-2 cursor-pointer text-sm text-[#000000]">
@@ -385,7 +477,7 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
             <SelectContent>{GST_TREATMENTS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
           </Select>
         </FieldRow>
-        {form.customer_type === "Business" && (
+        {(form.customer_type === "Business" || (form.customer_type === "Individual" && (form.gst_status === "Regular" || form.gst_status === "Composition"))) && (
           <FieldRow label="GST Number" required>
             <Input value={form.gst} onChange={(e) => onGstChange(e.target.value)} placeholder="15-char GSTIN — auto-fills state & PAN" maxLength={15} className="font-mono uppercase" />
           </FieldRow>

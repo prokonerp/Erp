@@ -74,8 +74,10 @@ const addMonths = (iso: string, months: number): string => {
   return `${targetYear}-${mm}-${dd}`;
 };
 
-// PM schedule: 4 visits per year with 2-3-3-3 month interval pattern from start.
-// Year 1: +2, +3, +3, +3 months. Each additional year adds 4 more visits at +3 months each.
+// PM schedule: 4 visits per year with a 2-3-3 interval pattern from start
+// (Year 1: +2, +3, +3, +3 months). Each additional year adds 4 more visits at +3 months each.
+// L15: the final contract month must not be skipped — the last visit is anchored
+// to the contract end date so every agreement gets a closing PM.
 export const generatePMDates = (start: string, durationYears: number): string[] => {
   if (!start || !durationYears || durationYears <= 0) return [];
   const totalVisits = 4 * durationYears;
@@ -86,6 +88,7 @@ export const generatePMDates = (start: string, durationYears: number): string[] 
     cur = addMonths(cur, inc);
     out.push(cur);
   }
+  out[out.length - 1] = addYears(start.slice(0, 10), durationYears);
   return out;
 };
 

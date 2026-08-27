@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, Trash2, Eye, CheckCircle2, Loader2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import type { ChallanItem, DocType } from "@/lib/challan";
-import { emptyItem } from "@/lib/challan";
+import { emptyItem, isChallanEditable } from "@/lib/challan";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
@@ -164,6 +164,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     }
     setForm((f) => ({
       ...f,
+      indent_id: (payload.indent_id as string) || f.indent_id,
       reference_no: (payload.reference_no as string) || f.reference_no,
       internal_remarks: (payload.internal_remarks as string) || f.internal_remarks,
     }));
@@ -195,6 +196,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     }
     setForm((f) => ({
       ...f,
+      indent_id: (payload.indent_id as string) || f.indent_id,
       reference_no: (payload.reference_no as string) || f.reference_no,
       internal_remarks: (payload.internal_remarks as string) || f.internal_remarks,
     }));
@@ -218,7 +220,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       // these exact items — editing them would silently desync inventory.
       // Cancelled challans are reversed/terminal and equally non-editable.
       const st = (r.status as string) || "";
-      if (st === "Dispatched" || st === "Cancelled") {
+      if (!isChallanEditable(st)) {
         toast.error(`This challan is ${st} — stock is already posted. Editing is blocked.`);
         navigate({ to: "/challan/$id", params: { id: editId } });
         return;

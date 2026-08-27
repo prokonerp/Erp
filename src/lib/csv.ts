@@ -1,5 +1,6 @@
 /** Tiny RFC-4180-ish CSV parser. Handles quoted fields, embedded commas, escaped quotes ("") and CRLF. */
 export function parseCSV(text: string): Record<string, string>[] {
+  text = text.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
   let cur = "";
   let row: string[] = [];
@@ -35,7 +36,7 @@ export function parseCSV(text: string): Record<string, string>[] {
 export function buildCSV(headers: string[], rows: Record<string, unknown>[]): string {
   const esc = (v: unknown) => {
     const s = v == null ? "" : String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join("\n");
 }

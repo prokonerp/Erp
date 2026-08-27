@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 
 export type IndentMapRow = {
   oracle_no: string;
@@ -11,7 +11,7 @@ export type IndentMapRow = {
 /** Return every (oracle_no → indent) mapping for a ticket. Used by the ticket
  *  page to render per-row View/Create actions in one round-trip. */
 export const listIndentMapForTicket = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveUser])
   .inputValidator((data: { ticket_id: string }) => data)
   .handler(async ({ data, context }): Promise<IndentMapRow[]> => {
     const { supabase } = context;
@@ -42,7 +42,7 @@ export const listIndentMapForTicket = createServerFn({ method: "GET" })
 /** Lookup a single (ticket, oracle_no) mapping. Returns null when no indent
  *  exists for that oracle yet, so the caller can fall back to Create. */
 export const getIndentByTicketOracle = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireActiveUser])
   .inputValidator((data: { ticket_id: string; oracle_no: string }) => data)
   .handler(async ({ data, context }): Promise<IndentMapRow | null> => {
     const on = (data.oracle_no || "").trim();

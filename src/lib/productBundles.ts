@@ -80,12 +80,15 @@ export async function saveBundleForParent(
     note?: string | null;
   }>,
 ): Promise<void> {
-  const { error: delErr } = await supabase
+  // Capture the existing rows first so a failed insert never wipes the
+  // bundle definition (M18): we insert the new children, then — only after a
+  // successful insert — prune the previously-stored rows.
+  const { data: prior, error: selErr } = await supabase
     .from("product_bundles" as any)
-    .delete()
+    .select("id")
     .eq("parent_product_id", parentId);
-  if (delErr) throw delErr;
-  if (!children.length) return;
+  if (selErr) throw selErr;
+
   const payload = children.map((c, i) => ({
     parent_product_id: parentId,
     child_product_id: c.child_product_id,
@@ -95,8 +98,21 @@ export async function saveBundleForParent(
     sort_order: c.sort_order ?? i,
     note: c.note ?? null,
   }));
-  const { error } = await supabase.from("product_bundles" as any).insert(payload as any);
-  if (error) throw error;
+
+  if (payload.length) {
+    const { error } = await supabase.from("product_bundles" as any).insert(payload as any);
+    if (error) throw error; // prior definition stays intact on failure
+  }
+
+  const priorIds = ((prior ?? []) as unknown as { id: string }[]).map((r) => r.id);
+  if (priorIds.length) {
+    const { error: delErr } = await supabase
+      .from("product_bundles" as any)
+      .delete()
+      .eq("parent_product_id", parentId)
+      .in("id", priorIds);
+    if (delErr) throw delErr;
+  }
 }
 
 // Selection state used by the "apply bundle" dialog.
