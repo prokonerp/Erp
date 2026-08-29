@@ -128,9 +128,8 @@ function AppLayout() {
   }, [openGroups]);
   useEffect(() => {
     const activeGroup = groupForPath(location.pathname);
-    if (activeGroup && !openGroups[activeGroup]) {
-      setOpenGroups((s) => ({ ...s, [activeGroup]: true }));
-    }
+    if (!activeGroup) return;
+    setOpenGroups((s) => (s[activeGroup] ? s : { ...s, [activeGroup]: true }));
     prevGroupRef.current = activeGroup;
   }, [location.pathname]);
 

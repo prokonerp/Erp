@@ -26,10 +26,12 @@ export function GeneralDcPrintView({
   dc,
   company,
   warehouseNames = {},
+  authorised_signature_url,
 }: {
   dc: GeneralDcRow;
   company: CompanyProfile;
   warehouseNames?: Record<string, string>;
+  authorised_signature_url?: string | null;
 }) {
   const accent = (company.accent_color && company.accent_color.trim()) || "#14225C";
   const salesOffice = cleanAddress(company.sales_office_address);
@@ -200,6 +202,9 @@ export function GeneralDcPrintView({
           Receiver&apos;s Signature
         </div>
         <div className="border-t pt-1 text-center" style={{ borderColor: "#6b7280" }}>
+          {authorised_signature_url ? (
+            <img src={authorised_signature_url} style={{ maxHeight: 80, maxWidth: 160, objectFit: "contain" }} alt="Authorised signature" />
+          ) : null}
           <div>For {company.name}</div>
           <div className="mt-6 text-gray-600">Authorised Signatory</div>
         </div>

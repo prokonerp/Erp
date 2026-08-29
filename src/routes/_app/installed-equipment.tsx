@@ -28,6 +28,9 @@ import {
 } from "@/lib/installedEquipment";
 
 export const Route = createFileRoute("/_app/installed-equipment")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    customer: (search.customer as string) || null,
+  }),
   component: InstalledEquipmentPage,
   head: () => ({
     meta: [
@@ -85,8 +88,9 @@ function downloadEquipmentTemplate() {
 
 function InstalledEquipmentPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const { isAdmin } = useIsAdmin();
-  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerId, setCustomerId] = useState<string | null>(() => search.customer);
   const [customerName, setCustomerName] = useState("");
   const [rows, setRows] = useState<InstalledEquipment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -115,13 +119,21 @@ function InstalledEquipmentPage() {
   };
 
   const onImport = async (file: File) => {
+    if (!customerId) {
+      toast.error("Select a customer first – import is customer-specific and validates Customer/Model exactly against masters");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     setImporting(true);
     try {
       const parsed = parseCSV(await file.text());
       if (!parsed.length) { toast.error("Empty CSV"); return; }
-      const res = await importEquipmentRows(parsed);
+      const res = await importEquipmentRows(parsed, { selectedCustomerId: customerId, selectedCustomerName: customerName });
       setImportResult(res);
       if (res.imported) toast.success(`Imported ${res.imported} row(s)`);
+      if (res.failed.length || res.skipped.length) {
+        toast.error(`${res.failed.length + res.skipped.length} row(s) not inserted – see import summary and download error Excel`);
+      }
       if (customerId) await load(customerId);
     } catch (e) {
       toast.error((e as { message?: string })?.message || "Import failed");
@@ -131,10 +143,39 @@ function InstalledEquipmentPage() {
     }
   };
 
+  const downloadImportErrors = () => {
+    if (!importResult) return;
+    const errorRows = [
+      ...importResult.failed.map((f) => ({ Row: f.row, Type: "Failed", Reason: f.reason })),
+      ...importResult.skipped.map((s) => ({ Row: s.row, Type: "Skipped (duplicate serial)", Reason: s.reason })),
+    ];
+    if (!errorRows.length) { toast.error("No errors to export"); return; }
+    const csv = buildCSV(["Row", "Type", "Reason"], errorRows as unknown as Record<string, string>[]);
+    downloadCSV(`InstalledEquipment_import_errors_${new Date().toISOString().slice(0,10)}.csv`, csv);
+  };
+
   useEffect(() => {
     if (!customerId) { setRows([]); return; }
     void load(customerId);
   }, [customerId]);
+
+  // Keep URL in sync so browser Back restores the selected customer and its equipment
+  useEffect(() => {
+    const urlCustomer = search.customer ?? null;
+    if (customerId !== urlCustomer) {
+      navigate({
+        to: "/installed-equipment",
+        search: (prev: any) => ({ ...prev, customer: customerId || undefined }),
+        replace: false,
+      } as never);
+    }
+  }, [customerId]);
+
+  useEffect(() => {
+    if (search.customer !== undefined && search.customer !== customerId) {
+      setCustomerId(search.customer);
+    }
+  }, [search.customer]);
 
   const decorated = useMemo(
     () => rows.map((r) => {
@@ -320,16 +361,20 @@ function InstalledEquipmentPage() {
               onChange={(id, c) => { setCustomerId(id); setCustomerName(c?.company || ""); }}
             />
           </div>
-          <Button disabled={!customerId} size="sm" onClick={openAdd}>
-            <Plus className="h-4 w-4 mr-1" />Add Equipment
-          </Button>
+          {isAdmin && (
+            <Button disabled={!customerId} size="sm" onClick={openAdd}>
+              <Plus className="h-4 w-4 mr-1" />Add Equipment
+            </Button>
+          )}
           <input
             ref={fileRef} type="file" accept=".csv,text/csv" hidden
             onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])}
           />
-          <Button variant="outline" size="sm" disabled={importing} onClick={() => fileRef.current?.click()}>
-            <Upload className="h-4 w-4 mr-1" />{importing ? "Importing…" : "Import CSV"}
-          </Button>
+          {isAdmin && (
+            <Button variant="outline" size="sm" disabled={importing} onClick={() => fileRef.current?.click()}>
+              <Upload className="h-4 w-4 mr-1" />{importing ? "Importing…" : "Import CSV"}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={downloadEquipmentTemplate} title="Download a sample CSV with the expected columns">
             <FileDown className="h-4 w-4 mr-1" />Sample CSV
           </Button>
@@ -393,10 +438,15 @@ function InstalledEquipmentPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
               <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">{importResult.imported} imported</Badge>
               <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">{importResult.skipped.length} skipped (duplicates)</Badge>
               <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">{importResult.failed.length} failed</Badge>
+              {(importResult.skipped.length > 0 || importResult.failed.length > 0) && (
+                <Button variant="outline" size="sm" onClick={downloadImportErrors} className="ml-auto">
+                  <FileDown className="h-4 w-4 mr-1" />Download Errors Excel
+                </Button>
+              )}
             </div>
             {(importResult.skipped.length > 0 || importResult.failed.length > 0) && (
               <ul className="max-h-48 overflow-auto rounded-md border p-2 text-xs space-y-1">
@@ -408,6 +458,7 @@ function InstalledEquipmentPage() {
                 ))}
               </ul>
             )}
+            <p className="text-xs text-muted-foreground">Validation is exact against masters — Customer and Model must match exactly (case/spacing). Duplicates by serial are skipped. Invalid rows are not inserted; rest are imported. Use “Download Errors Excel” to get the true per-row reasons.</p>
           </CardContent>
         </Card>
       )}
@@ -453,16 +504,16 @@ function InstalledEquipmentPage() {
                     <th className="px-2 py-1.5 w-10">Sr</th>
                     <th className="px-2 py-1.5">Model No</th>
                     <th className="px-2 py-1.5">Serial No</th>
-                    <th className="px-2 py-1.5">Inv No</th>
-                    <th className="px-2 py-1.5">Inv Date</th>
-                    <th className="px-2 py-1.5 text-right">Warranty (M)</th>
+                    {isAdmin && <th className="px-2 py-1.5">Inv No</th>}
+                    {isAdmin && <th className="px-2 py-1.5">Inv Date</th>}
+                    {isAdmin && <th className="px-2 py-1.5 text-right">Warranty (M)</th>}
                     <th className="px-2 py-1.5">Warranty Status</th>
-                    <th className="px-2 py-1.5">AMC Start</th>
-                    <th className="px-2 py-1.5">AMC End</th>
+                    {isAdmin && <th className="px-2 py-1.5">AMC Start</th>}
+                    {isAdmin && <th className="px-2 py-1.5">AMC End</th>}
                     <th className="px-2 py-1.5">AMC Status</th>
                     <th className="px-2 py-1.5 w-16 text-center">Ticket</th>
                     <th className="px-2 py-1.5 w-14 text-center">View</th>
-                    <th className="px-2 py-1.5 w-20 text-center">Actions</th>
+                    {isAdmin && <th className="px-2 py-1.5 w-20 text-center">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -471,15 +522,15 @@ function InstalledEquipmentPage() {
                       <td className="px-2 py-1 text-muted-foreground">{i + 1}</td>
                       <td className="px-2 py-1 font-medium">{d.row.model_no}</td>
                       <td className="px-2 py-1 font-mono">{d.row.serial_no || "—"}</td>
-                      <td className="px-2 py-1">{d.row.invoice_no || "—"}</td>
-                      <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.invoice_date) || "—"}</td>
-                      <td className="px-2 py-1 text-right">{d.row.warranty_months || 0}</td>
+                      {isAdmin && <td className="px-2 py-1">{d.row.invoice_no || "—"}</td>}
+                      {isAdmin && <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.invoice_date) || "—"}</td>}
+                      {isAdmin && <td className="px-2 py-1 text-right">{d.row.warranty_months || 0}</td>}
                       <td className="px-2 py-1">
                         <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusClass(d.w)}`}>{statusLabel[d.w]}</Badge>
-                        {d.wEnd && <span className="ml-1 text-muted-foreground">{fmtDate(d.wEnd)}</span>}
+                        {isAdmin && d.wEnd && <span className="ml-1 text-muted-foreground">{fmtDate(d.wEnd)}</span>}
                       </td>
-                      <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.amc_start_date) || "—"}</td>
-                      <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.amc_end_date) || "—"}</td>
+                      {isAdmin && <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.amc_start_date) || "—"}</td>}
+                      {isAdmin && <td className="px-2 py-1 whitespace-nowrap">{fmtDate(d.row.amc_end_date) || "—"}</td>}
                       <td className="px-2 py-1">
                         <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusClass(d.a)}`}>{statusLabel[d.a]}</Badge>
                       </td>
@@ -500,24 +551,20 @@ function InstalledEquipmentPage() {
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
                       </td>
-                      <td className="px-2 py-1 text-center whitespace-nowrap">
-                        {isAdmin ? (
-                          <>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(d.row)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" title="Delete" onClick={() => setDeleteRow(d.row)}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
+                      {isAdmin && (
+                        <td className="px-2 py-1 text-center whitespace-nowrap">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(d.row)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" title="Delete" onClick={() => setDeleteRow(d.row)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {!loading && filtered.length === 0 && (
-                    <tr><td colSpan={13} className="px-2 py-8 text-center text-muted-foreground">
+                    <tr><td colSpan={isAdmin ? 13 : 7} className="px-2 py-8 text-center text-muted-foreground">
                       {rows.length === 0 ? "No installed equipment recorded for this customer yet." : "No rows match the current search / filters."}
                     </td></tr>
                   )}

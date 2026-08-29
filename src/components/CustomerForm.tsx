@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -590,16 +590,14 @@ export function CustomerFormDialog({
   const [form, setForm] = useState<CustomerFormState>(emptyCustomerForm);
   const [tab, setTab] = useState("basic");
   const [saving, setSaving] = useState(false);
-  const [seed, setSeed] = useState<string | null>(null);
 
-  // Re-seed the form whenever the dialog is (re)opened.
-  const key = `${open}|${editing?.id ?? ""}|${initialCompany ?? ""}`;
-  if (open && seed !== key) {
-    setSeed(key);
-    setForm(editing ? customerToForm(editing) : { ...emptyCustomerForm, company: (initialCompany || "").trim() });
-    setTab("basic");
-  }
-  if (!open && seed !== null) setSeed(null);
+  // Re-seed the form whenever the dialog is (re)opened — useEffect to avoid setState during render.
+  useEffect(() => {
+    if (open) {
+      setForm(editing ? customerToForm(editing) : { ...emptyCustomerForm, company: (initialCompany || "").trim() });
+      setTab("basic");
+    }
+  }, [open, editing?.id, initialCompany]); // editing id is stable; re-seed when dialog opens or target changes
 
   async function submit(addAnother: boolean) {
     const err = validateCustomerForm(form);
@@ -612,7 +610,6 @@ export function CustomerFormDialog({
       if (addAnother) {
         setForm({ ...emptyCustomerForm });
         setTab("basic");
-        setSeed(`${open}|new|${Date.now()}`);
       } else {
         onOpenChange(false);
       }
@@ -625,9 +622,12 @@ export function CustomerFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0">
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0" aria-describedby={undefined}>
         <DialogHeader className="px-6 pt-5 pb-3 border-b">
           <DialogTitle className="text-xl">{editing ? "Edit Customer" : "New Customer"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {editing ? "Update customer details" : "Add a new customer to the master list"}
+          </DialogDescription>
         </DialogHeader>
 
         <CustomerFormFields form={form} setForm={setForm} tab={tab} setTab={setTab} />

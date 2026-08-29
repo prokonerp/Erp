@@ -67,6 +67,7 @@ export type PrintDoc = {
   notes?: string | null;
   terms?: string | null;
   prepared_by?: PrintPreparedBy | null;
+  authorised_signature_url?: string | null;
 };
 
 const fmtMoney = (n: number) =>
@@ -410,6 +411,9 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
           {doc.type === "quotation" ? "Customer Signature" : "Vendor Acknowledgement"}
         </div>
         <div className="border-t pt-1 text-center" style={{ borderColor: "#6b7280" }}>
+          {doc.authorised_signature_url ? (
+            <img src={doc.authorised_signature_url} style={{ maxHeight: 80, maxWidth: 160, objectFit: "contain" }} alt="Authorised signature" />
+          ) : null}
           <div>For {company.name}</div>
           <div className="mt-6 text-gray-600">Authorised Signatory</div>
         </div>

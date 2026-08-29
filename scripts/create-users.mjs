@@ -106,9 +106,10 @@ const USERS = [
     email: 'services@prokonhitech.com',
     phone: '8800890483',
     role: 'User',
-    status: 'inactive',
+    status: 'active',
     custom_permissions: {
       amc: { can_create: false, can_delete: false, can_edit: false, can_read: false, enable_access: false },
+      customers: { can_create: true, can_delete: false, can_edit: true, can_read: true, enable_access: true, can_export: false, can_import: false },
       gatepass: { can_create: true, can_delete: false, can_edit: false, can_export: false, can_import: false, can_read: true, enable_access: true },
       ims: { can_create: true, can_delete: false, can_edit: true, can_export: false, can_import: false, can_read: true, enable_access: true },
       indent: { can_create: true, can_delete: false, can_edit: false, can_export: false, can_import: false, can_read: true, enable_access: true },

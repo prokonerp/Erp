@@ -47,6 +47,7 @@ import { Route as AppTicketsSettingsRouteImport } from './routes/_app/tickets.se
 import { Route as AppTicketsNewRouteImport } from './routes/_app/tickets.new'
 import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.dashboard'
 import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
+import { Route as AppSettingsSignaturesRouteImport } from './routes/_app/settings.signatures'
 import { Route as AppSalesSettingsRouteImport } from './routes/_app/sales.settings'
 import { Route as AppSalesQuotationsRouteImport } from './routes/_app/sales.quotations'
 import { Route as AppSalesOrdersRouteImport } from './routes/_app/sales.orders'
@@ -311,6 +312,11 @@ const AppTicketsIdRoute = AppTicketsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => AppTicketsRoute,
+} as any)
+const AppSettingsSignaturesRoute = AppSettingsSignaturesRouteImport.update({
+  id: '/settings/signatures',
+  path: '/settings/signatures',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppSalesSettingsRoute = AppSalesSettingsRouteImport.update({
   id: '/settings',
@@ -756,6 +762,7 @@ export interface FileRoutesByFullPath {
   '/sales/orders': typeof AppSalesOrdersRouteWithChildren
   '/sales/quotations': typeof AppSalesQuotationsRoute
   '/sales/settings': typeof AppSalesSettingsRoute
+  '/settings/signatures': typeof AppSettingsSignaturesRoute
   '/tickets/$id': typeof AppTicketsIdRoute
   '/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/tickets/new': typeof AppTicketsNewRoute
@@ -855,6 +862,7 @@ export interface FileRoutesByTo {
   '/sales/orders': typeof AppSalesOrdersRouteWithChildren
   '/sales/quotations': typeof AppSalesQuotationsRoute
   '/sales/settings': typeof AppSalesSettingsRoute
+  '/settings/signatures': typeof AppSettingsSignaturesRoute
   '/tickets/$id': typeof AppTicketsIdRoute
   '/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/tickets/new': typeof AppTicketsNewRoute
@@ -971,6 +979,7 @@ export interface FileRoutesById {
   '/_app/sales/orders': typeof AppSalesOrdersRouteWithChildren
   '/_app/sales/quotations': typeof AppSalesQuotationsRoute
   '/_app/sales/settings': typeof AppSalesSettingsRoute
+  '/_app/settings/signatures': typeof AppSettingsSignaturesRoute
   '/_app/tickets/$id': typeof AppTicketsIdRoute
   '/_app/tickets/dashboard': typeof AppTicketsDashboardRoute
   '/_app/tickets/new': typeof AppTicketsNewRoute
@@ -1087,6 +1096,7 @@ export interface FileRouteTypes {
     | '/sales/orders'
     | '/sales/quotations'
     | '/sales/settings'
+    | '/settings/signatures'
     | '/tickets/$id'
     | '/tickets/dashboard'
     | '/tickets/new'
@@ -1186,6 +1196,7 @@ export interface FileRouteTypes {
     | '/sales/orders'
     | '/sales/quotations'
     | '/sales/settings'
+    | '/settings/signatures'
     | '/tickets/$id'
     | '/tickets/dashboard'
     | '/tickets/new'
@@ -1301,6 +1312,7 @@ export interface FileRouteTypes {
     | '/_app/sales/orders'
     | '/_app/sales/quotations'
     | '/_app/sales/settings'
+    | '/_app/settings/signatures'
     | '/_app/tickets/$id'
     | '/_app/tickets/dashboard'
     | '/_app/tickets/new'
@@ -1622,6 +1634,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/tickets/$id'
       preLoaderRoute: typeof AppTicketsIdRouteImport
       parentRoute: typeof AppTicketsRoute
+    }
+    '/_app/settings/signatures': {
+      id: '/_app/settings/signatures'
+      path: '/settings/signatures'
+      fullPath: '/settings/signatures'
+      preLoaderRoute: typeof AppSettingsSignaturesRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/sales/settings': {
       id: '/_app/sales/settings'
@@ -2539,6 +2558,7 @@ interface AppRouteChildren {
   AppTicketsRoute: typeof AppTicketsRouteWithChildren
   AppGatepassIdRoute: typeof AppGatepassIdRoute
   AppGatepassNewRoute: typeof AppGatepassNewRoute
+  AppSettingsSignaturesRoute: typeof AppSettingsSignaturesRoute
   AppGatepassIndexRoute: typeof AppGatepassIndexRoute
 }
 
@@ -2564,6 +2584,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppTicketsRoute: AppTicketsRouteWithChildren,
   AppGatepassIdRoute: AppGatepassIdRoute,
   AppGatepassNewRoute: AppGatepassNewRoute,
+  AppSettingsSignaturesRoute: AppSettingsSignaturesRoute,
   AppGatepassIndexRoute: AppGatepassIndexRoute,
 }
 

@@ -20,7 +20,7 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue>({
   theme: DEFAULT_THEME,
-  appearance: "balanced",
+  appearance: "light",
   setTheme: () => {},
 });
 

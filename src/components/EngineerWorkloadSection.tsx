@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -287,8 +287,8 @@ export function EngineerWorkloadSection() {
                   {engineerStats.map((e) => {
                     const isOpen = expanded === e.name;
                     return (
-                      <>
-                        <tr key={e.name} className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setExpanded(isOpen ? null : e.name)}>
+                      <React.Fragment key={e.name}>
+                        <tr className="border-t hover:bg-muted/30 cursor-pointer" onClick={() => setExpanded(isOpen ? null : e.name)}>
                           <td className="p-2">{isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</td>
                           <td className="p-2 font-medium">{e.name}</td>
                           <NumCell value={e.today} search={{ scope: "today", engineer: e.name }} />
@@ -310,7 +310,7 @@ export function EngineerWorkloadSection() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

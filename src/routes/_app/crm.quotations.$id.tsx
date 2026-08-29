@@ -36,6 +36,7 @@ import {
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
+import { signSignatureUrl } from "@/lib/userSignature";
 import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
 import { getCurrentUserName } from "@/lib/currentUser";
 
@@ -83,6 +84,7 @@ function QuoteEditor() {
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [warrantyMap, setWarrantyMap] = useState<Record<string, string>>({});
   const [preparedBy, setPreparedBy] = useState<PrintPreparedBy | null>(null);
+  const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const { action } = Route.useSearch();
   const autoRan = useRef(false);
@@ -136,15 +138,16 @@ function QuoteEditor() {
         const name = await getCurrentUserName();
         const { data: au } = await supabase
           .from("app_users")
-          .select("name,phone,email")
+          .select("name,phone,email,signature_url")
           .eq("user_id", u.user.id)
           .maybeSingle();
-        const row = (au as { name?: string | null; phone?: string | null; email?: string | null } | null) || null;
+        const row = (au as { name?: string | null; phone?: string | null; email?: string | null; signature_url?: string | null } | null) || null;
         setPreparedBy({
           name: (row?.name || name || u.user.email || "").trim() || null,
           phone: row?.phone || null,
           email: row?.email || u.user.email || null,
         });
+        setAuthorisedSignatureUrl(await signSignatureUrl(row?.signature_url || null));
       } catch { /* ignore */ }
     })();
   }, []);
@@ -307,9 +310,9 @@ function QuoteEditor() {
       return;
     }
     const { error } = await supabase.from("quotations").update(payload).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) throw new Error(error.message);
     toast.success("Saved");
-    load();
+    await load();
   };
 
   const setStatus = async (s: QuoteStatus) => {
@@ -340,7 +343,18 @@ function QuoteEditor() {
     if (!q) return;
     try {
       await save();
-      const r = await createSalesOrderFromQuote(q);
+      // Re-fetch the freshly saved quotation so createSalesOrderFromQuote
+      // works off DB-accurate data (stale `q` state would otherwise be used).
+      const { data: fresh, error: fetchErr } = await supabase
+        .from("quotations")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (fetchErr) throw new Error(fetchErr.message);
+      if (!fresh) throw new Error("Quotation not found after saving.");
+      const freshQuote = fresh as unknown as Quotation;
+      freshQuote.items = Array.isArray(freshQuote.items) ? freshQuote.items : [];
+      const r = await createSalesOrderFromQuote(freshQuote);
       toast.success(`Sales Order ${r.so_no || ""} created`);
       nav({ to: "/sales/orders/$id", params: { id: r.id } });
     } catch (e: unknown) {
@@ -667,6 +681,7 @@ function QuoteEditor() {
             notes: q.customer_notes,
             terms: q.terms,
             prepared_by: preparedBy,
+            authorised_signature_url: authorisedSignatureUrl,
           }}
         />
         {(() => {

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -240,16 +240,15 @@ function EditAdvanceDialog({ advance, onClose, onSaved }: { advance: Advance | n
   const [months, setMonths] = useState("");
   const [startYear, setStartYear] = useState("");
   const [startMonth, setStartMonth] = useState("");
-  const [seed, setSeed] = useState<string | null>(null);
-
-  if (advance && seed !== advance.id) {
-    setSeed(advance.id);
-    setAmount(String(advance.amount ?? 0));
-    setEmi(String(s?.emi ?? 0));
-    setMonths(String(advance.emi_months ?? 1));
-    setStartYear(String(advance.start_year ?? advance.period_year ?? new Date().getFullYear()));
-    setStartMonth(String(advance.start_month ?? advance.period_month ?? 1));
-  }
+  useEffect(() => {
+    if (advance) {
+      setAmount(String(advance.amount ?? 0));
+      setEmi(String(s?.emi ?? 0));
+      setMonths(String(advance.emi_months ?? 1));
+      setStartYear(String(advance.start_year ?? advance.period_year ?? new Date().getFullYear()));
+      setStartMonth(String(advance.start_month ?? advance.period_month ?? 1));
+    }
+  }, [advance?.id]); // re-seed when advance changes
 
   async function save() {
     if (!advance) return;
