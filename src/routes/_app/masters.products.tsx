@@ -473,6 +473,7 @@ export function ProductMasterPage() {
   async function postOpeningStock(
     productId: string,
     payload: { name: string; brand: string | null; model: string | null; category: string | null },
+    replace = false,
   ) {
     const { data: u } = await supabase.auth.getUser();
     const uid = u.user?.id ?? null;
@@ -480,6 +481,31 @@ export function ProductMasterPage() {
     const txnDate = opening.date
       ? new Date(opening.date + "T00:00:00Z").toISOString()
       : new Date().toISOString();
+
+    // When editing an existing product, REPLACE its previously-posted opening
+    // stock (and its "Opening Stock" transactions) so re-saving applies the new
+    // quantities instead of silently discarding them or duplicating rows.
+    if (replace) {
+      const modelKey = (payload.model || "").trim();
+      const matchFilter: Record<string, string> = modelKey
+        ? { part_model_no: modelKey }
+        : { part_name: payload.name };
+      const { data: existing } = await supabase
+        .from("ims_stock_items")
+        .select("id")
+        .eq("opening_stock", true)
+        .match(matchFilter);
+      const existingIds = (existing || []).map((r: { id: string }) => r.id);
+      if (existingIds.length) {
+        await supabase
+          .from("ims_transactions")
+          .delete()
+          .eq("reference", ref)
+          .in("stock_item_id", existingIds);
+        await supabase.from("ims_stock_items").delete().eq("opening_stock", true).match(matchFilter);
+      }
+    }
+
     let totalQty = 0;
     for (const row of opening.rows) {
       const rowQty = Number(row.qty) || 0;
@@ -733,11 +759,16 @@ export function ProductMasterPage() {
       }
     }
 
-    // Post opening stock — only on initial creation. Locked records must be
-    // edited via Stock Adjustment or an admin flow.
-    if (productId && !isService && opening.enabled && !openingLocked) {
+    // Post opening stock. On a fresh product this is a plain insert. For an
+    // existing product whose opening stock was already locked, admins may edit
+    // the opening-stock form (it is not read-only for admins), so re-post with
+    // replace=true to apply their changes instead of silently discarding them.
+    // Non-admins cannot edit a locked opening-stock form (it is read-only), so
+    // we must NOT re-post for them here (it would duplicate the locked rows).
+    const canPostOpening = !isService && opening.enabled && (!openingLocked || isAdmin);
+    if (productId && canPostOpening) {
       try {
-        await postOpeningStock(productId, payload);
+        await postOpeningStock(productId, payload, !!openingLocked);
       } catch (e: any) {
         toast.error(`Product saved but opening stock failed: ${e?.message || e}`);
       }
