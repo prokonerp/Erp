@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { PageLoader } from "@/components/shared/skeletons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Printer, Download, CheckCircle2, Ban, Pencil } from "lucide-react";
+import { ArrowLeft, Printer, Download, CheckCircle2, Ban, Pencil, Wrench } from "lucide-react";
 import { fetchGrn, CATEGORY_LABEL, type Grn } from "@/lib/grn";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -14,7 +14,12 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { useIsAdmin } from "@/lib/useRole";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
-import { DEFAULT_COMPANY_PROFILE, fetchCompanyProfile, type CompanyProfile } from "@/lib/companyProfile";
+import { CorrectGrnSerialDialog } from "@/components/CorrectGrnSerialDialog";
+import {
+  DEFAULT_COMPANY_PROFILE,
+  fetchCompanyProfile,
+  type CompanyProfile,
+} from "@/lib/companyProfile";
 
 export const Route = createFileRoute("/_app/grn/$id")({
   component: GrnView,
@@ -29,15 +34,27 @@ function GrnView() {
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
   const [editOpen, setEditOpen] = useState(false);
+  const [correctOpen, setCorrectOpen] = useState(false);
   const [invoiceLinked, setInvoiceLinked] = useState(false);
   const [wasEdited, setWasEdited] = useState(false);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
 
-  useEffect(() => { fetchCompanyProfile().then(setCompany).catch(() => {}); }, []);
+  useEffect(() => {
+    fetchCompanyProfile()
+      .then(setCompany)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
-    fetchGrn(id).then(setG).catch((e) => toast.error(e.message));
+    fetchGrn(id)
+      .then(setG)
+      .catch((e) => toast.error(e.message));
   }, [id]);
+
+  const refreshGrn = () =>
+    fetchGrn(id)
+      .then(setG)
+      .catch((e) => toast.error(e.message));
 
   // Auto-start the PDF download when opened with ?download=1 (from the
   // Indent Oracle pipeline "Download PDF" button).
@@ -49,7 +66,11 @@ function GrnView() {
     const t = setTimeout(async () => {
       const el = document.getElementById("print-area");
       if (!el) return;
-      try { await downloadElementAsPdf(el, `GRN_${g.grn_no || g.id}.pdf`); } catch { /* ignore */ }
+      try {
+        await downloadElementAsPdf(el, `GRN_${g.grn_no || g.id}.pdf`);
+      } catch {
+        /* ignore */
+      }
     }, 800);
     return () => clearTimeout(t);
   }, [g, autoDownloaded]);
@@ -68,10 +89,11 @@ function GrnView() {
 
       // Invoice-linkage guard: any invoice_items row whose serial_numbers
       // overlaps a serial produced by this GRN.
-      const serials = (g.items || [])
-        .map((it) => (it.serial_no || "").trim())
-        .filter(Boolean);
-      if (serials.length === 0) { setInvoiceLinked(false); return; }
+      const serials = (g.items || []).map((it) => (it.serial_no || "").trim()).filter(Boolean);
+      if (serials.length === 0) {
+        setInvoiceLinked(false);
+        return;
+      }
       const { data: inv } = await supabase
         .from("invoice_items")
         .select("id")
@@ -83,7 +105,11 @@ function GrnView() {
 
   if (!g) return <PageLoader />;
   const isOem = g.category === "oem";
-  const oemLogo = isOem ? (g.oem_logo_url ? { url: g.oem_logo_url, alt: g.source_name || "OEM" } : getOemLogo(g.source_name)) : null;
+  const oemLogo = isOem
+    ? g.oem_logo_url
+      ? { url: g.oem_logo_url, alt: g.source_name || "OEM" }
+      : getOemLogo(g.source_name)
+    : null;
   const backTo = `/grn/${g.category}` as "/grn/customer" | "/grn/oem" | "/grn/general";
   const status = g.status || "Draft";
   const isDraft = status === "Draft";
@@ -113,12 +139,19 @@ function GrnView() {
     const { data: u } = await supabase.auth.getUser();
     const { data, error } = await supabase
       .from("grns" as never)
-      .update({ status: "Submitted", submitted_by: u.user?.id ?? null, submitted_at: new Date().toISOString() } as never)
+      .update({
+        status: "Submitted",
+        submitted_by: u.user?.id ?? null,
+        submitted_at: new Date().toISOString(),
+      } as never)
       .eq("id", g.id)
       .select("*")
       .maybeSingle();
     setBusy(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     if (data) setG(data as unknown as Grn);
     toast.success("GRN submitted. Stock ledger updated.");
   };
@@ -138,7 +171,10 @@ function GrnView() {
       .update({ status: "Cancelled" } as never)
       .eq("id", g.id);
     setBusy(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setG({ ...g, status: "Cancelled" });
     toast.success("GRN cancelled. Stock reversed.");
   };
@@ -154,14 +190,17 @@ function GrnView() {
     window.print();
   };
 
-  const totals = (g.items || []).reduce((acc, it) => {
-    const q = parseFloat(it.qty_received ?? it.qty_accepted ?? "") || 0;
-    acc.q += q;
-    const cond = String(it.condition || "").toLowerCase();
-    if (cond === "bad" || cond === "defective") acc.j += q;
-    else acc.a += q;
-    return acc;
-  }, { q: 0, a: 0, j: 0 });
+  const totals = (g.items || []).reduce(
+    (acc, it) => {
+      const q = parseFloat(it.qty_received ?? it.qty_accepted ?? "") || 0;
+      acc.q += q;
+      const cond = String(it.condition || "").toLowerCase();
+      if (cond === "bad" || cond === "defective") acc.j += q;
+      else acc.a += q;
+      return acc;
+    },
+    { q: 0, a: 0, j: 0 },
+  );
 
   return (
     <>
@@ -182,16 +221,28 @@ function GrnView() {
       <div className="no-print mb-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link to="/grn">
-            <Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back to All GRN</Button>
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back to All GRN
+            </Button>
           </Link>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={isSubmitted ? "default" : isCancelled ? "destructive" : "secondary"}>{status}</Badge>
+            <Badge variant={isSubmitted ? "default" : isCancelled ? "destructive" : "secondary"}>
+              {status}
+            </Badge>
             {wasEdited && (
-              <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">Edited</Badge>
+              <Badge
+                variant="outline"
+                className="border-amber-500 text-amber-700 dark:text-amber-300"
+              >
+                Edited
+              </Badge>
             )}
             {isDraft && (
               <Link to="/grn/$id/edit" params={{ id: g.id }}>
-                <Button variant="outline" size="sm">Edit</Button>
+                <Button variant="outline" size="sm">
+                  Edit
+                </Button>
               </Link>
             )}
             {isAdmin && isSubmitted && (
@@ -201,19 +252,45 @@ function GrnView() {
                 className="gap-1.5"
                 onClick={() => setEditOpen(true)}
                 disabled={busy || invoiceLinked}
-                title={invoiceLinked ? "Invoice exists — create correction entry instead" : "Reverse stock and open for editing"}
+                title={
+                  invoiceLinked
+                    ? "Invoice exists — create correction entry instead"
+                    : "Reverse stock and open for editing"
+                }
               >
-                <Pencil className="h-4 w-4" />Edit GRN
+                <Pencil className="h-4 w-4" />
+                Edit GRN
+              </Button>
+            )}
+            {isAdmin && isSubmitted && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => setCorrectOpen(true)}
+                disabled={busy}
+                title="Correct a wrongly entered serial — automatically updated everywhere (stock, tickets, Oracle/indent, invoices, challans, etc.)"
+              >
+                <Wrench className="h-4 w-4" />
+                Correct serial
               </Button>
             )}
             {isDraft && (
               <Button size="sm" onClick={handleSubmit} disabled={busy} className="gap-1.5">
-                <CheckCircle2 className="h-4 w-4" />Submit
+                <CheckCircle2 className="h-4 w-4" />
+                Submit
               </Button>
             )}
             {isSubmitted && (
-              <Button size="sm" variant="outline" onClick={handleCancel} disabled={busy} className="gap-1.5">
-                <Ban className="h-4 w-4" />Cancel
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCancel}
+                disabled={busy}
+                className="gap-1.5"
+              >
+                <Ban className="h-4 w-4" />
+                Cancel
               </Button>
             )}
             {isAdmin && (
@@ -225,17 +302,26 @@ function GrnView() {
               />
             )}
             <Button variant="outline" size="sm" onClick={handleDownload}>
-              <Download className="h-4 w-4 mr-1" />Download PDF
+              <Download className="h-4 w-4 mr-1" />
+              Download PDF
             </Button>
-            <Button size="sm" onClick={handlePrint} disabled={isDraft} title={isDraft ? "Submit the document before printing" : ""}>
-              <Printer className="h-4 w-4 mr-1" />Print
+            <Button
+              size="sm"
+              onClick={handlePrint}
+              disabled={isDraft}
+              title={isDraft ? "Submit the document before printing" : ""}
+            >
+              <Printer className="h-4 w-4 mr-1" />
+              Print
             </Button>
           </div>
         </div>
         <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Review &amp; Print Preview</span>.
           {isDraft && " Draft GRN — click Submit to lock it and add stock to the IMS Stock Ledger."}
-          {isSubmitted && g.submitted_at && ` Submitted on ${new Date(g.submitted_at).toLocaleString()}.`}
+          {isSubmitted &&
+            g.submitted_at &&
+            ` Submitted on ${new Date(g.submitted_at).toLocaleString()}.`}
           {g.printed_at && ` · Last printed ${new Date(g.printed_at).toLocaleString()}.`}
           {invoiceLinked && (
             <span className="ml-1 text-destructive">
@@ -255,7 +341,10 @@ function GrnView() {
         reasonPlaceholder="e.g., Wrong serial captured, warehouse mismatch, qty correction…"
         onConfirm={async ({ reason }) => {
           setBusy(true);
-          const { error } = await supabase.rpc("admin_edit_grn_reverse" as never, { _id: g.id, _reason: reason } as never);
+          const { error } = await supabase.rpc(
+            "admin_edit_grn_reverse" as never,
+            { _id: g.id, _reason: reason } as never,
+          );
           setBusy(false);
           if (error) return { error: error.message };
           toast.success("Stock reversed. Opening GRN for edit.");
@@ -263,16 +352,62 @@ function GrnView() {
         }}
       />
 
-      <div id="print-area" className="bg-white text-black mx-auto shadow print:shadow-none" style={{ width: "190mm", minHeight: "277mm", padding: 0 }}>
+      <CorrectGrnSerialDialog
+        open={correctOpen}
+        onOpenChange={setCorrectOpen}
+        grnId={g.id}
+        grnNo={g.grn_no}
+        currentSerials={(g.items || []).flatMap((it) => [
+          ...(it.serial_no
+            ? it.serial_no
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : []),
+          ...(it.serials || []),
+        ])}
+        onCorrected={refreshGrn}
+      />
+
+      <div
+        id="print-area"
+        className="bg-white text-black mx-auto shadow print:shadow-none"
+        style={{ width: "190mm", minHeight: "277mm", padding: 0 }}
+      >
         {/* Header */}
         <div style={{ display: "flex", borderBottom: "2px solid #000", paddingBottom: 8 }}>
-          <div style={{ width: isOem ? "35%" : "30%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, paddingRight: 8 }}>
-            <img src={company.logo_url || prokonLogo.url} alt={company.name} style={{ maxHeight: isOem ? 45 : 60, objectFit: "contain" }} />
+          <div
+            style={{
+              width: isOem ? "35%" : "30%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              paddingRight: 8,
+            }}
+          >
+            <img
+              src={company.logo_url || prokonLogo.url}
+              alt={company.name}
+              style={{ maxHeight: isOem ? 45 : 60, objectFit: "contain" }}
+            />
             {isOem && oemLogo && (
-              <img src={oemLogo.url} alt={oemLogo.alt} style={{ maxHeight: 45, objectFit: "contain" }} />
+              <img
+                src={oemLogo.url}
+                alt={oemLogo.alt}
+                style={{ maxHeight: 45, objectFit: "contain" }}
+              />
             )}
           </div>
-          <div style={{ width: isOem ? "65%" : "70%", textAlign: "right", fontSize: 11, lineHeight: 1.4 }}>
+          <div
+            style={{
+              width: isOem ? "65%" : "70%",
+              textAlign: "right",
+              fontSize: 11,
+              lineHeight: 1.4,
+            }}
+          >
             <div style={{ fontSize: 14, fontWeight: 700, color: "#1e3a8a" }}>{company.name}</div>
             <div>{company.regd_address}</div>
             {company.factory_address && <div>{company.factory_address}</div>}
@@ -291,7 +426,16 @@ function GrnView() {
 
         {/* Title */}
         <div style={{ textAlign: "center", margin: "8px 0" }}>
-          <div style={{ display: "inline-block", border: "2px solid #000", padding: "4px 16px", fontWeight: 700, letterSpacing: 2, fontSize: 14 }}>
+          <div
+            style={{
+              display: "inline-block",
+              border: "2px solid #000",
+              padding: "4px 16px",
+              fontWeight: 700,
+              letterSpacing: 2,
+              fontSize: 14,
+            }}
+          >
             GOODS RECEIPT NOTE (GRN)
           </div>
           <div style={{ fontSize: 12, marginTop: 4, fontWeight: 700, letterSpacing: 1 }}>
@@ -300,7 +444,12 @@ function GrnView() {
           <div style={{ fontSize: 11, marginTop: 2 }}>
             <b>GRN No:</b> <span style={{ fontFamily: "monospace" }}>{g.grn_no}</span> &nbsp;&nbsp;
             <b>Date:</b> {g.grn_date}
-            {g.receipt_date && <> &nbsp;&nbsp;<b>Received:</b> {g.receipt_date}</>}
+            {g.receipt_date && (
+              <>
+                {" "}
+                &nbsp;&nbsp;<b>Received:</b> {g.receipt_date}
+              </>
+            )}
           </div>
         </div>
 
@@ -311,31 +460,111 @@ function GrnView() {
               <td style={{ width: "50%" }}>
                 <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 2 }}>SOURCE DETAILS</div>
                 <div style={{ fontSize: 11 }}>
-                  <div><b>{isOem ? "OEM" : g.category === "customer" ? "Customer" : "Vendor / Source"}:</b> {g.source_name}</div>
-                  {g.source_code && <div><b>Code:</b> {g.source_code}</div>}
-                  {g.source_gstin && <div><b>GSTIN:</b> {g.source_gstin}</div>}
-                  {g.oem_plant && <div><b>Plant:</b> {g.oem_plant}</div>}
-                  {g.source_address && <div><b>Address:</b> {g.source_address}</div>}
-                  {g.source_contact_person && <div><b>Contact:</b> {g.source_contact_person}</div>}
-                  {g.source_contact_number && <div><b>Phone:</b> {g.source_contact_number}</div>}
-                  {g.source_email && <div><b>Email:</b> {g.source_email}</div>}
+                  <div>
+                    <b>
+                      {isOem ? "OEM" : g.category === "customer" ? "Customer" : "Vendor / Source"}:
+                    </b>{" "}
+                    {g.source_name}
+                  </div>
+                  {g.source_code && (
+                    <div>
+                      <b>Code:</b> {g.source_code}
+                    </div>
+                  )}
+                  {g.source_gstin && (
+                    <div>
+                      <b>GSTIN:</b> {g.source_gstin}
+                    </div>
+                  )}
+                  {g.oem_plant && (
+                    <div>
+                      <b>Plant:</b> {g.oem_plant}
+                    </div>
+                  )}
+                  {g.source_address && (
+                    <div>
+                      <b>Address:</b> {g.source_address}
+                    </div>
+                  )}
+                  {g.source_contact_person && (
+                    <div>
+                      <b>Contact:</b> {g.source_contact_person}
+                    </div>
+                  )}
+                  {g.source_contact_number && (
+                    <div>
+                      <b>Phone:</b> {g.source_contact_number}
+                    </div>
+                  )}
+                  {g.source_email && (
+                    <div>
+                      <b>Email:</b> {g.source_email}
+                    </div>
+                  )}
                 </div>
               </td>
               <td style={{ width: "50%" }}>
-                <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 2 }}>GRN INFORMATION</div>
+                <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 2 }}>
+                  GRN INFORMATION
+                </div>
                 <div style={{ fontSize: 11 }}>
-                  <div><b>GRN No:</b> {g.grn_no}</div>
-                  <div><b>GRN Date:</b> {g.grn_date}</div>
-                  {g.source_doc_type && <div><b>Source Doc:</b> {g.source_doc_type} {g.source_doc_no} {g.source_doc_date ? `(${g.source_doc_date})` : ""}</div>}
-                  {g.reference_no && <div><b>Reference:</b> {g.reference_no}</div>}
-                  {g.po_no && <div><b>PO No:</b> {g.po_no}</div>}
-                  {g.invoice_no && <div><b>Invoice:</b> {g.invoice_no} {g.invoice_date ? `(${g.invoice_date})` : ""}</div>}
-                  {g.ticket_no && <div><b>Ticket:</b> {g.ticket_no}</div>}
-                  {g.vehicle_number && <div><b>Vehicle:</b> {g.vehicle_number}</div>}
-                  {g.transporter_name && <div><b>Transporter:</b> {g.transporter_name}</div>}
-                  {g.lr_number && <div><b>LR No:</b> {g.lr_number}</div>}
-                  {(g.driver_name || g.driver_mobile) && <div><b>Driver:</b> {g.driver_name} {g.driver_mobile ? `(${g.driver_mobile})` : ""}</div>}
-                  {(g.num_packages || g.total_weight) && <div><b>Pkgs/Weight:</b> {g.num_packages || "-"} / {g.total_weight || "-"}</div>}
+                  <div>
+                    <b>GRN No:</b> {g.grn_no}
+                  </div>
+                  <div>
+                    <b>GRN Date:</b> {g.grn_date}
+                  </div>
+                  {g.source_doc_type && (
+                    <div>
+                      <b>Source Doc:</b> {g.source_doc_type} {g.source_doc_no}{" "}
+                      {g.source_doc_date ? `(${g.source_doc_date})` : ""}
+                    </div>
+                  )}
+                  {g.reference_no && (
+                    <div>
+                      <b>Reference:</b> {g.reference_no}
+                    </div>
+                  )}
+                  {g.po_no && (
+                    <div>
+                      <b>PO No:</b> {g.po_no}
+                    </div>
+                  )}
+                  {g.invoice_no && (
+                    <div>
+                      <b>Invoice:</b> {g.invoice_no} {g.invoice_date ? `(${g.invoice_date})` : ""}
+                    </div>
+                  )}
+                  {g.ticket_no && (
+                    <div>
+                      <b>Ticket:</b> {g.ticket_no}
+                    </div>
+                  )}
+                  {g.vehicle_number && (
+                    <div>
+                      <b>Vehicle:</b> {g.vehicle_number}
+                    </div>
+                  )}
+                  {g.transporter_name && (
+                    <div>
+                      <b>Transporter:</b> {g.transporter_name}
+                    </div>
+                  )}
+                  {g.lr_number && (
+                    <div>
+                      <b>LR No:</b> {g.lr_number}
+                    </div>
+                  )}
+                  {(g.driver_name || g.driver_mobile) && (
+                    <div>
+                      <b>Driver:</b> {g.driver_name} {g.driver_mobile ? `(${g.driver_mobile})` : ""}
+                    </div>
+                  )}
+                  {(g.num_packages || g.total_weight) && (
+                    <div>
+                      <b>Pkgs/Weight:</b> {g.num_packages || "-"} / {g.total_weight || "-"}
+                    </div>
+                  )}
                 </div>
               </td>
             </tr>
@@ -361,7 +590,10 @@ function GrnView() {
               <tr key={i}>
                 <td style={{ textAlign: "center" }}>{i + 1}</td>
                 <td>{it.part_no}</td>
-                <td>{it.part_name}{it.description ? ` — ${it.description}` : ""}</td>
+                <td>
+                  {it.part_name}
+                  {it.description ? ` — ${it.description}` : ""}
+                </td>
                 {!isCustomerCat(g.category) && <td>{it.model_no || ""}</td>}
                 {!isCustomerCat(g.category) && <td>{it.serial_no || ""}</td>}
                 <td style={{ textAlign: "center" }}>{it.uom}</td>
@@ -378,10 +610,21 @@ function GrnView() {
               </tr>
             ))}
             {Array.from({ length: Math.max(0, 3 - (g.items?.length || 0)) }).map((_, i) => (
-              <tr key={`e${i}`}><td>&nbsp;</td><td></td><td></td>{!isCustomerCat(g.category) && <td></td>}{!isCustomerCat(g.category) && <td></td>}<td></td><td></td><td></td></tr>
+              <tr key={`e${i}`}>
+                <td>&nbsp;</td>
+                <td></td>
+                <td></td>
+                {!isCustomerCat(g.category) && <td></td>}
+                {!isCustomerCat(g.category) && <td></td>}
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
             ))}
             <tr style={{ fontWeight: 700, background: "#f8fafc" }}>
-              <td colSpan={isCustomerCat(g.category) ? 5 : 7} style={{ textAlign: "right" }}>Total Qty</td>
+              <td colSpan={isCustomerCat(g.category) ? 5 : 7} style={{ textAlign: "right" }}>
+                Total Qty
+              </td>
               <td style={{ textAlign: "right" }}>{totals.q}</td>
               <td></td>
             </tr>
@@ -393,22 +636,45 @@ function GrnView() {
           <tbody>
             <tr>
               <td style={{ width: "50%" }}>
-                <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 2 }}>QUALITY INSPECTION</div>
+                <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 2 }}>
+                  QUALITY INSPECTION
+                </div>
                 <div style={{ fontSize: 11 }}>
-                  <div><b>QC Status:</b> {g.qc_status || "-"}</div>
-                  <div><b>Inspector:</b> {g.qc_inspector || "-"}</div>
-                  <div><b>QC Date:</b> {g.qc_date || "-"}</div>
-                  <div><b>Accepted:</b> {g.accepted_qty ?? totals.a} &nbsp; <b>Rejected:</b> {g.rejected_qty ?? totals.j}</div>
-                  {g.qc_remarks && <div><b>Remarks:</b> {g.qc_remarks}</div>}
+                  <div>
+                    <b>QC Status:</b> {g.qc_status || "-"}
+                  </div>
+                  <div>
+                    <b>Inspector:</b> {g.qc_inspector || "-"}
+                  </div>
+                  <div>
+                    <b>QC Date:</b> {g.qc_date || "-"}
+                  </div>
+                  <div>
+                    <b>Accepted:</b> {g.accepted_qty ?? totals.a} &nbsp; <b>Rejected:</b>{" "}
+                    {g.rejected_qty ?? totals.j}
+                  </div>
+                  {g.qc_remarks && (
+                    <div>
+                      <b>Remarks:</b> {g.qc_remarks}
+                    </div>
+                  )}
                 </div>
               </td>
               <td style={{ width: "50%" }}>
                 <div style={{ fontWeight: 700, fontSize: 11, marginBottom: 2 }}>STORAGE</div>
                 <div style={{ fontSize: 11 }}>
-                  <div><b>Warehouse:</b> {g.warehouse_name || "-"}</div>
-                  <div><b>Location:</b> {g.storage_location || "-"}</div>
-                  <div><b>Bin / Rack:</b> {g.bin_no || "-"}</div>
-                  <div><b>Status:</b> {g.status}</div>
+                  <div>
+                    <b>Warehouse:</b> {g.warehouse_name || "-"}
+                  </div>
+                  <div>
+                    <b>Location:</b> {g.storage_location || "-"}
+                  </div>
+                  <div>
+                    <b>Bin / Rack:</b> {g.bin_no || "-"}
+                  </div>
+                  <div>
+                    <b>Status:</b> {g.status}
+                  </div>
                 </div>
               </td>
             </tr>
@@ -417,8 +683,16 @@ function GrnView() {
 
         {(g.receipt_remarks || g.internal_remarks) && (
           <div style={{ fontSize: 11, marginBottom: 6, border: "1px solid #333", padding: 6 }}>
-            {g.receipt_remarks && <div><b>Receipt Remarks:</b> {g.receipt_remarks}</div>}
-            {g.internal_remarks && <div><b>Internal Remarks:</b> {g.internal_remarks}</div>}
+            {g.receipt_remarks && (
+              <div>
+                <b>Receipt Remarks:</b> {g.receipt_remarks}
+              </div>
+            )}
+            {g.internal_remarks && (
+              <div>
+                <b>Internal Remarks:</b> {g.internal_remarks}
+              </div>
+            )}
           </div>
         )}
 
@@ -431,8 +705,19 @@ function GrnView() {
                 { label: "Checked By / QC", val: g.checked_by },
                 { label: "Approved By", val: g.approved_by },
               ].map((s) => (
-                <td key={s.label} style={{ height: 70, verticalAlign: "bottom", textAlign: "center", width: "33%" }}>
-                  <div style={{ borderTop: "1px solid #000", paddingTop: 4, marginTop: 40, fontSize: 11, fontWeight: 600 }}>
+                <td
+                  key={s.label}
+                  style={{ height: 70, verticalAlign: "bottom", textAlign: "center", width: "33%" }}
+                >
+                  <div
+                    style={{
+                      borderTop: "1px solid #000",
+                      paddingTop: 4,
+                      marginTop: 40,
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  >
                     {s.label}
                   </div>
                   <div style={{ fontSize: 10 }}>{s.val || ""}</div>
@@ -446,4 +731,6 @@ function GrnView() {
   );
 }
 
-function isCustomerCat(c: string) { return c === "customer"; }
+function isCustomerCat(c: string) {
+  return c === "customer";
+}

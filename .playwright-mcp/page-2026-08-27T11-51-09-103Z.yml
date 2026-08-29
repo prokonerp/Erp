@@ -1,0 +1,4 @@
+- generic [active] [ref=e1]:
+  - status "Loading your workspace…" [ref=e2]:
+    - paragraph [ref=e5]: Loading your workspace…
+  - region "Notifications alt+T"
