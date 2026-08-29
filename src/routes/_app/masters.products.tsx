@@ -624,14 +624,13 @@ export function ProductMasterPage() {
       toast.error("Description must be 200 characters or less");
       return;
     }
-    const isService = form.item_type === "service";
-    if (!isService) {
-      const openingErr = validateOpeningStock(opening, form.serial_tracking);
-      if (openingErr) {
-        toast.error(openingErr);
-        setTab("opening");
-        return;
-      }
+    // Validate opening stock for both products and services (services may now
+    // carry opening stock too).
+    const openingErr = validateOpeningStock(opening, form.serial_tracking);
+    if (openingErr) {
+      toast.error(openingErr);
+      setTab("opening");
+      return;
     }
     const ed = (editingDetail as unknown as Record<string, any>) || {};
     const wasSerialized = !!ed.serial_tracking || !!ed.is_serialized;
@@ -759,18 +758,19 @@ export function ProductMasterPage() {
       }
     }
 
-    // Post opening stock. On a fresh product this is a plain insert. For an
-    // existing product whose opening stock was already locked, admins may edit
-    // the opening-stock form (it is not read-only for admins), so re-post with
-    // replace=true to apply their changes instead of silently discarding them.
-    // Non-admins cannot edit a locked opening-stock form (it is read-only), so
-    // we must NOT re-post for them here (it would duplicate the locked rows).
-    const canPostOpening = !isService && opening.enabled && (!openingLocked || isAdmin);
+    // Post opening stock (products AND services may carry it). On a fresh item
+    // this is a plain insert. For an existing item whose opening stock was
+    // already locked, admins may edit the opening-stock form (it is not
+    // read-only for admins), so re-post with replace=true to apply their
+    // changes instead of silently discarding them. Non-admins cannot edit a
+    // locked opening-stock form (it is read-only), so we must NOT re-post for
+    // them here (it would duplicate the locked rows).
+    const canPostOpening = opening.enabled && (!openingLocked || isAdmin);
     if (productId && canPostOpening) {
       try {
         await postOpeningStock(productId, payload, !!openingLocked);
       } catch (e: any) {
-        toast.error(`Product saved but opening stock failed: ${e?.message || e}`);
+        toast.error(`Item saved but opening stock failed: ${e?.message || e}`);
       }
     }
 
@@ -1299,9 +1299,7 @@ export function ProductMasterPage() {
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="serials">Serial &amp; Warranty</TabsTrigger>
               <TabsTrigger value="bundle">Bundle</TabsTrigger>
-              {form.item_type !== "service" && (
-                <TabsTrigger value="opening">Opening Stock</TabsTrigger>
-              )}
+              <TabsTrigger value="opening">Opening Stock</TabsTrigger>
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-4">
               <div className="grid md:grid-cols-2 gap-4">
@@ -1315,7 +1313,6 @@ export function ProductMasterPage() {
                         variant={form.item_type === t ? "default" : "outline"}
                         onClick={() => {
                           setForm({ ...form, item_type: t });
-                          if (t === "service" && tab === "opening") setTab("details");
                         }}
                         className="justify-center"
                       >
@@ -1323,11 +1320,11 @@ export function ProductMasterPage() {
                       </Button>
                     ))}
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {form.item_type === "service"
-                      ? "Services are billable only — excluded from stock, GRN/DC pickers and IMS reports. Uses a SAC code for GST."
-                      : "Products are always inventory-tracked. Use Serial Tracking to decide serial-wise vs quantity-wise tracking."}
-                  </p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {form.item_type === "service"
+                    ? "Services are billed via SAC. They can also carry opening stock (e.g. demo/loan units) in a warehouse."
+                    : "Products are always inventory-tracked. Use Serial Tracking to decide serial-wise vs quantity-wise tracking."}
+                </p>
                 </div>
                 <div className="md:col-span-2">
                   <Label>Category *</Label>

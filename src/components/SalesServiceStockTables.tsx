@@ -37,7 +37,8 @@ function buildRows(stock: StockItem[], whIds: Set<string>, products: ProductLite
   const map = new Map<string, Row>();
   for (const r of stock) {
     const product = productMap.get(norm(r.part_model_no));
-    if (!product || product.item_type !== "product") continue;
+    // Include both Products and Services — services can now carry opening stock too.
+    if (!product) continue;
     const wid = r.warehouse_id || "";
     if (!whIds.has(wid)) continue;
     const b = bucketOf(r);

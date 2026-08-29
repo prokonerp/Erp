@@ -54,7 +54,8 @@ export function ProductStockSummary({
     const map = new Map<string, Group>();
     for (const r of stock) {
       const product = r.part_model_no ? productMap.get(r.part_model_no) : undefined;
-      if (!product || product.item_type !== "product") continue;
+      // Include both Products and Services — services can now carry opening stock too.
+      if (!product) continue;
       const key = `${(r.part_model_no || "").toLowerCase()}|${(r.oem || "").toLowerCase()}`;
       let g = map.get(key);
       if (!g) {
