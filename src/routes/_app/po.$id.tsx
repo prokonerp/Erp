@@ -19,8 +19,6 @@ import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { downloadPurchaseOrderPdf, printPurchaseOrderPdf } from "@/lib/purchaseOrderPdf";
 import { DocumentPrintView, type PrintDoc } from "@/components/DocumentPrintView";
 import { fetchCompanyProfile, DEFAULT_COMPANY_PROFILE, type CompanyProfile } from "@/lib/companyProfile";
-import { headerToCompanyProfile } from "@/lib/documentHeader";
-import { usePrintOptions } from "@/components/PrintOptionsDialog";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 
@@ -45,30 +43,6 @@ function POView() {
     email: string | null;
   } | null>(null);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
-  const printer = usePrintOptions();
-  const [pdfHeader, setPdfHeader] = useState<CompanyProfile | null>(null);
-
-  /** Shared: ask which office letterhead to use, then run the given action with it. */
-  const withHeader = async (run: (header: CompanyProfile | null) => void, viaWindowPrint = false) => {
-    const choice = await printer.ask({
-      docType: "purchase_order",
-      title: "Purchase Order print",
-      description: "Choose which office details appear on the PO letterhead.",
-      defaultSource: branch?.id ? { kind: "branch", id: branch.id } : null,
-      allowCopyLabel: false,
-      allowSupplyFrom: false,
-      company,
-    });
-    if (!choice) return;
-    const mapped = headerToCompanyProfile(choice.header);
-    setPdfHeader(mapped);
-    if (viaWindowPrint) {
-      // DOM path — wait one tick so the state lands in DocumentPrintView before printing.
-      setTimeout(() => window.print(), 150);
-    } else {
-      run(mapped);
-    }
-  };
 
   async function load() {
     setLoading(true);
@@ -129,15 +103,6 @@ function POView() {
 
   return (
     <div className="space-y-4">
-      {printer.element}
-      <style>{`
-        @media print {
-          @page { size: A4 portrait; margin: 12mm; }
-          body * { visibility: hidden; }
-          #po-print-area, #po-print-area * { visibility: visible; }
-          #po-print-area { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
-        }
-      `}</style>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" asChild><Link to="/po"><ArrowLeft className="h-4 w-4 mr-1" />Back</Link></Button>
@@ -160,9 +125,9 @@ function POView() {
           {po.status !== "cancelled" && po.status !== "completed" && (
             <Button size="sm" variant="outline" onClick={() => setStatus("cancelled")}><Ban className="h-4 w-4 mr-1" />Cancel</Button>
           )}
-          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => void withHeader((h) => printPurchaseOrderPdf({ po, items, branch, settings: pdfSettings, header: h }))}><Printer className="h-4 w-4 mr-1" />Print</Button>
-          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => void withHeader(() => {}, true)}><Printer className="h-4 w-4 mr-1" />Print (A4)</Button>
-          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => void withHeader((h) => downloadPurchaseOrderPdf({ po, items, branch, settings: pdfSettings, header: h }, `${po.po_no || "PO"}.pdf`))}><Download className="h-4 w-4 mr-1" />PDF</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => printPurchaseOrderPdf({ po, items, branch, settings: pdfSettings })}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print (A4)</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => downloadPurchaseOrderPdf({ po, items, branch, settings: pdfSettings }, `${po.po_no || "PO"}.pdf`)}><Download className="h-4 w-4 mr-1" />PDF</Button>
           <Button size="sm" variant="ghost" className="text-destructive" onClick={del}>Delete</Button>
         </div>
       </div>
@@ -267,9 +232,9 @@ function POView() {
       )}
 
       {/* A4 shared print template */}
-      <div id="po-print-area" className="hidden print:block">
+      <div className="hidden print:block">
         <DocumentPrintView
-          company={pdfHeader ?? company}
+          company={company}
           doc={{
             type: "po",
             number: po.po_no || "",

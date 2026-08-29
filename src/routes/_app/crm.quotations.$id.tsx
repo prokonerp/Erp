@@ -34,8 +34,6 @@ import {
   computeExpiryDate, DEFAULT_VALIDITY_DAYS,
 } from "@/lib/crm";
 import { getDocumentHeader } from "@/lib/letterhead";
-import { headerToCompanyProfile, companySignature } from "@/lib/documentHeader";
-import { usePrintOptions } from "@/components/PrintOptionsDialog";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/components/DocumentPrintView";
 import { signSignatureUrl } from "@/lib/userSignature";
@@ -325,19 +323,17 @@ function QuoteEditor() {
     toast.success("Status: " + s);
   };
 
-  const sendEmail = async () => {
+  const sendEmail = () => {
     if (!customer?.email) return toast.error("No customer email");
-    const sig = await companySignature();
-    const sub = encodeURIComponent(`Quotation ${q!.quote_no} - ${sig.split("\n")[0] || "Quotation"}`);
+    const sub = encodeURIComponent(`Quotation ${q!.quote_no} - ${q!.subject || "Prokon Hi-Tech Systems"}`);
     const body = encodeURIComponent(
-      `Dear ${customer.contact_name || customer.company} Team,\n\nPlease find our quotation ${q!.quote_no} dated ${fmtDate(q!.quote_date)} for your kind consideration. Total value: ${fmtMoney(totals.total)} (valid till ${fmtDate(q!.expiry_date)}).\n\nLooking forward to your confirmation.\n\nRegards,\n${sig}`
+      `Dear ${customer.contact_name || customer.company} Team,\n\nPlease find our quotation ${q!.quote_no} dated ${fmtDate(q!.quote_date)} for your kind consideration. Total value: ${fmtMoney(totals.total)} (valid till ${fmtDate(q!.expiry_date)}).\n\nLooking forward to your confirmation.\n\nRegards,\nProkon Hi-Tech Systems\nAuthorized APC Channel Partner`
     );
     window.open(`mailto:${customer.email}?subject=${sub}&body=${body}`);
   };
   const sendWA = async () => {
     if (!customer?.phone) return toast.error("No customer phone");
-    const sig = await companySignature();
-    const text = `Hi ${customer.contact_name || customer.company}, sharing our quotation ${q!.quote_no} (${fmtMoney(totals.total)}, valid till ${fmtDate(q!.expiry_date)}). Please confirm. — ${sig.split("\n")[0]}`;
+    const text = `Hi ${customer.contact_name || customer.company}, sharing our quotation ${q!.quote_no} (${fmtMoney(totals.total)}, valid till ${fmtDate(q!.expiry_date)}). Please confirm. — Prokon Hi-Tech Systems`;
     const ok = await waOpen(customer.phone, text);
     if (!ok) return toast.error("Valid mobile number is required before sending WhatsApp message.");
     toast.success("Opening WhatsApp…");
@@ -368,29 +364,8 @@ function QuoteEditor() {
 
   const docName = () => `${q?.quote_no || "Quotation"}.pdf`;
 
-  // Letterhead chosen via the print options dialog (falls back to Company Master).
-  const printer = usePrintOptions();
-  const [printHeader, setPrintHeader] = useState<CompanyProfile | null>(null);
-  const applyLetterheadChoice = async (): Promise<boolean> => {
-    const choice = await printer.ask({
-      docType: "quotation",
-      title: "Quotation letterhead",
-      description: "Choose which office details appear on the quotation.",
-      allowCopyLabel: false,
-      allowSupplyFrom: false,
-      company,
-    });
-    if (!choice) return false;
-    setPrintCompanyFromChoice(choice.header);
-    await new Promise((r) => setTimeout(r, 150)); // let the letterhead land in the DOM
-    return true;
-  };
-  const setPrintCompanyFromChoice = (h: Parameters<typeof headerToCompanyProfile>[0]) =>
-    setPrintHeader(headerToCompanyProfile(h));
-
   const doPrint = async () => {
     if (!printRef.current) return;
-    if (!(await applyLetterheadChoice())) return;
     try {
       await printElementSinglePage(printRef.current, docName());
     } catch (e: any) {
@@ -400,7 +375,6 @@ function QuoteEditor() {
 
   const doDownload = async () => {
     if (!printRef.current) return;
-    if (!(await applyLetterheadChoice())) return;
     try {
       toast.info("Preparing PDF…");
       await saveElementAsPdf(printRef.current, docName());
@@ -429,7 +403,6 @@ function QuoteEditor() {
 
   return (
     <div className="space-y-4">
-      {printer.element}
       <div className="flex items-center justify-between print:hidden flex-wrap gap-2">
         <Link to="/crm/quotations"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
         <div className="flex gap-2 flex-wrap">
@@ -647,7 +620,7 @@ function QuoteEditor() {
       {/* ============ SHARED A4 PRINT VIEW ============ */}
       <div ref={printRef} className="hidden print:block text-black">
         <DocumentPrintView
-          company={printHeader ?? company}
+          company={company}
           doc={{
             type: "quotation",
             number: q.quote_no || "",

@@ -1,18 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { PageLoader } from "@/components/shared/skeletons";
-import { Button } from "@/components/ui/button";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Printer, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
-import { getDocumentHeader } from "@/lib/letterhead";
+import { Button } from "@/components/ui/button";
 import {
-  headerToCompanyProfile,
-  resolveHeader,
-  type HeaderSource,
-} from "@/lib/documentHeader";
-import { usePrintOptions } from "@/components/PrintOptionsDialog";
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Printer, ArrowLeft } from "lucide-react";
 
 export const Route = createFileRoute("/_app/gatepass/$id")({
   component: GatepassView,
@@ -26,96 +25,25 @@ type Gatepass = {
   destination: string | null; purpose: string | null; return_type: string;
   items: Item[]; remarks: string | null; prepared_by: string | null; authorised_by: string | null;
   contact_no: string | null;
-  branch_id?: string | null;
 };
 
 function GatepassView() {
   const { id } = Route.useParams();
   const [g, setG] = useState<Gatepass | null>(null);
-  const [company, setCompany] = useState<ReturnType<typeof headerToCompanyProfile> | null>(null);
-  const printer = usePrintOptions();
-  const printPendingRef = useRef(false);
 
   useEffect(() => {
     supabase.from("gatepasses").select("*").eq("id", id).single()
       .then(({ data }) => setG(data as unknown as Gatepass));
-    getDocumentHeader().then((p) => setCompany(headerToCompanyProfile({
-      source: { kind: "regd_office" },
-      label: "Regd. Office",
-      orgName: p.name,
-      addressLines: (p.registered_office_address || p.regd_address).split(/[\n]/).map((s) => s.trim()).filter(Boolean),
-      gstin: p.gstin,
-      phone: p.phone,
-      email: p.email,
-      website: p.website,
-      logoUrl: p.logo_url,
-      accentColor: p.accent_color,
-      stateName: null,
-      stateCode: null,
-      bank: null,
-      invoiceFooter: null,
-    }))).catch(() => {});
   }, [id]);
 
-  // When the gatepass carries a branch, its identity wins over the default office.
-  useEffect(() => {
-    if (!g?.branch_id) return;
-    let alive = true;
-    resolveHeader({ kind: "branch", id: g.branch_id })
-      .then((h) => { if (alive) setCompany(headerToCompanyProfile(h)); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [g?.branch_id]);
-
-  // Print only after the chosen letterhead has been applied to the DOM.
-  useEffect(() => {
-    if (printPendingRef.current && company) {
-      printPendingRef.current = false;
-      const t = setTimeout(() => window.print(), 120);
-      return () => clearTimeout(t);
-    }
-  }, [company]);
-
-  const handlePrint = async () => {
-    const choice = await printer.smartAsk({
-      docType: "gatepass",
-      title: "Print Material Gatepass",
-      description: "Choose which office details appear on the gatepass letterhead.",
-      defaultSource: g?.branch_id ? ({ kind: "branch", id: g.branch_id } as HeaderSource) : null,
-      smartSerials: (g?.items || []).map((it) => (it.serial_no || "").trim()).filter(Boolean),
-      allowCopyLabel: false,
-      allowSupplyFrom: false,
-    });
-    if (!choice) return;
-    setCompany(headerToCompanyProfile(choice.header));
-    printPendingRef.current = true;
-  };
-
-  if (!g || !company) return <PageLoader />;
-
-  const addrLine = company.regd_address;
+  if (!g) return <PageLoader />;
 
   const Copy = ({ label }: { label: string }) => (
     <div className="bg-white text-black mx-auto max-w-3xl p-6 border print:border-0 print:shadow-none print:p-2 shadow-sm copy-block">
       <div className="text-center border-b-2 border-[#1e40af] pb-2 mb-3 relative">
         <div className="absolute right-0 top-0 text-[10px] font-bold border border-black px-2 py-0.5">{label}</div>
-        <img
-          src={company.logo_url || prokonLogo.url}
-          alt={company.name}
-          onError={(e) => { (e.currentTarget as HTMLImageElement).src = prokonLogo.url; }}
-          className="h-10 mx-auto object-contain mb-1"
-        />
-        <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent">{company.name}</h1>
-        <div className="text-sm">{addrLine}</div>
-        {(company.gstin || company.phone || company.email) && (
-          <div className="text-xs text-gray-700 mt-0.5">
-            {[
-              company.gstin ? `GSTIN: ${company.gstin}` : null,
-              company.phone ? `Phone: ${company.phone}` : null,
-              company.email ? `Email: ${company.email}` : null,
-            ].filter(Boolean).join(" | ")}
-          </div>
-        )}
+        <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent">PROKON HI-TECH SYSTEMS</h1>
+        <div className="text-sm">B-505, Picasso Centre, Sector-61, Gurgaon</div>
         <div className="mt-1 inline-block px-3 py-0.5 border-2 border-black font-bold tracking-widest text-sm">MATERIAL GATEPASS / CHALLAN</div>
       </div>
 
@@ -184,14 +112,13 @@ function GatepassView() {
       </div>
 
       <div className="mt-3 text-[10px] text-center text-gray-600 border-t pt-1">
-        System-generated gatepass · {company.name}{addrLine ? ` · ${addrLine}` : ""}
+        System-generated gatepass · Prokon Hi-Tech Systems · Picasso Centre, Sector-61, Gurgaon.
       </div>
     </div>
   );
 
   return (
     <div className="space-y-4">
-      {printer.element}
       <div className="flex flex-col gap-4 print:hidden">
         <Breadcrumb>
           <BreadcrumbList>
@@ -214,7 +141,7 @@ function GatepassView() {
         </Breadcrumb>
         <div className="flex justify-between">
           <Link to="/gatepass"><Button variant="outline" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
-          <Button onClick={handlePrint}><Printer className="h-4 w-4 mr-1" />Print Challan</Button>
+          <Button onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print Challan</Button>
         </div>
       </div>
 
@@ -227,10 +154,10 @@ function GatepassView() {
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 5mm; }
-          body * { visibility: hidden; }
-          #challan, #challan * { visibility: visible; }
-          #challan { position: absolute; left: 0; top: 0; width: 100%; height: auto; overflow: hidden; }
+          body { background: white !important; }
           html, body { height: auto !important; }
+          header, nav, .print\\:hidden { display: none !important; }
+          #challan { display: block; height: 287mm; overflow: hidden; }
           #challan > * { margin: 0 !important; }
           .copy-block {
             font-size: 9px; line-height: 1.2;

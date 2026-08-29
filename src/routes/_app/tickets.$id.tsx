@@ -30,9 +30,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { listIndentMapForTicket } from "@/lib/indent.functions";
 import { Eye } from "lucide-react";
-import { getDocumentHeader } from "@/lib/letterhead";
-import { headerToCompanyProfile } from "@/lib/documentHeader";
-import { usePrintOptions } from "@/components/PrintOptionsDialog";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -67,7 +64,6 @@ type Ticket = {
   remarks: string | null;
   created_at: string;
   customer_id: string | null;
-  equipment_id: string | null;
   oem_call: boolean;
   oem_brand: string | null;
   oem_ref_id: string | null;
@@ -151,8 +147,7 @@ function TicketDetail() {  const confirm = useConfirm();
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const [t, setT] = useState<Ticket | null>(null);
-   const [linkedEquip, setLinkedEquip] = useState<{ model_no: string; serial_no: string | null } | null>(null);
-   const [products, setProducts] = useState<{ id: string; name: string; model?: string | null; brand?: string | null; description?: string | null }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string; model?: string | null; brand?: string | null; description?: string | null }[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [busy, setBusy] = useState(false);
   const [noteText, setNoteText] = useState("");
@@ -165,53 +160,6 @@ function TicketDetail() {  const confirm = useConfirm();
   const [oemBrands, setOemBrands] = useState<string[]>(["APC","Luminous","Microtek","Eaton","Exide","Quanta"]);
   const [closingOpen, setClosingOpen] = useState(false);
   const [cancellingOpen, setCancellingOpen] = useState(false);
-  // Letterhead for the printed job sheet — resolved from the Company Master.
-  const [printCompany, setPrintCompany] = useState<ReturnType<typeof headerToCompanyProfile> | null>(null);
-  const printer = usePrintOptions();
-  const printPendingRef = useRef(false);
-
-  useEffect(() => {
-    getDocumentHeader().then((p) => setPrintCompany(headerToCompanyProfile({
-      source: { kind: "regd_office" },
-      label: "Regd. Office",
-      orgName: p.name,
-      addressLines: (p.registered_office_address || p.regd_address).split(/[\n]/).map((s) => s.trim()).filter(Boolean),
-      gstin: p.gstin,
-      phone: p.phone,
-      email: p.email,
-      website: p.website,
-      logoUrl: p.logo_url,
-      accentColor: p.accent_color,
-      stateName: null,
-      stateCode: null,
-      bank: null,
-      invoiceFooter: null,
-    }))).catch(() => {});
-  }, []);
-
-  const handlePrint = async () => {
-    const serial = (t?.serial_no || "").trim();
-    const choice = await printer.smartAsk({
-      docType: "service_ticket",
-      title: "Print Service Job Sheet",
-      description: "Choose which office details appear on the job sheet letterhead.",
-      smartSerials: serial ? [serial] : [],
-      allowCopyLabel: false,
-      allowSupplyFrom: false,
-      company: printCompany,
-    });
-    if (!choice) return;
-    setPrintCompany(headerToCompanyProfile(choice.header));
-    printPendingRef.current = true;
-  };
-
-  useEffect(() => {
-    if (printPendingRef.current && printCompany) {
-      printPendingRef.current = false;
-      const tmr = setTimeout(() => window.print(), 120);
-      return () => clearTimeout(tmr);
-    }
-  }, [printCompany]);
 
   const { isAdmin } = useIsAdmin();
   const [selectedDefRows, setSelectedDefRows] = useState<Record<number, boolean>>({});
@@ -285,26 +233,6 @@ function TicketDetail() {  const confirm = useConfirm();
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
-
-  // Fetch the installed_equipment record this ticket is linked to, so the detail
-  // page can show the model/Serial footprint and jump back to the register.
-  useEffect(() => {
-    const eqId = t?.equipment_id;
-    if (!eqId) { setLinkedEquip(null); return; }
-    let on = true;
-    supabase
-      .from("installed_equipment")
-      .select("model_no,serial_no")
-      .eq("id", eqId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!on) return;
-        if (data) setLinkedEquip({ model_no: (data as { model_no: string; serial_no: string | null }).model_no, serial_no: (data as { serial_no: string | null }).serial_no ?? null });
-        else setLinkedEquip(null);
-        if (error) console.warn("linked equipment fetch failed", error.message);
-      });
-    return () => { on = false; };
-  }, [t?.equipment_id]);
 
   // Auto-save on any change to the ticket. Debounces 2s of inactivity, silently
   // updates the DB, and reports status via `saveStatus`. Skips server round-trip
@@ -758,7 +686,7 @@ function TicketDetail() {  const confirm = useConfirm();
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handlePrint}><Printer className="h-4 w-4 mr-1" />Print</Button>
+          <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print</Button>
           <div
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground min-w-[70px]"
             aria-live="polite"
@@ -848,25 +776,6 @@ function TicketDetail() {  const confirm = useConfirm();
                 </Select>
               </div>
               <div className="md:col-span-1"><Label>Serial Number</Label><Input value={t.serial_no || ""} onChange={(e) => update({ serial_no: e.target.value.toUpperCase() })} className="font-mono" /></div>
-              <div className="md:col-span-3">
-                <Label>Installed Equipment</Label>
-                {linkedEquip ? (
-                  <div className="text-sm flex items-center gap-2">
-                    <span className="font-medium">{linkedEquip.model_no}</span>
-                    {linkedEquip.serial_no ? <span className="text-muted-foreground font-mono">S/N {linkedEquip.serial_no}</span> : null}
-                    <Button
-                      size="sm" variant="ghost"
-                      onClick={() => navigate({ to: "/installed-equipment", search: { customer: t.customer_id ?? null } })}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />Customer register
-                    </Button>
-                  </div>
-                ) : t.equipment_id ? (
-                  <span className="text-xs text-muted-foreground">Linked equipment record: {t.equipment_id.slice(0, 8)}… (details unavailable)</span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">Not linked to Installed Equipment. Scanning a serial that matches a customer's registered unit attaches it automatically.</span>
-                )}
-              </div>
               <div className="md:col-span-3"><Label>Complaint</Label><ComplaintPicker value={t.complaint || ""} onChange={(v) => update({ complaint: v })} /></div>
               <div className="md:col-span-3">
                 <Label>Special Instruction <span className="text-xs text-muted-foreground">(shows blinking ribbon when filled)</span></Label>
@@ -1272,16 +1181,15 @@ function TicketDetail() {  const confirm = useConfirm();
         </div>
       </div>
 
-      <TicketPrint t={t} customer={customer} company={printCompany} productModel={products.find((p) => p.name === t.product)?.model || t.product} />
-      {printer.element}
+      <TicketPrint t={t} customer={customer} productModel={products.find((p) => p.name === t.product)?.model || t.product} />
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 14mm; }
-          body * { visibility: hidden; }
-          .ticket-print, .ticket-print * { visibility: visible; }
-          .ticket-print { position: absolute; left: 0; top: 0; width: 100%; display: block !important; }
+          body { background: white !important; }
+          .no-print, header, nav { display: none !important; }
         }
         .ticket-print { display: none; }
+        @media print { .ticket-print { display: block !important; } }
       `}</style>
       <ClosingRemarksDialog
         open={closingOpen}
@@ -1303,8 +1211,7 @@ function TicketDetail() {  const confirm = useConfirm();
   );
 }
 
-function TicketPrint({ t, customer, productModel, company }: { t: Ticket; customer: CustomerBilling | null; productModel?: string | null; company?: ReturnType<typeof headerToCompanyProfile> | null }) {
-  const co = company ?? { name: "", regd_address: "", gstin: null, phone: null, email: null, website: null, logo_url: null } as ReturnType<typeof headerToCompanyProfile>;
+function TicketPrint({ t, customer, productModel }: { t: Ticket; customer: CustomerBilling | null; productModel?: string | null }) {
   const billLines = customer
     ? [
         customer.company,
@@ -1325,23 +1232,8 @@ function TicketPrint({ t, customer, productModel, company }: { t: Ticket; custom
   return (
     <div className="ticket-print bg-white text-black mx-auto max-w-3xl p-6 text-[12px] leading-relaxed">
       <div className="text-center border-b-2 border-[#1e40af] pb-3 mb-4">
-        <img
-          src={co.logo_url || prokonLogo.url}
-          alt={co.name || "Company"}
-          onError={(e) => { (e.currentTarget as HTMLImageElement).src = prokonLogo.url; }}
-          className="h-10 mx-auto object-contain mb-1"
-        />
-        <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent">{co.name || "—"}</h1>
-        <div className="text-sm">{co.regd_address}</div>
-        {(co.gstin || co.phone || co.email) && (
-          <div className="text-xs text-gray-700 mt-0.5">
-            {[
-              co.gstin ? `GSTIN: ${co.gstin}` : null,
-              co.phone ? `Phone: ${co.phone}` : null,
-              co.email ? `Email: ${co.email}` : null,
-            ].filter(Boolean).join(" | ")}
-          </div>
-        )}
+        <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-[#1e3a8a] via-[#2563eb] to-[#dc2626] bg-clip-text text-transparent">PROKON HI-TECH SYSTEMS</h1>
+        <div className="text-sm">B-505, Picasso Centre, Sector-61, Gurgaon</div>
         <div className="mt-2 inline-block px-3 py-0.5 border-2 border-black font-bold tracking-widest text-sm">SERVICE TICKET</div>
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 mb-3">
@@ -1435,7 +1327,7 @@ function TicketPrint({ t, customer, productModel, company }: { t: Ticket; custom
       )}
       <div className="grid grid-cols-2 gap-8 mt-12">
         <div><div className="border-t border-black pt-1 text-center">Customer Signature</div></div>
-        <div><div className="border-t border-black pt-1 text-center">For {co.name || "—"}</div></div>
+        <div><div className="border-t border-black pt-1 text-center">For Prokon Hi-Tech Systems</div></div>
       </div>
     </div>
   );
