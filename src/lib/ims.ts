@@ -194,8 +194,38 @@ export async function getStock(id: string): Promise<StockItem | null> {
 }
 
 export async function createStock(input: Partial<StockItem>): Promise<StockItem> {
-  const { data, error } = await sb.from("ims_stock_items").insert(input).select("*").single();
+  // Resolve current user for created_by and transaction audit trail
+  const { data: u } = await supabase.auth.getUser();
+  const uid = u.user?.id ?? null;
+
+  // 1. Insert stock item (with created_by)
+  const { data, error } = await sb
+    .from("ims_stock_items")
+    .insert({ ...input, created_by: uid } as never)
+    .select("*")
+    .single();
   if (error) throw error;
+
+  // 2. Create a corresponding transaction so counts/timelines stay in sync
+  const txnType: TxnType =
+    input.stock_type === "defective" ? "defective_in" : "good_in";
+  const qty = input.qty ?? 1;
+  const { error: tErr } = await sb.from("ims_transactions").insert({
+    txn_type: txnType,
+    stock_item_id: data.id,
+    part_name: input.part_name ?? null,
+    part_model_no: input.part_model_no ?? null,
+    part_serial_no: input.part_serial_no ?? null,
+    oem: input.oem ?? null,
+    to_warehouse_id: input.warehouse_id ?? null,
+    from_party: "Manual Entry",
+    qty,
+    reference: "Manual Stock Entry",
+    notes: input.notes ?? null,
+    created_by: uid,
+  } as never);
+  if (tErr) throw tErr;
+
   return data as StockItem;
 }
 

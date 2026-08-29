@@ -55,7 +55,7 @@ function Dashboard() {
     const m = new Map<string, number>();
     items.forEach((i) => {
       const k = i.warehouse_id || "—";
-      m.set(k, (m.get(k) || 0) + 1);
+      m.set(k, (m.get(k) || 0) + (Number(i.qty) || 1));
     });
     return m;
   };
@@ -63,7 +63,7 @@ function Dashboard() {
     const m = new Map<string, number>();
     items.forEach((i) => {
       const k = i.oem || "—";
-      m.set(k, (m.get(k) || 0) + 1);
+      m.set(k, (m.get(k) || 0) + (Number(i.qty) || 1));
     });
     return m;
   };
@@ -140,19 +140,19 @@ function Dashboard() {
       <section>
         <h2 className="text-lg font-semibold mb-2">Good Stock</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {stat("Total Good", good.length)}
+          {stat("Total Good", good.reduce((a, s) => a + (Number(s.qty) || 1), 0))}
           {stat("Warehouses", byWarehouse(good).size)}
           {stat("OEMs", byOem(good).size)}
-          {stat("Available", good.filter((s) => s.stock_status === "available").length)}
+          {stat("Available", good.filter((s) => s.stock_status === "available").reduce((a, s) => a + (Number(s.qty) || 1), 0))}
         </div>
       </section>
       <section>
         <h2 className="text-lg font-semibold mb-2">Defective Stock</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {stat("Total Defective", defective.length)}
-          {stat("Pending OEM Return", pendingOemReturn.length)}
+          {stat("Total Defective", defective.reduce((a, s) => a + (Number(s.qty) || 1), 0))}
+          {stat("Pending OEM Return", pendingOemReturn.reduce((a, s) => a + (Number(s.qty) || 1), 0))}
           {stat("Warehouses", byWarehouse(defective).size)}
-          {stat("Returned to OEM", defective.filter((s) => s.stock_status === "returned_to_oem").length)}
+          {stat("Returned to OEM", defective.filter((s) => s.stock_status === "returned_to_oem").reduce((a, s) => a + (Number(s.qty) || 1), 0))}
         </div>
       </section>
       <section>
@@ -170,7 +170,7 @@ function Dashboard() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {stat("Reserved", resv.filter((r) => r.status === "reserved").length)}
           {stat("Issued", resv.filter((r) => r.status === "issued").length)}
-          {stat("Available Stock", good.filter((s) => s.stock_status === "available").length)}
+          {stat("Available Stock", good.filter((s) => s.stock_status === "available").reduce((a, s) => a + (Number(s.qty) || 1), 0))}
         </div>
       </section>
 
