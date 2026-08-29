@@ -205,6 +205,7 @@ export async function createStock(input: Partial<StockItem>): Promise<StockItem>
     .select("*")
     .single();
   if (error) throw error;
+  if (!data) throw new Error("Stock insert was blocked by permissions. Contact admin to grant IMS access.");
 
   // 2. Create a corresponding transaction so counts/timelines stay in sync
   const txnType: TxnType =
