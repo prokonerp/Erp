@@ -326,3 +326,75 @@ GRANT EXECUTE ON FUNCTION public.propagate_serial_correction(text, text) TO serv
 -- Keep the correct_grn_serial admin entry point callable (it enforces its own
 -- admin check and is the only application-facing RPC for corrections).
 GRANT EXECUTE ON FUNCTION public.correct_grn_serial(uuid, text, text, text) TO authenticated;
+
+-- =============================================================================
+-- Repair 6 (LOGIC SPILL): invoice_item_sync_serials() misreads a serial
+-- CORRECTION as a real add/remove on the invoice and flips stock_status.
+--
+-- When propagate_serial_correction() rewrites invoice_items.serial_numbers
+-- from [v_old] to [v_new], the AFTER UPDATE trigger trg_invoice_item_sync_serials
+-- fires and computes:
+--     removed = {v_old} , added = {v_new}
+-- then does:
+--     UPDATE ims_stock_items SET stock_status='available' WHERE part_serial_no=ANY(removed) AND stock_status='issued';
+--     UPDATE ims_stock_items SET stock_status='issued'     WHERE part_serial_no=ANY(added)   AND stock_status='available';
+-- The second UPDATE matches the freshly-renamed stock unit (part_serial_no = v_new)
+-- and, when that unit was 'available', wrongly flips it to 'issued' — even though
+-- the admin only fixed a typo (no real issuance happened) and even though there
+-- is NO invoice actually being issued at that moment.
+--
+-- Fix: mirror the frozen-guard convention — during serial propagation the trigger
+-- must NOT mutate stock_status. It only syncs availability on genuine insert/
+-- update/delete of invoice line items.
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.invoice_item_sync_serials()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  removed TEXT[];
+  added TEXT[];
+BEGIN
+  -- A serial CORRECTION must not be interpreted as a real add/remove that
+  -- changes stock_status. The propagation routine already renamed the stock unit.
+  IF public.serial_propagation_on() THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.serial_numbers IS NOT NULL AND array_length(NEW.serial_numbers,1) > 0 THEN
+      UPDATE public.ims_stock_items
+         SET stock_status = 'issued', updated_at = now()
+       WHERE part_serial_no = ANY(NEW.serial_numbers)
+         AND stock_status = 'available';
+    END IF;
+    RETURN NEW;
+  ELSIF TG_OP = 'UPDATE' THEN
+    removed := ARRAY(SELECT unnest(COALESCE(OLD.serial_numbers,'{}')) EXCEPT SELECT unnest(COALESCE(NEW.serial_numbers,'{}')));
+    added   := ARRAY(SELECT unnest(COALESCE(NEW.serial_numbers,'{}')) EXCEPT SELECT unnest(COALESCE(OLD.serial_numbers,'{}')));
+    IF array_length(removed,1) > 0 THEN
+      UPDATE public.ims_stock_items
+         SET stock_status = 'available', updated_at = now()
+       WHERE part_serial_no = ANY(removed)
+         AND stock_status = 'issued';
+    END IF;
+    IF array_length(added,1) > 0 THEN
+      UPDATE public.ims_stock_items
+         SET stock_status = 'issued', updated_at = now()
+       WHERE part_serial_no = ANY(added)
+         AND stock_status = 'available';
+    END IF;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD.serial_numbers IS NOT NULL AND array_length(OLD.serial_numbers,1) > 0 THEN
+      UPDATE public.ims_stock_items
+         SET stock_status = 'available', updated_at = now()
+       WHERE part_serial_no = ANY(OLD.serial_numbers)
+         AND stock_status = 'issued';
+    END IF;
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END $$;
