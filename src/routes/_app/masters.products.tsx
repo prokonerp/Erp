@@ -2,20 +2,49 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useProducts, useCategories, useProductDetail, masterKeys } from "@/hooks/useMasters";
+import {
+  useProducts,
+  useProductsTable,
+  useCategories,
+  useProductDetail,
+  masterKeys,
+} from "@/hooks/useMasters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Pencil, Trash2, Save, X, Upload, ListOrdered, ShieldCheck, Package } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Save,
+  X,
+  Upload,
+  ListOrdered,
+  ShieldCheck,
+  Package,
+} from "lucide-react";
 import { toast } from "sonner";
 import { ExportButtons } from "@/components/ExportButtons";
 import { toTitleCaseSmart, upperTrim } from "@/lib/text";
@@ -27,7 +56,11 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { SerialsManager } from "@/components/SerialsManager";
-import { fetchBundleChildrenRaw, saveBundleForParent, type BundleChildRow } from "@/lib/productBundles";
+import {
+  fetchBundleChildrenRaw,
+  saveBundleForParent,
+  type BundleChildRow,
+} from "@/lib/productBundles";
 import {
   ProductOpeningStock,
   OpeningStockBadge,
@@ -48,7 +81,17 @@ const WARRANTY_TYPES = ["Manufacturer", "Seller", "AMC Covered"] as const;
 const WARRANTY_UNITS = ["Months", "Years"] as const;
 const WARRANTY_START = ["Invoice Date", "Installation Date", "Manual"] as const;
 const SERIAL_MODES = ["Manual", "Auto Generate"] as const;
-const DEFAULT_CATEGORIES = ["Accessories", "CCTV", "General", "Inverter/Battery", "Offline UPS", "Online UPS", "Solar Panel", "UPS Battery", "Spare Parts"];
+const DEFAULT_CATEGORIES = [
+  "Accessories",
+  "CCTV",
+  "General",
+  "Inverter/Battery",
+  "Offline UPS",
+  "Online UPS",
+  "Solar Panel",
+  "UPS Battery",
+  "Spare Parts",
+];
 const SPARE_PARTS_CATEGORY = "Spare Parts";
 const TAX_OPTIONS = [
   { value: "EXEMPT", label: "Exempted" },
@@ -86,12 +129,29 @@ type FormState = {
 };
 
 const empty: FormState = {
-  name: "", sku: "", item_type: "product", category: "", brand: "", model: "", unit: "Nos",
-  hsn: "", central_tax: "", local_tax: "", default_price: "", description: "", weight_kg: "", active: true,
-  serial_tracking: false, serial_mode: "Manual", serial_format: "",
-  warranty_applicable: false, warranty_type: "Manufacturer",
-  warranty_duration: "12", warranty_unit: "Months",
-  warranty_start_from: "Invoice Date", warranty_manual_override: true,
+  name: "",
+  sku: "",
+  item_type: "product",
+  category: "",
+  brand: "",
+  model: "",
+  unit: "Nos",
+  hsn: "",
+  central_tax: "",
+  local_tax: "",
+  default_price: "",
+  description: "",
+  weight_kg: "",
+  active: true,
+  serial_tracking: false,
+  serial_mode: "Manual",
+  serial_format: "",
+  warranty_applicable: false,
+  warranty_type: "Manufacturer",
+  warranty_duration: "12",
+  warranty_unit: "Months",
+  warranty_start_from: "Invoice Date",
+  warranty_manual_override: true,
   parent_tagging_required: false,
 };
 
@@ -128,13 +188,25 @@ export function ProductMasterPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [newCatName, setNewCatName] = useState("");
-  const [parentLinks, setParentLinks] = useState<Array<{ parent_product_id: string; active: boolean }>>([]);
+  const [parentLinks, setParentLinks] = useState<
+    Array<{ parent_product_id: string; active: boolean }>
+  >([]);
   const [linkedSpares, setLinkedSpares] = useState<ProductFull[]>([]);
-  const [spareLinks, setSpareLinks] = useState<Array<{ spare_part_id: string; active: boolean }>>([]);
+  const [spareLinks, setSpareLinks] = useState<Array<{ spare_part_id: string; active: boolean }>>(
+    [],
+  );
   const [linkedParents, setLinkedParents] = useState<ProductFull[]>([]);
   const [parentPickerOpen, setParentPickerOpen] = useState(false);
   const [parentSearch, setParentSearch] = useState("");
-  const [bundle, setBundle] = useState<Array<{ child_product_id: string; default_qty: number; mandatory: boolean; editable_qty: boolean; note: string | null }>>([]);
+  const [bundle, setBundle] = useState<
+    Array<{
+      child_product_id: string;
+      default_qty: number;
+      mandatory: boolean;
+      editable_qty: boolean;
+      note: string | null;
+    }>
+  >([]);
   const [bundleChildPickerOpen, setBundleChildPickerOpen] = useState(false);
   const [bundleChildSearch, setBundleChildSearch] = useState("");
   void linkedParents; // reserved for future UI
@@ -142,7 +214,11 @@ export function ProductMasterPage() {
   const [openingLocked, setOpeningLocked] = useState(false);
   const [warehouseList, setWarehouseList] = useState<WarehouseLite[]>([]);
   const { isAdmin } = useIsAdmin();
-  useEffect(() => { listWarehouses().then(setWarehouseList).catch(() => {}); }, []);
+  useEffect(() => {
+    listWarehouses()
+      .then(setWarehouseList)
+      .catch(() => {});
+  }, []);
 
   const queryClient = useQueryClient();
 
@@ -172,12 +248,11 @@ export function ProductMasterPage() {
 
   // Eligible parents for spare-part linking: active, non-spare-parts category, not self.
   const eligibleParents = useMemo(
-    () => rows.filter(
-      (p) =>
-        p.active !== false &&
-        (p.category || "") !== SPARE_PARTS_CATEGORY &&
-        p.id !== editingId,
-    ),
+    () =>
+      rows.filter(
+        (p) =>
+          p.active !== false && (p.category || "") !== SPARE_PARTS_CATEGORY && p.id !== editingId,
+      ),
     [rows, editingId],
   );
   const filteredParents = useMemo(() => {
@@ -192,7 +267,10 @@ export function ProductMasterPage() {
     const name = newCatName.trim();
     if (!name) return;
     const { error } = await supabase.from("product_categories" as any).insert({ name } as any);
-    if (error) return toast.error(error.message.includes("duplicate") ? "Category already exists" : error.message);
+    if (error)
+      return toast.error(
+        error.message.includes("duplicate") ? "Category already exists" : error.message,
+      );
     toast.success("Category added");
     setNewCatName("");
     setAddCatOpen(false);
@@ -206,14 +284,16 @@ export function ProductMasterPage() {
     setSpareLinks([]);
     setLinkedParents([]);
     setBundle([]);
-    const hasParentTagging = !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY;
+    const hasParentTagging =
+      !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY;
     if (hasParentTagging) {
       const { data } = await supabase
         .from("product_spare_parts" as any)
         .select("parent_product_id, active")
         .eq("spare_part_id", p.id);
-      const links = ((data || []) as unknown as { parent_product_id: string; active: boolean | null }[])
-        .map((r) => ({ parent_product_id: r.parent_product_id, active: r.active !== false }));
+      const links = (
+        (data || []) as unknown as { parent_product_id: string; active: boolean | null }[]
+      ).map((r) => ({ parent_product_id: r.parent_product_id, active: r.active !== false }));
       setParentLinks(links);
       const ids = links.map((l) => l.parent_product_id);
       setLinkedParents(rows.filter((r) => ids.includes(r.id)));
@@ -223,8 +303,9 @@ export function ProductMasterPage() {
         .from("product_spare_parts" as any)
         .select("spare_part_id, active")
         .eq("parent_product_id", p.id);
-      const links = ((data || []) as unknown as { spare_part_id: string; active: boolean | null }[])
-        .map((r) => ({ spare_part_id: r.spare_part_id, active: r.active !== false }));
+      const links = (
+        (data || []) as unknown as { spare_part_id: string; active: boolean | null }[]
+      ).map((r) => ({ spare_part_id: r.spare_part_id, active: r.active !== false }));
       setSpareLinks(links);
       const ids = links.map((l) => l.spare_part_id);
       setLinkedSpares(rows.filter((r) => ids.includes(r.id)));
@@ -232,34 +313,63 @@ export function ProductMasterPage() {
     // Load bundle configuration where this product is the parent.
     try {
       const rowsB: BundleChildRow[] = await fetchBundleChildrenRaw(p.id);
-      setBundle(rowsB.map((r) => ({
-        child_product_id: r.child_product_id,
-        default_qty: Number(r.default_qty) || 1,
-        mandatory: !!r.mandatory,
-        editable_qty: r.editable_qty !== false,
-        note: r.note ?? null,
-      })));
-    } catch { /* ignore */ }
+      setBundle(
+        rowsB.map((r) => ({
+          child_product_id: r.child_product_id,
+          default_qty: Number(r.default_qty) || 1,
+          mandatory: !!r.mandatory,
+          editable_qty: r.editable_qty !== false,
+          note: r.note ?? null,
+        })),
+      );
+    } catch {
+      /* ignore */
+    }
   }
 
-  const categories = useMemo(() => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[], [rows]);
-  const brands = useMemo(() => Array.from(new Set(rows.map((r) => r.brand).filter(Boolean))) as string[], [rows]);
+  const categories = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[],
+    [rows],
+  );
+  const brands = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.brand).filter(Boolean))) as string[],
+    [rows],
+  );
 
-  const filtered = useMemo(() => rows.filter((p) => {
-    const s = q.toLowerCase();
-    const matchQ = !s || [p.name, p.brand, p.model, p.category, p.hsn].some((v) => (v || "").toLowerCase().includes(s));
-    const matchCat = filterCategory === "__all" || (p.category || "") === filterCategory;
-    const matchBrand = filterBrand === "__all" || (p.brand || "") === filterBrand;
-    return matchQ && matchCat && matchBrand;
-  }), [rows, q, filterCategory, filterBrand]);
+  const filtered = useMemo(
+    () =>
+      rows.filter((p) => {
+        const s = q.toLowerCase();
+        const matchQ =
+          !s ||
+          [p.name, p.brand, p.model, p.category, p.hsn].some((v) =>
+            (v || "").toLowerCase().includes(s),
+          );
+        const matchCat = filterCategory === "__all" || (p.category || "") === filterCategory;
+        const matchBrand = filterBrand === "__all" || (p.brand || "") === filterBrand;
+        return matchQ && matchCat && matchBrand;
+      }),
+    [rows, q, filterCategory, filterBrand],
+  );
 
   function resetForm() {
-    setForm(empty); setEditingId(null); setTab("details");
-    setParentLinks([]); setLinkedSpares([]); setSpareLinks([]); setLinkedParents([]); setParentSearch("");
-    setBundle([]); setBundleChildSearch("");
-    setOpening(emptyOpeningStock()); setOpeningLocked(false);
+    setForm(empty);
+    setEditingId(null);
+    setTab("details");
+    setParentLinks([]);
+    setLinkedSpares([]);
+    setSpareLinks([]);
+    setLinkedParents([]);
+    setParentSearch("");
+    setBundle([]);
+    setBundleChildSearch("");
+    setOpening(emptyOpeningStock());
+    setOpeningLocked(false);
   }
-  function startNew() { resetForm(); setOpen(true); }
+  function startNew() {
+    resetForm();
+    setOpen(true);
+  }
   function startEdit(p: ProductFull) {
     setEditingId(p.id);
     setOpen(true);
@@ -275,13 +385,21 @@ export function ProductMasterPage() {
       model: p.model || "",
       unit: p.unit || "Nos",
       hsn: p.hsn || "",
-      central_tax: p.central_tax_exempt ? "EXEMPT" : (p.central_tax_rate != null ? String(p.central_tax_rate) : ""),
-      local_tax: p.local_tax_exempt ? "EXEMPT" : (p.local_tax_rate != null ? String(p.local_tax_rate) : ""),
+      central_tax: p.central_tax_exempt
+        ? "EXEMPT"
+        : p.central_tax_rate != null
+          ? String(p.central_tax_rate)
+          : "",
+      local_tax: p.local_tax_exempt
+        ? "EXEMPT"
+        : p.local_tax_rate != null
+          ? String(p.local_tax_rate)
+          : "",
       default_price: p.default_price != null ? String(p.default_price) : "",
       description: p.description || "",
       weight_kg: p.weight_kg != null ? String(p.weight_kg) : "",
       active: p.active !== false,
-      serial_tracking: !!p.serial_tracking,
+      serial_tracking: !!(p.serial_tracking || (p as any).is_serialized),
       serial_mode: p.serial_mode || "Manual",
       serial_format: p.serial_format || "",
       warranty_applicable: !!p.warranty_applicable,
@@ -290,7 +408,8 @@ export function ProductMasterPage() {
       warranty_unit: p.warranty_unit || "Months",
       warranty_start_from: p.warranty_start_from || "Invoice Date",
       warranty_manual_override: p.warranty_manual_override !== false,
-      parent_tagging_required: !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY,
+      parent_tagging_required:
+        !!p.parent_tagging_required || (p.category || "") === SPARE_PARTS_CATEGORY,
     };
   }
 
@@ -301,24 +420,35 @@ export function ProductMasterPage() {
       const modelKey = (p.model || "").trim();
       let q = supabase
         .from("ims_stock_items")
-        .select("id, warehouse_id, stock_type, part_serial_no, qty, created_at, notes, part_model_no, part_name")
+        .select(
+          "id, warehouse_id, stock_type, part_serial_no, qty, created_at, notes, part_model_no, part_name",
+        )
         .eq("opening_stock", true);
       if (modelKey) q = q.eq("part_model_no", modelKey);
       else q = q.eq("part_name", p.name || "");
       const { data } = await q;
       const rows = (data || []) as Array<{
-        warehouse_id: string | null; stock_type: "good" | "defective";
-        part_serial_no: string | null; qty: number; created_at: string;
+        warehouse_id: string | null;
+        stock_type: "good" | "defective";
+        part_serial_no: string | null;
+        qty: number;
+        created_at: string;
       }>;
       if (!rows.length) return;
       // Group by warehouse + stock_type into rows.
-      const groups = new Map<string, { warehouse_id: string; stock_type: "good" | "defective"; qty: number; serials: string[] }>();
+      const groups = new Map<
+        string,
+        { warehouse_id: string; stock_type: "good" | "defective"; qty: number; serials: string[] }
+      >();
       for (const r of rows) {
         const wh = r.warehouse_id || "";
         const st: "good" | "defective" = r.stock_type || "good";
         const key = `${wh}::${st}`;
         let g = groups.get(key);
-        if (!g) { g = { warehouse_id: wh, stock_type: st, qty: 0, serials: [] }; groups.set(key, g); }
+        if (!g) {
+          g = { warehouse_id: wh, stock_type: st, qty: 0, serials: [] };
+          groups.set(key, g);
+        }
         g.qty += Number(r.qty) || 0;
         if (r.part_serial_no) g.serials.push(r.part_serial_no);
       }
@@ -335,7 +465,9 @@ export function ProductMasterPage() {
         })),
       });
       setOpeningLocked(true);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   async function postOpeningStock(
@@ -373,9 +505,13 @@ export function ProductMasterPage() {
         const serials = row.serials.map((s) => s.trim()).filter(Boolean);
         const stockRows = serials.map((sn) => ({ ...baseRow, part_serial_no: sn, qty: 1 }));
         const { data: inserted, error } = await supabase
-          .from("ims_stock_items").insert(stockRows as any).select("id, part_serial_no");
+          .from("ims_stock_items")
+          .insert(stockRows as any)
+          .select("id, part_serial_no");
         if (error) throw error;
-        const txnRows = ((inserted || []) as Array<{ id: string; part_serial_no: string | null }>).map((r) => ({
+        const txnRows = (
+          (inserted || []) as Array<{ id: string; part_serial_no: string | null }>
+        ).map((r) => ({
           txn_type: txnType,
           stock_item_id: r.id,
           part_name: payload.name,
@@ -396,7 +532,10 @@ export function ProductMasterPage() {
         }
       } else {
         const { data: inserted, error } = await supabase
-          .from("ims_stock_items").insert({ ...baseRow, qty: rowQty } as any).select("id").single();
+          .from("ims_stock_items")
+          .insert({ ...baseRow, qty: rowQty } as any)
+          .select("id")
+          .single();
         if (error) throw error;
         const { error: tErr } = await supabase.from("ims_transactions").insert({
           txn_type: txnType,
@@ -417,14 +556,20 @@ export function ProductMasterPage() {
       totalQty += rowQty;
     }
     setOpeningLocked(true);
-    toast.success(`Opening stock posted (${totalQty} unit${totalQty === 1 ? "" : "s"} across ${opening.rows.length} warehouse${opening.rows.length === 1 ? "" : "s"})`);
+    toast.success(
+      `Opening stock posted (${totalQty} unit${totalQty === 1 ? "" : "s"} across ${opening.rows.length} warehouse${opening.rows.length === 1 ? "" : "s"})`,
+    );
   }
 
   async function save(addAnother = false) {
     if (!form.brand.trim() && !form.model.trim() && !form.name.trim()) {
-      toast.error("Enter Brand and Model (used to identify product)"); return;
+      toast.error("Enter Brand and Model (used to identify product)");
+      return;
     }
-    if (!form.category) { toast.error("Category is required"); return; }
+    if (!form.category) {
+      toast.error("Category is required");
+      return;
+    }
     const isSparePart = form.category === SPARE_PARTS_CATEGORY;
     // Only enforce parent selection for Spare Parts. Non-spare products may
     // have the "parent tagging" toggle enabled to allow optional tagging, but
@@ -434,20 +579,71 @@ export function ProductMasterPage() {
       toast.error("At least one compatible parent product must be selected.");
       return;
     }
-    if (!form.central_tax) { toast.error("Central Tax Rate is required"); return; }
-    if (!form.local_tax) { toast.error("Local Tax Rate is required"); return; }
-    if (form.warranty_applicable && (!form.warranty_duration || Number(form.warranty_duration) <= 0)) {
-      toast.error("Warranty duration is required when warranty is applicable"); return;
+    if (!form.central_tax) {
+      toast.error("Central Tax Rate is required");
+      return;
+    }
+    if (!form.local_tax) {
+      toast.error("Local Tax Rate is required");
+      return;
+    }
+    if (
+      form.warranty_applicable &&
+      (!form.warranty_duration || Number(form.warranty_duration) <= 0)
+    ) {
+      toast.error("Warranty duration is required when warranty is applicable");
+      return;
     }
     if (form.description && form.description.length > 200) {
-      toast.error("Description must be 200 characters or less"); return;
+      toast.error("Description must be 200 characters or less");
+      return;
     }
     const isService = form.item_type === "service";
     if (!isService) {
       const openingErr = validateOpeningStock(opening, form.serial_tracking);
-      if (openingErr) { toast.error(openingErr); setTab("opening"); return; }
+      if (openingErr) {
+        toast.error(openingErr);
+        setTab("opening");
+        return;
+      }
     }
-    const derivedName = [form.brand, form.model].filter(Boolean).join(" ").trim() || form.name.trim() || form.category;
+    const ed = (editingDetail as unknown as Record<string, any>) || {};
+    const wasSerialized = !!ed.serial_tracking || !!ed.is_serialized;
+    if (editingId && !form.serial_tracking && editingDetail) {
+      if (wasSerialized) {
+        const modelKey = (ed.model || "").trim();
+        try {
+          const { count: stockCount, error: stockCountErr } = await supabase
+            .from("ims_stock_items")
+            .select("id", { count: "exact", head: true })
+            .eq("part_model_no", modelKey)
+            .not("part_serial_no", "is", null)
+            .eq("stock_status", "available");
+          if (stockCountErr) throw stockCountErr;
+          const { count: serialCount, error: serialCountErr } = await supabase
+            .from("serials")
+            .select("id", { count: "exact", head: true })
+            .eq("product_id", editingId);
+          if (serialCountErr) throw serialCountErr;
+          const itemStockCount = stockCount ?? 0;
+          const serialRecordCount = serialCount ?? 0;
+          if (itemStockCount > 0 || serialRecordCount > 0) {
+            toast.error(
+              `Cannot disable serial tracking — ${itemStockCount} serial stock item(s) and ${serialRecordCount} serial record(s) exist for this product. Clear the serial data first.`,
+            );
+            setTab("serials");
+            return;
+          }
+        } catch {
+          toast.warning("Could not verify serial data before disabling tracking. Please retry.");
+          return;
+        }
+      }
+    }
+    const derivedName =
+      [form.brand, form.model].filter(Boolean).join(" ").trim() ||
+      form.name.trim() ||
+      form.category;
     const payload = {
       name: toTitleCaseSmart(derivedName),
       item_type: form.item_type,
@@ -468,12 +664,13 @@ export function ProductMasterPage() {
       description: form.description || null,
       weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
       active: form.active,
-      serial_tracking: form.serial_tracking,
+      serial_tracking: wasSerialized ? true : form.serial_tracking,
       serial_mode: form.serial_mode,
       serial_format: form.serial_tracking && form.serial_format ? form.serial_format : null,
       warranty_applicable: form.warranty_applicable,
       warranty_type: form.warranty_applicable ? form.warranty_type : null,
-      warranty_duration: form.warranty_applicable && form.warranty_duration ? Number(form.warranty_duration) : null,
+      warranty_duration:
+        form.warranty_applicable && form.warranty_duration ? Number(form.warranty_duration) : null,
       warranty_unit: form.warranty_applicable ? form.warranty_unit : null,
       warranty_start_from: form.warranty_applicable ? form.warranty_start_from : null,
       warranty_manual_override: form.warranty_manual_override,
@@ -481,11 +678,18 @@ export function ProductMasterPage() {
     };
     let productId = editingId;
     if (editingId) {
-      const { error } = await supabase.from("products").update(payload as any).eq("id", editingId);
+      const { error } = await supabase
+        .from("products")
+        .update(payload as any)
+        .eq("id", editingId);
       if (error) return toast.error(error.message);
       toast.success("Product updated");
     } else {
-      const { data, error } = await supabase.from("products").insert(payload as any).select("id").single();
+      const { data, error } = await supabase
+        .from("products")
+        .insert(payload as any)
+        .select("id")
+        .single();
       if (error) return toast.error(error.message);
       productId = (data as { id: string } | null)?.id ?? null;
       toast.success("Product added");
@@ -494,25 +698,36 @@ export function ProductMasterPage() {
     // Sync parent links whenever tagging is enabled (spare-part category or opt-in).
     const syncParentLinks = isSparePart || form.parent_tagging_required;
     if (syncParentLinks && productId) {
-      await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
+      await supabase
+        .from("product_spare_parts" as any)
+        .delete()
+        .eq("spare_part_id", productId);
       if (parentLinks.length) {
         const linkRows = parentLinks.map((l) => ({
           spare_part_id: productId,
           parent_product_id: l.parent_product_id,
           active: l.active,
         }));
-        const { error: linkErr } = await supabase.from("product_spare_parts" as any).insert(linkRows as any);
+        const { error: linkErr } = await supabase
+          .from("product_spare_parts" as any)
+          .insert(linkRows as any);
         if (linkErr) toast.error(`Saved product but failed to link parents: ${linkErr.message}`);
       }
     } else if (!syncParentLinks && productId && editingId) {
       // Parent tagging disabled — remove any existing parent links where this product was a child.
-      await supabase.from("product_spare_parts" as any).delete().eq("spare_part_id", productId);
+      await supabase
+        .from("product_spare_parts" as any)
+        .delete()
+        .eq("spare_part_id", productId);
     }
 
     // Persist bundle (replace-all) for this product as parent.
     if (productId) {
       try {
-        await saveBundleForParent(productId, bundle.map((b, i) => ({ ...b, sort_order: i })));
+        await saveBundleForParent(
+          productId,
+          bundle.map((b, i) => ({ ...b, sort_order: i })),
+        );
       } catch (e: any) {
         toast.error(`Product saved but bundle failed: ${e?.message || e}`);
       }
@@ -530,7 +745,10 @@ export function ProductMasterPage() {
 
     queryClient.invalidateQueries({ queryKey: masterKeys.products() });
     if (addAnother) resetForm();
-    else { setOpen(false); resetForm(); }
+    else {
+      setOpen(false);
+      resetForm();
+    }
   }
 
   function toggleParent(id: string) {
@@ -544,7 +762,9 @@ export function ProductMasterPage() {
     setParentLinks((prev) => prev.map((l) => (l.parent_product_id === id ? { ...l, active } : l)));
   }
   async function setSpareLinkActive(sparePartId: string, parentId: string, active: boolean) {
-    setSpareLinks((prev) => prev.map((l) => (l.spare_part_id === sparePartId ? { ...l, active } : l)));
+    setSpareLinks((prev) =>
+      prev.map((l) => (l.spare_part_id === sparePartId ? { ...l, active } : l)),
+    );
     const { error } = await supabase
       .from("product_spare_parts" as any)
       .update({ active } as any)
@@ -552,7 +772,9 @@ export function ProductMasterPage() {
       .eq("spare_part_id", sparePartId);
     if (error) {
       toast.error(`Failed to update status: ${error.message}`);
-      setSpareLinks((prev) => prev.map((l) => (l.spare_part_id === sparePartId ? { ...l, active: !active } : l)));
+      setSpareLinks((prev) =>
+        prev.map((l) => (l.spare_part_id === sparePartId ? { ...l, active: !active } : l)),
+      );
     }
   }
 
@@ -575,12 +797,27 @@ export function ProductMasterPage() {
         parent_category: pp?.category || "",
       };
     });
-    const headers = ["spare_part", "spare_part_model", "spare_part_oem", "parent_product", "parent_model", "parent_oem", "parent_category"];
-    const csv = [headers.join(","), ...out.map((r) => headers.map((h) => `"${String((r as any)[h] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
+    const headers = [
+      "spare_part",
+      "spare_part_model",
+      "spare_part_oem",
+      "parent_product",
+      "parent_model",
+      "parent_oem",
+      "parent_category",
+    ];
+    const csv = [
+      headers.join(","),
+      ...out.map((r) =>
+        headers.map((h) => `"${String((r as any)[h] ?? "").replace(/"/g, '""')}"`).join(","),
+      ),
+    ].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "Prokon_SpareParts_Compatibility.csv"; a.click();
+    a.href = url;
+    a.download = "Prokon_SpareParts_Compatibility.csv";
+    a.click();
     URL.revokeObjectURL(url);
   }
 
@@ -592,29 +829,44 @@ export function ProductMasterPage() {
       const rowsCsv = parseCSV(text);
       if (!rowsCsv.length) return toast.error("Empty CSV");
       // Extract raw parent tokens per row (accept several column aliases).
-      const parseTokens = (s: string) => s.split(/[|,;]/).map((x) => x.trim()).filter(Boolean);
-      const prepared = rowsCsv.map((r) => {
-        const rawParents =
-          r["Parent Model"] || r["Parent Models"] || r["Parent SKU"] || r["Parent SKUs"] ||
-          r["Parent"] || r["Parents"] || r["Parent Product"] || r["Parent Products"] || "";
-        const parentTokens = parseTokens(rawParents).map((t) => upperTrim(t));
-        return {
-          row: {
-            name: toTitleCaseSmart(r["Name"] || r["Product"] || r["Product Name"] || ""),
-            category: toTitleCaseSmart(r["Category"] || "") || null,
-            brand: upperTrim(r["Brand"] || "") || null,
-            model: upperTrim(r["Model"] || "") || null,
-            unit: r["Unit"] || "Nos",
-            hsn: upperTrim(r["HSN"] || "") || null,
-            default_price: r["Price"] || r["Default Price"] ? Number(r["Price"] || r["Default Price"]) : null,
-            description: r["Description"] || null,
-            weight_kg: r["Weight"] || r["Weight (kg)"] ? Number(r["Weight"] || r["Weight (kg)"]) : null,
-            active: true,
-            parent_tagging_required: parentTokens.length > 0,
-          },
-          parentTokens,
-        };
-      }).filter((p) => p.row.name);
+      const parseTokens = (s: string) =>
+        s
+          .split(/[|,;]/)
+          .map((x) => x.trim())
+          .filter(Boolean);
+      const prepared = rowsCsv
+        .map((r) => {
+          const rawParents =
+            r["Parent Model"] ||
+            r["Parent Models"] ||
+            r["Parent SKU"] ||
+            r["Parent SKUs"] ||
+            r["Parent"] ||
+            r["Parents"] ||
+            r["Parent Product"] ||
+            r["Parent Products"] ||
+            "";
+          const parentTokens = parseTokens(rawParents).map((t) => upperTrim(t));
+          return {
+            row: {
+              name: toTitleCaseSmart(r["Name"] || r["Product"] || r["Product Name"] || ""),
+              category: toTitleCaseSmart(r["Category"] || "") || null,
+              brand: upperTrim(r["Brand"] || "") || null,
+              model: upperTrim(r["Model"] || "") || null,
+              unit: r["Unit"] || "Nos",
+              hsn: upperTrim(r["HSN"] || "") || null,
+              default_price:
+                r["Price"] || r["Default Price"] ? Number(r["Price"] || r["Default Price"]) : null,
+              description: r["Description"] || null,
+              weight_kg:
+                r["Weight"] || r["Weight (kg)"] ? Number(r["Weight"] || r["Weight (kg)"]) : null,
+              active: true,
+              parent_tagging_required: parentTokens.length > 0,
+            },
+            parentTokens,
+          };
+        })
+        .filter((p) => p.row.name);
       if (!prepared.length) return toast.error("No valid rows. Required: Name");
 
       const payload = prepared.map((p) => p.row);
@@ -625,15 +877,24 @@ export function ProductMasterPage() {
       if (error) return toast.error(error.message);
 
       // Resolve parent tokens to product IDs and create mappings (default inactive).
-      const insertedRows = (inserted || []) as unknown as { id: string; model: string | null; name: string | null }[];
+      const insertedRows = (inserted || []) as unknown as {
+        id: string;
+        model: string | null;
+        name: string | null;
+      }[];
       const { data: allProducts } = await supabase.from("products").select("id, model, name");
       const lookup = new Map<string, string>();
-      for (const p of ((allProducts || []) as unknown as { id: string; model: string | null; name: string | null }[])) {
+      for (const p of (allProducts || []) as unknown as {
+        id: string;
+        model: string | null;
+        name: string | null;
+      }[]) {
         if (p.model) lookup.set(upperTrim(p.model), p.id);
         if (p.name) lookup.set(upperTrim(p.name), p.id);
       }
 
-      const mappings: Array<{ spare_part_id: string; parent_product_id: string; active: boolean }> = [];
+      const mappings: Array<{ spare_part_id: string; parent_product_id: string; active: boolean }> =
+        [];
       let unresolved = 0;
       prepared.forEach((p, idx) => {
         const childId = insertedRows[idx]?.id;
@@ -649,17 +910,25 @@ export function ProductMasterPage() {
       });
 
       if (mappings.length) {
-        const { error: mapErr } = await supabase.from("product_spare_parts" as any).insert(mappings as any);
+        const { error: mapErr } = await supabase
+          .from("product_spare_parts" as any)
+          .insert(mappings as any);
         if (mapErr) toast.error(`Products imported but parent mappings failed: ${mapErr.message}`);
       }
 
       const parts = [`Imported ${payload.length} product(s)`];
-      if (mappings.length) parts.push(`${mappings.length} parent mapping(s) added (inactive by default — activate on edit)`);
+      if (mappings.length)
+        parts.push(
+          `${mappings.length} parent mapping(s) added (inactive by default — activate on edit)`,
+        );
       if (unresolved) parts.push(`${unresolved} parent reference(s) could not be matched`);
       toast.success(parts.join(" · "));
       queryClient.invalidateQueries({ queryKey: masterKeys.products() });
-    } catch (e: any) { toast.error(e?.message || "Import failed"); }
-    finally { if (fileRef.current) fileRef.current.value = ""; }
+    } catch (e: any) {
+      toast.error(e?.message || "Import failed");
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }
 
   const [deleteTarget, setDeleteTarget] = useState<ProductFull | null>(null);
@@ -767,9 +1036,20 @@ export function ProductMasterPage() {
         crumbs={[{ label: "Masters" }, { label: "Products" }]}
         actions={
           <>
-            <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])} />
-            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}><Upload className="h-4 w-4 mr-1" />Import CSV</Button>
-            <Button variant="outline" size="sm" onClick={downloadCompatibilityReport}>Spare Parts Report</Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,text/csv"
+              hidden
+              onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])}
+            />
+            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+              <Upload className="h-4 w-4 mr-1" />
+              Import CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={downloadCompatibilityReport}>
+              Spare Parts Report
+            </Button>
             <ExportButtons
               name="Prokon_Products"
               title="Product Master"
@@ -781,11 +1061,14 @@ export function ProductMasterPage() {
                 { header: "Unit", get: (p) => p.unit },
                 { header: "HSN", get: (p) => p.hsn || "" },
                 { header: "Price", get: (p) => p.default_price ?? "" },
-                { header: "Active", get: (p) => p.active === false ? "No" : "Yes" },
+                { header: "Active", get: (p) => (p.active === false ? "No" : "Yes") },
                 { header: "Description", get: (p) => p.description || "" },
               ]}
             />
-            <Button size="sm" onClick={startNew}><Plus className="h-4 w-4 mr-1" />New Product</Button>
+            <Button size="sm" onClick={startNew}>
+              <Plus className="h-4 w-4 mr-1" />
+              New Product
+            </Button>
           </>
         }
       />
@@ -794,28 +1077,60 @@ export function ProductMasterPage() {
         columns={productColumns}
         data={filtered}
         emptyIcon={Package}
-        emptyTitle={q || filterCategory !== "__all" || filterBrand !== "__all" ? "No products match your filters" : "No products yet"}
-        emptyHint={q || filterCategory !== "__all" || filterBrand !== "__all" ? "Try clearing your search or filter." : "Click New Product or Import CSV to add your first product."}
-        emptyAction={!(q || filterCategory !== "__all" || filterBrand !== "__all") ? <Button size="sm" onClick={startNew}><Plus className="h-4 w-4 mr-1" />New Product</Button> : undefined}
+        emptyTitle={
+          q || filterCategory !== "__all" || filterBrand !== "__all"
+            ? "No products match your filters"
+            : "No products yet"
+        }
+        emptyHint={
+          q || filterCategory !== "__all" || filterBrand !== "__all"
+            ? "Try clearing your search or filter."
+            : "Click New Product or Import CSV to add your first product."
+        }
+        emptyAction={
+          !(q || filterCategory !== "__all" || filterBrand !== "__all") ? (
+            <Button size="sm" onClick={startNew}>
+              <Plus className="h-4 w-4 mr-1" />
+              New Product
+            </Button>
+          ) : undefined
+        }
         toolbar={
           <div className="flex items-center gap-2 flex-wrap w-full">
             <span className="text-sm font-medium">All Products ({rows.length})</span>
             <div className="ml-auto flex items-center gap-2">
               <Select value={filterCategory} onValueChange={setFilterCategory}>
-                <SelectTrigger className="w-40 h-8"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectTrigger className="w-40 h-8">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all">All Categories</SelectItem>
-                  {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  {categories.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={filterBrand} onValueChange={setFilterBrand}>
-                <SelectTrigger className="w-40 h-8"><SelectValue placeholder="Brand" /></SelectTrigger>
+                <SelectTrigger className="w-40 h-8">
+                  <SelectValue placeholder="Brand" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all">All Brands</SelectItem>
-                  {brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  {brands.map((b) => (
+                    <SelectItem key={b} value={b}>
+                      {b}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <Input placeholder="Search model / brand / category\u2026" value={q} onChange={(e) => setQ(e.target.value)} className="w-64 h-8 text-xs" />
+              <Input
+                placeholder="Search model / brand / category\u2026"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                className="w-64 h-8 text-xs"
+              />
             </div>
           </div>
         }
@@ -830,22 +1145,120 @@ export function ProductMasterPage() {
         variant="danger"
         onConfirm={async () => {
           if (!deleteTarget) return;
+
+          const warnings: string[] = [];
+          let checkFailed = false;
+          try {
+            let serialStockCount = 0;
+            if (deleteTarget.model) {
+              const { count: stockCount, error: stockError } = await supabase
+                .from("ims_stock_items")
+                .select("*", { count: "exact", head: true })
+                .eq("part_model_no", deleteTarget.model)
+                .not("part_serial_no", "is", null)
+                .eq("stock_status", "available");
+              if (stockError) throw stockError;
+              serialStockCount = stockCount ?? 0;
+            }
+
+            const { count: serialCount, error: serialError } = await supabase
+              .from("serials")
+              .select("*", { count: "exact", head: true })
+              .eq("product_id", deleteTarget.id);
+            if (serialError) throw serialError;
+            const serialRecordCount = serialCount ?? 0;
+
+            let nonSerialStockCount = 0;
+            if (deleteTarget.model) {
+              const { count: nonSerialCount, error: nonSerialErr } = await supabase
+                .from("ims_stock_items")
+                .select("*", { count: "exact", head: true })
+                .eq("part_model_no", deleteTarget.model)
+                .is("part_serial_no", null);
+              if (nonSerialErr) throw nonSerialErr;
+              nonSerialStockCount = nonSerialCount ?? 0;
+            }
+
+            const { count: spareCount, error: spareErr } = await supabase
+              .from("product_spare_parts")
+              .select("*", { count: "exact", head: true })
+              .or(`parent_product_id.eq.${deleteTarget.id},spare_part_id.eq.${deleteTarget.id}`);
+            if (spareErr) throw spareErr;
+            const sparePartLinks = spareCount ?? 0;
+
+            const { count: bundlesCount, error: bundlesErr } = await supabase
+              .from("product_bundles")
+              .select("*", { count: "exact", head: true })
+              .or(`parent_product_id.eq.${deleteTarget.id},child_product_id.eq.${deleteTarget.id}`);
+            if (bundlesErr) throw bundlesErr;
+            const productBundleLinks = bundlesCount ?? 0;
+
+            const { count: upsCount, error: upsErr } = await supabase
+              .from("ups_bundles")
+              .select("*", { count: "exact", head: true })
+              .eq("parent_product_id", deleteTarget.id);
+            if (upsErr) throw upsErr;
+            const upsBundleLinks = upsCount ?? 0;
+
+            const { count: battCount, error: battErr } = await supabase
+              .from("battery_catalog")
+              .select("*", { count: "exact", head: true })
+              .eq("product_id", deleteTarget.id);
+            if (battErr) throw battErr;
+            const batteryRefs = battCount ?? 0;
+
+            if (serialStockCount > 0) warnings.push(`${serialStockCount} serial stock item(s)`);
+            if (serialRecordCount > 0) warnings.push(`${serialRecordCount} serial record(s)`);
+            if (nonSerialStockCount > 0)
+              warnings.push(`${nonSerialStockCount} non-serial stock item(s)`);
+            if (sparePartLinks > 0) warnings.push(`${sparePartLinks} product spare part link(s)`);
+            if (productBundleLinks > 0)
+              warnings.push(`${productBundleLinks} product bundle link(s)`);
+            if (upsBundleLinks > 0) warnings.push(`${upsBundleLinks} ups bundle link(s)`);
+            if (batteryRefs > 0) warnings.push(`${batteryRefs} battery catalog reference(s)`);
+          } catch {
+            checkFailed = true;
+            toast.warning(
+              "Could not verify all linked data before deleting. The database will enforce its own constraints.",
+            );
+          }
+
+          if (!checkFailed && warnings.length > 0) {
+            toast.error(
+              `Cannot delete this product — the following linked data exists:\n${warnings.map((w) => `• ${w}`).join("\n")}\nClear or reassign the data before deleting.`,
+            );
+            return;
+          }
+
           const { error } = await supabase.from("products").delete().eq("id", deleteTarget.id);
-          if (error) { toast.error(error.message); return; }
+          if (error) {
+            toast.error(error.message);
+            return;
+          }
           toast.success("Deleted");
           setDeleteTarget(null);
           queryClient.invalidateQueries({ queryKey: masterKeys.products() });
         }}
       />
 
-      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) resetForm();
+        }}
+      >
         <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-0">
           <DialogHeader className="px-6 pt-5 pb-3 border-b">
             <div className="flex items-start justify-between gap-3 flex-wrap">
-              <DialogTitle className="text-xl">{editingId ? "Edit Product" : "New Product"}</DialogTitle>
+              <DialogTitle className="text-xl">
+                {editingId ? "Edit Product" : "New Product"}
+              </DialogTitle>
               <OpeningStockBadge
                 state={opening}
-                warehouseNames={opening.rows.map((r) => warehouseList.find((w) => w.id === r.warehouse_id)?.name)}
+                warehouseNames={opening.rows.map(
+                  (r) => warehouseList.find((w) => w.id === r.warehouse_id)?.name,
+                )}
               />
             </div>
           </DialogHeader>
@@ -855,256 +1268,391 @@ export function ProductMasterPage() {
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="serials">Serial &amp; Warranty</TabsTrigger>
               <TabsTrigger value="bundle">Bundle</TabsTrigger>
-              {form.item_type !== "service" && <TabsTrigger value="opening">Opening Stock</TabsTrigger>}
+              {form.item_type !== "service" && (
+                <TabsTrigger value="opening">Opening Stock</TabsTrigger>
+              )}
             </TabsList>
             <TabsContent value="details" className="space-y-4 mt-4">
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <Label>Item Type *</Label>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  {(["product", "service"] as const).map((t) => (
-                    <Button
-                      key={t}
-                      type="button"
-                      variant={form.item_type === t ? "default" : "outline"}
-                      onClick={() => {
-                        setForm({ ...form, item_type: t });
-                        if (t === "service" && tab === "opening") setTab("details");
-                      }}
-                      className="justify-center"
-                    >
-                      {t === "product" ? "Product" : "Service"}
-                    </Button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  {form.item_type === "service"
-                    ? "Services are billable only — excluded from stock, GRN/DC pickers and IMS reports. Uses a SAC code for GST."
-                    : "Products are always inventory-tracked. Use Serial Tracking to decide serial-wise vs quantity-wise tracking."}
-                </p>
-              </div>
-              <div className="md:col-span-2">
-                <Label>Category *</Label>
-                <Select
-                  value={form.category}
-                  onValueChange={(v) => {
-                    if (v === "__add_new__") { setAddCatOpen(true); return; }
-                    setForm({ ...form, category: v });
-                  }}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                  <SelectContent>
-                    {categoryOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    <SelectItem value="__add_new__" className="text-primary font-medium">+ Add New Category</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Brand</Label>
-                <Input
-                  value={form.brand}
-                  onChange={(e) => setForm({ ...form, brand: e.target.value.toUpperCase() })}
-                  placeholder="APC / SCHNEIDER / LUMINOUS"
-                  className="uppercase"
-                />
-              </div>
-              <div>
-                <Label>Model</Label>
-                <Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="SMT1500I" className="font-mono" />
-              </div>
-              <div className="md:col-span-2">
-                <div className="flex items-center justify-between">
-                  <Label>Description</Label>
-                  <span className={cn("text-[10px]", (form.description?.length || 0) >= 200 ? "text-destructive" : "text-muted-foreground")}>
-                    {form.description?.length || 0}/200
-                  </span>
-                </div>
-                <Textarea
-                  rows={3}
-                  maxLength={200}
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value.slice(0, 200) })}
-                  placeholder="Specs / line-item description used on quotations"
-                />
-              </div>
-              <div>
-                <Label>Unit</Label>
-                <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>{form.item_type === "service" ? "SAC Code" : "HSN Code"}</Label>
-                <Input
-                  value={form.hsn}
-                  onChange={(e) => setForm({ ...form, hsn: e.target.value })}
-                  placeholder={form.item_type === "service" ? "998719" : "8504"}
-                  className="font-mono"
-                />
-              </div>
-              <div>
-                <Label>Default Price (₹)</Label>
-                <Input type="number" min="0" step="0.01" value={form.default_price} onChange={(e) => setForm({ ...form, default_price: e.target.value })} placeholder="Optional" />
-              </div>
-              <div>
-                <Label>Weight (kg)</Label>
-                <Input type="number" min="0" step="0.01" value={form.weight_kg} onChange={(e) => setForm({ ...form, weight_kg: e.target.value })} placeholder="e.g. 12.5" />
-              </div>
-              <div className="md:col-span-2 rounded-md border p-3 bg-muted/30">
-                <div className="text-sm font-medium mb-2">Default Tax Rates</div>
-                <div className="grid md:grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Central Tax Rate *</Label>
-                    <Select value={form.central_tax} onValueChange={(v) => setForm({ ...form, central_tax: v, local_tax: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>
-                        {TAX_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[10px] text-muted-foreground mt-1">Local tax auto-syncs; override allowed.</p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <Label>Item Type *</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    {(["product", "service"] as const).map((t) => (
+                      <Button
+                        key={t}
+                        type="button"
+                        variant={form.item_type === t ? "default" : "outline"}
+                        onClick={() => {
+                          setForm({ ...form, item_type: t });
+                          if (t === "service" && tab === "opening") setTab("details");
+                        }}
+                        className="justify-center"
+                      >
+                        {t === "product" ? "Product" : "Service"}
+                      </Button>
+                    ))}
                   </div>
-                  <div>
-                    <Label className="text-xs">Local Tax Rate *</Label>
-                    <Select value={form.local_tax} onValueChange={(v) => setForm({ ...form, local_tax: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>
-                        {TAX_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {form.item_type === "service"
+                      ? "Services are billable only — excluded from stock, GRN/DC pickers and IMS reports. Uses a SAC code for GST."
+                      : "Products are always inventory-tracked. Use Serial Tracking to decide serial-wise vs quantity-wise tracking."}
+                  </p>
                 </div>
-              </div>
-              <div className="md:col-span-2 flex items-center gap-2">
-                <Checkbox id="active" checked={form.active} onCheckedChange={(v) => setForm({ ...form, active: !!v })} />
-                <Label htmlFor="active" className="text-sm font-normal cursor-pointer">Active (available in transaction dropdowns)</Label>
-              </div>
-
-              <div className="md:col-span-2 flex items-center justify-between rounded-md border p-3 bg-muted/20">
+                <div className="md:col-span-2">
+                  <Label>Category *</Label>
+                  <Select
+                    value={form.category}
+                    onValueChange={(v) => {
+                      if (v === "__add_new__") {
+                        setAddCatOpen(true);
+                        return;
+                      }
+                      setForm({ ...form, category: v });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoryOptions.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__add_new__" className="text-primary font-medium">
+                        + Add New Category
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div>
-                  <Label className="text-sm font-medium">Parent Tagging Required</Label>
-                  <p className="text-[11px] text-muted-foreground">Enable to tag compatible parent products (auto-on for Spare Parts).</p>
+                  <Label>Brand</Label>
+                  <Input
+                    value={form.brand}
+                    onChange={(e) => setForm({ ...form, brand: e.target.value.toUpperCase() })}
+                    placeholder="APC / SCHNEIDER / LUMINOUS"
+                    className="uppercase"
+                  />
                 </div>
-                <Switch
-                  checked={form.parent_tagging_required || form.category === SPARE_PARTS_CATEGORY}
-                  disabled={form.category === SPARE_PARTS_CATEGORY}
-                  onCheckedChange={(v) => setForm({ ...form, parent_tagging_required: v })}
-                />
-              </div>
-
-              {(form.parent_tagging_required || form.category === SPARE_PARTS_CATEGORY) && (
-                <div className="md:col-span-2 rounded-md border p-3 space-y-2">
+                <div>
+                  <Label>Model</Label>
+                  <Input
+                    value={form.model}
+                    onChange={(e) => setForm({ ...form, model: e.target.value })}
+                    placeholder="SMT1500I"
+                    className="font-mono"
+                  />
+                </div>
+                <div className="md:col-span-2">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium">Compatible Parent Products *</Label>
-                      <p className="text-[11px] text-muted-foreground">Active parent products this item can be tagged to. Spare-parts items are excluded.</p>
-                    </div>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setParentPickerOpen(true)}>
-                      <Plus className="h-4 w-4 mr-1" />Add Products
-                    </Button>
+                    <Label>Description</Label>
+                    <span
+                      className={cn(
+                        "text-[10px]",
+                        (form.description?.length || 0) >= 200
+                          ? "text-destructive"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {form.description?.length || 0}/200
+                    </span>
                   </div>
-                  {parentLinks.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">No parent products selected yet.</p>
-                  ) : (
-                    <div className="rounded-md border divide-y">
-                      {parentLinks.map((link) => {
-                        const p = rows.find((r) => r.id === link.parent_product_id);
-                        if (!p) return null;
-                        return (
-                          <div key={link.parent_product_id} className="flex items-center justify-between gap-2 px-3 py-2">
-                            <div className="min-w-0">
-                              <div className="text-sm font-mono truncate">{p.model || p.name}</div>
-                              <div className="text-[11px] text-muted-foreground truncate">{[p.brand, p.category].filter(Boolean).join(" · ")}</div>
-                            </div>
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="flex items-center gap-1.5">
-                                <Switch
-                                  checked={link.active}
-                                  onCheckedChange={(v) => setParentActive(link.parent_product_id, !!v)}
-                                />
-                                <span className={cn("text-[11px] font-medium", link.active ? "text-primary" : "text-muted-foreground")}>
-                                  {link.active ? "Active" : "Inactive"}
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => toggleParent(link.parent_product_id)}
-                                className="text-muted-foreground hover:text-destructive"
-                                aria-label="Remove"
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
+                  <Textarea
+                    rows={3}
+                    maxLength={200}
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm({ ...form, description: e.target.value.slice(0, 200) })
+                    }
+                    placeholder="Specs / line-item description used on quotations"
+                  />
+                </div>
+                <div>
+                  <Label>Unit</Label>
+                  <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNITS.map((u) => (
+                        <SelectItem key={u} value={u}>
+                          {u}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{form.item_type === "service" ? "SAC Code" : "HSN Code"}</Label>
+                  <Input
+                    value={form.hsn}
+                    onChange={(e) => setForm({ ...form, hsn: e.target.value })}
+                    placeholder={form.item_type === "service" ? "998719" : "8504"}
+                    className="font-mono"
+                  />
+                </div>
+                <div>
+                  <Label>Default Price (₹)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.default_price}
+                    onChange={(e) => setForm({ ...form, default_price: e.target.value })}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <Label>Weight (kg)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.weight_kg}
+                    onChange={(e) => setForm({ ...form, weight_kg: e.target.value })}
+                    placeholder="e.g. 12.5"
+                  />
+                </div>
+                <div className="md:col-span-2 rounded-md border p-3 bg-muted/30">
+                  <div className="text-sm font-medium mb-2">Default Tax Rates</div>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Central Tax Rate *</Label>
+                      <Select
+                        value={form.central_tax}
+                        onValueChange={(v) => setForm({ ...form, central_tax: v, local_tax: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TAX_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Local tax auto-syncs; override allowed.
+                      </p>
                     </div>
-                  )}
+                    <div>
+                      <Label className="text-xs">Local Tax Rate *</Label>
+                      <Select
+                        value={form.local_tax}
+                        onValueChange={(v) => setForm({ ...form, local_tax: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TAX_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
-              )}
+                <div className="md:col-span-2 flex items-center gap-2">
+                  <Checkbox
+                    id="active"
+                    checked={form.active}
+                    onCheckedChange={(v) => setForm({ ...form, active: !!v })}
+                  />
+                  <Label htmlFor="active" className="text-sm font-normal cursor-pointer">
+                    Active (available in transaction dropdowns)
+                  </Label>
+                </div>
 
-              {editingId && form.category !== SPARE_PARTS_CATEGORY && linkedSpares.length > 0 && (
-                <div className="md:col-span-2 rounded-md border p-3 space-y-2">
-                  <Label className="text-sm font-medium">Linked Spare Parts ({linkedSpares.length})</Label>
-                  <Table>
-                    <TableHeader><TableRow>
-                      <TableHead>Spare Part</TableHead>
-                      <TableHead>Model No</TableHead>
-                      <TableHead>OEM</TableHead>
-                      <TableHead className="w-32">Status</TableHead>
-                    </TableRow></TableHeader>
-                    <TableBody>
-                      {linkedSpares.map((sp) => {
-                        const link = spareLinks.find((l) => l.spare_part_id === sp.id);
-                        const isActive = link?.active !== false;
-                        return (
-                          <TableRow key={sp.id}>
-                            <TableCell>{sp.name}</TableCell>
-                            <TableCell className="font-mono">{sp.model || "—"}</TableCell>
-                            <TableCell>{sp.brand || "—"}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Switch
-                                  checked={isActive}
-                                  onCheckedChange={(v) => editingId && setSpareLinkActive(sp.id, editingId, !!v)}
-                                />
-                                <span className="text-xs text-muted-foreground">{isActive ? "Active" : "Inactive"}</span>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                <div className="md:col-span-2 flex items-center justify-between rounded-md border p-3 bg-muted/20">
+                  <div>
+                    <Label className="text-sm font-medium">Parent Tagging Required</Label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Enable to tag compatible parent products (auto-on for Spare Parts).
+                    </p>
+                  </div>
+                  <Switch
+                    checked={form.parent_tagging_required || form.category === SPARE_PARTS_CATEGORY}
+                    disabled={form.category === SPARE_PARTS_CATEGORY}
+                    onCheckedChange={(v) => setForm({ ...form, parent_tagging_required: v })}
+                  />
                 </div>
-              )}
-            </div>
+
+                {(form.parent_tagging_required || form.category === SPARE_PARTS_CATEGORY) && (
+                  <div className="md:col-span-2 rounded-md border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-sm font-medium">Compatible Parent Products *</Label>
+                        <p className="text-[11px] text-muted-foreground">
+                          Active parent products this item can be tagged to. Spare-parts items are
+                          excluded.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setParentPickerOpen(true)}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Products
+                      </Button>
+                    </div>
+                    {parentLinks.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">
+                        No parent products selected yet.
+                      </p>
+                    ) : (
+                      <div className="rounded-md border divide-y">
+                        {parentLinks.map((link) => {
+                          const p = rows.find((r) => r.id === link.parent_product_id);
+                          if (!p) return null;
+                          return (
+                            <div
+                              key={link.parent_product_id}
+                              className="flex items-center justify-between gap-2 px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <div className="text-sm font-mono truncate">
+                                  {p.model || p.name}
+                                </div>
+                                <div className="text-[11px] text-muted-foreground truncate">
+                                  {[p.brand, p.category].filter(Boolean).join(" · ")}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <div className="flex items-center gap-1.5">
+                                  <Switch
+                                    checked={link.active}
+                                    onCheckedChange={(v) =>
+                                      setParentActive(link.parent_product_id, !!v)
+                                    }
+                                  />
+                                  <span
+                                    className={cn(
+                                      "text-[11px] font-medium",
+                                      link.active ? "text-primary" : "text-muted-foreground",
+                                    )}
+                                  >
+                                    {link.active ? "Active" : "Inactive"}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleParent(link.parent_product_id)}
+                                  className="text-muted-foreground hover:text-destructive"
+                                  aria-label="Remove"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {editingId && form.category !== SPARE_PARTS_CATEGORY && linkedSpares.length > 0 && (
+                  <div className="md:col-span-2 rounded-md border p-3 space-y-2">
+                    <Label className="text-sm font-medium">
+                      Linked Spare Parts ({linkedSpares.length})
+                    </Label>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Spare Part</TableHead>
+                          <TableHead>Model No</TableHead>
+                          <TableHead>OEM</TableHead>
+                          <TableHead className="w-32">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {linkedSpares.map((sp) => {
+                          const link = spareLinks.find((l) => l.spare_part_id === sp.id);
+                          const isActive = link?.active !== false;
+                          return (
+                            <TableRow key={sp.id}>
+                              <TableCell>{sp.name}</TableCell>
+                              <TableCell className="font-mono">{sp.model || "—"}</TableCell>
+                              <TableCell>{sp.brand || "—"}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Switch
+                                    checked={isActive}
+                                    onCheckedChange={(v) =>
+                                      editingId && setSpareLinkActive(sp.id, editingId, !!v)
+                                    }
+                                  />
+                                  <span className="text-xs text-muted-foreground">
+                                    {isActive ? "Active" : "Inactive"}
+                                  </span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="serials" className="space-y-6 mt-4">
               <section className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium flex items-center gap-2"><ListOrdered className="h-4 w-4" />Serial Number Tracking</h3>
-                    <p className="text-xs text-muted-foreground">Track each unit individually by serial number.</p>
+                    <h3 className="font-medium flex items-center gap-2">
+                      <ListOrdered className="h-4 w-4" />
+                      Serial Number Tracking
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Track each unit individually by serial number.
+                    </p>
                   </div>
-                  <Switch checked={form.serial_tracking} onCheckedChange={(v) => setForm({ ...form, serial_tracking: v })} />
+                  <Switch
+                    checked={form.serial_tracking}
+                    onCheckedChange={(v) => setForm({ ...form, serial_tracking: v })}
+                  />
                 </div>
                 {form.serial_tracking && (
                   <div className="grid md:grid-cols-2 gap-4 pl-1 border-l-2 border-primary/30 pl-4">
                     <div>
                       <Label>Serial Mode</Label>
-                      <Select value={form.serial_mode} onValueChange={(v) => setForm({ ...form, serial_mode: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{SERIAL_MODES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                      <Select
+                        value={form.serial_mode}
+                        onValueChange={(v) => setForm({ ...form, serial_mode: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SERIAL_MODES.map((m) => (
+                            <SelectItem key={m} value={m}>
+                              {m}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
                     <div>
                       <Label>Serial Number Format (hint)</Label>
-                      <Input value={form.serial_format} onChange={(e) => setForm({ ...form, serial_format: e.target.value })} placeholder="e.g. UPS-2025-####" className="font-mono" />
+                      <Input
+                        value={form.serial_format}
+                        onChange={(e) => setForm({ ...form, serial_format: e.target.value })}
+                        placeholder="e.g. UPS-2025-####"
+                        className="font-mono"
+                      />
                     </div>
                     <div className="md:col-span-2 text-xs text-muted-foreground bg-muted/40 rounded p-2">
-                      Serial will be <b>mandatory</b> in Purchase, Sales, Gatepass and Service for this product. Duplicate serials are blocked.
+                      Serial will be <b>mandatory</b> in Purchase, Sales, Gatepass and Service for
+                      this product. Duplicate serials are blocked.
                     </div>
                   </div>
                 )}
@@ -1113,43 +1661,95 @@ export function ProductMasterPage() {
               <section className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Warranty</h3>
-                    <p className="text-xs text-muted-foreground">Auto-calculate warranty start &amp; end dates per unit.</p>
+                    <h3 className="font-medium flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Warranty
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Auto-calculate warranty start &amp; end dates per unit.
+                    </p>
                   </div>
-                  <Switch checked={form.warranty_applicable} onCheckedChange={(v) => setForm({ ...form, warranty_applicable: v })} />
+                  <Switch
+                    checked={form.warranty_applicable}
+                    onCheckedChange={(v) => setForm({ ...form, warranty_applicable: v })}
+                  />
                 </div>
                 {form.warranty_applicable && (
                   <div className="grid md:grid-cols-2 gap-4 border-l-2 border-primary/30 pl-4">
                     <div>
                       <Label>Warranty Type</Label>
-                      <Select value={form.warranty_type} onValueChange={(v) => setForm({ ...form, warranty_type: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{WARRANTY_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                      <Select
+                        value={form.warranty_type}
+                        onValueChange={(v) => setForm({ ...form, warranty_type: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {WARRANTY_TYPES.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {t}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <Label>Duration *</Label>
-                        <Input type="number" min="1" value={form.warranty_duration} onChange={(e) => setForm({ ...form, warranty_duration: e.target.value })} />
+                        <Input
+                          type="number"
+                          min="1"
+                          value={form.warranty_duration}
+                          onChange={(e) => setForm({ ...form, warranty_duration: e.target.value })}
+                        />
                       </div>
                       <div>
                         <Label>Unit</Label>
-                        <Select value={form.warranty_unit} onValueChange={(v) => setForm({ ...form, warranty_unit: v })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>{WARRANTY_UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+                        <Select
+                          value={form.warranty_unit}
+                          onValueChange={(v) => setForm({ ...form, warranty_unit: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {WARRANTY_UNITS.map((u) => (
+                              <SelectItem key={u} value={u}>
+                                {u}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
                         </Select>
                       </div>
                     </div>
                     <div>
                       <Label>Warranty Starts From</Label>
-                      <Select value={form.warranty_start_from} onValueChange={(v) => setForm({ ...form, warranty_start_from: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{WARRANTY_START.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                      <Select
+                        value={form.warranty_start_from}
+                        onValueChange={(v) => setForm({ ...form, warranty_start_from: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {WARRANTY_START.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {s}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
                     <div className="flex items-end gap-2">
-                      <Checkbox id="wmo" checked={form.warranty_manual_override} onCheckedChange={(v) => setForm({ ...form, warranty_manual_override: !!v })} />
-                      <Label htmlFor="wmo" className="text-sm font-normal cursor-pointer">Allow manual override of dates</Label>
+                      <Checkbox
+                        id="wmo"
+                        checked={form.warranty_manual_override}
+                        onCheckedChange={(v) => setForm({ ...form, warranty_manual_override: !!v })}
+                      />
+                      <Label htmlFor="wmo" className="text-sm font-normal cursor-pointer">
+                        Allow manual override of dates
+                      </Label>
                     </div>
                   </div>
                 )}
@@ -1160,12 +1760,15 @@ export function ProductMasterPage() {
               <div>
                 <h3 className="font-medium flex items-center gap-2">Bundle</h3>
                 <p className="text-xs text-muted-foreground">
-                  When this product is added to a Quotation or Invoice, the items below are suggested automatically.
-                  Mark rows as mandatory to prevent removal; disable "editable qty" to lock the default quantity.
+                  When this product is added to a Quotation or Invoice, the items below are
+                  suggested automatically. Mark rows as mandatory to prevent removal; disable
+                  "editable qty" to lock the default quantity.
                 </p>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{bundle.length} child item{bundle.length === 1 ? "" : "s"}</span>
+                <span className="text-sm text-muted-foreground">
+                  {bundle.length} child item{bundle.length === 1 ? "" : "s"}
+                </span>
                 <Button
                   type="button"
                   size="sm"
@@ -1173,11 +1776,14 @@ export function ProductMasterPage() {
                   disabled={!editingId}
                   onClick={() => setBundleChildPickerOpen(true)}
                 >
-                  <Plus className="h-4 w-4 mr-1" />Add child products
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add child products
                 </Button>
               </div>
               {!editingId && (
-                <div className="text-xs text-muted-foreground italic">Save the product first, then add bundle children.</div>
+                <div className="text-xs text-muted-foreground italic">
+                  Save the product first, then add bundle children.
+                </div>
               )}
               {bundle.length > 0 && (
                 <div className="border rounded-md overflow-hidden">
@@ -1199,7 +1805,9 @@ export function ProductMasterPage() {
                           <TableRow key={b.child_product_id}>
                             <TableCell>
                               <div className="font-medium">{c?.model || c?.name || "—"}</div>
-                              <div className="text-[11px] text-muted-foreground">{[c?.brand, c?.category].filter(Boolean).join(" · ")}</div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {[c?.brand, c?.category].filter(Boolean).join(" · ")}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <Input
@@ -1209,20 +1817,30 @@ export function ProductMasterPage() {
                                 className="h-8 text-right"
                                 value={b.default_qty}
                                 onChange={(e) => {
-                                  const next = [...bundle]; next[i] = { ...next[i], default_qty: Number(e.target.value) }; setBundle(next);
+                                  const next = [...bundle];
+                                  next[i] = { ...next[i], default_qty: Number(e.target.value) };
+                                  setBundle(next);
                                 }}
                               />
                             </TableCell>
                             <TableCell className="text-center">
                               <Checkbox
                                 checked={b.mandatory}
-                                onCheckedChange={(v) => { const next = [...bundle]; next[i] = { ...next[i], mandatory: !!v }; setBundle(next); }}
+                                onCheckedChange={(v) => {
+                                  const next = [...bundle];
+                                  next[i] = { ...next[i], mandatory: !!v };
+                                  setBundle(next);
+                                }}
                               />
                             </TableCell>
                             <TableCell className="text-center">
                               <Checkbox
                                 checked={b.editable_qty}
-                                onCheckedChange={(v) => { const next = [...bundle]; next[i] = { ...next[i], editable_qty: !!v }; setBundle(next); }}
+                                onCheckedChange={(v) => {
+                                  const next = [...bundle];
+                                  next[i] = { ...next[i], editable_qty: !!v };
+                                  setBundle(next);
+                                }}
                               />
                             </TableCell>
                             <TableCell>
@@ -1230,11 +1848,19 @@ export function ProductMasterPage() {
                                 className="h-8 text-xs"
                                 placeholder="Optional note"
                                 value={b.note || ""}
-                                onChange={(e) => { const next = [...bundle]; next[i] = { ...next[i], note: e.target.value || null }; setBundle(next); }}
+                                onChange={(e) => {
+                                  const next = [...bundle];
+                                  next[i] = { ...next[i], note: e.target.value || null };
+                                  setBundle(next);
+                                }}
                               />
                             </TableCell>
                             <TableCell>
-                              <Button size="icon" variant="ghost" onClick={() => setBundle(bundle.filter((_, x) => x !== i))}>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setBundle(bundle.filter((_, x) => x !== i))}
+                              >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
                             </TableCell>
@@ -1259,16 +1885,32 @@ export function ProductMasterPage() {
           </Tabs>
 
           <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30 sticky bottom-0">
-            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+              <X className="h-4 w-4 mr-1" />
+              Cancel
+            </Button>
             <div className="flex gap-2">
-              {!editingId && <Button variant="outline" onClick={() => save(true)}><Plus className="h-4 w-4 mr-1" />Save & New</Button>}
-              <Button onClick={() => save(false)}><Save className="h-4 w-4 mr-1" />{editingId ? "Update" : "Save"}</Button>
+              {!editingId && (
+                <Button variant="outline" onClick={() => save(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Save & New
+                </Button>
+              )}
+              <Button onClick={() => save(false)}>
+                <Save className="h-4 w-4 mr-1" />
+                {editingId ? "Update" : "Save"}
+              </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!serialsFor} onOpenChange={(o) => { if (!o) setSerialsFor(null); }}>
+      <Dialog
+        open={!!serialsFor}
+        onOpenChange={(o) => {
+          if (!o) setSerialsFor(null);
+        }}
+      >
         <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Serials — {serialsFor?.name}</DialogTitle>
@@ -1279,7 +1921,9 @@ export function ProductMasterPage() {
 
       <Dialog open={addCatOpen} onOpenChange={setAddCatOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Add New Category</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Add New Category</DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
             <div>
               <Label>Category Name</Label>
@@ -1292,8 +1936,19 @@ export function ProductMasterPage() {
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={() => { setAddCatOpen(false); setNewCatName(""); }}>Cancel</Button>
-              <Button size="sm" onClick={saveNewCategory}>Save</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setAddCatOpen(false);
+                  setNewCatName("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button size="sm" onClick={saveNewCategory}>
+                Save
+              </Button>
             </div>
           </div>
         </DialogContent>
@@ -1301,7 +1956,9 @@ export function ProductMasterPage() {
 
       <Dialog open={parentPickerOpen} onOpenChange={setParentPickerOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader><DialogTitle>Select Compatible Parent Products</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Select Compatible Parent Products</DialogTitle>
+          </DialogHeader>
           <Input
             placeholder="Search by model, brand or category…"
             value={parentSearch}
@@ -1309,37 +1966,56 @@ export function ProductMasterPage() {
           />
           <div className="overflow-y-auto border rounded-md">
             <Table>
-              <TableHeader><TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead>Model</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>Category</TableHead>
-              </TableRow></TableHeader>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Brand</TableHead>
+                  <TableHead>Category</TableHead>
+                </TableRow>
+              </TableHeader>
               <TableBody>
                 {filteredParents.map((p) => (
-                  <TableRow key={p.id} className="cursor-pointer" onClick={() => toggleParent(p.id)}>
-                    <TableCell><Checkbox checked={parentLinks.some((l) => l.parent_product_id === p.id)} onCheckedChange={() => toggleParent(p.id)} /></TableCell>
+                  <TableRow
+                    key={p.id}
+                    className="cursor-pointer"
+                    onClick={() => toggleParent(p.id)}
+                  >
+                    <TableCell>
+                      <Checkbox
+                        checked={parentLinks.some((l) => l.parent_product_id === p.id)}
+                        onCheckedChange={() => toggleParent(p.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono">{p.model || p.name}</TableCell>
                     <TableCell>{p.brand || "—"}</TableCell>
                     <TableCell>{p.category || "—"}</TableCell>
                   </TableRow>
                 ))}
                 {filteredParents.length === 0 && (
-                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No products match.</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
+                      No products match.
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
           </div>
           <div className="flex justify-between items-center pt-2">
             <span className="text-sm text-muted-foreground">{parentLinks.length} selected</span>
-            <Button size="sm" onClick={() => setParentPickerOpen(false)}>Done</Button>
+            <Button size="sm" onClick={() => setParentPickerOpen(false)}>
+              Done
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={bundleChildPickerOpen} onOpenChange={setBundleChildPickerOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader><DialogTitle>Add Bundle Child Products</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Add Bundle Child Products</DialogTitle>
+          </DialogHeader>
           <Input
             placeholder="Search by model, brand or category…"
             value={bundleChildSearch}
@@ -1347,27 +2023,49 @@ export function ProductMasterPage() {
           />
           <div className="overflow-y-auto border rounded-md">
             <Table>
-              <TableHeader><TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead>Model</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>Category</TableHead>
-              </TableRow></TableHeader>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead>Brand</TableHead>
+                  <TableHead>Category</TableHead>
+                </TableRow>
+              </TableHeader>
               <TableBody>
                 {rows
-                  .filter((p) => p.active !== false && p.id !== editingId && !bundle.some((b) => b.child_product_id === p.id))
+                  .filter(
+                    (p) =>
+                      p.active !== false &&
+                      p.id !== editingId &&
+                      !bundle.some((b) => b.child_product_id === p.id),
+                  )
                   .filter((p) => {
                     const s = bundleChildSearch.trim().toLowerCase();
                     if (!s) return true;
-                    return [p.name, p.model, p.brand, p.category].some((v) => (v || "").toLowerCase().includes(s));
+                    return [p.name, p.model, p.brand, p.category].some((v) =>
+                      (v || "").toLowerCase().includes(s),
+                    );
                   })
                   .map((p) => (
                     <TableRow
                       key={p.id}
                       className="cursor-pointer"
-                      onClick={() => setBundle([...bundle, { child_product_id: p.id, default_qty: 1, mandatory: false, editable_qty: true, note: null }])}
+                      onClick={() =>
+                        setBundle([
+                          ...bundle,
+                          {
+                            child_product_id: p.id,
+                            default_qty: 1,
+                            mandatory: false,
+                            editable_qty: true,
+                            note: null,
+                          },
+                        ])
+                      }
                     >
-                      <TableCell><Plus className="h-4 w-4 text-primary" /></TableCell>
+                      <TableCell>
+                        <Plus className="h-4 w-4 text-primary" />
+                      </TableCell>
                       <TableCell className="font-mono">{p.model || p.name}</TableCell>
                       <TableCell>{p.brand || "—"}</TableCell>
                       <TableCell>{p.category || "—"}</TableCell>
@@ -1377,7 +2075,9 @@ export function ProductMasterPage() {
             </Table>
           </div>
           <div className="flex justify-end pt-2">
-            <Button size="sm" onClick={() => setBundleChildPickerOpen(false)}>Done</Button>
+            <Button size="sm" onClick={() => setBundleChildPickerOpen(false)}>
+              Done
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

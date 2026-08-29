@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageLoader } from "@/components/shared/skeletons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,8 @@ import { useIsAdmin } from "@/lib/useRole";
 import { AdminDeleteDialog } from "@/components/AdminDeleteDialog";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import { DEFAULT_COMPANY_PROFILE, fetchCompanyProfile, type CompanyProfile } from "@/lib/companyProfile";
+import { headerToCompanyProfile } from "@/lib/documentHeader";
+import { usePrintOptions } from "@/components/PrintOptionsDialog";
 
 export const Route = createFileRoute("/_app/grn/$id")({
   component: GrnView,
@@ -32,12 +34,23 @@ function GrnView() {
   const [invoiceLinked, setInvoiceLinked] = useState(false);
   const [wasEdited, setWasEdited] = useState(false);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
+  const printer = usePrintOptions();
+  const printPendingRef = useRef(false);
 
   useEffect(() => { fetchCompanyProfile().then(setCompany).catch(() => {}); }, []);
 
   useEffect(() => {
     fetchGrn(id).then(setG).catch((e) => toast.error(e.message));
   }, [id]);
+
+  // Apply the dialog-chosen letterhead before printing.
+  useEffect(() => {
+    if (printPendingRef.current) {
+      printPendingRef.current = false;
+      const t = setTimeout(() => window.print(), 120);
+      return () => clearTimeout(t);
+    }
+  }, [company]);
 
   // Auto-start the PDF download when opened with ?download=1 (from the
   // Indent Oracle pipeline "Download PDF" button).
@@ -151,7 +164,17 @@ function GrnView() {
         .update({ printed_by: u.user?.id ?? null, printed_at: new Date().toISOString() } as never)
         .eq("id", g.id);
     }
-    window.print();
+    const choice = await printer.ask({
+      docType: "grn",
+      title: "Print GRN",
+      description: "Choose which office details appear on the GRN letterhead.",
+      defaultSource: g.branch_id ? { kind: "branch", id: g.branch_id } : null,
+      allowCopyLabel: false,
+      allowSupplyFrom: false,
+    });
+    if (!choice) return;
+    setCompany(headerToCompanyProfile(choice.header));
+    printPendingRef.current = true;
   };
 
   const totals = (g.items || []).reduce((acc, it) => {
@@ -165,6 +188,7 @@ function GrnView() {
 
   return (
     <>
+      {printer.element}
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 10mm; }
@@ -177,6 +201,9 @@ function GrnView() {
         #print-area table { border-collapse: collapse; width: 100%; }
         #print-area th, #print-area td { border: 1px solid #333; padding: 4px 6px; font-size: 11px; vertical-align: top; }
         #print-area thead { display: table-header-group; }
+        /* Full-width boxes sit flush with the page margins — drop their side
+           borders in print so no frame line prints along the page edge. */
+        @media print { .print-open-box { border-left: none !important; border-right: none !important; } }
       `}</style>
 
       <div className="no-print mb-4 space-y-3">
@@ -302,6 +329,11 @@ function GrnView() {
             <b>Date:</b> {g.grn_date}
             {g.receipt_date && <> &nbsp;&nbsp;<b>Received:</b> {g.receipt_date}</>}
           </div>
+          {g.warehouse_name && (
+            <div style={{ fontSize: 11, marginTop: 2 }}>
+              <b>Received Into:</b> {g.warehouse_name}
+            </div>
+          )}
         </div>
 
         {/* Source & GRN info */}
@@ -416,7 +448,7 @@ function GrnView() {
         </table>
 
         {(g.receipt_remarks || g.internal_remarks) && (
-          <div style={{ fontSize: 11, marginBottom: 6, border: "1px solid #333", padding: 6 }}>
+          <div className="print-open-box" style={{ fontSize: 11, marginBottom: 6, border: "1px solid #333", padding: 6 }}>
             {g.receipt_remarks && <div><b>Receipt Remarks:</b> {g.receipt_remarks}</div>}
             {g.internal_remarks && <div><b>Internal Remarks:</b> {g.internal_remarks}</div>}
           </div>

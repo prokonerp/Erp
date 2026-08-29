@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useCustomers, useCustomerDetail, masterKeys } from "@/hooks/useMasters";
+import { useCustomersTable, useCustomerDetail, masterKeys } from "@/hooks/useMasters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Pencil, Trash2, Upload, Users, Search } from "lucide-react";
@@ -29,28 +29,34 @@ export function CustomerMasterPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
-  const { data: customersData, isLoading } = useCustomers();
-  const rows = customersData?.rows ?? [];
-  const totalCount = customersData?.count ?? rows.length;
+  // Server-paginated, debounced search — avoids loading 3101 rows into DOM
+  const [page, setPage] = useState(0);
+  const pageSize = 25;
+  const [debouncedQ, setDebouncedQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedQ(q);
+      setPage(0);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const { data: customersData, isLoading } = useCustomersTable({
+    search: debouncedQ,
+    page,
+    pageSize,
+  });
+  const rows = (customersData as any)?.rows ?? [];
+  const totalCount = (customersData as any)?.count ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const { data: editingDetail } = useCustomerDetail(open && editingId ? editingId : null);
   const editing = editingId ? (editingDetail ?? null) : null;
 
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
 
-  const filtered = useMemo(
-    () =>
-      rows.filter((c) => {
-        const s = q.toLowerCase();
-        return (
-          !s ||
-          [c.company, c.contact_name, c.phone, c.email, c.gst, c.state].some(
-            (v) => (v || "").toLowerCase().includes(s),
-          )
-        );
-      }),
-    [rows, q],
-  );
+  // Server already filtered + sorted; no client filter needed
+  const filtered = rows;
 
   function startNew() {
     setEditingId(null);
@@ -195,21 +201,21 @@ export function CustomerMasterPage() {
               title="Customer Master"
               rows={filtered}
               columns={[
-                { header: "Company", get: (c) => c.company },
-                { header: "Contact", get: (c) => c.contact_name || "" },
-                { header: "Phone", get: (c) => c.phone || "" },
-                { header: "Email", get: (c) => c.email || "" },
-                { header: "GSTIN", get: (c) => c.gst || "" },
-                { header: "PAN", get: (c) => (c as any).pan || "" },
-                { header: "GST Treatment", get: (c) => (c as any).gst_status || "" },
-                { header: "State", get: (c) => c.state || "" },
-                { header: "City", get: (c) => (c as any).city || "" },
+                { header: "Company", get: (c: any) => c.company },
+                { header: "Contact", get: (c: any) => c.contact_name || "" },
+                { header: "Phone", get: (c: any) => c.phone || "" },
+                { header: "Email", get: (c: any) => c.email || "" },
+                { header: "GSTIN", get: (c: any) => c.gst || "" },
+                { header: "PAN", get: (c: any) => (c as any).pan || "" },
+                { header: "GST Treatment", get: (c: any) => (c as any).gst_status || "" },
+                { header: "State", get: (c: any) => c.state || "" },
+                { header: "City", get: (c: any) => (c as any).city || "" },
                 {
                   header: "Billing Address",
-                  get: (c) => c.billing_address || c.address || "",
+                  get: (c: any) => c.billing_address || c.address || "",
                 },
-                { header: "Shipping Address", get: (c) => c.shipping_address || "" },
-                { header: "Remarks", get: (c) => c.remarks || "" },
+                { header: "Shipping Address", get: (c: any) => c.shipping_address || "" },
+                { header: "Remarks", get: (c: any) => c.remarks || "" },
               ]}
             />
             <Button size="sm" onClick={startNew}>
@@ -224,6 +230,7 @@ export function CustomerMasterPage() {
         columns={columns}
         data={filtered}
         isLoading={isLoading}
+        totalRecords={totalCount}
         emptyIcon={Users}
         emptyTitle={q ? `No results for "${q}"` : "No customers yet"}
         emptyHint={
@@ -242,7 +249,8 @@ export function CustomerMasterPage() {
         toolbar={
           <div className="flex items-center gap-2 w-full">
             <span className="text-sm font-medium">
-              All Customers ({totalCount || rows.length})
+              All Customers ({totalCount.toLocaleString()})
+              {totalCount > pageSize ? ` · Page ${page + 1} of ${pageCount}` : ""}
             </span>
             <div className="ml-auto relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -254,6 +262,21 @@ export function CustomerMasterPage() {
               />
             </div>
           </div>
+        }
+        footer={
+          totalCount > pageSize ? (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                Previous
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Page {page + 1} of {pageCount} · {totalCount.toLocaleString()} total
+              </span>
+              <Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            </div>
+          ) : undefined
         }
       />
 

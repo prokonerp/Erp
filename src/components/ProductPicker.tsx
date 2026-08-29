@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { useProducts } from "@/hooks/useMasters";
+import { useEffect, useMemo, useState } from "react";
+import { useProductsForPicker } from "@/hooks/useMasters";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -46,11 +47,34 @@ export function ProductPicker({
   className,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search), 150);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const { data: allProducts, isLoading } = useProducts();
-  const rows = (allProducts ?? []).filter((p) => p.active !== false);
+  const { data: rowsData, isLoading } = useProductsForPicker(debounced);
+  const rows = ((rowsData as any) ?? []).filter((p: any) => (p as any).active !== false);
 
-  const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
+  const [selectedFallback, setSelectedFallback] = useState<ProductMaster | null>(null);
+  const selected = useMemo(() => rows.find((r: any) => r.id === value) || selectedFallback, [rows, value, selectedFallback]);
+
+  useEffect(() => {
+    if (!value || rows.find((r: any) => r.id === value) || selectedFallback?.id === value) return;
+    let active = true;
+    supabase
+      .from("products")
+      .select("id, name, model, short_name, display_name, brand, category")
+      .eq("id", value)
+      .single()
+      .then(({ data }) => {
+        if (active && data) setSelectedFallback(data as unknown as ProductMaster);
+      });
+    return () => {
+      active = false;
+    };
+  }, [value, rows, selectedFallback]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -80,27 +104,29 @@ export function ProductPicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[320px]" align="start">
-        <Command
-          filter={(val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}
-        >
-          <CommandInput placeholder="Search by model or full name…" />
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Search by model or full name…" value={search} onValueChange={setSearch} />
           <CommandList>
-            <CommandEmpty>
-              <div className="py-4 px-3 text-sm space-y-2">
-                <p className="text-muted-foreground">No matching product.</p>
-                <a
-                  href="/masters/products"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add New Product
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            </CommandEmpty>
-            <CommandGroup heading={`${rows.length} models`}>
-              {rows.map((p) => {
+            {isLoading ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">Searching…</div>
+            ) : (
+              <CommandEmpty>
+                <div className="py-4 px-3 text-sm space-y-2">
+                  <p className="text-muted-foreground">No matching product.</p>
+                  <a
+                    href="/masters/products"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add New Product
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </CommandEmpty>
+            )}
+            <CommandGroup heading={debounced ? `${rows.length} matches` : `${rows.length} models`}>
+              {rows.map((p: any) => {
                 const blob = productSearchBlob(p);
                 return (
                   <CommandItem

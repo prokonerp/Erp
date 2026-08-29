@@ -408,6 +408,31 @@ async function logWhatsAppLaunch(entry: {
   }
 }
 
+// Brand name used to sign automated WhatsApp messages. Primed once from the
+// Company Master so message templates never hardcode identity again.
+let TICKET_BRAND = "";
+export function setTicketBrand(name: string) {
+  TICKET_BRAND = (name || "").trim();
+}
+function ticketBrandLine(): string {
+  return TICKET_BRAND ? `— ${TICKET_BRAND}` : "";
+}
+if (typeof window !== "undefined") {
+  (async () => {
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("company_profile" as never)
+        .select("name")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      const name = (data as unknown as { name?: string } | null)?.name;
+      if (name) setTicketBrand(name);
+    } catch { /* best-effort branding */ }
+  })();
+}
+
 export function engineerAssignMsg(t: {
   case_id: string;
   call_type: string;
@@ -431,7 +456,7 @@ export function engineerAssignMsg(t: {
     t.serial_no ? `Serial: ${t.serial_no}` : "",
     t.complaint ? `Complaint: ${t.complaint}` : "",
     ``,
-    `— Prokon Hi-Tech Systems`,
+    ticketBrandLine(),
   ]
     .filter(Boolean)
     .join("\n");
@@ -446,10 +471,10 @@ export function customerClosedMsg(t: {
     `Dear ${t.customer_name},`,
     ``,
     `Your service request *${t.case_id}*${t.product ? ` for ${t.product}` : ""} has been *resolved & closed*.`,
-    `Thank you for choosing Prokon Hi-Tech Systems. We appreciate your business.`,
+    TICKET_BRAND ? `Thank you for choosing ${TICKET_BRAND}. We appreciate your business.` : `Thank you. We appreciate your business.`,
     ``,
     `For any further assistance, feel free to reach out.`,
-    `— Prokon Hi-Tech Systems`,
+    ticketBrandLine(),
   ].join("\n");
 }
 

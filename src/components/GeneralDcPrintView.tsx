@@ -126,6 +126,18 @@ export function GeneralDcPrintView({
         </div>
       )}
 
+      {/* Dispatched From — derived from the warehouses chosen on the lines */}
+      {(() => {
+        const ids = Array.from(new Set((dc.items || []).map((it) => it.warehouse_id).filter(Boolean))) as string[];
+        const labels = ids.map((id) => warehouseNames[id]).filter(Boolean);
+        if (!labels.length) return null;
+        return (
+          <div className="text-center text-[10.5px] mb-2">
+            <b>Dispatched From:</b> {labels.join("  ·  ")}
+          </div>
+        );
+      })()}
+
       {/* Items */}
       <table className="items">
         <thead>

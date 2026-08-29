@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchAll } from "@/lib/fetchAll";
+import { useProductsForPicker } from "@/hooks/useMasters";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -31,35 +31,49 @@ type Props = {
  */
 export function ImsModelPartPicker({ value, onSelect, className, placeholder = "Search Model / Part…" }: Props) {
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<ImsModelPart[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
   useEffect(() => {
-    let alive = true;
-    fetchAll<any>("products", (q) =>
-      q.select("id,name,short_name,display_name,model,brand,category,description,active,item_type").order("model"),
-    )
-      .then((data) => {
-        if (!alive) return;
-        const mapped: (ImsModelPart & { description?: string | null })[] = data
-          .filter((p) => p.active !== false && (p.item_type ?? "product") !== "service")
-          .map((p) => ({
-            id: p.id,
-            name: p.name || p.model || "(unnamed)",
-            model: (p.short_name || p.model) || null,
-            brand: p.brand || null,
-            category: p.category || null,
-            description: p.description || null,
-            productType: (p.category || "").toLowerCase().includes("spare") ? "Spare Part" : "Product",
-          }));
-        setRows(mapped as ImsModelPart[]);
-        setLoading(false);
-      })
-      .catch(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
+    const t = setTimeout(() => setDebounced(search), 150);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const selected = useMemo(() => rows.find((r) => r.id === value) || null, [rows, value]);
+  const { data: rowsData, isLoading: loading } = useProductsForPicker(debounced);
+  const rows = useMemo(() => {
+    const all = (rowsData as any) ?? [];
+    return (all as any[])
+      .filter((p: any) => p.active !== false && (p.item_type ?? "product") !== "service")
+      .map((p: any) => ({
+        id: p.id,
+        name: p.name || p.model || "(unnamed)",
+        model: (p.short_name || p.model) || null,
+        brand: p.brand || null,
+        category: p.category || null,
+        description: p.description || null,
+        productType: (p.category || "").toLowerCase().includes("spare") ? "Spare Part" : "Product",
+      })) as ImsModelPart[];
+  }, [rowsData]);
+
+  const [selectedFallback, setSelectedFallback] = useState<ImsModelPart | null>(null);
+  const selected = useMemo(() => rows.find((r) => r.id === value) || selectedFallback, [rows, value, selectedFallback]);
+  useEffect(() => {
+    if (!value || rows.find((r) => r.id === value) || selectedFallback?.id === value) return;
+    let active = true;
+    supabase.from("products").select("id,name,short_name,model,brand,category,description,active,item_type").eq("id", value).single().then(({ data }) => {
+      if (active && data) {
+        const p: any = data;
+        setSelectedFallback({
+          id: p.id,
+          name: p.name || p.model || "(unnamed)",
+          model: (p.short_name || p.model) || null,
+          brand: p.brand || null,
+          category: p.category || null,
+          productType: (p.category || "").toLowerCase().includes("spare") ? "Spare Part" : "Product",
+        } as ImsModelPart);
+      }
+    });
+    return () => { active = false; };
+  }, [value, rows, selectedFallback]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -83,20 +97,24 @@ export function ImsModelPartPicker({ value, onSelect, className, placeholder = "
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[340px]" align="start">
-        <Command filter={(val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}>
-          <CommandInput placeholder="Search by model, name, OEM, category…" />
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Search by model, name, OEM, category…" value={search} onValueChange={setSearch} />
           <CommandList>
-            <CommandEmpty>
-              <div className="py-4 px-3 text-sm space-y-2">
-                <p className="text-muted-foreground">No matching Model / Part.</p>
-                <a href="/masters/products" target="_blank" rel="noopener noreferrer"
-                   className="inline-flex items-center gap-1 text-primary hover:underline">
-                  <Plus className="h-3.5 w-3.5" /> Add in Product Master
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            </CommandEmpty>
-            <CommandGroup heading={`${rows.length} items (Products + Spare Parts)`}>
+            {loading ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">Searching…</div>
+            ) : (
+              <CommandEmpty>
+                <div className="py-4 px-3 text-sm space-y-2">
+                  <p className="text-muted-foreground">No matching Model / Part.</p>
+                  <a href="/masters/products" target="_blank" rel="noopener noreferrer"
+                     className="inline-flex items-center gap-1 text-primary hover:underline">
+                    <Plus className="h-3.5 w-3.5" /> Add in Product Master
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </CommandEmpty>
+            )}
+            <CommandGroup heading={debounced ? `${rows.length} matches` : `${rows.length} items (Products + Spare Parts)`}>
               {rows.map((p) => {
                 const blob = `${p.model || ""} ${p.name} ${p.brand || ""} ${p.category || ""} ${p.productType}`.toLowerCase();
                 return (

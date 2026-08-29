@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Label } from "@/components/ui/label";
 
@@ -28,18 +28,20 @@ interface Props {
 }
 
 export function BranchPicker({ value, onChange, required, label = "Prokon Branch", disabled }: Props) {
-  const [branches, setBranches] = useState<BranchOption[]>([]);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
+  const { data: branchesData } = useQuery({
+    queryKey: ["branches", "picker"],
+    queryFn: async () => {
+      const { data, error } = await supabase
         .from("branches")
         .select("id, company_id, name, code, address, city, state_name, state_code, pin_code, gstin, phone, email, active, company:companies(id,name,gstin,email,phone,address)")
         .order("name", { ascending: true });
-      setBranches((data as any) ?? []);
-    })();
-  }, []);
-
+      if (error) throw error;
+      return (data as any) ?? [];
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+  const branches = (branchesData ?? []) as BranchOption[];
   const activeBranches = branches.filter((b) => b.active !== false || b.id === value);
 
   return (
