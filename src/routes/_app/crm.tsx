@@ -29,7 +29,7 @@ function CrmLayout() {
   const loc = useLocation();
   return (
     <div>
-      <div className="border-b border-border bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/40 -mx-4 md:-mx-6 px-4 md:px-6 mb-5 print:hidden sticky top-14 z-20">
+      <div className="border-b border-border bg-background -mx-4 md:-mx-6 px-4 md:px-6 mb-5 print:hidden sticky top-0 z-20">
         <nav className="flex gap-1 overflow-x-auto" aria-label="CRM sections">
           {tabs.map((t) => {
             const active = t.exact ? loc.pathname === t.to : loc.pathname.startsWith(t.to);

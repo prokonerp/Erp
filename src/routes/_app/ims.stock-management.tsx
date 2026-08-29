@@ -360,7 +360,7 @@ function StockManagement() {
         <CardContent className="p-0">
           <div className="overflow-x-auto max-h-[640px] overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="bg-muted/60 sticky top-0 z-10 border-b">
+              <thead className="bg-muted sticky top-0 z-10 border-b">
                 <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th className="p-2.5 w-8"></th>
                   <th className="p-2.5">Product</th>

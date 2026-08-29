@@ -632,7 +632,7 @@ export function CustomerFormDialog({
 
         <CustomerFormFields form={form} setForm={setForm} tab={tab} setTab={setTab} />
 
-        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30 sticky bottom-0">
+        <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted sticky bottom-0">
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
           <div className="flex gap-2">
             {allowSaveAndNew && !editing && (

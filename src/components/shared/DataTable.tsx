@@ -178,7 +178,7 @@ export function DataTable<T extends Record<string, any>>({
             />
           ) : (
             <table className={cn("w-full text-sm", className)}>
-              <thead className="sticky top-0 z-10 border-b bg-muted/50 text-xs font-medium uppercase tracking-wide text-muted-foreground backdrop-blur-sm">
+              <thead className="sticky top-0 z-10 border-b bg-muted text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 <tr>
                   {columns.map((col) => {
                     const isRight = col.align === "right";

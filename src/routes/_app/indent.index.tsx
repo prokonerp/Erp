@@ -301,7 +301,9 @@ function IndentRow({
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium">
-                {closedCount}/{oracles.length} closed
+                {closedCount === oracles.length
+                  ? `${closedCount}/${oracles.length} closed`
+                  : `${oracles.length - closedCount}/${oracles.length} open`}
               </span>
               <span className="text-[11px] text-muted-foreground">·</span>
               <OracleChips oracles={oracles} indentType={r.indent_type} />
@@ -468,7 +470,7 @@ function OracleChips({
   indentType: string | null;
 }) {
   return (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap">
       {oracles.map((o, i) => {
         const prog = oracleProgress(o, indentType);
         const dotCls =
@@ -478,11 +480,12 @@ function OracleChips({
               ? "bg-amber-500"
               : "bg-rose-500";
         return (
-          <span
-            key={i}
-            className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotCls}`}
-            title={`Oracle ${o.oracle_no || `#${i + 1}`}`}
-          />
+          <span key={i} className="flex items-center">
+            <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotCls} mr-8`} />
+            <span className="font-bold font-mono text-base leading-none">
+              {o.oracle_no || `#${i + 1}`}
+            </span>
+          </span>
         );
       })}
     </div>

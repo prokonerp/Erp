@@ -1912,7 +1912,7 @@ export function ProductMasterPage() {
             </TabsContent>
           </Tabs>
 
-          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30 sticky bottom-0">
+          <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted sticky bottom-0">
             <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               <X className="h-4 w-4 mr-1" />
               Cancel

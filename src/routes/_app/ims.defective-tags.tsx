@@ -326,7 +326,7 @@ function AspTab({
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-muted/50 sticky top-0">
+            <thead className="bg-muted sticky top-0">
               <tr className="text-left">
                 <th className="p-2 w-8">
                   <Checkbox

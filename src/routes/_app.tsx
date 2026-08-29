@@ -427,7 +427,7 @@ function AppLayout() {
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Top bar */}
         <header
-          className="h-14 shrink-0 border-b flex items-center gap-3 px-4 md:px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-sm print:hidden"
+          className="h-14 shrink-0 border-b flex items-center gap-3 px-4 md:px-6 bg-background shadow-sm print:hidden"
         >
           <Button
             variant="ghost"
@@ -475,8 +475,8 @@ function AppLayout() {
         </header>
 
         {/* Content - THE ONLY scrollbar on the right side */}
-        <main id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 scroll-smooth bg-background" tabIndex={-1}>
-          <div className="max-w-[1600px] w-full mx-auto">
+        <main id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth bg-background" tabIndex={-1}>
+          <div className="max-w-[1600px] w-full mx-auto p-4 md:p-6">
             <ClaimAdminBanner />
             <Outlet />
           </div>

@@ -70,7 +70,7 @@ export function FormShell({
   return (
     <DensityCtx.Provider value={{ density, setDensity }}>
       <div data-density={density} className="fk-shell">
-        <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-background/85 backdrop-blur border-b border-border/60">
+        <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-background border-b border-border">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
               <h1 className="text-lg sm:text-xl font-semibold leading-tight truncate">{title}</h1>
@@ -274,7 +274,7 @@ function inferFieldSize({
  */
 export function StickyMobileActions({ children }: { children: ReactNode }) {
   return (
-    <div className="sm:hidden fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur px-3 py-2 flex gap-2 justify-end">
+    <div className="sm:hidden fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background px-3 py-2 flex gap-2 justify-end">
       {children}
     </div>
   );

@@ -266,7 +266,7 @@ function Ledger() {
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50 sticky top-0 z-10">
+            <thead className="bg-muted sticky top-0 z-10">
               <tr className="text-left">
                 <th className="p-2">Date / Time</th>
                 <th className="p-2">Txn No</th>
@@ -460,7 +460,7 @@ function DefectiveTagQuickAction({
         </div>
         <div className="border rounded-md overflow-auto max-h-[360px]">
           <table className="w-full text-xs">
-            <thead className="bg-muted/50 sticky top-0 z-10">
+            <thead className="bg-muted sticky top-0 z-10">
               <tr className="text-left">
                 <th className="p-2 w-8">
                   <Checkbox

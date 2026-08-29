@@ -146,7 +146,7 @@ export function GatepassNewForm() {
       >
         <div className="overflow-x-auto -mx-2 sm:mx-0">
           <table className="w-full text-sm border-separate border-spacing-0 min-w-[720px]">
-            <thead className="sticky top-0 z-10 bg-muted/60">
+            <thead className="sticky top-0 z-10 bg-muted">
               <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="px-2 py-1.5 w-10">#</th>
                 <th className="px-2 py-1.5 min-w-[220px]">Product</th>

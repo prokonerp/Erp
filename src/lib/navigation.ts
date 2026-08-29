@@ -197,7 +197,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     to: "/indent",
-    label: "Purchase Requests (Indent)",
+    label: "Indent",
     icon: ClipboardList,
     module: "indent",
     group: "Procurement",

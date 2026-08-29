@@ -609,7 +609,7 @@ function NewQuotation() {
         </Card>
       </div>
 
-      <div className="flex justify-end gap-2 sticky bottom-0 bg-background/95 backdrop-blur border-t py-2">
+      <div className="flex justify-end gap-2 sticky bottom-0 bg-background border-t py-2">
         <Button variant="outline" size="sm" onClick={() => nav({ to: "/crm/quotations" })}>Cancel</Button>
         <Button variant="outline" size="sm" onClick={onSaveDraft} disabled={saving}><Save className="h-4 w-4 mr-1" />Save Draft</Button>
         <Button size="sm" onClick={onSaveSend} disabled={saving}><Send className="h-4 w-4 mr-1" />Save & Send</Button>
