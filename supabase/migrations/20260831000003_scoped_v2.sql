@@ -45,14 +45,8 @@ AS $$
     WHEN _arr IS NULL THEN '[]'::jsonb
     WHEN jsonb_typeof(_arr) <> 'array' THEN _arr
     ELSE COALESCE(
-      (SELECT jsonb_agg(
-         jsonb_set(
-           elem,
-           '{serial}',
-           to_jsonb(public.serial_replace_token(COALESCE(elem->>'serial',''), _from, _to)),
-           false
-         )
-       FROM jsonb_array_elements(_arr) AS elem),
+      (SELECT jsonb_agg(jsonb_set(elem, '{serial}', to_jsonb(public.serial_replace_token(COALESCE(elem->>'serial',''), _from, _to)), false))
+         FROM jsonb_array_elements(_arr) AS elem),
       '[]'::jsonb)
   END;
 $$;
