@@ -48,7 +48,19 @@
 -- ---------------------------------------------------------------------------
 BEGIN;
 
+-- 0) CRITICAL: Bypass frozen-items guard for this transaction only (local, auto-reset)
+--    Trigger assert_items_frozen_after_post() checks IF serial_propagation_on() THEN RETURN NEW;
+--    serial_propagation_on() reads current_setting('app.serial_propagation')='on'.
+--    propagate_serial_correction() sets this flag via PERFORM set_config('app.serial_propagation','on',true)
+--    before its UPDATEs, so it bypasses. The previous direct-UPDATE repair and
+--    correct_oracle_slot DID NOT set the flag, so DC UPDATE was blocked with
+--    P0001 "Challan Generated — its items are frozen because stock has been posted".
+--    Third arg true = transaction-local (auto-reset at COMMIT/ROLLBACK), so guard
+--    is lifted only for this correction. Works in SQL Editor where auth.uid() IS NULL.
+SELECT set_config('app.serial_propagation', 'on', true);
+
 -- 1a) Audit row (never delete — insert only)
+--     NOTE: tickets column is case_id (not ticket_no) — use case_id for document_no
 INSERT INTO document_deletion_audit
   (document_type, document_subtype, document_no, document_id, reason, deleted_by, original_created_by, original_created_at, snapshot)
 SELECT
@@ -153,16 +165,16 @@ WHERE dc.challan_no='DC-CUST/26-27/0113'
 LIMIT 1;
 
 -- ---------------------------------------------------------------------------
--- STEP 4 — VERIFY (read-only checks before you COMMIT)
+-- STEP 4 — VERIFY (read-only checks before you COMMIT — keep inside transaction)
 -- ---------------------------------------------------------------------------
--- SELECT 'tickets' AS tbl, good_parts_details->0->>'serial' FROM tickets WHERE id='7d29997d-0da9-46ce-9733-e2219a00f1bd';
--- SELECT 'dc' AS tbl, items->0->>'serial_no', items->0->>'good_serial' FROM delivery_challans WHERE challan_no='DC-CUST/26-27/0113';
--- SELECT 'stock_old' AS tbl, count(*) FROM ims_stock_items WHERE part_serial_no='0H2624G00408';
--- SELECT 'stock_new' AS tbl, count(*) FROM ims_stock_items WHERE part_serial_no='0H2629G00591';
--- SELECT 'indent' AS tbl, b->'exchange_rows'->0->>'serial_no' AS b, b->'received_rows'->0->>'serial_no' AS c
---   FROM indents, jsonb_array_elements(oracles_data) b WHERE b->>'oracle_no'='41214317';
+SELECT 'tickets'   AS tbl, id, case_id, good_parts_details->0->>'serial' AS serial_after FROM tickets WHERE id='7d29997d-0da9-46ce-9733-e2219a00f1bd';
+SELECT 'dc'        AS tbl, challan_no, status, items->0->>'serial_no' AS serial_no_after, items->0->>'good_serial' AS good_serial_after FROM delivery_challans WHERE challan_no='DC-CUST/26-27/0113';
+SELECT 'stock_old' AS tbl, count(*) AS cnt FROM ims_stock_items WHERE part_serial_no='0H2624G00408';
+SELECT 'stock_new' AS tbl, count(*) AS cnt FROM ims_stock_items WHERE part_serial_no='0H2629G00591';
+SELECT 'indent'    AS tbl, b->>'oracle_no' AS oracle_no, b->'exchange_rows'->0->>'serial_no' AS b_should_be_0H2629, b->'received_rows'->0->>'serial_no' AS c_should_be_0H2624
+FROM indents, jsonb_array_elements(COALESCE(oracles_data,'[]'::jsonb)) b WHERE b->>'oracle_no'='41214317';
 
--- If SELECTs look correct (B=0H2629, C=0H2624, ticket=0H2629, dc good_serial=0H2629, stock_new=1) → COMMIT; else ROLLBACK;
+-- If verification looks correct (ticket=0H2629, dc serial_no/good_serial=0H2629, stock_new=1, indent B=0H2629 C=0H2624) → COMMIT; else ROLLBACK;
 COMMIT;
 -- ROLLBACK; -- uncomment to abort if verification failed
 

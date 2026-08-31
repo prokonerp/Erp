@@ -1,5 +1,12 @@
 -- =============================================================================
 -- SCOPED SERIAL CORRECTION V2 — satellite repair + harder document scope
+-- PATCH 20260831000003a — frozen-challan unblock (additive, reversible)
+--   Adds PERFORM set_config('app.serial_propagation','on',true) to both
+--   correct_oracle_slot and correct_grn_serial so _sync_doc updates bypass
+--   assert_items_frozen_after_post() on status='Challan Generated' without
+--   requiring Cancel+reraise. LOCAL flag auto-resets at tx end; mirrors
+--   propagate_serial_correction() ll.132/161. No DROP, no data UPDATE at
+--   migration time; reversible via re-apply of previous file.
 -- =============================================================================
 -- CONTEXT: Oracle 41214317 had B (exchange) and C (received) both holding
 --   same string 0H2624G00408 initially. Correcting C via global
@@ -87,6 +94,12 @@ BEGIN
   IF auth.uid() IS NOT NULL AND NOT public.has_role(auth.uid(), 'admin') THEN
     RAISE EXCEPTION 'Only administrators can correct serial numbers';
   END IF;
+
+  -- Unblock frozen-challan satellite sync: bypass assert_items_frozen_after_post()
+  -- LOCAL (=true third arg) auto-resets at transaction end; same pattern as
+  -- propagate_serial_correction() line 132/161. Safe because scope remains PK-anchored
+  -- (indent_id + oracle_no + LIKE guard); flag only suppresses the freeze check.
+  PERFORM set_config('app.serial_propagation','on',true);
 
   IF v_old IS NULL OR v_new IS NULL OR v_old = v_new THEN
     RAISE EXCEPTION 'Old and new serial numbers must be provided and different';
@@ -223,6 +236,13 @@ BEGIN
   IF auth.uid() IS NOT NULL AND NOT public.has_role(auth.uid(), 'admin') THEN
     RAISE EXCEPTION 'Only administrators can correct serial numbers';
   END IF;
+
+  -- Unblock frozen-challan / GRN satellite sync: same LOCAL flag as
+  -- propagate_serial_correction(). Allows any downstream UPDATE to
+  -- delivery_challans (via correct_indent_oracle_serial or direct items rewrite)
+  -- to bypass assert_items_frozen_after_post() when status='Challan Generated'.
+  PERFORM set_config('app.serial_propagation','on',true);
+
   IF v_old IS NULL OR v_new IS NULL OR v_old = v_new THEN
     RAISE EXCEPTION 'Old and new serial numbers must be provided and different';
   END IF;
