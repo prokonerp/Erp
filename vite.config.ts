@@ -77,6 +77,15 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
               return "vendor";
             if (id.includes("@supabase/")) return "supabase";
             if (id.includes("node_modules/recharts")) return "charts";
+            // Heavy export / doc libs — isolate so they never bloat the main entry
+            // (all are dynamic import() at runtime; this only matters if a static
+            // import slips in or a route chunk pulls them transitively).
+            if (id.includes("node_modules/xlsx")) return "xlsx";
+            if (id.includes("node_modules/jspdf") || id.includes("jspdf-autotable")) return "jspdf";
+            if (id.includes("node_modules/pdfjs-dist")) return "pdfjs";
+            if (id.includes("node_modules/html2canvas") || id.includes("html2canvas-pro")) return "canvas";
+            if (id.includes("node_modules/canvg")) return "canvg";
+            if (id.includes("node_modules/pako") || id.includes("node_modules/fflate")) return "compress";
           },
         },
       },

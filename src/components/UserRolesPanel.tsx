@@ -16,7 +16,7 @@ export function UserRolesPanel({ isAdmin }: { isAdmin: boolean }) {  const confi
   const [role, setRole] = useState<"admin" | "user">("user");
 
   async function load() {
-    const { data, error } = await supabase.from("user_roles").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("user_roles").select("id,user_id,role,created_at").order("created_at", { ascending: false }).limit(200);
     if (error) toast.error(error.message);
     setRows(data ?? []);
   }

@@ -8,7 +8,7 @@ import { ProductStockSummary } from "@/components/ProductStockSummary";
 import { SalesServiceStockTables } from "@/components/SalesServiceStockTables";
 import { NegativeOverridesList } from "@/components/NegativeOverridesList";
 import {
-  listStock, listTransactions, listTransfers, listReservations,
+  fetchStockPage, fetchTransactionsPage, listTransfers, listReservations,
   listWarehouses, listProducts, warehouseLookup,
   STOCK_STATUS_LABEL, STOCK_TYPE_LABEL, TXN_TYPE_LABEL, TRANSFER_STATUS_LABEL,
   type StockItem, type Transaction, type Transfer, type Reservation, type WarehouseLite, type ProductLite,
@@ -30,10 +30,12 @@ function Reports() {
 
   useEffect(() => {
     (async () => {
-      const [s, t, x, r, w, p] = await Promise.all([
-        listStock(), listTransactions(), listTransfers(), listReservations(), listWarehouses(), listProducts(),
+      const [sRes, tRes, x, r, w, p] = await Promise.all([
+        fetchStockPage({ page: 0, pageSize: 500 }),
+        fetchTransactionsPage({ page: 0, pageSize: 500 }),
+        listTransfers(), listReservations(), listWarehouses(), listProducts(),
       ]);
-      setStock(s); setTxns(t); setTransfers(x); setResv(r); setWarehouses(w); setProducts(p);
+      setStock(sRes.data as StockItem[]); setTxns(tRes.data as Transaction[]); setTransfers(x); setResv(r); setWarehouses(w); setProducts(p);
       setLoading(false);
     })();
   }, []);

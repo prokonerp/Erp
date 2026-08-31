@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -9,15 +9,32 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight, ChevronDown, CircleCheck, TriangleAlert, LayoutGrid, List, Layers, Hash, Shield } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
-  listStock, listWarehouses,
+  fetchStockPage, listWarehouses,
   type StockItem, type StockType, type WarehouseLite,
 } from "@/lib/ims";
 import { StockWarehouseKpis, StockWarehouseHeader } from "@/components/reports/StockWarehouseKpis";
 import { StockWarehouseTable } from "@/components/reports/StockWarehouseTable";
 import { ReportsPageHeader, ReportsFilters, ReportsWarrantyShell } from "@/components/reports/ReportsShell";
-import { StockSummaryDisclosure } from "@/components/reports/StockSummaryDisclosure";
-import { StockLedgerCompact, StockLedgerDetailed } from "@/components/stock/StockLedgerViews";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
+// Heavy report views (~40-60k each) — lazy so the initial /reports shell paints
+// fast and the 140k chunk is split at route granularity.
+const StockLedgerCompact = lazy(() =>
+  import("@/components/stock/StockLedgerViews").then((m) => ({ default: m.StockLedgerCompact })),
+);
+const StockLedgerDetailed = lazy(() =>
+  import("@/components/stock/StockLedgerViews").then((m) => ({ default: m.StockLedgerDetailed })),
+);
+const StockSummaryDisclosure = lazy(() =>
+  import("@/components/reports/StockSummaryDisclosure").then((m) => ({ default: m.StockSummaryDisclosure })),
+);
+
+function LedgerFallback() {
+  return <div className="h-48 animate-pulse bg-muted rounded-xl" />;
+}
+function DisclosureFallback() {
+  return <div className="h-20 animate-pulse bg-muted rounded-xl" />;
+}
 
 export const Route = createFileRoute("/_app/reports")({
   component: ReportsPage,
@@ -65,13 +82,13 @@ function ReportsPage() {
 
   useEffect(() => {
     (async () => {
-      const [st, w, s, p] = await Promise.all([
-        listStock(),
+      const [stRes, w, s, p] = await Promise.all([
+        fetchStockPage({ page: 0, pageSize: 500 }),
         listWarehouses(),
         supabase.from("serials").select("*"),
         supabase.from("products").select("id,name,brand,model,description,serial_tracking,warranty_applicable"),
       ]);
-      setStock(st);
+      setStock(stRes.data as StockItem[]);
       setWarehouses(w);
       setSerials((s.data || []) as any);
       setProducts((p.data || []) as any);
@@ -262,7 +279,9 @@ function ReportsPage() {
             <>
               <StockWarehouseKpis groups={stockGroups} />
               <div className="rounded-xl border border-border/60 bg-card shadow-sm p-3">
-                <StockSummaryDisclosure filteredStock={filteredStock as any} />
+                <Suspense fallback={<DisclosureFallback />}>
+                  <StockSummaryDisclosure filteredStock={filteredStock as any} />
+                </Suspense>
                 <p className="text-[11px] text-muted-foreground mt-2 text-center">
                   Compact shows <span className="font-semibold text-emerald-700">Available only (105)</span> — switch to Stock Ledger → Detailed for full 126 (All statuses)
                 </p>
@@ -290,7 +309,9 @@ function ReportsPage() {
                   Stock Summary — Detailed
                   <span className="text-xs font-normal text-muted-foreground">Available breakdown by status</span>
                 </CardTitle>
-                <StockSummaryDisclosure filteredStock={filteredStock as any} />
+                <Suspense fallback={<DisclosureFallback />}>
+                  <StockSummaryDisclosure filteredStock={filteredStock as any} />
+                </Suspense>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -354,7 +375,9 @@ function ReportsPage() {
                 ]} />
               </CardHeader>
               <CardContent className="p-0">
-                <StockLedgerCompact items={filteredStock as any} warehouses={warehouses as any} products={products as any} />
+                <Suspense fallback={<LedgerFallback />}>
+                  <StockLedgerCompact items={filteredStock as any} warehouses={warehouses as any} products={products as any} />
+                </Suspense>
               </CardContent>
             </Card>
           ) : (
@@ -367,7 +390,9 @@ function ReportsPage() {
                 <p className="text-xs text-muted-foreground mt-1">Shows every stock row (Available + Reserved + In transit + Issued…) — use filters to reach the Summary’s 105 Available</p>
               </CardHeader>
               <CardContent className="p-0">
-                <StockLedgerDetailed items={filteredStock as any} warehouses={warehouses as any} />
+                <Suspense fallback={<LedgerFallback />}>
+                  <StockLedgerDetailed items={filteredStock as any} warehouses={warehouses as any} />
+                </Suspense>
               </CardContent>
             </Card>
           )}

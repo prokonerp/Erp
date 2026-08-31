@@ -346,7 +346,7 @@ export function OracleBlockEditor({
     })();
   }, []);
 
-  // Watch warehouse selection per row and refresh stock lists.
+  // Watch warehouse selection per row and refresh stock lists — explicit cols + limit 200 (not unbounded).
   const exchWhKey = value.exchange_rows.map((r) => r.warehouse_id).join("|");
   useEffect(() => {
     (async () => {
@@ -358,7 +358,8 @@ export function OracleBlockEditor({
           .eq("warehouse_id", r.warehouse_id)
           .eq("stock_type", "good")
           .eq("stock_status", "available")
-          .order("part_name");
+          .order("part_name")
+          .limit(200);
         next[i] = (data || []) as StockRow[];
       }));
       setExchStockByRow(next);
@@ -466,7 +467,8 @@ export function OracleBlockEditor({
       .select("id,warehouse_id")
       .eq("stock_status", "available")
       .eq("part_name", partName)
-      .neq("warehouse_id", row.warehouse_id);
+      .neq("warehouse_id", row.warehouse_id)
+      .limit(200);
     const otherCount = (others || []).length;
     const totalElsewhere = otherCount;
     if (totalElsewhere > 0) {

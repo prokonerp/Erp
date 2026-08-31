@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
+ * @deprecated for UI lists — use bounded server queries with explicit cols + limit + useQuery.
+ * Kept only for export paths (Excel/PDF) where full table scan is intentional.
+ * For pickers/lists, use useCustomersForPicker / useProductsForPicker (25/30 limit, 6-8 cols, debounced 150ms, shouldFilter=false).
  * Fetch ALL rows from a Supabase table, bypassing the default 1000-row cap
  * by paging through with .range() in batches of `pageSize`.
  *

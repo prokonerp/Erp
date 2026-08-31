@@ -21,8 +21,9 @@ export function GatepassRecords() {
   const [rows, setRows] = useState<Gatepass[]>([]);
   const [q, setQ] = useState("");
 
+  const GATEPASS_COLS = "id,challan_no,gatepass_date,gatepass_time,person_name,person_company,vehicle_no,destination,purpose,return_type,items,remarks,created_at";
   useEffect(() => {
-    supabase.from("gatepasses").select("*").order("created_at", { ascending: false })
+    supabase.from("gatepasses").select(GATEPASS_COLS).order("created_at", { ascending: false }).limit(100)
       .then(({ data }) => setRows((data || []) as unknown as Gatepass[]));
   }, []);
 

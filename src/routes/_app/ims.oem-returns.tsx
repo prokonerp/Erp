@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { listStock, updateStock, createTransaction, STOCK_STATUS_LABEL, type StockItem } from "@/lib/ims";
+import { fetchStockPage, updateStock, createTransaction, STOCK_STATUS_LABEL, type StockItem } from "@/lib/ims";
 
 export const Route = createFileRoute("/_app/ims/oem-returns")({
   component: OemReturns,
@@ -17,8 +17,8 @@ function OemReturns() {
   async function load() {
     setLoading(true);
     try {
-      const all = await listStock();
-      setRows(all.filter((s) => s.stock_type === "defective"));
+      const res = await fetchStockPage({ page: 0, pageSize: 500 });
+      setRows((res.data as StockItem[]).filter((s) => s.stock_type === "defective"));
     } finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);

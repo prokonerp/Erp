@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
-  listStock,
+  fetchStockPage,
+  fetchTransactionsPage,
   listTransfers,
   listReservations,
   listWarehouses,
-  listTransactions,
   formatWarehouse,
   type StockItem,
   type Transfer,
@@ -14,6 +15,7 @@ import {
   type WarehouseLite,
   type Transaction,
 } from "@/lib/ims";
+import { stockKeys, txnKeys } from "@/lib/queryKeys";
 import { localDateIso } from "@/lib/dateRange";
 
 // Lazy-load the recharts-backed charts section (~400KB) so the IMS dashboard
@@ -25,25 +27,40 @@ export const Route = createFileRoute("/_app/ims/")({
 });
 
 function Dashboard() {
-  const [stock, setStock] = useState<StockItem[]>([]);
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [resv, setResv] = useState<Reservation[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
-  const [txns, setTxns] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const stockQ = useQuery({
+    queryKey: stockKeys.paginated({ page: 0, pageSize: 500 }),
+    queryFn: () => fetchStockPage({ page: 0, pageSize: 500 }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+  const txnQ = useQuery({
+    queryKey: txnKeys.paginated({ page: 0, pageSize: 500 }),
+    queryFn: () => fetchTransactionsPage({ page: 0, pageSize: 500 }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+  const transfersQ = useQuery({
+    queryKey: ["ims_transfers", "list"],
+    queryFn: listTransfers,
+    staleTime: 30_000,
+  });
+  const resvQ = useQuery({
+    queryKey: ["ims_reservations", "list"],
+    queryFn: listReservations,
+    staleTime: 30_000,
+  });
+  const whQ = useQuery({
+    queryKey: ["warehouses", "list"],
+    queryFn: listWarehouses,
+    staleTime: 30_000,
+  });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [s, t, r, w, x] = await Promise.all([
-          listStock(), listTransfers(), listReservations(), listWarehouses(), listTransactions(),
-        ]);
-        setStock(s); setTransfers(t); setResv(r); setWarehouses(w); setTxns(x);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const stock: StockItem[] = (stockQ.data?.data ?? []) as StockItem[];
+  const txns: Transaction[] = (txnQ.data?.data ?? []) as Transaction[];
+  const transfers: Transfer[] = (transfersQ.data ?? []) as Transfer[];
+  const resv: Reservation[] = (resvQ.data ?? []) as Reservation[];
+  const warehouses: WarehouseLite[] = (whQ.data ?? []) as WarehouseLite[];
+  const loading = stockQ.isLoading || txnQ.isLoading || transfersQ.isLoading || resvQ.isLoading || whQ.isLoading;
 
   if (loading) return <div className="text-muted-foreground">Loading…</div>;
 

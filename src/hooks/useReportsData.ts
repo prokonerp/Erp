@@ -1,7 +1,7 @@
 import * as React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  listStock,
+  fetchStockPage,
   listWarehouses,
   type StockItem,
   type StockStatus,
@@ -216,14 +216,15 @@ export function useReportsData(): UseReportsDataReturn {
 
     (async () => {
       try {
-        const [st, w, s, p] = await Promise.all([
-          listStock(),
+        const [stRes, w, s, p] = await Promise.all([
+          fetchStockPage({ page: 0, pageSize: 500 }),
           listWarehouses(),
           supabase.from("serials").select("*"),
           supabase.from("products").select(
             "id,name,brand,model,description,serial_tracking,warranty_applicable",
           ),
         ]);
+        const st = stRes.data;
 
         if (cancelled) return;
 

@@ -145,8 +145,8 @@ function RolesSection() {
 
   async function load() {
     const [{ data: r }, { data: p }] = await Promise.all([
-      supabase.from("app_roles").select("*").order("name"),
-      supabase.from("role_module_permissions").select("*"),
+      supabase.from("app_roles").select("id,name,description,is_system").order("name").limit(200),
+      supabase.from("role_module_permissions").select("id,role_id,module,enable_access,can_read,can_create,can_edit,can_delete,can_export,can_import").limit(500),
     ]);
     setRoles((r as Role[]) ?? []);
     setPerms((p as Perm[]) ?? []);
@@ -415,9 +415,9 @@ function UsersSection() {
 
   async function load() {
     const [{ data: au }, { data: r }, { data: ur }] = await Promise.all([
-      supabase.from("app_users").select("*").order("created_at", { ascending: false }),
-      supabase.from("app_roles").select("*").order("name"),
-      supabase.from("user_roles").select("user_id").eq("role", "admin"),
+      supabase.from("app_users").select("user_id,name,email,phone,role_id,status,custom_permissions,last_login,last_activity,last_logout,login_count,created_at").order("created_at", { ascending: false }).limit(200),
+      supabase.from("app_roles").select("id,name,description,is_system").order("name").limit(200),
+      supabase.from("user_roles").select("user_id").eq("role", "admin").limit(200),
     ]);
     setAppUsers((au as AppUser[]) ?? []);
     setRoles((r as Role[]) ?? []);
@@ -699,8 +699,9 @@ function UserDialog({
       if (!roleId) return setRolePerms([]);
       const { data } = await supabase
         .from("role_module_permissions")
-        .select("*")
-        .eq("role_id", roleId);
+        .select("id,role_id,module,enable_access,can_read,can_create,can_edit,can_delete,can_export,can_import")
+        .eq("role_id", roleId)
+        .limit(200);
       setRolePerms((data as Perm[]) ?? []);
     })();
   }, [roleId]);

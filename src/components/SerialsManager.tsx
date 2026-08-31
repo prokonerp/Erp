@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchAll } from "@/lib/fetchAll";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,16 +76,14 @@ export function SerialsManager({ product }: { product: Product }) {
   const [bulkInvoice, setBulkInvoice] = useState("");
   const [bulkDate, setBulkDate] = useState<string>("");
 
+  const SERIAL_COLS = "id,product_id,serial_number,purchase_invoice_no,purchase_date,supplier_id,sale_invoice_no,customer_id,installation_date,warranty_start_date,warranty_end_date,status,notes,warehouse_id,created_at";
   const load = async () => {
-    const [{ data: ser }, { data: ven }, cust, { data: wh }] = await Promise.all([
-      supabase.from("serials").select("*").eq("product_id", product.id).order("created_at", { ascending: false }),
-      supabase.from("vendors").select("id,name").order("name"),
-      // Paged fetch: a plain select() caps at 1000 rows and would hide
-      // alphabetically-late customers from this selector.
-      fetchAll<{ id: string; company: string | null; contact_name: string | null }>(
-        "customers", (q) => q.select("id,company,contact_name").order("company"),
-      ),
-      supabase.from("warehouses").select("id,name,code").eq("status", "Active").order("name"),
+    const [{ data: ser }, { data: ven }, { data: cust }, { data: wh }] = await Promise.all([
+      supabase.from("serials").select(SERIAL_COLS).eq("product_id", product.id).order("created_at", { ascending: false }).limit(500),
+      supabase.from("vendors").select("id,name").order("name").limit(200),
+      // Bounded customer list for linking: explicit cols + limit 100 (picker window). Use direct limit instead of fetchAll full scan.
+      supabase.from("customers").select("id,company,contact_name").order("company").limit(100),
+      supabase.from("warehouses").select("id,name,code").eq("status", "Active").order("name").limit(100),
     ]);
     setRows((ser || []) as Serial[]);
     setVendors((ven || []) as any);

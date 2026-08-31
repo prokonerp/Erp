@@ -204,8 +204,10 @@ export type StockPaginatedParams = {
   stockStatus?: StockStatus | null;
 };
 
-const STOCK_SELECT =
-  "id,part_name,part_model_no,part_serial_no,warehouse_id,stock_type,stock_status,qty,transaction_ref,created_at";
+export const STOCK_SELECT =
+  "id,oem,category,part_name,part_model_no,part_serial_no,warehouse_id,stock_type,stock_status,ticket_id,indent_id,oem_case_id,customer_name,transaction_ref,notes,qty,opening_stock,created_at,updated_at";
+
+export const STOCK_SELECT_AGG = STOCK_SELECT;
 
 /**
  * Server-paginated fetch for stock items. Uses `count: exact` + `.range()` so
@@ -328,8 +330,8 @@ export type TransactionsPaginatedParams = {
   txnType?: TxnType | null;
 };
 
-const TXN_SELECT =
-  "id,txn_no,txn_date,txn_type,stock_item_id,part_name,part_model_no,part_serial_no,oem,from_warehouse_id,to_warehouse_id,qty,reference,created_at";
+export const TXN_SELECT =
+  "id,txn_no,txn_date,txn_type,stock_item_id,part_name,part_model_no,part_serial_no,oem,from_warehouse_id,to_warehouse_id,from_party,to_party,qty,ticket_id,indent_id,oem_case_id,transfer_id,reference,notes,created_at";
 
 export async function fetchTransactionsPage(
   params: TransactionsPaginatedParams,

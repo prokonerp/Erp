@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetchAll";
-import { listWarehouses, type WarehouseLite } from "@/lib/ims";
+import { listWarehouses, STOCK_SELECT, TXN_SELECT, type WarehouseLite } from "@/lib/ims";
 
 /**
  * Phase 1.1 — Defective listings no longer use unbounded fetchAll sequential paging.
@@ -87,7 +87,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   // Each query is ordered server-side and capped; exports use the _ForExport variants below.
   // Future: replace with single RPC/view `defective_in_records_view` or `list_defective_in_records(p_limit, p_search)` .
   const [txnsRes, tagsRes, warehouses, indentsRes] = await Promise.all([
-    sb.from("ims_transactions").select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT),
+    sb.from("ims_transactions").select(TXN_SELECT).eq("txn_type", "defective_in").order("txn_date", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT),
     sb.from("defective_tags").select("txn_id,stock_item_id,tag_no,model_no,serial_no").limit(DEFECTIVE_PAGE_LIMIT),
     listWarehouses(),
     sb.from("indents").select("id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted").order("indent_date", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT),
@@ -159,8 +159,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const hasTag = (model?: string | null, serial?: string | null) => tagFor(model, serial) !== undefined;
 
   // Include anything flagged defective by TYPE or by STATUS.
-  // Bounded to DEFECTIVE_PAGE_LIMIT — unbounded fetchAll kept only for exports.
-  const { data: allStockData, error: stockErr } = await sb.from("ims_stock_items").select("*").order("created_at", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT);
+  // Bounded to DEFECTIVE_PAGE_LIMIT — unbounded fetchAll kept only for exports. Explicit cols, no select "*".
+  const { data: allStockData, error: stockErr } = await sb.from("ims_stock_items").select(STOCK_SELECT).order("created_at", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT);
   if (stockErr) throw stockErr;
   const allStock = (allStockData || []) as any[];
   const statusKey = (serial?: string | null, model?: string | null) =>

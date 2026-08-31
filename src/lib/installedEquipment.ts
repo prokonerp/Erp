@@ -101,12 +101,14 @@ export const listEquipmentForCustomer = async (
   customerId: string,
 ): Promise<InstalledEquipment[]> => {
   const sb = supabase as unknown as { from: (t: string) => any };
+  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,status,remarks,created_at";
   const { data, error } = await sb
     .from("installed_equipment")
-    .select("*")
+    .select(cols)
     .eq("customer_id", customerId)
     .order("invoice_date", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(500);
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
 };
@@ -132,7 +134,8 @@ export const deleteEquipment = async (id: string): Promise<void> => {
 
 /** Lookup by serial (used by the global serial search fallback). */
 export const findEquipmentBySerial = async (serial: string): Promise<InstalledEquipment[]> => {
-  const { data, error } = await table().select("*").ilike("serial_no", `%${serial}%`).limit(25);
+  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_date,warranty_months,status";
+  const { data, error } = await table().select(cols).ilike("serial_no", `%${serial}%`).limit(25);
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
 };
@@ -142,7 +145,8 @@ export const findEquipmentBySerial = async (serial: string): Promise<InstalledEq
 export const findEquipmentBySerialExact = async (serial: string): Promise<InstalledEquipment[]> => {
   const s = serial.trim().toUpperCase();
   if (!s) return [];
-  const { data, error } = await table().select("*").eq("serial_no", s).limit(5);
+  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_date,warranty_months,status";
+  const { data, error } = await table().select(cols).eq("serial_no", s).limit(5);
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
 };
@@ -176,8 +180,9 @@ export const findEquipmentByCustomerAndSerial = async (
 ): Promise<InstalledEquipment | null> => {
   const s = serial.trim().toUpperCase();
   if (!customerId || !s) return null;
+  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_date,warranty_months,status";
   const { data, error } = await table()
-    .select("*")
+    .select(cols)
     .eq("customer_id", customerId)
     .eq("serial_no", s)
     .limit(1);
@@ -213,9 +218,16 @@ export const getOrCreateEquipmentForTicket = async (input: {
   return (data as { id: string }).id;
 };
 
-/** Every equipment row across all customers (used by the Summary tab). */
-export const listAllEquipment = async (): Promise<InstalledEquipment[]> =>
-  fetchAll<InstalledEquipment>("installed_equipment", (q) => q.select("*"));
+/** Every equipment row across all customers (used by the Summary tab) — bounded, explicit cols (export uses paginated RPC). */
+export const listAllEquipment = async (): Promise<InstalledEquipment[]> => {
+  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,status,remarks,created_at";
+  const { data, error } = await (supabase as any).from("installed_equipment").select(cols).order("created_at", { ascending: false }).limit(500);
+  if (error) throw error;
+  return (data || []) as InstalledEquipment[];
+};
+/** @deprecated fetchAll for exports only — use bounded listAllEquipment for UI */
+export const listAllEquipmentForExport = async (): Promise<InstalledEquipment[]> =>
+  fetchAll<InstalledEquipment>("installed_equipment", (q) => q.select("id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,status"));
 
 export type ImportOutcome = {
   imported: number;
