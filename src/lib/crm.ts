@@ -126,6 +126,11 @@ export type Quotation = {
   attachments: any[];
   created_at: string;
   updated_at: string;
+  // ── Revise trail (Option A, all nullable/have defaults so old rows stay valid) ──
+  revision_of?: string | null;
+  revision_no?: number;         // 1 = original, 2… = revisions
+  is_latest?: boolean;          // false = superseded, hidden from default pipeline/list unless Show history
+  superseded_at?: string | null;
 };
 
 export type QuoteTermsTemplate = {
@@ -187,6 +192,63 @@ export const quoteStatusClass: Record<QuoteStatus, string> = {
   expired: "bg-amber-100 text-amber-800 border-amber-300",
   invoiced: "bg-purple-100 text-purple-800 border-purple-300",
 };
+
+// ── Revision helpers (Option A, pipeline-safe) ──────────────────────────
+
+export const revisionBadgeClass = "bg-slate-100 text-slate-700 border-slate-300";
+export const latestRevisionBadgeClass = "bg-emerald-50 text-emerald-800 border-emerald-200";
+export const supersededBadgeClass = "bg-slate-100 text-slate-500 border-slate-300";
+
+export function isSuperseded(q: Pick<Quotation, "is_latest">): boolean {
+  return q.is_latest === false;
+}
+export function isLatest(q: Pick<Quotation, "is_latest">): boolean {
+  return q.is_latest !== false;
+}
+export function revisionLabel(q: Pick<Quotation, "revision_no" | "is_latest">): string {
+  const n = Number(q.revision_no || 1);
+  if (n <= 1) return isSuperseded(q as any) ? "Superseded" : "";
+  return isSuperseded(q as any) ? `Superseded v${n}` : `Revised v${n}`;
+}
+export function groupKeyForThread(q: Quotation): string {
+  // thread = same lead if present, else root id via revision_of chain fallback
+  if (q.lead_id) return `lead:${q.lead_id}`;
+  if (q.revision_of) return `rev:${q.revision_of}`;
+  return `id:${q.id}`;
+}
+export function sortQuotationsForThread(a: Quotation, b: Quotation): number {
+  const na = Number(a.revision_no || 1);
+  const nb = Number(b.revision_no || 1);
+  if (na !== nb) return nb - na; // latest first
+  return (b.created_at || "").localeCompare(a.created_at || "");
+}
+
+/** Filter to only latest revisions (default pipeline/list view). Keep superseded hidden */
+export function filterLatestOnly<T extends Pick<Quotation, "is_latest">>(rows: T[]): T[] {
+  return rows.filter((r) => r.is_latest !== false);
+}
+
+/** Keep mutations pipeline-safe: sync a lead's expected_value to its latest revision total */
+export async function syncLeadExpectedValue(leadId: string, newTotal?: number): Promise<void> {
+  if (!leadId) return;
+  // prefer caller-supplied newTotal to avoid extra read; fallback to DB fetch of latest
+  let total = newTotal;
+  if (total === undefined) {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data } = await (supabase as any)
+      .from("quotations")
+      .select("total")
+      .eq("lead_id", leadId)
+      .eq("is_latest", true)
+      .order("revision_no", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    total = Number((data as any)?.total ?? 0);
+  }
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { error } = await (supabase as any).from("leads").update({ expected_value: total }).eq("id", leadId);
+  if (error) throw error;
+}
 
 export const fmtMoney = (n: number | null | undefined) =>
   "₹" + (Number(n || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

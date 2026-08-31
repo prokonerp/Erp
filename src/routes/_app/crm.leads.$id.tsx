@@ -9,13 +9,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail, UserCheck, BellRing } from "lucide-react";
+import { ArrowLeft, Save, Plus, FileSpreadsheet, Trophy, X, MessageCircle, Mail, UserCheck, BellRing, History, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { toast } from "sonner";
-import { type Lead, type LeadActivity, type Customer, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel } from "@/lib/crm";
+import { type Lead, type LeadActivity, type Customer, type Quotation, statusLabel, statusClass, fmtMoney, fmtDate, computeIncentive, type IncentiveRule, fyLabel, isSuperseded, isLatest, revisionLabel, sortQuotationsForThread } from "@/lib/crm";
 import { useLeadAssignment } from "@/lib/useLeadAssignment";
 import { istTodayIso } from "@/lib/dateRange";
 import { AdminOnlySection } from "@/components/AdminAccessNotices";
 import { waOpen } from "@/lib/tickets";
+import { StatusBadge } from "@/components/crm/StatusBadge";
+import { EmptyState } from "@/components/crm/EmptyState";
+import { groupQuotationsByThread } from "@/components/crm/QuotationThreadGroup";
 
 export const Route = createFileRoute("/_app/crm/leads/$id")({ component: LeadDetail });
 
@@ -45,6 +48,10 @@ function LeadDetail() {
   const { isAdmin, userId, staff, nameOf, myName, logActivity, assignLeadTo } = useLeadAssignment();
   const [assignTo, setAssignTo] = useState("");
   const [assignBusy, setAssignBusy] = useState(false);
+  const [quotes, setQuotes] = useState<Quotation[]>([]);
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
 
   const load = async () => {
     const { data: l } = await supabase.from("leads").select("*").eq("id", id).single();
@@ -57,6 +64,24 @@ function LeadDetail() {
     setCustomer((c as unknown as Customer) || null);
     setActivities((a || []) as unknown as LeadActivity[]);
     setCloseVal(String((l as any).closed_value || (l as any).expected_value || ""));
+    // Quotations thread for this lead — sorted latest-first
+    setQuotesLoading(true);
+    try {
+      const { data: qs } = await supabase
+        .from("quotations")
+        .select("*")
+        .eq("lead_id", id)
+        .order("revision_no", { ascending: false })
+        .order("created_at", { ascending: false });
+      const qRows = ((qs || []) as unknown as Quotation[]).sort(sortQuotationsForThread);
+      setQuotes(qRows);
+      // keep thread grouped helper available (no-op if unused, ensures grouping logic exercised)
+      void groupQuotationsByThread(qRows);
+    } catch {
+      /* ignore — quotations are optional */
+    } finally {
+      setQuotesLoading(false);
+    }
   };
   useEffect(() => { load(); }, [id]);
 
@@ -185,6 +210,12 @@ function LeadDetail() {
 
   const needsAck = !!userId && lead.owner_id === userId && !!lead.assigned_at && !lead.acknowledged_at;
 
+  // ── Quotations thread derived state (Option A) ──
+  const sortedQuotes = [...quotes].sort(sortQuotationsForThread);
+  const latestQuote = sortedQuotes.find((q) => isLatest(q)) ?? sortedQuotes[0] ?? null;
+  const supersededCount = quotes.filter(isSuperseded).length;
+  const visibleQuotes = showHistory ? sortedQuotes : sortedQuotes.filter((q) => isLatest(q));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -257,8 +288,153 @@ function LeadDetail() {
         </Card>
       </AdminOnlySection>
 
+      {/* ── Quotations thread card — below assignment, above action bar ── */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+            Quotations
+            {quotes.length > 0 && (
+              <Badge variant="outline" className="ml-1 text-xs font-normal">
+                {quotes.length}
+              </Badge>
+            )}
+          </CardTitle>
+          {supersededCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setShowHistory((v) => !v)}
+            >
+              {showHistory ? (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5 mr-1" /> Hide history
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5 mr-1" /> Show history ({supersededCount} superseded)
+                </>
+              )}
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {quotesLoading ? (
+            <div className="text-sm text-muted-foreground py-4 text-center">Loading quotations…</div>
+          ) : quotes.length === 0 ? (
+            <EmptyState
+              icon={FileSpreadsheet}
+              title="No quotations yet"
+              description="Create your first quotation for this lead — it will appear as v1 and future revisions will be threaded here."
+            />
+          ) : visibleQuotes.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-2">History hidden — toggle to view superseded revisions.</div>
+          ) : (
+            <div className="space-y-2">
+              {(() => {
+                // group by thread for display, though single lead yields one group
+                const grouped = groupQuotationsByThread(visibleQuotes);
+                const entries = Array.from(grouped.entries());
+                // if single group, render flat; otherwise show thread separators
+                const flat = entries.length === 1;
+                return entries.map(([threadKey, rows]) => (
+                  <div key={threadKey} className={flat ? "" : "border rounded-md p-2"}>
+                    {!flat && (
+                      <div className="text-xs text-muted-foreground mb-2 font-mono">{threadKey}</div>
+                    )}
+                    <ul className="space-y-1.5">
+                      {rows.map((q) => {
+                        const superseded = isSuperseded(q);
+                        const latest = isLatest(q);
+                        const revNo = Number(q.revision_no || 1);
+                        const isExpanded = expandedQuoteId === q.id;
+                        const vLabel = revNo > 1 ? `v${revNo}` : "v1";
+                        const revLabel = revisionLabel(q);
+                        return (
+                          <li
+                            key={q.id}
+                            className={`flex flex-col rounded-md border px-3 py-2 transition-colors ${superseded ? "opacity-60 bg-muted/20" : "bg-card hover:bg-accent/30"} ${isExpanded ? "ring-1 ring-primary/20" : ""}`}
+                          >
+                            <div className="flex flex-wrap items-center gap-2 text-sm">
+                              <span className="font-mono font-medium">{q.quote_no || "—"}</span>
+                              <Badge
+                                variant="outline"
+                                className={`text-[11px] px-1.5 py-0 ${latest ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-300"}`}
+                              >
+                                {vLabel}
+                              </Badge>
+                              {revLabel && (
+                                <span className="text-xs text-muted-foreground">{revLabel}</span>
+                              )}
+                              <span className="font-semibold tabular-nums">{fmtMoney(q.total)}</span>
+                              <StatusBadge kind="quote" value={q.status} />
+                              <span className="text-xs text-muted-foreground">{fmtDate(q.quote_date || q.created_at)}</span>
+                              <span className="ml-auto flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs px-2"
+                                  onClick={() => setExpandedQuoteId((prev) => (prev === q.id ? null : q.id))}
+                                >
+                                  {isExpanded ? <ChevronUp className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
+                                  {isExpanded ? "Hide" : "Details"}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs px-2"
+                                  onClick={() => nav({ to: "/crm/quotations/$id", params: { id: q.id } })}
+                                >
+                                  <Eye className="h-3 w-3 mr-1" /> View
+                                </Button>
+                              </span>
+                            </div>
+                            {isExpanded && (
+                              <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2 text-xs">
+                                <span className="text-muted-foreground">
+                                  {q.subject || "—"} · {q.items?.length ?? 0} items · Subtotal {fmtMoney(q.subtotal)}
+                                </span>
+                                <Link
+                                  to="/crm/quotations/$id"
+                                  params={{ id: q.id }}
+                                  className="ml-auto inline-flex items-center text-primary hover:underline"
+                                >
+                                  Open quotation →
+                                </Link>
+                                {/* Diff trigger placeholder — full diff dialog lives in quotation detail */}
+                                {rows.length > 1 && (
+                                  <Badge variant="outline" className="text-[11px] border-dashed">
+                                    Revises {q.revision_of ? q.revision_of.slice(0, 8) : "—"}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={createQuote}><FileSpreadsheet className="h-4 w-4 mr-1" />Create quotation</Button>
+        {latestQuote && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!latestQuote || isSuperseded(latestQuote)}
+            onClick={() => nav({ to: "/crm/quotations/new", search: { revise: (latestQuote as Quotation).id } as any })}
+            title={isSuperseded(latestQuote) ? "Latest revision is superseded" : "Create a new revision from the latest quotation"}
+          >
+            <History className="h-4 w-4 mr-1" />Revise latest
+          </Button>
+        )}
         <Button size="sm" variant="outline" className="bg-green-600 hover:bg-green-700 text-white border-green-700" onClick={sendWhatsapp}><MessageCircle className="h-4 w-4 mr-1" />WhatsApp</Button>
         <Button size="sm" variant="outline" onClick={sendEmail}><Mail className="h-4 w-4 mr-1" />Email</Button>
         {lead.status !== "won" && lead.status !== "lost" && (

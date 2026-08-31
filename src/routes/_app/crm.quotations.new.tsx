@@ -21,6 +21,7 @@ import {
   type Customer, type QuoteItem,
   fmtMoney, computeQuoteTotals, lineAmount, isIntraSupply, INDIAN_STATES,
   computeExpiryDate, DEFAULT_VALIDITY_DAYS,
+  syncLeadExpectedValue,
 } from "@/lib/crm";
 import type { QuoteTermsTemplate } from "@/lib/crm";
 import { getCurrentUserName } from "@/lib/currentUser";
@@ -29,8 +30,9 @@ import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChang
 
 export const Route = createFileRoute("/_app/crm/quotations/new")({
   component: NewQuotation,
-  validateSearch: (s: Record<string, unknown>): { clone?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { clone?: string; revise?: string } => ({
     clone: typeof s.clone === "string" ? s.clone : undefined,
+    revise: typeof s.revise === "string" ? s.revise : undefined,
   }),
   head: () => ({
     meta: [
@@ -47,7 +49,9 @@ type StockRow = { product_id: string | null; quantity: number; warehouse: string
 
 function NewQuotation() {
   const nav = useNavigate();
-  const { clone: cloneId } = useSearch({ from: "/_app/crm/quotations/new" });
+  const { clone: cloneId, revise: reviseId } = useSearch({ from: "/_app/crm/quotations/new" });
+  // revise takes precedence over clone when both are present
+  const effectiveCloneId = reviseId ? undefined : cloneId;
   const [dirty, setDirty] = useState(false);
   const markDirty = () => { if (!dirty) setDirty(true); };
   const { blocker, markClean } = useUnsavedChanges(dirty);
@@ -91,6 +95,14 @@ function NewQuotation() {
   const [stockByProduct, setStockByProduct] = useState<Record<string, StockRow[]>>({});
   const savedOnceRef = useRef(false);
 
+  // ── Revise trail (Option A) ──
+  const [reviseOf, setReviseOf] = useState<string | null>(null);
+  const [reviseNo, setReviseNo] = useState<number | null>(null);
+  const [reviseOldTotal, setReviseOldTotal] = useState<number | null>(null);
+  const [reviseSourceQuoteNo, setReviseSourceQuoteNo] = useState<string | null>(null);
+  const [reviseLeadId, setReviseLeadId] = useState<string | null>(null);
+  const [reviseBlocked, setReviseBlocked] = useState(false);
+
   // Load once — customers/products are cached inside pickers. We load branches,
   // CRM settings (business state + default terms) and a stock aggregate here.
   useEffect(() => {
@@ -104,8 +116,8 @@ function NewQuotation() {
       const s = data as { business_state?: string; business_gstin?: string | null; default_terms?: string; default_customer_notes?: string } | null;
       if (s?.business_state) setBusinessState(s.business_state);
       if (s?.business_gstin) setBusinessGstin(s.business_gstin);
-      if (!cloneId && s?.default_terms) setTerms(s.default_terms);
-      if (!cloneId && s?.default_customer_notes) setNotes(s.default_customer_notes);
+      if (!cloneId && !reviseId && s?.default_terms) setTerms(s.default_terms);
+      if (!cloneId && !reviseId && s?.default_customer_notes) setNotes(s.default_customer_notes);
     });
 
     supabase.from("inventory").select("product_id,quantity,warehouse").then(({ data }) => {
@@ -135,11 +147,12 @@ function NewQuotation() {
 
   // Clone: prefill this blank form from an existing quotation. Nothing is
   // written until the user clicks Save, so the new quote gets its own number.
+  // Mutually exclusive with ?revise — if both present, revise wins.
   useEffect(() => {
-    if (!cloneId) return;
+    if (!effectiveCloneId) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.from("quotations").select("*").eq("id", cloneId).maybeSingle();
+      const { data, error } = await supabase.from("quotations").select("*").eq("id", effectiveCloneId).maybeSingle();
       if (cancelled) return;
       const q = data as Record<string, any> | null;
       if (error || !q) { toast.error("Could not load the quotation to clone."); return; }
@@ -180,7 +193,76 @@ function NewQuotation() {
       toast.success(`Cloned from ${q.quote_no || "quotation"} — save to create a new quote`);
     })();
     return () => { cancelled = true; };
-  }, [cloneId]);
+  }, [effectiveCloneId]);
+
+  // Revise: prefill from an existing quotation for a SAME-lead revision.
+  // Pipeline-safe: does NOT create a new lead on save. Sets revision_of/no/is_latest.
+  useEffect(() => {
+    if (!reviseId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.from("quotations").select("*").eq("id", reviseId).maybeSingle();
+      if (cancelled) return;
+      const q = data as Record<string, any> | null;
+      if (error || !q) { toast.error("Could not load the quotation to revise."); return; }
+      // Guard: cannot revise a superseded quotation
+      if (q.is_latest === false) {
+        toast.error("Cannot revise a superseded quotation — revise the latest instead");
+        setReviseBlocked(true);
+        return;
+      }
+      // Warn if already converted (allow but inform)
+      if ((q.status === "accepted" || q.status === "invoiced") && q.converted_to_so_id) {
+        toast.message("This quotation is already converted to a Sales Order — revising will create a new draft revision");
+      }
+      setCustomerId(q.customer_id ?? null);
+      if (q.customer_id) {
+        const { data: c } = await supabase.from("customers").select("*").eq("id", q.customer_id).maybeSingle();
+        if (!cancelled && c) setCustomer(c as unknown as Customer);
+      }
+      if (cancelled) return;
+      if (q.branch_id) setBranchId(q.branch_id);
+      setSubject(q.subject || "");
+      setRefNo(q.reference_no || "");
+      setSalesperson((s) => q.salesperson || s);
+      setPlaceOfSupply(q.place_of_supply || "");
+      setBilling(q.billing_address || "");
+      setShipping(q.shipping_address || "");
+      setContactName(q.contact_name || "");
+      setContactEmail(q.contact_email || "");
+      setContactPhone(q.contact_phone || "");
+      setPaymentTerms(q.payment_terms || "");
+      setDeliveryTimeline(q.delivery_timeline || "");
+      setDiscountAmount(Number(q.discount_amount) || 0);
+      setDiscountLabel((q as any).discount_label || "Discount");
+      setShippingCharges(Number(q.shipping_charges) || 0);
+      setAdjustment(Number(q.adjustment) || 0);
+      setTcsPercent(Number(q.tcs_percent) || 0);
+      setRoundOff(Number(q.round_off) || 0);
+      setNotes(q.customer_notes || "");
+      setTerms(q.terms || "");
+      setRemarks(q.remarks || "");
+      if (typeof q.include_oem_logos === "boolean") setIncludeOemLogos(q.include_oem_logos);
+      const rows = (Array.isArray(q.items) ? q.items : []) as QuoteItem[];
+      if (rows.length) setItems(rows.map((r) => ({ ...r, amount: lineAmount(r) })));
+      const vDays = Number(q.validity_days) || DEFAULT_VALIDITY_DAYS;
+      setValidityDays(vDays);
+      // Revise: quote date = today, expiry recomputed from today + validity
+      const today = todayIso();
+      setQuoteDate(today);
+      setExpiryDate(computeExpiryDate(today, vDays));
+
+      const nextNo = (Number(q.revision_no) || 1) + 1;
+      setReviseOf(q.id);
+      setReviseNo(nextNo);
+      setReviseOldTotal(Number(q.total) || 0);
+      setReviseSourceQuoteNo(q.quote_no || null);
+      setReviseLeadId(q.lead_id ?? null);
+      setReviseBlocked(false);
+      toast.success(`Revision of ${q.quote_no || "quotation"} v${nextNo} — edit and save to create the new revision`);
+    })();
+    return () => { cancelled = true; };
+  }, [reviseId]);
 
   const totals = useMemo(() => computeQuoteTotals({
     items, discount_amount: discountAmount, shipping_charges: shippingCharges,
@@ -282,10 +364,22 @@ function NewQuotation() {
     const err = validate();
     if (err) { toast.error(err); return null; }
     if (savedOnceRef.current) return null;
+    // Revise guards
+    if (reviseId && reviseBlocked) {
+      toast.error("Cannot revise a superseded quotation — revise the latest instead");
+      return null;
+    }
+    if (reviseId && !reviseOf) {
+      toast.error("Revision source is still loading — please wait");
+      return null;
+    }
     setSaving(true);
     try {
       const { data: u } = await supabase.auth.getUser();
-      const payload: Record<string, unknown> = {
+
+      const isRevise = !!reviseId && !!reviseOf && reviseNo != null;
+
+      const basePayload: Record<string, unknown> = {
         customer_id: customerId,
         owner_id: u.user!.id,
         branch_id: branchId,
@@ -324,6 +418,49 @@ function NewQuotation() {
         remarks: remarks || null,
         include_oem_logos: includeOemLogos,
       };
+
+      // ── Revise path: copy lead_id, set revision trail, pipeline-sync, no new lead ──
+      if (isRevise) {
+        const payload: Record<string, unknown> = {
+          ...basePayload,
+          lead_id: reviseLeadId,
+          revision_of: reviseOf,
+          revision_no: reviseNo,
+          is_latest: true,
+          superseded_at: null,
+        };
+        const { data, error } = await supabase.from("quotations").insert(payload as never).select().single();
+        if (error) { toast.error(error.message); return null; }
+        savedOnceRef.current = true;
+        const saved = data as { id: string; quote_no?: string | null; lead_id?: string | null };
+        const newId = saved.id;
+
+        // Mark predecessor as superseded
+        const { error: supErr } = await (supabase as any)
+          .from("quotations")
+          .update({ is_latest: false, superseded_at: new Date().toISOString() })
+          .eq("id", reviseOf);
+        if (supErr) {
+          toast.error(`Revision created but predecessor could not be marked superseded: ${supErr.message}`);
+        }
+
+        // Pipeline sync: update leads.expected_value to new total (same lead, no new lead)
+        if (reviseLeadId) {
+          try {
+            await syncLeadExpectedValue(reviseLeadId, totals.total);
+          } catch (e: any) {
+            toast.error(`Revision saved but pipeline could not be updated: ${e?.message || e}`);
+          }
+        }
+
+        const oldStr = fmtMoney(reviseOldTotal ?? 0);
+        const newStr = fmtMoney(totals.total);
+        toast.success(`Revised v${reviseNo} created — pipeline updated ${oldStr} → ${newStr} (no new lead)`);
+        return newId;
+      }
+
+      // ── Clone / new path: existing behaviour ──
+      const payload: Record<string, unknown> = { ...basePayload };
       const { data, error } = await supabase.from("quotations").insert(payload as never).select().single();
       if (error) { toast.error(error.message); return null; }
       savedOnceRef.current = true;
@@ -376,10 +513,23 @@ function NewQuotation() {
     <div className="space-y-3" onInput={markDirty}>
       <UnsavedChangesPrompt blocker={blocker} />
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link to="/crm/quotations"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
-          <h1 className="text-lg font-semibold">{cloneId ? "New Quotation (clone)" : "New Quotation"}</h1>
-          <Badge variant="outline" className="text-xs">Quote # auto-generated on save</Badge>
+          <h1 className="text-lg font-semibold">
+            {reviseId ? "New Quotation (revise)" : effectiveCloneId ? "New Quotation (clone)" : "New Quotation"}
+          </h1>
+          {reviseId && reviseOf && reviseNo ? (
+            <>
+              <Badge variant="outline" className="text-xs bg-slate-100 text-slate-700 border-slate-300">
+                Revision of {reviseSourceQuoteNo || reviseOf.slice(0, 8)} v{reviseNo}
+              </Badge>
+              <Link to="/crm/quotations/$id" params={{ id: reviseOf }} className="text-xs text-primary hover:underline">
+                View source
+              </Link>
+            </>
+          ) : (
+            <Badge variant="outline" className="text-xs">Quote # auto-generated on save</Badge>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => nav({ to: "/crm/quotations" })}>Cancel</Button>

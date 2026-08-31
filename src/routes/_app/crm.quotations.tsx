@@ -63,6 +63,7 @@ import {
   FilePlus,
   Printer,
   Download,
+  History,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -75,6 +76,8 @@ import {
   computeExpiryDate,
   DEFAULT_VALIDITY_DAYS,
   fetchCustomersByIds,
+  revisionLabel,
+  isSuperseded,
 } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
@@ -84,6 +87,7 @@ import { useDebounced } from "@/lib/sales.hooks";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { StatusBadge } from "@/components/crm/StatusBadge";
 import { EmptyState } from "@/components/crm/EmptyState";
+import CloneDestinationDialog from "@/components/crm/CloneDestinationDialog";
 
 export const Route = createFileRoute("/_app/crm/quotations")({ component: Page });
 
@@ -368,7 +372,12 @@ type QuoteListRow = Pick<
   | "total"
   | "created_at"
   | "updated_at"
->;
+> & {
+  lead_id?: string | null;
+  revision_of?: string | null;
+  revision_no?: number;
+  is_latest?: boolean;
+};
 
 const PAGE_SIZE = 20;
 
@@ -389,6 +398,8 @@ function QuotesWorkspace() {
   const [openNew, setOpenNew] = useState(false);
   const [newCustId, setNewCustId] = useState("");
   const [newSubject, setNewSubject] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+  const [cloneDialog, setCloneDialog] = useState<{ row: QuoteListRow } | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const cacheRef = useRef<Map<string, Quotation>>(new Map());
   const search = useDebounced(q, 300);
@@ -425,7 +436,7 @@ function QuotesWorkspace() {
       let query = supabase
         .from("quotations")
         .select(
-          "id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at",
+          "id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest",
         )
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -465,10 +476,12 @@ function QuotesWorkspace() {
   }, [rows, resolveCustomers]);
 
   // Filter by customer / amount client-side (list is already narrow).
+  // Also hide superseded unless showHistory toggled — keeps default pipeline view clean (latest only)
   const filtered = useMemo(() => {
+    const base = showHistory ? rows : rows.filter((r) => r.is_latest !== false);
     const s = search.trim().toLowerCase();
-    if (!s) return rows;
-    return rows.filter((r) => {
+    if (!s) return base;
+    return base.filter((r) => {
       const cust = cmap[r.customer_id || ""]?.company?.toLowerCase() || "";
       const amt = String(r.total ?? "");
       return (
@@ -478,7 +491,7 @@ function QuotesWorkspace() {
         amt.includes(s)
       );
     });
-  }, [rows, cmap, search]);
+  }, [rows, cmap, search, showHistory]);
 
   // Restore last opened from sessionStorage on first mount.
   useEffect(() => {
@@ -585,7 +598,20 @@ function QuotesWorkspace() {
   };
 
   const clone = (row: QuoteListRow) => {
+    // If source has a lead, prompt: same lead (Revise) vs new lead (Clone)
+    if (row.lead_id) {
+      setCloneDialog({ row });
+      return;
+    }
     nav({ to: "/crm/quotations/new", search: { clone: row.id } });
+  };
+
+  const revise = (row: QuoteListRow) => {
+    if (row.is_latest === false) {
+      toast.error("Cannot revise a superseded quotation — revise the latest version instead.");
+      return;
+    }
+    nav({ to: "/crm/quotations/new", search: { revise: row.id } as any });
   };
 
   const changeStatus = async (next: QuoteStatus) => {
@@ -656,6 +682,17 @@ function QuotesWorkspace() {
                 <CardTitle className="text-sm">Quotations</CardTitle>
                 <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-muted text-[10px] font-medium text-muted-foreground tabular-nums">
                   {filtered.length}
+                </span>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-muted-foreground ml-2">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showHistory}
+                      onChange={(e) => setShowHistory(e.target.checked)}
+                      className="h-3 w-3 rounded border-input"
+                    />
+                    Show history
+                  </label>
                 </span>
               </div>
               <Link to="/crm/quotations/new">
@@ -752,6 +789,18 @@ function QuotesWorkspace() {
                     <div className="font-semibold text-base flex flex-wrap items-center gap-2">
                       {selected.quote_no || "(unsaved)"}
                       <StatusBadge kind="quote" value={selected.status} size="sm" />
+                      {revisionLabel(selected as any) && (
+                        <span className={cn(
+                          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold border",
+                          isSuperseded(selected as any) ? "bg-slate-100 text-slate-500 border-slate-300" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        )}>
+                          <History className="h-3 w-3" />
+                          {revisionLabel(selected as any)}
+                        </span>
+                      )}
+                      {isSuperseded(selected as any) && (
+                        <span className="text-xs text-slate-500">Superseded • not in pipeline</span>
+                      )}
                     </div>
                     <div className="text-sm font-semibold truncate text-foreground">
                       {cmap[selected.customer_id || ""]?.company || "—"}
@@ -760,6 +809,11 @@ function QuotesWorkspace() {
                         • {fmtDate(selected.quote_date)}
                       </span>
                     </div>
+                    {(selected as any).revision_of && (
+                      <div className="text-xs text-muted-foreground">
+                        Revises {(selected as any).revision_of?.slice?.(0, 8)} • v{(selected as any).revision_no}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -826,10 +880,17 @@ function QuotesWorkspace() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
+                          onSelect={() => revise({ ...selected } as any)}
+                          className="gap-2"
+                          disabled={(selected as any).is_latest === false}
+                        >
+                          <History className="h-4 w-4" /> Revise (same deal)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           onSelect={() => clone({ ...selected } as any)}
                           className="gap-2"
                         >
-                          <Copy className="h-4 w-4" /> Clone
+                          <Copy className="h-4 w-4" /> Clone (new deal)
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={() => changeStatus("accepted")}
@@ -978,6 +1039,33 @@ function QuotesWorkspace() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Clone destination: same lead (Revise) vs new lead (Clone) */}
+        <CloneDestinationDialog
+          open={!!cloneDialog}
+          onOpenChange={(o) => !o && setCloneDialog(null)}
+          source={{
+            quote_no: cloneDialog?.row.quote_no || "",
+            total: Number(cloneDialog?.row.total || 0),
+            customer_name: cloneDialog ? cmap[cloneDialog.row.customer_id || ""]?.company : undefined,
+            lead_id: cloneDialog?.row.lead_id || null,
+          }}
+          onChoose={(choice) => {
+            const id = cloneDialog?.row.id;
+            if (!id) return;
+            setCloneDialog(null);
+            if (choice === "same-lead") {
+              // Revise = same lead, pipeline-safe, history trail
+              if (cloneDialog?.row.is_latest === false) {
+                toast.error("Cannot revise a superseded quotation — revise the latest version.");
+                return;
+              }
+              nav({ to: "/crm/quotations/new", search: { revise: id } as any });
+            } else {
+              nav({ to: "/crm/quotations/new", search: { clone: id } });
+            }
+          }}
+        />
       </div>
     </>
   );
@@ -994,6 +1082,8 @@ const QuoteRow = memo(function QuoteRow({
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
+  const rev = revisionLabel(row as any);
+  const superseded = isSuperseded(row as any);
   return (
     <button
       type="button"
@@ -1002,10 +1092,26 @@ const QuoteRow = memo(function QuoteRow({
       className={cn(
         "w-full text-left px-3 py-2 hover:bg-accent/50 transition-colors",
         selected && "bg-accent/70 border-l-2 border-primary",
+        superseded && "opacity-60 bg-muted/20 hover:bg-muted/30",
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="font-medium text-sm truncate">{customer}</div>
+        <div className="font-medium text-sm truncate flex items-center gap-1.5">
+          <span className="truncate">{customer}</span>
+          {rev && (
+            <span className={cn(
+              "inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold border",
+              superseded ? "bg-slate-100 text-slate-500 border-slate-300" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+            )}>
+              {rev}
+            </span>
+          )}
+          {superseded && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-500">
+              <History className="h-3 w-3" />
+            </span>
+          )}
+        </div>
         <StatusBadge kind="quote" value={row.status} size="sm" />
       </div>
       <div className="flex items-center justify-between text-xs text-muted-foreground mt-0.5 gap-2">
@@ -1018,6 +1124,9 @@ const QuoteRow = memo(function QuoteRow({
       </div>
       {row.subject && (
         <div className="text-[11px] text-muted-foreground truncate mt-0.5">{row.subject}</div>
+      )}
+      {superseded && (
+        <div className="text-[10px] text-slate-500 mt-0.5">Superseded — not counted in pipeline</div>
       )}
     </button>
   );
@@ -1050,6 +1159,23 @@ function ActivityTimeline({ quote }: { quote: Quotation }) {
       tone: "text-muted-foreground",
     },
   ];
+  if ((quote as any).revision_of) {
+    const revNo = Number((quote as any).revision_no || 2);
+    events.push({
+      icon: History,
+      label: `Revised — v${revNo} (supersedes previous)`,
+      ts: quote.created_at,
+      tone: "text-emerald-600",
+    });
+  }
+  if (isSuperseded(quote as any)) {
+    events.push({
+      icon: History,
+      label: `Superseded by v${Number((quote as any).revision_no || 1) + 1} — not counted in pipeline`,
+      ts: (quote as any).superseded_at || quote.updated_at,
+      tone: "text-slate-500",
+    });
+  }
   if (quote.updated_at && quote.updated_at !== quote.created_at) {
     events.push({
       icon: Pencil,
