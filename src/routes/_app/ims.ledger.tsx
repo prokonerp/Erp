@@ -5,23 +5,58 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { ArrowDownCircle, ArrowUpCircle, History, RefreshCw, Tag as TagIcon, Printer, Download } from "lucide-react";
 import {
-  listStock, listTransactions, listWarehouses,
-  TXN_TYPE_LABEL, STOCK_STATUS_LABEL,
-  type StockItem, type Transaction, type WarehouseLite, type TxnType,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  History,
+  RefreshCw,
+  Tag as TagIcon,
+  Printer,
+  Download,
+} from "lucide-react";
+import {
+  fetchStockPage,
+  fetchTransactionsPage,
+  listWarehouses,
+  TXN_TYPE_LABEL,
+  STOCK_STATUS_LABEL,
+  type StockItem,
+  type Transaction,
+  type WarehouseLite,
+  type TxnType,
 } from "@/lib/ims";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { stockKeys, txnKeys } from "@/lib/queryKeys";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
+import { TableSkeleton } from "@/components/shared/skeletons";
+import { PaginationFooter } from "@/components/PaginationFooter";
+import { useDebounced } from "@/lib/sales.hooks";
 import { DefectiveTagSheet } from "@/components/DefectiveTagSheet";
 import { printMultiPageElement, saveMultiPageElementAsPdf } from "@/lib/docPdf";
 import { getCurrentUserName } from "@/lib/currentUser";
 import {
-  fmtDate, generateTags, listDefectiveInRecords, markTagsPrinted,
-  type DefectiveInRecord, type DefectiveTag,
+  fmtDate,
+  generateTags,
+  listDefectiveInRecords,
+  markTagsPrinted,
+  type DefectiveInRecord,
+  type DefectiveTag,
 } from "@/lib/defectiveTags";
 
 export const Route = createFileRoute("/_app/ims/ledger")({
@@ -45,8 +80,18 @@ const OUT_TYPES: TxnType[] = ["good_out", "defective_out", "transfer_out", "oem_
 /** Stock type a transaction moves — from the linked stock item, else inferred from txn type. */
 function txnStockType(t: Transaction, item?: StockItem | null): "good" | "defective" | null {
   if (item) return item.stock_type;
-  if (t.txn_type === "defective_in" || t.txn_type === "defective_out" || t.txn_type === "oem_return") return "defective";
-  if (t.txn_type === "good_in" || t.txn_type === "good_out" || t.txn_type === "oem_replacement_receipt") return "good";
+  if (
+    t.txn_type === "defective_in" ||
+    t.txn_type === "defective_out" ||
+    t.txn_type === "oem_return"
+  )
+    return "defective";
+  if (
+    t.txn_type === "good_in" ||
+    t.txn_type === "good_out" ||
+    t.txn_type === "oem_replacement_receipt"
+  )
+    return "good";
   return null;
 }
 
@@ -60,11 +105,6 @@ function classifyTxn(t: Transaction): { wh: string | null; dir: Direction } {
 }
 
 function Ledger() {
-  const [stock, setStock] = useState<StockItem[]>([]);
-  const [txns, setTxns] = useState<Transaction[]>([]);
-  const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [warehouseId, setWarehouseId] = useState<string>("all");
   const [txnType, setTxnType] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
@@ -72,16 +112,50 @@ function Ledger() {
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [q, setQ] = useState("");
-  const [drill, setDrill] = useState<{ serial: string | null; item: StockItem | null } | null>(null);
+  const qDebounced = useDebounced(q.trim(), 250);
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
+  const [drill, setDrill] = useState<{ serial: string | null; item: StockItem | null } | null>(
+    null,
+  );
+
+  const stockQ = useQuery({
+    queryKey: stockKeys.paginated({
+      page,
+      pageSize,
+      search: qDebounced || null,
+    } as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryFn: () => fetchStockPage({ page, pageSize, search: qDebounced || null }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+  const txnQ = useQuery({
+    queryKey: txnKeys.paginated({ page, pageSize, search: qDebounced || null } as unknown as Record<
+      string,
+      unknown
+    > & { page: number; pageSize: number }),
+    queryFn: () => fetchTransactionsPage({ page, pageSize, search: qDebounced || null }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+  const whQ = useQuery({
+    queryKey: ["warehouses", "list"],
+    queryFn: listWarehouses,
+    staleTime: 30_000,
+  });
+  const stock: StockItem[] = (stockQ.data?.data ?? []) as StockItem[];
+  const txns: Transaction[] = (txnQ.data?.data ?? []) as Transaction[];
+  const warehouses: WarehouseLite[] = (whQ.data ?? []) as WarehouseLite[];
+  const total = txnQ.data?.count ?? 0;
+
+  useEffect(() => {
+    setPage(0);
+  }, [qDebounced, warehouseId, txnType, status, stockType, from, to]);
+  const loading = stockQ.isLoading || txnQ.isLoading || whQ.isLoading;
 
   async function load() {
-    setLoading(true);
-    try {
-      const [s, t, w] = await Promise.all([listStock(), listTransactions(), listWarehouses()]);
-      setStock(s); setTxns(t); setWarehouses(w);
-    } finally { setLoading(false); }
+    await Promise.all([stockQ.refetch(), txnQ.refetch(), whQ.refetch()]);
   }
-  useEffect(() => { load(); }, []);
 
   const stockById = useMemo(() => new Map(stock.map((s) => [s.id, s])), [stock]);
 
@@ -96,7 +170,9 @@ function Ledger() {
 
   // Compute ledger with per-warehouse running balances (ascending), then display desc
   const ledger = useMemo<LedgerRow[]>(() => {
-    const asc = [...txns].sort((a, b) => new Date(a.txn_date).getTime() - new Date(b.txn_date).getTime());
+    const asc = [...txns].sort(
+      (a, b) => new Date(a.txn_date).getTime() - new Date(b.txn_date).getTime(),
+    );
     const bal = new Map<string, number>();
     const built: LedgerRow[] = [];
     for (const t of asc) {
@@ -104,9 +180,16 @@ function Ledger() {
       const key = wh || "__none__";
       const cur = bal.get(key) || 0;
       const qty = Number(t.qty) || 0;
-      let stock_in = 0, stock_out = 0, next = cur;
-      if (dir === "in") { stock_in = qty; next = cur + qty; }
-      else if (dir === "out") { stock_out = qty; next = cur - qty; }
+      let stock_in = 0,
+        stock_out = 0,
+        next = cur;
+      if (dir === "in") {
+        stock_in = qty;
+        next = cur + qty;
+      } else if (dir === "out") {
+        stock_out = qty;
+        next = cur - qty;
+      }
       bal.set(key, next);
       built.push({ ...t, warehouse_id: wh, direction: dir, stock_in, stock_out, running: next });
     }
@@ -126,32 +209,59 @@ function Ledger() {
       const ts = new Date(r.txn_date).getTime();
       if (ts < fromTs || ts > toTs) return false;
       if (!s) return true;
-      return [r.txn_no, r.part_name, r.part_model_no, r.part_serial_no, r.oem,
-        r.reference, r.notes, r.indent_id, r.oem_case_id, r.from_party, r.to_party]
-        .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
+      return [
+        r.txn_no,
+        r.part_name,
+        r.part_model_no,
+        r.part_serial_no,
+        r.oem,
+        r.reference,
+        r.notes,
+        r.indent_id,
+        r.oem_case_id,
+        r.from_party,
+        r.to_party,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(s));
     });
   }, [ledger, warehouseId, txnType, stockType, status, stockById, from, to, q]);
 
   // Stock scoped by the same warehouse / type / status filters as the ledger rows,
   // so the summary always matches the IMS Stock page for the same selection.
-  const scopedStock = useMemo(() => stock.filter((s) => {
-    if (warehouseId !== "all" && s.warehouse_id !== warehouseId) return false;
-    if (stockType !== "all" && s.stock_type !== stockType) return false;
-    if (status !== "all" && s.stock_status !== status) return false;
-    return true;
-  }), [stock, warehouseId, stockType, status]);
+  const scopedStock = useMemo(
+    () =>
+      stock.filter((s) => {
+        if (warehouseId !== "all" && s.warehouse_id !== warehouseId) return false;
+        if (stockType !== "all" && s.stock_type !== stockType) return false;
+        if (status !== "all" && s.stock_status !== status) return false;
+        return true;
+      }),
+    [stock, warehouseId, stockType, status],
+  );
 
-  const scopedTxns = useMemo(() => txns.filter((t) => {
-    if (warehouseId !== "all" && t.from_warehouse_id !== warehouseId && t.to_warehouse_id !== warehouseId) return false;
-    const item = t.stock_item_id ? stockById.get(t.stock_item_id) : null;
-    if (stockType !== "all" && txnStockType(t, item) !== stockType) return false;
-    if (status !== "all" && item?.stock_status !== status) return false;
-    return true;
-  }), [txns, warehouseId, stockType, status, stockById]);
+  const scopedTxns = useMemo(
+    () =>
+      txns.filter((t) => {
+        if (
+          warehouseId !== "all" &&
+          t.from_warehouse_id !== warehouseId &&
+          t.to_warehouse_id !== warehouseId
+        )
+          return false;
+        const item = t.stock_item_id ? stockById.get(t.stock_item_id) : null;
+        if (stockType !== "all" && txnStockType(t, item) !== stockType) return false;
+        if (status !== "all" && item?.stock_status !== status) return false;
+        return true;
+      }),
+    [txns, warehouseId, stockType, status, stockById],
+  );
 
   const summary = useMemo(() => {
-    const count = (fn: (s: StockItem) => boolean) => scopedStock.filter(fn).reduce((a, s) => a + (Number(s.qty) || 1), 0);
-    let inSum = 0, outSum = 0;
+    const count = (fn: (s: StockItem) => boolean) =>
+      scopedStock.filter(fn).reduce((a, s) => a + (Number(s.qty) || 1), 0);
+    let inSum = 0,
+      outSum = 0;
     for (const t of scopedTxns) {
       const { wh, dir } = classifyTxn(t);
       const q = Number(t.qty) || 0;
@@ -168,7 +278,8 @@ function Ledger() {
       defective: count((s) => s.stock_type === "defective"),
       returned: count((s) => s.stock_status === "returned_to_oem"),
       scrapped: count((s) => s.stock_status === "scrapped"),
-      inSum, outSum,
+      inSum,
+      outSum,
     };
   }, [scopedStock, scopedTxns, warehouseId]);
 
@@ -186,8 +297,13 @@ function Ledger() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">
-            <span className="flex items-center gap-2"><History className="h-4 w-4" /> Warehouse Ledger — {warehouseId === "all" ? "All Warehouses" : whName(warehouseId)}</span>
-            <Button size="sm" variant="outline" onClick={load}><RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh</Button>
+            <span className="flex items-center gap-2">
+              <History className="h-4 w-4" /> Warehouse Ledger —{" "}
+              {warehouseId === "all" ? "All Warehouses" : whName(warehouseId)}
+            </span>
+            <Button size="sm" variant="outline" onClick={load}>
+              <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -210,37 +326,58 @@ function Ledger() {
           <div>
             <Label className="text-xs">Warehouse</Label>
             <Select value={warehouseId} onValueChange={setWarehouseId}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Warehouses</SelectItem>
-                {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}{w.type ? ` (${w.type})` : ""}</SelectItem>)}
+                {warehouses.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.name}
+                    {w.type ? ` (${w.type})` : ""}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label className="text-xs">Transaction Type</Label>
             <Select value={txnType} onValueChange={setTxnType}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {Object.entries(TXN_TYPE_LABEL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+                {Object.entries(TXN_TYPE_LABEL).map(([k, l]) => (
+                  <SelectItem key={k} value={k}>
+                    {l}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label className="text-xs">Current Status</Label>
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                {Object.entries(STOCK_STATUS_LABEL).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
+                {Object.entries(STOCK_STATUS_LABEL).map(([k, l]) => (
+                  <SelectItem key={k} value={k}>
+                    {l}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label className="text-xs">Stock Type</Label>
             <Select value={stockType} onValueChange={setStockType}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="good">Good</SelectItem>
@@ -258,96 +395,246 @@ function Ledger() {
           </div>
           <div>
             <Label className="text-xs">Search</Label>
-            <Input placeholder="Txn / Product / Serial / OEM / Indent / DC / GRN…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Input
+              placeholder="Txn / Product / Serial / OEM / Indent / DC / GRN…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted sticky top-0 z-10">
-              <tr className="text-left">
-                <th className="p-2">Date / Time</th>
-                <th className="p-2">Txn No</th>
-                <th className="p-2">Type</th>
-                <th className="p-2">Product · Serial</th>
-                <th className="p-2">OEM</th>
-                <th className="p-2">Warehouse</th>
-                <th className="p-2">Party / Counter-WH</th>
-                <th className="p-2 text-right text-emerald-700">Stock In</th>
-                <th className="p-2 text-right text-rose-700">Stock Out</th>
-                <th className="p-2 text-right">Running Balance</th>
-                <th className="p-2">Ref / Indent</th>
-                <th className="p-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={12}>Loading ledger…</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={12}>No transactions match the current filters.</td></tr>
-              ) : filtered.map((r) => {
-                const item = r.stock_item_id ? stockById.get(r.stock_item_id) : null;
-                const counter = r.direction === "in"
-                  ? (r.from_party || whName(r.from_warehouse_id))
-                  : (r.to_party || whName(r.to_warehouse_id));
-                return (
-                  <tr key={r.id} className="border-t hover:bg-muted/30">
-                    <td className="p-2 whitespace-nowrap text-xs">{new Date(r.txn_date).toLocaleString()}</td>
-                    <td className="p-2 font-mono text-xs">{r.txn_no || "—"}</td>
-                    <td className="p-2">
-                      <Badge variant="outline" className={
-                        r.direction === "in" ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                          : r.direction === "out" ? "bg-rose-50 text-rose-800 border-rose-200"
-                          : "bg-muted"
-                      }>
-                        {r.direction === "in" ? <ArrowDownCircle className="h-3 w-3 inline mr-1" /> :
-                         r.direction === "out" ? <ArrowUpCircle className="h-3 w-3 inline mr-1" /> : null}
-                        {TXN_TYPE_LABEL[r.txn_type]}
-                      </Badge>
-                    </td>
-                    <td className="p-2">
-                      <div className="font-medium">{r.part_name || "—"}</div>
-                      {r.part_model_no ? <div className="text-xs text-muted-foreground">{r.part_model_no}</div> : null}
-                      {r.part_serial_no ? (
-                        <button
-                          className="text-xs font-mono text-primary hover:underline"
-                          onClick={() => setDrill({ serial: r.part_serial_no, item: item || null })}
-                          title="View full lifecycle"
-                        >
-                          {r.part_serial_no}
-                        </button>
-                      ) : null}
-                    </td>
-                    <td className="p-2 text-xs">{r.oem || "—"}</td>
-                    <td className="p-2 text-xs">{whName(r.warehouse_id)}</td>
-                    <td className="p-2 text-xs">{counter || "—"}</td>
-                    <td className="p-2 text-right font-mono text-emerald-700">{r.stock_in || ""}</td>
-                    <td className="p-2 text-right font-mono text-rose-700">{r.stock_out || ""}</td>
-                    <td className="p-2 text-right font-mono font-semibold">{r.running}</td>
-                    <td className="p-2 text-xs">
-                      {r.reference ? <div>{r.reference}</div> : null}
-                      {r.indent_id ? <div className="font-mono text-muted-foreground">IND: {r.indent_id.slice(0, 8)}…</div> : null}
-                      {r.oem_case_id ? <div className="font-mono text-muted-foreground">Case: {r.oem_case_id}</div> : null}
-                    </td>
-                    <td className="p-2">
-                      {item ? <StockStatusBadge status={item.stock_status} type={item.stock_type} /> : <span className="text-muted-foreground">—</span>}
-                    </td>
+        <CardContent className="p-0 overflow-hidden">
+          {txnQ.isLoading || stockQ.isLoading ? (
+            <TableSkeleton rows={6} />
+          ) : (
+            <div
+              className="max-h-[60vh] overflow-auto overscroll-contain scroll-pt-0"
+              style={{ contain: "content" }}
+            >
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  <col className="w-[86px]" />
+                  <col className="w-[88px]" />
+                  <col className="w-[112px]" />
+                  <col />
+                  <col className="w-[84px]" />
+                  <col className="w-[116px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[66px]" />
+                  <col className="w-[70px]" />
+                  <col className="w-[74px]" />
+                  <col className="w-[124px]" />
+                  <col className="w-[92px]" />
+                </colgroup>
+                <thead className="bg-muted sticky top-0 z-10">
+                  <tr className="text-left">
+                    <th className="p-2 whitespace-nowrap text-xs font-medium">Date / Time</th>
+                    <th className="p-2 whitespace-nowrap text-xs font-medium">Txn No</th>
+                    <th className="p-2 whitespace-nowrap text-xs font-medium">Type</th>
+                    <th className="p-2 whitespace-nowrap text-xs font-medium">Product · Serial</th>
+                    <th className="p-2 whitespace-nowrap text-xs font-medium">OEM</th>
+                    <th className="p-2 whitespace-nowrap text-xs font-medium">Warehouse</th>
+                    <th className="p-2 whitespace-nowrap text-xs font-medium">
+                      Party / Counter-WH
+                    </th>
+                    <th className="p-2 text-right whitespace-nowrap text-xs font-medium text-emerald-700">
+                      Stock In
+                    </th>
+                    <th className="p-2 text-right whitespace-nowrap text-xs font-medium text-rose-700">
+                      Stock Out
+                    </th>
+                    <th className="p-2 text-right whitespace-nowrap text-xs font-medium">
+                      Balance
+                    </th>
+                    <th className="p-2 whitespace-nowrap text-xs font-medium">Ref / Indent</th>
+                    <th className="p-2 whitespace-nowrap text-xs font-medium">Status</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td className="p-4 text-muted-foreground" colSpan={12}>
+                        Loading ledger…
+                      </td>
+                    </tr>
+                  ) : filtered.length === 0 ? (
+                    <tr>
+                      <td className="p-4 text-muted-foreground" colSpan={12}>
+                        No transactions match the current filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filtered.map((r) => {
+                      const item = r.stock_item_id ? stockById.get(r.stock_item_id) : null;
+                      const counter =
+                        r.direction === "in"
+                          ? r.from_party || whName(r.from_warehouse_id)
+                          : r.to_party || whName(r.to_warehouse_id);
+                      return (
+                        <tr key={r.id} className="border-t hover:bg-muted/30">
+                          <td className="p-2 whitespace-nowrap align-top">
+                            {(() => {
+                              const d = new Date(r.txn_date);
+                              const date = d.toLocaleDateString("en-GB");
+                              const time = d.toLocaleTimeString("en-GB", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              });
+                              return (
+                                <>
+                                  <div className="text-xs font-medium tabular-nums leading-none whitespace-nowrap">
+                                    {date}
+                                  </div>
+                                  <div className="text-[11px] text-muted-foreground tabular-nums leading-none mt-1 whitespace-nowrap">
+                                    {time}
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </td>
+                          <td
+                            className="p-1.5 font-mono text-[11px] leading-tight break-all whitespace-normal align-top"
+                            title={r.txn_no || ""}
+                          >
+                            {r.txn_no || "—"}
+                          </td>
+                          <td className="p-1.5 align-top">
+                            <Badge
+                              variant="outline"
+                              className={
+                                r.direction === "in"
+                                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                  : r.direction === "out"
+                                    ? "bg-rose-50 text-rose-800 border-rose-200"
+                                    : "bg-muted" +
+                                      " whitespace-normal break-words text-[11px] leading-tight px-1.5 py-0 max-w-[112px] text-left justify-start"
+                              }
+                            >
+                              {r.direction === "in" ? (
+                                <ArrowDownCircle className="h-3 w-3 inline mr-1 shrink-0" />
+                              ) : r.direction === "out" ? (
+                                <ArrowUpCircle className="h-3 w-3 inline mr-1 shrink-0" />
+                              ) : null}
+                              <span className="break-words">{TXN_TYPE_LABEL[r.txn_type]}</span>
+                            </Badge>
+                          </td>
+                          <td className="p-1.5 align-top">
+                            <div
+                              className="font-medium leading-tight break-words whitespace-normal text-xs"
+                              title={r.part_name || ""}
+                            >
+                              {r.part_name || "—"}
+                            </div>
+                            {r.part_model_no ? (
+                              <div className="text-[11px] text-muted-foreground break-words whitespace-normal leading-tight">
+                                {r.part_model_no}
+                              </div>
+                            ) : null}
+                            {r.part_serial_no ? (
+                              <button
+                                className="text-[11px] font-mono text-primary hover:underline break-all whitespace-normal block text-left leading-tight"
+                                onClick={() =>
+                                  setDrill({ serial: r.part_serial_no, item: item || null })
+                                }
+                                title="View full lifecycle"
+                              >
+                                {r.part_serial_no}
+                              </button>
+                            ) : null}
+                          </td>
+                          <td
+                            className="p-1.5 text-xs break-words whitespace-normal leading-tight align-top"
+                            title={r.oem || ""}
+                          >
+                            {r.oem || "—"}
+                          </td>
+                          <td
+                            className="p-1.5 text-xs break-words whitespace-normal leading-tight align-top"
+                            title={whName(r.warehouse_id)}
+                          >
+                            {whName(r.warehouse_id)}
+                          </td>
+                          <td
+                            className="p-1.5 text-xs break-words whitespace-normal leading-tight align-top"
+                            title={counter || ""}
+                          >
+                            {counter || "—"}
+                          </td>
+                          <td className="p-1.5 text-right font-mono text-emerald-700 tabular-nums text-xs whitespace-nowrap align-top">
+                            {r.stock_in || "—"}
+                          </td>
+                          <td className="p-1.5 text-right font-mono text-rose-700 tabular-nums text-xs whitespace-nowrap align-top">
+                            {r.stock_out || "—"}
+                          </td>
+                          <td className="p-1.5 text-right font-mono font-semibold tabular-nums text-xs whitespace-nowrap align-top">
+                            {r.running}
+                          </td>
+                          <td className="p-1.5 text-xs align-top break-words whitespace-normal leading-tight">
+                            {r.reference ? (
+                              <div
+                                className="break-words whitespace-normal leading-tight"
+                                title={r.reference}
+                              >
+                                {r.reference}
+                              </div>
+                            ) : null}
+                            {r.indent_id ? (
+                              <div className="font-mono text-muted-foreground break-words whitespace-normal leading-tight">
+                                IND: {r.indent_id.slice(0, 8)}…
+                              </div>
+                            ) : null}
+                            {r.oem_case_id ? (
+                              <div className="font-mono text-muted-foreground break-words whitespace-normal leading-tight">
+                                Case: {r.oem_case_id}
+                              </div>
+                            ) : null}
+                            {!r.reference && !r.indent_id && !r.oem_case_id ? "—" : null}
+                          </td>
+                          <td className="p-2 whitespace-nowrap">
+                            {item ? (
+                              <StockStatusBadge status={item.stock_status} type={item.stock_type} />
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <PaginationFooter
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPage={setPage}
+            isFetching={
+              (txnQ.isFetching || stockQ.isFetching) && !(txnQ.isLoading || stockQ.isLoading)
+            }
+          />
         </CardContent>
       </Card>
 
-      <Dialog open={!!drill} onOpenChange={(v) => { if (!v) setDrill(null); }}>
+      <Dialog
+        open={!!drill}
+        onOpenChange={(v) => {
+          if (!v) setDrill(null);
+        }}
+      >
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>
               Lifecycle — {drill?.item?.part_name || "—"}
-              {drill?.serial ? <span className="font-mono text-sm text-muted-foreground ml-2">SN: {drill.serial}</span> : null}
+              {drill?.serial ? (
+                <span className="font-mono text-sm text-muted-foreground ml-2">
+                  SN: {drill.serial}
+                </span>
+              ) : null}
             </DialogTitle>
           </DialogHeader>
           {drill && (
@@ -360,15 +647,18 @@ function Ledger() {
           )}
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }
 
 /** Multi-select defective stock in the ledger and generate/print defective tags inline. */
 function DefectiveTagQuickAction({
-  warehouseId, warehouses,
-}: { warehouseId: string; warehouses: WarehouseLite[] }) {
+  warehouseId,
+  warehouses,
+}: {
+  warehouseId: string;
+  warehouses: WarehouseLite[];
+}) {
   const [rows, setRows] = useState<DefectiveInRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -393,7 +683,9 @@ function DefectiveTagQuickAction({
       setLoading(false);
     }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase().trim();
@@ -401,8 +693,20 @@ function DefectiveTagQuickAction({
       if (warehouseId !== "all" && r.warehouse_id !== warehouseId) return false;
       if (!showGenerated && r.tag_generated) return false;
       if (!s) return true;
-      return [r.txn_no, r.service_request_no, r.oracle_order_no, r.model_no, r.part_name, r.serial_no, r.customer_name, r.asp_code, r.engineer_name, r.reason]
-        .filter(Boolean).some((v) => String(v).toLowerCase().includes(s));
+      return [
+        r.txn_no,
+        r.service_request_no,
+        r.oracle_order_no,
+        r.model_no,
+        r.part_name,
+        r.serial_no,
+        r.customer_name,
+        r.asp_code,
+        r.engineer_name,
+        r.reason,
+      ]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(s));
     });
   }, [rows, warehouseId, showGenerated, q]);
 
@@ -419,7 +723,11 @@ function DefectiveTagQuickAction({
       setPreview(created);
       load();
     } catch (e: any) {
-      toast.error(e?.message?.includes("duplicate") ? "A tag already exists for one of the selected items" : e?.message || "Tag generation failed");
+      toast.error(
+        e?.message?.includes("duplicate")
+          ? "A tag already exists for one of the selected items"
+          : e?.message || "Tag generation failed",
+      );
     } finally {
       setSaving(false);
     }
@@ -428,19 +736,27 @@ function DefectiveTagQuickAction({
   async function doPrint() {
     if (!sheetRef.current || !preview) return;
     await printMultiPageElement(sheetRef.current, "defective-tags", { landscape: true });
-    await markTagsPrinted(preview.map((t) => t.id), await getCurrentUserName());
+    await markTagsPrinted(
+      preview.map((t) => t.id),
+      await getCurrentUserName(),
+    );
   }
   async function doDownload() {
     if (!sheetRef.current || !preview) return;
-    try { await saveMultiPageElementAsPdf(sheetRef.current, "defective-tags.pdf", { landscape: true }); }
-    catch (e: any) { toast.error(e?.message || "Download failed"); }
+    try {
+      await saveMultiPageElementAsPdf(sheetRef.current, "defective-tags.pdf", { landscape: true });
+    } catch (e: any) {
+      toast.error(e?.message || "Download failed");
+    }
   }
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
-          <span className="flex items-center gap-2"><TagIcon className="h-4 w-4" /> Defective Stock — Quick Tag</span>
+          <span className="flex items-center gap-2">
+            <TagIcon className="h-4 w-4" /> Defective Stock — Quick Tag
+          </span>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{selectedRows.length} selected</span>
             <Button size="sm" disabled={!selectedRows.length || saving} onClick={createTags}>
@@ -452,20 +768,30 @@ function DefectiveTagQuickAction({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <Input className="flex-1 min-w-[220px]" placeholder="Search model / serial / customer / SR / Oracle…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input
+            className="flex-1 min-w-[220px]"
+            placeholder="Search model / serial / customer / SR / Oracle…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={showGenerated} onCheckedChange={(v) => setShowGenerated(!!v)} />
             Show already tagged
           </label>
         </div>
-        <div className="border rounded-md overflow-auto max-h-[360px]">
+        <div
+          className="border rounded-md overflow-auto max-h-[60vh] overscroll-contain scroll-pt-0"
+          style={{ contain: "content" }}
+        >
           <table className="w-full text-xs">
             <thead className="bg-muted sticky top-0 z-10">
               <tr className="text-left">
                 <th className="p-2 w-8">
                   <Checkbox
                     checked={selectable.length > 0 && selectedRows.length === selectable.length}
-                    onCheckedChange={(v) => setSel(v ? Object.fromEntries(selectable.map((r) => [r.key, true])) : {})}
+                    onCheckedChange={(v) =>
+                      setSel(v ? Object.fromEntries(selectable.map((r) => [r.key, true])) : {})
+                    }
                   />
                 </th>
                 <th className="p-2">Stock IN No</th>
@@ -480,35 +806,47 @@ function DefectiveTagQuickAction({
             </thead>
             <tbody>
               {loading ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={9}>Loading defective stock…</td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td className="p-4 text-muted-foreground" colSpan={9}>No defective stock for this selection.</td></tr>
-              ) : filtered.map((r) => (
-                <tr key={r.key} className="border-t align-top hover:bg-muted/30">
-                  <td className="p-2">
-                    <Checkbox
-                      disabled={r.tag_generated}
-                      checked={!!sel[r.key]}
-                      onCheckedChange={(v) => setSel((s) => ({ ...s, [r.key]: !!v }))}
-                    />
-                  </td>
-                  <td className="p-2 font-mono">{r.txn_no || "—"}</td>
-                  <td className="p-2 whitespace-nowrap">{fmtDate(r.txn_date)}</td>
-                  <td className="p-2">
-                    <div>{r.model_no || r.part_name || "—"}</div>
-                    <div className="font-mono text-muted-foreground">{r.serial_no || "—"}</div>
-                  </td>
-                  <td className="p-2">{whName(r.warehouse_id)}</td>
-                  <td className="p-2">{r.customer_name || "—"}</td>
-                  <td className="p-2">{r.service_request_no || "—"}</td>
-                  <td className="p-2">{r.oracle_order_no || "—"}</td>
-                  <td className="p-2">
-                    {r.tag_generated
-                      ? <Badge variant="secondary">{r.tag_no || "Generated"}</Badge>
-                      : <Badge variant="outline">Not Tagged</Badge>}
+                <tr>
+                  <td className="p-4 text-muted-foreground" colSpan={9}>
+                    Loading defective stock…
                   </td>
                 </tr>
-              ))}
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td className="p-4 text-muted-foreground" colSpan={9}>
+                    No defective stock for this selection.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((r) => (
+                  <tr key={r.key} className="border-t align-top hover:bg-muted/30">
+                    <td className="p-2">
+                      <Checkbox
+                        disabled={r.tag_generated}
+                        checked={!!sel[r.key]}
+                        onCheckedChange={(v) => setSel((s) => ({ ...s, [r.key]: !!v }))}
+                      />
+                    </td>
+                    <td className="p-2 font-mono">{r.txn_no || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{fmtDate(r.txn_date)}</td>
+                    <td className="p-2">
+                      <div>{r.model_no || r.part_name || "—"}</div>
+                      <div className="font-mono text-muted-foreground">{r.serial_no || "—"}</div>
+                    </td>
+                    <td className="p-2">{whName(r.warehouse_id)}</td>
+                    <td className="p-2">{r.customer_name || "—"}</td>
+                    <td className="p-2">{r.service_request_no || "—"}</td>
+                    <td className="p-2">{r.oracle_order_no || "—"}</td>
+                    <td className="p-2">
+                      {r.tag_generated ? (
+                        <Badge variant="secondary">{r.tag_no || "Generated"}</Badge>
+                      ) : (
+                        <Badge variant="outline">Not Tagged</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -517,14 +855,22 @@ function DefectiveTagQuickAction({
       <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
         <DialogContent className="max-w-[900px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Defective Tag Preview — {preview?.length || 0} tag(s), A4 portrait, 4 per page</DialogTitle>
+            <DialogTitle>
+              Defective Tag Preview — {preview?.length || 0} tag(s), A4 portrait, 4 per page
+            </DialogTitle>
           </DialogHeader>
           <div className="bg-muted/40 p-4 overflow-x-auto">
             {preview && <DefectiveTagSheet ref={sheetRef} tags={preview} />}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={doDownload}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
-            <Button onClick={doPrint}><Printer className="h-4 w-4 mr-1" />Print</Button>
+            <Button variant="outline" onClick={doDownload}>
+              <Download className="h-4 w-4 mr-1" />
+              Download PDF
+            </Button>
+            <Button onClick={doPrint}>
+              <Printer className="h-4 w-4 mr-1" />
+              Print
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -533,7 +879,10 @@ function DefectiveTagQuickAction({
 }
 
 function SerialLifecycle({
-  serial, item, allTxns, whName,
+  serial,
+  item,
+  allTxns,
+  whName,
 }: {
   serial: string | null;
   item: StockItem | null;
@@ -541,9 +890,8 @@ function SerialLifecycle({
   whName: (id: string | null) => string;
 }) {
   const rows = useMemo(() => {
-    const list = allTxns.filter((t) =>
-      (item && t.stock_item_id === item.id) ||
-      (serial && t.part_serial_no === serial)
+    const list = allTxns.filter(
+      (t) => (item && t.stock_item_id === item.id) || (serial && t.part_serial_no === serial),
     );
     return list.sort((a, b) => new Date(a.txn_date).getTime() - new Date(b.txn_date).getTime());
   }, [allTxns, item, serial]);
@@ -552,10 +900,19 @@ function SerialLifecycle({
     <div className="space-y-3">
       {item && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs bg-muted/30 rounded-md p-3">
-          <div><span className="text-muted-foreground">OEM:</span> {item.oem || "—"}</div>
-          <div><span className="text-muted-foreground">Model:</span> {item.part_model_no || "—"}</div>
-          <div><span className="text-muted-foreground">Current WH:</span> {whName(item.warehouse_id)}</div>
-          <div><span className="text-muted-foreground">Status:</span> <StockStatusBadge status={item.stock_status} type={item.stock_type} /></div>
+          <div>
+            <span className="text-muted-foreground">OEM:</span> {item.oem || "—"}
+          </div>
+          <div>
+            <span className="text-muted-foreground">Model:</span> {item.part_model_no || "—"}
+          </div>
+          <div>
+            <span className="text-muted-foreground">Current WH:</span> {whName(item.warehouse_id)}
+          </div>
+          <div>
+            <span className="text-muted-foreground">Status:</span>{" "}
+            <StockStatusBadge status={item.stock_status} type={item.stock_type} />
+          </div>
         </div>
       )}
       <div className="overflow-x-auto border rounded-md">
@@ -574,19 +931,29 @@ function SerialLifecycle({
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td className="p-3 text-muted-foreground" colSpan={8}>No transactions recorded for this item.</td></tr>
-            ) : rows.map((t) => (
-              <tr key={t.id} className="border-t">
-                <td className="p-2 whitespace-nowrap text-xs">{new Date(t.txn_date).toLocaleString()}</td>
-                <td className="p-2 font-mono text-xs">{t.txn_no || "—"}</td>
-                <td className="p-2"><Badge variant="outline">{TXN_TYPE_LABEL[t.txn_type]}</Badge></td>
-                <td className="p-2 text-xs">{t.from_party || whName(t.from_warehouse_id)}</td>
-                <td className="p-2 text-xs">{t.to_party || whName(t.to_warehouse_id)}</td>
-                <td className="p-2 text-right font-mono">{t.qty}</td>
-                <td className="p-2 text-xs">{t.reference || "—"}</td>
-                <td className="p-2 text-xs">{t.notes || "—"}</td>
+              <tr>
+                <td className="p-3 text-muted-foreground" colSpan={8}>
+                  No transactions recorded for this item.
+                </td>
               </tr>
-            ))}
+            ) : (
+              rows.map((t) => (
+                <tr key={t.id} className="border-t">
+                  <td className="p-2 whitespace-nowrap text-xs">
+                    {new Date(t.txn_date).toLocaleString()}
+                  </td>
+                  <td className="p-2 font-mono text-xs">{t.txn_no || "—"}</td>
+                  <td className="p-2">
+                    <Badge variant="outline">{TXN_TYPE_LABEL[t.txn_type]}</Badge>
+                  </td>
+                  <td className="p-2 text-xs">{t.from_party || whName(t.from_warehouse_id)}</td>
+                  <td className="p-2 text-xs">{t.to_party || whName(t.to_warehouse_id)}</td>
+                  <td className="p-2 text-right font-mono">{t.qty}</td>
+                  <td className="p-2 text-xs">{t.reference || "—"}</td>
+                  <td className="p-2 text-xs">{t.notes || "—"}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
