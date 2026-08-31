@@ -38,7 +38,8 @@ import { PageHeader } from "@/components/crm/PageHeader";
 import { StatusBadge } from "@/components/crm/StatusBadge";
 import { EmptyState } from "@/components/crm/EmptyState";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
-import { PageLoader } from "@/components/shared/skeletons";
+import { useDebounced } from "@/lib/sales.hooks";
+import { useLeadsTable } from "@/hooks/useLeadsTable";
 
 export const Route = createFileRoute("/_app/crm/leads")({ component: LeadsPage });
 
@@ -59,11 +60,12 @@ type LeadForm = {
 
 function LeadsList() {
   const nav = useNavigate();
-  const [rows, setRows] = useState<Lead[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filter, setFilter] = useState<"all" | LeadStatus>("all");
   const [q, setQ] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const pageSize = 25;
+  const debouncedQ = useDebounced(q.trim(), 250);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<LeadForm>({
     customer_id: "",
@@ -75,21 +77,40 @@ function LeadsList() {
   });
   const openNewLead = useCallback(() => setOpen(true), []);
 
-  const load = async () => {
-    setLoading(true);
-    // Phase 0.2 debloat: explicit cols + limit 200 + range 0,199
-    const { data: l } = await supabase
-      .from("leads")
-      .select("id,customer_id,title,source,status,expected_value,closed_value,next_followup,owner_id,assigned_to,assigned_at,acknowledged_at,updated_at,lost_reason,closed_at,closed_remarks,remarks")
-      .order("updated_at", { ascending: false }).limit(200).range(0, 199);
-    const list = (l || []) as unknown as Lead[];
-    setRows(list);
-    setCustomers(await fetchCustomersByIds(list.map((r) => r.customer_id)));
-    setLoading(false);
-  };
   useEffect(() => {
-    load();
-  }, []);
+    setPage(0);
+  }, [debouncedQ, filter]);
+
+  const leadsQuery = useLeadsTable({ search: debouncedQ, status: filter, page, pageSize });
+  const rows = useMemo(() => (leadsQuery.data?.rows ?? []) as Lead[], [leadsQuery.data?.rows]);
+  const total = leadsQuery.data?.count ?? 0;
+  const isLoading = leadsQuery.isLoading;
+  const isFetching = leadsQuery.isFetching;
+
+  // Resolve customer names for the current page only (chunked fetch)
+  useEffect(() => {
+    if (!rows.length) return;
+    const ids = rows.map((r) => r.customer_id);
+    const known = new Set(customers.map((c) => c.id));
+    const missing = Array.from(new Set(ids.filter((id) => id && !known.has(id))));
+    if (!missing.length) return;
+    let active = true;
+    fetchCustomersByIds(missing).then((fetched) => {
+      if (!active || !fetched.length) return;
+      setCustomers((prev) => {
+        const have = new Set(prev.map((c) => c.id));
+        return [...prev, ...fetched.filter((c) => !have.has(c.id))];
+      });
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
+
+  const load = useCallback(() => {
+    leadsQuery.refetch();
+  }, [leadsQuery]);
 
   const { isAdmin, staff, busy: assignBusy, nameOf, assignLeadTo } = useLeadAssignment();
 
@@ -100,7 +121,7 @@ function LeadsList() {
       toast.success("Lead assigned");
       load();
     },
-    [assignLeadTo],
+    [assignLeadTo, load],
   );
 
   const cmap = useMemo(
@@ -137,16 +158,18 @@ function LeadsList() {
     load();
   };
 
+  // Server already filters by status + title/source; client supplements with customer-name match on the current page.
   const filtered = useMemo(() => {
+    const s = debouncedQ.toLowerCase();
+    if (!s) return rows;
+    // If server already matched title/source, we still need to include customer-name hits that wouldn't be server-matched.
+    // So broaden client-side on the current page to include customer company as well, while keeping non-matches filtered out.
     return rows.filter((r) => {
-      if (filter !== "all" && r.status !== filter) return false;
-      const s = q.toLowerCase();
-      if (!s) return true;
       return [r.title, r.source, cmap[r.customer_id]?.company].some((v) =>
         (v || "").toLowerCase().includes(s),
       );
     });
-  }, [rows, filter, q, cmap]);
+  }, [rows, debouncedQ, cmap]);
 
   const columns: ColumnDef<Lead>[] = useMemo(() => {
     const cols: ColumnDef<Lead>[] = [
@@ -264,7 +287,7 @@ function LeadsList() {
     return cols;
   }, [cmap, nameOf, isAdmin, assignBusy, staff, assignInline, filter]);
 
-  if (loading) return <PageLoader label="Loading leads…" />;
+  // Loading handled by DataTable's skeleton; no full-page gate so toolbar stays interactive during fetch.
 
   return (
     <div className="space-y-4">
@@ -348,7 +371,9 @@ function LeadsList() {
       <DataTable
         columns={columns}
         data={filtered}
-        isLoading={loading}
+        isLoading={isLoading}
+        totalRecords={total}
+        serverPagination={{ page, pageSize, total, onPageChange: setPage }}
         rowKey="id"
         onRowClick={(r) => nav({ to: "/crm/leads/$id", params: { id: r.id } })}
         emptyIcon={Target}
@@ -366,7 +391,9 @@ function LeadsList() {
         }
         toolbar={
           <div className="flex items-center gap-2 w-full">
-            <span className="text-sm font-medium">All Leads ({filtered.length})</span>
+            <span className="text-sm font-medium">
+              All Leads ({total.toLocaleString()}){isFetching && !isLoading ? " · updating…" : ""}
+            </span>
             <div className="ml-auto relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
