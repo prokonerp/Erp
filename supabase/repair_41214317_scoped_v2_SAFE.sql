@@ -53,7 +53,7 @@ INSERT INTO document_deletion_audit
   (document_type, document_subtype, document_no, document_id, reason, deleted_by, original_created_by, original_created_at, snapshot)
 SELECT
   'ticket_satellite_correction', 'good_parts_details',
-  COALESCE(NULLIF(t.ticket_no,''), t.id::text), t.id,
+  COALESCE(NULLIF(t.case_id,''), t.id::text), t.id,
   'Repair 41214317: B satellite 0H2624G00408 → 0H2629G00591 (ticket good_parts_details). Indent B already correct; satellites were left stale by scoped path.',
   auth.uid(), t.created_by, t.created_at,
   jsonb_build_object('oracle_no','41214317','slot','exchange','old_serial','0H2624G00408','new_serial','0H2629G00591','ticket_id',t.id)
