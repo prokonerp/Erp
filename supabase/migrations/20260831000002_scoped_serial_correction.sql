@@ -126,11 +126,11 @@ BEGIN
     RAISE EXCEPTION 'Serial "%" not found in indent % oracle % slot %', v_old, _indent_id, _oracle_no, _slot;
   END IF;
 
-  -- audit (never delete)
+  -- audit (never delete) — indent_no can be NULL for legacy rows, use COALESCE to satisfy NOT NULL
   INSERT INTO public.document_deletion_audit
     (document_type, document_subtype, document_no, document_id, reason, deleted_by, original_created_by, original_created_at, snapshot)
   VALUES
-    ('indent_oracle_serial_correction', _slot, v_indent.indent_no, v_indent.id, _reason, auth.uid(), v_indent.created_by, v_indent.created_at,
+    ('indent_oracle_serial_correction', _slot, COALESCE(v_indent.indent_no, v_indent.id::text), v_indent.id, _reason, auth.uid(), v_indent.created_by, v_indent.created_at,
      jsonb_build_object('oracle_no', _oracle_no, 'slot', _slot, 'old_serial', v_old, 'new_serial', v_new));
 
   -- scoped update — ONLY that oracle block, ONLY that slot, ONLY this indent_id
@@ -191,7 +191,7 @@ BEGIN
   INSERT INTO public.document_deletion_audit
     (document_type, document_subtype, document_no, document_id, reason, deleted_by, original_created_by, original_created_at, snapshot)
   VALUES
-    ('grn_serial_correction', gr.category, gr.grn_no, gr.id, _reason, auth.uid(), gr.created_by, gr.created_at,
+    ('grn_serial_correction', gr.category, COALESCE(gr.grn_no, gr.id::text), gr.id, _reason, auth.uid(), gr.created_by, gr.created_at,
      jsonb_build_object('old_serial', v_old, 'new_serial', v_new, 'scope', _scope, 'oracle_no', _oracle_no));
 
   -- 1) Fix THIS grn only (always scoped to id)
