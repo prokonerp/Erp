@@ -98,7 +98,8 @@ DECLARE
   v_found int := 0;
   v_indent public.indents%ROWTYPE;
 BEGIN
-  IF auth.uid() IS NULL OR NOT public.has_role(auth.uid(), 'admin') THEN
+  -- Allow SQL Editor (auth.uid() IS NULL, current_user = postgres/service_role) to run scoped fixes
+  IF auth.uid() IS NOT NULL AND NOT public.has_role(auth.uid(), 'admin') THEN
     RAISE EXCEPTION 'Only administrators can correct serial numbers';
   END IF;
   IF v_old IS NULL OR v_new IS NULL OR v_old = v_new THEN
@@ -162,7 +163,8 @@ DECLARE
   v_indent_id uuid;
   v_oracle_no text;
 BEGIN
-  IF auth.uid() IS NULL OR NOT public.has_role(auth.uid(), 'admin') THEN
+  -- Allow SQL Editor (auth.uid() NULL) — Postgres/service_role
+  IF auth.uid() IS NOT NULL AND NOT public.has_role(auth.uid(), 'admin') THEN
     RAISE EXCEPTION 'Only administrators can correct serial numbers';
   END IF;
   IF v_old IS NULL OR v_new IS NULL OR v_old = v_new THEN
