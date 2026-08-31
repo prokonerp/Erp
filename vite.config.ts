@@ -70,10 +70,12 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
               id.includes("node_modules/react") ||
               id.includes("node_modules/react-dom") ||
               id.includes("@tanstack/react-router") ||
-              id.includes("@tanstack/react-start")
+              id.includes("@tanstack/react-start") ||
+              id.includes("@tanstack/react-query") ||
+              id.includes("@tanstack/query-core")
             )
               return "vendor";
-            if (id.includes("@supabase/supabase-js")) return "supabase";
+            if (id.includes("@supabase/")) return "supabase";
             if (id.includes("node_modules/recharts")) return "charts";
           },
         },

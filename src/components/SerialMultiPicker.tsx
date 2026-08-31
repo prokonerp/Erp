@@ -49,7 +49,7 @@ export function SerialMultiPicker({
       if (warehouseId) x = x.eq("warehouse_id", warehouseId);
       if (partModelNo) x = x.eq("part_model_no", partModelNo);
       else if (partName) x = x.eq("part_name", partName);
-      return x.order("part_serial_no");
+      return x.order("part_serial_no").limit(100);
     })
       .then((data) => setRows(data.filter((r) => !excludeSerials.includes(r.part_serial_no) || value.includes(r.part_serial_no))))
       .finally(() => setLoading(false));

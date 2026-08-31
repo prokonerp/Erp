@@ -40,7 +40,7 @@ export function UpsSmartPanel({ items, onAddItems }: Props) {
     Promise.all([
       fetchUpsBundles(),
       fetchBatteryCatalog(),
-      fetchAll<ProductMaster>("products", (q) => q.select("*")),
+      fetchAll<ProductMaster>("products", (q) => q.select("id,name,model,brand,hsn,unit,default_price,description").limit(500)),
     ])
       .then(([b, bat, p]) => {
         if (!alive) return;

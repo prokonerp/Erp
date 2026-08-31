@@ -39,10 +39,7 @@ const ChartContainer = React.forwardRef<
     children: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>["children"];
   }
 >(({ id, className, children, config, ...props }, ref) => {
-  const [Recharts, setRecharts] = React.useState<typeof RechartsPrimitive | null>(null);
-  React.useEffect(() => {
-    import("recharts").then((m) => setRecharts(m as unknown as typeof RechartsPrimitive));
-  }, []);
+  const Recharts = useRecharts();
   const uniqueId = React.useId();
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`;
 
@@ -98,11 +95,21 @@ ${colorConfig
   );
 };
 
-function ChartTooltip(props: Omit<React.ComponentProps<typeof RechartsPrimitive.Tooltip>, "ref">) {
-  const [Recharts, setRecharts] = React.useState<typeof RechartsPrimitive | null>(null);
+// Shared lazy hook — avoids 3 parallel import("recharts") promises + 3 re-renders
+function useRecharts() {
+  const [mod, setMod] = React.useState<typeof RechartsPrimitive | null>(null);
   React.useEffect(() => {
-    import("recharts").then((m) => setRecharts(m as unknown as typeof RechartsPrimitive));
+    let cancelled = false;
+    import("recharts")
+      .then((m) => { if (!cancelled) setMod(m as unknown as typeof RechartsPrimitive); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
+  return mod;
+}
+
+function ChartTooltip(props: Omit<React.ComponentProps<typeof RechartsPrimitive.Tooltip>, "ref">) {
+  const Recharts = useRecharts();
   if (!Recharts) return null;
   return <Recharts.Tooltip {...props} />;
 }
@@ -255,10 +262,7 @@ const ChartTooltipContent = React.forwardRef<
 ChartTooltipContent.displayName = "ChartTooltip";
 
 function ChartLegend(props: Omit<React.ComponentProps<typeof RechartsPrimitive.Legend>, "ref">) {
-  const [Recharts, setRecharts] = React.useState<typeof RechartsPrimitive | null>(null);
-  React.useEffect(() => {
-    import("recharts").then((m) => setRecharts(m as unknown as typeof RechartsPrimitive));
-  }, []);
+  const Recharts = useRecharts();
   if (!Recharts) return null;
   return <Recharts.Legend {...props} />;
 }

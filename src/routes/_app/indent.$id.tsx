@@ -79,7 +79,7 @@ function IndentDetail() {
               setDefParts(Array.isArray(raw) ? (raw as Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>) : []);
             })
         : Promise.resolve();
-      const docsPromise = loadLinkedDocs(ind?.indent_no);
+      const docsPromise = loadLinkedDocs(ind?.indent_no, ind?.oracle_number);
       await Promise.all([ticketPromise, docsPromise]);
       setTimeout(() => { hydratedRef.current = true; }, 100);
     })();
@@ -91,7 +91,7 @@ function IndentDetail() {
    *  used to gate Oracle auto-close. Also queries by reference_no for legacy
    *  DCs that were saved without an indent_id but still carry the indent_no
    *  in reference_no. */
-  const loadLinkedDocs = useCallback(async (indentNo?: string | null) => {
+  const loadLinkedDocs = useCallback(async (indentNo?: string | null, legacyOracleNo?: string | null) => {
     const pending: Record<string, OraclePendingDocs> = {};
     const docs: Record<string, OracleDocInfoMap> = {};
     // Track the newest settled document per oracle+kind so View/Download link
@@ -129,7 +129,7 @@ function IndentDetail() {
     };
 
     const dcCols = "id, challan_no, challan_date, created_at, status, items, indent_id, reference_no";
-    const legacyKeys = [indentNo, i?.oracle_number].filter(Boolean) as string[];
+    const legacyKeys = [indentNo, legacyOracleNo].filter(Boolean) as string[];
     const dcQueries = [supabase.from("delivery_challans").select(dcCols).eq("indent_id", id)];
     for (const k of legacyKeys) {
       dcQueries.push(supabase.from("delivery_challans").select(dcCols).eq("reference_no", k).is("indent_id", null));
@@ -160,7 +160,7 @@ function IndentDetail() {
       .eq("indent_id", id);
     const grnById = new Map<string, unknown>();
     for (const g of (grnRows || []) as unknown as Array<{ id: string }>) grnById.set(g.id, g);
-    const grnLegacyKeys = [indentNo, i?.oracle_number].filter(Boolean) as string[];
+    const grnLegacyKeys = [indentNo, legacyOracleNo].filter(Boolean) as string[];
     if (grnLegacyKeys.length) {
       const { data: grnLegacy } = await supabase
         .from("grns" as never)
@@ -190,8 +190,8 @@ function IndentDetail() {
   // Refresh linked-document statuses periodically (same 60s tick used for age).
   useEffect(() => {
     if (!hydratedRef.current) return;
-    void loadLinkedDocs(i?.indent_no);
-  }, [tick, loadLinkedDocs, i?.indent_no]);
+    void loadLinkedDocs(i?.indent_no, i?.oracle_number);
+  }, [tick, loadLinkedDocs, i?.indent_no, i?.oracle_number]);
 
 
   /** One batched lookup: which of this Indent's Oracle #s also appear on
@@ -204,8 +204,7 @@ function IndentDetail() {
     let cancelled = false;
     const timer = setTimeout(() => {
       void (async () => {
-        // Phase 1.3: limit 200 + server-side text filter to avoid 2k×JSON full scan
-        const orFilter = Array.from(wanted).map((k) => `oracles_data.cs.{\\"oracle_no\\":\\"${k}\\"}`).join(",");
+        // limit 200 + debounce avoids 2k×JSON full scan; orFilter removed (was dead code) — true server CS filter needs GIN index, keep client filter on 200 window for now
         const { data, error } = await supabase
           .from("indents" as never)
           .select("id, indent_no, oracles_data")

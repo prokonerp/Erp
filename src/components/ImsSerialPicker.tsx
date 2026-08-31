@@ -60,7 +60,7 @@ export function ImsSerialPicker({
         else if (partName) q = q.eq("part_name", partName);
         if (stockType) q = q.eq("stock_type", stockType);
         if (warehouseId) q = q.eq("warehouse_id", warehouseId);
-        return q.order("part_serial_no");
+        return q.order("part_serial_no").limit(100);
       })
         .then((data) => {
           if (!alive) return;

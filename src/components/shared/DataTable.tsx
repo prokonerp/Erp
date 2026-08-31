@@ -183,15 +183,13 @@ export function DataTable<T extends Record<string, any>>({
     : 1;
 
   useEffect(() => {
-    // clamp / reset when data shrinks or grows
-    setClientPage((p) => Math.min(p, Math.max(0, clientPageCount - 1)));
-  }, [clientPageCount]);
-
-  // Reset to page 0 when data identity changes significantly (search etc.)
-  // sortedData is already memo'd; we watch its length
-  useEffect(() => {
-    if (sortedData.length <= CLIENT_PAGE_SIZE) setClientPage(0);
-  }, [sortedData.length]);
+    setClientPage((p) => {
+      const clamped = Math.min(p, Math.max(0, clientPageCount - 1));
+      // when data shrinks to <= one page, always reset to 0 to avoid stale page 2/3
+      if (sortedData.length <= CLIENT_PAGE_SIZE) return 0;
+      return clamped;
+    });
+  }, [clientPageCount, sortedData.length]);
 
   const displayData = useMemo(() => {
     if (serverPagination) return sortedData; // already server-sliced
@@ -200,7 +198,7 @@ export function DataTable<T extends Record<string, any>>({
     return sortedData.slice(start, start + CLIENT_PAGE_SIZE);
   }, [sortedData, serverPagination, needsClientPagination, clientPage]);
 
-  const totalForDisplay = serverPagination?.total ?? totalRecords ?? data.length;
+  const totalForDisplay = serverPagination?.total ?? totalRecords ?? sortedData.length;
 
   const serverPaginationNode = serverPagination ? (
     <PaginationFooter
