@@ -439,6 +439,7 @@ function QuotesWorkspace() {
           "id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest",
         )
         .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
         .range(from, to);
       if (statusF !== "all") query = query.eq("status", statusF);
       const s = search.trim();
@@ -463,7 +464,11 @@ function QuotesWorkspace() {
     setLoadingMore(true);
     const { data } = await buildQuery(rows.length, rows.length + PAGE_SIZE - 1);
     const list = (data || []) as unknown as QuoteListRow[];
-    setRows((prev) => [...prev, ...list]);
+    setRows((prev) => {
+      const seen = new Set(prev.map((r) => r.id));
+      const deduped = list.filter((r) => !seen.has(r.id));
+      return [...prev, ...deduped];
+    });
     setHasMore(list.length === PAGE_SIZE);
     setLoadingMore(false);
   }, [buildQuery, rows.length, loadingMore, hasMore]);
@@ -477,8 +482,15 @@ function QuotesWorkspace() {
 
   // Filter by customer / amount client-side (list is already narrow).
   // Also hide superseded unless showHistory toggled — keeps default pipeline view clean (latest only)
+  // Dedupe by id defensively (range pagination + re-fetches can otherwise emit duplicates)
   const filtered = useMemo(() => {
-    const base = showHistory ? rows : rows.filter((r) => r.is_latest !== false);
+    const seen = new Set<string>();
+    const dedupedRows = rows.filter((r) => {
+      if (seen.has(r.id)) return false;
+      seen.add(r.id);
+      return true;
+    });
+    const base = showHistory ? dedupedRows : dedupedRows.filter((r) => r.is_latest !== false);
     const s = search.trim().toLowerCase();
     if (!s) return base;
     return base.filter((r) => {
@@ -728,7 +740,7 @@ function QuotesWorkspace() {
           <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto divide-y">
             {filtered.map((r) => (
               <QuoteRow
-                key={r.id}
+                key={`${r.id}-${r.revision_no ?? 1}-${r.is_latest ? "latest" : "old"}`}
                 row={r}
                 customer={cmap[r.customer_id || ""]?.company || "—"}
                 selected={r.id === selectedId}

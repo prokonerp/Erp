@@ -210,10 +210,18 @@ function LeadDetail() {
 
   const needsAck = !!userId && lead.owner_id === userId && !!lead.assigned_at && !lead.acknowledged_at;
 
-  // ── Quotations thread derived state (Option A) ──
-  const sortedQuotes = [...quotes].sort(sortQuotationsForThread);
+  // ── Quotations thread derived state (Option A) — dedupe defensively by id ──
+  const dedupedQuotes = (() => {
+    const seen = new Set<string>();
+    return quotes.filter((q) => {
+      if (seen.has(q.id)) return false;
+      seen.add(q.id);
+      return true;
+    });
+  })();
+  const sortedQuotes = [...dedupedQuotes].sort(sortQuotationsForThread);
   const latestQuote = sortedQuotes.find((q) => isLatest(q)) ?? sortedQuotes[0] ?? null;
-  const supersededCount = quotes.filter(isSuperseded).length;
+  const supersededCount = dedupedQuotes.filter(isSuperseded).length;
   const visibleQuotes = showHistory ? sortedQuotes : sortedQuotes.filter((q) => isLatest(q));
 
   return (
@@ -353,7 +361,7 @@ function LeadDetail() {
                         const revLabel = revisionLabel(q);
                         return (
                           <li
-                            key={q.id}
+                            key={`${q.id}-${revNo}-${latest ? "latest" : "old"}`}
                             className={`flex flex-col rounded-md border px-3 py-2 transition-colors ${superseded ? "opacity-60 bg-muted/20" : "bg-card hover:bg-accent/30"} ${isExpanded ? "ring-1 ring-primary/20" : ""}`}
                           >
                             <div className="flex flex-wrap items-center gap-2 text-sm">
