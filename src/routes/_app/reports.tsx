@@ -193,11 +193,11 @@ function ReportsPage() {
   }
 
   const ViewToggle = ({ value, onChange }: { value: "compact" | "detailed"; onChange: (v: "compact" | "detailed") => void }) => (
-    <ToggleGroup type="single" value={value} onValueChange={(v) => v && onChange(v as any)} variant="outline" size="sm" className="h-8 rounded-full border-border/60 bg-muted p-0.5">
-      <ToggleGroupItem value="compact" aria-label="Compact" className="rounded-full data-[state=on]:bg-card data-[state=on]:shadow-sm px-3 text-xs gap-1.5">
+    <ToggleGroup type="single" value={value} onValueChange={(v) => v && onChange(v as any)} variant="default" size="sm" className="h-8 rounded-full border border-border bg-muted p-1 gap-1">
+      <ToggleGroupItem value="compact" aria-label="Compact" className="rounded-full px-3 py-1 text-xs font-medium gap-1.5 border-0 bg-transparent text-muted-foreground hover:bg-card hover:text-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm data-[state=on]:border-primary transition-colors">
         <LayoutGrid className="h-3.5 w-3.5" /> Compact
       </ToggleGroupItem>
-      <ToggleGroupItem value="detailed" aria-label="Detailed" className="rounded-full data-[state=on]:bg-card data-[state=on]:shadow-sm px-3 text-xs gap-1.5">
+      <ToggleGroupItem value="detailed" aria-label="Detailed" className="rounded-full px-3 py-1 text-xs font-medium gap-1.5 border-0 bg-transparent text-muted-foreground hover:bg-card hover:text-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm data-[state=on]:border-primary transition-colors">
         <List className="h-3.5 w-3.5" /> Detailed
       </ToggleGroupItem>
     </ToggleGroup>

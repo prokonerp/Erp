@@ -129,10 +129,10 @@ export function CompactDetailedToggle({
         aria-pressed={value === "compact"}
         onClick={() => onChange("compact")}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium leading-none transition-all cursor-pointer",
+          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium leading-none transition-all cursor-pointer border border-transparent",
           value === "compact"
-            ? "bg-card text-primary shadow-sm ring-1 ring-border/40"
-            : "text-muted-foreground hover:text-foreground",
+            ? "bg-primary text-primary-foreground shadow-sm border-primary"
+            : "text-muted-foreground hover:bg-card hover:text-foreground",
         )}
       >
         <LayoutGrid className="h-3.5 w-3.5" aria-hidden /> Compact
@@ -142,10 +142,10 @@ export function CompactDetailedToggle({
         aria-pressed={value === "detailed"}
         onClick={() => onChange("detailed")}
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium leading-none transition-all cursor-pointer",
+          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium leading-none transition-all cursor-pointer border border-transparent",
           value === "detailed"
-            ? "bg-card text-primary shadow-sm ring-1 ring-border/40"
-            : "text-muted-foreground hover:text-foreground",
+            ? "bg-primary text-primary-foreground shadow-sm border-primary"
+            : "text-muted-foreground hover:bg-card hover:text-foreground",
         )}
       >
         <ListTree className="h-3.5 w-3.5" aria-hidden /> Detailed

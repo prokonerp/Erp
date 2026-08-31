@@ -333,15 +333,15 @@ export function StockLedgerCompact(props: StockLedgerCompactProps) {
       </CardHeader>
 
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[68vh] overscroll-contain scroll-pt-0">
           <table className="w-full text-sm border-collapse min-w-[720px]">
-            {/* Sticky header — type grouping + bucket subheader */}
-            <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur supports-[backdrop-filter]:bg-muted/80">
+            {/* Sticky header — both warehouse grouping + Good/Scrap rows stick while scrolling */}
+            <thead className="sticky top-0 z-20 bg-muted/90 backdrop-blur supports-[backdrop-filter]:bg-muted/90 shadow-sm">
               {/* Warehouse grouping row */}
               <tr className="border-y border-border/60">
                 <th
                   rowSpan={2}
-                  className="sticky left-0 z-20 bg-muted/80 backdrop-blur supports-[backdrop-filter]:bg-muted/80 px-3 py-2.5 text-left align-middle text-[11px] font-semibold tracking-widest uppercase text-muted-foreground whitespace-nowrap border-r border-border/60 min-w-[220px]"
+                  className="sticky left-0 z-30 bg-muted/90 backdrop-blur supports-[backdrop-filter]:bg-muted/90 px-3 py-2.5 text-left align-middle text-[11px] font-semibold tracking-widest uppercase text-muted-foreground whitespace-nowrap border-r border-border/60 min-w-[220px] shadow-[1px_0_0_0_hsl(var(--border))]"
                 >
                   Item
                 </th>
@@ -796,7 +796,7 @@ export function StockLedgerDetailed(props: StockLedgerDetailedProps) {
 
         {/* density toggle */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="hidden sm:flex items-center gap-1 rounded-full border border-border bg-muted/40 p-0.5">
+          <div className="hidden sm:flex items-center gap-1 rounded-full border border-border bg-muted p-1">
             {(["comfortable", "compact"] as const).map((d) => (
               <button
                 key={d}
@@ -805,8 +805,8 @@ export function StockLedgerDetailed(props: StockLedgerDetailedProps) {
                 onClick={() => {
                   if (!controlledDensity) setInnerDensity(d);
                 }}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
-                  density === d ? "bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"
+                className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors border border-transparent ${
+                  density === d ? "bg-primary text-primary-foreground shadow-sm border-primary" : "text-muted-foreground hover:bg-card hover:text-foreground"
                 }`}
               >
                 {d}
