@@ -16,7 +16,10 @@ export function PageLoader({
 }) {
   return (
     <div
-      className={cn("flex min-h-[40vh] w-full flex-col items-center justify-center gap-3", className)}
+      className={cn(
+        "flex min-h-[40vh] w-full flex-col items-center justify-center gap-3",
+        className,
+      )}
       aria-busy="true"
       aria-label={label}
       role="status"

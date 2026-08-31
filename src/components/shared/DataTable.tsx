@@ -1,4 +1,8 @@
 import {
+  memo,
+  useCallback,
+  useRef,
+  useDeferredValue,
   useState,
   useMemo,
   useEffect,
@@ -73,11 +77,82 @@ const CLIENT_PAGE_SIZE = 50;
 
 function readStoredDensity(): Density {
   if (typeof window === "undefined") return "comfortable";
-  return window.localStorage.getItem(DENSITY_STORAGE_KEY) === "compact"
-    ? "compact"
-    : "comfortable";
+  return window.localStorage.getItem(DENSITY_STORAGE_KEY) === "compact" ? "compact" : "comfortable";
 }
 
+/* ──────── MemoRow — memoized <tr> with CSS containment ──────── */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MemoRowProps<T extends Record<string, any>> = {
+  row: T;
+  rowKeyStr: string;
+  density: Density;
+  columns: ColumnDef<T>[];
+  onRowClick?: (row: T) => void;
+  globalIndex: number;
+  /** Serialized sort state for areEqual — busts memo only when sort changes */
+  sortKey: string;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function MemoRowInner<T extends Record<string, any>>({
+  row,
+  density,
+  columns,
+  onRowClick,
+  globalIndex,
+}: MemoRowProps<T>) {
+  return (
+    <tr
+      style={
+        { contentVisibility: "auto", containIntrinsicSize: "auto 48px" } as React.CSSProperties
+      }
+      className={cn(
+        "border-b last:border-0 transition-colors",
+        onRowClick && "cursor-pointer hover:bg-muted/40",
+      )}
+      onClick={onRowClick ? () => onRowClick(row) : undefined}
+    >
+      {columns.map((col) => {
+        const isRight = col.align === "right";
+        const content = col.render ? col.render(row, globalIndex) : row[col.key];
+        return (
+          <td
+            key={col.key}
+            className={cn(
+              "whitespace-nowrap",
+              CELL_DENSITY[density],
+              isRight && "text-right tabular-nums",
+              col.className,
+            )}
+          >
+            {content ?? "—"}
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
+/**
+ * areEqual: rowKey equality + density + column keys length + sort key.
+ * Also checks row reference and globalIndex/onRowClick to avoid stale renders
+ * when the underlying record identity or pagination offset changes.
+ */
+const MemoRow = memo(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  MemoRowInner as unknown as React.FC<MemoRowProps<Record<string, any>>>,
+  (prev, next) =>
+    prev.rowKeyStr === next.rowKeyStr &&
+    prev.density === next.density &&
+    prev.columns.length === next.columns.length &&
+    prev.sortKey === next.sortKey &&
+    prev.row === next.row &&
+    prev.globalIndex === next.globalIndex &&
+    prev.onRowClick === next.onRowClick,
+) as unknown as typeof MemoRowInner;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function DataTable<T extends Record<string, any>>({
   columns,
   data,
@@ -130,25 +205,36 @@ export function DataTable<T extends Record<string, any>>({
 
   const sort = controlledSort ?? internalSort;
   const density = controlledDensity ?? internalDensity;
+  const sortKey = sort ? `${sort.key}:${sort.dir}` : "";
 
-  function toggleSort(key: string) {
-    const next: SortState = (() => {
-      if (!sort || sort.key !== key) return { key, dir: "asc" };
-      if (sort.dir === "asc") return { key, dir: "desc" };
-      return null;
-    })();
-    if (onSortChange) onSortChange(next);
-    else setInternalSort(next);
-  }
+  const toggleSort = useCallback(
+    (key: string) => {
+      const next: SortState = (() => {
+        if (!sort || sort.key !== key) return { key, dir: "asc" };
+        if (sort.dir === "asc") return { key, dir: "desc" };
+        return null;
+      })();
+      if (onSortChange) onSortChange(next);
+      else setInternalSort(next);
+    },
+    [sort, onSortChange],
+  );
 
-  function changeDensity(d: Density) {
+  const changeDensity = useCallback((d: Density) => {
     setInternalDensity(d);
     try {
       window.localStorage.setItem(DENSITY_STORAGE_KEY, d);
     } catch {
       /* private mode etc. — non-fatal */
     }
-  }
+  }, []);
+
+  // Stabilize deps: avoid busting sortedData memo when callers recreate
+  // columns array with same keys. Use a ref-tracked stable key string.
+  const columnsKey = useMemo(() => columns.map((c) => c.key).join(","), [columns]);
+  const columnsKeysRef = useRef(columnsKey);
+  if (columnsKeysRef.current !== columnsKey) columnsKeysRef.current = columnsKey;
+  const stableColumnsKey = columnsKeysRef.current;
 
   const sortedData = useMemo(() => {
     if (!sort) return data;
@@ -166,39 +252,50 @@ export function DataTable<T extends Record<string, any>>({
       const cmp = String(av).localeCompare(String(bv));
       return sort.dir === "asc" ? cmp : -cmp;
     });
-  }, [data, sort, columns]);
+    // stableColumnsKey tracks columns keys without busting on recreated arrays
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, sort, stableColumnsKey]);
 
-  function getRowKey(row: T, index: number): string {
-    if (typeof rowKey === "function") return rowKey(row);
-    return String(row[rowKey] ?? index);
-  }
+  // Deferred sort for large datasets — keeps UI responsive (typing/filter)
+  // during expensive sorts. Falls back to immediate value for small tables.
+  // Hook is unconditional (rules-of-hooks); effective value is conditional.
+  const deferredSortedDataRaw = useDeferredValue(sortedData);
+  const effectiveSortedData = sortedData.length > 200 ? deferredSortedDataRaw : sortedData;
+
+  const getRowKey = useCallback(
+    (row: T, index: number): string => {
+      if (typeof rowKey === "function") return rowKey(row);
+      return String(row[rowKey] ?? index);
+    },
+    [rowKey],
+  );
 
   // ── Pagination / virtualization fallback ──────────────────────────
   // Server mode: caller passes serverPagination (page already sliced server-side)
   // Client fallback: when data > 100 rows and no serverPagination, slice client-side 50/page
-  const needsClientPagination = !serverPagination && sortedData.length > 100;
+  const needsClientPagination = !serverPagination && effectiveSortedData.length > 100;
   const [clientPage, setClientPage] = useState(0);
   const clientPageCount = needsClientPagination
-    ? Math.max(1, Math.ceil(sortedData.length / CLIENT_PAGE_SIZE))
+    ? Math.max(1, Math.ceil(effectiveSortedData.length / CLIENT_PAGE_SIZE))
     : 1;
 
   useEffect(() => {
     setClientPage((p) => {
       const clamped = Math.min(p, Math.max(0, clientPageCount - 1));
       // when data shrinks to <= one page, always reset to 0 to avoid stale page 2/3
-      if (sortedData.length <= CLIENT_PAGE_SIZE) return 0;
+      if (effectiveSortedData.length <= CLIENT_PAGE_SIZE) return 0;
       return clamped;
     });
-  }, [clientPageCount, sortedData.length]);
+  }, [clientPageCount, effectiveSortedData.length]);
 
   const displayData = useMemo(() => {
-    if (serverPagination) return sortedData; // already server-sliced
-    if (!needsClientPagination) return sortedData;
+    if (serverPagination) return effectiveSortedData; // already server-sliced
+    if (!needsClientPagination) return effectiveSortedData;
     const start = clientPage * CLIENT_PAGE_SIZE;
-    return sortedData.slice(start, start + CLIENT_PAGE_SIZE);
-  }, [sortedData, serverPagination, needsClientPagination, clientPage]);
+    return effectiveSortedData.slice(start, start + CLIENT_PAGE_SIZE);
+  }, [effectiveSortedData, serverPagination, needsClientPagination, clientPage]);
 
-  const totalForDisplay = serverPagination?.total ?? totalRecords ?? sortedData.length;
+  const totalForDisplay = serverPagination?.total ?? totalRecords ?? effectiveSortedData.length;
 
   const serverPaginationNode = serverPagination ? (
     <PaginationFooter
@@ -213,7 +310,7 @@ export function DataTable<T extends Record<string, any>>({
     <PaginationFooter
       page={clientPage}
       pageSize={CLIENT_PAGE_SIZE}
-      total={sortedData.length}
+      total={effectiveSortedData.length}
       onPage={setClientPage}
     />
   ) : null;
@@ -229,18 +326,16 @@ export function DataTable<T extends Record<string, any>>({
         </CardHeader>
       )}
       <CardContent className="p-0">
-        <div className="max-h-[60vh] overflow-auto">
+        <div
+          className="max-h-[60vh] overflow-auto overscroll-contain scroll-pt-0"
+          style={{ contain: "content" }}
+        >
           {isLoading ? (
             <TableSkeleton rows={6} />
-          ) : sortedData.length === 0 ? (
-            <EmptyState
-              icon={emptyIcon}
-              title={emptyTitle}
-              hint={emptyHint}
-              action={emptyAction}
-            />
+          ) : effectiveSortedData.length === 0 ? (
+            <EmptyState icon={emptyIcon} title={emptyTitle} hint={emptyHint} action={emptyAction} />
           ) : (
-            <table className={cn("w-full text-sm", className)}>
+            <table className={cn("w-full table-fixed text-sm", className)}>
               <thead className="sticky top-0 z-10 border-b bg-muted text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 <tr>
                   {columns.map((col) => {
@@ -275,10 +370,18 @@ export function DataTable<T extends Record<string, any>>({
                             )}
                           >
                             {col.header}
-                            <SortIndicator active={isActiveCol} dir={isActiveCol ? sort!.dir : null} />
+                            <SortIndicator
+                              active={isActiveCol}
+                              dir={isActiveCol ? sort!.dir : null}
+                            />
                           </button>
                         ) : (
-                          <span className={cn("inline-flex items-center gap-1", isRight && "float-right")}>
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1",
+                              isRight && "float-right",
+                            )}
+                          >
                             {col.header}
                           </span>
                         )}
@@ -292,35 +395,16 @@ export function DataTable<T extends Record<string, any>>({
                   // global index for render/key when client-paginated
                   const globalIndex = needsClientPagination ? clientPage * CLIENT_PAGE_SIZE + i : i;
                   return (
-                    <tr
+                    <MemoRow
                       key={getRowKey(row, globalIndex)}
-                      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 48px" } as React.CSSProperties}
-                      className={cn(
-                        "border-b last:border-0 transition-colors",
-                        onRowClick && "cursor-pointer hover:bg-muted/40",
-                      )}
-                      onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    >
-                      {columns.map((col) => {
-                        const isRight = col.align === "right";
-                        const content = col.render
-                          ? col.render(row, globalIndex)
-                          : row[col.key];
-                        return (
-                          <td
-                            key={col.key}
-                            className={cn(
-                              "whitespace-nowrap",
-                              CELL_DENSITY[density],
-                              isRight && "text-right tabular-nums",
-                              col.className,
-                            )}
-                          >
-                            {content ?? "—"}
-                          </td>
-                        );
-                      })}
-                    </tr>
+                      row={row}
+                      rowKeyStr={getRowKey(row, globalIndex)}
+                      density={density}
+                      columns={columns}
+                      onRowClick={onRowClick}
+                      globalIndex={globalIndex}
+                      sortKey={sortKey}
+                    />
                   );
                 })}
               </tbody>
@@ -333,7 +417,10 @@ export function DataTable<T extends Record<string, any>>({
               {totalForDisplay.toLocaleString()} record{totalForDisplay === 1 ? "" : "s"}
             </span>
             <div className="flex items-center gap-3">
-              <DensityToggle density={density} onChange={controlledDensity ? undefined : changeDensity} />
+              <DensityToggle
+                density={density}
+                onChange={controlledDensity ? undefined : changeDensity}
+              />
               {paginationNode}
               {footer}
             </div>
