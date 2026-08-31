@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, FileText, Receipt, Lock, LockOpen, CheckCircle2, ChevronDown, ChevronUp, Eye, Download, ShieldCheck } from "lucide-react";
+import { Trash2, FileText, Receipt, Lock, LockOpen, CheckCircle2, ChevronDown, ChevronUp, Eye, Download, ShieldCheck, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,7 +14,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { docSatisfied, normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, sectionMissingFields, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { docSatisfied, normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, requiresCustomerReturn, sectionMissingFields, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import { IndentModelPicker } from "@/components/IndentModelPicker";
 import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeline";
@@ -69,11 +70,197 @@ function GenerateButton({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Per-slot "Correct serial" — slot-scoped RPC, no spill to sibling slots.
+// ---------------------------------------------------------------------------
+type SlotKey = "exchange" | "received" | "customer_received" | "defective";
+const SLOT_LABEL: Record<SlotKey, string> = {
+  exchange: "Section B (Material Exchange)",
+  received: "Section C (Material Received from OEM)",
+  customer_received: "Section D (Material Received from Customer)",
+  defective: "Section A (Defective)",
+};
+
+function CorrectSlotButton({
+  indentId,
+  oracleNo,
+  slot,
+  oldSerial,
+  disabled,
+  disabledReason,
+  onSuccess,
+}: {
+  indentId?: string;
+  oracleNo: string;
+  slot: SlotKey;
+  oldSerial: string;
+  disabled?: boolean;
+  disabledReason?: string;
+  onSuccess: (newSerial: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [newSerial, setNewSerial] = useState("");
+  const [reason, setReason] = useState("");
+  const [syncDoc, setSyncDoc] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const slotLabel = SLOT_LABEL[slot] || slot;
+  const canSubmit = newSerial.trim() && reason.trim() && newSerial.trim() !== (oldSerial || "").trim() && !busy;
+  const isDisabled = !!disabled || !(oldSerial || "").trim();
+
+  const tooltipMsg = !oldSerial?.trim()
+    ? "No serial to correct"
+    : disabledReason || (disabled ? "Correction disabled" : undefined);
+
+  const handleConfirm = async () => {
+    const nSerial = newSerial.trim();
+    const oSerial = (oldSerial || "").trim();
+    if (!nSerial || !reason.trim()) { toast.error("Enter new serial and reason."); return; }
+    if (nSerial === oSerial) { toast.error("New serial must differ from old."); return; }
+    if (!indentId) { toast.error("Missing indent id — cannot correct."); return; }
+    if (!oracleNo?.trim()) { toast.error("Missing oracle number."); return; }
+    setBusy(true);
+    try {
+      // Primary: correct_oracle_slot (scoped v2, supports _sync_ticket/_sync_doc)
+      const { error } = await supabase.rpc("correct_oracle_slot" as never, {
+        _indent_id: indentId,
+        _oracle_no: oracleNo,
+        _slot: slot,
+        _old_serial: oSerial,
+        _new_serial: nSerial,
+        _reason: reason.trim(),
+        _sync_ticket: true,
+        _sync_doc: syncDoc,
+      } as never);
+      if (error) {
+        const msg = (error as unknown as { message?: string }).message || "";
+        const code = (error as unknown as { code?: string }).code || "";
+        const isMissingFn = msg.includes("does not exist") || msg.includes("not found") || code === "42883" || msg.includes("correct_oracle_slot");
+        if (isMissingFn) {
+          // Fallback: legacy correct_indent_oracle_serial (6-arg, no sync flags)
+          const { error: e2 } = await supabase.rpc("correct_indent_oracle_serial" as never, {
+            _indent_id: indentId,
+            _oracle_no: oracleNo,
+            _slot: slot,
+            _old_serial: oSerial,
+            _new_serial: nSerial,
+            _reason: reason.trim(),
+          } as never);
+          if (e2) throw e2;
+        } else {
+          throw error;
+        }
+      }
+      toast.success(`Corrected ${slotLabel}: ${oSerial} → ${nSerial}`);
+      onSuccess(nSerial);
+      setOpen(false);
+      setNewSerial("");
+      setReason("");
+      setSyncDoc(false);
+    } catch (e: unknown) {
+      const m = e instanceof Error ? e.message : (e as { message?: string })?.message || "Correction failed";
+      toast.error(m);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const btn = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-8 shrink-0"
+      disabled={isDisabled}
+      onClick={() => setOpen(true)}
+      title={isDisabled ? tooltipMsg : `Correct serial in ${slotLabel}`}
+    >
+      <Wrench className="h-3.5 w-3.5 mr-1" />Correct
+    </Button>
+  );
+
+  const wrappedBtn = isDisabled && tooltipMsg
+    ? (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild><span className="inline-flex">{btn}</span></TooltipTrigger>
+          <TooltipContent>{tooltipMsg}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+    : btn;
+
+  return (
+    <>
+      {wrappedBtn}
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setBusy(false); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Correct serial — {slotLabel}</DialogTitle>
+            <DialogDescription>
+              Oracle <span className="font-mono font-medium">{oracleNo || "—"}</span> · Slot <span className="font-medium">{slot}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed">
+            This will <span className="font-semibold">only</span> change <span className="font-mono">{slotLabel}</span> for Oracle <span className="font-mono">{oracleNo || "—"}</span>.
+            Other sections (B/C/D) and other Oracles remain untouched. {slot !== "exchange" ? "Ticket satellite syncs only for exchange/defective slots." : ""} {syncDoc ? "Linked DC/GRN items for this Oracle will also be updated." : "Linked documents are not touched unless you check 'Also sync linked DC/GRN'."}
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <Label>Old serial (read-only)</Label>
+              <Input value={oldSerial || ""} readOnly className="font-mono bg-muted/50" />
+            </div>
+            <div>
+              <Label>New serial <span className="text-destructive">*</span></Label>
+              <Input
+                value={newSerial}
+                onChange={(e) => setNewSerial(e.target.value)}
+                placeholder="Enter corrected serial"
+                className="font-mono"
+                autoFocus
+              />
+            </div>
+            {oldSerial && newSerial && (
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs font-mono">
+                <span className="text-muted-foreground">Preview:</span> {oldSerial} <span className="mx-1">→</span> <span className="font-semibold">{newSerial.trim() || "—"}</span>
+              </div>
+            )}
+            <div>
+              <Label htmlFor="correct-reason">Reason <span className="text-destructive">*</span></Label>
+              <Textarea
+                id="correct-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g., OEM confirmed wrong serial dispatched, verified against packing slip…"
+                rows={2}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+              <input type="checkbox" checked={syncDoc} onChange={(e) => setSyncDoc(e.target.checked)} className="h-3.5 w-3.5 rounded border-input" />
+              Also sync linked DC/GRN for this Oracle (indent_id + oracle_no)
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
+            <Button onClick={handleConfirm} disabled={!canSubmit}>
+              {busy ? "Correcting…" : "Confirm correction"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function OracleBlockEditor({
   index, value: rawValue, onChange, onRemove, defectiveParts, isAdmin = false,
   collapsed = false, onToggleCollapse, onGenerateChallan, onGenerateGrn,
   onGenerateCustomerGrn, dcExists = false, dcInfo, indentId,
   pendingDocs, indentType, docInfo, duplicateIndentNo,
+  indentStatus,
 }: {
   index: number;
   value: OracleBlock;
@@ -100,6 +287,8 @@ export function OracleBlockEditor({
   docInfo?: OracleDocInfoMap;
   /** Indent No where this same Oracle # also appears (informational). */
   duplicateIndentNo?: string | null;
+  /** Optional indent-level status. When omitted, derived from value.status. */
+  indentStatus?: "open" | "closed" | null;
 }) {
   // Always work with a normalized block (arrays guaranteed).
   const value = useMemo(() => normalizeOracle(rawValue), [rawValue]);
@@ -128,6 +317,26 @@ export function OracleBlockEditor({
   const missingC = sectionMissingFields(value, "C", indentType);
   const missingD = sectionMissingFields(value, "D", indentType);
   const locked = closed && !isAdmin;
+  // Hardened lock states:
+  // - locked: closed && !isAdmin  → every editable control disabled, banner shown
+  // - closedAdminLocked: closed && isAdmin && !reopened → fields disabled until Reopen, banner shown
+  // - isReopened: value.reopened truthy → serial fields become readOnly + CorrectSlotButton flow
+  const isReopened = !!value.reopened;
+  const fieldsDisabled = closed && !isReopened;
+  const closedAdminLocked = closed && isAdmin && !isReopened;
+  // Indent-level settled check for gating Correct button (task: "Disabled when indent status=closed and all docs settled")
+  const indentIsClosed: "open" | "closed" = (indentStatus as "open" | "closed") ?? (closed ? "closed" : "open");
+  const allDocsSettled = useMemo(() => {
+    if (!pendingDocs) return false;
+    const needCust = requiresCustomerReturn(indentType);
+    const bOk = docSatisfied(pendingDocs.dc);
+    const cOk = docSatisfied(pendingDocs.oem_grn);
+    const dOk = needCust ? docSatisfied(pendingDocs.customer_grn) : true;
+    // Also consider the case where pendingDocs says no docs exist yet (settled===0) → not settled
+    return bOk && cOk && dOk;
+  }, [pendingDocs, indentType]);
+  const correctBlockedBySettled = indentIsClosed === "closed" && allDocsSettled;
+  const correctDisabledReason = "Indent Closed — all sections complete (read-only)";
   void defectiveParts;
 
   useEffect(() => {
@@ -280,6 +489,9 @@ export function OracleBlockEditor({
   const doneSlots = defCount + exchDone + recvDone;
   const pct = defCount === 0 ? 0 : Math.min(100, Math.round((doneSlots / totalSlots) * 100));
 
+  const commonSelectDisabled = locked || fieldsDisabled;
+  const commonInputDisabled = locked || fieldsDisabled;
+
   return (
     <Card className={`border-2 ${closed ? "border-emerald-500/60 bg-emerald-500/5" : "border-amber-500/40"}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -297,6 +509,11 @@ export function OracleBlockEditor({
           {closed && value.force_closed && (
             <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300" title={value.force_close_reason || undefined}>
               Force Closed
+            </Badge>
+          )}
+          {locked && (
+            <Badge variant="outline" className="border-slate-400 text-slate-600 dark:text-slate-300 gap-1">
+              <Lock className="h-3 w-3" />Locked — admin only
             </Badge>
           )}
           {collapsed && (
@@ -347,13 +564,29 @@ export function OracleBlockEditor({
             </>
           )}
           {!closed && (
-            <Button variant="ghost" size="icon" onClick={onRemove}><Trash2 className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={onRemove} disabled={commonInputDisabled}><Trash2 className="h-4 w-4" /></Button>
           )}
         </div>
       </CardHeader>
       {!collapsed && (
-      <CardContent className={`space-y-4 ${locked ? "pointer-events-none opacity-80" : ""}`}>
-        <div className="pointer-events-auto">
+      <CardContent className="space-y-4">
+        {/* Hardened lock banners — replace CSS pointer-events-none trick */}
+        {locked && (
+          <div className="rounded-md border border-slate-300 bg-slate-100 dark:bg-slate-900/40 px-3 py-2 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2">
+            <Lock className="h-3.5 w-3.5 shrink-0" /> Locked — Oracle is closed. Only an admin can Reopen. All fields are read-only to prevent spill.
+          </div>
+        )}
+        {closedAdminLocked && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+            Closed — Reopen to correct serials. Direct edits are disabled to prevent spill. Use <span className="font-semibold">Reopen</span> above, then the per-slot <span className="font-semibold">Correct</span> button next to each serial.
+          </div>
+        )}
+        {isReopened && (
+          <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
+            Reopened — serial fields are read-only. Use the <span className="font-semibold">Correct</span> button next to each serial to fix a single slot without touching the others.
+          </div>
+        )}
+        <div>
           <OraclePipeline
             oracle={value}
             indentType={indentType}
@@ -373,6 +606,7 @@ export function OracleBlockEditor({
             onChange={(e) => setBlock({ oracle_no: e.target.value })}
             placeholder="Auto-set from Ticket"
             readOnly
+            disabled={commonInputDisabled}
             className="font-mono bg-muted/50"
           />
         </div>
@@ -387,7 +621,25 @@ export function OracleBlockEditor({
             <div key={i} className="grid grid-cols-12 gap-2 items-end">
               <div className="col-span-12 md:col-span-3"><Label>Parts / Item</Label><Input value={d.part_name || ""} readOnly className="bg-muted/50" /></div>
               <div className="col-span-12 md:col-span-3"><Label>DEF Part Model No</Label><Input value={d.def_model_no} readOnly className="bg-muted/50" /></div>
-              <div className="col-span-12 md:col-span-3"><Label>DEF Part Serial No</Label><Input value={d.def_serial_no} readOnly className="font-mono bg-muted/50" /></div>
+              <div className="col-span-12 md:col-span-3"><Label>DEF Part Serial No</Label>
+                <div className="flex gap-1.5 items-center">
+                  <Input value={d.def_serial_no} readOnly className="font-mono bg-muted/50 flex-1" />
+                  {isReopened && (
+                    <CorrectSlotButton
+                      indentId={indentId}
+                      oracleNo={value.oracle_no}
+                      slot="defective"
+                      oldSerial={d.def_serial_no}
+                      disabled={correctBlockedBySettled}
+                      disabledReason={correctBlockedBySettled ? correctDisabledReason : undefined}
+                      onSuccess={(ns) => {
+                        const next = value.defective_rows.map((r, ix) => ix === i ? { ...r, def_serial_no: ns } : r);
+                        onChange({ ...value, defective_rows: next });
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
               <div className="col-span-12 md:col-span-3"><Label>Qty</Label><Input value={d.qty} readOnly className="bg-muted/50" /></div>
             </div>
           ))}
@@ -423,6 +675,7 @@ export function OracleBlockEditor({
             const stock = exchStockByRow[i] || [];
             const models = modelsWithSaved(stock, ex.model_no);
             const serials = serialsWithSaved(stock, ex.model_no, ex.serial_no);
+            const serialSelectDisabled = commonSelectDisabled || !ex.model_no || isReopened;
             return (
               <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 border-t first:border-t-0 first:pt-0">
                 <div>
@@ -433,6 +686,7 @@ export function OracleBlockEditor({
                       const w = warehouses.find((x) => x.id === v);
                       setExchRow(i, { warehouse_id: v, warehouse_name: w?.name || "", model_no: "", serial_no: "" });
                     }}
+                    disabled={commonSelectDisabled}
                   >
                     <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
                     <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
@@ -443,7 +697,7 @@ export function OracleBlockEditor({
                   <Select
                     value={ex.model_no}
                     onValueChange={(v) => setExchRow(i, { model_no: v, serial_no: "" })}
-                    disabled={!ex.warehouse_id}
+                    disabled={commonSelectDisabled || !ex.warehouse_id}
                   >
                     <SelectTrigger><SelectValue placeholder={ex.warehouse_id ? "Select model" : "Pick warehouse first"} /></SelectTrigger>
                     <SelectContent>{models.map((m) => <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>)}</SelectContent>
@@ -451,14 +705,29 @@ export function OracleBlockEditor({
                 </div>
                 <div>
                   <Label>Material Exchange Serial</Label>
-                  <Select
-                    value={ex.serial_no}
-                    onValueChange={(v) => setExchRow(i, { serial_no: v })}
-                    disabled={!ex.model_no}
-                  >
-                    <SelectTrigger><SelectValue placeholder={ex.model_no ? "Select serial" : "Pick model first"} /></SelectTrigger>
-                    <SelectContent>{serials.map((s) => <SelectItem key={s.id} value={s.part_serial_no || s.id}>{s.part_serial_no || "(no serial)"}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <div className="flex gap-1.5 items-center">
+                    <div className="flex-1 min-w-0">
+                      <Select
+                        value={ex.serial_no}
+                        onValueChange={(v) => setExchRow(i, { serial_no: v })}
+                        disabled={serialSelectDisabled}
+                      >
+                        <SelectTrigger><SelectValue placeholder={ex.model_no ? "Select serial" : "Pick model first"} /></SelectTrigger>
+                        <SelectContent>{serials.map((s) => <SelectItem key={s.id} value={s.part_serial_no || s.id}>{s.part_serial_no || "(no serial)"}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    {isReopened && (
+                      <CorrectSlotButton
+                        indentId={indentId}
+                        oracleNo={value.oracle_no}
+                        slot="exchange"
+                        oldSerial={ex.serial_no}
+                        disabled={correctBlockedBySettled}
+                        disabledReason={correctBlockedBySettled ? correctDisabledReason : undefined}
+                        onSuccess={(ns) => setExchRow(i, { serial_no: ns })}
+                      />
+                    )}
+                  </div>
                 </div>
                 <div>
                   <Label>Qty</Label>
@@ -467,6 +736,7 @@ export function OracleBlockEditor({
                     value={ex.qty}
                     onChange={(e) => setExchRow(i, { qty: e.target.value })}
                     onBlur={(e) => checkStockAndValidate(i, e.target.value)}
+                    disabled={commonInputDisabled}
                   />
                 </div>
               </div>
@@ -512,6 +782,7 @@ export function OracleBlockEditor({
                       const w = warehouses.find((x) => x.id === v);
                       setRecvRow(i, { warehouse_id: v, warehouse_name: w?.name || "" });
                     }}
+                    disabled={commonSelectDisabled}
                   >
                     <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
                     <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
@@ -523,20 +794,36 @@ export function OracleBlockEditor({
                     value={rcv.model_no || ""}
                     onPick={({ name, model }) => setRecvRow(i, { part_name: name, model_no: model })}
                     placeholder={def?.def_model_no || "Select model"}
+                    disabled={commonSelectDisabled}
                   />
                 </div>
                 <div>
                   <Label>Material Rec Serial No</Label>
-                  <Input
-                    value={rcv.serial_no}
-                    onChange={(e) => setRecvRow(i, { serial_no: e.target.value })}
-                    placeholder={def?.def_serial_no || "Serial No"}
-                    className="font-mono"
-                  />
+                  <div className="flex gap-1.5 items-center">
+                    <Input
+                      value={rcv.serial_no}
+                      onChange={(e) => setRecvRow(i, { serial_no: e.target.value })}
+                      placeholder={def?.def_serial_no || "Serial No"}
+                      className="font-mono flex-1"
+                      disabled={commonInputDisabled}
+                      readOnly={isReopened}
+                    />
+                    {isReopened && (
+                      <CorrectSlotButton
+                        indentId={indentId}
+                        oracleNo={value.oracle_no}
+                        slot="received"
+                        oldSerial={rcv.serial_no}
+                        disabled={correctBlockedBySettled}
+                        disabledReason={correctBlockedBySettled ? correctDisabledReason : undefined}
+                        onSuccess={(ns) => setRecvRow(i, { serial_no: ns })}
+                      />
+                    )}
+                  </div>
                 </div>
-                <div><Label>Qty</Label><Input type="number" min={1} value={rcv.qty} onChange={(e) => setRecvRow(i, { qty: e.target.value })} /></div>
-                <div><Label>Material Rec Date</Label><Input type="date" value={rcv.received_date} onChange={(e) => setRecvRow(i, { received_date: e.target.value })} /></div>
-                <div className="md:col-span-3"><Label>Remarks</Label><Textarea rows={2} value={rcv.remarks} onChange={(e) => setRecvRow(i, { remarks: e.target.value })} /></div>
+                <div><Label>Qty</Label><Input type="number" min={1} value={rcv.qty} onChange={(e) => setRecvRow(i, { qty: e.target.value })} disabled={commonInputDisabled} /></div>
+                <div><Label>Material Rec Date</Label><Input type="date" value={rcv.received_date} onChange={(e) => setRecvRow(i, { received_date: e.target.value })} disabled={commonInputDisabled} /></div>
+                <div className="md:col-span-3"><Label>Remarks</Label><Textarea rows={2} value={rcv.remarks} onChange={(e) => setRecvRow(i, { remarks: e.target.value })} disabled={commonInputDisabled} /></div>
               </div>
             );
           })}
@@ -582,6 +869,7 @@ export function OracleBlockEditor({
                       const w = warehouses.find((x) => x.id === v);
                       setCustRow(i, { warehouse_id: v, warehouse_name: w?.name || "" });
                     }}
+                    disabled={commonSelectDisabled}
                   >
                     <SelectTrigger><SelectValue placeholder="Select warehouse" /></SelectTrigger>
                     <SelectContent>{warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}</SelectContent>
@@ -592,6 +880,7 @@ export function OracleBlockEditor({
                   <Select
                     value={rcv.product_tag || ""}
                     onValueChange={(v) => setCustRow(i, { product_tag: v as ProductTag })}
+                    disabled={commonSelectDisabled}
                   >
                     <SelectTrigger><SelectValue placeholder="Select condition" /></SelectTrigger>
                     <SelectContent>
@@ -607,23 +896,39 @@ export function OracleBlockEditor({
                     value={rcv.model_no || ""}
                     onPick={({ name, model }) => setCustRow(i, { part_name: name, model_no: model })}
                     placeholder={def?.def_model_no || "Select model"}
+                    disabled={commonSelectDisabled}
                   />
                 </div>
                 <div>
                   <Label>Material Rec Serial No</Label>
-                  <Input
-                    value={rcv.serial_no}
-                    onChange={(e) => setCustRow(i, { serial_no: e.target.value })}
-                    placeholder={def?.def_serial_no || "Serial No"}
-                    className="font-mono"
-                  />
+                  <div className="flex gap-1.5 items-center">
+                    <Input
+                      value={rcv.serial_no}
+                      onChange={(e) => setCustRow(i, { serial_no: e.target.value })}
+                      placeholder={def?.def_serial_no || "Serial No"}
+                      className="font-mono flex-1"
+                      disabled={commonInputDisabled}
+                      readOnly={isReopened}
+                    />
+                    {isReopened && (
+                      <CorrectSlotButton
+                        indentId={indentId}
+                        oracleNo={value.oracle_no}
+                        slot="customer_received"
+                        oldSerial={rcv.serial_no}
+                        disabled={correctBlockedBySettled}
+                        disabledReason={correctBlockedBySettled ? correctDisabledReason : undefined}
+                        onSuccess={(ns) => setCustRow(i, { serial_no: ns })}
+                      />
+                    )}
+                  </div>
                 </div>
-                <div><Label>Qty</Label><Input type="number" min={1} value={rcv.qty} onChange={(e) => setCustRow(i, { qty: e.target.value })} placeholder={def?.qty || "1"} /></div>
-                <div><Label>Material Rec Date</Label><Input type="date" value={rcv.received_date} onChange={(e) => setCustRow(i, { received_date: e.target.value })} /></div>
+                <div><Label>Qty</Label><Input type="number" min={1} value={rcv.qty} onChange={(e) => setCustRow(i, { qty: e.target.value })} placeholder={def?.qty || "1"} disabled={commonInputDisabled} /></div>
+                <div><Label>Material Rec Date</Label><Input type="date" value={rcv.received_date} onChange={(e) => setCustRow(i, { received_date: e.target.value })} disabled={commonInputDisabled} /></div>
                 <div className="md:col-span-3 flex gap-2 items-end">
-                  <div className="flex-1"><Label>Remarks</Label><Textarea rows={2} value={rcv.remarks} onChange={(e) => setCustRow(i, { remarks: e.target.value })} /></div>
-                  {!locked && (
-                    <Button variant="ghost" size="icon" onClick={() => removeCustRow(i)} title="Remove row">
+                  <div className="flex-1"><Label>Remarks</Label><Textarea rows={2} value={rcv.remarks} onChange={(e) => setCustRow(i, { remarks: e.target.value })} disabled={commonInputDisabled} /></div>
+                  {!locked && !fieldsDisabled && (
+                    <Button variant="ghost" size="icon" onClick={() => removeCustRow(i)} title="Remove row" disabled={commonInputDisabled}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   )}

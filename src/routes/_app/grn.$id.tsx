@@ -37,6 +37,7 @@ function GrnView() {
   const [correctOpen, setCorrectOpen] = useState(false);
   const [invoiceLinked, setInvoiceLinked] = useState(false);
   const [wasEdited, setWasEdited] = useState(false);
+  const [indentStatus, setIndentStatus] = useState<string | null>(null);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
 
   useEffect(() => {
@@ -92,14 +93,27 @@ function GrnView() {
       const serials = (g.items || []).map((it) => (it.serial_no || "").trim()).filter(Boolean);
       if (serials.length === 0) {
         setInvoiceLinked(false);
-        return;
+      } else {
+        const { data: inv } = await supabase
+          .from("invoice_items")
+          .select("id")
+          .overlaps("serial_numbers", serials)
+          .limit(1);
+        setInvoiceLinked((inv || []).length > 0);
       }
-      const { data: inv } = await supabase
-        .from("invoice_items")
-        .select("id")
-        .overlaps("serial_numbers", serials)
-        .limit(1);
-      setInvoiceLinked((inv || []).length > 0);
+
+      // Indent status for Correct-serial closed guard (scoped dialog)
+      const indentId = (g as unknown as { indent_id?: string | null }).indent_id;
+      if (indentId) {
+        const { data: indent } = await supabase
+          .from("indents" as never)
+          .select("status")
+          .eq("id", indentId)
+          .maybeSingle();
+        setIndentStatus((indent as { status?: string } | null)?.status ?? null);
+      } else {
+        setIndentStatus(null);
+      }
     })();
   }, [g?.id, g?.grn_no]);
 
@@ -269,7 +283,7 @@ function GrnView() {
                 className="gap-1.5"
                 onClick={() => setCorrectOpen(true)}
                 disabled={busy}
-                title="Correct a wrongly entered serial — automatically updated everywhere (stock, tickets, Oracle/indent, invoices, challans, etc.)"
+                title="Correct a wrongly entered serial — slot-scoped (this GRN + linked oracle slot). Other oracles/DCs not touched."
               >
                 <Wrench className="h-4 w-4" />
                 Correct serial
@@ -352,22 +366,39 @@ function GrnView() {
         }}
       />
 
-      <CorrectGrnSerialDialog
-        open={correctOpen}
-        onOpenChange={setCorrectOpen}
-        grnId={g.id}
-        grnNo={g.grn_no}
-        currentSerials={(g.items || []).flatMap((it) => [
-          ...(it.serial_no
-            ? it.serial_no
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean)
-            : []),
-          ...(it.serials || []),
-        ])}
-        onCorrected={refreshGrn}
-      />
+      {(() => {
+        const oracleNos = Array.from(
+          new Set((g.items || []).map((it) => (it.oracle_no || "").trim()).filter(Boolean)),
+        );
+        const singleOracleNo = oracleNos.length === 1 ? oracleNos[0] : null;
+        const slotForGrn =
+          g.category === "customer"
+            ? ("customer_received" as const)
+            : g.category === "oem"
+              ? ("received" as const)
+              : null;
+        return (
+          <CorrectGrnSerialDialog
+            open={correctOpen}
+            onOpenChange={setCorrectOpen}
+            grnId={g.id}
+            grnNo={g.grn_no}
+            currentSerials={(g.items || []).flatMap((it) => [
+              ...(it.serial_no
+                ? it.serial_no
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                : []),
+              ...(it.serials || []),
+            ])}
+            oracle_no={singleOracleNo}
+            slot={slotForGrn}
+            indentStatus={indentStatus}
+            onCorrected={refreshGrn}
+          />
+        );
+      })()}
 
       <div
         id="print-area"
