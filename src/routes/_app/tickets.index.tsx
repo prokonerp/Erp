@@ -184,9 +184,19 @@ function TicketsList() {
 
   const load = async () => {
     setLoading(true);
-    let query = supabase.from("tickets").select("*").eq("is_deleted", false).order("created_at", { ascending: false }).limit(500);
+    // Phase 0.2 debloat: explicit cols + server filters + range 0,49 (limit 50)
+    let query = supabase
+      .from("tickets")
+      .select(
+        "id,case_id,status,priority,customer_name,customer_id,serial_no,created_at,assigned_engineer_name,good_parts_details,defective_parts_details",
+      )
+      .eq("is_deleted", false)
+      .order("created_at", { ascending: false })
+      .range(0, 49);
     if (status !== "all") query = query.eq("status", status);
     if (type !== "all") query = query.eq("call_type", type);
+    const trimmedQ = q.trim();
+    if (trimmedQ) query = query.ilike("customer_name", `%${trimmedQ.replace(/%/g, "\\%")}%`);
     const { data } = await query;
     const baseRows = (data || []) as Row[];
     const ids = baseRows.map((r) => r.id);
@@ -196,15 +206,16 @@ function TicketsList() {
         .from("ticket_activities")
         .select("ticket_id")
         .eq("special_instruction", true)
-        .in("ticket_id", ids);
+        .in("ticket_id", ids)
+        .limit(200);
       flagged = new Set(((acts as { ticket_id: string }[] | null) || []).map((a) => a.ticket_id));
     }
     setRows(baseRows.map((r) => ({ ...r, has_special_activity: flagged.has(r.id) })));
-    const { data: emps } = await supabase.from("assignable_engineers").select("id,name,phone,department,active").order("name");
+    const { data: emps } = await supabase.from("assignable_engineers").select("id,name,phone,department,active").order("name").limit(200);
     setEmployees((emps || []) as Employee[]);
     setLoading(false);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, type]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [status, type, q]);
   useRealtimeRefetch("tickets", () => load());
 
   const cities = useMemo(() => Array.from(new Set(rows.map((r) => (r.location || "").trim()).filter(Boolean))).sort(), [rows]);

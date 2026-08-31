@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, Undo2, Factory, Package, FileStack, Pencil, MoreHorizontal, Eye, Trash2 } from "lucide-react";
+import { Search, Plus, Undo2, Factory, Package, FileStack, Pencil, MoreHorizontal, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
-import { fetchAllGrns, type Grn, type GrnCategory } from "@/lib/grn";
+import { useGrnsPaginated, fetchAllGrns, type Grn, type GrnCategory } from "@/lib/grn";
 import { fetchUserNameMap } from "@/lib/challan";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
@@ -58,55 +58,67 @@ function SummaryCard({ label, count, color, icon: Icon }: { label: string; count
   );
 }
 
+const PAGE_SIZE = 25;
+
 export function GrnUnifiedList() {
-  const [rows, setRows] = useState<Grn[]>([]);
-  const [users, setUsers] = useState<Record<string, string>>({});
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
+  const [users, setUsers] = useState<Record<string, string>>({});
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | GrnCategory>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [page, setPage] = useState(0);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [q, typeFilter, statusFilter, sourceFilter, from, to]);
+
+  const queryParams = useMemo(() => ({
+    page,
+    pageSize: PAGE_SIZE,
+    category: typeFilter,
+    status: statusFilter,
+    search: q || null,
+    sourceName: sourceFilter,
+    fromDate: from || null,
+    toDate: to || null,
+  }), [page, typeFilter, statusFilter, q, sourceFilter, from, to]);
+
+  const { data, isLoading, isFetching, error } = useGrnsPaginated(queryParams);
+
+  const rows: Grn[] = data?.data ?? [];
+  const totalCount: number = data?.count ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   useEffect(() => {
-    fetchAllGrns()
-      .then(async (data) => {
-        setRows(data);
-        const ids = data.map((d) => d.created_by || "").filter(Boolean);
-        setUsers(await fetchUserNameMap(ids));
-      })
-      .catch((e) => toast.error(e.message));
-  }, []);
+    if (error) toast.error((error as Error).message);
+  }, [error]);
+
+  // Resolve user display names for current page
+  useEffect(() => {
+    if (rows.length === 0) return;
+    const ids = rows.map((d) => d.created_by || "").filter(Boolean);
+    if (ids.length === 0) return;
+    fetchUserNameMap(ids).then(setUsers).catch(() => {});
+  }, [rows]);
 
   const sources = useMemo(
     () => Array.from(new Set(rows.map((r) => r.source_name).filter(Boolean) as string[])).sort(),
     [rows]
   );
 
-  const filtered = rows.filter((r) => {
-    if (typeFilter !== "all" && r.category !== typeFilter) return false;
-    if (statusFilter !== "all" && r.status !== statusFilter) return false;
-    if (sourceFilter !== "all" && r.source_name !== sourceFilter) return false;
-    if (from && r.grn_date < from) return false;
-    if (to && r.grn_date > to) return false;
-    const s = q.toLowerCase();
-    if (!s) return true;
-    return (
-      r.grn_no.toLowerCase().includes(s) ||
-      (r.source_name || "").toLowerCase().includes(s) ||
-      (r.reference_no || "").toLowerCase().includes(s) ||
-      (r.source_doc_no || "").toLowerCase().includes(s)
-    );
-  });
-
-  const counts = {
-    total: rows.length,
-    customer: rows.filter((r) => r.category === "customer").length,
-    oem: rows.filter((r) => r.category === "oem").length,
-    general: rows.filter((r) => r.category === "general").length,
-  };
+  // For summary cards: when no type filter, approximate breakdown from current page
+  // Total is exact server-side filtered count; breakdowns are page-scoped.
+  const counts = useMemo(() => ({
+    total: totalCount,
+    customer: typeFilter === "customer" ? totalCount : rows.filter((r) => r.category === "customer").length,
+    oem: typeFilter === "oem" ? totalCount : rows.filter((r) => r.category === "oem").length,
+    general: typeFilter === "general" ? totalCount : rows.filter((r) => r.category === "general").length,
+  }), [totalCount, rows, typeFilter]);
 
   const cols = [
     { header: "GRN No", get: (r: Grn) => r.grn_no },
@@ -117,6 +129,36 @@ export function GrnUnifiedList() {
     { header: "Status", get: (r: Grn) => r.status },
     { header: "Created By", get: (r: Grn) => users[r.created_by || ""] || "" },
   ];
+
+  // Export-all handler keeps fetchAll for exports only (not for list rendering)
+  const [exporting, setExporting] = useState(false);
+  const [exportRows, setExportRows] = useState<Grn[] | null>(null);
+  const handleExportAll = async () => {
+    setExporting(true);
+    try {
+      const all = await fetchAllGrns();
+      // Apply same client-side filters for export parity (export = full filtered set)
+      let out = all;
+      if (typeFilter !== "all") out = out.filter((r) => r.category === typeFilter);
+      if (statusFilter !== "all") out = out.filter((r) => r.status === statusFilter);
+      if (sourceFilter !== "all") out = out.filter((r) => r.source_name === sourceFilter);
+      if (from) out = out.filter((r) => r.grn_date >= from);
+      if (to) out = out.filter((r) => r.grn_date <= to);
+      if (q.trim()) {
+        const s = q.toLowerCase();
+        out = out.filter((r) => r.grn_no.toLowerCase().includes(s) || (r.source_name || "").toLowerCase().includes(s) || (r.reference_no || "").toLowerCase().includes(s) || (r.source_doc_no || "").toLowerCase().includes(s));
+      }
+      setExportRows(out);
+      toast.success(`Prepared ${out.length} rows for export`);
+    } catch (e: any) {
+      toast.error(e.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const displayRows = exportRows ?? rows;
+  const exportColsSource = exportRows ? exportRows : rows;
 
   return (
     <div className="space-y-4">
@@ -130,7 +172,7 @@ export function GrnUnifiedList() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
-            <CardTitle>Goods Receipt Notes ({filtered.length})</CardTitle>
+            <CardTitle>Goods Receipt Notes ({totalCount}) {isFetching && <span className="text-xs font-normal text-muted-foreground">· loading…</span>}</CardTitle>
             <div className="flex items-center gap-2">
               <TypeBadge category="customer" />
               <TypeBadge category="oem" />
@@ -138,7 +180,11 @@ export function GrnUnifiedList() {
             </div>
           </div>
           <div className="flex gap-2 items-center flex-wrap">
-            <ExportButtons name="GRNs" title="Goods Receipt Notes" rows={filtered} columns={cols} />
+            {/* Current-page export uses server-paginated rows; Export All uses fetchAll (export-only) */}
+            <ExportButtons name="GRNs" title="Goods Receipt Notes" rows={displayRows} columns={cols} />
+            <Button variant="outline" size="sm" onClick={handleExportAll} disabled={exporting}>
+              {exporting ? "Preparing…" : exportRows ? `Export all (${exportRows.length})` : "Prepare export (all)"}
+            </Button>
             <Link to="/grn/new">
               <Button size="sm"><Plus className="h-4 w-4 mr-1" />New GRN</Button>
             </Link>
@@ -201,7 +247,9 @@ export function GrnUnifiedList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r) => (
+                {isLoading ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                ) : rows.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono">{r.grn_no}</TableCell>
                     <TableCell>{r.grn_date}</TableCell>
@@ -234,7 +282,10 @@ export function GrnUnifiedList() {
                                   kind="grn"
                                   id={r.id}
                                   label={`GRN ${r.grn_no}`}
-                                  onDeleted={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
+                                  onDeleted={() => {
+                                    // keepPreviousData keeps stale page; invalidation will refetch on next interaction
+                                    toast.success("Deleted");
+                                  }}
                                   renderTrigger={(open) => (
                                     <DropdownMenuItem
                                       className="text-destructive focus:text-destructive"
@@ -252,11 +303,26 @@ export function GrnUnifiedList() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {filtered.length === 0 && (
+                {!isLoading && rows.length === 0 && (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No records</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Pagination — server-side, keepPreviousData keeps prior rows visible while fetching */}
+          <div className="flex items-center justify-between pt-2">
+            <div className="text-sm text-muted-foreground">
+              Page {page + 1} of {pageCount} · {totalCount} total {isFetching && "· updating…"}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                <ChevronLeft className="h-4 w-4 mr-1" />Prev
+              </Button>
+              <Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>
+                Next<ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

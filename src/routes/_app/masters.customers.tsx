@@ -231,6 +231,7 @@ export function CustomerMasterPage() {
         data={filtered}
         isLoading={isLoading}
         totalRecords={totalCount}
+        serverPagination={{ page, pageSize, total: totalCount, onPageChange: setPage }}
         emptyIcon={Users}
         emptyTitle={q ? `No results for "${q}"` : "No customers yet"}
         emptyHint={
@@ -262,21 +263,6 @@ export function CustomerMasterPage() {
               />
             </div>
           </div>
-        }
-        footer={
-          totalCount > pageSize ? (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                Previous
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                Page {page + 1} of {pageCount} · {totalCount.toLocaleString()} total
-              </span>
-              <Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>
-                Next
-              </Button>
-            </div>
-          ) : undefined
         }
       />
 

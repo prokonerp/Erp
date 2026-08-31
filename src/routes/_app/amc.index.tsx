@@ -28,7 +28,8 @@ function AmcDashboard() {
   const canCreateTicket = can("tickets", "create");
 
   const load = () => {
-    supabase.from("amcs").select("*").eq("is_deleted", false).order("end_date", { ascending: true })
+    // Phase 0.2 debloat: explicit cols + limit 200 + range 0,199
+    supabase.from("amcs").select("id,agreement_no,client_name,client_company,contact_no,email,client_gst,start_date,end_date,amc_value,units,pm_dates,created_at").eq("is_deleted", false).order("end_date", { ascending: true }).limit(200).range(0, 199)
       .then(({ data }) => setRows((data || []) as unknown as Amc[]));
   };
   useEffect(() => { load(); }, []);

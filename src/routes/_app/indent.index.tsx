@@ -48,17 +48,28 @@ function IndentList() {
   const [tab, setTab] = useState<Status>("open");
 
   const load = async () => {
-    const { data } = await supabase
+    // Phase 0.2 debloat: explicit cols + limit 100 + server-side search filter
+    let query = supabase
       .from("indents" as never)
-      .select("*")
+      .select(
+        "id,indent_no,indent_date,ticket_id,case_id,company,product_model,oracles_data,status,created_at",
+      )
       .eq("is_deleted", false)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(100);
+    const trimmed = q.trim();
+    if (trimmed) {
+      // server-side prefilter on most-searched cols; client split open/closed still applied below
+      const esc = trimmed.replace(/%/g, "\\%").replace(/,/g, "\\,");
+      query = query.or(`indent_no.ilike.%${esc}%,company.ilike.%${esc}%`);
+    }
+    const { data } = await query;
     setRows((data || []) as unknown as Indent[]);
     setLoading(false);
   };
   useEffect(() => {
     load();
-  }, []);
+  }, [q]);
   useRealtimeRefetch("indents", load);
 
   useEffect(() => {

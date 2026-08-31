@@ -1,13 +1,7 @@
 import * as React from "react";
-import { use } from "react";
 import type * as RechartsPrimitive from "recharts";
 
 import { cn } from "@/lib/utils";
-
-// Load recharts lazily. The library (~400KB) is fetched only when a chart
-// component actually renders. All components share this single promise, so
-// Vite emits one chunk and it downloads exactly once.
-const rechartsModule = import("recharts");
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
@@ -45,7 +39,10 @@ const ChartContainer = React.forwardRef<
     children: React.ComponentProps<typeof RechartsPrimitive.ResponsiveContainer>["children"];
   }
 >(({ id, className, children, config, ...props }, ref) => {
-  const Recharts = use(rechartsModule);
+  const [Recharts, setRecharts] = React.useState<typeof RechartsPrimitive | null>(null);
+  React.useEffect(() => {
+    import("recharts").then((m) => setRecharts(m as unknown as typeof RechartsPrimitive));
+  }, []);
   const uniqueId = React.useId();
   const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`;
 
@@ -61,7 +58,11 @@ const ChartContainer = React.forwardRef<
         {...props}
       >
         <ChartStyle id={chartId} config={config} />
-        <Recharts.ResponsiveContainer>{children}</Recharts.ResponsiveContainer>
+        {Recharts ? (
+          <Recharts.ResponsiveContainer>{children}</Recharts.ResponsiveContainer>
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-muted-foreground">Loading chart...</div>
+        )}
       </div>
     </ChartContext.Provider>
   );
@@ -98,7 +99,11 @@ ${colorConfig
 };
 
 function ChartTooltip(props: Omit<React.ComponentProps<typeof RechartsPrimitive.Tooltip>, "ref">) {
-  const Recharts = use(rechartsModule);
+  const [Recharts, setRecharts] = React.useState<typeof RechartsPrimitive | null>(null);
+  React.useEffect(() => {
+    import("recharts").then((m) => setRecharts(m as unknown as typeof RechartsPrimitive));
+  }, []);
+  if (!Recharts) return null;
   return <Recharts.Tooltip {...props} />;
 }
 ChartTooltip.displayName = "ChartTooltip";
@@ -250,7 +255,11 @@ const ChartTooltipContent = React.forwardRef<
 ChartTooltipContent.displayName = "ChartTooltip";
 
 function ChartLegend(props: Omit<React.ComponentProps<typeof RechartsPrimitive.Legend>, "ref">) {
-  const Recharts = use(rechartsModule);
+  const [Recharts, setRecharts] = React.useState<typeof RechartsPrimitive | null>(null);
+  React.useEffect(() => {
+    import("recharts").then((m) => setRecharts(m as unknown as typeof RechartsPrimitive));
+  }, []);
+  if (!Recharts) return null;
   return <Recharts.Legend {...props} />;
 }
 ChartLegend.displayName = "ChartLegend";

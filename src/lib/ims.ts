@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { imsKeys, stockKeys, txnKeys } from "@/lib/queryKeys";
 
 export type StockType = "good" | "defective";
 export type StockStatus =
@@ -180,11 +182,77 @@ export const TRANSFER_STATUS_LABEL: Record<TransferStatus, string> = {
   cancelled: "Cancelled",
 };
 
+/**
+ * @deprecated for lists — use useStockPaginated / fetchStockPage with server pagination.
+ * Kept only for exports / legacy callers that need the full dataset. Do not use for UI lists.
+ */
 export async function listStock(): Promise<StockItem[]> {
   const { fetchAll } = await import("@/lib/fetchAll");
   return fetchAll<StockItem>("ims_stock_items", (q) =>
     q.select("*").order("created_at", { ascending: false }),
   );
+}
+
+// ── Paginated (server-side) ───────────────────────────────────────────────
+
+export type StockPaginatedParams = {
+  page: number;
+  pageSize: number;
+  warehouseId?: string | null;
+  search?: string | null;
+  stockType?: StockType | null;
+  stockStatus?: StockStatus | null;
+};
+
+const STOCK_SELECT =
+  "id,part_name,part_model_no,part_serial_no,warehouse_id,stock_type,stock_status,qty,transaction_ref,created_at";
+
+/**
+ * Server-paginated fetch for stock items. Uses `count: exact` + `.range()` so
+ * the list never needs to pull the whole table.
+ */
+export async function fetchStockPage(
+  params: StockPaginatedParams,
+): Promise<{ data: StockItem[]; count: number }> {
+  const { page, pageSize, warehouseId, search, stockType, stockStatus } = params;
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+
+  let q: any = supabase
+    .from("ims_stock_items" as never)
+    .select(STOCK_SELECT, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (warehouseId) q = q.eq("warehouse_id", warehouseId);
+  if (stockType) q = q.eq("stock_type", stockType);
+  if (stockStatus) q = q.eq("stock_status", stockStatus);
+  if (search && search.trim()) {
+    const s = search.trim().replace(/%/g, "");
+    // Server-side ilike across the most-searched columns; avoid pulling full table.
+    q = q.or(`part_name.ilike.%${s}%,part_model_no.ilike.%${s}%,part_serial_no.ilike.%${s}%`);
+  }
+
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return { data: (data || []) as StockItem[], count: count ?? 0 };
+}
+
+export function useStockPaginated(params: StockPaginatedParams) {
+  return useQuery({
+    queryKey: stockKeys.paginated(params as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryFn: () => fetchStockPage(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Back-compat alias — some callers imported via imsKeys. */
+export function useStockPaginatedWithImsKeys(params: StockPaginatedParams) {
+  return useQuery({
+    queryKey: imsKeys.paginated(params as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryFn: () => fetchStockPage(params),
+    placeholderData: keepPreviousData,
+  });
 }
 
 export async function getStock(id: string): Promise<StockItem | null> {
@@ -240,11 +308,59 @@ export async function deleteStock(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * @deprecated for lists — use useTransactionsPaginated / fetchTransactionsPage with server pagination.
+ * Kept only for exports / legacy callers that need the full dataset. Do not use for UI lists.
+ */
 export async function listTransactions(): Promise<Transaction[]> {
   const { fetchAll } = await import("@/lib/fetchAll");
   return fetchAll<Transaction>("ims_transactions", (q) =>
     q.select("*").order("txn_date", { ascending: false }),
   );
+}
+
+// ── Paginated transactions ────────────────────────────────────────────────
+
+export type TransactionsPaginatedParams = {
+  page: number;
+  pageSize: number;
+  search?: string | null;
+  txnType?: TxnType | null;
+};
+
+const TXN_SELECT =
+  "id,txn_no,txn_date,txn_type,stock_item_id,part_name,part_model_no,part_serial_no,oem,from_warehouse_id,to_warehouse_id,qty,reference,created_at";
+
+export async function fetchTransactionsPage(
+  params: TransactionsPaginatedParams,
+): Promise<{ data: Transaction[]; count: number }> {
+  const { page, pageSize, search, txnType } = params;
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+
+  let q: any = supabase
+    .from("ims_transactions" as never)
+    .select(TXN_SELECT, { count: "exact" })
+    .order("txn_date", { ascending: false })
+    .range(from, to);
+
+  if (txnType) q = q.eq("txn_type", txnType);
+  if (search && search.trim()) {
+    const s = search.trim().replace(/%/g, "");
+    q = q.or(`part_name.ilike.%${s}%,part_model_no.ilike.%${s}%,part_serial_no.ilike.%${s}%,txn_no.ilike.%${s}%`);
+  }
+
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return { data: (data || []) as Transaction[], count: count ?? 0 };
+}
+
+export function useTransactionsPaginated(params: TransactionsPaginatedParams) {
+  return useQuery({
+    queryKey: txnKeys.paginated(params as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryFn: () => fetchTransactionsPage(params),
+    placeholderData: keepPreviousData,
+  });
 }
 
 export async function createTransaction(input: Partial<Transaction>): Promise<Transaction> {

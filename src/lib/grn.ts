@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllWith } from "@/lib/fetchAll";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { grnKeys } from "@/lib/queryKeys";
 
 export type GrnCategory = "customer" | "oem" | "general";
 export type GrnStatus = "Draft" | "Submitted" | "Cancelled";
@@ -104,16 +106,73 @@ export const CATEGORY_LABEL: Record<GrnCategory, string> = {
   general: "General",
 };
 
+/**
+ * @deprecated for lists — use useGrnsPaginated / fetchGrnsPage with server pagination.
+ * Kept only for exports / legacy callers. Do not use for UI lists.
+ */
 export async function fetchGrns(category: GrnCategory) {
   // B-11: page past the 1000-row server cap.
   return fetchAllWith<Grn>((q) =>
     q.from("grns").select("*").eq("category", category).order("created_at", { ascending: false }));
 }
 
+/**
+ * @deprecated for lists — use useGrnsPaginated / fetchGrnsPage with server pagination.
+ * Kept only for exports (Excel/PDF) that need the full dataset.
+ */
 export async function fetchAllGrns() {
   // B-11: page past the 1000-row server cap.
   return fetchAllWith<Grn>((q) =>
     q.from("grns").select("*").order("created_at", { ascending: false }));
+}
+
+// ── Paginated (server-side) ───────────────────────────────────────────────
+
+export type GrnPaginatedParams = {
+  page: number;
+  pageSize: number;
+  category?: GrnCategory | "all" | null;
+  status?: string | null;
+  search?: string | null;
+  sourceName?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
+};
+
+export async function fetchGrnsPage(
+  params: GrnPaginatedParams,
+): Promise<{ data: Grn[]; count: number }> {
+  const { page, pageSize, category, status, search, sourceName, fromDate, toDate } = params;
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+
+  let q: any = supabase
+    .from("grns" as never)
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (category && category !== "all") q = q.eq("category", category);
+  if (status && status !== "all") q = q.eq("status", status);
+  if (sourceName && sourceName !== "all") q = q.eq("source_name", sourceName);
+  if (fromDate) q = q.gte("grn_date", fromDate);
+  if (toDate) q = q.lte("grn_date", toDate);
+  if (search && search.trim()) {
+    const s = search.trim().replace(/%/g, "");
+    q = q.or(`grn_no.ilike.%${s}%,source_name.ilike.%${s}%,reference_no.ilike.%${s}%,source_doc_no.ilike.%${s}%`);
+  }
+
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return { data: (data || []) as Grn[], count: count ?? 0 };
+}
+
+export function useGrnsPaginated(params: GrnPaginatedParams) {
+  return useQuery({
+    queryKey: grnKeys.paginated(params as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryFn: () => fetchGrnsPage(params),
+    placeholderData: keepPreviousData,
+  });
 }
 
 export async function fetchGrn(id: string) {

@@ -1,6 +1,7 @@
 import {
   useState,
   useMemo,
+  useEffect,
   type ReactNode,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -10,6 +11,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "./EmptyState";
 import { TableSkeleton } from "./skeletons";
+import { PaginationFooter } from "@/components/PaginationFooter";
 import type { LucideIcon } from "lucide-react";
 
 /**
@@ -59,6 +61,16 @@ const HEADER_DENSITY: Record<Density, string> = {
 
 const DENSITY_STORAGE_KEY = "prokon-table-density";
 
+/** Server-driven pagination — when provided DataTable renders PaginationFooter and skips client slicing. */
+export type ServerPagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+};
+
+const CLIENT_PAGE_SIZE = 50;
+
 function readStoredDensity(): Density {
   if (typeof window === "undefined") return "comfortable";
   return window.localStorage.getItem(DENSITY_STORAGE_KEY) === "compact"
@@ -82,6 +94,7 @@ export function DataTable<T extends Record<string, any>>({
   footer,
   toolbar,
   totalRecords,
+  serverPagination,
   className,
   cardClassName,
 }: {
@@ -107,6 +120,8 @@ export function DataTable<T extends Record<string, any>>({
    * "50 records" for a 5,000-row dataset.
    */
   totalRecords?: number;
+  /** When provided, DataTable renders PaginationFooter and skips client slicing. Keeps backward compat when omitted. */
+  serverPagination?: ServerPagination;
   className?: string;
   cardClassName?: string;
 }) {
@@ -158,6 +173,56 @@ export function DataTable<T extends Record<string, any>>({
     return String(row[rowKey] ?? index);
   }
 
+  // ── Pagination / virtualization fallback ──────────────────────────
+  // Server mode: caller passes serverPagination (page already sliced server-side)
+  // Client fallback: when data > 100 rows and no serverPagination, slice client-side 50/page
+  const needsClientPagination = !serverPagination && sortedData.length > 100;
+  const [clientPage, setClientPage] = useState(0);
+  const clientPageCount = needsClientPagination
+    ? Math.max(1, Math.ceil(sortedData.length / CLIENT_PAGE_SIZE))
+    : 1;
+
+  useEffect(() => {
+    // clamp / reset when data shrinks or grows
+    setClientPage((p) => Math.min(p, Math.max(0, clientPageCount - 1)));
+  }, [clientPageCount]);
+
+  // Reset to page 0 when data identity changes significantly (search etc.)
+  // sortedData is already memo'd; we watch its length
+  useEffect(() => {
+    if (sortedData.length <= CLIENT_PAGE_SIZE) setClientPage(0);
+  }, [sortedData.length]);
+
+  const displayData = useMemo(() => {
+    if (serverPagination) return sortedData; // already server-sliced
+    if (!needsClientPagination) return sortedData;
+    const start = clientPage * CLIENT_PAGE_SIZE;
+    return sortedData.slice(start, start + CLIENT_PAGE_SIZE);
+  }, [sortedData, serverPagination, needsClientPagination, clientPage]);
+
+  const totalForDisplay = serverPagination?.total ?? totalRecords ?? data.length;
+
+  const serverPaginationNode = serverPagination ? (
+    <PaginationFooter
+      page={serverPagination.page}
+      pageSize={serverPagination.pageSize}
+      total={serverPagination.total}
+      onPage={serverPagination.onPageChange}
+    />
+  ) : null;
+
+  const clientPaginationNode = needsClientPagination ? (
+    <PaginationFooter
+      page={clientPage}
+      pageSize={CLIENT_PAGE_SIZE}
+      total={sortedData.length}
+      onPage={setClientPage}
+    />
+  ) : null;
+
+  const paginationNode = serverPaginationNode ?? clientPaginationNode;
+  const hasFooterBar = !!(footer || paginationNode);
+
   return (
     <Card className={cn("overflow-hidden", cardClassName)}>
       {toolbar && (
@@ -166,7 +231,7 @@ export function DataTable<T extends Record<string, any>>({
         </CardHeader>
       )}
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        <div className="max-h-[60vh] overflow-auto">
           {isLoading ? (
             <TableSkeleton rows={6} />
           ) : sortedData.length === 0 ? (
@@ -225,48 +290,53 @@ export function DataTable<T extends Record<string, any>>({
                 </tr>
               </thead>
               <tbody>
-                {sortedData.map((row, i) => (
-                  <tr
-                    key={getRowKey(row, i)}
-                    className={cn(
-                      "border-b last:border-0 transition-colors",
-                      onRowClick && "cursor-pointer hover:bg-muted/40",
-                    )}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  >
-                    {columns.map((col) => {
-                      const isRight = col.align === "right";
-                      const content = col.render
-                        ? col.render(row, i)
-                        : row[col.key];
-                      return (
-                        <td
-                          key={col.key}
-                          className={cn(
-                            "whitespace-nowrap",
-                            CELL_DENSITY[density],
-                            isRight && "text-right tabular-nums",
-                            col.className,
-                          )}
-                        >
-                          {content ?? "—"}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                {displayData.map((row, i) => {
+                  // global index for render/key when client-paginated
+                  const globalIndex = needsClientPagination ? clientPage * CLIENT_PAGE_SIZE + i : i;
+                  return (
+                    <tr
+                      key={getRowKey(row, globalIndex)}
+                      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 48px" } as React.CSSProperties}
+                      className={cn(
+                        "border-b last:border-0 transition-colors",
+                        onRowClick && "cursor-pointer hover:bg-muted/40",
+                      )}
+                      onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    >
+                      {columns.map((col) => {
+                        const isRight = col.align === "right";
+                        const content = col.render
+                          ? col.render(row, globalIndex)
+                          : row[col.key];
+                        return (
+                          <td
+                            key={col.key}
+                            className={cn(
+                              "whitespace-nowrap",
+                              CELL_DENSITY[density],
+                              isRight && "text-right tabular-nums",
+                              col.className,
+                            )}
+                          >
+                            {content ?? "—"}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
-        {footer && (
+        {hasFooterBar && (
           <div className="flex items-center justify-between border-t bg-muted/30 px-4 py-2">
             <span className="text-xs text-muted-foreground">
-              {(totalRecords ?? data.length).toLocaleString()} record
-              {(totalRecords ?? data.length) === 1 ? "" : "s"}
+              {totalForDisplay.toLocaleString()} record{totalForDisplay === 1 ? "" : "s"}
             </span>
             <div className="flex items-center gap-3">
               <DensityToggle density={density} onChange={controlledDensity ? undefined : changeDensity} />
+              {paginationNode}
               {footer}
             </div>
           </div>

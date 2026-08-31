@@ -60,6 +60,25 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
         "@tanstack/query-core",
       ],
     },
+    build: {
+      cssCodeSplit: true,
+      chunkSizeWarningLimit: 900,
+      rollupOptions: {
+        output: {
+          manualChunks: (id: string) => {
+            if (
+              id.includes("node_modules/react") ||
+              id.includes("node_modules/react-dom") ||
+              id.includes("@tanstack/react-router") ||
+              id.includes("@tanstack/react-start")
+            )
+              return "vendor";
+            if (id.includes("@supabase/supabase-js")) return "supabase";
+            if (id.includes("node_modules/recharts")) return "charts";
+          },
+        },
+      },
+    },
     optimizeDeps: {
       include: [
         "react",
@@ -67,6 +86,8 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
         "react-dom/client",
         "react/jsx-runtime",
         "react/jsx-dev-runtime",
+        "recharts",
+        "@supabase/supabase-js",
       ],
       ignoreOutdatedRequests: true,
     },

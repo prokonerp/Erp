@@ -63,11 +63,12 @@ function CrmDashboard() {
   useEffect(() => {
     (async () => {
       setLoading(true);
+      // Phase 0.2 debloat: explicit cols + limit 200 + keep Promise.all smaller payload
       const [l, q, i, r] = await Promise.all([
-        supabase.from("leads").select("*").order("updated_at", { ascending: false }),
-        supabase.from("quotations").select("*").order("created_at", { ascending: false }),
-        supabase.from("incentives").select("*").order("created_at", { ascending: false }),
-        supabase.from("incentive_rules").select("*").order("sort_order"),
+        supabase.from("leads").select("id,customer_id,title,status,expected_value,closed_value,next_followup,owner_id,assigned_to,assigned_at,acknowledged_at,updated_at").order("updated_at", { ascending: false }).limit(200).range(0, 199),
+        supabase.from("quotations").select("id,customer_id,quote_no,quote_date,status,total,created_at").order("created_at", { ascending: false }).limit(200).range(0, 199),
+        supabase.from("incentives").select("id,period,closed_value,payout,status,created_at").order("created_at", { ascending: false }).limit(200).range(0, 199),
+        supabase.from("incentive_rules").select("id,sort_order,percent,threshold").order("sort_order").limit(200),
       ]);
       const lData = (l.data || []) as unknown as Lead[];
       const qData = (q.data || []) as unknown as Quotation[];

@@ -298,9 +298,11 @@ type TicketRow = {
 function TicketsWidget({ scope }: { scope: { engineerName: string | null } }) {
   const [rows, setRows] = useState<TicketRow[] | null>(null);
   const load = async () => {
+    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 30d window
+    const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
     let q = supabase.from("tickets")
-      .select("id,case_id,status,priority,assigned_engineer_name,created_at,closed_at")
-      .eq("is_deleted", false).order("created_at", { ascending: false }).limit(1000);
+      .select("id,case_id,status,created_at,closed_at")
+      .eq("is_deleted", false).gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
     if (scope.engineerName) q = q.eq("assigned_engineer_name", scope.engineerName);
     const { data } = await q;
     setRows((data || []) as TicketRow[]);
@@ -339,9 +341,10 @@ function AmcWidget() {
   const [amcs, setAmcs] = useState<AmcRow[] | null>(null);
   const [pms, setPms] = useState<PmRow[] | null>(null);
   const load = async () => {
-    const { data: a } = await supabase.from("amcs").select("id,agreement_no,end_date").eq("is_deleted", false).order("end_date", { ascending: true }).limit(1000);
+    // Phase 0.2 debloat: minimal cols + limit 200 + keep Promise.all but smaller payload
+    const { data: a } = await supabase.from("amcs").select("id,agreement_no,end_date").eq("is_deleted", false).order("end_date", { ascending: true }).limit(200);
     setAmcs((a || []) as AmcRow[]);
-    const { data: p } = await supabase.from("pm_visits").select("id,scheduled_date,completed_at").limit(1000);
+    const { data: p } = await supabase.from("pm_visits").select("id,scheduled_date,completed_at").gte("scheduled_date", new Date(Date.now() - 30*86400000).toISOString().slice(0,10)).limit(200);
     setPms((p || []) as PmRow[]);
   };
   useEffect(() => { load(); }, []);
@@ -383,7 +386,9 @@ type IndentRow = { id: string; indent_no: string; created_at: string; oracles_da
 function IndentWidget() {
   const [rows, setRows] = useState<IndentRow[] | null>(null);
   const load = async () => {
-    const { data } = await supabase.from("indents" as never).select("id,indent_no,created_at,oracles_data,created_by").eq("is_deleted", false).order("created_at", { ascending: false }).limit(1000);
+    // Phase 0.2 debloat: minimal cols + limit 200 + 30d window
+    const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
+    const { data } = await supabase.from("indents" as never).select("id,indent_no,created_at,oracles_data,created_by").eq("is_deleted", false).gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
     setRows((data || []) as unknown as IndentRow[]);
   };
   useEffect(() => { load(); }, []);
@@ -425,9 +430,11 @@ function CrmWidget() {
   const [quotes, setQuotes] = useState<QuoteRow[] | null>(null);
   useEffect(() => {
     (async () => {
-      const { data: l } = await supabase.from("leads").select("id,status,expected_value,next_followup,owner_id").limit(1000);
+      // Phase 0.2 debloat: minimal cols + limit 200 + keep Promise.all smaller payload
+      const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
+      const { data: l } = await supabase.from("leads").select("id,status,expected_value,next_followup,owner_id").gte("created_at", since30d.toISOString()).limit(200);
       setLeads((l || []) as LeadRow[]);
-      const { data: q } = await supabase.from("quotations").select("id,status,total").limit(1000);
+      const { data: q } = await supabase.from("quotations").select("id,status,total").gte("created_at", since30d.toISOString()).limit(200);
       setQuotes((q || []) as QuoteRow[]);
     })();
   }, []);
@@ -464,9 +471,11 @@ function ImsWidget() {
   const [grns, setGrns] = useState<GrnRow[] | null>(null);
   useEffect(() => {
     (async () => {
-      const { data: s } = await supabase.from("ims_stock_items").select("id,stock_status,part_name").limit(2000);
+      // Phase 0.2 debloat: minimal cols + limit 200 + 30d window where applicable
+      const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
+      const { data: s } = await supabase.from("ims_stock_items").select("id,stock_status,part_name").limit(200);
       setStock((s || []) as StockRow[]);
-      const { data: g } = await supabase.from("grns").select("id,status,grn_date").order("created_at", { ascending: false }).limit(500);
+      const { data: g } = await supabase.from("grns").select("id,status,grn_date").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
       setGrns((g || []) as GrnRow[]);
     })();
   }, []);
@@ -509,11 +518,13 @@ function MaterialMovementWidget() {
   const [grns, setGrns] = useState<GrnRow[] | null>(null);
   useEffect(() => {
     (async () => {
-      const { data: g } = await supabase.from("gatepasses").select("id,return_type,created_at").order("created_at", { ascending: false }).limit(500);
+      // Phase 0.2 debloat: minimal cols + limit 200 + 30d window where applicable
+      const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
+      const { data: g } = await supabase.from("gatepasses").select("id,return_type,created_at").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
       setGps((g || []) as GpRow[]);
-      const { data: d } = await supabase.from("delivery_challans").select("id,status,challan_date").order("challan_date", { ascending: false }).limit(500);
+      const { data: d } = await supabase.from("delivery_challans").select("id,status,challan_date").gte("challan_date", since30d.toISOString().slice(0,10)).order("challan_date", { ascending: false }).limit(200);
       setDcs((d || []) as DcRow[]);
-      const { data: r } = await supabase.from("grns").select("id,status,grn_date").order("grn_date", { ascending: false }).limit(500);
+      const { data: r } = await supabase.from("grns").select("id,status,grn_date").gte("grn_date", since30d.toISOString().slice(0,10)).order("grn_date", { ascending: false }).limit(200);
       setGrns((r || []) as GrnRow[]);
     })();
   }, []);
@@ -553,7 +564,9 @@ function quarterRange(offset = 0) {
 function QuarterlyTicketsCard() {
   const [rows, setRows] = useState<{ created_at: string; status: string }[] | null>(null);
   const load = async () => {
-    const { data } = await supabase.from("tickets").select("created_at,status").eq("is_deleted", false).order("created_at", { ascending: false }).limit(5000);
+    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 90d window
+    const since90d = new Date(); since90d.setDate(since90d.getDate() - 90);
+    const { data } = await supabase.from("tickets").select("id,case_id,status,created_at,closed_at").eq("is_deleted", false).gte("created_at", since90d.toISOString()).order("created_at", { ascending: false }).limit(200);
     setRows((data || []) as any);
   };
   useEffect(() => { load(); }, []);
@@ -612,12 +625,13 @@ function BarLine({ label, value, max, tone }: { label: string; value: number; ma
 function TeamPerformanceCard() {
   const [rows, setRows] = useState<{ assigned_engineer_name: string | null; status: string; closed_at: string | null }[] | null>(null);
   const load = async () => {
+    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 90d window (already had 90d)
     const since = new Date(); since.setDate(since.getDate() - 90);
     const { data } = await supabase.from("tickets")
-      .select("assigned_engineer_name,status,closed_at")
+      .select("id,case_id,status,created_at,closed_at,assigned_engineer_name")
       .eq("is_deleted", false)
       .gte("created_at", since.toISOString())
-      .limit(5000);
+      .limit(200);
     setRows((data || []) as any);
   };
   useEffect(() => { load(); }, []);

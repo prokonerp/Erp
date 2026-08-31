@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Search, Plus, User, Factory, FileStack, Pencil, MoreHorizontal, Eye, Trash2 } from "lucide-react";
+import { Search, Plus, User, Factory, FileStack, Pencil, MoreHorizontal, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
-import { fetchAllChallans, fetchUserNameMap, type DeliveryChallan, type DocType } from "@/lib/challan";
+import { useChallansPaginated, fetchAllChallans, fetchUserNameMap, type DeliveryChallan, type DocType } from "@/lib/challan";
 import { toast } from "sonner";
 import { useIsAdmin } from "@/lib/useRole";
 import { useNavigate } from "@tanstack/react-router";
@@ -56,54 +56,62 @@ function SummaryCard({ label, count, color, icon: Icon }: { label: string; count
   );
 }
 
+const PAGE_SIZE = 25;
+
 export function ChallanUnifiedList() {
-  const [rows, setRows] = useState<DeliveryChallan[]>([]);
-  const [users, setUsers] = useState<Record<string, string>>({});
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
+  const [users, setUsers] = useState<Record<string, string>>({});
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | DocType>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [partyFilter, setPartyFilter] = useState<string>("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
-    fetchAllChallans()
-      .then(async (data) => {
-        setRows(data);
-        const ids = data.map((d) => d.created_by || "").filter(Boolean);
-        setUsers(await fetchUserNameMap(ids));
-      })
-      .catch((e) => toast.error(e.message));
-  }, []);
+    setPage(0);
+  }, [q, typeFilter, statusFilter, partyFilter, from, to]);
+
+  const queryParams = useMemo(() => ({
+    page,
+    pageSize: PAGE_SIZE,
+    docType: typeFilter,
+    status: statusFilter,
+    search: q || null,
+    partyName: partyFilter,
+    fromDate: from || null,
+    toDate: to || null,
+  }), [page, typeFilter, statusFilter, q, partyFilter, from, to]);
+
+  const { data, isLoading, isFetching, error } = useChallansPaginated(queryParams);
+
+  const rows: DeliveryChallan[] = data?.data ?? [];
+  const totalCount: number = data?.count ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  useEffect(() => {
+    if (error) toast.error((error as Error).message);
+  }, [error]);
+
+  useEffect(() => {
+    if (rows.length === 0) return;
+    const ids = rows.map((d) => d.created_by || "").filter(Boolean);
+    if (ids.length === 0) return;
+    fetchUserNameMap(ids).then(setUsers).catch(() => {});
+  }, [rows]);
 
   const parties = useMemo(
     () => Array.from(new Set(rows.map((r) => r.party_name).filter(Boolean) as string[])).sort(),
     [rows]
   );
 
-  const filtered = rows.filter((r) => {
-    if (typeFilter !== "all" && r.doc_type !== typeFilter) return false;
-    if (statusFilter !== "all" && r.status !== statusFilter) return false;
-    if (partyFilter !== "all" && r.party_name !== partyFilter) return false;
-    if (from && r.challan_date < from) return false;
-    if (to && r.challan_date > to) return false;
-    const s = q.toLowerCase();
-    if (!s) return true;
-    return (
-      r.challan_no.toLowerCase().includes(s) ||
-      (r.party_name || "").toLowerCase().includes(s) ||
-      (r.reference_no || "").toLowerCase().includes(s) ||
-      (r.gate_pass_no || "").toLowerCase().includes(s)
-    );
-  });
-
-  const counts = {
-    total: rows.length,
-    customer: rows.filter((r) => r.doc_type === "customer").length,
-    oem: rows.filter((r) => r.doc_type === "oem").length,
-  };
+  const counts = useMemo(() => ({
+    total: totalCount,
+    customer: typeFilter === "customer" ? totalCount : rows.filter((r) => r.doc_type === "customer").length,
+    oem: typeFilter === "oem" ? totalCount : rows.filter((r) => r.doc_type === "oem").length,
+  }), [totalCount, rows, typeFilter]);
 
   const cols = [
     { header: "Challan No", get: (r: DeliveryChallan) => r.challan_no },
@@ -114,6 +122,33 @@ export function ChallanUnifiedList() {
     { header: "Status", get: (r: DeliveryChallan) => r.status },
     { header: "Created By", get: (r: DeliveryChallan) => users[r.created_by || ""] || "" },
   ];
+
+  const [exporting, setExporting] = useState(false);
+  const [exportRows, setExportRows] = useState<DeliveryChallan[] | null>(null);
+  const handleExportAll = async () => {
+    setExporting(true);
+    try {
+      const all = await fetchAllChallans();
+      let out = all;
+      if (typeFilter !== "all") out = out.filter((r) => r.doc_type === typeFilter);
+      if (statusFilter !== "all") out = out.filter((r) => r.status === statusFilter);
+      if (partyFilter !== "all") out = out.filter((r) => r.party_name === partyFilter);
+      if (from) out = out.filter((r) => r.challan_date >= from);
+      if (to) out = out.filter((r) => r.challan_date <= to);
+      if (q.trim()) {
+        const s = q.toLowerCase();
+        out = out.filter((r) => r.challan_no.toLowerCase().includes(s) || (r.party_name || "").toLowerCase().includes(s) || (r.reference_no || "").toLowerCase().includes(s) || (r.gate_pass_no || "").toLowerCase().includes(s));
+      }
+      setExportRows(out);
+      toast.success(`Prepared ${out.length} rows for export`);
+    } catch (e: any) {
+      toast.error(e.message || "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const displayRows = exportRows ?? rows;
 
   return (
     <div className="space-y-4">
@@ -126,14 +161,17 @@ export function ChallanUnifiedList() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
-            <CardTitle>Delivery Challans ({filtered.length})</CardTitle>
+            <CardTitle>Delivery Challans ({totalCount}) {isFetching && <span className="text-xs font-normal text-muted-foreground">· loading…</span>}</CardTitle>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <TypeBadge docType="customer" />
               <TypeBadge docType="oem" />
             </div>
           </div>
           <div className="flex gap-2 items-center flex-wrap">
-            <ExportButtons name="DeliveryChallans" title="Delivery Challans" rows={filtered} columns={cols} />
+            <ExportButtons name="DeliveryChallans" title="Delivery Challans" rows={displayRows} columns={cols} />
+            <Button variant="outline" size="sm" onClick={handleExportAll} disabled={exporting}>
+              {exporting ? "Preparing…" : exportRows ? `Export all (${exportRows.length})` : "Prepare export (all)"}
+            </Button>
             <Link to="/challan/new">
               <Button size="sm">
                 <Plus className="h-4 w-4 mr-1" />New Delivery Challan
@@ -197,7 +235,9 @@ export function ChallanUnifiedList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r) => (
+                {isLoading ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                ) : rows.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-mono">{r.challan_no}</TableCell>
                     <TableCell>{r.challan_date}</TableCell>
@@ -230,7 +270,7 @@ export function ChallanUnifiedList() {
                                   kind="challan"
                                   id={r.id}
                                   label={`Delivery Challan ${r.challan_no}`}
-                                  onDeleted={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
+                                  onDeleted={() => toast.success("Deleted")}
                                   renderTrigger={(open) => (
                                     <DropdownMenuItem
                                       className="text-destructive focus:text-destructive"
@@ -248,11 +288,25 @@ export function ChallanUnifiedList() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {filtered.length === 0 && (
+                {!isLoading && rows.length === 0 && (
                   <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No records</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <div className="text-sm text-muted-foreground">
+              Page {page + 1} of {pageCount} · {totalCount} total {isFetching && "· updating…"}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                <ChevronLeft className="h-4 w-4 mr-1" />Prev
+              </Button>
+              <Button variant="outline" size="sm" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>
+                Next<ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

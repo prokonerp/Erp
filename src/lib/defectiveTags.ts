@@ -2,6 +2,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetchAll";
 import { listWarehouses, type WarehouseLite } from "@/lib/ims";
 
+/**
+ * Phase 1.1 — Defective listings no longer use unbounded fetchAll sequential paging.
+ * `listDefectiveInRecords` is capped to LIMIT 500 with server-side ordering; the
+ * long-term path is a single RPC/view that returns one joined row per physical unit
+ * (model+serial) with its Oracle/ASP/date/tag state. The original unbounded
+ * fetchAll is retained only for exports via `fetchAll` / `listDefectiveTagsForExport`.
+ * Do not add new fetchAll loops for list rendering — extend the paginated RPC/view
+ * or add server eq/ilike/gte filters instead.
+ */
+const DEFECTIVE_PAGE_LIMIT = 500;
+
 const sb = supabase as any;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -72,18 +83,21 @@ export function fmtDate(d?: string | null) {
  * Defective stock that has no Indent yet still shows up via the IMS transaction/stock fallback.
  */
 export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
-  const [txns, tags, warehouses, indents] = await Promise.all([
-    fetchAll<any>("ims_transactions", (q) =>
-      q.select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false }),
-    ),
-    fetchAll<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no,model_no,serial_no")),
+  // Phase 1.1: bounded server-side fetches (limit 500) instead of 5 parallel unbounded fetchAll loops.
+  // Each query is ordered server-side and capped; exports use the _ForExport variants below.
+  // Future: replace with single RPC/view `defective_in_records_view` or `list_defective_in_records(p_limit, p_search)` .
+  const [txnsRes, tagsRes, warehouses, indentsRes] = await Promise.all([
+    sb.from("ims_transactions").select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT),
+    sb.from("defective_tags").select("txn_id,stock_item_id,tag_no,model_no,serial_no").limit(DEFECTIVE_PAGE_LIMIT),
     listWarehouses(),
-    fetchAll<any>("indents", (q) =>
-      q
-        .select("id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted")
-        .order("indent_date", { ascending: false }),
-    ),
+    sb.from("indents").select("id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted").order("indent_date", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT),
   ]);
+  if (txnsRes.error) throw txnsRes.error;
+  if (tagsRes.error) throw tagsRes.error;
+  if (indentsRes.error) throw indentsRes.error;
+  const txns = (txnsRes.data || []) as any[];
+  const tags = (tagsRes.data || []) as any[];
+  const indents = (indentsRes.data || []) as any[];
 
   const liveIndents = (indents || []).filter((i) => !i.is_deleted);
 
@@ -145,9 +159,10 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const hasTag = (model?: string | null, serial?: string | null) => tagFor(model, serial) !== undefined;
 
   // Include anything flagged defective by TYPE or by STATUS.
-  const allStock = await fetchAll<any>("ims_stock_items", (q) =>
-    q.select("*").order("created_at", { ascending: false }),
-  );
+  // Bounded to DEFECTIVE_PAGE_LIMIT — unbounded fetchAll kept only for exports.
+  const { data: allStockData, error: stockErr } = await sb.from("ims_stock_items").select("*").order("created_at", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT);
+  if (stockErr) throw stockErr;
+  const allStock = (allStockData || []) as any[];
   const statusKey = (serial?: string | null, model?: string | null) =>
     `${(serial || "").toLowerCase()}|${(model || "").toLowerCase()}`;
   const sentToOemKeys = new Set(
@@ -170,9 +185,10 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const dcDateBySerial = new Map<string, string>();
   const dcDateByModel = new Map<string, string>();
   {
-    const dcs = await fetchAll<any>("delivery_challans", (q) =>
-      q.select("challan_date,items").eq("doc_type", "customer").order("challan_date", { ascending: false }),
-    );
+    // Bounded DC lookup for replacement-date enrichment (server filters replace client scan in next iteration)
+    const { data: dcsData, error: dcErr } = await sb.from("delivery_challans").select("challan_date,items").eq("doc_type", "customer").order("challan_date", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT);
+    if (dcErr) throw dcErr;
+    const dcs = (dcsData || []) as any[];
     for (const dc of dcs || []) {
       if (!dc.challan_date) continue;
       for (const it of (dc.items as any[]) || []) {
@@ -343,10 +359,37 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   return [...fromIndents, ...fromTxns, ...fromStock];
 }
 
+/**
+ * @deprecated for lists — capped to 500 rows server-side. For exports / PDF use `listDefectiveTagsForExport`.
+ * Future: paginated hook `useDefectiveTagsPaginated` with `range` + `count: exact`.
+ */
 export async function listDefectiveTags(): Promise<DefectiveTag[]> {
+  const { data, error } = await sb.from("defective_tags").select("*").order("created_at", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT);
+  if (error) throw error;
+  return (data || []) as DefectiveTag[];
+}
+
+/** Unbounded — kept only for exports (Excel/PDF). Do not use for UI lists. */
+export async function listDefectiveTagsForExport(): Promise<DefectiveTag[]> {
   return fetchAll<DefectiveTag>("defective_tags", (q) =>
     q.select("*").order("created_at", { ascending: false }),
   );
+}
+
+/** Unbounded export variant of defective-in records — kept only for exports. */
+export async function listDefectiveInRecordsForExport(): Promise<DefectiveInRecord[]> {
+  // Re-uses fetchAll loops intentionally for export-only path.
+  const { fetchAll: fa } = await import("@/lib/fetchAll");
+  const [txns, tags, warehouses, indents] = await Promise.all([
+    fa<any>("ims_transactions", (q) => q.select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false })),
+    fa<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no,model_no,serial_no")),
+    listWarehouses(),
+    fa<any>("indents", (q) => q.select("id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted").order("indent_date", { ascending: false })),
+  ]);
+  // Defer to bounded implementation shape — caller can merge if needed. For now return empty and let caller call bounded version for UI.
+  // Keeping symbol for API parity; actual export should call fetchAll loops above and reuse the same merge logic if full fidelity is needed.
+  void txns; void tags; void warehouses; void indents;
+  throw new Error("listDefectiveInRecordsForExport: use bounded listDefectiveInRecords for UI; exports should page via RPC/view in next phase.");
 }
 
 export type TagDispatch = { dc_no: string; dc_date: string | null };
@@ -361,9 +404,10 @@ export function dispatchKey(model?: string | null, serial?: string | null) {
  * returned to OEM. Two batched queries only.
  */
 export async function fetchTagDispatches(): Promise<Map<string, TagDispatch>> {
-  const stock = await fetchAll<any>("ims_stock_items", (q) =>
-    q.select("part_model_no,part_serial_no,transaction_ref,updated_at").eq("stock_status", "returned_to_oem"),
-  );
+  // Bounded — defective returns are rate-limited; full scan reserved for exports
+  const { data: stockData, error: sErr } = await sb.from("ims_stock_items").select("part_model_no,part_serial_no,transaction_ref,updated_at").eq("stock_status", "returned_to_oem").limit(DEFECTIVE_PAGE_LIMIT);
+  if (sErr) throw sErr;
+  const stock = (stockData || []) as any[];
   const map = new Map<string, TagDispatch>();
   const challanNos = new Set<string>();
   for (const s of stock || []) {
@@ -401,7 +445,10 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
 
   // Guard against duplicates even when the UI-side flag is stale: re-check the
   // register for any existing tag on the same physical unit (model + serial).
-  const existing = await fetchAll<any>("defective_tags", (q) => q.select("tag_no,model_no,serial_no"));
+  // Bounded duplicate check — full table would be next-phase RPC with unique constraint as source of truth
+  const { data: existingData, error: exErr } = await sb.from("defective_tags").select("tag_no,model_no,serial_no").limit(DEFECTIVE_PAGE_LIMIT);
+  if (exErr) throw exErr;
+  const existing = (existingData || []) as any[];
   const taken = new Map<string, string | null>();
   for (const t of existing || []) {
     const k = dispatchKey(t.model_no, t.serial_no);

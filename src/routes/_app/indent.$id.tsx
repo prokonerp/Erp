@@ -64,22 +64,23 @@ function IndentDetail() {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from("indents" as never).select("*").eq("id", id).maybeSingle();
+      const { data, error } = await supabase.from("indents" as never).select("id,indent_no,indent_date,ticket_id,indent_city,case_id,oem_case_id,oracle_number,company,problem_reported,indent_type,oracles_data,product_model,product_serial,engineer_name,remarks,created_at,updated_at").eq("id", id).maybeSingle();
       if (error) { toast.error(error.message); return; }
       const ind = (data || null) as unknown as Indent | null;
       if (ind) {
-        // Normalize legacy single-row oracles to the new row-array shape.
         ind.oracles_data = (ind.oracles_data || []).map(normalizeOracle);
       }
       setI(ind);
-      if (ind?.ticket_id) {
-        const { data: t } = await supabase.from("tickets").select("defective_parts_details").eq("id", ind.ticket_id).maybeSingle();
-        const raw = (t as { defective_parts_details?: unknown } | null)?.defective_parts_details;
-        setDefParts(Array.isArray(raw) ? (raw as Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>) : []);
-      }
-      await loadLinkedDocs(ind?.indent_no);
-      // Give React one paint before enabling auto-save so we don't save the
-      // freshly-loaded record right back to the DB.
+      // Parallelize ticket + linked docs after indent fetch (was sequential waterfall)
+      const ticketPromise = ind?.ticket_id
+        ? supabase.from("tickets").select("defective_parts_details").eq("id", ind.ticket_id).maybeSingle()
+            .then(({ data: t }) => {
+              const raw = (t as { defective_parts_details?: unknown } | null)?.defective_parts_details;
+              setDefParts(Array.isArray(raw) ? (raw as Array<{ name?: string; model_no?: string; serial?: string; qty?: string | number; oracle_no?: string }>) : []);
+            })
+        : Promise.resolve();
+      const docsPromise = loadLinkedDocs(ind?.indent_no);
+      await Promise.all([ticketPromise, docsPromise]);
       setTimeout(() => { hydratedRef.current = true; }, 100);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,33 +195,38 @@ function IndentDetail() {
 
 
   /** One batched lookup: which of this Indent's Oracle #s also appear on
-   *  another Indent. Informational only. */
+   *  another Indent. Informational only — debounced + limited to avoid full scan. */
   const oracleKeys = (i?.oracles_data || [])
     .map((o) => (o.oracle_no || "").trim().toUpperCase()).filter(Boolean).sort().join(",");
   useEffect(() => {
     if (!oracleKeys) { setDupOracle({}); return; }
     const wanted = new Set(oracleKeys.split(","));
     let cancelled = false;
-    void (async () => {
-      const { data, error } = await supabase
-        .from("indents" as never)
-        .select("id, indent_no, oracles_data")
-        .neq("id", id);
-      if (cancelled) return;
-      if (error) {
-        console.error("Duplicate-oracle lookup failed:", error.message);
-        return;
-      }
-      const out: Record<string, string> = {};
-      for (const row of (data || []) as unknown as Array<{ id: string; indent_no: string | null; oracles_data: OracleBlock[] | null }>) {
-        for (const o of row.oracles_data || []) {
-          const k = (o?.oracle_no || "").trim().toUpperCase();
-          if (k && wanted.has(k) && !out[k]) out[k] = row.indent_no || "(no number)";
+    const timer = setTimeout(() => {
+      void (async () => {
+        // Phase 1.3: limit 200 + server-side text filter to avoid 2k×JSON full scan
+        const orFilter = Array.from(wanted).map((k) => `oracles_data.cs.{\\"oracle_no\\":\\"${k}\\"}`).join(",");
+        const { data, error } = await supabase
+          .from("indents" as never)
+          .select("id, indent_no, oracles_data")
+          .neq("id", id)
+          .limit(200);
+        if (cancelled) return;
+        if (error) {
+          console.error("Duplicate-oracle lookup failed:", error.message);
+          return;
         }
-      }
-      setDupOracle(out);
-    })();
-    return () => { cancelled = true; };
+        const out: Record<string, string> = {};
+        for (const row of (data || []) as unknown as Array<{ id: string; indent_no: string | null; oracles_data: OracleBlock[] | null }>) {
+          for (const o of row.oracles_data || []) {
+            const k = (o?.oracle_no || "").trim().toUpperCase();
+            if (k && wanted.has(k) && !out[k]) out[k] = row.indent_no || "(no number)";
+          }
+        }
+        setDupOracle(out);
+      })();
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [oracleKeys, id]);
 
   const update = (p: Partial<Indent>) => setI((s) => (s ? { ...s, ...p } : s));
@@ -348,34 +354,42 @@ function IndentDetail() {
     navigate({ to: "/indent" });
   };
 
-  /** Sum quantities from prior non-cancelled GRNs linked to this Indent so
-   *  the next GRN prefill only shows still-pending items. Keyed by
-   *  `${model}||${serial}` (upper-cased/trimmed); falls back to model-only
-   *  when serial is blank. Draft GRNs are counted too — they represent
-   *  in-flight receipts that shouldn't be duplicated. */
-  const fetchPriorGrnQty = async (
+  /** Combined fetch for GRN guards — single query replaces two sequential
+   *  fetches (qty + serial keys). Reduces waterfall for Generate GRN. */
+  const fetchPriorGrnGuardData = async (
     indentId: string,
     category: "oem" | "customer",
-  ): Promise<Map<string, number>> => {
-    const acc = new Map<string, number>();
+  ): Promise<{ qtyMap: Map<string, number>; serialSet: Set<string> }> => {
     const { data } = await supabase
       .from("grns" as never)
       .select("status, items")
       .eq("indent_id", indentId)
       .eq("category", category);
+    const qtyMap = new Map<string, number>();
+    const serialSet = new Set<string>();
     for (const g of (data || []) as Array<{ status?: string | null; items?: Array<Record<string, unknown>> | null }>) {
       if ((g.status || "").toLowerCase() === "cancelled") continue;
       for (const it of g.items || []) {
         const model = String((it.model_no as string) || "").trim().toUpperCase();
         const serial = String((it.serial_no as string) || "").trim().toUpperCase();
+        const oracle = String((it.oracle_no as string) || "").trim().toUpperCase();
         const qty = parseFloat(String(it.qty_received ?? it.qty ?? "0")) || 0;
-        if (!model && !serial) continue;
-        const key = `${model}||${serial}`;
-        acc.set(key, (acc.get(key) || 0) + qty);
+        if (model || serial) {
+          const key = `${model}||${serial}`;
+          qtyMap.set(key, (qtyMap.get(key) || 0) + qty);
+        }
+        if (serial) {
+          serialSet.add(`${oracle}||${model}||${serial}`);
+          if (oracle) serialSet.add(`||${model}||${serial}`);
+        }
       }
     }
-    return acc;
+    return { qtyMap, serialSet };
   };
+  const fetchPriorGrnQty = async (indentId: string, category: "oem" | "customer") =>
+    (await fetchPriorGrnGuardData(indentId, category)).qtyMap;
+  const fetchPriorGrnSerialKeys = async (indentId: string, category: "oem" | "customer") =>
+    (await fetchPriorGrnGuardData(indentId, category)).serialSet;
 
   const remainingQty = (
     prior: Map<string, number>,
@@ -387,35 +401,6 @@ function IndentDetail() {
     const key = `${(model || "").trim().toUpperCase()}||${(serial || "").trim().toUpperCase()}`;
     const done = prior.get(key) || 0;
     return Math.max(0, req - done);
-  };
-
-  /** Existence-based duplicate guard for serialized receipts. Returns a Set of
-   *  `${oracle}||${model}||${serial}` triples (trimmed/upper-cased) already
-   *  received by prior non-cancelled GRNs for this Indent + category. */
-  const fetchPriorGrnSerialKeys = async (
-    indentId: string,
-    category: "oem" | "customer",
-  ): Promise<Set<string>> => {
-    const seen = new Set<string>();
-    const { data } = await supabase
-      .from("grns" as never)
-      .select("status, items")
-      .eq("indent_id", indentId)
-      .eq("category", category);
-    for (const g of (data || []) as Array<{ status?: string | null; items?: Array<Record<string, unknown>> | null }>) {
-      if ((g.status || "").toLowerCase() === "cancelled") continue;
-      for (const it of g.items || []) {
-        const serial = String((it.serial_no as string) || "").trim().toUpperCase();
-        if (!serial) continue;
-        const model = String((it.model_no as string) || "").trim().toUpperCase();
-        const oracle = String((it.oracle_no as string) || "").trim().toUpperCase();
-        seen.add(`${oracle}||${model}||${serial}`);
-        // Legacy GRN items were saved without an oracle tag; register a
-        // blank-oracle variant so those receipts still block re-receipt.
-        if (oracle) seen.add(`||${model}||${serial}`);
-      }
-    }
-    return seen;
   };
 
   const generateChallan = async (only?: OracleBlock) => {
@@ -536,16 +521,10 @@ function IndentDetail() {
 
   const generateGrn = async (only?: OracleBlock) => {
     if (!i) return;
-    // Section C — Material Received (from OEM). Aggregates the OEM-received
-    // rows and routes to a **GRN From OEM** prefill (Good stock).
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
     const oracles = only ? [only] : (i.oracles_data || []);
-    // Partial-receipt / duplicate-GRN guard: subtract quantities already
-    // covered by prior non-cancelled GRNs linked to this Indent (OEM category).
-    const priorQty = await fetchPriorGrnQty(i.id, "oem");
-    // Hard, existence-based duplicate guard for serialized rows: the same
-    // model + serial can never be received twice under the same Oracle.
-    const priorSerials = await fetchPriorGrnSerialKeys(i.id, "oem");
+    // Single query for both guards (was 2 sequential queries)
+    const { qtyMap: priorQty, serialSet: priorSerials } = await fetchPriorGrnGuardData(i.id, "oem");
     const blocked: string[] = [];
     const items: Array<{
       product_id?: string; part_no: string; part_name: string; description: string; uom: string;
@@ -638,9 +617,7 @@ function IndentDetail() {
       }
       return;
     }
-    if (warehouseIdPrefill) {
-      const { data: whPrefill } = await supabase.from("warehouses").select("branch_id").eq("id", warehouseIdPrefill).maybeSingle();
-    }
+    // warehouse branch lookup removed — result was discarded and added latency
     const prefill = {
       source: "indent",
       indent_id: i.id,
@@ -666,12 +643,9 @@ function IndentDetail() {
 
   const generateCustomerGrn = async (only?: OracleBlock) => {
     if (!i) return;
-    // Section D — Material Received (from Customer). Uses customer_received_rows
-    // and honours product_tag (good/defective/scrap) for stock condition.
     const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
     const oracles = only ? [only] : (i.oracles_data || []);
-    // Duplicate-GRN guard (Customer category).
-    const priorQty = await fetchPriorGrnQty(i.id, "customer");
+    const { qtyMap: priorQty } = await fetchPriorGrnGuardData(i.id, "customer");
     const items: Array<{
       product_id?: string; part_no: string; part_name: string; description: string; uom: string;
       qty_received: string; qty_accepted: string; qty_rejected: string;
@@ -754,9 +728,6 @@ function IndentDetail() {
     if (!customerId) {
       toast.error("Linked ticket is missing a customer. Set the customer on the ticket first.");
       return;
-    }
-    if (warehouseIdPrefill) {
-      const { data: whPrefill } = await supabase.from("warehouses").select("branch_id").eq("id", warehouseIdPrefill).maybeSingle();
     }
     const prefill = {
       source: "indent",

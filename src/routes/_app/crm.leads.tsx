@@ -77,10 +77,11 @@ function LeadsList() {
 
   const load = async () => {
     setLoading(true);
+    // Phase 0.2 debloat: explicit cols + limit 200 + range 0,199
     const { data: l } = await supabase
       .from("leads")
-      .select("*")
-      .order("updated_at", { ascending: false });
+      .select("id,customer_id,title,source,status,expected_value,closed_value,next_followup,owner_id,assigned_to,assigned_at,acknowledged_at,updated_at,lost_reason,closed_at,closed_remarks,remarks")
+      .order("updated_at", { ascending: false }).limit(200).range(0, 199);
     const list = (l || []) as unknown as Lead[];
     setRows(list);
     setCustomers(await fetchCustomersByIds(list.map((r) => r.customer_id)));

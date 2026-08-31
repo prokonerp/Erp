@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllWith } from "@/lib/fetchAll";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { challanKeys, dcKeys } from "@/lib/queryKeys";
 
 export type ChallanItem = {
   product_id?: string;
@@ -95,16 +97,82 @@ export const emptyItem = (): ChallanItem => ({
   model_no: "", serial_no: "",
 });
 
+/**
+ * @deprecated for lists — use useChallansPaginated / fetchChallansPage with server pagination.
+ * Kept only for exports / legacy callers. Do not use for UI lists.
+ */
 export async function fetchChallans(docType: DocType) {
   // B-11: page past the 1000-row server cap.
   return fetchAllWith<DeliveryChallan>((q) =>
     q.from("delivery_challans").select("*").eq("doc_type", docType).order("created_at", { ascending: false }));
 }
 
+/**
+ * @deprecated for lists — use useChallansPaginated / fetchChallansPage with server pagination.
+ * Kept only for exports (Excel/PDF) that need the full dataset.
+ */
 export async function fetchAllChallans() {
   // B-11: page past the 1000-row server cap.
   return fetchAllWith<DeliveryChallan>((q) =>
     q.from("delivery_challans").select("*").order("created_at", { ascending: false }));
+}
+
+// ── Paginated (server-side) ───────────────────────────────────────────────
+
+export type ChallanPaginatedParams = {
+  page: number;
+  pageSize: number;
+  docType?: DocType | "all" | null;
+  status?: string | null;
+  search?: string | null;
+  partyName?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
+};
+
+export async function fetchChallansPage(
+  params: ChallanPaginatedParams,
+): Promise<{ data: DeliveryChallan[]; count: number }> {
+  const { page, pageSize, docType, status, search, partyName, fromDate, toDate } = params;
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+
+  let q: any = supabase
+    .from("delivery_challans" as never)
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (docType && docType !== "all") q = q.eq("doc_type", docType);
+  if (status && status !== "all") q = q.eq("status", status);
+  if (partyName && partyName !== "all") q = q.eq("party_name", partyName);
+  if (fromDate) q = q.gte("challan_date", fromDate);
+  if (toDate) q = q.lte("challan_date", toDate);
+  if (search && search.trim()) {
+    const s = search.trim().replace(/%/g, "");
+    q = q.or(`challan_no.ilike.%${s}%,party_name.ilike.%${s}%,reference_no.ilike.%${s}%,gate_pass_no.ilike.%${s}%`);
+  }
+
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return { data: (data || []) as DeliveryChallan[], count: count ?? 0 };
+}
+
+export function useChallansPaginated(params: ChallanPaginatedParams) {
+  return useQuery({
+    queryKey: challanKeys.paginated(params as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryFn: () => fetchChallansPage(params),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Alias using dcKeys — both key factories point to the same domain. */
+export function useDcPaginated(params: ChallanPaginatedParams) {
+  return useQuery({
+    queryKey: dcKeys.paginated(params as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryFn: () => fetchChallansPage(params),
+    placeholderData: keepPreviousData,
+  });
 }
 
 export async function fetchUserNameMap(ids: string[]): Promise<Record<string, string>> {
