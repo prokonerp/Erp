@@ -220,9 +220,9 @@ export function useReportsData(): UseReportsDataReturn {
           fetchStockPage({ page: 0, pageSize: 500 }),
           listWarehouses(),
           supabase.from("serials").select("*"),
-          supabase.from("products").select(
-            "id,name,brand,model,description,serial_tracking,warranty_applicable",
-          ),
+          supabase
+            .from("products")
+            .select("id,name,brand,model,description,serial_tracking,warranty_applicable"),
         ]);
         const st = stRes.data;
 
@@ -230,8 +230,8 @@ export function useReportsData(): UseReportsDataReturn {
 
         setStock(st as StockItem[]);
         setWarehouses(w as WarehouseLite[]);
-        setSerials(((s.data || []) as unknown as Serial[]));
-        setProducts(((p.data || []) as unknown as Product[]));
+        setSerials((s.data || []) as unknown as Serial[]);
+        setProducts((p.data || []) as unknown as Product[]);
 
         // Resolve only the customers referenced by these serials — same
         // truncation guard as reports.tsx:72-77.
@@ -245,7 +245,7 @@ export function useReportsData(): UseReportsDataReturn {
             .from("customers")
             .select("id,company,contact_name")
             .in("id", uniq);
-          if (!cancelled) setCustomers(((c || []) as unknown as Customer[]));
+          if (!cancelled) setCustomers((c || []) as unknown as Customer[]);
         } else {
           if (!cancelled) setCustomers([]);
         }

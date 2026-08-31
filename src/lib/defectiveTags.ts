@@ -87,10 +87,24 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   // Each query is ordered server-side and capped; exports use the _ForExport variants below.
   // Future: replace with single RPC/view `defective_in_records_view` or `list_defective_in_records(p_limit, p_search)` .
   const [txnsRes, tagsRes, warehouses, indentsRes] = await Promise.all([
-    sb.from("ims_transactions").select(TXN_SELECT).eq("txn_type", "defective_in").order("txn_date", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT),
-    sb.from("defective_tags").select("txn_id,stock_item_id,tag_no,model_no,serial_no").limit(DEFECTIVE_PAGE_LIMIT),
+    sb
+      .from("ims_transactions")
+      .select(TXN_SELECT)
+      .eq("txn_type", "defective_in")
+      .order("txn_date", { ascending: false })
+      .limit(DEFECTIVE_PAGE_LIMIT),
+    sb
+      .from("defective_tags")
+      .select("txn_id,stock_item_id,tag_no,model_no,serial_no")
+      .limit(DEFECTIVE_PAGE_LIMIT),
     listWarehouses(),
-    sb.from("indents").select("id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted").order("indent_date", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT),
+    sb
+      .from("indents")
+      .select(
+        "id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted",
+      )
+      .order("indent_date", { ascending: false })
+      .limit(DEFECTIVE_PAGE_LIMIT),
   ]);
   if (txnsRes.error) throw txnsRes.error;
   if (tagsRes.error) throw tagsRes.error;
@@ -103,17 +117,18 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
 
   const ticketIds = Array.from(
     new Set(
-      [
-        ...txns.map((t) => t.ticket_id),
-        ...liveIndents.map((i) => i.ticket_id),
-      ].filter((id: string | null) => !!id && UUID_RE.test(id)),
+      [...txns.map((t) => t.ticket_id), ...liveIndents.map((i) => i.ticket_id)].filter(
+        (id: string | null) => !!id && UUID_RE.test(id),
+      ),
     ),
   ) as string[];
   let tickets: any[] = [];
   if (ticketIds.length) {
     const { data } = await sb
       .from("tickets")
-      .select("id,case_id,customer_name,assigned_engineer_name,complaint,oem_ref_id,defective_parts_details")
+      .select(
+        "id,case_id,customer_name,assigned_engineer_name,complaint,oem_ref_id,defective_parts_details",
+      )
       .in("id", ticketIds);
     tickets = data || [];
   }
@@ -121,7 +136,10 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
 
   // Batch: all indents for the involved tickets, so Oracle # can be resolved
   // from the Indent that already handled this defective part.
-  const norm = (v: any) => String(v ?? "").trim().toLowerCase();
+  const norm = (v: any) =>
+    String(v ?? "")
+      .trim()
+      .toLowerCase();
   const oracleByTicketPart = new Map<string, string>();
   if (ticketIds.length) {
     const { data: indents } = await sb
@@ -140,7 +158,9 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     }
   }
   const whById = new Map<string, WarehouseLite>(warehouses.map((w) => [w.id, w]));
-  const tagByTxn = new Map(tags.filter((t) => t.txn_id).map((t) => [t.txn_id, t.tag_no as string | null]));
+  const tagByTxn = new Map(
+    tags.filter((t) => t.txn_id).map((t) => [t.txn_id, t.tag_no as string | null]),
+  );
   const tagByStockItem = new Map(
     tags.filter((t) => t.stock_item_id).map((t) => [t.stock_item_id, t.tag_no as string | null]),
   );
@@ -156,11 +176,16 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     const k = dispatchKey(model, serial);
     return k === "|" ? undefined : tagByPart.get(k);
   };
-  const hasTag = (model?: string | null, serial?: string | null) => tagFor(model, serial) !== undefined;
+  const hasTag = (model?: string | null, serial?: string | null) =>
+    tagFor(model, serial) !== undefined;
 
   // Include anything flagged defective by TYPE or by STATUS.
   // Bounded to DEFECTIVE_PAGE_LIMIT — unbounded fetchAll kept only for exports. Explicit cols, no select "*".
-  const { data: allStockData, error: stockErr } = await sb.from("ims_stock_items").select(STOCK_SELECT).order("created_at", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT);
+  const { data: allStockData, error: stockErr } = await sb
+    .from("ims_stock_items")
+    .select(STOCK_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(DEFECTIVE_PAGE_LIMIT);
   if (stockErr) throw stockErr;
   const allStock = (allStockData || []) as any[];
   const statusKey = (serial?: string | null, model?: string | null) =>
@@ -186,7 +211,12 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const dcDateByModel = new Map<string, string>();
   {
     // Bounded DC lookup for replacement-date enrichment (server filters replace client scan in next iteration)
-    const { data: dcsData, error: dcErr } = await sb.from("delivery_challans").select("challan_date,items").eq("doc_type", "customer").order("challan_date", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT);
+    const { data: dcsData, error: dcErr } = await sb
+      .from("delivery_challans")
+      .select("challan_date,items")
+      .eq("doc_type", "customer")
+      .order("challan_date", { ascending: false })
+      .limit(DEFECTIVE_PAGE_LIMIT);
     if (dcErr) throw dcErr;
     const dcs = (dcsData || []) as any[];
     for (const dc of dcs || []) {
@@ -200,7 +230,9 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     }
   }
   const dcDateFor = (model?: string | null, serial?: string | null) =>
-    (serial && dcDateBySerial.get(norm(serial))) || (!serial && model ? dcDateByModel.get(norm(model)) : null) || null;
+    (serial && dcDateBySerial.get(norm(serial))) ||
+    (!serial && model ? dcDateByModel.get(norm(model)) : null) ||
+    null;
 
   // Reuse existing txn linkage (and its tag) when the same physical part is
   // already present in IMS, so tags stay attached to one record.
@@ -218,7 +250,9 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     for (const blk of (ind.oracles_data as any[]) || []) {
       const oracleNo = String(blk?.oracle_no || "").trim() || null;
       const wh = whById.get(
-        ((blk?.received_rows as any[]) || []).map((r) => r?.warehouse_id).find((w) => w && UUID_RE.test(w)) || "",
+        ((blk?.received_rows as any[]) || [])
+          .map((r) => r?.warehouse_id)
+          .find((w) => w && UUID_RE.test(w)) || "",
       );
       const rows = (blk?.defective_rows as any[]) || [];
       rows.forEach((row, idx) => {
@@ -258,7 +292,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
           replacement_date: dcDateFor(model, serial),
           reason: remarks || null,
           tag_generated: hasTag(model, serial) || (txn ? tagByTxn.has(txn.id) : false),
-          tag_no: tagFor(model, serial) ?? (txn ? tagByTxn.get(txn.id) ?? null : null),
+          tag_no: tagFor(model, serial) ?? (txn ? (tagByTxn.get(txn.id) ?? null) : null),
           sent_to_oem: sentToOemKeys.has(statusKey(serial, model)),
         });
       });
@@ -273,43 +307,48 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         !indentCoveredParts.has(`${norm(t.part_model_no)}|${norm(t.part_serial_no)}`),
     )
     .map((t) => {
-    const tk = t.ticket_id ? tById.get(t.ticket_id) : null;
-    const wh = whById.get(t.to_warehouse_id || t.from_warehouse_id || "");
-    // Serial fallback: pull from the ticket's defective parts capture.
-    let serialNo: string | null = t.part_serial_no || null;
-    if (!serialNo && tk?.defective_parts_details) {
-      const match = ((tk.defective_parts_details as any[]) || []).find(
-        (p) => norm(p?.model_no) === norm(t.part_model_no) && p?.serial,
-      );
-      serialNo = match?.serial || null;
-    }
-    const oracleFromIndent = t.ticket_id
-      ? oracleByTicketPart.get(`${t.ticket_id}|${norm(t.part_model_no)}|${norm(serialNo)}`) || null
-      : null;
-    return {
-      key: t.id,
-      source: "txn" as const,
-      txn_id: t.id,
-      stock_item_id: null,
-      txn_no: t.txn_no,
-      txn_date: t.txn_date,
-      service_request_no: tk?.case_id || (t.ticket_id && !UUID_RE.test(t.ticket_id) ? t.ticket_id : null) || t.reference || null,
-      oem_ref_id: tk?.oem_ref_id || null,
-      oracle_order_no: oracleFromIndent || t.oem_case_id || null,
-      model_no: t.part_model_no || null,
-      part_name: t.part_name || null,
-      serial_no: serialNo,
-      customer_name: t.from_party || tk?.customer_name || null,
-      asp_code: wh?.asp_code || null,
-      warehouse_id: wh?.id || null,
-      engineer_name: tk?.assigned_engineer_name || null,
-      replacement_date: dcDateFor(t.part_model_no, serialNo) || t.txn_date,
-      reason: t.notes || tk?.complaint || null,
-      tag_generated: hasTag(t.part_model_no, serialNo) || tagByTxn.has(t.id),
-      tag_no: tagFor(t.part_model_no, serialNo) ?? tagByTxn.get(t.id) ?? null,
-      sent_to_oem: sentToOemKeys.has(statusKey(t.part_serial_no, t.part_model_no)),
-    };
-  });
+      const tk = t.ticket_id ? tById.get(t.ticket_id) : null;
+      const wh = whById.get(t.to_warehouse_id || t.from_warehouse_id || "");
+      // Serial fallback: pull from the ticket's defective parts capture.
+      let serialNo: string | null = t.part_serial_no || null;
+      if (!serialNo && tk?.defective_parts_details) {
+        const match = ((tk.defective_parts_details as any[]) || []).find(
+          (p) => norm(p?.model_no) === norm(t.part_model_no) && p?.serial,
+        );
+        serialNo = match?.serial || null;
+      }
+      const oracleFromIndent = t.ticket_id
+        ? oracleByTicketPart.get(`${t.ticket_id}|${norm(t.part_model_no)}|${norm(serialNo)}`) ||
+          null
+        : null;
+      return {
+        key: t.id,
+        source: "txn" as const,
+        txn_id: t.id,
+        stock_item_id: null,
+        txn_no: t.txn_no,
+        txn_date: t.txn_date,
+        service_request_no:
+          tk?.case_id ||
+          (t.ticket_id && !UUID_RE.test(t.ticket_id) ? t.ticket_id : null) ||
+          t.reference ||
+          null,
+        oem_ref_id: tk?.oem_ref_id || null,
+        oracle_order_no: oracleFromIndent || t.oem_case_id || null,
+        model_no: t.part_model_no || null,
+        part_name: t.part_name || null,
+        serial_no: serialNo,
+        customer_name: t.from_party || tk?.customer_name || null,
+        asp_code: wh?.asp_code || null,
+        warehouse_id: wh?.id || null,
+        engineer_name: tk?.assigned_engineer_name || null,
+        replacement_date: dcDateFor(t.part_model_no, serialNo) || t.txn_date,
+        reason: t.notes || tk?.complaint || null,
+        tag_generated: hasTag(t.part_model_no, serialNo) || tagByTxn.has(t.id),
+        tag_no: tagFor(t.part_model_no, serialNo) ?? tagByTxn.get(t.id) ?? null,
+        sent_to_oem: sentToOemKeys.has(statusKey(t.part_serial_no, t.part_model_no)),
+      };
+    });
 
   // Defective stock can also exist as stock items without a matching `defective_in`
   // transaction (opening stock, GRN-classified defectives, manual entries). Include
@@ -322,12 +361,16 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const stockItems = allStock.filter(
     (s) =>
       String(s.stock_type || "").toLowerCase() === "defective" ||
-      String(s.stock_status || "").toLowerCase().includes("defect"),
+      String(s.stock_status || "")
+        .toLowerCase()
+        .includes("defect"),
   );
   const fromStock = stockItems
     .filter(
       (s) =>
-        !coveredSerials.has(`${(s.part_serial_no || "").toLowerCase()}|${(s.part_model_no || "").toLowerCase()}`),
+        !coveredSerials.has(
+          `${(s.part_serial_no || "").toLowerCase()}|${(s.part_model_no || "").toLowerCase()}`,
+        ),
     )
     .map((s) => {
       const wh = whById.get(s.warehouse_id || "");
@@ -364,7 +407,11 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
  * Future: paginated hook `useDefectiveTagsPaginated` with `range` + `count: exact`.
  */
 export async function listDefectiveTags(): Promise<DefectiveTag[]> {
-  const { data, error } = await sb.from("defective_tags").select("*").order("created_at", { ascending: false }).limit(DEFECTIVE_PAGE_LIMIT);
+  const { data, error } = await sb
+    .from("defective_tags")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(DEFECTIVE_PAGE_LIMIT);
   if (error) throw error;
   return (data || []) as DefectiveTag[];
 }
@@ -381,22 +428,39 @@ export async function listDefectiveInRecordsForExport(): Promise<DefectiveInReco
   // Re-uses fetchAll loops intentionally for export-only path.
   const { fetchAll: fa } = await import("@/lib/fetchAll");
   const [txns, tags, warehouses, indents] = await Promise.all([
-    fa<any>("ims_transactions", (q) => q.select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false })),
+    fa<any>("ims_transactions", (q) =>
+      q.select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false }),
+    ),
     fa<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no,model_no,serial_no")),
     listWarehouses(),
-    fa<any>("indents", (q) => q.select("id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted").order("indent_date", { ascending: false })),
+    fa<any>("indents", (q) =>
+      q
+        .select(
+          "id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted",
+        )
+        .order("indent_date", { ascending: false }),
+    ),
   ]);
   // Defer to bounded implementation shape — caller can merge if needed. For now return empty and let caller call bounded version for UI.
   // Keeping symbol for API parity; actual export should call fetchAll loops above and reuse the same merge logic if full fidelity is needed.
-  void txns; void tags; void warehouses; void indents;
-  throw new Error("listDefectiveInRecordsForExport: use bounded listDefectiveInRecords for UI; exports should page via RPC/view in next phase.");
+  void txns;
+  void tags;
+  void warehouses;
+  void indents;
+  throw new Error(
+    "listDefectiveInRecordsForExport: use bounded listDefectiveInRecords for UI; exports should page via RPC/view in next phase.",
+  );
 }
 
 export type TagDispatch = { dc_no: string; dc_date: string | null };
 
 /** Key used to match a tag to its dispatched stock item: model|serial (lowercased). */
 export function dispatchKey(model?: string | null, serial?: string | null) {
-  return `${String(model ?? "").trim().toLowerCase()}|${String(serial ?? "").trim().toLowerCase()}`;
+  return `${String(model ?? "")
+    .trim()
+    .toLowerCase()}|${String(serial ?? "")
+    .trim()
+    .toLowerCase()}`;
 }
 
 /**
@@ -405,7 +469,11 @@ export function dispatchKey(model?: string | null, serial?: string | null) {
  */
 export async function fetchTagDispatches(): Promise<Map<string, TagDispatch>> {
   // Bounded — defective returns are rate-limited; full scan reserved for exports
-  const { data: stockData, error: sErr } = await sb.from("ims_stock_items").select("part_model_no,part_serial_no,transaction_ref,updated_at").eq("stock_status", "returned_to_oem").limit(DEFECTIVE_PAGE_LIMIT);
+  const { data: stockData, error: sErr } = await sb
+    .from("ims_stock_items")
+    .select("part_model_no,part_serial_no,transaction_ref,updated_at")
+    .eq("stock_status", "returned_to_oem")
+    .limit(DEFECTIVE_PAGE_LIMIT);
   if (sErr) throw sErr;
   const stock = (stockData || []) as any[];
   const map = new Map<string, TagDispatch>();
@@ -424,7 +492,9 @@ export async function fetchTagDispatches(): Promise<Map<string, TagDispatch>> {
       .from("delivery_challans")
       .select("challan_no,challan_date")
       .in("challan_no", Array.from(challanNos));
-    const dateByNo = new Map<string, string | null>((data || []).map((d: any) => [d.challan_no, d.challan_date]));
+    const dateByNo = new Map<string, string | null>(
+      (data || []).map((d: any) => [d.challan_no, d.challan_date]),
+    );
     for (const v of map.values()) v.dc_date = dateByNo.get(v.dc_no) ?? null;
   }
   return map;
@@ -446,7 +516,10 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
   // Guard against duplicates even when the UI-side flag is stale: re-check the
   // register for any existing tag on the same physical unit (model + serial).
   // Bounded duplicate check — full table would be next-phase RPC with unique constraint as source of truth
-  const { data: existingData, error: exErr } = await sb.from("defective_tags").select("tag_no,model_no,serial_no").limit(DEFECTIVE_PAGE_LIMIT);
+  const { data: existingData, error: exErr } = await sb
+    .from("defective_tags")
+    .select("tag_no,model_no,serial_no")
+    .limit(DEFECTIVE_PAGE_LIMIT);
   if (exErr) throw exErr;
   const existing = (existingData || []) as any[];
   const taken = new Map<string, string | null>();
@@ -454,7 +527,9 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
     const k = dispatchKey(t.model_no, t.serial_no);
     if (k !== "|" && !taken.has(k)) taken.set(k, t.tag_no ?? null);
   }
-  const dupes = candidates.filter((r) => taken.has(dispatchKey(r.model_no || r.part_name, r.serial_no)));
+  const dupes = candidates.filter((r) =>
+    taken.has(dispatchKey(r.model_no || r.part_name, r.serial_no)),
+  );
   if (dupes.length) {
     const d = dupes[0];
     const tagNo = taken.get(dispatchKey(d.model_no || d.part_name, d.serial_no));
@@ -463,25 +538,24 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
     );
   }
 
-  const rows = candidates
-    .map((r) => ({
-      txn_id: r.txn_id,
-      stock_item_id: r.stock_item_id,
-      txn_no: r.txn_no,
-      txn_date: r.txn_date,
-      service_request_no: r.service_request_no,
-      oem_case_id: r.oem_ref_id,
-      oracle_order_no: r.oracle_order_no,
-      model_no: r.model_no || r.part_name,
-      serial_no: r.serial_no,
-      customer_name: r.customer_name,
-      asp_code: r.asp_code,
-      engineer_name: r.engineer_name,
-      replacement_date: r.replacement_date,
-      reason: r.reason,
-      warehouse_id: r.warehouse_id,
-      created_by_name: createdByName || null,
-    }));
+  const rows = candidates.map((r) => ({
+    txn_id: r.txn_id,
+    stock_item_id: r.stock_item_id,
+    txn_no: r.txn_no,
+    txn_date: r.txn_date,
+    service_request_no: r.service_request_no,
+    oem_case_id: r.oem_ref_id,
+    oracle_order_no: r.oracle_order_no,
+    model_no: r.model_no || r.part_name,
+    serial_no: r.serial_no,
+    customer_name: r.customer_name,
+    asp_code: r.asp_code,
+    engineer_name: r.engineer_name,
+    replacement_date: r.replacement_date,
+    reason: r.reason,
+    warehouse_id: r.warehouse_id,
+    created_by_name: createdByName || null,
+  }));
   if (!rows.length) return [] as DefectiveTag[];
   const { data, error } = await sb.from("defective_tags").insert(rows).select("*");
   if (error) throw error;
@@ -494,7 +568,11 @@ export async function markTagsPrinted(ids: string[], byName?: string | null) {
   // print the same batch concurrently. Instead, each tag is incremented from
   // a freshly read count, sequentially, with every result checked.
   for (const id of ids) {
-    const { data: row, error: readErr } = await sb.from("defective_tags").select("id,print_count").eq("id", id).maybeSingle();
+    const { data: row, error: readErr } = await sb
+      .from("defective_tags")
+      .select("id,print_count")
+      .eq("id", id)
+      .maybeSingle();
     if (readErr) throw new Error(`Could not read print state for tag ${id}: ${readErr.message}`);
     const next = ((row as { print_count?: number } | null)?.print_count || 0) + 1;
     const { error } = await sb
