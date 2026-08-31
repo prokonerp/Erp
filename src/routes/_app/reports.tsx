@@ -8,12 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { istTodayIso, daysAgoIst } from "@/lib/dateRange";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, CircleCheck, TriangleAlert } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
   listStock, listWarehouses,
-  type StockItem, type WarehouseLite,
+  type StockItem, type StockType, type WarehouseLite,
 } from "@/lib/ims";
+import { StockWarehouseKpis, StockWarehouseHeader } from "@/components/reports/StockWarehouseKpis";
+import { StockWarehouseTable } from "@/components/reports/StockWarehouseTable";
+import { ReportsPageHeader, ReportsFilters, ReportsTabsNav, ReportsWarrantyShell } from "@/components/reports/ReportsShell";
 
 export const Route = createFileRoute("/_app/reports")({
   component: ReportsPage,
@@ -114,29 +117,48 @@ function ReportsPage() {
     return Array.from(m.values()).sort((a, b) => a.warehouse.localeCompare(b.warehouse) || a.product.localeCompare(b.product));
   }, [filteredStock, warehouses]);
 
-  /** Serial tracking: grouped by Model No + Warehouse (+ OEM via the shared groupKey). */
+  /** Serial tracking: grouped by Model No + Warehouse (+ OEM via the shared groupKey).
+   *  Each serial retains its stock_type so Good vs Defective can be coloured/tagged.
+   */
   const serialGroups = useMemo(() => {
-    const m = new Map<string, { key: string; model: string; oem: string; warehouse: string; qty: number; serials: string[] }>();
+    type SerialEntry = { sn: string; type: StockType };
+    const m = new Map<string, { key: string; model: string; oem: string; warehouse: string; serialMap: Map<string, StockType> }>();
     filteredStock.filter((r) => r.stock_status === "available").forEach((r) => {
       const list = splitSerials(r.part_serial_no);
       if (list.length === 0) return;
       const key = `${r.warehouse_id || "__"}_${groupKey(r)}`;
-      const e = m.get(key) || {
-        key,
-        model: r.part_model_no || "—",
-        oem: r.oem || "—",
-        warehouse: plainWhName(r.warehouse_id),
-        qty: 0,
-        serials: [] as string[],
-      };
-      e.qty += list.length;
-      e.serials.push(...list);
-      m.set(key, e);
+      let e = m.get(key);
+      if (!e) {
+        e = {
+          key,
+          model: r.part_model_no || "—",
+          oem: r.oem || "—",
+          warehouse: plainWhName(r.warehouse_id),
+          serialMap: new Map<string, StockType>(),
+        };
+        m.set(key, e);
+      }
+      for (const sn of list) {
+        const cur = e.serialMap.get(sn);
+        // Defective takes precedence if the same serial appears in both types
+        if (!cur) e.serialMap.set(sn, r.stock_type);
+        else if (cur === "good" && r.stock_type === "defective") e.serialMap.set(sn, "defective");
+      }
     });
     return Array.from(m.values())
-      .map((g) => ({ ...g, serials: Array.from(new Set(g.serials)).sort((a, b) => a.localeCompare(b)) }))
+      .map((g) => {
+        const serials: SerialEntry[] = Array.from(g.serialMap.entries())
+          .map(([sn, type]) => ({ sn, type }))
+          .sort((a, b) => a.sn.localeCompare(b.sn));
+        const good = serials.filter((s) => s.type === "good").length;
+        const defective = serials.filter((s) => s.type === "defective").length;
+        return { key: g.key, model: g.model, oem: g.oem, warehouse: g.warehouse, qty: serials.length, good, defective, serials };
+      })
       .sort((a, b) => a.model.localeCompare(b.model) || a.warehouse.localeCompare(b.warehouse));
   }, [filteredStock, warehouses]);
+
+  const totalGoodSerials = useMemo(() => serialGroups.reduce((s, g) => s + g.good, 0), [serialGroups]);
+  const totalDefectiveSerials = useMemo(() => serialGroups.reduce((s, g) => s + g.defective, 0), [serialGroups]);
 
   // --- Warranty tab still reads the legacy `serials` table (ims_stock_items has no warranty dates) ---
   const enriched = useMemo(() => serials.map((s) => ({
@@ -165,52 +187,30 @@ function ReportsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Stock &amp; Serial Reports</h1>
-        <p className="text-sm text-muted-foreground">Track inventory by warehouse, serial movement, and warranty status.</p>
-      </div>
+    <div className="space-y-5">
+      <ReportsPageHeader />
 
-      <Card>
-        <CardContent className="pt-4 flex flex-wrap items-end gap-3">
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">Warehouse</label>
-            <Select value={wh} onValueChange={setWh}>
-              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all">All warehouses</SelectItem>
-                {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.code ? `${w.code} — ` : ""}{w.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">Product</label>
-            <Select value={prod} onValueChange={setProd}>
-              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all">All products</SelectItem>
-                {stockProducts.map((p) => <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-xs text-muted-foreground block mb-1">Search</label>
-            <Input placeholder="Serial / product / customer / invoice…" value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
-        </CardContent>
-      </Card>
+      <ReportsFilters
+        warehouses={warehouses}
+        stockProducts={stockProducts}
+        wh={wh}
+        prod={prod}
+        q={q}
+        onWhChange={setWh}
+        onProdChange={setProd}
+        onQChange={setQ}
+        onClearAll={() => { setWh("__all"); setProd("__all"); setQ(""); }}
+        resultsCount={tab === "stock" ? stockGroups.length : tab === "serials" ? serialGroups.length : warrantyRows.length}
+        resultsLabel={tab === "stock" ? "SKUs" : tab === "serials" ? "Models" : "Rows"}
+      />
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="stock">Stock by Warehouse</TabsTrigger>
-          <TabsTrigger value="serials">Serial Tracking</TabsTrigger>
-          <TabsTrigger value="warranty">Warranty Status</TabsTrigger>
-        </TabsList>
+        <ReportsTabsNav counts={{ stock: stockGroups.length, serials: serialGroups.length, warranty: warrantyRows.length }} />
 
-        <TabsContent value="stock" className="mt-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Available Stock by Warehouse ({stockGroups.length})</CardTitle>
+        <TabsContent value="stock" className="mt-4 space-y-4">
+          <StockWarehouseKpis groups={stockGroups} />
+          <Card className="overflow-hidden rounded-xl border-border/60 bg-card shadow-sm">
+            <StockWarehouseHeader count={stockGroups.length}>
               <ExportButtons name="Stock_By_Warehouse" title="Stock by Warehouse" rows={stockGroups} columns={[
                 { header: "Warehouse", get: (r) => r.warehouse },
                 { header: "OEM", get: (r) => r.oem },
@@ -219,39 +219,39 @@ function ReportsPage() {
                 { header: "Defective", get: (r) => r.defective },
                 { header: "Total", get: (r) => r.qty },
               ]} />
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>Warehouse</TableHead><TableHead>OEM</TableHead><TableHead>Product</TableHead>
-                  <TableHead className="text-right">Good</TableHead><TableHead className="text-right">Defective</TableHead><TableHead className="text-right">Total Available</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {stockGroups.map((g, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{g.warehouse}</TableCell>
-                      <TableCell>{g.oem}</TableCell>
-                      <TableCell>{g.product}</TableCell>
-                      <TableCell className="text-right">{g.good || "—"}</TableCell>
-                      <TableCell className="text-right">{g.defective || "—"}</TableCell>
-                      <TableCell className="text-right font-medium">{g.qty}</TableCell>
-                    </TableRow>
-                  ))}
-                  {stockGroups.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No available stock matches these filters.</TableCell></TableRow>}
-                </TableBody>
-              </Table>
+            </StockWarehouseHeader>
+            <CardContent className="p-0">
+              <StockWarehouseTable groups={stockGroups} />
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="serials" className="mt-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Serial Number Tracking ({serialGroups.length})</CardTitle>
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+              <div className="space-y-2">
+                <CardTitle className="text-base">Serial Number Tracking ({serialGroups.length})</CardTitle>
+                {serialGroups.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
+                      <CircleCheck className="h-3.5 w-3.5" /> Good · {totalGoodSerials}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 font-medium text-rose-700">
+                      <TriangleAlert className="h-3.5 w-3.5" /> Defective · {totalDefectiveSerials}
+                    </span>
+                    <span className="text-muted-foreground ml-1">
+                      {totalGoodSerials + totalDefectiveSerials} total serials · green = good stock, red = defective stock
+                    </span>
+                  </div>
+                )}
+              </div>
               <ExportButtons name="Serial_Tracking" title="Serial Number Tracking" rows={serialGroups} columns={[
                 { header: "Model No", get: (r) => r.model },
                 { header: "Warehouse", get: (r) => r.warehouse },
+                { header: "Good", get: (r) => r.good },
+                { header: "Defective", get: (r) => r.defective },
                 { header: "Total Qty", get: (r) => r.qty },
+                { header: "Serials (Good=BAD tagged)", get: (r) => r.serials.map((s) => `${s.sn} [${s.type}]`).join(", ") },
               ]} />
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -259,7 +259,9 @@ function ReportsPage() {
                 <TableHeader><TableRow>
                   <TableHead className="w-8" />
                   <TableHead>Model No</TableHead><TableHead>Warehouse</TableHead>
-                  <TableHead className="text-right">Total Quantity</TableHead>
+                  <TableHead className="text-center">Good</TableHead>
+                  <TableHead className="text-center">Defective</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {serialGroups.map((g) => {
@@ -267,7 +269,7 @@ function ReportsPage() {
                     return (
                       <Fragment key={g.key}>
                         <TableRow
-                          className="cursor-pointer"
+                          className="cursor-pointer hover:bg-muted/50"
                           onClick={() => setOpenSerialGroups((s) => ({ ...s, [g.key]: !s[g.key] }))}
                         >
                           <TableCell className="w-8 text-muted-foreground">
@@ -275,25 +277,69 @@ function ReportsPage() {
                           </TableCell>
                           <TableCell className="font-medium">{g.model}</TableCell>
                           <TableCell>{g.warehouse}</TableCell>
+                          <TableCell className="text-center">
+                            {g.good > 0
+                              ? <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 min-w-6">{g.good}</span>
+                              : <span className="text-muted-foreground text-xs">—</span>}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {g.defective > 0
+                              ? <span className="inline-flex items-center justify-center rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700 min-w-6">{g.defective}</span>
+                              : <span className="text-muted-foreground text-xs">—</span>}
+                          </TableCell>
                           <TableCell className="text-right font-medium">{g.qty}</TableCell>
                         </TableRow>
                         {open && (
-                          <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <TableRow className="bg-muted/20 hover:bg-muted/20">
                             <TableCell />
-                            <TableCell colSpan={3} className="py-3">
-                              <div className="text-xs text-muted-foreground mb-2">Serial numbers ({g.serials.length})</div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {g.serials.map((sn) => (
-                                  <Badge key={sn} variant="secondary" className="font-mono text-[11px]">{sn}</Badge>
-                                ))}
+                            <TableCell colSpan={5} className="py-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                                <div className="flex items-center gap-3 text-xs">
+                                  <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-500" /> Good ({g.good})
+                                  </span>
+                                  <span className="inline-flex items-center gap-1.5 font-medium text-rose-700">
+                                    <span className="h-2 w-2 rounded-full bg-rose-500" /> Defective ({g.defective})
+                                  </span>
+                                  <span className="text-muted-foreground hidden sm:inline">— click a serial to copy / search</span>
+                                </div>
+                                <span className="text-xs text-muted-foreground">Serial numbers ({g.serials.length})</span>
                               </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {g.serials.map(({ sn, type }) => {
+                                  const isBad = type === "defective";
+                                  return (
+                                    <Badge
+                                      key={sn}
+                                      variant="outline"
+                                      title={isBad ? "Defective stock — needs replacement/return" : "Good stock — available for issue"}
+                                      className={`group inline-flex items-center gap-1.5 font-mono text-[11px] leading-none py-1 pl-2 pr-1.5 border shadow-sm transition-colors cursor-default select-all
+                                        ${isBad
+                                          ? "bg-rose-50 border-rose-300 text-rose-800 hover:bg-rose-100 hover:border-rose-400"
+                                          : "bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-400"}`}
+                                    >
+                                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${isBad ? "bg-rose-500" : "bg-emerald-500"}`} />
+                                      {sn}
+                                      <span className={`ml-1 inline-flex items-center rounded px-1 py-0.5 text-[9px] font-sans font-bold tracking-wide leading-none
+                                        ${isBad ? "bg-rose-500 text-white" : "bg-emerald-600 text-white"}`}>
+                                        {isBad ? "BAD" : "GOOD"}
+                                      </span>
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                              {g.defective > 0 && g.good > 0 && (
+                                <p className="text-[11px] text-muted-foreground mt-2">
+                                  Tip: Red <span className="font-semibold text-rose-700">BAD</span> serials are defective stock in this warehouse — don&apos;t issue without QC. Green <span className="font-semibold text-emerald-700">GOOD</span> are ready to issue.
+                                </p>
+                              )}
                             </TableCell>
                           </TableRow>
                         )}
                       </Fragment>
                     );
                   })}
-                  {serialGroups.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No serialised stock matches these filters.</TableCell></TableRow>}
+                  {serialGroups.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No serialised stock matches these filters.</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </CardContent>
@@ -301,9 +347,9 @@ function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="warranty" className="mt-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Warranty Status ({warrantyRows.length})</CardTitle>
+          <ReportsWarrantyShell
+            count={warrantyRows.length}
+            actions={(
               <ExportButtons name="Warranty_Status" title="Warranty Status" rows={warrantyRows} columns={[
                 { header: "Serial", get: (r) => r.serial_number },
                 { header: "Product", get: (r) => r.product },
@@ -312,8 +358,9 @@ function ReportsPage() {
                 { header: "End", get: (r) => r.warranty_end_date || "" },
                 { header: "Status", get: (r) => warrantyState(r.warranty_end_date!).label },
               ]} />
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
+            )}
+          >
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Serial</TableHead><TableHead>Product</TableHead><TableHead>Customer</TableHead>
@@ -336,8 +383,8 @@ function ReportsPage() {
                   {warrantyRows.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No warranty records.</TableCell></TableRow>}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </div>
+          </ReportsWarrantyShell>
         </TabsContent>
       </Tabs>
     </div>
