@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,40 +20,62 @@ import {
   TIER_LABEL,
 } from "@/lib/upsBundle";
 import type { ProductMaster } from "@/components/ProductPicker";
-import { fetchAll } from "@/lib/fetchAll";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 type Props = {
   items: QuoteItem[];
   onAddItems: (rows: QuoteItem[]) => void;
 };
 
+const RecoCard = memo(function RecoCard({ r, onAdd }: { r: Recommendation; onAdd: (r: Recommendation) => void }) {
+  return (
+    <div className="rounded-md border p-2 bg-white space-y-1">
+      <div className="flex items-center justify-between">
+        <Badge variant="outline" className="text-[10px]">{TIER_LABEL[r.tier]}</Badge>
+        <span className="text-xs font-semibold">{fmtMoney(r.total_price)}</span>
+      </div>
+      <div className="text-xs font-medium">{r.battery.voltage}V \u00d7 {r.battery.ah}Ah \u00d7 {r.qty} nos</div>
+      <div className="text-[10px] text-muted-foreground">{r.battery.brand} {r.battery.model} \u2014 backup \u2248 {fmtBackup(r.achieved_backup_h)}</div>
+      <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={() => onAdd(r)}>Add to quote</Button>
+    </div>
+  );
+});
+
 export function UpsSmartPanel({ items, onAddItems }: Props) {
   const [bundles, setBundles] = useState<UpsBundle[]>([]);
   const [batteries, setBatteries] = useState<Battery[]>([]);
-  const [products, setProducts] = useState<ProductMaster[]>([]);
-  const [loading, setLoading] = useState(true);
   const [overrides, setOverrides] = useState<Record<string, { loadW: number; desiredH: number }>>({});
   const [recos, setRecos] = useState<Record<string, Recommendation[]>>({});
 
+  // Bundles + batteries still via their own fetchers; products now bounded server query (100 max, explicit 8 cols)
+  const PRODUCT_COLS = "id,name,model,brand,hsn,unit,default_price,description";
+  const { data: productsData, isLoading: productsLoading } = useQuery({
+    queryKey: ["ups-smart-products"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("products").select(PRODUCT_COLS).eq("active", true).order("name").limit(100);
+      if (error) throw error;
+      return (data || []) as unknown as ProductMaster[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const products = useMemo(() => (productsData as unknown as ProductMaster[] | undefined) ?? [], [productsData]);
+
+  const [catalogLoading, setCatalogLoading] = useState(true);
   useEffect(() => {
     let alive = true;
-    Promise.all([
-      fetchUpsBundles(),
-      fetchBatteryCatalog(),
-      fetchAll<ProductMaster>("products", (q) => q.select("id,name,model,brand,hsn,unit,default_price,description").limit(500)),
-    ])
-      .then(([b, bat, p]) => {
+    Promise.all([fetchUpsBundles(), fetchBatteryCatalog()])
+      .then(([b, bat]) => {
         if (!alive) return;
         setBundles(b);
         setBatteries(bat);
-        setProducts(p);
       })
       .catch(() => {})
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
+      .finally(() => alive && setCatalogLoading(false));
+    return () => { alive = false; };
   }, []);
+
+  const loading = catalogLoading || productsLoading;
 
   const productMap = useMemo(() => {
     const m = new Map<string, ProductMaster>();
@@ -73,10 +95,7 @@ export function UpsSmartPanel({ items, onAddItems }: Props) {
       .filter(Boolean) as { idx: number; item: QuoteItem; bundle: UpsBundle; productId: string }[];
   }, [items, bundles]);
 
-  if (loading) return null;
-  if (upsLines.length === 0) return null;
-
-  const addBundle = (u: { bundle: UpsBundle; item: QuoteItem }) => {
+  const addBundle = useCallback((u: { bundle: UpsBundle; item: QuoteItem }) => {
     const existingPids = new Set(items.map((it) => (it as any).product_id).filter(Boolean));
     const rows: QuoteItem[] = [];
     for (const bi of u.bundle.items) {
@@ -104,13 +123,13 @@ export function UpsSmartPanel({ items, onAddItems }: Props) {
     }
     onAddItems(rows);
     toast.success(`Added ${rows.length} bundle item(s)`);
-  };
+  }, [items, productMap, onAddItems]);
 
-  const getState = (key: string, bundle: UpsBundle) =>
-    overrides[key] ?? { loadW: Number(bundle.ups_load_watts || 0), desiredH: 4 };
+  const getState = useCallback((key: string, bundle: UpsBundle) =>
+    overrides[key] ?? { loadW: Number(bundle.ups_load_watts || 0), desiredH: 4 }, [overrides]);
 
-  // Detect batteries currently added for a UPS: any item with product_id linked to a battery in catalog
-  const findQuoteBattery = () => {
+  // Memoized battery lookup — stable reference vs per-row findQuoteBattery()
+  const currentBattery = useMemo(() => {
     for (const it of items) {
       const pid = (it as any).product_id as string | undefined;
       if (!pid) continue;
@@ -118,7 +137,37 @@ export function UpsSmartPanel({ items, onAddItems }: Props) {
       if (bat) return { battery: bat, qty: Number(it.qty || 0) };
     }
     return null;
-  };
+  }, [items, batteries]);
+
+  const handleRecommend = useCallback((key: string, loadW: number, desiredH: number) => {
+    const r = recommendBatteries(batteries, loadW, desiredH);
+    setRecos((prev) => ({ ...prev, [key]: r }));
+    if (r.length === 0) toast.info("No batteries found for these inputs. Configure Battery Catalog in Settings.");
+  }, [batteries]);
+
+  const handleApplyReco = useCallback((r: Recommendation) => {
+    const bp = r.battery.product_id ? productMap.get(r.battery.product_id) : undefined;
+    const desc = bp?.name || `${r.battery.brand || ""} ${r.battery.model || ""} ${r.battery.voltage}V ${r.battery.ah}Ah`.trim();
+    const row: QuoteItem = {
+      description: desc || "Battery",
+      hsn: bp?.hsn || "",
+      qty: r.qty,
+      unit: bp?.unit || "Nos",
+      rate: r.battery.price || (bp?.default_price != null ? Number(bp.default_price) : 0),
+      discount_percent: 0,
+      tax_percent: 18,
+      amount: 0,
+      item_details: `${r.battery.voltage}V \u00d7 ${r.battery.ah}Ah \u2014 ${TIER_LABEL[r.tier]} tier`,
+    } as any;
+    if (bp) (row as any).product_id = bp.id;
+    onAddItems([row]);
+    toast.success(`Added ${r.qty} \u00d7 ${desc}`);
+  }, [productMap, onAddItems]);
+
+
+  if (loading) return null;
+  if (upsLines.length === 0) return null;
+
 
   return (
     <Card className="print:hidden border-blue-200 bg-blue-50/40">
@@ -132,7 +181,7 @@ export function UpsSmartPanel({ items, onAddItems }: Props) {
         {upsLines.map((u) => {
           const key = `${u.productId}-${u.idx}`;
           const s = getState(key, u.bundle);
-          const currentBat = findQuoteBattery();
+          const currentBat = currentBattery;
           const liveH = currentBat
             ? backupHours({
                 voltage: currentBat.battery.voltage,
@@ -144,30 +193,7 @@ export function UpsSmartPanel({ items, onAddItems }: Props) {
           const halfLoadH = liveH * 2;
           const isLow = liveH > 0 && liveH < 1;
 
-          const doRecommend = () => {
-            const r = recommendBatteries(batteries, s.loadW, s.desiredH);
-            setRecos((prev) => ({ ...prev, [key]: r }));
-            if (r.length === 0) toast.info("No batteries found for these inputs. Configure Battery Catalog in Settings.");
-          };
 
-          const applyReco = (r: Recommendation) => {
-            const bp = r.battery.product_id ? productMap.get(r.battery.product_id) : undefined;
-            const desc = bp?.name || `${r.battery.brand || ""} ${r.battery.model || ""} ${r.battery.voltage}V ${r.battery.ah}Ah`.trim();
-            const row: QuoteItem = {
-              description: desc || "Battery",
-              hsn: bp?.hsn || "",
-              qty: r.qty,
-              unit: bp?.unit || "Nos",
-              rate: r.battery.price || (bp?.default_price != null ? Number(bp.default_price) : 0),
-              discount_percent: 0,
-              tax_percent: 18,
-              amount: 0,
-              item_details: `${r.battery.voltage}V × ${r.battery.ah}Ah — ${TIER_LABEL[r.tier]} tier`,
-            } as any;
-            if (bp) (row as any).product_id = bp.id;
-            onAddItems([row]);
-            toast.success(`Added ${r.qty} × ${desc}`);
-          };
 
           return (
             <div key={key} className="rounded-md border bg-white p-3 space-y-3">
@@ -234,7 +260,7 @@ export function UpsSmartPanel({ items, onAddItems }: Props) {
                 <div className="text-[11px] text-muted-foreground">
                   Formula: (V × Ah × Qty × 0.8) / Load
                 </div>
-                <Button size="sm" variant="secondary" onClick={doRecommend}>
+                <Button size="sm" variant="secondary" onClick={() => handleRecommend(key, s.loadW, s.desiredH)}>
                   <Sparkles className="h-3.5 w-3.5 mr-1" /> Recommend batteries
                 </Button>
               </div>
@@ -242,21 +268,7 @@ export function UpsSmartPanel({ items, onAddItems }: Props) {
               {recos[key] && recos[key].length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   {recos[key].map((r) => (
-                    <div key={r.tier} className="rounded-md border p-2 bg-white space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="outline" className="text-[10px]">{TIER_LABEL[r.tier]}</Badge>
-                        <span className="text-xs font-semibold">{fmtMoney(r.total_price)}</span>
-                      </div>
-                      <div className="text-xs font-medium">
-                        {r.battery.voltage}V × {r.battery.ah}Ah × {r.qty} nos
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {r.battery.brand} {r.battery.model} — backup ≈ {fmtBackup(r.achieved_backup_h)}
-                      </div>
-                      <Button size="sm" variant="outline" className="w-full h-7 text-[11px]" onClick={() => applyReco(r)}>
-                        Add to quote
-                      </Button>
-                    </div>
+                    <RecoCard key={r.tier} r={r} onAdd={handleApplyReco} />
                   ))}
                 </div>
               )}

@@ -1,32 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchAll } from "@/lib/fetchAll";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useProductsForPicker } from "@/hooks/useMasters";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown, Plus, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 
 type Product = {
   id: string;
   name: string;
   model: string | null;
   brand: string | null;
-  active: boolean | null;
+  category?: string | null;
+  hsn?: string | null;
+  active?: boolean | null;
 };
-
-/** Cache products in-module so multiple pickers on one form share one fetch,
- *  and re-open picks up newly added products after a lightweight refetch. */
-let cache: Product[] | null = null;
-const listeners = new Set<(rows: Product[]) => void>();
-async function loadProducts(force = false): Promise<Product[]> {
-  if (cache && !force) return cache;
-  const rows = await fetchAll<Product>("products", (q) =>
-    q.select("id,name,model,brand,active").order("name"),
-  );
-  cache = rows.filter((p) => p.active !== false);
-  listeners.forEach((fn) => fn(cache!));
-  return cache;
-}
 
 type Props = {
   /** Currently saved product name (auto-populated from defective row). */
@@ -54,24 +44,46 @@ export function IndentProductPicker({
   disabled,
   className,
 }: Props) {
-  const [rows, setRows] = useState<Product[]>(cache || []);
   const [pOpen, setPOpen] = useState(false);
   const [mOpen, setMOpen] = useState(false);
+  const [pSearch, setPSearch] = useState("");
+  const [mSearch, setMSearch] = useState("");
+  const [pDebounced, setPDebounced] = useState("");
+  const [mDebounced, setMDebounced] = useState("");
+  useEffect(() => { const t = setTimeout(() => setPDebounced(pSearch), 150); return () => clearTimeout(t); }, [pSearch]);
+  useEffect(() => { const t = setTimeout(() => setMDebounced(mSearch), 150); return () => clearTimeout(t); }, [mSearch]);
 
-  useEffect(() => {
-    let alive = true;
-    loadProducts().then((data) => { if (alive) setRows(data); }).catch(() => {});
-    const fn = (r: Product[]) => setRows(r);
-    listeners.add(fn);
-    return () => { alive = false; listeners.delete(fn); };
-  }, []);
+  // Product picker: server-filtered 25/30 window, 6 cols, shouldFilter=false
+  const { data: pickerRows } = useProductsForPicker(pDebounced);
+  const rows = useMemo(() => (pickerRows as unknown as Product[] | undefined) ?? [], [pickerRows]);
 
-  // Refresh when the picker regains focus (user returned from Product Master tab).
-  useEffect(() => {
-    const onFocus = () => { loadProducts(true).catch(() => {}); };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);
+  // Model picker: server-filtered by selected product name + debounced model search, explicit 6 cols, limit 30
+  const MODEL_COLS = "id,name,model,brand,category,hsn";
+  const { data: modelRowsData } = useQuery({
+    queryKey: ["indent-models", productValue, mDebounced],
+    queryFn: async () => {
+      if (!productValue) return [] as Product[];
+      let q = supabase.from("products").select(MODEL_COLS).eq("name", productValue).eq("active", true).order("model").limit(30);
+      const term = mDebounced.trim();
+      if (term) q = q.ilike("model", `%${term}%`);
+      const { data, error } = await q as any;
+      if (error) throw error;
+      return (data || []) as Product[];
+    },
+    enabled: !!productValue,
+    staleTime: 60 * 1000,
+  });
+  const modelRows = useMemo(() => (modelRowsData as Product[] | undefined) ?? [], [modelRowsData]);
+
+  const handleProductPick = useCallback((name: string) => {
+    const nextModel = name.toLowerCase() === productValue.toLowerCase() ? modelValue : "";
+    onPick({ name, model: nextModel });
+    setPOpen(false);
+  }, [productValue, modelValue, onPick]);
+  const handleModelPick = useCallback((m: string) => {
+    onPick({ name: productValue, model: m });
+    setMOpen(false);
+  }, [productValue, onPick]);
 
   const productNames = useMemo(() => {
     const seen = new Set<string>();
@@ -82,7 +94,7 @@ export function IndentProductPicker({
       seen.add(n.toLowerCase());
       out.push(n);
     }
-    // Ensure the currently-saved name renders even if not in master.
+    // Ensure the currently-saved name renders even if not in 25-window
     if (productValue && !seen.has(productValue.toLowerCase())) out.unshift(productValue);
     return out;
   }, [rows, productValue]);
@@ -91,16 +103,25 @@ export function IndentProductPicker({
     if (!productValue) return [] as string[];
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const r of rows) {
-      if ((r.name || "").toLowerCase() !== productValue.toLowerCase()) continue;
+    for (const r of modelRows) {
       const m = (r.model || "").trim();
       if (!m || seen.has(m.toLowerCase())) continue;
       seen.add(m.toLowerCase());
       out.push(m);
     }
+    // Fallback: also surface models from the 25-window that match productValue when modelRows is filtered narrowly
+    if (out.length === 0) {
+      for (const r of rows) {
+        if ((r.name || "").toLowerCase() !== productValue.toLowerCase()) continue;
+        const m = (r.model || "").trim();
+        if (!m || seen.has(m.toLowerCase())) continue;
+        seen.add(m.toLowerCase());
+        out.push(m);
+      }
+    }
     if (modelValue && !seen.has(modelValue.toLowerCase())) out.unshift(modelValue);
     return out;
-  }, [rows, productValue, modelValue]);
+  }, [rows, modelRows, productValue, modelValue]);
 
   const addNewLink = (
     <a
@@ -129,8 +150,8 @@ export function IndentProductPicker({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[280px]" align="start">
-          <Command filter={(v, s) => (v.toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}>
-            <CommandInput placeholder="Search product…" />
+          <Command shouldFilter={false}>
+            <CommandInput placeholder="Search product…" value={pSearch} onValueChange={setPSearch} />
             <CommandList>
               <CommandEmpty>
                 <div className="py-3 px-3 space-y-2 text-sm">
@@ -143,12 +164,7 @@ export function IndentProductPicker({
                   <CommandItem
                     key={name}
                     value={name}
-                    onSelect={() => {
-                      // Reset model when product changes.
-                      const nextModel = name.toLowerCase() === productValue.toLowerCase() ? modelValue : "";
-                      onPick({ name, model: nextModel });
-                      setPOpen(false);
-                    }}
+                    onSelect={() => handleProductPick(name)}
                   >
                     <Check className={cn("mr-2 h-4 w-4", productValue.toLowerCase() === name.toLowerCase() ? "opacity-100" : "opacity-0")} />
                     <span className="truncate">{name}</span>
@@ -175,8 +191,8 @@ export function IndentProductPicker({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[280px]" align="start">
-          <Command filter={(v, s) => (v.toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}>
-            <CommandInput placeholder="Search model…" />
+          <Command shouldFilter={false}>
+            <CommandInput placeholder="Search model…" value={mSearch} onValueChange={setMSearch} />
             <CommandList>
               <CommandEmpty>
                 <div className="py-3 px-3 space-y-2 text-sm">
@@ -189,10 +205,7 @@ export function IndentProductPicker({
                   <CommandItem
                     key={m}
                     value={m}
-                    onSelect={() => {
-                      onPick({ name: productValue, model: m });
-                      setMOpen(false);
-                    }}
+                    onSelect={() => handleModelPick(m)}
                   >
                     <Check className={cn("mr-2 h-4 w-4", modelValue.toLowerCase() === m.toLowerCase() ? "opacity-100" : "opacity-0")} />
                     <span className="font-mono text-xs truncate">{m}</span>

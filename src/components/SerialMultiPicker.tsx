@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { fetchAll } from "@/lib/fetchAll";
+import { supabase } from "@/integrations/supabase/client";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 type SerialRow = {
   id: string;
@@ -31,43 +32,51 @@ type Props = {
 export function SerialMultiPicker({
   open, onOpenChange, qty, warehouseId, partModelNo, partName, value, onConfirm, excludeSerials = [],
 }: Props) {
-  const [rows, setRows] = useState<SerialRow[]>([]);
-  const [loading, setLoading] = useState(false);
   const [q, setQ] = useState("");
+  const [debounced, setDebounced] = useState("");
   const [picked, setPicked] = useState<string[]>(value);
 
   useEffect(() => { setPicked(value); }, [value, open]);
+  useEffect(() => { const t = setTimeout(() => setDebounced(q), 150); return () => clearTimeout(t); }, [q]);
 
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    fetchAll<SerialRow>("ims_stock_items", (qq) => {
-      let x = qq
-        .select("id,part_serial_no,part_model_no,part_name,warehouse_id,stock_status")
-        .eq("stock_status", "available")
-        .not("part_serial_no", "is", null);
-      if (warehouseId) x = x.eq("warehouse_id", warehouseId);
-      if (partModelNo) x = x.eq("part_model_no", partModelNo);
-      else if (partName) x = x.eq("part_name", partName);
-      return x.order("part_serial_no").limit(100);
-    })
-      .then((data) => setRows(data.filter((r) => !excludeSerials.includes(r.part_serial_no) || value.includes(r.part_serial_no))))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, warehouseId, partModelNo, partName]);
+  const COLS = "id,part_serial_no,part_model_no,part_name,warehouse_id,stock_status";
+  const { data: rowsData, isLoading: loading } = useQuery({
+    queryKey: ["ims-serials-multi", warehouseId, partModelNo, partName, open, debounced] as const,
+    queryFn: async () => {
+      const term = debounced.trim();
+      let qb = supabase.from("ims_stock_items").select(COLS).eq("stock_status", "available").not("part_serial_no", "is", null);
+      if (warehouseId) qb = (qb as any).eq("warehouse_id", warehouseId);
+      if (partModelNo) qb = (qb as any).eq("part_model_no", partModelNo);
+      else if (partName) qb = (qb as any).eq("part_name", partName);
+      if (term) {
+        const p = `%${term}%`;
+        qb = (qb as any).or(`part_serial_no.ilike.${p},part_model_no.ilike.${p},part_name.ilike.${p}`);
+        const { data, error } = await (qb as any).order("part_serial_no").limit(30);
+        if (error) throw error;
+        const all = (data || []) as unknown as SerialRow[];
+        return all.filter((r) => !excludeSerials.includes(r.part_serial_no) || value.includes(r.part_serial_no));
+      }
+      const { data, error } = await (qb as any).order("part_serial_no").limit(25);
+      if (error) throw error;
+      const all = (data || []) as unknown as SerialRow[];
+      return all.filter((r) => !excludeSerials.includes(r.part_serial_no) || value.includes(r.part_serial_no));
+    },
+    enabled: open,
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+  });
+  const rows = useMemo(() => (rowsData as SerialRow[] | undefined) ?? [], [rowsData]);
 
-  const filtered = useMemo(
-    () => rows.filter((r) => !q || r.part_serial_no.toLowerCase().includes(q.toLowerCase())),
-    [rows, q],
-  );
+  // Server already filters by debounced term (25/30 window); filtered mirrors rows for instant render
+  const filtered = rows;
 
-  const toggle = (sn: string) => {
+  const toggle = useCallback((sn: string) => {
     setPicked((p) => {
       if (p.includes(sn)) return p.filter((x) => x !== sn);
       if (p.length >= qty) return p; // cap at qty
       return [...p, sn];
     });
-  };
+  }, [qty]);
 
   const canSave = picked.length === qty;
 

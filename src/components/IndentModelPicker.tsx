@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchAll } from "@/lib/fetchAll";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useProductsForPicker } from "@/hooks/useMasters";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -7,18 +7,6 @@ import { Check, ChevronsUpDown, Plus, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Product = { id: string; name: string; model: string | null; active: boolean | null };
-
-let cache: Product[] | null = null;
-const listeners = new Set<(rows: Product[]) => void>();
-async function loadProducts(force = false): Promise<Product[]> {
-  if (cache && !force) return cache;
-  const rows = await fetchAll<Product>("products", (q) =>
-    q.select("id,name,model,active").order("model"),
-  );
-  cache = rows.filter((p) => p.active !== false);
-  listeners.forEach((fn) => fn(cache!));
-  return cache;
-}
 
 type Props = {
   value?: string;
@@ -32,22 +20,13 @@ type Props = {
  *  any existing free-text model value (auto-populated legacy indents) by
  *  surfacing it at the top of the list. */
 export function IndentModelPicker({ value = "", onPick, placeholder = "Select model…", disabled, className }: Props) {
-  const [rows, setRows] = useState<Product[]>(cache || []);
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => { const t = setTimeout(() => setDebounced(search), 150); return () => clearTimeout(t); }, [search]);
 
-  useEffect(() => {
-    let alive = true;
-    loadProducts().then((r) => { if (alive) setRows(r); }).catch(() => {});
-    const fn = (r: Product[]) => setRows(r);
-    listeners.add(fn);
-    return () => { alive = false; listeners.delete(fn); };
-  }, []);
-
-  useEffect(() => {
-    const onFocus = () => { loadProducts(true).catch(() => {}); };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);
+  const { data: rowsData } = useProductsForPicker(debounced);
+  const rows = useMemo(() => ((rowsData as unknown as Product[]) ?? []).filter((p) => p.active !== false), [rowsData]);
 
   const items = useMemo(() => {
     const seen = new Set<string>();
@@ -61,6 +40,8 @@ export function IndentModelPicker({ value = "", onPick, placeholder = "Select mo
     if (value && !seen.has(value.toLowerCase())) out.unshift({ model: value, name: "" });
     return out;
   }, [rows, value]);
+
+  const handlePick = useCallback((it: { model: string; name: string }) => { onPick({ name: it.name, model: it.model }); setOpen(false); }, [onPick]);
 
   const addNewLink = (
     <a href="/masters/products" target="_blank" rel="noopener noreferrer"
@@ -81,8 +62,8 @@ export function IndentModelPicker({ value = "", onPick, placeholder = "Select mo
         </Button>
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[300px]" align="start">
-        <Command filter={(v, s) => (v.toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}>
-          <CommandInput placeholder="Search model…" />
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="Search model…" value={search} onValueChange={setSearch} />
           <CommandList>
             <CommandEmpty>
               <div className="py-3 px-3 space-y-2 text-sm">
@@ -95,7 +76,7 @@ export function IndentModelPicker({ value = "", onPick, placeholder = "Select mo
                 <CommandItem
                   key={it.model}
                   value={`${it.model} ${it.name}`}
-                  onSelect={() => { onPick({ name: it.name, model: it.model }); setOpen(false); }}
+                  onSelect={() => handlePick(it)}
                 >
                   <Check className={cn("mr-2 h-4 w-4", value.toLowerCase() === it.model.toLowerCase() ? "opacity-100" : "opacity-0")} />
                   <div className="flex-1 min-w-0">
