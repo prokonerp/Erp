@@ -100,8 +100,10 @@ export const statusClass = (s: CoverStatus): string =>
 export const listEquipmentForCustomer = async (
   customerId: string,
 ): Promise<InstalledEquipment[]> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as unknown as { from: (t: string) => any };
-  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,status,remarks,created_at";
+  const cols =
+    "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,status,remarks,created_at";
   const { data, error } = await sb
     .from("installed_equipment")
     .select(cols)
@@ -114,6 +116,7 @@ export const listEquipmentForCustomer = async (
 };
 
 const table = () =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (supabase as unknown as { from: (t: string) => any }).from("installed_equipment");
 
 export const createEquipment = async (input: EquipmentInput): Promise<void> => {
@@ -170,7 +173,9 @@ export const findProductByModel = async (
     .limit(1);
   if (error) throw error;
   const prod = (data || [])[0];
-  return prod ? { id: prod.id, model: prod.model || "", brand: prod.brand || null, name: prod.name || "" } : null;
+  return prod
+    ? { id: prod.id, model: prod.model || "", brand: prod.brand || null, name: prod.name || "" }
+    : null;
 };
 
 /** Exact lookup scoped to one customer — used to detect an existing unit before appending. */
@@ -220,14 +225,24 @@ export const getOrCreateEquipmentForTicket = async (input: {
 
 /** Every equipment row across all customers (used by the Summary tab) — bounded, explicit cols (export uses paginated RPC). */
 export const listAllEquipment = async (): Promise<InstalledEquipment[]> => {
-  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,status,remarks,created_at";
-  const { data, error } = await (supabase as any).from("installed_equipment").select(cols).order("created_at", { ascending: false }).limit(500);
+  const cols =
+    "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,status,remarks,created_at";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("installed_equipment")
+    .select(cols)
+    .order("created_at", { ascending: false })
+    .limit(500);
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
 };
 /** @deprecated fetchAll for exports only — use bounded listAllEquipment for UI */
 export const listAllEquipmentForExport = async (): Promise<InstalledEquipment[]> =>
-  fetchAll<InstalledEquipment>("installed_equipment", (q) => q.select("id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,status"));
+  fetchAll<InstalledEquipment>("installed_equipment", (q) =>
+    q.select(
+      "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,status",
+    ),
+  );
 
 export type ImportOutcome = {
   imported: number;
@@ -274,6 +289,7 @@ export const importEquipmentRows = async (
   const out: ImportOutcome = { imported: 0, skipped: [], failed: [] };
   if (!rows.length) return out;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const customers = await fetchAll<any>("customers", (q) => q.select("id,company,customer_code"));
   // Exact maps (trimmed, case-sensitive) for strict validation
   const byNameExact = new Map<string, string>();
@@ -306,11 +322,14 @@ export const importEquipmentRows = async (
     // No customer pre-selected — will validate per-row exact match and resolve id per row
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const products = await fetchAll<any>("products", (q) =>
     q.select("id,name,model,short_name,warranty_applicable,warranty_duration,warranty_unit"),
   );
   // Exact model map — ONLY the canonical `model` field, trimmed exact, case-sensitive
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const byModelExact = new Map<string, any>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const byModelLower = new Map<string, any>();
   for (const p of products) {
     const exact = String(p.model || "").trim();

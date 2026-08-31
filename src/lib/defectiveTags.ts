@@ -13,6 +13,7 @@ import { listWarehouses, STOCK_SELECT, TXN_SELECT, type WarehouseLite } from "@/
  */
 const DEFECTIVE_PAGE_LIMIT = 500;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -109,8 +110,11 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   if (txnsRes.error) throw txnsRes.error;
   if (tagsRes.error) throw tagsRes.error;
   if (indentsRes.error) throw indentsRes.error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const txns = (txnsRes.data || []) as any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tags = (tagsRes.data || []) as any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const indents = (indentsRes.data || []) as any[];
 
   const liveIndents = (indents || []).filter((i) => !i.is_deleted);
@@ -122,6 +126,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       ),
     ),
   ) as string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let tickets: any[] = [];
   if (ticketIds.length) {
     const { data } = await sb
@@ -136,6 +141,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
 
   // Batch: all indents for the involved tickets, so Oracle # can be resolved
   // from the Indent that already handled this defective part.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const norm = (v: any) =>
     String(v ?? "")
       .trim()
@@ -147,9 +153,11 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       .select("ticket_id,oracles_data")
       .in("ticket_id", ticketIds);
     for (const ind of indents || []) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const blk of (ind.oracles_data as any[]) || []) {
         const oracleNo = String(blk?.oracle_no || "").trim();
         if (!oracleNo) continue;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const row of (blk?.defective_rows as any[]) || []) {
           const k = `${ind.ticket_id}|${norm(row?.def_model_no)}|${norm(row?.def_serial_no)}`;
           if (!oracleByTicketPart.has(k)) oracleByTicketPart.set(k, oracleNo);
@@ -187,6 +195,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     .order("created_at", { ascending: false })
     .limit(DEFECTIVE_PAGE_LIMIT);
   if (stockErr) throw stockErr;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allStock = (allStockData || []) as any[];
   const statusKey = (serial?: string | null, model?: string | null) =>
     `${(serial || "").toLowerCase()}|${(model || "").toLowerCase()}`;
@@ -218,9 +227,11 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       .order("challan_date", { ascending: false })
       .limit(DEFECTIVE_PAGE_LIMIT);
     if (dcErr) throw dcErr;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dcs = (dcsData || []) as any[];
     for (const dc of dcs || []) {
       if (!dc.challan_date) continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const it of (dc.items as any[]) || []) {
         const s = norm(it?.defective_serial);
         const m = norm(it?.defective_model);
@@ -236,6 +247,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
 
   // Reuse existing txn linkage (and its tag) when the same physical part is
   // already present in IMS, so tags stay attached to one record.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const txnByPart = new Map<string, any>();
   for (const t of txns) {
     const k = `${norm(t.part_model_no)}|${norm(t.part_serial_no)}`;
@@ -247,13 +259,16 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const indentCoveredParts = new Set<string>();
   for (const ind of liveIndents) {
     const tk = ind.ticket_id ? tById.get(ind.ticket_id) : null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const blk of (ind.oracles_data as any[]) || []) {
       const oracleNo = String(blk?.oracle_no || "").trim() || null;
       const wh = whById.get(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ((blk?.received_rows as any[]) || [])
           .map((r) => r?.warehouse_id)
           .find((w) => w && UUID_RE.test(w)) || "",
       );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = (blk?.defective_rows as any[]) || [];
       rows.forEach((row, idx) => {
         const model = String(row?.def_model_no || "").trim() || null;
@@ -267,6 +282,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         const txn = txnByPart.get(partKey);
         if (txn) indentCoveredTxnIds.add(txn.id);
         const remarks =
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ((tk?.defective_parts_details as any[]) || []).find(
             (p) =>
               (norm(p?.model_no) === norm(model) || norm(p?.name) === norm(model)) &&
@@ -312,6 +328,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       // Serial fallback: pull from the ticket's defective parts capture.
       let serialNo: string | null = t.part_serial_no || null;
       if (!serialNo && tk?.defective_parts_details) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const match = ((tk.defective_parts_details as any[]) || []).find(
           (p) => norm(p?.model_no) === norm(t.part_model_no) && p?.serial,
         );
@@ -428,11 +445,14 @@ export async function listDefectiveInRecordsForExport(): Promise<DefectiveInReco
   // Re-uses fetchAll loops intentionally for export-only path.
   const { fetchAll: fa } = await import("@/lib/fetchAll");
   const [txns, tags, warehouses, indents] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fa<any>("ims_transactions", (q) =>
       q.select("*").eq("txn_type", "defective_in").order("txn_date", { ascending: false }),
     ),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fa<any>("defective_tags", (q) => q.select("txn_id,stock_item_id,tag_no,model_no,serial_no")),
     listWarehouses(),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fa<any>("indents", (q) =>
       q
         .select(
@@ -475,6 +495,7 @@ export async function fetchTagDispatches(): Promise<Map<string, TagDispatch>> {
     .eq("stock_status", "returned_to_oem")
     .limit(DEFECTIVE_PAGE_LIMIT);
   if (sErr) throw sErr;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const stock = (stockData || []) as any[];
   const map = new Map<string, TagDispatch>();
   const challanNos = new Set<string>();
@@ -493,6 +514,7 @@ export async function fetchTagDispatches(): Promise<Map<string, TagDispatch>> {
       .select("challan_no,challan_date")
       .in("challan_no", Array.from(challanNos));
     const dateByNo = new Map<string, string | null>(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (data || []).map((d: any) => [d.challan_no, d.challan_date]),
     );
     for (const v of map.values()) v.dc_date = dateByNo.get(v.dc_no) ?? null;
@@ -521,6 +543,7 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
     .select("tag_no,model_no,serial_no")
     .limit(DEFECTIVE_PAGE_LIMIT);
   if (exErr) throw exErr;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const existing = (existingData || []) as any[];
   const taken = new Map<string, string | null>();
   for (const t of existing || []) {

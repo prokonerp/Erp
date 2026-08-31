@@ -141,6 +141,7 @@ export type AuditEntry = {
 };
 
 const sb = supabase as unknown as {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from: (t: string) => any;
 };
 
@@ -220,6 +221,7 @@ export async function fetchStockPage(
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = supabase
     .from("ims_stock_items" as never)
     .select(STOCK_SELECT, { count: "exact" })
@@ -242,7 +244,9 @@ export async function fetchStockPage(
 
 export function useStockPaginated(params: StockPaginatedParams) {
   return useQuery({
-    queryKey: stockKeys.paginated(params as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryKey: stockKeys.paginated(
+      params as unknown as Record<string, unknown> & { page: number; pageSize: number },
+    ),
     queryFn: () => fetchStockPage(params),
     placeholderData: keepPreviousData,
   });
@@ -251,7 +255,9 @@ export function useStockPaginated(params: StockPaginatedParams) {
 /** Back-compat alias — some callers imported via imsKeys. */
 export function useStockPaginatedWithImsKeys(params: StockPaginatedParams) {
   return useQuery({
-    queryKey: imsKeys.paginated(params as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryKey: imsKeys.paginated(
+      params as unknown as Record<string, unknown> & { page: number; pageSize: number },
+    ),
     queryFn: () => fetchStockPage(params),
     placeholderData: keepPreviousData,
   });
@@ -275,11 +281,11 @@ export async function createStock(input: Partial<StockItem>): Promise<StockItem>
     .select("*")
     .single();
   if (error) throw error;
-  if (!data) throw new Error("Stock insert was blocked by permissions. Contact admin to grant IMS access.");
+  if (!data)
+    throw new Error("Stock insert was blocked by permissions. Contact admin to grant IMS access.");
 
   // 2. Create a corresponding transaction so counts/timelines stay in sync
-  const txnType: TxnType =
-    input.stock_type === "defective" ? "defective_in" : "good_in";
+  const txnType: TxnType = input.stock_type === "defective" ? "defective_in" : "good_in";
   const qty = input.qty ?? 1;
   const { error: tErr } = await sb.from("ims_transactions").insert({
     txn_type: txnType,
@@ -340,6 +346,7 @@ export async function fetchTransactionsPage(
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = supabase
     .from("ims_transactions" as never)
     .select(TXN_SELECT, { count: "exact" })
@@ -349,7 +356,9 @@ export async function fetchTransactionsPage(
   if (txnType) q = q.eq("txn_type", txnType);
   if (search && search.trim()) {
     const s = search.trim().replace(/%/g, "");
-    q = q.or(`part_name.ilike.%${s}%,part_model_no.ilike.%${s}%,part_serial_no.ilike.%${s}%,txn_no.ilike.%${s}%`);
+    q = q.or(
+      `part_name.ilike.%${s}%,part_model_no.ilike.%${s}%,part_serial_no.ilike.%${s}%,txn_no.ilike.%${s}%`,
+    );
   }
 
   const { data, error, count } = await q;
@@ -359,7 +368,9 @@ export async function fetchTransactionsPage(
 
 export function useTransactionsPaginated(params: TransactionsPaginatedParams) {
   return useQuery({
-    queryKey: txnKeys.paginated(params as unknown as Record<string, unknown> & { page: number; pageSize: number }),
+    queryKey: txnKeys.paginated(
+      params as unknown as Record<string, unknown> & { page: number; pageSize: number },
+    ),
     queryFn: () => fetchTransactionsPage(params),
     placeholderData: keepPreviousData,
   });
@@ -382,13 +393,20 @@ export async function deleteTransaction(id: string): Promise<void> {
 }
 
 export async function getStockHistory(stockId: string): Promise<Transaction[]> {
-  const { data, error } = await sb.from("ims_transactions").select("*").eq("stock_item_id", stockId).order("txn_date", { ascending: true });
+  const { data, error } = await sb
+    .from("ims_transactions")
+    .select("*")
+    .eq("stock_item_id", stockId)
+    .order("txn_date", { ascending: true });
   if (error) throw error;
   return (data || []) as Transaction[];
 }
 
 export async function listTransfers(): Promise<Transfer[]> {
-  const { data, error } = await sb.from("ims_transfers").select("*").order("created_at", { ascending: false });
+  const { data, error } = await sb
+    .from("ims_transfers")
+    .select("*")
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return (data || []) as Transfer[];
 }
@@ -411,7 +429,11 @@ export async function createTransfer(input: Partial<Transfer>): Promise<Transfer
  * status — two admins double-approving (or one acting on a stale screen)
  * can no longer both transition the same transfer.
  */
-export async function updateTransfer(id: string, patch: Partial<Transfer>, expectedStatus?: Transfer["status"] | null): Promise<void> {
+export async function updateTransfer(
+  id: string,
+  patch: Partial<Transfer>,
+  expectedStatus?: Transfer["status"] | null,
+): Promise<void> {
   let q = sb.from("ims_transfers").update(patch).eq("id", id);
   if (expectedStatus) q = q.eq("status", expectedStatus);
   const { data, error } = await q.select("id");
@@ -429,7 +451,10 @@ export async function deleteTransfer(id: string): Promise<void> {
 }
 
 export async function listReservations(): Promise<Reservation[]> {
-  const { data, error } = await sb.from("ims_reservations").select("*").order("reserved_at", { ascending: false });
+  const { data, error } = await sb
+    .from("ims_reservations")
+    .select("*")
+    .order("reserved_at", { ascending: false });
   if (error) throw error;
   return (data || []) as Reservation[];
 }
@@ -451,7 +476,11 @@ export async function deleteReservation(id: string): Promise<void> {
 }
 
 export async function listAudit(limit = 500): Promise<AuditEntry[]> {
-  const { data, error } = await sb.from("ims_audit_log").select("*").order("created_at", { ascending: false }).limit(limit);
+  const { data, error } = await sb
+    .from("ims_audit_log")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw error;
   return (data || []) as AuditEntry[];
 }
@@ -500,7 +529,9 @@ export function warehouseBranchName(wh: WarehouseLite | null | undefined): strin
 /** Friendly display: "Delhi Warehouse (Godown)" */
 export function formatWarehouse(wh: WarehouseLite | null | undefined): string {
   if (!wh) return "—";
-  const bits = [wh.type, wh.asp_code ? `ASP: ${wh.asp_code}` : null, wh.branch?.name].filter(Boolean);
+  const bits = [wh.type, wh.asp_code ? `ASP: ${wh.asp_code}` : null, wh.branch?.name].filter(
+    Boolean,
+  );
   return bits.length ? `${wh.name} (${bits.join(" • ")})` : wh.name;
 }
 
@@ -526,7 +557,11 @@ export async function findAvailableStockBySerial(
   serial: string,
   partModelNo?: string | null,
 ): Promise<StockItem | null> {
-  let q = sb.from("ims_stock_items").select("*").eq("part_serial_no", serial).eq("stock_status", "available");
+  let q = sb
+    .from("ims_stock_items")
+    .select("*")
+    .eq("part_serial_no", serial)
+    .eq("stock_status", "available");
   if (partModelNo) q = q.eq("part_model_no", partModelNo);
   const { data, error } = await q.maybeSingle();
   if (error) throw error;
@@ -558,7 +593,11 @@ export async function issueStockToTicket(input: {
   oem?: string | null;
   qty?: number;
 }): Promise<void> {
-  const { data: stock, error: loadErr } = await sb.from("ims_stock_items").select("*").eq("id", input.stockItemId).maybeSingle();
+  const { data: stock, error: loadErr } = await sb
+    .from("ims_stock_items")
+    .select("*")
+    .eq("id", input.stockItemId)
+    .maybeSingle();
   if (loadErr) throw loadErr;
   if (!stock) throw new Error("Stock item not found — it may have been deleted.");
   if (stock.stock_status === "issued") {
@@ -567,24 +606,33 @@ export async function issueStockToTicket(input: {
     );
   }
 
-  const txnType = (stock.stock_type === "defective") ? "defective_out" : "good_out";
+  const txnType = stock.stock_type === "defective" ? "defective_out" : "good_out";
   const refParts = [
     input.ticketNo ? `Ticket ${input.ticketNo}` : null,
     input.caseId ? `Case ${input.caseId}` : null,
     input.engineer ? `Engineer ${input.engineer}` : null,
-  ].filter(Boolean).join(" · ");
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   // Claim first: conditional update loses the race if another user just
   // issued this serial (affected-rows check below).
-  const { data: claimedRows, error: claimErr } = await sb.from("ims_stock_items").update({
-    stock_status: "issued",
-    ticket_id: input.ticketId,
-    customer_name: input.customerName ?? null,
-    updated_at: new Date().toISOString(),
-  }).eq("id", input.stockItemId).neq("stock_status", "issued").select("id");
+  const { data: claimedRows, error: claimErr } = await sb
+    .from("ims_stock_items")
+    .update({
+      stock_status: "issued",
+      ticket_id: input.ticketId,
+      customer_name: input.customerName ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.stockItemId)
+    .neq("stock_status", "issued")
+    .select("id");
   if (claimErr) throw claimErr;
   if (!claimedRows || claimedRows.length === 0) {
-    throw new Error(`Serial ${input.partSerialNo || stock.part_serial_no || ""} was just issued by someone else.`);
+    throw new Error(
+      `Serial ${input.partSerialNo || stock.part_serial_no || ""} was just issued by someone else.`,
+    );
   }
 
   const { error: txnError } = await sb.from("ims_transactions").insert({
@@ -600,17 +648,22 @@ export async function issueStockToTicket(input: {
     to_party: input.customerName || "Customer (Ticket)",
     qty: input.qty ?? 1,
     ticket_id: input.ticketId,
-    reference: refParts || (input.ticketNo || input.caseId || null),
+    reference: refParts || input.ticketNo || input.caseId || null,
     notes: "Auto-issued from Ticket → Parts Used confirmation",
   });
   if (txnError) {
     // Roll back the claim — never mark stock issued without its audit trail.
-    await sb.from("ims_stock_items").update({
-      stock_status: stock.stock_status,
-      ticket_id: stock.ticket_id ?? null,
-      customer_name: stock.customer_name ?? null,
-      updated_at: new Date().toISOString(),
-    }).eq("id", input.stockItemId);
-    throw new Error(`Stock issue recorded failed, transaction log could not be written: ${txnError.message}`);
+    await sb
+      .from("ims_stock_items")
+      .update({
+        stock_status: stock.stock_status,
+        ticket_id: stock.ticket_id ?? null,
+        customer_name: stock.customer_name ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.stockItemId);
+    throw new Error(
+      `Stock issue recorded failed, transaction log could not be written: ${txnError.message}`,
+    );
   }
 }
