@@ -297,7 +297,7 @@ function NewPO() {
                 <tr>
                   <th className="p-2 text-left w-10">#</th>
                   <th className="p-2 text-left min-w-[300px]">Product / Description</th>
-                  <th className="p-2 text-left w-28">HSN</th>
+                  <th className="p-2 text-left w-32">HSN</th>
                   <th className="p-2 text-right w-20">Qty</th>
                   <th className="p-2 text-left w-20">Unit</th>
                   <th className="p-2 text-right w-40">Rate</th>

@@ -394,12 +394,12 @@ function EditPO() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1220px]">
+            <table className="w-full text-sm min-w-[1230px]">
               <thead className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="p-2 text-left w-10">#</th>
                   <th className="p-2 text-left min-w-[300px]">Product / Description</th>
-                  <th className="p-2 text-left w-28">HSN</th>
+                  <th className="p-2 text-left w-32">HSN</th>
                   <th className="p-2 text-right w-20">Qty</th>
                   <th className="p-2 text-left w-20">Unit</th>
                   <th className="p-2 text-right w-40">Rate</th>
