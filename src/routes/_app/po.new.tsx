@@ -292,15 +292,15 @@ function NewPO() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1180px]">
+            <table className="w-full text-sm min-w-[1220px]">
               <thead className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="p-2 text-left w-10">#</th>
-                  <th className="p-2 text-left min-w-[320px]">Product / Description</th>
+                  <th className="p-2 text-left min-w-[300px]">Product / Description</th>
                   <th className="p-2 text-left w-28">HSN</th>
-                  <th className="p-2 text-right w-28">Qty</th>
+                  <th className="p-2 text-right w-20">Qty</th>
                   <th className="p-2 text-left w-20">Unit</th>
-                  <th className="p-2 text-right w-32">Rate</th>
+                  <th className="p-2 text-right w-40">Rate</th>
                   <th className="p-2 text-right w-20">Disc%</th>
                   <th className="p-2 text-center w-20">GST%</th>
                   <th className="p-2 text-center w-24">Warranty</th>
@@ -332,9 +332,9 @@ function NewPO() {
                         <Input className="h-9 text-sm font-medium" placeholder="Description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
                       </td>
                       <td className="p-2"><Input className="h-9 text-sm font-mono" value={it.hsn} onChange={(e) => setItem(idx, { hsn: e.target.value })} placeholder="—" title={it.hsn} /></td>
-                      <td className="p-2"><Input type="number" step="0.001" className="h-9 text-sm font-mono font-medium tabular-nums text-right w-full" value={it.qty} onChange={(e) => setItem(idx, { qty: Number(e.target.value) })} title={String(it.qty)} /></td>
+                      <td className="p-2"><Input type="text" inputMode="numeric" maxLength={3} className="h-9 text-sm font-mono font-medium tabular-nums text-right w-full" value={it.qty} onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0,3); setItem(idx, { qty: v === "" ? 0 : Math.min(999, Number(v)) }); }} title={String(it.qty)} placeholder="0" /></td>
                       <td className="p-2"><Input className="h-9 text-sm" value={it.unit} onChange={(e) => setItem(idx, { unit: e.target.value })} /></td>
-                      <td className="p-2"><Input type="number" step="0.01" className="h-9 text-sm font-mono font-semibold tabular-nums text-right w-full" value={it.rate} onChange={(e) => setItem(idx, { rate: Number(e.target.value) })} title={String(it.rate)} placeholder="0.00" /></td>
+                      <td className="p-2"><Input type="number" step="0.01" max={100000000} className="h-9 text-sm font-mono font-semibold tabular-nums text-right w-full" value={it.rate} onChange={(e) => { const v = Number(e.target.value); if (v > 100000000) return; setItem(idx, { rate: v }); }} title={String(it.rate)} placeholder="0.00" /></td>
                       <td className="p-2"><Input type="number" step="0.01" className="h-9 text-sm font-mono tabular-nums text-right w-full" value={it.discount_pct} onChange={(e) => setItem(idx, { discount_pct: Number(e.target.value) })} /></td>
                       <td className="p-2">
                         <select className="w-full h-9 rounded-md border bg-background px-1 text-sm font-medium text-center" value={it.gst_rate} onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}>
