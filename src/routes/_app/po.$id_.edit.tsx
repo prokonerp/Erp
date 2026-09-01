@@ -434,10 +434,10 @@ function EditPO() {
                         <Input className="h-9 text-sm font-medium" placeholder="Description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
                       </td>
                       <td className="p-2"><Input className="h-9 text-sm font-mono" value={it.hsn} onChange={(e) => setItem(idx, { hsn: e.target.value })} placeholder="—" title={it.hsn} /></td>
-                      <td className="p-2"><Input type="text" inputMode="numeric" maxLength={3} className="h-9 text-sm font-mono font-medium tabular-nums text-right w-full" value={it.qty} onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0,3); setItem(idx, { qty: v === "" ? 0 : Math.min(999, Number(v)) }); }} title={String(it.qty)} placeholder="0" /></td>
+                      <td className="p-2"><Input type="text" inputMode="numeric" maxLength={3} className="h-9 text-sm font-mono font-medium tabular-nums text-right w-full" value={it.qty} onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0,3); setItem(idx, { qty: v === "" ? 0 : Math.min(999, Number(v)) }); }} title={String(it.qty)} placeholder="0" onFocus={(e) => e.target.select()} /></td>
                       <td className="p-2"><Input className="h-9 text-sm" value={it.unit} onChange={(e) => setItem(idx, { unit: e.target.value })} /></td>
-                      <td className="p-2"><Input type="number" step="0.01" max={100000000} className="h-9 text-sm font-mono font-semibold tabular-nums text-right w-full" value={it.rate} onChange={(e) => { const v = Number(e.target.value); if (v > 100000000) return; setItem(idx, { rate: v }); }} title={String(it.rate)} placeholder="0.00" /></td>
-                      <td className="p-2"><Input type="number" step="0.01" className="h-9 text-sm font-mono tabular-nums text-right w-full" value={it.discount_pct} onChange={(e) => setItem(idx, { discount_pct: Number(e.target.value) })} /></td>
+                      <td className="p-2"><Input type="number" step="0.01" max={100000000} className="h-9 text-sm font-mono font-semibold tabular-nums text-right w-full" value={it.rate} onChange={(e) => { const v = Number(e.target.value); if (v > 100000000) return; setItem(idx, { rate: v }); }} title={String(it.rate)} placeholder="0.00" onFocus={(e) => e.target.select()} /></td>
+                      <td className="p-2"><Input type="number" step="0.01" className="h-9 text-sm font-mono tabular-nums text-right w-full" value={it.discount_pct} onChange={(e) => setItem(idx, { discount_pct: Number(e.target.value) })} onFocus={(e) => e.target.select()} /></td>
                       <td className="p-2">
                         <select className="w-full h-9 rounded-md border bg-background px-1 text-sm font-medium text-center" value={it.gst_rate} onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}>
                           {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}
@@ -445,7 +445,7 @@ function EditPO() {
                       </td>
                       <td className="p-2">
                         <div className="flex items-center gap-1">
-                          <Input type="number" min={0} max={120} className="h-9 w-full text-sm font-mono font-semibold tabular-nums bg-amber-50 border-amber-200 text-center" value={it.warranty_months} onChange={(e) => setItem(idx, { warranty_months: Number(e.target.value) })} title={String(it.warranty_months)} />
+                          <Input type="number" min={0} max={120} className="h-9 w-full text-sm font-mono font-semibold tabular-nums bg-amber-50 border-amber-200 text-center" value={it.warranty_months} onChange={(e) => setItem(idx, { warranty_months: Number(e.target.value) })} title={String(it.warranty_months)} onFocus={(e) => e.target.select()} />
                           <span className="text-xs text-muted-foreground whitespace-nowrap">mo</span>
                         </div>
                       </td>
@@ -480,7 +480,7 @@ function EditPO() {
             <div className="flex justify-between"><span>Subtotal</span><span className="font-mono tabular-nums">{inrPO(totals.subtotal)}</span></div>
             <div className="flex items-center justify-between gap-2">
               <span>Discount</span>
-              <Input type="number" step="0.01" className="h-8 w-28 text-right font-mono font-semibold tabular-nums" value={headerDiscount} onChange={(e) => setHeaderDiscount(Number(e.target.value))} />
+              <Input type="number" step="0.01" className="h-8 w-28 text-right font-mono font-semibold tabular-nums" value={headerDiscount} onChange={(e) => setHeaderDiscount(Number(e.target.value))} onFocus={(e) => e.target.select()} />
             </div>
             <div className="flex justify-between"><span>Taxable Value</span><span className="font-mono tabular-nums">{inrPO(totals.taxable_value)}</span></div>
             {totals.is_interstate ? (
