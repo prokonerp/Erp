@@ -43,11 +43,13 @@ export function useTicketsTable(opts: {
   q: string;
   page: number;
   pageSize: number;
+  /** "open" = active statuses, "closed" = Closed + Cancelled, "all" = no filter */
+  tab?: "open" | "closed" | "all";
 }) {
-  const { status, type, q, page, pageSize } = opts;
+  const { status, type, q, page, pageSize, tab = "all" } = opts;
   const term = q.trim();
   return useQuery({
-    queryKey: ["tickets", "table", { status, type, q: term, page, pageSize }] as const,
+    queryKey: ["tickets", "table", { status, type, q: term, page, pageSize, tab }] as const,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
     queryFn: async () => {
@@ -58,6 +60,14 @@ export function useTicketsTable(opts: {
         .eq("is_deleted", false)
         .order("created_at", { ascending: false })
         .range(from, to);
+
+      // Server-side tab filtering: open = not terminal, closed = terminal only
+      if (tab === "open") {
+        sel = sel.not("status", "in", '("Closed","Cancelled")');
+      } else if (tab === "closed") {
+        sel = sel.in("status", ["Closed", "Cancelled"]);
+      }
+
       if (status !== "all") sel = sel.eq("status", status);
       if (type !== "all") sel = sel.eq("call_type", type);
       if (term) {
@@ -84,6 +94,32 @@ export function useTicketsTable(opts: {
       }
       const rows = baseRows.map((r) => ({ ...r, has_special_activity: flagged.has(r.id) }));
       return { rows, count: count ?? 0 };
+    },
+  });
+}
+
+/** Lightweight count for Open vs Closed tabs — runs in parallel, no row data fetched. */
+export function useTicketTabCounts() {
+  return useQuery({
+    queryKey: ["tickets", "tab_counts"] as const,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const [openRes, closedRes] = await Promise.all([
+        supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("is_deleted", false)
+          .not("status", "in", '("Closed","Cancelled")'),
+        supabase
+          .from("tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("is_deleted", false)
+          .in("status", ["Closed", "Cancelled"]),
+      ]);
+      return {
+        open: openRes.count ?? 0,
+        closed: closedRes.count ?? 0,
+      };
     },
   });
 }

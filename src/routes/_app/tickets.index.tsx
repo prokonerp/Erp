@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebounced } from "@/lib/sales.hooks";
-import { useTicketsTable, useAssignableEngineers } from "@/hooks/useTicketsTable";
+import { useTicketsTable, useAssignableEngineers, useTicketTabCounts } from "@/hooks/useTicketsTable";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +61,7 @@ import {
 } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -230,7 +230,7 @@ function TicketsList() {
   const [view, setView] = useState<"table" | "cards">("table");
   const [closingCtx, setClosingCtx] = useState<{ r: Row; notify: boolean } | null>(null);
   const [cancellingCtx, setCancellingCtx] = useState<{ r: Row } | null>(null);
-  const [showTerminal, setShowTerminal] = useState(false);
+  const [tab, setTab] = useState<"open" | "closed">("open");
   type SortKey = "created" | "timer" | "priority" | "customer";
   const [sortKey, setSortKey] = useState<SortKey>("created");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -275,19 +275,21 @@ function TicketsList() {
   // Reset paging when server filters change
   useEffect(() => {
     setPage(0);
-  }, [debouncedQ, status, type]);
+  }, [debouncedQ, status, type, tab]);
 
-  const ticketsQuery = useTicketsTable({ status, type, q: debouncedQ, page, pageSize });
+  const ticketsQuery = useTicketsTable({ status, type, q: debouncedQ, page, pageSize, tab });
   const rows = useMemo(() => (ticketsQuery.data?.rows ?? []) as Row[], [ticketsQuery.data?.rows]);
   const total = ticketsQuery.data?.count ?? 0;
   const isLoading = ticketsQuery.isLoading;
   const isFetching = ticketsQuery.isFetching;
   const employeesQuery = useAssignableEngineers();
   const employees = (employeesQuery.data ?? []) as Employee[];
+  const tabCounts = useTicketTabCounts();
   const refetchTickets = useCallback(() => {
     ticketsQuery.refetch();
     employeesQuery.refetch();
-  }, [ticketsQuery, employeesQuery]);
+    tabCounts.refetch();
+  }, [ticketsQuery, employeesQuery, tabCounts]);
   useRealtimeRefetch("tickets", () => {
     ticketsQuery.refetch();
   });
@@ -409,6 +411,7 @@ function TicketsList() {
       if (pa !== pb) return pa - pb;
       return secondary(a, b);
     });
+    // Server already filters by tab, so classify by terminal status within the result
     const active: Row[] = [];
     const terminal: Row[] = [];
     for (const r of sorted) (isTerminalStatus(r.status) ? terminal : active).push(r);
@@ -429,15 +432,12 @@ function TicketsList() {
     sortDir,
   ]);
 
-  // When the user explicitly filters by a terminal status, show only that group
-  // normally — the "sink terminal to bottom" rule only kicks in for mixed views.
-  const explicitTerminalFilter = status === "Closed" || status === "Cancelled";
+  // Server already filters by tab — all rows are relevant
   const activeCount = activeRows.length;
   const terminalCount = terminalRows.length;
-  const showTerminalGroup = explicitTerminalFilter || showTerminal;
   const filtered = useMemo(
-    () => (showTerminalGroup ? [...activeRows, ...terminalRows] : activeRows),
-    [activeRows, terminalRows, showTerminalGroup],
+    () => [...activeRows, ...terminalRows],
+    [activeRows, terminalRows],
   );
 
   const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
@@ -1029,18 +1029,24 @@ function TicketsList() {
           )}
 
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 font-medium">
-              Active <span className="font-semibold">({activeCount})</span>
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200 px-2 py-0.5 font-medium">
-              Closed / Cancelled <span className="font-semibold">({terminalCount})</span>
-            </span>
-            {!explicitTerminalFilter && (
-              <label className="ml-auto inline-flex items-center gap-2 text-muted-foreground">
-                <Switch checked={showTerminal} onCheckedChange={setShowTerminal} />
-                <span>Show Closed / Cancelled</span>
-              </label>
-            )}
+            <Tabs value={tab} onValueChange={(v) => setTab(v as "open" | "closed")}>
+              <TabsList className="h-8">
+                <TabsTrigger value="open" className="text-xs gap-1.5 px-3">
+                  <span className="inline-block rounded-full h-2 w-2 bg-emerald-500" />
+                  Open
+                  <span className="font-semibold text-muted-foreground">
+                    ({tabCounts.data?.open ?? "—"})
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="closed" className="text-xs gap-1.5 px-3">
+                  <span className="inline-block rounded-full h-2 w-2 bg-zinc-400" />
+                  Closed
+                  <span className="font-semibold text-muted-foreground">
+                    ({tabCounts.data?.closed ?? "—"})
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
 
           {view === "cards" ? (
@@ -1054,12 +1060,6 @@ function TicketsList() {
               <div className="space-y-4">
                 {activeRows.length > 0 && (
                   <div>
-                    {showTerminalGroup && terminalRows.length > 0 && (
-                      <SectionDivider
-                        label={`Active Tickets · ${activeRows.length}`}
-                        tone="active"
-                      />
-                    )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                       {activeRows.map((r) => (
                         <TicketCard
@@ -1078,12 +1078,8 @@ function TicketsList() {
                     </div>
                   </div>
                 )}
-                {showTerminalGroup && terminalRows.length > 0 && (
+                {terminalRows.length > 0 && (
                   <div>
-                    <SectionDivider
-                      label={`Closed / Cancelled · ${terminalRows.length}`}
-                      tone="terminal"
-                    />
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 opacity-80">
                       {terminalRows.map((r) => (
                         <TicketCard
@@ -1106,6 +1102,17 @@ function TicketsList() {
             )
           ) : (
             <TooltipProvider delayDuration={200}>
+              {!isLoading && (
+                <div className="flex items-center justify-end mb-2">
+                  <PaginationFooter
+                    page={page}
+                    pageSize={pageSize}
+                    total={total}
+                    onPage={setPage}
+                    isFetching={isFetching && !isLoading}
+                  />
+                </div>
+              )}
               <div className="overflow-auto border rounded-md max-h-[60vh] overscroll-contain">
                 {isLoading ? (
                   <TableSkeleton rows={6} />
@@ -1143,46 +1150,15 @@ function TicketsList() {
                       ) : (
                         <>
                           {activeRows.length > 0 &&
-                            showTerminalGroup &&
-                            terminalRows.length > 0 && (
-                              <tr className="bg-emerald-50/60">
-                                <td
-                                  colSpan={12}
-                                  className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-800"
-                                >
-                                  — Active Tickets · {activeRows.length} —
-                                </td>
-                              </tr>
-                            )}
-                          {activeRows.map((r) => renderTicketRow(r))}
-                          {showTerminalGroup && terminalRows.length > 0 && (
-                            <>
-                              <tr className="bg-zinc-100">
-                                <td
-                                  colSpan={12}
-                                  className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-700"
-                                >
-                                  — Closed / Cancelled · {terminalRows.length} —
-                                </td>
-                              </tr>
-                              {terminalRows.map((r) => renderTicketRow(r, true))}
-                            </>
-                          )}
+                            activeRows.map((r) => renderTicketRow(r))}
+                          {terminalRows.length > 0 &&
+                            terminalRows.map((r) => renderTicketRow(r, true))}
                         </>
                       )}
                     </tbody>
                   </table>
                 )}
               </div>
-              {!isLoading && (
-                <PaginationFooter
-                  page={page}
-                  pageSize={pageSize}
-                  total={total}
-                  onPage={setPage}
-                  isFetching={isFetching && !isLoading}
-                />
-              )}
               {isFetching && !isLoading && (
                 <div className="px-3 py-1 text-xs text-muted-foreground">Updating…</div>
               )}
@@ -1321,20 +1297,6 @@ function TicketsList() {
       </tr>
     );
   }
-}
-
-function SectionDivider({ label, tone }: { label: string; tone: "active" | "terminal" }) {
-  const cls =
-    tone === "active"
-      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-      : "bg-zinc-100 text-zinc-700 border-zinc-200";
-  return (
-    <div
-      className={`mb-2 rounded border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider ${cls}`}
-    >
-      — {label} —
-    </div>
-  );
 }
 
 function RowActions({
