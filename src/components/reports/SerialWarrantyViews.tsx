@@ -549,7 +549,7 @@ export function SerialCompactView({
                                     isBad ? "bg-rose-500 text-white" : "bg-emerald-600 text-white",
                                   )}
                                 >
-                                  {isBad ? "BAD" : "GOOD"}
+                                  {isBad ? "DEFECTIVE" : "GOOD"}
                                 </span>
                               </Badge>
                             );
@@ -557,7 +557,7 @@ export function SerialCompactView({
                         </div>
                         {g.defective > 0 && g.good > 0 ? (
                           <p className="text-[11px] text-muted-foreground mt-2">
-                            Red <span className="font-semibold text-rose-700">BAD</span> serials are defective stock in this warehouse — don&apos;t issue without QC. Green{" "}
+                            Red <span className="font-semibold text-rose-700">DEFECTIVE</span> serials are defective stock in this warehouse — don&apos;t issue without QC. Green{" "}
                             <span className="font-semibold text-emerald-700">GOOD</span> are ready to issue.
                           </p>
                         ) : null}
@@ -658,7 +658,7 @@ export function SerialDetailedView({
                     </span>
                   </span>
                   <span className={cn("inline-flex rounded px-1 py-0.5 text-[9px] font-bold tracking-wide leading-none shrink-0", isBad ? "bg-rose-500 text-white" : "bg-emerald-600 text-white")}>
-                    {isBad ? "BAD" : "GOOD"}
+                    {isBad ? "DEFECTIVE" : "GOOD"}
                   </span>
                 </button>
               );
@@ -1111,7 +1111,7 @@ export function SerialCardShell({
               ) : null}
             </div>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-1">
-              Grouped by Model No + Warehouse · Good/Bad pill flow · collapsible serial list
+              Grouped by Model No + Warehouse · Good/Defective pill flow · collapsible serial list
             </p>
           </div>
         </div>

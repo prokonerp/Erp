@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,8 +17,8 @@ export const Route = createFileRoute("/_app/po/")({
 function POList() {
   const [rows, setRows] = useState<PORow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState<POStatus | "all">("all");
+  const [q, setQ] = useRouteState("q", "");
+  const [status, setStatus] = useRouteState<POStatus | "all">("status", "all");
 
   useEffect(() => {
     (async () => {

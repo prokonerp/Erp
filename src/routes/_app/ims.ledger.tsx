@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -105,15 +106,15 @@ function classifyTxn(t: Transaction): { wh: string | null; dir: Direction } {
 }
 
 function Ledger() {
-  const [warehouseId, setWarehouseId] = useState<string>("all");
-  const [txnType, setTxnType] = useState<string>("all");
-  const [status, setStatus] = useState<string>("all");
-  const [stockType, setStockType] = useState<string>("all");
-  const [from, setFrom] = useState<string>("");
-  const [to, setTo] = useState<string>("");
-  const [q, setQ] = useState("");
+  const [warehouseId, setWarehouseId] = useRouteState<string>("warehouseId", "all");
+  const [txnType, setTxnType] = useRouteState<string>("txnType", "all");
+  const [status, setStatus] = useRouteState<string>("status", "all");
+  const [stockType, setStockType] = useRouteState<string>("stockType", "all");
+  const [from, setFrom] = useRouteState<string>("from", "");
+  const [to, setTo] = useRouteState<string>("to", "");
+  const [q, setQ] = useRouteState<string>("q", "");
   const qDebounced = useDebounced(q.trim(), 250);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useRouteState<number>("page", 0);
   const pageSize = 50;
   const [drill, setDrill] = useState<{ serial: string | null; item: StockItem | null } | null>(
     null,
@@ -662,8 +663,8 @@ function DefectiveTagQuickAction({
   const [rows, setRows] = useState<DefectiveInRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [q, setQ] = useState("");
-  const [showGenerated, setShowGenerated] = useState(false);
+  const [q, setQ] = useRouteState<string>("q", "", { scope: "defective-tag" });
+  const [showGenerated, setShowGenerated] = useRouteState<boolean>("showGenerated", false, { scope: "defective-tag" });
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [preview, setPreview] = useState<DefectiveTag[] | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);

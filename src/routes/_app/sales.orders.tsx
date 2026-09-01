@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { fetchSalesOrders, soStatusMeta, type SalesOrder } from "@/lib/salesOrders";
@@ -10,7 +11,7 @@ export const Route = createFileRoute("/_app/sales/orders")({ component: SalesOrd
 
 function SalesOrdersList() {
   const [rows, setRows] = useState<SalesOrder[]>([]);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState<string>("q", "");
   const [loading, setLoading] = useState(true);
   useEffect(() => { fetchSalesOrders().then(setRows).finally(() => setLoading(false)); }, []);
   const filtered = rows.filter((r) =>

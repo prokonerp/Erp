@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -58,10 +59,10 @@ export const Route = createFileRoute("/_app/ims/stock")({
 
 function StockLedger() {
   const { isAdmin } = useIsAdmin();
-  const [q, setQ] = useState("");
-  const [type, setType] = useState<string>("all");
-  const [status, setStatus] = useState<string>("all");
-  const [page, setPage] = useState(0);
+  const [q, setQ] = useRouteState<string>("q", "");
+  const [type, setType] = useRouteState<string>("type", "all");
+  const [status, setStatus] = useRouteState<string>("status", "all");
+  const [page, setPage] = useRouteState<number>("page", 0);
   const pageSize = 25;
   const qDebounced = useDebounced(q.trim(), 250);
   const [openNew, setOpenNew] = useState(false);

@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,11 +19,13 @@ export const Route = createFileRoute("/_app/sales/payments/")({
 type Row = PaymentRow & { customer?: { company: string } };
 
 function PaymentList() {
-  const [q, setQ] = useState("");
-  const [page, setPage] = useState(0);
+  const [q, setQ] = useRouteState<string>("q", "");
+  const [page, setPage] = useRouteState<number>("page", 0);
   const pageSize = 50;
   const debouncedQ = useDebounced(q.trim(), 300);
-  useMemo(() => setPage(0), [debouncedQ]);
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedQ]);
 
   const query = useQuery({
     queryKey: ["payments_received", { q: debouncedQ, page, pageSize }],

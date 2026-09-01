@@ -31,6 +31,8 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { downloadInvoicePdf, printInvoicePdf } from "@/lib/invoicePdf";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
+import { signSignatureUrl } from "@/lib/userSignature";
+import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/sales/invoices/$id")({
   component: InvoiceView,
@@ -49,6 +51,8 @@ function InvoiceView() {
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [showSupplyFrom, setShowSupplyFrom] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
+  const [preparedBy, setPreparedBy] = useState<{ name?: string | null; phone?: string | null; email?: string | null } | null>(null);
 
   // e-Way form
   const [ewayOpen, setEwayOpen] = useState(false);
@@ -88,6 +92,34 @@ function InvoiceView() {
     }
   }
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Authorised signature for PDF footer (current user). Mirrors quotations.$id & po.$id logic.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user || cancelled) return;
+        const name = await getCurrentUserName();
+        if (cancelled) return;
+        const { data: au } = await supabase
+          .from("app_users")
+          .select("name,phone,email,signature_url")
+          .eq("user_id", u.user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        const row = (au as { name?: string | null; phone?: string | null; email?: string | null; signature_url?: string | null } | null) || null;
+        setPreparedBy({
+          name: (row?.name || name || u.user.email || "").trim() || null,
+          phone: row?.phone || null,
+          email: row?.email || u.user.email || null,
+        });
+        const signed = await signSignatureUrl(row?.signature_url || null);
+        if (!cancelled) setAuthorisedSignatureUrl(signed);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   async function issueIfDraft() {
     if (!inv || inv.status !== "draft") return;
@@ -193,8 +225,8 @@ function InvoiceView() {
           <Button size="sm" variant="outline" asChild>
             <Link to="/sales/payments/new" search={{ invoice_id: inv.id } as any}><Wallet className="h-4 w-4 mr-1.5" />Record Payment</Link>
           </Button>
-          <Button size="sm" variant="outline" onClick={() => printInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, company, showSupplyFrom, meta: pdfMeta } as any)}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
-          <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, company, showSupplyFrom, meta: pdfMeta } as any)}><Download className="h-4 w-4 mr-1.5" />PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => printInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, company, showSupplyFrom, meta: pdfMeta, authorisedSignatureUrl, preparedBy } as any)}><Printer className="h-4 w-4 mr-1.5" />Print</Button>
+          <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf({ invoice: inv, items, branch, customer, themeColor: pdfTheme.themeColor, copyLabel: pdfTheme.copyLabel, settings: pdfSettings, company, showSupplyFrom, meta: pdfMeta, authorisedSignatureUrl, preparedBy } as any)}><Download className="h-4 w-4 mr-1.5" />PDF</Button>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import type { InvoiceRow, InvoiceItemRow, BranchRow } from "@/lib/sales";
 import { inr } from "@/lib/sales";
 import type { CompanyProfile } from "@/lib/companyProfile";
 import { getCompany } from "@/lib/letterhead";
+import { fetchSignatureDataUrl, getImageDimensions } from "@/lib/signaturePdfHelpers";
 
 type Customer = {
   company: string;
@@ -57,6 +58,9 @@ export async function renderInvoicePdf(args: {
   /** When true, render a small "Supply From: <warehouse>" line below the letterhead. */
   showSupplyFrom?: boolean;
   meta?: { vehicle_no?: string | null; po_no?: string | null; po_date?: string | null; payment_terms?: string | null };
+  /** Authorised signature image URL (signed URL or public /signatures/*.svg). Embedded above signatory line. */
+  authorisedSignatureUrl?: string | null;
+  preparedBy?: { name?: string | null; phone?: string | null; email?: string | null } | null;
 }): Promise<jsPDF> {
   const [{ default: jsPDF }, { default: autoTable }, QRCode] = await Promise.all([
     import("jspdf"),
@@ -434,7 +438,7 @@ export async function renderInvoicePdf(args: {
     if (qr) doc.addImage(qr, "PNG", margin + col1W + (col2W - qrSize) / 2, y + 18, qrSize, qrSize);
   }
 
-  // Signature (right)
+  // Signature (right) — try to embed authorised signature image above signatory line
   doc.setFillColor(tr, tg, tb);
   doc.rect(margin + col1W + col2W, y, col3W, 14, "F");
   doc.setTextColor(255, 255, 255).setFont("helvetica", "bold").setFontSize(8.5);
@@ -443,9 +447,43 @@ export async function renderInvoicePdf(args: {
   const sigX = margin + col1W + col2W;
   doc.setFont("helvetica", "bold").setFontSize(9);
   doc.text(`For ${companyName.toUpperCase()}`, sigX + col3W - 6, y + 28, { align: "right" });
-  // Blank space for physical signature
+  // Embed signature image if available (max 110×38 pt centered inside col3)
+  if (args.authorisedSignatureUrl) {
+    try {
+      const sig = await fetchSignatureDataUrl(args.authorisedSignatureUrl);
+      if (sig && sig.dataUrl) {
+        let iw = 110;
+        let ih = 38;
+        try {
+          const dims = await getImageDimensions(sig.dataUrl);
+          if (dims && dims.w && dims.h) {
+            const scale = Math.min(110 / dims.w, 38 / dims.h, 1);
+            iw = dims.w * scale;
+            ih = dims.h * scale;
+          }
+        } catch { /* keep default */ }
+        const cx = sigX + col3W / 2;
+        const x = cx - iw / 2;
+        // Place image centered vertically in the gap between "For X" (y+28) and "Authorised Signatory" (y+footerH-8)
+        // Reserve 8pt above the signatory line; image top = y + 36 roughly
+        const yImg = y + 38 + (46 - ih) / 2; // 46 = available height ~ y+35 to y+81
+        const fmt = sig.format === "JPEG" ? "JPEG" : "PNG";
+        doc.addImage(sig.dataUrl, fmt as any, x, yImg, iw, ih);
+      }
+    } catch (e) {
+      console.warn("[invoice PDF] signature embed failed", e);
+    }
+  }
   doc.setFont("helvetica", "normal").setFontSize(8.5);
   doc.text("Authorised Signatory", sigX + col3W - 6, y + footerH - 8, { align: "right" });
+  if (args.preparedBy?.name) {
+    try {
+      doc.setFont("helvetica", "normal").setFontSize(6.5);
+      doc.setTextColor(80, 80, 80);
+      doc.text(String(args.preparedBy.name).slice(0, 32), sigX + col3W - 6, y + footerH - 2, { align: "right" });
+      doc.setTextColor(0, 0, 0);
+    } catch { /* ignore */ }
+  }
 
   // Ensure we haven't overflowed
   if (y + footerH > pageH - margin) {

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,7 @@ function Reports() {
   const [resv, setResv] = useState<Reservation[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [products, setProducts] = useState<ProductLite[]>([]);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState<string>("q", "");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

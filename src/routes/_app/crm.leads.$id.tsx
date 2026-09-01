@@ -26,7 +26,7 @@ const LOST_REASONS = [
   "Price too high",
   "Chose a competitor",
   "No budget",
-  "Bad timing",
+  "Defective timing",
   "Went with in-house solution",
   "Other",
 ];

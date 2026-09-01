@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,9 +62,9 @@ type LeadForm = {
 function LeadsList() {
   const nav = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [filter, setFilter] = useState<"all" | LeadStatus>("all");
-  const [q, setQ] = useState("");
-  const [page, setPage] = useState(0);
+  const [filter, setFilter] = useRouteState<"all" | LeadStatus>("filter", "all");
+  const [q, setQ] = useRouteState<string>("q", "");
+  const [page, setPage] = useRouteState<number>("page", 0);
   const pageSize = 25;
   const debouncedQ = useDebounced(q.trim(), 250);
   const [open, setOpen] = useState(false);

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,8 +52,8 @@ function statusOf(expiry: string | null): { label: string; cls: string } {
 
 function AmcOemData() {
   const [rows, setRows] = useState<OemRow[]>([]);
-  const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "expiring" | "expired">("all");
+  const [q, setQ] = useRouteState<string>("q", "");
+  const [statusFilter, setStatusFilter] = useRouteState<"all" | "expiring" | "expired">("statusFilter", "all");
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 

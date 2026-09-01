@@ -9,12 +9,26 @@ import {
   CalendarDays,
   Hash,
   Layers,
+  ExternalLink,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { Transaction, WarehouseLite } from "@/lib/ims";
 import { resolveTxnType, TxnTypeBadge } from "@/components/serial/TransactionTypeBadge";
+import { useNavigate } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { getTxnDocMeta, txnDocTooltip } from "@/lib/txnDocument";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -241,6 +255,155 @@ export function WarehouseFlow({
 }
 
 // ---------------------------------------------------------------------------
+// Voucher / Reference — DC / GRN preferred, clickable
+// ---------------------------------------------------------------------------
+
+function TxnVoucherLink({ txn, onDetail }: { txn: Transaction; onDetail?: (t: Transaction) => void }) {
+  const navigate = useNavigate();
+  const meta = React.useMemo(() => getTxnDocMeta(txn), [txn]);
+  const [loading, setLoading] = React.useState(false);
+  const isClickable = !!meta.docType && !!meta.docNo;
+  const tooltip = txnDocTooltip(meta);
+
+  const handleClick = React.useCallback(async () => {
+    if (isClickable && meta.docNo && meta.docType) {
+    setLoading(true);
+    try {
+      const sb = supabase as unknown as { from: (t: string) => any };
+      const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+      if (meta.docType === "grn") {
+        let found: { id: string } | null = null;
+        // Legacy GRN references stored UUID instead of grn_no — try id first when it looks like a UUID
+        if (isUuid(meta.docNo)) {
+          const { data } = await sb.from("grns").select("id").eq("id", meta.docNo).maybeSingle();
+          if (data?.id) found = data as { id: string };
+        }
+        if (!found) {
+          const { data, error } = await sb.from("grns").select("id").eq("grn_no", meta.docNo).maybeSingle();
+          if (error) throw error;
+          if (data?.id) found = data as { id: string };
+        }
+        if (found?.id) {
+          navigate({ to: "/grn/$id", params: { id: found.id } } as any);
+        } else {
+          toast.error(`GRN ${meta.docNo} not found`);
+        }
+      } else if (meta.docType === "dc") {
+        const { data, error } = await sb.from("delivery_challans").select("id").eq("challan_no", meta.docNo).maybeSingle();
+        if (error) throw error;
+        if (data?.id) {
+          navigate({ to: "/challan/$id", params: { id: data.id } } as any);
+        } else {
+          toast.error(`Delivery Challan ${meta.docNo} not found`);
+        }
+      } else if (meta.docType === "gdc") {
+        const { data, error } = await sb
+          .from("general_delivery_challans")
+          .select("id")
+          .eq("dc_no", meta.docNo)
+          .maybeSingle();
+        if (error) throw error;
+        if (data?.id) {
+          navigate({ to: "/sales/general-dc/$id", params: { id: data.id } } as any);
+        } else {
+          toast.error(`General DC ${meta.docNo} not found`);
+        }
+      } else if (meta.docType === "transfer") {
+        const tid = (meta as unknown as { transferId?: string | null }).transferId;
+        if (tid) {
+          navigate({ to: "/ims/transfers/$id", params: { id: tid } } as any);
+        } else if (meta.docNo) {
+          const { data, error } = await sb.from("ims_transfers").select("id").eq("transfer_no", meta.docNo).maybeSingle();
+          if (error) throw error;
+          if (data?.id) navigate({ to: "/ims/transfers/$id", params: { id: data.id } } as any);
+          else toast.error(`Transfer ${meta.docNo} not found`);
+        }
+      } else if (meta.docType === "invoice") {
+        const { data, error } = await sb.from("invoices").select("id").eq("invoice_no", meta.docNo).maybeSingle();
+        if (error) throw error;
+        if (data?.id) navigate({ to: "/sales/invoices/$id", params: { id: data.id } } as any);
+        else toast.error(`Invoice ${meta.docNo} not found`);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to open document";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+    return;
+    }
+    // Non-document voucher (e.g. Opening Balance) — open detail dialog instead of doing nothing
+    if (onDetail) onDetail(txn);
+    else toast.info(`${meta.display} — ${meta.rawRef || "Opening Balance"} (no source document)`);
+  }, [isClickable, meta, navigate, onDetail, txn]);
+
+  if (isClickable) {
+    const typeColor =
+      meta.docType === "grn"
+        ? "text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-transparent hover:border-emerald-200"
+        : meta.docType === "dc"
+          ? "text-blue-700 hover:text-blue-800 hover:bg-blue-50 border-transparent hover:border-blue-200"
+          : meta.docType === "gdc"
+            ? "text-violet-700 hover:text-violet-800 hover:bg-violet-50 border-transparent hover:border-violet-200"
+            : meta.docType === "invoice"
+              ? "text-amber-700 hover:text-amber-800 hover:bg-amber-50 border-transparent hover:border-amber-200"
+              : "text-amber-700 hover:text-amber-800 hover:bg-amber-50 border-transparent hover:border-amber-200";
+
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={loading}
+        title={tooltip}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-xs font-semibold shadow-sm transition-colors max-w-[190px] truncate",
+          "bg-white hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
+          typeColor,
+        )}
+      >
+        {loading ? (
+          <Loader2 size={11} className="shrink-0 animate-spin" aria-hidden />
+        ) : meta.docType === "grn" ? (
+          <FileText size={11} className="shrink-0 opacity-70" aria-hidden />
+        ) : meta.docType === "dc" ? (
+          <Truck size={11} className="shrink-0 opacity-70" aria-hidden />
+        ) : meta.docType === "gdc" ? (
+          <Package size={11} className="shrink-0 opacity-70" aria-hidden />
+        ) : (
+          <Hash size={11} className="shrink-0 opacity-60" aria-hidden />
+        )}
+        <span className="truncate">{meta.display}</span>
+        <ExternalLink size={10} className="shrink-0 opacity-60" aria-hidden />
+      </button>
+    );
+  }
+
+  // Non-document voucher — still clickable but opens transaction detail dialog
+  // Show as muted pill button so the user understands "something will open"
+  const showInternalHint = meta.rawRef && meta.internalTxnNo && meta.display !== meta.internalTxnNo;
+  const detailTooltip = meta.rawRef && meta.rawRef.toLowerCase().includes("opening")
+    ? `${meta.display} • Opening Balance — click to view detail`
+    : `${tooltip} — click to view detail`;
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      title={detailTooltip}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-xs font-medium shadow-sm transition-colors max-w-[190px] truncate",
+        "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white hover:border-slate-300 hover:text-slate-800",
+      )}
+    >
+      <Hash size={11} className="shrink-0 opacity-60" aria-hidden />
+      <span className="truncate">{meta.display}</span>
+      {showInternalHint ? (
+        <span className="hidden" aria-hidden>{meta.internalTxnNo}</span>
+      ) : null}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -296,6 +459,14 @@ export const MovementTimeline: React.FC<MovementTimelineProps> = ({
   }, [txns]);
 
   const partyOf = React.useCallback((t: Transaction) => t.to_party || t.from_party || "—", []);
+  const navigate = useNavigate();
+  const [detailTxn, setDetailTxn] = React.useState<Transaction | null>(null);
+  const detailMeta = React.useMemo(() => (detailTxn ? getTxnDocMeta(detailTxn) : null), [detailTxn]);
+  const detailWhFlow = React.useMemo(() => {
+    if (!detailTxn) return null;
+    const r: TypeResolverResult = typeResolver ? typeResolver(detailTxn) : resolveTxnType(detailTxn);
+    return resolveCategory(detailTxn, r as ReturnType<typeof resolveTxnType>);
+  }, [detailTxn, typeResolver]);
 
   if (sorted.length === 0) {
     return (
@@ -371,8 +542,8 @@ export const MovementTimeline: React.FC<MovementTimelineProps> = ({
                         </Badge>
                       )}
                     </td>
-                    <td className="p-2.5 font-mono text-xs text-slate-700 max-w-[180px] truncate">
-                      {t.txn_no || t.reference || "—"}
+                    <td className="p-2.5 max-w-[200px]">
+                      <TxnVoucherLink txn={t} onDetail={setDetailTxn} />
                     </td>
                     <td className="p-2.5 text-slate-700 max-w-[160px] truncate" title={partyOf(t)}>
                       {partyOf(t)}
@@ -471,9 +642,8 @@ export const MovementTimeline: React.FC<MovementTimelineProps> = ({
                           {formatDate(t.txn_date || t.created_at)}
                         </span>
                         <span className="text-slate-300">·</span>
-                        <span className="inline-flex items-center gap-1 font-mono text-xs text-slate-500">
-                          <Hash size={11} className="text-slate-400" aria-hidden />
-                          <span className="truncate max-w-[140px]">{t.txn_no || t.reference || "—"}</span>
+                        <span className="inline-flex max-w-[170px] truncate">
+                          <TxnVoucherLink txn={t} onDetail={setDetailTxn} />
                         </span>
                       </div>
                       <div className="mt-1.5">
@@ -537,6 +707,161 @@ export const MovementTimeline: React.FC<MovementTimelineProps> = ({
           })}
         </div>
       </div>
+
+      {/* ── Transaction detail dialog — every voucher click opens something ── */}
+      <Dialog open={!!detailTxn} onOpenChange={(o) => !o && setDetailTxn(null)}>
+        <DialogContent className="max-w-lg">
+          {detailTxn ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  {detailMeta?.docType ? (
+                    <>
+                      {detailMeta.docType === "grn" ? (
+                        <FileText size={16} className="text-emerald-600" />
+                      ) : detailMeta.docType === "dc" ? (
+                        <Truck size={16} className="text-blue-600" />
+                      ) : detailMeta.docType === "gdc" ? (
+                        <Package size={16} className="text-violet-600" />
+                      ) : (
+                        <Hash size={16} className="text-slate-500" />
+                      )}
+                      <span className="font-mono text-sm">{detailMeta.display}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Hash size={16} className="text-slate-500" />
+                      <span className="font-mono text-sm">{detailMeta?.display || detailTxn.txn_no || "Transaction"}</span>
+                    </>
+                  )}
+                </DialogTitle>
+                <DialogDescription className="sr-only">Transaction detail for {detailTxn.txn_no}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-1">
+                <div className="flex flex-wrap gap-2">
+                  <TxnTypeBadge txn={detailTxn} iconSize={12} />
+                  {detailMeta?.docType ? (
+                    <Badge variant="outline" className="font-mono text-xs">
+                      {detailMeta.docType.toUpperCase()} {detailMeta.docNo}
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Date</div>
+                    <div className="font-medium">{formatDate(detailTxn.txn_date || detailTxn.created_at)}</div>
+                    <div className="text-xs text-muted-foreground">{detailTxn.created_at ? new Date(detailTxn.created_at).toLocaleTimeString() : ""}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Qty</div>
+                    <div className="font-mono font-semibold">{detailTxn.qty}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-xs text-muted-foreground">Voucher / Reference</div>
+                    <div className="font-mono text-xs break-all">{detailTxn.reference || "—"}</div>
+                    <div className="font-mono text-[11px] text-muted-foreground">Internal: {detailTxn.txn_no || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Party</div>
+                    <div className="font-medium truncate" title={partyOf(detailTxn)}>{partyOf(detailTxn)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Product</div>
+                    <div className="truncate" title={detailTxn.part_name || ""}>{detailTxn.part_name || "—"}</div>
+                    <div className="font-mono text-xs text-muted-foreground truncate">{detailTxn.part_model_no || ""}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-xs text-muted-foreground">Warehouse Flow</div>
+                    <div className="mt-1">
+                      <WarehouseFlow
+                        fromId={detailTxn.from_warehouse_id}
+                        toId={detailTxn.to_warehouse_id}
+                        fromParty={detailTxn.from_party}
+                        toParty={detailTxn.to_party}
+                        category={detailWhFlow || "adjust"}
+                        warehouses={whMap}
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                  {detailTxn.notes ? (
+                    <div className="col-span-2">
+                      <div className="text-xs text-muted-foreground">Notes</div>
+                      <div className="text-xs bg-muted/40 rounded-md p-2 border">{detailTxn.notes}</div>
+                    </div>
+                  ) : null}
+                  <div className="col-span-2 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-muted-foreground">Serial:</span>{" "}
+                      <span className="font-mono">{detailTxn.part_serial_no || "—"}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">OEM:</span> {detailTxn.oem || "—"}
+                    </div>
+                  </div>
+                </div>
+                {detailMeta?.docType ? (
+                  <div className="pt-2 border-t">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const t = detailTxn;
+                        setDetailTxn(null);
+                        // Re-use the same navigation logic: find an element with the same txn and click its voucher
+                        // Instead, directly navigate using the stored meta
+                        (async () => {
+                          const sb = supabase as unknown as { from: (tt: string) => any };
+                          const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+                          try {
+                            if (detailMeta.docType === "grn" && detailMeta.docNo) {
+                              let found: { id: string } | null = null;
+                              if (isUuid(detailMeta.docNo)) {
+                                const { data } = await sb.from("grns").select("id").eq("id", detailMeta.docNo).maybeSingle();
+                                if (data?.id) found = data as { id: string };
+                              }
+                              if (!found) {
+                                const { data } = await sb.from("grns").select("id").eq("grn_no", detailMeta.docNo).maybeSingle();
+                                if (data?.id) found = data as { id: string };
+                              }
+                              if (found?.id) navigate({ to: "/grn/$id", params: { id: found.id } } as any);
+                              else toast.error(`GRN ${detailMeta.docNo} not found`);
+                            } else if (detailMeta.docType === "dc" && detailMeta.docNo) {
+                              const { data } = await sb.from("delivery_challans").select("id").eq("challan_no", detailMeta.docNo).maybeSingle();
+                              if (data?.id) navigate({ to: "/challan/$id", params: { id: data.id } } as any);
+                              else toast.error(`DC ${detailMeta.docNo} not found`);
+                            } else if (detailMeta.docType === "gdc" && detailMeta.docNo) {
+                              const { data } = await sb.from("general_delivery_challans").select("id").eq("dc_no", detailMeta.docNo).maybeSingle();
+                              if (data?.id) navigate({ to: "/sales/general-dc/$id", params: { id: data.id } } as any);
+                              else toast.error(`GDC ${detailMeta.docNo} not found`);
+                            } else if (detailMeta.docType === "transfer" && detailMeta.docNo) {
+                              const tid = (detailMeta as unknown as { transferId?: string | null }).transferId;
+                              if (tid) navigate({ to: "/ims/transfers/$id", params: { id: tid } } as any);
+                              else {
+                                const { data } = await sb.from("ims_transfers").select("id").eq("transfer_no", detailMeta.docNo).maybeSingle();
+                                if (data?.id) navigate({ to: "/ims/transfers/$id", params: { id: data.id } } as any);
+                                else toast.error(`Transfer ${detailMeta.docNo} not found`);
+                              }
+                            }
+                          } catch (e: unknown) {
+                            toast.error(e instanceof Error ? e.message : "Failed to open document");
+                          }
+                        })();
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 shadow-sm"
+                    >
+                      <ExternalLink size={12} /> Open {detailMeta.docType === "grn" ? "GRN" : detailMeta.docType === "dc" ? "Delivery Challan" : detailMeta.docType === "gdc" ? "General DC" : "Document"}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground border-t pt-2">
+                    Opening Balance / manual entries have no source document — this is the full ledger record for this serial.
+                  </p>
+                )}
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

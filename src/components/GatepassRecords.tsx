@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ export type Gatepass = {
 
 export function GatepassRecords() {
   const [rows, setRows] = useState<Gatepass[]>([]);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState("q", "");
 
   const GATEPASS_COLS = "id,challan_no,gatepass_date,gatepass_time,person_name,person_company,vehicle_no,destination,purpose,return_type,items,remarks,created_at";
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -42,10 +43,10 @@ type Status = "open" | "closed";
 
 function IndentList() {
   const [rows, setRows] = useState<Indent[]>([]);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState<string>("q", "");
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
-  const [tab, setTab] = useState<Status>("open");
+  const [tab, setTab] = useRouteState<Status>("tab", "open");
 
   const load = async () => {
     // Phase 0.2 debloat: explicit cols + limit 100 + server-side search filter

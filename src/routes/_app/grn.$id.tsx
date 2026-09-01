@@ -8,6 +8,7 @@ import { fetchGrn, CATEGORY_LABEL, type Grn } from "@/lib/grn";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
+import { signSignatureUrl } from "@/lib/userSignature";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -39,11 +40,32 @@ function GrnView() {
   const [wasEdited, setWasEdited] = useState(false);
   const [indentStatus, setIndentStatus] = useState<string | null>(null);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
+  const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCompanyProfile()
       .then(setCompany)
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user || cancelled) return;
+        const { data: au } = await supabase
+          .from("app_users")
+          .select("signature_url")
+          .eq("user_id", u.user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        const row = au as { signature_url?: string | null } | null;
+        const signed = await signSignatureUrl(row?.signature_url || null);
+        if (!cancelled) setAuthorisedSignatureUrl(signed);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -209,7 +231,7 @@ function GrnView() {
       const q = parseFloat(it.qty_received ?? it.qty_accepted ?? "") || 0;
       acc.q += q;
       const cond = String(it.condition || "").toLowerCase();
-      if (cond === "bad" || cond === "defective") acc.j += q;
+      if (cond === "defective") acc.j += q;
       else acc.a += q;
       return acc;
     },
@@ -633,7 +655,7 @@ function GrnView() {
                   {(() => {
                     const c = String(it.condition || "").toLowerCase();
                     if (!c) return "-";
-                    if (c === "defective" || c === "bad") return "Bad";
+                    if (c === "defective") return "Defective";
                     if (c === "good") return "Good";
                     return it.condition;
                   })()}
@@ -728,32 +750,42 @@ function GrnView() {
         )}
 
         {/* Signatures */}
-        <table>
+        <table style={{ width: "100%", marginTop: 12 }}>
           <tbody>
             <tr>
-              {[
-                { label: "Received By", val: g.received_by },
-                { label: "Checked By / QC", val: g.checked_by },
-                { label: "Approved By", val: g.approved_by },
-              ].map((s) => (
-                <td
-                  key={s.label}
-                  style={{ height: 70, verticalAlign: "bottom", textAlign: "center", width: "33%" }}
-                >
-                  <div
-                    style={{
-                      borderTop: "1px solid #000",
-                      paddingTop: 4,
-                      marginTop: 40,
-                      fontSize: 11,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {s.label}
-                  </div>
-                  <div style={{ fontSize: 10 }}>{s.val || ""}</div>
-                </td>
-              ))}
+              {/* Received By — blank signing space */}
+              <td style={{ width: "33%", verticalAlign: "bottom", textAlign: "center" }}>
+                <div style={{ marginTop: 40 }} />
+                <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11, fontWeight: 600 }}>
+                  Received By
+                </div>
+                <div style={{ fontSize: 10 }}>{g.received_by || ""}</div>
+              </td>
+              {/* Checked By / QC — blank signing space */}
+              <td style={{ width: "33%", verticalAlign: "bottom", textAlign: "center" }}>
+                <div style={{ marginTop: 40 }} />
+                <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11, fontWeight: 600 }}>
+                  Checked By / QC
+                </div>
+                <div style={{ fontSize: 10 }}>{g.checked_by || ""}</div>
+              </td>
+              {/* Approved By — signature image above the line */}
+              <td style={{ width: "33%", verticalAlign: "bottom", textAlign: "center" }}>
+                {authorisedSignatureUrl ? (
+                  <img
+                    src={authorisedSignatureUrl}
+                    crossOrigin="anonymous"
+                    alt="Authorised signature"
+                    style={{ maxHeight: 80, maxWidth: 160, objectFit: "contain", display: "block", margin: "0 auto 4px" }}
+                  />
+                ) : (
+                  <div style={{ marginTop: 40 }} />
+                )}
+                <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11, fontWeight: 600 }}>
+                  Approved By
+                </div>
+                <div style={{ fontSize: 10 }}>{g.approved_by || ""}</div>
+              </td>
             </tr>
           </tbody>
         </table>

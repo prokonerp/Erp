@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/lib/useRole";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,8 +78,8 @@ function PayrollPage() {
   const { tab } = Route.useSearch();
   const navigate = Route.useNavigate();
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useRouteState("year", now.getFullYear(), { scope: "payroll" });
+  const [month, setMonth] = useRouteState("month", now.getMonth() + 1, { scope: "payroll" });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [att, setAtt] = useState<Record<string, Record<number, AttEntry>>>({});
   const [lock, setLock] = useState<AttendanceLock | null>(null);
@@ -93,7 +94,7 @@ function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useRouteState("search", "", { scope: "payroll" });
   const dim = daysInMonth(year, month);
 
   async function load() {

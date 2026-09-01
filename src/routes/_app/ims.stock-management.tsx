@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -235,13 +236,13 @@ function warehouseBreakdown(items: StockItem[], whName: (id: string | null) => s
 }
 
 function StockManagement() {
-  const [q, setQ] = useState("");
-  const [oemFilter, setOemFilter] = useState("all");
-  const [whFilter, setWhFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [selectedProduct, setSelectedProduct] = useState<ProductRow | null>(null);
-  const [page, setPage] = useState(0);
+  const [q, setQ] = useRouteState<string>("q", "");
+  const [oemFilter, setOemFilter] = useRouteState<string>("oemFilter", "all");
+  const [whFilter, setWhFilter] = useRouteState<string>("whFilter", "all");
+  const [statusFilter, setStatusFilter] = useRouteState<string>("statusFilter", "all");
+  const [expandedKeys, setExpandedKeys] = useRouteState<string[]>("expandedKeys", []);
+  const [selectedProductKey, setSelectedProductKey] = useRouteState<string | null>("selectedProductKey", null);
+  const [page, setPage] = useRouteState<number>("page", 0);
   const pageSize = 25;
   const qDebounced = useDebounced(q.trim(), 250);
 
@@ -325,6 +326,11 @@ function StockManagement() {
   }, [items, q, oemFilter, whFilter, statusFilter]);
 
   const products = useMemo(() => aggregate(filteredItems, txns), [filteredItems, txns]);
+  const expanded = useMemo(() => new Set(expandedKeys), [expandedKeys]);
+  const selectedProduct = useMemo(() => {
+    if (!selectedProductKey) return null;
+    return products.find((p) => p.key === selectedProductKey) ?? null;
+  }, [products, selectedProductKey]);
 
   const oems = useMemo(
     () => Array.from(new Set(items.map((i) => i.oem).filter(Boolean))).sort() as string[],
@@ -416,11 +422,7 @@ function StockManagement() {
   }, [filteredItems, warehouses]);
 
   function toggleExpand(k: string) {
-    setExpanded((prev) => {
-      const n = new Set(prev);
-      n.has(k) ? n.delete(k) : n.add(k);
-      return n;
-    });
+    setExpandedKeys((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
   }
 
   return (
@@ -609,7 +611,7 @@ function StockManagement() {
                           <tr
                             key={p.key}
                             className={`border-t transition-colors hover:bg-primary/5 cursor-pointer ${zebra}`}
-                            onClick={() => setSelectedProduct(p)}
+                            onClick={() => setSelectedProductKey(p.key)}
                           >
                             <td
                               className="p-2.5"
@@ -731,7 +733,7 @@ function StockManagement() {
 
       <ProductDetailSheet
         product={selectedProduct}
-        onClose={() => setSelectedProduct(null)}
+        onClose={() => setSelectedProductKey(null)}
         whName={whName}
       />
     </div>

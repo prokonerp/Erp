@@ -99,8 +99,8 @@ export function ExecutiveKpisSection() {
     { label: "Closed Today", value: k.closedToday, icon: CheckCircle2, tone: "good", to: "/tickets", search: { scope: "closedToday" } },
     { label: "New Today", value: k.newToday, icon: PlusCircle, tone: "info", to: "/tickets", search: { scope: "today" } },
     { label: "Carry-over", value: k.carry, icon: RotateCcw, tone: k.carry ? "warn" : "muted", to: "/tickets", search: { scope: "carry" } },
-    { label: "Overdue >24h", value: k.overdue, icon: AlertTriangle, tone: k.overdue ? "bad" : "muted", to: "/tickets", search: { scope: "overdue" } },
-    { label: "High Priority", value: k.highPri, icon: Flame, tone: k.highPri ? "bad" : "muted", to: "/tickets", search: { scope: "highPriority" } },
+    { label: "Overdue >24h", value: k.overdue, icon: AlertTriangle, tone: k.overdue ? "defective" : "muted", to: "/tickets", search: { scope: "overdue" } },
+    { label: "High Priority", value: k.highPri, icon: Flame, tone: k.highPri ? "defective" : "muted", to: "/tickets", search: { scope: "highPriority" } },
     { label: "Avg Execution", value: fmtH(k.avgExec), icon: Timer, tone: "muted" },
     { label: "Avg Open Age", value: fmtH(k.avgAge), icon: Hourglass, tone: k.avgAge > 48 ? "warn" : "muted" },
   ];
@@ -112,19 +112,19 @@ export function ExecutiveKpisSection() {
   );
 }
 
-type Tone = "info" | "good" | "warn" | "bad" | "muted";
+type Tone = "info" | "good" | "warn" | "defective" | "muted";
 const RING: Record<Tone, string> = {
   info: "bg-blue-50 text-blue-700 ring-blue-100",
   good: "bg-emerald-50 text-emerald-700 ring-emerald-100",
   warn: "bg-amber-50 text-amber-700 ring-amber-100",
-  bad: "bg-red-50 text-red-700 ring-red-100",
+  defective: "bg-red-50 text-red-700 ring-red-100",
   muted: "bg-zinc-50 text-zinc-600 ring-zinc-100",
 };
 const VAL: Record<Tone, string> = {
   info: "text-blue-700",
   good: "text-emerald-700",
   warn: "text-amber-700",
-  bad: "text-red-700",
+  defective: "text-red-700",
   muted: "text-foreground",
 };
 

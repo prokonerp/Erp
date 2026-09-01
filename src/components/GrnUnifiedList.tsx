@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useRouteState } from "@/lib/routeState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,13 +65,13 @@ export function GrnUnifiedList() {
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
   const [users, setUsers] = useState<Record<string, string>>({});
-  const [q, setQ] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | GrnCategory>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [page, setPage] = useState(0);
+  const [q, setQ] = useRouteState("q", "");
+  const [typeFilter, setTypeFilter] = useRouteState<"all" | GrnCategory>("typeFilter", "all");
+  const [statusFilter, setStatusFilter] = useRouteState<string>("statusFilter", "all");
+  const [sourceFilter, setSourceFilter] = useRouteState<string>("sourceFilter", "all");
+  const [from, setFrom] = useRouteState<string>("from", "");
+  const [to, setTo] = useRouteState<string>("to", "");
+  const [page, setPage] = useRouteState<number>("page", 0);
 
   // Reset to first page when filters change
   useEffect(() => {

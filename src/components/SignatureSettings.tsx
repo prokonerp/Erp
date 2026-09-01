@@ -8,7 +8,7 @@ import { PenLine, Trash2, Upload, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
 import { supabase } from "@/integrations/supabase/client";
-import { SIGNATURE_BUCKET, signSignatureUrl } from "@/lib/userSignature";
+import { SIGNATURE_BUCKET, signSignatureUrl, cleanSignatureImage, signatureExt } from "@/lib/userSignature";
 
 type AppUserRow = {
   user_id: string;
@@ -48,11 +48,22 @@ export function SignatureSettings({ isAdmin }: { isAdmin: boolean }) {
     if (file.size > 2 * 1024 * 1024) return toast.error("Max file size is 2 MB");
     setBusyId(user.user_id);
     try {
-      const ext = (file.name.split(".").pop() || "png").toLowerCase();
+      const cleanedBlob = await cleanSignatureImage(file);
+      const storeBlob = cleanedBlob || file; // fallback to raw if cleaning fails
+      const ext = cleanedBlob ? signatureExt() : (file.name.split(".").pop() || "png").toLowerCase();
+      const mime = cleanedBlob ? "image/png" : file.type;
       const path = `signatures/${user.user_id}.${ext}`;
+      // Clean up legacy files with old extensions
+      const legacyExts = ["png", "jpg", "jpeg"];
+      for (const le of legacyExts) {
+        const legacyPath = `signatures/${user.user_id}.${le}`;
+        if (legacyPath !== path) {
+          await supabase.storage.from(SIGNATURE_BUCKET).remove([legacyPath]).catch(() => {});
+        }
+      }
       const { error: upErr } = await supabase.storage
         .from(SIGNATURE_BUCKET)
-        .upload(path, file, { contentType: file.type, cacheControl: "3600", upsert: false });
+        .upload(path, storeBlob, { contentType: mime, cacheControl: "3600", upsert: true });
       if (upErr) throw upErr;
       const { error: dbErr } = await supabase
         .from("app_users")
@@ -85,6 +96,14 @@ export function SignatureSettings({ isAdmin }: { isAdmin: boolean }) {
           .from(SIGNATURE_BUCKET)
           .remove([row.signature_url]);
         if (rmErr) throw rmErr;
+      }
+      // Also remove legacy formats
+      const legacyExts = ["png", "jpg", "jpeg"];
+      for (const le of legacyExts) {
+        const legacyPath = `signatures/${row.user_id}.${le}`;
+        if (legacyPath !== row.signature_url) {
+          await supabase.storage.from(SIGNATURE_BUCKET).remove([legacyPath]).catch(() => {});
+        }
       }
       const { error: dbErr } = await supabase
         .from("app_users")

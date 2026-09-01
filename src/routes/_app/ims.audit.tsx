@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -15,10 +16,10 @@ export const Route = createFileRoute("/_app/ims/audit")({
 function Audit() {
   const [rows, setRows] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState<string>("q", "");
   const qDebounced = useDebounced(q, 250);
   const deferredQ = useDeferredValue(qDebounced);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useRouteState<number>("page", 0);
   const PAGE_SIZE = 50;
 
   useEffect(() => {

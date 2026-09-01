@@ -8,6 +8,7 @@ import { fetchChallan, type DeliveryChallan } from "@/lib/challan";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
+import { signSignatureUrl } from "@/lib/userSignature";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -29,8 +30,29 @@ function ChallanView() {
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
   const [company, setCompany] = useState<CompanyProfile | null>(null);
+  const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
 
   useEffect(() => { getDocumentHeader().then(setCompany).catch(() => {}); }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user || cancelled) return;
+        const { data: au } = await supabase
+          .from("app_users")
+          .select("signature_url")
+          .eq("user_id", u.user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        const row = au as { signature_url?: string | null } | null;
+        const signed = await signSignatureUrl(row?.signature_url || null);
+        if (!cancelled) setAuthorisedSignatureUrl(signed);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     fetchChallan(id).then(setC).catch((e) => toast.error(e.message));
@@ -411,21 +433,42 @@ function ChallanView() {
         </div>
 
         {/* Signatures */}
-        <table>
+        <table style={{ width: "100%", marginTop: 12 }}>
           <tbody>
             <tr>
-              {[
-                { label: "Prepared By", val: c.prepared_by },
-                { label: "Checked By", val: c.checked_by },
-                { label: "Authorized Signatory", val: c.approved_by },
-              ].map((s) => (
-                <td key={s.label} style={{ height: 70, verticalAlign: "bottom", textAlign: "center", width: "33%" }}>
-                  <div style={{ borderTop: "1px solid #000", paddingTop: 4, marginTop: 40, fontSize: 11, fontWeight: 600 }}>
-                    {s.label}
-                  </div>
-                  <div style={{ fontSize: 10 }}>{s.val || ""}</div>
-                </td>
-              ))}
+              {/* Prepared By — blank signing space */}
+              <td style={{ width: "33%", verticalAlign: "bottom", textAlign: "center" }}>
+                <div style={{ marginTop: 40 }} />
+                <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11, fontWeight: 600 }}>
+                  Prepared By
+                </div>
+                <div style={{ fontSize: 10 }}>{c.prepared_by || ""}</div>
+              </td>
+              {/* Checked By — blank signing space */}
+              <td style={{ width: "33%", verticalAlign: "bottom", textAlign: "center" }}>
+                <div style={{ marginTop: 40 }} />
+                <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11, fontWeight: 600 }}>
+                  Checked By
+                </div>
+                <div style={{ fontSize: 10 }}>{c.checked_by || ""}</div>
+              </td>
+              {/* Authorised Signatory — signature image above the line */}
+              <td style={{ width: "33%", verticalAlign: "bottom", textAlign: "center" }}>
+                {authorisedSignatureUrl ? (
+                  <img
+                    src={authorisedSignatureUrl}
+                    crossOrigin="anonymous"
+                    alt="Authorised signature"
+                    style={{ maxHeight: 80, maxWidth: 160, objectFit: "contain", display: "block", margin: "0 auto 4px" }}
+                  />
+                ) : (
+                  <div style={{ marginTop: 40 }} />
+                )}
+                <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11, fontWeight: 600 }}>
+                  Authorized Signatory
+                </div>
+                <div style={{ fontSize: 10 }}>{c.approved_by || ""}</div>
+              </td>
             </tr>
           </tbody>
         </table>

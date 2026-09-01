@@ -1,5 +1,4 @@
 import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MasterCrud } from "@/components/MasterCrud";
 import { CompanyProfileSettings } from "@/components/CompanyProfileSettings";
@@ -25,11 +24,7 @@ function MastersPage() {
   const isCustomerRoute = location.pathname === "/masters/customers";
   const isProductRoute = location.pathname === "/masters/products";
   const routedTab = isCustomerRoute ? "customers" : isProductRoute ? "products" : (search.tab ?? null);
-  const [tab, setTab] = useState<string>(routedTab ?? "company");
-  useEffect(() => {
-    if (routedTab) setTab(routedTab);
-  }, [routedTab]);
-  const currentTab = routedTab ?? tab;
+  const currentTab = routedTab ?? "company";
 
   const tabItems: { value: string; label: string }[] = [
     { value: "company", label: "Company" },
@@ -45,7 +40,6 @@ function MastersPage() {
     { value: "users", label: "Users & Roles" },
   ];
   const handleTabChange = (v: string) => {
-    setTab(v);
     if (v === "customers") navigate({ to: "/masters/customers" });
     else if (v === "products") navigate({ to: "/masters/products" });
     else navigate({ to: "/masters", search: { tab: v } });

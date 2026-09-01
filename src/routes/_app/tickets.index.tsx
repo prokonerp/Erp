@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebounced } from "@/lib/sales.hooks";
 import { useTicketsTable, useAssignableEngineers, useTicketTabCounts } from "@/hooks/useTicketsTable";
@@ -211,10 +212,10 @@ type Employee = {
 function TicketsList() {
   const search = Route.useSearch();
   const { isAdmin } = useIsAdmin();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState<string>("q", "");
   const [status, setStatus] = useState<string>(search.status || "all");
-  const [type, setType] = useState<string>("all");
-  const [cityFilter, setCityFilter] = useState<string>("all");
+  const [type, setType] = useRouteState<string>("type", "all");
+  const [cityFilter, setCityFilter] = useRouteState<string>("cityFilter", "all");
   const [engineerFilter, setEngineerFilter] = useState<string>(search.engineer || "all");
   const [priorityFilter, setPriorityFilter] = useState<string>(search.priority || "all");
   const [scope, setScope] = useState<string>(search.scope || "all");
@@ -222,18 +223,30 @@ function TicketsList() {
   const [oemFilter, setOemFilter] = useState<string>(search.oem || "all");
   const [partsFilter, setPartsFilter] = useState<string>(search.parts || "all");
   const [ageBucket, setAgeBucket] = useState<string>(search.ageBucket || "all");
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [page, setPage] = useState(0);
+  const [dateRange, setDateRange] = useRouteState<DateRange | undefined>("dateRange", undefined, {
+    serialize: (v) =>
+      v ? { from: v.from ? (v.from as Date).toISOString() : null, to: v.to ? (v.to as Date).toISOString() : null } : null,
+    deserialize: (raw, fallback) => {
+      if (!raw || typeof raw !== "object") return fallback;
+      const r = raw as { from?: string | null; to?: string | null };
+      if (!r.from && !r.to) return undefined as unknown as DateRange | undefined;
+      return {
+        from: r.from ? new Date(r.from) : undefined,
+        to: r.to ? new Date(r.to) : undefined,
+      } as DateRange;
+    },
+  });
+  const [page, setPage] = useRouteState<number>("page", 0);
   const pageSize = 25;
   const debouncedQ = useDebounced(q.trim(), 250);
   const [, setNowTick] = useState(0);
-  const [view, setView] = useState<"table" | "cards">("table");
+  const [view, setView] = useRouteState<"table" | "cards">("view", "table");
   const [closingCtx, setClosingCtx] = useState<{ r: Row; notify: boolean } | null>(null);
   const [cancellingCtx, setCancellingCtx] = useState<{ r: Row } | null>(null);
-  const [tab, setTab] = useState<"open" | "closed">("open");
+  const [tab, setTab] = useRouteState<"open" | "closed">("tab", "open");
   type SortKey = "created" | "timer" | "priority" | "customer";
-  const [sortKey, setSortKey] = useState<SortKey>("created");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortKey, setSortKey] = useRouteState<SortKey>("sortKey", "created");
+  const [sortDir, setSortDir] = useRouteState<"asc" | "desc">("sortDir", "desc");
   const toggleSort = (k: SortKey) => {
     setSortKey((prev) => {
       if (prev === k) {

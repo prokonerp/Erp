@@ -2,6 +2,7 @@ import type jsPDF from "jspdf";
 import { amountInWords } from "@/lib/gst";
 import { type PORow, type POItemRow } from "@/lib/purchaseOrder";
 import type { BranchRow } from "@/lib/sales";
+import { fetchSignatureDataUrl, getImageDimensions } from "@/lib/signaturePdfHelpers";
 
 function hexToRgb(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
@@ -36,6 +37,8 @@ export async function renderPurchaseOrderPdf(args: {
     phone?: string | null;
     email?: string | null;
   } | null;
+  authorisedSignatureUrl?: string | null;
+  preparedBy?: { name?: string | null; phone?: string | null; email?: string | null } | null;
 }): Promise<jsPDF> {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import("jspdf"),
@@ -124,7 +127,7 @@ export async function renderPurchaseOrderPdf(args: {
 
   y += boxH;
 
-  // Items table — includes Warranty per line (default 12 mo, editable). Guarded so a single bad row never crashes the whole PDF.
+  // Items table — includes Warranty per line (default 12 mo, editable). Guarded so a single defective row never crashes the whole PDF.
   const safeItems = (items ?? []).length ? items : [{ description: "No items", hsn: "—", qty: 0, unit: "", rate: 0, gst_rate: 0, warranty_months: 12, line_total: 0 } as any];
   try {
     autoTable(doc, {
@@ -231,12 +234,55 @@ export async function renderPurchaseOrderPdf(args: {
   // Signature block
   const pageH = doc.internal.pageSize.getHeight();
   const sigY = Math.max(ty + 30, pageH - 80);
+
+  // Try to embed authorised signature image above the signatory line (max 140×45 pt, centered).
+  // Wrapped in try/catch so a defective URL / CORS / SVG raster failure never crashes the whole PDF.
+  if (args.authorisedSignatureUrl) {
+    try {
+      const sig = await fetchSignatureDataUrl(args.authorisedSignatureUrl);
+      if (sig && sig.dataUrl) {
+        let iw = 140;
+        let ih = 45;
+        try {
+          const dims = await getImageDimensions(sig.dataUrl);
+          if (dims && dims.w && dims.h) {
+            const scale = Math.min(140 / dims.w, 45 / dims.h, 1);
+            iw = dims.w * scale;
+            ih = dims.h * scale;
+          }
+        } catch {
+          /* keep default 140×45 */
+        }
+        const cx = margin + cw - 100; // horizontal centre of signature column (160pt wide)
+        const x = cx - iw / 2;
+        const y = sigY - ih - 8; // 8pt gap above the line
+        // jsPDF addImage format must be PNG or JPEG — sig.format is already normalised.
+        const fmt = sig.format === "JPEG" ? "JPEG" : "PNG";
+        doc.addImage(sig.dataUrl, fmt as any, x, y, iw, ih);
+      }
+    } catch (e) {
+      console.warn("[PO PDF] signature embed failed", e);
+    }
+  }
+
   doc.setLineWidth(0.5);
   doc.line(margin + cw - 180, sigY, margin + cw - 20, sigY);
   doc.setFont("helvetica", "normal").setFontSize(8.5);
   doc.text("Authorized Signatory", margin + cw - 100, sigY + 12, { align: "center" });
   doc.setFont("helvetica", "bold").setFontSize(10);
   doc.text(`For ${companyName}`, margin + cw - 100, sigY - 6, { align: "center" });
+
+  // Optional: show prepared-by name below signature line for traceability (if provided)
+  if (args.preparedBy?.name) {
+    try {
+      doc.setFont("helvetica", "normal").setFontSize(7);
+      doc.setTextColor(80, 80, 80);
+      doc.text(String(args.preparedBy.name).slice(0, 40), margin + cw - 100, sigY + 22, { align: "center" });
+      doc.setTextColor(0, 0, 0);
+    } catch {
+      /* ignore */
+    }
+  }
 
   return doc;
 }

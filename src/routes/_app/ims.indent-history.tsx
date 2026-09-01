@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +17,7 @@ function IndentHistory() {
   const [rows, setRows] = useState<Transaction[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState<string>("q", "");
 
   useEffect(() => {
     (async () => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -58,9 +59,9 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
   // Fetch only the columns the form/list actually use (not select("*")).
   const cols = useMemo(() => ["id", ...fields.map((f) => f.key)].join(", "), [fields]);
 
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useRouteState<number>("page", 0, { scope: table });
   const pageSize = 25;
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState("q", "", { scope: table });
   const [debouncedQ, setDebouncedQ] = useState("");
   useEffect(() => {
     const t = setTimeout(() => {

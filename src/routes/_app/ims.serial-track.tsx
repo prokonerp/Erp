@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import {
 import { resolveTxnType } from "@/components/serial/TransactionTypeBadge";
 import { MovementTimeline, getMovementLabel } from "@/components/serial/MovementTimeline";
 import { SerialSearchHero, SerialHeaderCard, SectionHeader } from "@/components/serial/SerialTrackShell";
+import { getTxnDocMeta } from "@/lib/txnDocument";
 
 export const Route = createFileRoute("/_app/ims/serial-track")({
   component: SerialTrack,
@@ -52,7 +54,7 @@ function SerialTrack() {
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState("");
-  const [q, setQ] = useState(serialParam || "");
+  const [q, setQ] = useRouteState<string>("q", serialParam || "");
 
   useEffect(() => {
     listWarehouses().then(setWarehouses).catch(() => {});
@@ -245,7 +247,7 @@ function SerialTrack() {
               oemLabel={row.oem || "—"}
               warehouseLabel={plainWhName(row.warehouse_id)}
               qty={row.qty}
-              issuedTo={issuedTo ? { party: issuedTo.to_party || row.customer_name || "—", reference: issuedTo.reference || issuedTo.txn_no } : null}
+              issuedTo={issuedTo ? { party: issuedTo.to_party || row.customer_name || "—", reference: getTxnDocMeta(issuedTo as unknown as any).display } : null}
             />
 
             <Card className="rounded-xl border-border/60 bg-card shadow-sm overflow-hidden">
@@ -256,7 +258,7 @@ function SerialTrack() {
                   onDownload={() => exportCSV(`serial_${serial}_history`, [
                     { header: "Date", get: (t: Transaction) => (t.txn_date || t.created_at || "").slice(0, 10) },
                     { header: "Type", get: (t: Transaction) => resolveTxnType(t as Transaction).label },
-                    { header: "Voucher/Reference", get: (t: Transaction) => t.txn_no || t.reference || "" },
+                    { header: "Voucher/Reference", get: (t: Transaction) => getTxnDocMeta(t as Transaction).display },
                     { header: "Party", get: (t: Transaction) => t.to_party || t.from_party || "—" },
                     { header: "Warehouse Flow", get: (t: Transaction) => {
                       const from = t.from_warehouse_id ? plainWhName(t.from_warehouse_id) : (t.from_party || "");

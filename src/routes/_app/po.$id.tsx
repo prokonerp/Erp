@@ -23,6 +23,8 @@ import { DocumentPrintView, type PrintDoc } from "@/components/DocumentPrintView
 import { fetchCompanyProfile, DEFAULT_COMPANY_PROFILE, type CompanyProfile } from "@/lib/companyProfile";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { signSignatureUrl } from "@/lib/userSignature";
+import { getCurrentUserName } from "@/lib/currentUser";
 
 export const Route = createFileRoute("/_app/po/$id")({
   component: POView,
@@ -46,6 +48,8 @@ function POView() {
     email: string | null;
   } | null>(null);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
+  const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
+  const [preparedBy, setPreparedBy] = useState<{ name?: string | null; phone?: string | null; email?: string | null } | null>(null);
 
   async function load() {
     // Guard: prevent PostgREST 400 when route param is "1", "undefined", etc.
@@ -92,6 +96,37 @@ function POView() {
   }
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Authorised signature + prepared-by for PDFs & print view (mirrors quotations.$id logic).
+  // Fetches current user's app_users row; falls back to auth email/name if app_users missing.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user || cancelled) return;
+        const name = await getCurrentUserName();
+        if (cancelled) return;
+        const { data: au } = await supabase
+          .from("app_users")
+          .select("name,phone,email,signature_url")
+          .eq("user_id", u.user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        const row = (au as { name?: string | null; phone?: string | null; email?: string | null; signature_url?: string | null } | null) || null;
+        setPreparedBy({
+          name: (row?.name || name || u.user.email || "").trim() || null,
+          phone: row?.phone || null,
+          email: row?.email || u.user.email || null,
+        });
+        const signed = await signSignatureUrl(row?.signature_url || null);
+        if (!cancelled) setAuthorisedSignatureUrl(signed);
+      } catch {
+        /* ignore — no signature is a valid state; PDFs degrade to line-only */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   async function setStatus(next: POStatus) {
     if (!po) return;
     if (!isValidUuid(po.id)) return toast.error("Invalid Purchase Order ID — cannot update status.");
@@ -125,7 +160,7 @@ function POView() {
   async function handlePrintPdf() {
     if (!canPrint) { toast.error("Only approved/sent POs can be printed."); return; }
     try {
-      await printPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings });
+      await printPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings, authorisedSignatureUrl, preparedBy });
     } catch (e: any) {
       const msg = e?.message || "Print failed";
       // printPurchaseOrderPdf already falls back to download when popup blocked
@@ -136,7 +171,7 @@ function POView() {
 
   async function handleDownloadPdf() {
     try {
-      await downloadPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings }, `${po!.po_no || "PO"}.pdf`);
+      await downloadPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings, authorisedSignatureUrl, preparedBy }, `${po!.po_no || "PO"}.pdf`);
     } catch (e: any) {
       toast.error(e?.message || "Download failed");
     }
@@ -339,6 +374,8 @@ function POView() {
             },
             notes: po.notes,
             terms: po.terms,
+            prepared_by: preparedBy,
+            authorised_signature_url: authorisedSignatureUrl,
           } as PrintDoc}
         />
       </div>

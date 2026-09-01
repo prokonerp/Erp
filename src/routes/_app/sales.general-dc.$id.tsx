@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { getCompany } from "@/lib/letterhead";
 import { DEFAULT_COMPANY_PROFILE, type CompanyProfile } from "@/lib/companyProfile";
+import { signSignatureUrl } from "@/lib/userSignature";
 import { inr } from "@/lib/sales";
 import { useIsAdmin } from "@/lib/useRole";
 import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
@@ -69,6 +70,7 @@ function GeneralDcDetail() {
   const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
   const [negOpen, setNegOpen] = useState(false);
   const [returned, setReturned] = useState(false);
+  const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -80,6 +82,26 @@ function GeneralDcDetail() {
       setWarehouseNames(map);
     });
   }, [id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user || cancelled) return;
+        const { data: au } = await supabase
+          .from("app_users")
+          .select("signature_url")
+          .eq("user_id", u.user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        const row = au as { signature_url?: string | null } | null;
+        const signed = await signSignatureUrl(row?.signature_url || null);
+        if (!cancelled) setAuthorisedSignatureUrl(signed);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!dc?.returnable || !dc?.dc_no) return;
@@ -364,7 +386,7 @@ function GeneralDcDetail() {
       {/* Print source (hidden on screen) */}
       <div className="hidden">
         <div ref={printRef}>
-          <GeneralDcPrintView dc={dc} company={company} warehouseNames={warehouseNames} />
+          <GeneralDcPrintView dc={dc} company={company} warehouseNames={warehouseNames} authorised_signature_url={authorisedSignatureUrl} />
         </div>
       </div>
     </div>

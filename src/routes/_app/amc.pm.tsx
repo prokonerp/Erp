@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,15 +41,22 @@ type AmcLite = {
 function PMSchedule() {
   const [pms, setPms] = useState<PMRow[]>([]);
   const [amcs, setAmcs] = useState<Record<string, AmcLite>>({});
-  const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<"all" | "pending" | "done" | "overdue">("all");
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [q, setQ] = useRouteState<string>("q", "");
+  const [filter, setFilter] = useRouteState<"all" | "pending" | "done" | "overdue">("filter", "all");
+  const [selectedDate, setSelectedDate] = useRouteState<Date | undefined>("selectedDate", undefined, {
+    serialize: (v) => (v ? (v as Date).toISOString() : null),
+    deserialize: (raw, fallback) => {
+      if (!raw || typeof raw !== "string") return fallback;
+      const d = new Date(raw as string);
+      return isNaN(d.getTime()) ? fallback : d;
+    },
+  });
   const [busy, setBusy] = useState<string | null>(null);
   const [openDate, setOpenDate] = useState<string | null>(null);
   const [openPmId, setOpenPmId] = useState<string | null>(null);
-  const [dateInput, setDateInput] = useState<string>("");
-  const [rangeMode, setRangeMode] = useState<RangeMode>("month");
-  const [customRange, setCustomRange] = useState<DateRange>(currentMonth());
+  const [dateInput, setDateInput] = useRouteState<string>("dateInput", "");
+  const [rangeMode, setRangeMode] = useRouteState<RangeMode>("rangeMode", "month");
+  const [customRange, setCustomRange] = useRouteState<DateRange>("customRange", currentMonth());
   const { can } = usePermissions();
   const canCreateTicket = can("tickets", "create");
 

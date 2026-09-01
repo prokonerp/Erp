@@ -5,7 +5,7 @@ import { Warehouse, Package, Boxes } from "lucide-react";
 // ---------------------------------------------------------------------------
 // StockWarehouseTable — premium grouped-by-warehouse table
 // Theme: Prokon Navy Premium — Glacier #F1F5F9 bg, Navy #1E3A5F primary
-//        (oklch 0.32 0.08 250), secondary #2563EB, emerald GOOD, rose BAD.
+//        (oklch 0.32 0.08 250), secondary #2563EB, emerald GOOD, rose DEFECTIVE.
 // Spec: Group by warehouse → sticky warehouse header per group with pills
 //       + health bar; rows with OEM mono badge, Product+Package,
 //       emerald/rose pills, Health segmented bar.
@@ -118,7 +118,7 @@ export const StockWarehouseTable: React.FC<{ groups: StockWarehouseGroup[] }> = 
                             Good {fmt(whGood)}
                           </span>
                           <span className="inline-flex items-center rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5 text-xs font-semibold leading-none text-rose-700 tabular-nums">
-                            Bad {fmt(whDef)}
+                            Defective {fmt(whDef)}
                           </span>
                           <span className="inline-flex items-center rounded-full bg-primary text-primary-foreground border border-primary/10 px-2 py-0.5 text-xs font-semibold leading-none tabular-nums shadow-sm shadow-primary/10">
                             Total {fmt(whQty)}

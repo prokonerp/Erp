@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Search, Package, Factory, Warehouse, Hash, Truck, Activity, Wrench, Download, X, Sparkles, Clock3 } from "lucide-react";
+import { Search, Package, Factory, Warehouse, Hash, Truck, Activity, Wrench, Download, X, Sparkles, Clock3, ExternalLink, Loader2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
 import type { StockStatus, StockType } from "@/lib/ims";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { getTxnDocMeta } from "@/lib/txnDocument";
 
 // ---------------------------------------------------------------------------
 // SerialSearchHero — premium search bar inside Card
@@ -192,6 +196,97 @@ function MetaItem({ icon: Icon, label, value, tone = "slate" }: MetaItemProps) {
   );
 }
 
+function IssuedToBand({ party, reference }: { party: string; reference?: string | null }) {
+  const navigate = useNavigate();
+  const [loading, setLoading] = React.useState(false);
+  const meta = React.useMemo(() => {
+    if (!reference) return null;
+    // Reuse the same preference logic: treat reference string as document number when possible
+    // Build a fake Transaction to leverage getTxnDocMeta's parsing.
+    return getTxnDocMeta({ reference, txn_no: null } as unknown as import("@/lib/ims").Transaction);
+  }, [reference]);
+  const isClickable = !!meta?.docType && !!meta?.docNo;
+  const handleClick = React.useCallback(async () => {
+    if (!isClickable || !meta?.docNo || !meta?.docType) return;
+    setLoading(true);
+    try {
+      const sb = supabase as unknown as { from: (t: string) => any };
+      const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+      if (meta.docType === "dc") {
+        const { data } = await sb.from("delivery_challans").select("id").eq("challan_no", meta.docNo).maybeSingle();
+        if (data?.id) navigate({ to: "/challan/$id", params: { id: data.id } } as any);
+        else toast.error(`Delivery Challan ${meta.docNo} not found`);
+      } else if (meta.docType === "grn") {
+        let found: { id: string } | null = null;
+        if (isUuid(meta.docNo)) {
+          const { data } = await sb.from("grns").select("id").eq("id", meta.docNo).maybeSingle();
+          if (data?.id) found = data as { id: string };
+        }
+        if (!found) {
+          const { data } = await sb.from("grns").select("id").eq("grn_no", meta.docNo).maybeSingle();
+          if (data?.id) found = data as { id: string };
+        }
+        if (found?.id) navigate({ to: "/grn/$id", params: { id: found.id } } as any);
+        else toast.error(`GRN ${meta.docNo} not found`);
+      } else if (meta.docType === "gdc") {
+        const { data } = await sb.from("general_delivery_challans").select("id").eq("dc_no", meta.docNo).maybeSingle();
+        if (data?.id) navigate({ to: "/sales/general-dc/$id", params: { id: data.id } } as any);
+        else toast.error(`General DC ${meta.docNo} not found`);
+      } else if (meta.docType === "invoice") {
+        const { data } = await sb.from("invoices").select("id").eq("invoice_no", meta.docNo).maybeSingle();
+        if (data?.id) navigate({ to: "/sales/invoices/$id", params: { id: data.id } } as any);
+        else toast.error(`Invoice ${meta.docNo} not found`);
+      } else if (meta.docType === "transfer") {
+        const tid = (meta as unknown as { transferId?: string | null }).transferId;
+        if (tid) navigate({ to: "/ims/transfers/$id", params: { id: tid } } as any);
+        else if (meta.docNo) {
+          const { data } = await sb.from("ims_transfers").select("id").eq("transfer_no", meta.docNo).maybeSingle();
+          if (data?.id) navigate({ to: "/ims/transfers/$id", params: { id: data.id } } as any);
+          else toast.error(`Transfer ${meta.docNo} not found`);
+        }
+      }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed to open document");
+    } finally {
+      setLoading(false);
+    }
+  }, [isClickable, meta, navigate]);
+
+  return (
+    <div className="flex items-center gap-3 border-t border-border/60 bg-muted/20 px-4 sm:px-5 py-3">
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 border border-blue-200 text-blue-700 shadow-sm">
+        <Truck size={14} aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground leading-none">Issued to</div>
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="text-[13px] font-semibold text-slate-800 truncate max-w-[260px]" title={party}>
+            {party || "—"}
+          </span>
+          {reference ? (
+            isClickable ? (
+              <button
+                type="button"
+                onClick={handleClick}
+                disabled={loading}
+                className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs font-mono font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 shadow-sm transition-colors"
+                title={`${reference} — click to open`}
+              >
+                {loading ? <Loader2 size={11} className="animate-spin" /> : <ExternalLink size={11} className="opacity-60" />}
+                <span>· {reference}</span>
+              </button>
+            ) : (
+              <span className="text-xs text-muted-foreground truncate" title={reference}>
+                · {reference}
+              </span>
+            )
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SerialHeaderCard({
   serial,
   stockStatus,
@@ -231,24 +326,7 @@ export function SerialHeaderCard({
 
       {/* issued band */}
       {hasIssued && issuedTo ? (
-        <div className="flex items-center gap-3 border-t border-border/60 bg-muted/20 px-4 sm:px-5 py-3">
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 border border-blue-200 text-blue-700 shadow-sm">
-            <Truck size={14} aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground leading-none">Issued to</div>
-            <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="text-[13px] font-semibold text-slate-800 truncate max-w-[260px]" title={issuedTo.party}>
-                {issuedTo.party || "—"}
-              </span>
-              {issuedTo.reference ? (
-                <span className="text-xs text-muted-foreground truncate" title={issuedTo.reference}>
-                  · {issuedTo.reference}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        <IssuedToBand party={issuedTo.party} reference={issuedTo.reference} />
       ) : null}
     </Card>
   );

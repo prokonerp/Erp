@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCustomersTable, useCustomerDetail, masterKeys } from "@/hooks/useMasters";
@@ -18,14 +19,14 @@ import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 
 
 export function CustomerMasterPage() {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState("q", "");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   // Server-paginated, debounced search — avoids loading 3101 rows into DOM
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useRouteState<number>("page", 0);
   const pageSize = 25;
   const [debouncedQ, setDebouncedQ] = useState("");
   useEffect(() => {

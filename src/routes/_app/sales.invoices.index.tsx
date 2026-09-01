@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -25,9 +26,9 @@ export const Route = createFileRoute("/_app/sales/invoices/")({
 });
 
 function InvoiceList() {
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState<InvoiceStatus | "all">("all");
-  const [page, setPage] = useState(0);
+  const [q, setQ] = useRouteState<string>("q", "");
+  const [status, setStatus] = useRouteState<InvoiceStatus | "all">("status", "all");
+  const [page, setPage] = useRouteState<number>("page", 0);
   const pageSize = 50;
   const debouncedQ = useDebounced(q.trim(), 300);
   // Reset paging when filters change.

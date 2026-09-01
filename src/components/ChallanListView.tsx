@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useRouteState } from "@/lib/routeState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +30,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export function ChallanListView({ docType, newTo }: Props) {
   const [rows, setRows] = useState<DeliveryChallan[]>([]);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useRouteState("q", "", { scope: docType });
   const isOem = docType === "oem";
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();

@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,18 +95,29 @@ function InstalledEquipmentPage() {
   const [customerName, setCustomerName] = useState("");
   const [rows, setRows] = useState<InstalledEquipment[]>([]);
   const [loading, setLoading] = useState(false);
-  const [q, setQ] = useState("");
-  const [chips, setChips] = useState<Set<ChipKey>>(new Set());
+  const [q, setQ] = useRouteState("q", "", { scope: "ie" });
+  const [chipsArr, setChipsArr] = useRouteState<ChipKey[]>("chips", [], { scope: "ie" });
+  const chips = useMemo(() => new Set<ChipKey>(chipsArr), [chipsArr]);
+  const setChips: React.Dispatch<React.SetStateAction<Set<ChipKey>>> = (action) => {
+    setChipsArr((prevArr) => {
+      const prevSet = new Set<ChipKey>(prevArr);
+      const nextSet =
+        typeof action === "function"
+          ? (action as (p: Set<ChipKey>) => Set<ChipKey>)(prevSet)
+          : (action as Set<ChipKey>);
+      return [...nextSet] as ChipKey[];
+    });
+  };
   const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteRow, setDeleteRow] = useState<InstalledEquipment | null>(null);
   const [draft, setDraft] = useState({ ...emptyDraft });
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState("list");
+  const [tab, setTab] = useRouteState("tab", "list", { scope: "ie" });
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportOutcome | null>(null);
-  const [sortDesc, setSortDesc] = useState(true);
+  const [sortDesc, setSortDesc] = useRouteState("sortDesc", true, { scope: "ie" });
 
   const load = async (id: string) => {
     setLoading(true);

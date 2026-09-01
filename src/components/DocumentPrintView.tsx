@@ -146,21 +146,38 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
       <style>{`
         @media print {
           @page { size: A4; margin: 10mm; }
-          body { font-family: Arial, Helvetica, sans-serif; color: #000; }
-          .doc-print { font-size: 10.5px; }
           .doc-print thead { display: table-header-group; }
           .doc-print tr { page-break-inside: avoid; }
         }
+        .doc-print {
+          font-family: Arial, Helvetica, sans-serif;
+          color: #000;
+          font-size: 10.5px;
+          line-height: 1.35;
+          border: 2px solid ${accent};
+          padding: 14px 18px;
+          display: flex;
+          flex-direction: column;
+          min-height: 272mm;
+          box-sizing: border-box;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .doc-print .sign-field { height: 80px; display: flex; flex-direction: column; justify-content: flex-end; }
+        .doc-print .sign-caption { min-height: 16px; display: flex; align-items: center; justify-content: center; }
+        .doc-print .sign-field .sign-space { height: 60px; }
+        .doc-print .sign-field .sign-img { max-height: 60px; }
+        .doc-print .sign-field .sign-img + .sign-caption { margin-top: 4px; }
         .doc-print .accent-bar { background: ${accent} !important; color: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print .accent-tx { color: ${accent}; }
         .doc-print .accent-bd { border-color: ${accent}; }
         .doc-print table.items { width: 100%; border-collapse: collapse; border: 1px solid ${accent}; }
         .doc-print table.items th { background: ${accent} !important; color: #ffffff !important; padding: 5px 4px; font-size: 10px; font-weight: 700; border: 1px solid ${accent}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print table.items td { padding: 5px 4px; border: 1px solid #e5e7eb; font-size: 10.5px; vertical-align: top; }
-        .doc-print { border: 1.5px solid ${accent}; padding: 10px 12px; display: flex; flex-direction: column; min-height: 272mm; box-sizing: border-box; }
         .doc-print .doc-spacer { flex: 1 1 auto; min-height: 8px; }
         .doc-print .lbl { color: #374151; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 600; }
         .doc-print .lbl-r { color: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+        .doc-print .sign-img { display: block; margin: 0 auto; max-height: 60px; max-width: 160px; object-fit: contain; }
       `}</style>
 
       {/* Header */}
@@ -364,7 +381,7 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
 
       {/* Bank details */}
       {(company.bank_name || company.bank_account_number) && (
-        <div className="mt-4 border" style={{ borderColor: "#e5e7eb" }}>
+        <div className="mt-4 border" style={{ borderColor: "#d1d5db" }}>
           <div className="accent-bar px-2 py-1 text-[10px] font-semibold">Bank Details</div>
           <div className="p-2 grid grid-cols-3 gap-x-4 gap-y-1 text-[10.5px]">
             {company.bank_name && <div><span className="lbl">Bank: </span><span className="font-semibold">{company.bank_name}</span></div>}
@@ -407,15 +424,27 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
 
       {/* Signature */}
       <div className="grid grid-cols-2 gap-8 mt-6 text-[10.5px]">
-        <div className="border-t pt-1 text-center" style={{ borderColor: "#6b7280" }}>
-          {doc.type === "quotation" ? "Customer Signature" : "Vendor Acknowledgement"}
+        <div className="text-center">
+          <div className="sign-field">
+            <div className="sign-space" />
+            <div className="sign-caption">&nbsp;</div>
+          </div>
+          <div className="border-t pt-1.5 mt-2" style={{ borderColor: "#6b7280" }}>
+            {doc.type === "quotation" ? "Customer Signature" : "Vendor Acknowledgement"}
+          </div>
         </div>
-        <div className="border-t pt-1 text-center" style={{ borderColor: "#6b7280" }}>
-          {doc.authorised_signature_url ? (
-            <img src={doc.authorised_signature_url} style={{ maxHeight: 80, maxWidth: 160, objectFit: "contain" }} alt="Authorised signature" />
-          ) : null}
-          <div>For {company.name}</div>
-          <div className="mt-6 text-gray-600">Authorised Signatory</div>
+        <div className="text-center">
+          <div className="sign-field">
+            {doc.authorised_signature_url ? (
+              <img src={doc.authorised_signature_url} crossOrigin="anonymous" className="sign-img" alt="Authorised signature" />
+            ) : (
+              <div className="sign-space" />
+            )}
+            <div className="sign-caption mt-1 font-semibold">For {company.name}</div>
+          </div>
+          <div className="border-t pt-1.5 mt-2 text-center" style={{ borderColor: "#6b7280" }}>
+            Authorised Signatory
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,6 +37,7 @@ import {
 import { inr } from "@/lib/sales";
 import { usePermissions } from "@/lib/usePermissions";
 import { saveElementAsPdf } from "@/lib/docPdf";
+import { signSignatureUrl } from "@/lib/userSignature";
 import { GeneralDcPrintView } from "@/components/GeneralDcPrintView";
 import {
   CompanyProfile,
@@ -71,7 +73,7 @@ function GeneralDcList() {
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
   const [warehouseNames, setWarehouseNames] = useState<Record<string, string>>({});
   const [returnedNos, setReturnedNos] = useState<Set<string>>(new Set());
-  const [tab, setTab] = useState<"all" | "pending-returns">("all");
+  const [tab, setTab] = useRouteState<"all" | "pending-returns">("tab", "all");
   const { loading: permLoading, can } = usePermissions();
 
   const refresh = async () => {
@@ -216,8 +218,29 @@ function RowActions({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [pdfPending, setPdfPending] = useState(false);
+  const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
   const downloadingRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user || cancelled) return;
+        const { data: au } = await supabase
+          .from("app_users")
+          .select("signature_url")
+          .eq("user_id", u.user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        const row = au as { signature_url?: string | null } | null;
+        const signed = await signSignatureUrl(row?.signature_url || null);
+        if (!cancelled) setAuthorisedSignatureUrl(signed);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!pdfPending || !printRef.current || downloadingRef.current) return;
@@ -362,7 +385,7 @@ function RowActions({
       {pdfPending && (
         <div className="hidden">
           <div ref={printRef}>
-            <GeneralDcPrintView dc={dc} company={company} warehouseNames={warehouseNames} />
+            <GeneralDcPrintView dc={dc} company={company} warehouseNames={warehouseNames} authorised_signature_url={authorisedSignatureUrl} />
           </div>
         </div>
       )}

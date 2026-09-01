@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,10 +21,10 @@ export const Route = createFileRoute("/_app/amc/")({
 
 function AmcDashboard() {
   const [rows, setRows] = useState<Amc[]>([]);
-  const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<"all" | "active" | "expiring" | "expired">("all");
-  const [rangeMode, setRangeMode] = useState<RangeMode>("all");
-  const [customRange, setCustomRange] = useState<DateRange>(currentMonth());
+  const [q, setQ] = useRouteState<string>("q", "");
+  const [filter, setFilter] = useRouteState<"all" | "active" | "expiring" | "expired">("filter", "all");
+  const [rangeMode, setRangeMode] = useRouteState<RangeMode>("rangeMode", "all");
+  const [customRange, setCustomRange] = useRouteState<DateRange>("customRange", currentMonth());
   const { can } = usePermissions();
   const canCreateTicket = can("tickets", "create");
 

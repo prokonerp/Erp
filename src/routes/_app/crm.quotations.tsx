@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -104,8 +105,8 @@ function QuotesList() {
   const nav = useNavigate();
   const [rows, setRows] = useState<Quotation[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [q, setQ] = useState("");
-  const [statusF, setStatusF] = useState<string>("all");
+  const [q, setQ] = useRouteState<string>("q", "", { scope: "legacy" });
+  const [statusF, setStatusF] = useRouteState<string>("statusF", "all", { scope: "legacy" });
   const [open, setOpen] = useState(false);
   const [custId, setCustId] = useState("");
   const [subject, setSubject] = useState("");
@@ -385,20 +386,20 @@ function QuotesWorkspace() {
   const nav = useNavigate();
   const [rows, setRows] = useState<QuoteListRow[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [q, setQ] = useState("");
-  const [statusF, setStatusF] = useState<string>("all");
+  const [q, setQ] = useRouteState<string>("q", "");
+  const [statusF, setStatusF] = useRouteState<string>("statusF", "all");
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useRouteState<string | null>("selectedId", null);
   const [selected, setSelected] = useState<Quotation | null>(null);
   const [selLoading, setSelLoading] = useState(false);
-  const [tab, setTab] = useState<"details" | "activity">("details");
+  const [tab, setTab] = useRouteState<"details" | "activity">("tab", "details");
   const [converting, setConverting] = useState(false);
   const [delId, setDelId] = useState<string | null>(null);
   const [openNew, setOpenNew] = useState(false);
   const [newCustId, setNewCustId] = useState("");
   const [newSubject, setNewSubject] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
+  const [showHistory, setShowHistory] = useRouteState<boolean>("showHistory", false);
   const [cloneDialog, setCloneDialog] = useState<{ row: QuoteListRow } | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const cacheRef = useRef<Map<string, Quotation>>(new Map());
@@ -505,16 +506,6 @@ function QuotesWorkspace() {
     });
   }, [rows, cmap, search, showHistory]);
 
-  // Restore last opened from sessionStorage on first mount.
-  useEffect(() => {
-    try {
-      const last = sessionStorage.getItem("quotes_last_selected");
-      if (last) setSelectedId(last);
-    } catch {
-      /* private-mode browsing: ignore */
-    }
-  }, []);
-
   // Auto-select first item when list changes and nothing selected.
   useEffect(() => {
     if (!selectedId && filtered.length) setSelectedId(filtered[0].id);
@@ -525,11 +516,6 @@ function QuotesWorkspace() {
     if (!selectedId) {
       setSelected(null);
       return;
-    }
-    try {
-      sessionStorage.setItem("quotes_last_selected", selectedId);
-    } catch {
-      /* private-mode browsing: ignore */
     }
     const cached = cacheRef.current.get(selectedId);
     if (cached) {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -172,13 +173,16 @@ type ProductFull = ProductMaster & {
 };
 
 export function ProductMasterPage() {
-  const [q, setQ] = useState("");
-  const [filterCategory, setFilterCategory] = useState("__all");
-  const [filterBrand, setFilterBrand] = useState("__all");
+  const [q, setQ] = useRouteState("q", "");
+  const [filterCategory, setFilterCategory] = useRouteState("filterCategory", "__all");
+  const [filterBrand, setFilterBrand] = useRouteState("filterBrand", "__all");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(empty);
-  const [tab, setTab] = useState<"details" | "serials" | "bundle" | "opening">("details");
+  const [tab, setTab] = useRouteState<"details" | "serials" | "bundle" | "opening">(
+    "tab",
+    "details",
+  );
   const [serialsFor, setSerialsFor] = useState<ProductFull | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [addCatOpen, setAddCatOpen] = useState(false);

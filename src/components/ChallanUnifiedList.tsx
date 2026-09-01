@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useRouteState } from "@/lib/routeState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,13 +63,13 @@ export function ChallanUnifiedList() {
   const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
   const [users, setUsers] = useState<Record<string, string>>({});
-  const [q, setQ] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | DocType>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [partyFilter, setPartyFilter] = useState<string>("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [page, setPage] = useState(0);
+  const [q, setQ] = useRouteState("q", "");
+  const [typeFilter, setTypeFilter] = useRouteState<"all" | DocType>("typeFilter", "all");
+  const [statusFilter, setStatusFilter] = useRouteState<string>("statusFilter", "all");
+  const [partyFilter, setPartyFilter] = useRouteState<string>("partyFilter", "all");
+  const [from, setFrom] = useRouteState<string>("from", "");
+  const [to, setTo] = useRouteState<string>("to", "");
+  const [page, setPage] = useRouteState<number>("page", 0);
 
   useEffect(() => {
     setPage(0);

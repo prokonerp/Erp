@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { useDebounced } from "@/lib/sales.hooks";
@@ -98,7 +99,7 @@ function DefectiveTagsPage() {
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [dispatches, setDispatches] = useState<Map<string, TagDispatch>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<string>("");
+  const [tab, setTab] = useRouteState<string>("tab", "");
   const [preview, setPreview] = useState<DefectiveTag[] | null>(null);
   const [dcCandidates, setDcCandidates] = useState<DefectiveInRecord[] | null>(null);
   const [askDc, setAskDc] = useState<DefectiveInRecord[] | null>(null);
@@ -322,13 +323,13 @@ function AspTab({
   onView: (tag: DefectiveTag) => void;
   onGenerateDc: (rows: DefectiveInRecord[]) => void;
 }) {
-  const [q, setQ] = useState("");
-  const [showGenerated, setShowGenerated] = useState(false);
+  const [q, setQ] = useRouteState<string>("asp-q", "", { scope: `asp-${aspKey}` });
+  const [showGenerated, setShowGenerated] = useRouteState<boolean>("asp-showGenerated", false, { scope: `asp-${aspKey}` });
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const qDebounced = useDebounced(q, 250);
   const deferredQ = useDeferredValue(qDebounced);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useRouteState<number>("asp-page", 0, { scope: `asp-${aspKey}` });
   const PAGE_SIZE = 50;
 
   const filtered = useMemo(() => {
@@ -581,16 +582,16 @@ function RegisterTab({
   onRefresh: () => void;
   onPreview: (t: DefectiveTag[]) => void;
 }) {
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("all");
-  const [aspFilter, setAspFilter] = useState("all");
-  const [sortKey, setSortKey] = useState<SortKey>("tag_date");
-  const [sortAsc, setSortAsc] = useState(false);
+  const [q, setQ] = useRouteState<string>("reg-q", "", { scope: "register" });
+  const [status, setStatus] = useRouteState<string>("reg-status", "all", { scope: "register" });
+  const [aspFilter, setAspFilter] = useRouteState<string>("reg-aspFilter", "all", { scope: "register" });
+  const [sortKey, setSortKey] = useRouteState<SortKey>("reg-sortKey", "tag_date", { scope: "register" });
+  const [sortAsc, setSortAsc] = useRouteState<boolean>("reg-sortAsc", false, { scope: "register" });
   const qDebounced = useDebounced(q, 250);
   const deferredQ = useDeferredValue(qDebounced);
   const deferredStatus = useDeferredValue(status);
   const deferredAspFilter = useDeferredValue(aspFilter);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useRouteState<number>("reg-page", 0, { scope: "register" });
   const PAGE_SIZE = 50;
 
   // Only tags whose physical part has actually been dispatched back to the OEM.

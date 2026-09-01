@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,22 +17,13 @@ import { StockWarehouseKpis, StockWarehouseHeader } from "@/components/reports/S
 import { StockWarehouseTable } from "@/components/reports/StockWarehouseTable";
 import { ReportsPageHeader, ReportsFilters, ReportsWarrantyShell } from "@/components/reports/ReportsShell";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { TallyStockLedger } from "@/components/stock/TallyStockLedger";
 
-// Heavy report views (~40-60k each) — lazy so the initial /reports shell paints
-// fast and the 140k chunk is split at route granularity.
-const StockLedgerCompact = lazy(() =>
-  import("@/components/stock/StockLedgerViews").then((m) => ({ default: m.StockLedgerCompact })),
-);
-const StockLedgerDetailed = lazy(() =>
-  import("@/components/stock/StockLedgerViews").then((m) => ({ default: m.StockLedgerDetailed })),
-);
+// Heavy report view — lazy so the initial /reports shell paints fast.
 const StockSummaryDisclosure = lazy(() =>
   import("@/components/reports/StockSummaryDisclosure").then((m) => ({ default: m.StockSummaryDisclosure })),
 );
 
-function LedgerFallback() {
-  return <div className="h-48 animate-pulse bg-muted rounded-xl" />;
-}
 function DisclosureFallback() {
   return <div className="h-20 animate-pulse bg-muted rounded-xl" />;
 }
@@ -69,16 +61,15 @@ function ReportsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [tab, setTab] = useState("stock-summary");
-  const [wh, setWh] = useState("__all");
-  const [prod, setProd] = useState("__all");
-  const [q, setQ] = useState("");
-  const [openSerialGroups, setOpenSerialGroups] = useState<Record<string, boolean>>({});
-  // per-tab compact/detailed views (each tab remembers)
-  const [stockView, setStockView] = useState<"compact" | "detailed">("compact");
-  const [ledgerView, setLedgerView] = useState<"compact" | "detailed">("compact");
-  const [serialView, setSerialView] = useState<"compact" | "detailed">("compact");
-  const [warrantyView, setWarrantyView] = useState<"compact" | "detailed">("detailed");
+  const [tab, setTab] = useRouteState("tab", "stock-summary");
+  const [wh, setWh] = useRouteState("wh", "__all");
+  const [prod, setProd] = useRouteState("prod", "__all");
+  const [q, setQ] = useRouteState("q", "");
+  const [openSerialGroups, setOpenSerialGroups] = useRouteState<Record<string, boolean>>("openSerialGroups", {});
+  // per-tab compact/detailed views (each tab remembers) — stock-ledger now uses TallyStockLedger (own filters)
+  const [stockView, setStockView] = useRouteState<"compact" | "detailed">("stockView", "compact");
+  const [serialView, setSerialView] = useRouteState<"compact" | "detailed">("serialView", "compact");
+  const [warrantyView, setWarrantyView] = useRouteState<"compact" | "detailed">("warrantyView", "detailed");
 
   useEffect(() => {
     (async () => {
@@ -220,30 +211,25 @@ function ReportsPage() {
     </ToggleGroup>
   );
 
-  // counts for tabs (stock-summary = compact groups, ledger = filteredStock length proxy)
-  const ledgerCompactCount = useMemo(() => {
-    // distinct products in filteredStock regardless of status (for compact matrix header)
-    const s = new Set(filteredStock.map((r) => groupKey(r)));
-    return s.size;
-  }, [filteredStock]);
-
   return (
     <div className="space-y-5">
       <ReportsPageHeader />
 
-      <ReportsFilters
-        warehouses={warehouses}
-        stockProducts={stockProducts}
-        wh={wh}
-        prod={prod}
-        q={q}
-        onWhChange={setWh}
-        onProdChange={setProd}
-        onQChange={setQ}
-        onClearAll={() => { setWh("__all"); setProd("__all"); setQ(""); }}
-        resultsCount={tab === "stock-summary" ? stockGroups.length : tab === "stock-ledger" ? (ledgerView === "compact" ? ledgerCompactCount : filteredStock.length) : tab === "serials" ? serialGroups.length : warrantyRows.length}
-        resultsLabel={tab === "stock-summary" ? "SKUs" : tab === "stock-ledger" ? (ledgerView === "compact" ? "Items" : "Rows") : tab === "serials" ? "Models" : "Rows"}
-      />
+      {tab !== "stock-ledger" && (
+        <ReportsFilters
+          warehouses={warehouses}
+          stockProducts={stockProducts}
+          wh={wh}
+          prod={prod}
+          q={q}
+          onWhChange={setWh}
+          onProdChange={setProd}
+          onQChange={setQ}
+          onClearAll={() => { setWh("__all"); setProd("__all"); setQ(""); }}
+          resultsCount={tab === "stock-summary" ? stockGroups.length : tab === "serials" ? serialGroups.length : warrantyRows.length}
+          resultsLabel={tab === "stock-summary" ? "SKUs" : tab === "serials" ? "Models" : "Rows"}
+        />
+      )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -267,7 +253,6 @@ function ReportsPage() {
           </TabsList>
           <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
             {tab === "stock-summary" && <ViewToggle value={stockView} onChange={setStockView} />}
-            {tab === "stock-ledger" && <ViewToggle value={ledgerView} onChange={setLedgerView} />}
             {tab === "serials" && <ViewToggle value={serialView} onChange={setSerialView} />}
             {tab === "warranty" && <ViewToggle value={warrantyView} onChange={setWarrantyView} />}
           </div>
@@ -354,50 +339,11 @@ function ReportsPage() {
           )}
         </TabsContent>
 
-        {/* STOCK LEDGER — Sales Stock matrix (compact) + line-item ledger (detailed, All 126) */}
+        {/* STOCK LEDGER — Tally Gateway (replaces legacy compact/detailed matrix) */}
         <TabsContent value="stock-ledger" className="mt-4 space-y-4">
-          <div className="flex sm:hidden justify-end">
-            <ViewToggle value={ledgerView} onChange={setLedgerView} />
-          </div>
-          {ledgerView === "compact" ? (
-            <Card className="overflow-hidden rounded-xl border-border/60 bg-card shadow-sm">
-              <CardHeader className="pb-3 border-b flex flex-row items-center justify-between gap-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  Stock Ledger — Compact (By Warehouse Type)
-                  <span className="hidden sm:inline text-xs font-normal text-muted-foreground">Godown (NIT-3) vs Service (Picasso) • Good/Scrap matrix</span>
-                </CardTitle>
-                <ExportButtons name="Stock_Ledger_Compact" title="Stock Ledger Compact" rows={filteredStock} columns={[
-                  { header: "Item", get: (r) => r.part_model_no || r.part_name || "" },
-                  { header: "Warehouse", get: (r) => plainWhName(r.warehouse_id) },
-                  { header: "Type", get: (r) => r.stock_type },
-                  { header: "Status", get: (r) => r.stock_status },
-                  { header: "Qty", get: (r) => r.qty },
-                ]} />
-              </CardHeader>
-              <CardContent className="p-0">
-                <Suspense fallback={<LedgerFallback />}>
-                  <StockLedgerCompact items={filteredStock as any} warehouses={warehouses as any} products={products as any} />
-                </Suspense>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="overflow-hidden rounded-xl border-border/60 bg-card shadow-sm">
-              <CardHeader className="pb-3 border-b">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  Stock Ledger — Detailed (All statuses • {stockAllStats.totalAll} units)
-                  <Badge variant="outline" className="bg-primary text-primary-foreground border-primary">Full 126</Badge>
-                </CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">Shows every stock row (Available + Reserved + In transit + Issued…) — use filters to reach the Summary’s 105 Available</p>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Suspense fallback={<LedgerFallback />}>
-                  <StockLedgerDetailed items={filteredStock as any} warehouses={warehouses as any} />
-                </Suspense>
-              </CardContent>
-            </Card>
-          )}
+          <TallyStockLedger />
           <p className="text-[11px] text-center text-muted-foreground">
-            Writes stay in <span className="font-semibold">Inventory → Stock</span> only (read-only here) — matches your rule.
+            Writes stay in <span className="font-semibold">Inventory → Stock</span> only (read-only here) — Tally view is computed from transactions.
           </p>
         </TabsContent>
 
@@ -427,7 +373,7 @@ function ReportsPage() {
                 { header: "Good", get: (r) => r.good },
                 { header: "Defective", get: (r) => r.defective },
                 { header: "Total Qty", get: (r) => r.qty },
-                { header: "Serials (Good=BAD tagged)", get: (r) => r.serials.map((s) => `${s.sn} [${s.type}]`).join(", ") },
+                { header: "Serials (Good=DEFECTIVE tagged)", get: (r) => r.serials.map((s) => `${s.sn} [${s.type}]`).join(", ") },
               ]} />
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -470,7 +416,7 @@ function ReportsPage() {
                                     return (
                                       <Badge key={sn} variant="outline" className={`inline-flex items-center gap-1.5 font-mono text-[11px] py-1 pl-2 pr-1.5 border shadow-sm ${isBad ? "bg-rose-50 border-rose-300 text-rose-800" : "bg-emerald-50 border-emerald-300 text-emerald-800"}`}>
                                         <span className={`h-1.5 w-1.5 rounded-full ${isBad ? "bg-rose-500" : "bg-emerald-500"}`} />{sn}
-                                        <span className={`ml-1 rounded px-1 py-0.5 text-[9px] font-bold ${isBad ? "bg-rose-500 text-white" : "bg-emerald-600 text-white"}`}>{isBad ? "BAD" : "GOOD"}</span>
+                                        <span className={`ml-1 rounded px-1 py-0.5 text-[9px] font-bold ${isBad ? "bg-rose-500 text-white" : "bg-emerald-600 text-white"}`}>{isBad ? "DEFECTIVE" : "GOOD"}</span>
                                       </Badge>
                                     );
                                   })}
