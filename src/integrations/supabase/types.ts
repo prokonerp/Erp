@@ -3977,6 +3977,7 @@ export type Database = {
           sr_no: number
           taxable_value: number
           unit: string | null
+          warranty_months: number | null
         }
         Insert: {
           cess?: number
@@ -3998,6 +3999,7 @@ export type Database = {
           sr_no?: number
           taxable_value?: number
           unit?: string | null
+          warranty_months?: number | null
         }
         Update: {
           cess?: number
@@ -4019,6 +4021,7 @@ export type Database = {
           sr_no?: number
           taxable_value?: number
           unit?: string | null
+          warranty_months?: number | null
         }
         Relationships: [
           {

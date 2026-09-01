@@ -97,6 +97,7 @@ export type POItemRow = {
   cess: number;
   line_total: number;
   received_qty: number;
+  warranty_months: number | null;
 };
 
 export type POItemDraft = {
@@ -108,6 +109,7 @@ export type POItemDraft = {
   rate: number;
   discount_pct: number;
   gst_rate: number;
+  warranty_months: number;
 };
 
 export const emptyPOItem = (): POItemDraft => ({
@@ -119,6 +121,7 @@ export const emptyPOItem = (): POItemDraft => ({
   rate: 0,
   discount_pct: 0,
   gst_rate: 18,
+  warranty_months: 12,
 });
 
 export function poItemFromBreakup(
@@ -141,6 +144,7 @@ export function poItemFromBreakup(
     igst: b.igst,
     cess: b.cess,
     line_total: b.line_total,
+    warranty_months: Number.isFinite(Number(d.warranty_months)) ? Number(d.warranty_months) : 12,
   };
 }
 
