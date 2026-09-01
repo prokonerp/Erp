@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trash2, Plus, Save, Zap } from "lucide-react";
+import { Trash2, Plus, Save, Zap, ArrowLeft } from "lucide-react";
 import { VendorPicker, type Vendor } from "@/components/VendorPicker";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
@@ -15,31 +15,37 @@ import type { Customer } from "@/lib/crm";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { productWarrantyMonths } from "@/lib/sales";
 import { computeTotals, stateCodeFromGSTIN, stateNameFromCode, amountInWords } from "@/lib/gst";
-import { istTodayIso } from "@/lib/dateRange";
+import { PageLoader } from "@/components/shared/skeletons";
 import {
   emptyPOItem,
   inrPO,
   poItemFromBreakup,
+  fetchPOWithItems,
   type DeliveryAddressType,
   type POItemDraft,
 } from "@/lib/purchaseOrder";
 import { productDisplayName } from "@/lib/productNames";
+import { usePermissions } from "@/lib/usePermissions";
 import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
 
-export const Route = createFileRoute("/_app/po/new")({
-  component: NewPO,
-  head: () => ({ meta: [{ title: "New Purchase Order — Prokon" }] }),
+export const Route = createFileRoute("/_app/po/$id_/edit")({
+  component: EditPO,
+  head: () => ({ meta: [{ title: "Edit Purchase Order — Prokon" }] }),
 });
 
-function NewPO() {
+function EditPO() {
+  const { id } = Route.useParams() as { id: string };
   const nav = useNavigate();
+  const { loading: permLoading, isAdmin } = usePermissions();
+  const [pageLoading, setPageLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
   const markDirty = () => { if (!dirty) setDirty(true); };
   const { blocker, markClean } = useUnsavedChanges(dirty);
+
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [branchId, setBranchId] = useState<string>("");
   const [vendor, setVendor] = useState<Vendor | null>(null);
-  const [poDate, setPoDate] = useState(istTodayIso());
+  const [poDate, setPoDate] = useState<string>("");
   const [deliveryDate, setDeliveryDate] = useState<string>("");
   const [payTerms, setPayTerms] = useState<string>("30 Days");
   const [deliveryType, setDeliveryType] = useState<DeliveryAddressType>("org");
@@ -50,14 +56,82 @@ function NewPO() {
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState("");
   const [saving, setSaving] = useState(false);
+  const [poNo, setPoNo] = useState<string | null>(null);
+  const [poStatus, setPoStatus] = useState<string>("draft");
 
   useEffect(() => {
-    fetchBranches().then((bs) => {
-      setBranches(bs);
-      const def = bs.find((b) => b.is_default) || bs[0];
-      if (def) setBranchId(def.id);
-    }).catch((e) => toast.error(e.message));
-  }, []);
+    let active = true;
+    async function load() {
+      setPageLoading(true);
+      try {
+        const [bs, poData] = await Promise.all([
+          fetchBranches(),
+          fetchPOWithItems(id),
+        ]);
+        if (!active) return;
+        setBranches(bs);
+        const { po, items: poItems } = poData;
+        setPoNo(po.po_no);
+        setPoStatus(po.status);
+        if (po.status !== "draft") {
+          toast.error("Only Draft POs can be edited before approval.");
+          nav({ to: "/po/$id", params: { id } });
+          return;
+        }
+        setBranchId(po.branch_id);
+        setPoDate(po.po_date);
+        setDeliveryDate(po.delivery_date || "");
+        setPayTerms(po.payment_terms || "30 Days");
+        setDeliveryType(po.delivery_address_type as DeliveryAddressType);
+        if (po.delivery_address_type === "custom") {
+          setCustomAddress(po.delivery_address || "");
+        }
+        setVendor({
+          id: po.vendor_id,
+          name: po.vendor_name || "Vendor",
+          contact_name: po.vendor_contact_name,
+          phone: po.vendor_phone,
+          email: po.vendor_email,
+          address: po.vendor_address,
+          gstin: po.vendor_gstin,
+        } as Vendor);
+        if (po.customer_id) {
+          try {
+            const { data: c } = await (supabase as any).from("customers").select("*").eq("id", po.customer_id).maybeSingle();
+            if (c) setCustomer(c as Customer);
+            else if (po.customer_name) {
+              setCustomer({ id: po.customer_id, company: po.customer_name } as unknown as Customer);
+            }
+          } catch {
+            if (po.customer_name) setCustomer({ id: po.customer_id, company: po.customer_name } as unknown as Customer);
+          }
+        }
+        if (poItems.length > 0) {
+          setItems(poItems.map((it) => ({
+            product_id: it.product_id,
+            description: it.description,
+            hsn: it.hsn || "",
+            qty: Number(it.qty) || 1,
+            unit: it.unit || "Nos",
+            rate: Number(it.rate) || 0,
+            discount_pct: Number(it.discount_pct) || 0,
+            gst_rate: Number(it.gst_rate) || 0,
+            warranty_months: Number((it as any).warranty_months ?? 12) || 12,
+          })));
+        }
+        setHeaderDiscount(Number(po.discount) || 0);
+        setNotes(po.notes || "");
+        setTerms(po.terms || "");
+      } catch (e: any) {
+        toast.error(e.message || "Failed to load PO");
+        nav({ to: "/po" });
+      } finally {
+        if (active) setPageLoading(false);
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const branch = useMemo(() => branches.find((b) => b.id === branchId) || null, [branches, branchId]);
   const sellerCode = branch?.state_code || stateCodeFromGSTIN(branch?.gstin) || null;
@@ -65,13 +139,14 @@ function NewPO() {
   const vendorState = stateNameFromCode(vendorCode);
 
   const totals = useMemo(
-    () => computeTotals({
-      sellerStateCode: sellerCode,
-      buyerStateCode: vendorCode,
-      items: items.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate })),
-      headerDiscount,
-      roundOff: true,
-    }),
+    () =>
+      computeTotals({
+        sellerStateCode: sellerCode,
+        buyerStateCode: vendorCode,
+        items: items.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate })),
+        headerDiscount,
+        roundOff: true,
+      }),
     [items, sellerCode, vendorCode, headerDiscount],
   );
 
@@ -94,9 +169,12 @@ function NewPO() {
     if (items.length === 0 || items.some((it) => !it.description.trim())) return toast.error("Every line needs a description");
     if (!deliveryAddress.trim()) return toast.error("Delivery address is required");
     if (deliveryType === "customer" && !customer) return toast.error("Select a customer for delivery");
+    if (poStatus !== "draft") {
+      toast.error("Only Draft POs can be edited.");
+      return;
+    }
     setSaving(true);
     try {
-      const { data: u } = await supabase.auth.getUser();
       const payload: any = {
         po_date: poDate,
         delivery_date: deliveryDate || null,
@@ -118,7 +196,7 @@ function NewPO() {
         delivery_address_type: deliveryType,
         delivery_address: deliveryAddress,
         customer_id: deliveryType === "customer" ? customer?.id ?? null : null,
-        customer_name: deliveryType === "customer" ? customer?.company ?? null : null,
+        customer_name: deliveryType === "customer" ? (customer as any)?.company ?? null : null,
         payment_terms: payTerms || null,
         is_interstate: totals.is_interstate,
         subtotal: totals.subtotal,
@@ -134,27 +212,47 @@ function NewPO() {
         status,
         notes,
         terms,
-        created_by: u.user?.id ?? null,
       };
-      const { data: po, error } = await (supabase as any).from("purchase_orders").insert(payload).select("id, po_no").single();
-      if (error) throw error;
+      const { error: e1 } = await (supabase as any).from("purchase_orders").update(payload).eq("id", id);
+      if (e1) throw e1;
+
+      const { error: eDel } = await (supabase as any).from("purchase_order_items").delete().eq("po_id", id);
+      if (eDel) throw eDel;
 
       const itemRows = items.map((d, i) => {
         const b = totals.items[i];
-        return { ...poItemFromBreakup(d, b), po_id: po.id, sr_no: i + 1 };
+        return { ...poItemFromBreakup(d, b), po_id: id, sr_no: i + 1 };
       });
-      const { error: e2 } = await (supabase as any).from("purchase_order_items").insert(itemRows);
-      if (e2) throw e2;
+      const { error: eIns } = await (supabase as any).from("purchase_order_items").insert(itemRows);
+      if (eIns) throw eIns;
 
-      toast.success(`PO ${po.po_no || ""} ${status === "approved" ? "approved" : "saved"}`);
+      toast.success(status === "approved" ? "PO updated & approved" : "PO updated");
       markClean();
       setDirty(false);
-      nav({ to: "/po/$id", params: { id: po.id } });
+      nav({ to: "/po/$id", params: { id } });
     } catch (e: any) {
       toast.error(e.message || "Save failed");
     } finally {
       setSaving(false);
     }
+  }
+
+  if (permLoading || pageLoading) return <PageLoader />;
+  if (!isAdmin) {
+    return (
+      <div className="p-6 text-center space-y-3">
+        <p className="text-sm text-muted-foreground">Only administrators can edit purchase orders before approval.</p>
+        <Button variant="outline" size="sm" onClick={() => nav({ to: "/po/$id", params: { id } })}><ArrowLeft className="h-4 w-4 mr-1" />Back to PO</Button>
+      </div>
+    );
+  }
+  if (poStatus !== "draft") {
+    return (
+      <div className="p-6 text-center space-y-3">
+        <p className="text-sm text-muted-foreground">This PO is <b>{poStatus}</b> — only Draft POs can be edited.</p>
+        <Button variant="outline" size="sm" onClick={() => nav({ to: "/po/$id", params: { id } })}><ArrowLeft className="h-4 w-4 mr-1" />Back to PO</Button>
+      </div>
+    );
   }
 
   const PAY_OPTS = ["Advance", "7 Days", "15 Days", "30 Days"];
@@ -164,13 +262,17 @@ function NewPO() {
     <div className="space-y-4 max-w-[1600px] mx-auto" onInput={markDirty}>
       <UnsavedChangesPrompt blocker={blocker} />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">New Purchase Order</h2>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => nav({ to: "/po/$id", params: { id } })}><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
+          <h2 className="text-lg font-semibold">Edit Purchase Order <span className="font-mono text-muted-foreground font-normal text-sm">{poNo || id.slice(0,8)}</span></h2>
+          <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-medium">Draft — Admin Edit</span>
+        </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => save("draft")} disabled={saving} className="h-9 px-4">
-            <Save className="h-4 w-4 mr-1.5" />Save Draft
+            <Save className="h-4 w-4 mr-1.5" />Save Changes
           </Button>
           <Button size="sm" onClick={() => save("approved")} disabled={saving} className="h-9 px-5">
-            <Zap className="h-4 w-4 mr-1.5" />Approve PO
+            <Zap className="h-4 w-4 mr-1.5" />Save & Approve
           </Button>
         </div>
       </div>
@@ -288,11 +390,11 @@ function NewPO() {
       <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">Items <span className="text-xs font-normal text-muted-foreground ml-2">Warranty defaults to 12 months — editable</span></CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setItems((a) => [...a, emptyPOItem()])}><Plus className="h-4 w-4 mr-1" />Add row</Button>
+          <Button size="sm" variant="outline" onClick={() => { setItems((a) => [...a, emptyPOItem()]); markDirty(); }}><Plus className="h-4 w-4 mr-1" />Add row</Button>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1220px]">
+            <table className="w-full text-sm min-w-[1230px]">
               <thead className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="p-2 text-left w-10">#</th>
@@ -359,7 +461,7 @@ function NewPO() {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-muted-foreground px-3 py-2 border-t bg-zinc-50/50">Tip: scroll horizontally to see all columns. Rate / HSN / Qty fields are now wide enough to show full numbers like “564566”.</p>
+          <p className="text-xs text-muted-foreground px-3 py-2 border-t bg-zinc-50/50">Tip: scroll horizontally if needed. Rate / HSN / Qty fields are now wide enough to show full numbers like “564566”.</p>
         </CardContent>
       </Card>
 

@@ -5,7 +5,8 @@ import { PageLoader } from "@/components/shared/skeletons";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Printer, Download, ArrowLeft, Zap, Send, CheckCircle2, Ban } from "lucide-react";
+import { Printer, Download, ArrowLeft, Zap, Send, CheckCircle2, Ban, Pencil } from "lucide-react";
+import { usePermissions } from "@/lib/usePermissions";
 import {
   fetchPOWithItems,
   inrPO,
@@ -30,6 +31,7 @@ export const Route = createFileRoute("/_app/po/$id")({
 function POView() {
   const { id } = Route.useParams();
   const nav = useNavigate();
+  const { isAdmin } = usePermissions();
   const [po, setPo] = useState<PORow | null>(null);
   const [items, setItems] = useState<POItemRow[]>([]);
   const [branch, setBranch] = useState<BranchRow | null>(null);
@@ -110,6 +112,9 @@ function POView() {
           <StatusBadge tone={sm.badgeTone}>{sm.label}</StatusBadge>
         </div>
         <div className="flex flex-wrap gap-2">
+          {po.status === "draft" && isAdmin && (
+            <Button size="sm" variant="outline" asChild><Link to="/po/$id/edit" params={{ id: po.id } as any}><Pencil className="h-4 w-4 mr-1" />Edit</Link></Button>
+          )}
           {po.status === "draft" && (
             <Button size="sm" onClick={() => setStatus("approved")}><Zap className="h-4 w-4 mr-1" />Approve</Button>
           )}
@@ -176,7 +181,7 @@ function POView() {
       </div>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Items</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Items <span className="text-xs font-normal text-muted-foreground">(Warranty highlighted)</span></CardTitle></CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
@@ -188,6 +193,7 @@ function POView() {
                 <th className="p-2 text-left w-16">Unit</th>
                 <th className="p-2 text-right w-24">Rate</th>
                 <th className="p-2 text-right w-20">GST%</th>
+                <th className="p-2 text-center w-20">Warranty</th>
                 <th className="p-2 text-right w-28">Amount</th>
               </tr>
             </thead>
@@ -197,28 +203,29 @@ function POView() {
                   <td className="p-2 text-xs">{it.sr_no}</td>
                   <td className="p-2">{it.description}</td>
                   <td className="p-2 font-mono text-xs">{it.hsn || "—"}</td>
-                  <td className="p-2 text-right">{it.qty}</td>
+                  <td className="p-2 text-right font-mono tabular-nums">{it.qty}</td>
                   <td className="p-2">{it.unit}</td>
-                  <td className="p-2 text-right">{inrPO(it.rate)}</td>
+                  <td className="p-2 text-right font-mono tabular-nums">{inrPO(it.rate)}</td>
                   <td className="p-2 text-right">{it.gst_rate}%</td>
-                  <td className="p-2 text-right font-medium">{inrPO(it.line_total)}</td>
+                  <td className="p-2 text-center"><span className="inline-flex items-center rounded-full bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 text-xs font-semibold">{(it as any).warranty_months ?? 12} mo</span></td>
+                  <td className="p-2 text-right font-medium font-mono tabular-nums">{inrPO(it.line_total)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="bg-muted/40 text-sm">
-              <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">Subtotal</td><td className="p-2 text-right">{inrPO(po.subtotal)}</td></tr>
-              {po.discount > 0 && <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">Discount</td><td className="p-2 text-right">{inrPO(po.discount)}</td></tr>}
-              <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">Taxable</td><td className="p-2 text-right">{inrPO(po.taxable_value)}</td></tr>
+              <tr><td colSpan={8} className="p-2 text-right text-muted-foreground">Subtotal</td><td className="p-2 text-right font-mono tabular-nums">{inrPO(po.subtotal)}</td></tr>
+              {po.discount > 0 && <tr><td colSpan={8} className="p-2 text-right text-muted-foreground">Discount</td><td className="p-2 text-right font-mono tabular-nums">{inrPO(po.discount)}</td></tr>}
+              <tr><td colSpan={8} className="p-2 text-right text-muted-foreground">Taxable</td><td className="p-2 text-right font-mono tabular-nums">{inrPO(po.taxable_value)}</td></tr>
               {po.is_interstate ? (
-                <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">IGST</td><td className="p-2 text-right">{inrPO(po.igst)}</td></tr>
+                <tr><td colSpan={8} className="p-2 text-right text-muted-foreground">IGST</td><td className="p-2 text-right font-mono tabular-nums">{inrPO(po.igst)}</td></tr>
               ) : (
                 <>
-                  <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">CGST</td><td className="p-2 text-right">{inrPO(po.cgst)}</td></tr>
-                  <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">SGST</td><td className="p-2 text-right">{inrPO(po.sgst)}</td></tr>
+                  <tr><td colSpan={8} className="p-2 text-right text-muted-foreground">CGST</td><td className="p-2 text-right font-mono tabular-nums">{inrPO(po.cgst)}</td></tr>
+                  <tr><td colSpan={8} className="p-2 text-right text-muted-foreground">SGST</td><td className="p-2 text-right font-mono tabular-nums">{inrPO(po.sgst)}</td></tr>
                 </>
               )}
-              {po.round_off !== 0 && <tr><td colSpan={7} className="p-2 text-right text-muted-foreground">Round Off</td><td className="p-2 text-right">{inrPO(po.round_off)}</td></tr>}
-              <tr className="font-bold"><td colSpan={7} className="p-2 text-right">Grand Total</td><td className="p-2 text-right">{inrPO(po.total)}</td></tr>
+              {po.round_off !== 0 && <tr><td colSpan={8} className="p-2 text-right text-muted-foreground">Round Off</td><td className="p-2 text-right font-mono tabular-nums">{inrPO(po.round_off)}</td></tr>}
+              <tr className="font-bold"><td colSpan={8} className="p-2 text-right">Grand Total</td><td className="p-2 text-right font-mono tabular-nums">{inrPO(po.total)}</td></tr>
             </tfoot>
           </table>
         </CardContent>
@@ -262,7 +269,7 @@ function POView() {
             delivery_terms: (po as any).delivery_terms || null,
             items: items.map((it) => ({
               description: it.description,
-              warranty: null,
+              warranty: `${(it as any).warranty_months ?? 12} M`,
               hsn: it.hsn,
               qty: it.qty,
               unit: it.unit,

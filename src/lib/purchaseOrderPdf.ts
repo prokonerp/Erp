@@ -123,15 +123,15 @@ export async function renderPurchaseOrderPdf(args: {
 
   y += boxH;
 
-  // Items table
+  // Items table — includes Warranty per line (default 12 mo, editable)
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    styles: { fontSize: 9, cellPadding: 4, lineColor: [tr, tg, tb], lineWidth: 0.3, textColor: 20 },
+    styles: { fontSize: 8.5, cellPadding: 3.5, lineColor: [tr, tg, tb], lineWidth: 0.3, textColor: 20 },
     headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontStyle: "bold", halign: "center" },
     head: [[
       "#", "Product / Description", "HSN", "Qty", "Unit", "Rate",
-      po.is_interstate ? "IGST%" : "GST%", "Amount",
+      po.is_interstate ? "IGST%" : "GST%", "Warranty", "Amount",
     ]],
     body: items.map((it, i) => [
       String(i + 1),
@@ -141,16 +141,18 @@ export async function renderPurchaseOrderPdf(args: {
       it.unit || "",
       inrPdf(it.rate),
       `${it.gst_rate}%`,
+      `${(it as any).warranty_months ?? 12} mo`,
       inrPdf(it.line_total),
     ]),
     columnStyles: {
-      0: { halign: "center", cellWidth: 22 },
-      2: { halign: "center", cellWidth: 50 },
-      3: { halign: "center", cellWidth: 40 },
-      4: { halign: "center", cellWidth: 40 },
-      5: { halign: "right", cellWidth: 60 },
-      6: { halign: "center", cellWidth: 50 },
-      7: { halign: "right", cellWidth: 70 },
+      0: { halign: "center", cellWidth: 20 },
+      2: { halign: "center", cellWidth: 42 },
+      3: { halign: "center", cellWidth: 32 },
+      4: { halign: "center", cellWidth: 34 },
+      5: { halign: "right", cellWidth: 52 },
+      6: { halign: "center", cellWidth: 36 },
+      7: { halign: "center", cellWidth: 42 },
+      8: { halign: "right", cellWidth: 62 },
     },
   });
 
