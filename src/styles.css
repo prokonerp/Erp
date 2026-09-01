@@ -431,6 +431,13 @@ button[role="combobox"][name*="uom" i],
   }
 }
 
+/* PO A4 print: explicit fallback so window.print() never yields blank page
+   even if Tailwind v4 tree-shakes the `print:` variant. */
+.po-a4-print { display: none; }
+@media print {
+  .po-a4-print { display: block !important; }
+}
+
 /* App-wide watermark — fixed, centered, behind all UI. */
 body::before {
   content: "";
