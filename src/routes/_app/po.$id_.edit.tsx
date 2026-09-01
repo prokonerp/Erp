@@ -21,6 +21,10 @@ import {
   inrPO,
   poItemFromBreakup,
   fetchPOWithItems,
+  safeInsertPOItems,
+  safeDeletePOItems,
+  isMissingWarrantyColumnError,
+  isValidUuid,
   type DeliveryAddressType,
   type POItemDraft,
 } from "@/lib/purchaseOrder";
@@ -62,6 +66,13 @@ function EditPO() {
   useEffect(() => {
     let active = true;
     async function load() {
+      // Guard: prevent PostgREST 400 when id is "1" or non-UUID (e.g. stale link / manual / typo)
+      if (!isValidUuid(id)) {
+        toast.error("Invalid Purchase Order ID — the link may be outdated or malformed.");
+        nav({ to: "/po" });
+        setPageLoading(false);
+        return;
+      }
       setPageLoading(true);
       try {
         const [bs, poData] = await Promise.all([
@@ -164,6 +175,7 @@ function EditPO() {
   }, [deliveryType, branch, customer, customAddress]);
 
   async function save(status: "draft" | "approved") {
+    if (!isValidUuid(id)) return toast.error("Invalid Purchase Order ID — the link may be outdated or malformed.");
     if (!branchId) return toast.error("Select branch");
     if (!vendor) return toast.error("Select vendor");
     if (items.length === 0 || items.some((it) => !it.description.trim())) return toast.error("Every line needs a description");
@@ -216,15 +228,22 @@ function EditPO() {
       const { error: e1 } = await (supabase as any).from("purchase_orders").update(payload).eq("id", id);
       if (e1) throw e1;
 
-      const { error: eDel } = await (supabase as any).from("purchase_order_items").delete().eq("po_id", id);
-      if (eDel) throw eDel;
+      // Use validated delete helper — prevents `po_id=eq.1` 400 and maps uuid errors to friendly toast
+      await safeDeletePOItems(id);
 
       const itemRows = items.map((d, i) => {
         const b = totals.items[i];
         return { ...poItemFromBreakup(d, b), po_id: id, sr_no: i + 1 };
       });
-      const { error: eIns } = await (supabase as any).from("purchase_order_items").insert(itemRows);
-      if (eIns) throw eIns;
+      try {
+        await safeInsertPOItems(itemRows as any);
+      } catch (eIns: any) {
+        if (isMissingWarrantyColumnError(eIns)) {
+          toast.error("PO saved but warranty column not yet migrated — items saved with default warranty. Apply migration 20260901000000.");
+          throw eIns;
+        }
+        throw eIns;
+      }
 
       toast.success(status === "approved" ? "PO updated & approved" : "PO updated");
       markClean();
@@ -445,7 +464,7 @@ function EditPO() {
                       </td>
                       <td className="p-2">
                         <div className="flex items-center gap-1">
-                          <Input type="number" min={0} max={120} className="h-9 w-full text-sm font-mono font-semibold tabular-nums bg-amber-50 border-amber-200 text-center" value={it.warranty_months} onChange={(e) => setItem(idx, { warranty_months: Number(e.target.value) })} title={String(it.warranty_months)} onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()} />
+                          <Input type="number" min={0} max={120} className="h-9 w-full text-sm font-mono font-semibold tabular-nums bg-amber-50 border-amber-200 text-center" value={it.warranty_months} onChange={(e) => { let v = Number(e.target.value); if (!Number.isFinite(v)) v = 12; v = Math.round(v); v = Math.max(0, Math.min(120, v)); setItem(idx, { warranty_months: v }); }} title={String(it.warranty_months)} onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()} />
                           <span className="text-xs text-muted-foreground whitespace-nowrap">mo</span>
                         </div>
                       </td>

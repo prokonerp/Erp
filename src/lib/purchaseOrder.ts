@@ -148,15 +148,122 @@ export function poItemFromBreakup(
   };
 }
 
+// Columns without warranty_months — used as fallback until migration is live.
+const PO_ITEMS_FALLBACK_COLUMNS =
+  "id, po_id, sr_no, product_id, description, hsn, qty, unit, rate, discount_pct, taxable_value, gst_rate, cgst, sgst, igst, cess, line_total, received_qty, created_at";
+
+export function isMissingWarrantyColumnError(err: any): boolean {
+  const msg = (err?.message || err?.details || err?.hint || String(err) || "").toLowerCase();
+  return msg.includes("warranty_months");
+}
+
+function normalizePOItems(rows: any[]): POItemRow[] {
+  return (rows ?? []).map((r) => ({
+    ...r,
+    warranty_months: r.warranty_months ?? 12,
+  })) as POItemRow[];
+}
+
+// ── UUID guard ──────────────────────────────────────────────────────────
+// PostgREST returns 400 "invalid input syntax for type uuid: \"1\"" when a
+// route param like "/po/1" (or any non-UUID) is passed to `.eq("po_id", id)`.
+// The encoded URL fragment `"%22%2C%22po_id%22:1"` seen in prod is exactly that
+// JSON-ish leakage. Early-return with a user-friendly error avoids the 400 and
+// the double-fetch that surfaces it twice via React StrictMode / useEffect.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function isValidUuid(v: unknown): boolean {
+  return typeof v === "string" && UUID_RE.test(v);
+}
+function assertValidUuid(id: unknown, label = "ID"): void {
+  if (!isValidUuid(id)) {
+    // Keep the original value in the message for debugging, but don't leak
+    // the full UUID in production toasts — caller will show a generic msg.
+    throw new Error(`Invalid ${label} — expected UUID, got ${JSON.stringify(id)}`);
+  }
+}
+function mapUuid400Error(err: any): Error | null {
+  const msg = String(err?.message || err?.details || err?.hint || err || "").toLowerCase();
+  // PostgREST 400 for uuid column when value is "1", "null", "undefined", etc.
+  if (msg.includes("invalid input syntax for type uuid") || msg.includes("22p02")) {
+    return new Error("Invalid Purchase Order ID — the link may be outdated or malformed.");
+  }
+  return null;
+}
+
 export async function fetchPOWithItems(id: string): Promise<{ po: PORow; items: POItemRow[] }> {
-  const [{ data: po, error: e1 }, { data: items, error: e2 }] = await Promise.all([
-    (supabase as any).from("purchase_orders").select("*").eq("id", id).maybeSingle(),
-    (supabase as any).from("purchase_order_items").select("*").eq("po_id", id).order("sr_no"),
-  ]);
-  if (e1) throw e1;
-  if (e2) throw e2;
+  if (!isValidUuid(id)) {
+    throw new Error("Invalid Purchase Order ID — the link may be outdated or malformed.");
+  }
+  let po: any = null;
+  let e1: any = null;
+  try {
+    const res = await (supabase as any).from("purchase_orders").select("*").eq("id", id).maybeSingle();
+    po = res.data;
+    e1 = res.error;
+  } catch (err: any) {
+    throw mapUuid400Error(err) ?? err;
+  }
+  if (e1) throw mapUuid400Error(e1) ?? e1;
   if (!po) throw new Error("Purchase Order not found");
-  return { po: po as PORow, items: (items ?? []) as POItemRow[] };
+
+  // Try select * first (includes warranty_months when column exists)
+  let items: any = null;
+  let e2: any = null;
+  try {
+    const res = await (supabase as any).from("purchase_order_items").select("*").eq("po_id", id).order("sr_no");
+    items = res.data;
+    e2 = res.error;
+  } catch (err: any) {
+    throw mapUuid400Error(err) ?? err;
+  }
+
+  if (e2 && isMissingWarrantyColumnError(e2)) {
+    const fallback = await (supabase as any)
+      .from("purchase_order_items")
+      .select(PO_ITEMS_FALLBACK_COLUMNS)
+      .eq("po_id", id)
+      .order("sr_no");
+    if (fallback.error) throw mapUuid400Error(fallback.error) ?? fallback.error;
+    return { po: po as PORow, items: normalizePOItems(fallback.data) };
+  }
+  if (e2) throw mapUuid400Error(e2) ?? e2;
+  return { po: po as PORow, items: normalizePOItems(items) };
+}
+
+/**
+ * Resilient insert for purchase_order_items — strips warranty_months
+ * and retries once if the remote DB has not yet applied the warranty
+ * migration (PostgREST schema cache 400).
+ */
+export async function safeInsertPOItems(rows: Record<string, any>[]): Promise<void> {
+  if (!rows.length) return;
+  // Guard: every row must have a valid UUID po_id — prevents the
+  // `po_id=eq.1` / `"%22po_id%22:1"` 400 seen when a numeric id leaks.
+  for (const r of rows) {
+    if (!isValidUuid(r.po_id)) {
+      throw new Error(`Invalid po_id in insert row — expected UUID, got ${JSON.stringify(r.po_id)}`);
+    }
+  }
+  let { error } = await (supabase as any).from("purchase_order_items").insert(rows);
+  if (error && isMissingWarrantyColumnError(error)) {
+    const stripped = rows.map(({ warranty_months: _w, ...rest }) => rest);
+    const retry = await (supabase as any).from("purchase_order_items").insert(stripped);
+    if (retry.error) throw retry.error;
+    // Non-blocking warn - UI callers may toast
+    console.warn("[safeInsertPOItems] warranty_months column missing on remote, inserted without it. Apply migration 20260901000000_add_po_warranty.sql");
+    return;
+  }
+  if (error) throw error;
+}
+
+export async function safeDeletePOItems(poId: string): Promise<void> {
+  if (!isValidUuid(poId)) throw new Error("Invalid Purchase Order ID — expected UUID");
+  const { error } = await (supabase as any).from("purchase_order_items").delete().eq("po_id", poId);
+  if (error) {
+    const mapped = mapUuid400Error(error);
+    if (mapped) throw mapped;
+    throw error;
+  }
 }
 
 export function inrPO(n: number | null | undefined): string {

@@ -10,6 +10,7 @@ import { usePermissions } from "@/lib/usePermissions";
 import {
   fetchPOWithItems,
   inrPO,
+  isValidUuid,
   poStatusMeta,
   PO_STATUSES,
   type PORow,
@@ -47,6 +48,13 @@ function POView() {
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
 
   async function load() {
+    // Guard: prevent PostgREST 400 when route param is "1", "undefined", etc.
+    if (!isValidUuid(id)) {
+      toast.error("Invalid Purchase Order ID — the link may be outdated or malformed.");
+      nav({ to: "/po" });
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const r = await fetchPOWithItems(id);
@@ -68,7 +76,16 @@ function POView() {
       } : null);
       try { setCompany(await fetchCompanyProfile()); } catch { /* keep default */ }
     } catch (e: any) {
-      toast.error(e.message);
+      const msg = e?.message || "Failed to load Purchase Order";
+      // Map uuid 400 to friendly message already done in fetchPOWithItems,
+      // but keep fallback here for network-level 400.
+      if (String(msg).toLowerCase().includes("invalid purchase order id")) {
+        toast.error(msg);
+        nav({ to: "/po" });
+      } else {
+        toast.error(msg);
+      }
+      console.warn("[po.$id] load failed", e);
     } finally {
       setLoading(false);
     }
@@ -77,6 +94,7 @@ function POView() {
 
   async function setStatus(next: POStatus) {
     if (!po) return;
+    if (!isValidUuid(po.id)) return toast.error("Invalid Purchase Order ID — cannot update status.");
     const { error } = await (supabase as any).from("purchase_orders").update({ status: next }).eq("id", po.id);
     if (error) return toast.error(error.message);
     toast.success(`Status → ${poStatusMeta(next).label}`);
@@ -85,6 +103,7 @@ function POView() {
 
   async function del() {
     if (!po) return;
+    if (!isValidUuid(po.id)) return toast.error("Invalid Purchase Order ID — cannot delete.");
     setConfirmTarget({
       title: "Delete this Purchase Order?",
       description: "This cannot be undone. All line items and stock entries will be lost.",
@@ -102,6 +121,35 @@ function POView() {
 
   const sm = poStatusMeta(po.status);
   const canPrint = po.status !== "draft";
+
+  async function handlePrintPdf() {
+    if (!canPrint) { toast.error("Only approved/sent POs can be printed."); return; }
+    try {
+      await printPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings });
+    } catch (e: any) {
+      const msg = e?.message || "Print failed";
+      // printPurchaseOrderPdf already falls back to download when popup blocked
+      if (String(msg).toLowerCase().includes("popup blocked")) toast.info(msg);
+      else toast.error(msg);
+    }
+  }
+
+  async function handleDownloadPdf() {
+    try {
+      await downloadPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings }, `${po!.po_no || "PO"}.pdf`);
+    } catch (e: any) {
+      toast.error(e?.message || "Download failed");
+    }
+  }
+
+  function handlePrintA4() {
+    if (!canPrint) { toast.error("Only approved/sent POs can be printed."); return; }
+    try {
+      window.print();
+    } catch (e: any) {
+      toast.error(e?.message || "Browser print failed. Try Print PDF instead.");
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -130,9 +178,9 @@ function POView() {
           {po.status !== "cancelled" && po.status !== "completed" && (
             <Button size="sm" variant="outline" onClick={() => setStatus("cancelled")}><Ban className="h-4 w-4 mr-1" />Cancel</Button>
           )}
-          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => printPurchaseOrderPdf({ po, items, branch, settings: pdfSettings })}><Printer className="h-4 w-4 mr-1" />Print</Button>
-          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => window.print()}><Printer className="h-4 w-4 mr-1" />Print (A4)</Button>
-          <Button size="sm" variant="outline" disabled={!canPrint} onClick={() => downloadPurchaseOrderPdf({ po, items, branch, settings: pdfSettings }, `${po.po_no || "PO"}.pdf`)}><Download className="h-4 w-4 mr-1" />PDF</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={handlePrintPdf} title={canPrint ? "Print via PDF (new window)" : "Approve PO first"}><Printer className="h-4 w-4 mr-1" />Print PDF</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={handlePrintA4} title={canPrint ? "Browser print (A4 template)" : "Approve PO first"}><Printer className="h-4 w-4 mr-1" />Print (A4)</Button>
+          <Button size="sm" variant="outline" disabled={!canPrint} onClick={handleDownloadPdf} title="Download PDF to file"><Download className="h-4 w-4 mr-1" />Download PDF</Button>
           <Button size="sm" variant="ghost" className="text-destructive" onClick={del}>Delete</Button>
         </div>
       </div>
@@ -238,8 +286,11 @@ function POView() {
         </div>
       )}
 
-      {/* A4 shared print template */}
-      <div className="hidden print:block">
+      {/* A4 shared print template — visible only in print.
+          Uses both Tailwind `print:block` and explicit `.po-a4-print` class
+          so window.print() never produces a blank page even if the Tailwind
+          print variant is not generated (Tailwind v4 tree-shaking). */}
+      <div className="hidden print:block po-a4-print" aria-hidden="true">
         <DocumentPrintView
           company={company}
           doc={{

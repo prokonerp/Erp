@@ -42,6 +42,7 @@ export async function renderPurchaseOrderPdf(args: {
     import("jspdf-autotable"),
   ]);
   const { po, items, branch } = args;
+  if (!po) throw new Error("Missing purchase order data for PDF");
   const themeColor = args.themeColor || "#1f3864";
   const [tr, tg, tb] = hexToRgb(themeColor);
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
@@ -123,40 +124,53 @@ export async function renderPurchaseOrderPdf(args: {
 
   y += boxH;
 
-  // Items table — includes Warranty per line (default 12 mo, editable)
-  autoTable(doc, {
-    startY: y,
-    margin: { left: margin, right: margin },
-    styles: { fontSize: 8.5, cellPadding: 3.5, lineColor: [tr, tg, tb], lineWidth: 0.3, textColor: 20 },
-    headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontStyle: "bold", halign: "center" },
-    head: [[
-      "#", "Product / Description", "HSN", "Qty", "Unit", "Rate",
-      po.is_interstate ? "IGST%" : "GST%", "Warranty", "Amount",
-    ]],
-    body: items.map((it, i) => [
-      String(i + 1),
-      it.description,
-      it.hsn || "—",
-      String(it.qty),
-      it.unit || "",
-      inrPdf(it.rate),
-      `${it.gst_rate}%`,
-      `${(it as any).warranty_months ?? 12} mo`,
-      inrPdf(it.line_total),
-    ]),
-    columnStyles: {
-      0: { halign: "center", cellWidth: 20 },
-      2: { halign: "center", cellWidth: 42 },
-      3: { halign: "center", cellWidth: 32 },
-      4: { halign: "center", cellWidth: 34 },
-      5: { halign: "right", cellWidth: 52 },
-      6: { halign: "center", cellWidth: 36 },
-      7: { halign: "center", cellWidth: 42 },
-      8: { halign: "right", cellWidth: 62 },
-    },
-  });
+  // Items table — includes Warranty per line (default 12 mo, editable). Guarded so a single bad row never crashes the whole PDF.
+  const safeItems = (items ?? []).length ? items : [{ description: "No items", hsn: "—", qty: 0, unit: "", rate: 0, gst_rate: 0, warranty_months: 12, line_total: 0 } as any];
+  try {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 8.5, cellPadding: 3.5, lineColor: [tr, tg, tb], lineWidth: 0.3, textColor: 20 },
+      headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontStyle: "bold", halign: "center" },
+      head: [[
+        "#", "Product / Description", "HSN", "Qty", "Unit", "Rate",
+        po.is_interstate ? "IGST%" : "GST%", "Warranty", "Amount",
+      ]],
+      body: safeItems.map((it: any, i: number) => [
+        String(i + 1),
+        String(it.description || "—").slice(0, 400),
+        it.hsn || "—",
+        String(Number(it.qty) || 0),
+        it.unit || "",
+        inrPdf(Number(it.rate) || 0),
+        `${Number(it.gst_rate) || 0}%`,
+        `${(it as any).warranty_months ?? 12} mo`,
+        inrPdf(Number(it.line_total) || 0),
+      ]),
+      columnStyles: {
+        0: { halign: "center", cellWidth: 20 },
+        2: { halign: "center", cellWidth: 42 },
+        3: { halign: "center", cellWidth: 32 },
+        4: { halign: "center", cellWidth: 34 },
+        5: { halign: "right", cellWidth: 52 },
+        6: { halign: "center", cellWidth: 36 },
+        7: { halign: "center", cellWidth: 42 },
+        8: { halign: "right", cellWidth: 62 },
+      },
+    });
+  } catch (e) {
+    console.warn("[PO PDF] autoTable failed, falling back to text rows", e);
+    let fy = y + 14;
+    doc.setFont("helvetica", "normal").setFontSize(9);
+    safeItems.forEach((it: any, i: number) => {
+      const line = `${i + 1}. ${String(it.description || "—").slice(0, 80)}  Qty:${it.qty}  Rate:${inrPdf(it.rate)}  GST:${it.gst_rate}%  Warranty:${(it as any).warranty_months ?? 12} mo  Amt:${inrPdf(it.line_total)}`;
+      const parts = doc.splitTextToSize(line, cw) as string[];
+      parts.slice(0, 2).forEach((p: string) => { doc.text(p, margin, fy); fy += 10; });
+    });
+    (doc as any).lastAutoTable = { finalY: fy };
+  }
 
-  let ty = (doc as any).lastAutoTable.finalY + 8;
+  let ty = ((doc as any).lastAutoTable?.finalY ?? (y + 120)) + 8;
 
   // Totals block — right-aligned column with label left / value right, same column width.
   const totalsW = 260;
@@ -232,10 +246,28 @@ export async function printPurchaseOrderPdf(args: Parameters<typeof renderPurcha
   const blob = doc.output("blob");
   const url = URL.createObjectURL(blob);
   const win = window.open(url, "_blank");
-  if (win) setTimeout(() => { try { win.focus(); win.print(); } catch { /* ignore */ } }, 500);
+  if (!win) {
+    URL.revokeObjectURL(url);
+    // Popup blocked — fallback to download so user isn't left with nothing
+    doc.save(`${args.po.po_no || "PO"}.pdf`);
+    throw new Error("Popup blocked — PDF downloaded instead. Allow popups for direct print.");
+  }
+  const doPrint = () => {
+    try { win.focus(); win.print(); } catch { /* ignore */ }
+  };
+  // Print once content loads; fallback timer for browsers that don't fire load
+  try {
+    win.addEventListener("load", doPrint, { once: true } as any);
+  } catch {}
+  setTimeout(doPrint, 900);
+  setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 60_000);
 }
 
 export async function downloadPurchaseOrderPdf(args: Parameters<typeof renderPurchaseOrderPdf>[0], filename: string): Promise<void> {
-  const doc = await renderPurchaseOrderPdf(args);
-  doc.save(filename);
+  try {
+    const doc = await renderPurchaseOrderPdf(args);
+    doc.save(filename);
+  } catch (e: any) {
+    throw new Error(e?.message || "Failed to generate PDF");
+  }
 }

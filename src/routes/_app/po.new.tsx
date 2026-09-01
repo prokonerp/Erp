@@ -19,7 +19,9 @@ import { istTodayIso } from "@/lib/dateRange";
 import {
   emptyPOItem,
   inrPO,
+  isMissingWarrantyColumnError,
   poItemFromBreakup,
+  safeInsertPOItems,
   type DeliveryAddressType,
   type POItemDraft,
 } from "@/lib/purchaseOrder";
@@ -143,8 +145,15 @@ function NewPO() {
         const b = totals.items[i];
         return { ...poItemFromBreakup(d, b), po_id: po.id, sr_no: i + 1 };
       });
-      const { error: e2 } = await (supabase as any).from("purchase_order_items").insert(itemRows);
-      if (e2) throw e2;
+      try {
+        await safeInsertPOItems(itemRows as any);
+      } catch (e2: any) {
+        if (isMissingWarrantyColumnError(e2)) {
+          toast.error("PO saved but warranty column not yet migrated — items saved with default warranty. Apply migration 20260901000000.");
+          throw e2;
+        }
+        throw e2;
+      }
 
       toast.success(`PO ${po.po_no || ""} ${status === "approved" ? "approved" : "saved"}`);
       markClean();
@@ -343,7 +352,7 @@ function NewPO() {
                       </td>
                       <td className="p-2">
                         <div className="flex items-center gap-1">
-                          <Input type="number" min={0} max={120} className="h-9 w-full text-sm font-mono font-semibold tabular-nums bg-amber-50 border-amber-200 text-center" value={it.warranty_months} onChange={(e) => setItem(idx, { warranty_months: Number(e.target.value) })} title={String(it.warranty_months)} onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()} />
+                          <Input type="number" min={0} max={120} className="h-9 w-full text-sm font-mono font-semibold tabular-nums bg-amber-50 border-amber-200 text-center" value={it.warranty_months} onChange={(e) => { let v = Number(e.target.value); if (!Number.isFinite(v)) v = 12; v = Math.round(v); v = Math.max(0, Math.min(120, v)); setItem(idx, { warranty_months: v }); }} title={String(it.warranty_months)} onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()} />
                           <span className="text-xs text-muted-foreground whitespace-nowrap">mo</span>
                         </div>
                       </td>
