@@ -26,6 +26,10 @@ export const COUNTRIES = ["India", "United States", "United Kingdom", "United Ar
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export function isUrpValue(v: string | null | undefined): boolean {
+  return (v || "").trim().toUpperCase() === "URP";
+}
+
 export type CustomerType = "Business" | "Individual";
 
 export type AddressBlock = {
@@ -111,6 +115,10 @@ export function customerToForm(c: Customer): CustomerFormState {
     pincode: any.shipping_pincode || "",
   };
   const sameAsBilling = !any.shipping_line1 && (!c.shipping_address || c.shipping_address === (c.billing_address || c.address || ""));
+  const rawGst = c.gst || "";
+  const isLegacyUrp = isUrpValue(rawGst);
+  let inferredStatus: GstTreatment = (any.gst_status as GstTreatment) || (rawGst && !isLegacyUrp ? "Regular" : "Unregistered");
+  if (isLegacyUrp) inferredStatus = "Unregistered";
   return {
     customer_type: (any.customer_type as CustomerType) || "Business",
     salutation: any.salutation || "Mr.",
@@ -121,7 +129,7 @@ export function customerToForm(c: Customer): CustomerFormState {
     area_code: any.phone_area_code || "+91",
     phone: c.phone || "",
     gst: c.gst || "",
-    gst_status: (any.gst_status as GstTreatment) || (c.gst ? "Regular" : "Unregistered"),
+    gst_status: inferredStatus,
     pan: any.pan || panFromGstin(c.gst || ""),
     billing,
     shipping: sameAsBilling ? billing : shipping,
@@ -135,15 +143,22 @@ export function customerToForm(c: Customer): CustomerFormState {
 
 type TabKey = "basic" | "gst" | "address" | "contacts";
 
-/** Shared validation — returns null when valid, else message + the tab to focus. */
+/** Shared validation — returns null when valid, else message + the tab to focus.
+ * URP is accepted as a sentinel for “GST unknown” — staff habit. When GST
+ * field is literally “URP” (any case), skip GSTIN regex and required checks,
+ * regardless of the selected treatment, so typing URP never blocks save.
+ */
 export function validateCustomerForm(form: CustomerFormState): { message: string; tab: TabKey } | null {
   if (form.customer_type === "Business" && !form.company.trim()) return { message: "Company Name is required for Business", tab: "basic" };
   if (!form.first_name.trim()) return { message: "First name is required", tab: "basic" };
   if (!isValidPhone(form.phone)) return { message: "Enter a valid 10-digit mobile number", tab: "basic" };
   if (!form.email.trim()) return { message: "Email is required", tab: "basic" };
   if (!EMAIL_REGEX.test(form.email.trim())) return { message: "Enter a valid email address", tab: "basic" };
-  if (form.gst_status !== "Unregistered" && form.gst_status !== "Consumer" && !form.gst.trim()) return { message: "GST Number is required for the selected GST treatment", tab: "gst" };
-  if ((form.gst_status === "Regular" || form.gst_status === "Composition") && !isValidGSTIN(form.gst)) return { message: "Enter a valid 15-character GSTIN", tab: "gst" };
+  const isUrp = isUrpValue(form.gst);
+  if (!isUrp) {
+    if (form.gst_status !== "Unregistered" && form.gst_status !== "Consumer" && !form.gst.trim()) return { message: "GST Number is required for the selected GST treatment", tab: "gst" };
+    if ((form.gst_status === "Regular" || form.gst_status === "Composition") && !isValidGSTIN(form.gst)) return { message: "Enter a valid 15-character GSTIN", tab: "gst" };
+  }
   if (form.pan && !PAN_REGEX.test(form.pan.toUpperCase().trim())) return { message: "PAN must be 10 chars (AAAAA9999A)", tab: "gst" };
   for (let i = 0; i < form.contacts.length; i++) {
     const c = form.contacts[i];
@@ -161,8 +176,14 @@ export function validateCustomerForm(form: CustomerFormState): { message: string
  * GSTIN. Now both types populate `gst` from the entered GSTIN whenever the
  * treatment is not "Unregistered" and not "Consumer" (i.e. Regular/Composition).
  * Validation lives in `validateCustomerForm` and is unchanged.
+ * URP (any case) is treated as “GST unknown” — Business → “URP”, Individual → null,
+ * regardless of the dropdown value, so staff typing URP never fails.
  */
 function computeGstValue(form: CustomerFormState): string | null {
+  const isUrp = isUrpValue(form.gst);
+  if (isUrp) {
+    return form.customer_type === "Business" ? "URP" : null;
+  }
   if (form.gst_status === "Unregistered") {
     return form.customer_type === "Business" ? "URP" : null;
   }
@@ -180,6 +201,8 @@ export function buildCustomerPayload(form: CustomerFormState): Record<string, an
     ? toTitleCaseSmart(form.company)
     : toTitleCaseSmart([form.salutation, form.first_name, form.last_name].filter(Boolean).join(" "));
   const contactDisplay = toTitleCaseSmart([form.salutation, form.first_name, form.last_name].filter(Boolean).join(" "));
+  // If staff typed literally “URP”, force status to Unregistered — historical DB invariant (all 1479 URP rows are Unregistered)
+  const effectiveGstStatus: GstTreatment = isUrpValue(form.gst) ? "Unregistered" : form.gst_status;
 
   return {
     customer_type: form.customer_type,
@@ -191,8 +214,8 @@ export function buildCustomerPayload(form: CustomerFormState): Record<string, an
     phone: form.phone.trim(),
     phone_area_code: form.area_code || "+91",
     email: form.email.trim().toLowerCase() || null,
-    gst: computeGstValue(form),
-    gst_status: form.gst_status,
+    gst: computeGstValue({ ...form, gst_status: effectiveGstStatus }),
+    gst_status: effectiveGstStatus,
     pan: form.pan ? upperTrim(form.pan) : null,
     place_of_supply: form.place_of_supply || null,
     sector: form.sector ? toTitleCaseSmart(form.sector) : null,
@@ -252,7 +275,10 @@ function generateCustomerCode(): string {
  * and return null so an infra problem never blocks a legitimate save.
  */
 async function findDuplicateCustomer(form: CustomerFormState): Promise<string | null> {
-  const gst = upperTrim(form.gst);
+  const rawGst = upperTrim(form.gst);
+  const isUrp = isUrpValue(rawGst);
+  // URP is a shared placeholder for 1479+ customers — never treat it as a unique GSTIN for dedupe
+  const gst = isUrp ? "" : rawGst;
   const company =
     form.customer_type === "Business"
       ? toTitleCaseSmart(form.company)
@@ -385,7 +411,16 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
   const [emailError, setEmailError] = useState("");
 
   function onGstChange(v: string) {
-    const up = v.toUpperCase();
+    const up = v.toUpperCase().trim();
+    // Staff habit: typing “URP” means GST unknown — auto-switch to Unregistered so save never fails
+    if (isUrpValue(up)) {
+      setForm((f) => ({
+        ...f,
+        gst: "URP",
+        gst_status: "Unregistered",
+      }));
+      return;
+    }
     const auto = stateFromGSTIN(up);
     setForm((f) => ({
       ...f,
@@ -477,11 +512,21 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
             <SelectContent>{GST_TREATMENTS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
           </Select>
         </FieldRow>
-        {(form.customer_type === "Business" || (form.customer_type === "Individual" && (form.gst_status === "Regular" || form.gst_status === "Composition"))) && (
-          <FieldRow label="GST Number" required>
-            <Input value={form.gst} onChange={(e) => onGstChange(e.target.value)} placeholder="15-char GSTIN — auto-fills state & PAN" maxLength={15} className="font-mono uppercase" />
-          </FieldRow>
-        )}
+        {(form.customer_type === "Business" || (form.customer_type === "Individual" && (form.gst_status === "Regular" || form.gst_status === "Composition"))) && (() => {
+          const gstRequired = form.gst_status === "Regular" || form.gst_status === "Composition";
+          const isUrp = isUrpValue(form.gst);
+          return (
+            <FieldRow label="GST Number" required={gstRequired}>
+              <Input value={form.gst} onChange={(e) => onGstChange(e.target.value)} placeholder={gstRequired ? "15-char GSTIN — auto-fills state & PAN" : "Leave blank or type URP if GST is unknown"} maxLength={15} className="font-mono uppercase" />
+              {!gstRequired && !isUrp && form.gst.trim() === "" && (
+                <p className="text-xs text-muted-foreground mt-1">Blank will be saved as “URP” for Business.</p>
+              )}
+              {isUrp && (
+                <p className="text-xs text-emerald-600 mt-1">“URP” = GST unknown — will be saved as Unregistered.</p>
+              )}
+            </FieldRow>
+          );
+        })()}
         <FieldRow label="Place of Supply">
           <StateCombobox value={form.place_of_supply} onChange={(s) => setForm({ ...form, place_of_supply: s })} />
         </FieldRow>
