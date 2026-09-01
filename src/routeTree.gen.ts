@@ -109,6 +109,7 @@ import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.inv
 import { Route as AppSalesInvoicesIdRouteImport } from './routes/_app/sales.invoices.$id'
 import { Route as AppSalesGeneralDcNewRouteImport } from './routes/_app/sales.general-dc.new'
 import { Route as AppSalesGeneralDcIdRouteImport } from './routes/_app/sales.general-dc.$id'
+import { Route as AppPoIdEditRouteImport } from './routes/_app/po.$id_.edit'
 import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
 import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
 import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
@@ -623,6 +624,11 @@ const AppSalesGeneralDcIdRoute = AppSalesGeneralDcIdRouteImport.update({
   path: '/general-dc/$id',
   getParentRoute: () => AppSalesRoute,
 } as any)
+const AppPoIdEditRoute = AppPoIdEditRouteImport.update({
+  id: '/$id_/edit',
+  path: '/$id/edit',
+  getParentRoute: () => AppPoRoute,
+} as any)
 const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -790,6 +796,7 @@ export interface FileRoutesByFullPath {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/po/$id/edit': typeof AppPoIdEditRoute
   '/sales/general-dc/$id': typeof AppSalesGeneralDcIdRoute
   '/sales/general-dc/new': typeof AppSalesGeneralDcNewRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
@@ -890,6 +897,7 @@ export interface FileRoutesByTo {
   '/grn/oem/new': typeof AppGrnOemNewRoute
   '/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/po/$id/edit': typeof AppPoIdEditRoute
   '/sales/general-dc/$id': typeof AppSalesGeneralDcIdRoute
   '/sales/general-dc/new': typeof AppSalesGeneralDcNewRoute
   '/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
@@ -1007,6 +1015,7 @@ export interface FileRoutesById {
   '/_app/grn/oem/new': typeof AppGrnOemNewRoute
   '/_app/ims/transfers/$id': typeof AppImsTransfersIdRoute
   '/_app/ims/transfers/new': typeof AppImsTransfersNewRoute
+  '/_app/po/$id_/edit': typeof AppPoIdEditRoute
   '/_app/sales/general-dc/$id': typeof AppSalesGeneralDcIdRoute
   '/_app/sales/general-dc/new': typeof AppSalesGeneralDcNewRoute
   '/_app/sales/invoices/$id': typeof AppSalesInvoicesIdRoute
@@ -1124,6 +1133,7 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/po/$id/edit'
     | '/sales/general-dc/$id'
     | '/sales/general-dc/new'
     | '/sales/invoices/$id'
@@ -1224,6 +1234,7 @@ export interface FileRouteTypes {
     | '/grn/oem/new'
     | '/ims/transfers/$id'
     | '/ims/transfers/new'
+    | '/po/$id/edit'
     | '/sales/general-dc/$id'
     | '/sales/general-dc/new'
     | '/sales/invoices/$id'
@@ -1340,6 +1351,7 @@ export interface FileRouteTypes {
     | '/_app/grn/oem/new'
     | '/_app/ims/transfers/$id'
     | '/_app/ims/transfers/new'
+    | '/_app/po/$id_/edit'
     | '/_app/sales/general-dc/$id'
     | '/_app/sales/general-dc/new'
     | '/_app/sales/invoices/$id'
@@ -2069,6 +2081,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSalesGeneralDcIdRouteImport
       parentRoute: typeof AppSalesRoute
     }
+    '/_app/po/$id_/edit': {
+      id: '/_app/po/$id_/edit'
+      path: '/$id/edit'
+      fullPath: '/po/$id/edit'
+      preLoaderRoute: typeof AppPoIdEditRouteImport
+      parentRoute: typeof AppPoRoute
+    }
     '/_app/ims/transfers/new': {
       id: '/_app/ims/transfers/new'
       path: '/new'
@@ -2453,6 +2472,7 @@ interface AppPoRouteChildren {
   AppPoNewRoute: typeof AppPoNewRoute
   AppPoSettingsRoute: typeof AppPoSettingsRoute
   AppPoIndexRoute: typeof AppPoIndexRoute
+  AppPoIdEditRoute: typeof AppPoIdEditRoute
 }
 
 const AppPoRouteChildren: AppPoRouteChildren = {
@@ -2460,6 +2480,7 @@ const AppPoRouteChildren: AppPoRouteChildren = {
   AppPoNewRoute: AppPoNewRoute,
   AppPoSettingsRoute: AppPoSettingsRoute,
   AppPoIndexRoute: AppPoIndexRoute,
+  AppPoIdEditRoute: AppPoIdEditRoute,
 }
 
 const AppPoRouteWithChildren = AppPoRoute._addFileChildren(AppPoRouteChildren)

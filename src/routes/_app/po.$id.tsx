@@ -5,7 +5,8 @@ import { PageLoader } from "@/components/shared/skeletons";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Printer, Download, ArrowLeft, Zap, Send, CheckCircle2, Ban } from "lucide-react";
+import { Printer, Download, ArrowLeft, Zap, Send, CheckCircle2, Ban, Pencil } from "lucide-react";
+import { usePermissions } from "@/lib/usePermissions";
 import {
   fetchPOWithItems,
   inrPO,
@@ -30,6 +31,7 @@ export const Route = createFileRoute("/_app/po/$id")({
 function POView() {
   const { id } = Route.useParams();
   const nav = useNavigate();
+  const { isAdmin } = usePermissions();
   const [po, setPo] = useState<PORow | null>(null);
   const [items, setItems] = useState<POItemRow[]>([]);
   const [branch, setBranch] = useState<BranchRow | null>(null);
@@ -110,6 +112,9 @@ function POView() {
           <StatusBadge tone={sm.badgeTone}>{sm.label}</StatusBadge>
         </div>
         <div className="flex flex-wrap gap-2">
+          {po.status === "draft" && isAdmin && (
+            <Button size="sm" variant="outline" asChild><Link to="/po/$id/edit" params={{ id: po.id } as any}><Pencil className="h-4 w-4 mr-1" />Edit</Link></Button>
+          )}
           {po.status === "draft" && (
             <Button size="sm" onClick={() => setStatus("approved")}><Zap className="h-4 w-4 mr-1" />Approve</Button>
           )}
