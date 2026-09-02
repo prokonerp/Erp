@@ -211,7 +211,7 @@ function HeadSalesDashboard() {
   // ── §12 P5 Compliance KPI — IRN / E-Way / Complete ──────────────────────
   // Derived per invoice:
   //   e_invoice_required = transport_details.e_invoice_reqd==="Y" ? true : transport_details.e_invoice_reqd==="N" ? false : isValidGSTIN(branch.gstin) && isValidGSTIN(buyer_gstin)
-  //   e_way_required     = transport_details.e_way_reqd==="Y" ? true : Number(total) >= 50000
+  //   e_way_required     = transport_details.e_way_reqd==="N" ? false : transport_details.e_way_reqd==="Y" ? true : Number(total) >= 50000
   //   irn_pending  when e_invoice_required && einvoice_status !== "generated"
   //   eway_pending when e_way_required     && eway_status     !== "generated"
   //   complete     when (!eInvReq || generated) && (!eWayReq || generated)
@@ -228,8 +228,9 @@ function HeadSalesDashboard() {
       else if (td?.e_invoice_reqd === "N") eInvReq = false;
       else eInvReq = isValidGSTIN(branchGstin) && isValidGSTIN(inv.buyer_gstin);
       let eWayReq: boolean;
-      if (td?.e_way_reqd === "Y") eWayReq = true;
-      else eWayReq = Number(inv.total ?? 0) >= 50000;
+      if (td?.e_way_reqd === "N") eWayReq = false;
+      else if (td?.e_way_reqd === "Y") eWayReq = true;
+      else eWayReq = Number(inv.total ?? 0) >= 50000; // M5: inclusive ≥50000 — 50000 exactly required
 
       const eInvStatus = String(inv.einvoice_status ?? "pending").toLowerCase();
       const eWayStatus = String(inv.eway_status ?? "not_required").toLowerCase();

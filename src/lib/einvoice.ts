@@ -138,8 +138,8 @@ function asTransportDetails(
  *   otherwise `computeEInvoiceRequired(seller_gstin, buyer_gstin) === "Y"` (B2B
  *   gate: valid branch GSTIN + valid buyer GSTIN → Y, else N).
  * - **e-Way required** — delegates to `computeEWayRequired(total, e_way_reqd)`:
- *   explicit `"Y"` always true, `"N"` defers to ₹50k threshold, otherwise
- *   `total >= 50000`.
+ *   explicit `"N"` always false (overrides threshold), `"Y"` always true,
+ *   otherwise `total >= 50000`.
  * - **Complete** — `(!e_invoice_required || irn_present) && (!e_way_required || ewb_present)`.
  *   `irn_present` checks `irn` / `transport_details.einvoice_irn` / `einvoice_status==='generated'`;
  *   `ewb_present` checks `ewaybill_no` / `transport_details.eway_bill_no` / `eway_status==='generated'`.
@@ -161,14 +161,13 @@ export function getInvoiceCompletionStatus(
 
   const transport = asTransportDetails(invoice.transport_details);
 
-  // e-Invoice required
+  // e-Invoice required — H9 fixed dead code: consult invoice.seller_gstin then transport fallbacks (branch GSTIN flows via invoice.seller_gstin)
+  // spec fix: sellerGstin = invoice.seller_gstin ?? (transport as any)?.einvoice_irn ?? (transport as any)?.seller_gstin ?? null
   let e_invoice_required: boolean;
   if (transport && (transport.e_invoice_reqd === "Y" || transport.e_invoice_reqd === "N")) {
     e_invoice_required = transport.e_invoice_reqd === "Y";
   } else {
-    const sellerGstin =
-      (invoice.seller_gstin as string | null | undefined) ??
-      (transport?.einvoice_irn ? null : null);
+    const sellerGstin = invoice.seller_gstin ?? (transport as any)?.einvoice_irn ?? (transport as any)?.seller_gstin ?? null;
     const buyerGstin = (invoice.buyer_gstin as string | null | undefined) ?? null;
     e_invoice_required = computeEInvoiceRequired(sellerGstin ?? null, buyerGstin ?? null) === "Y";
   }

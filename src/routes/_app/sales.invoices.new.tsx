@@ -32,6 +32,7 @@ import {
   stateNameFromCode,
   amountInWords,
 } from "@/lib/gst";
+import { GSTIN_STATE_CODES } from "@/lib/india";
 import { getCompany } from "@/lib/letterhead";
 import { productDisplayName, productShortName } from "@/lib/productNames";
 import { useIsAdmin } from "@/lib/useRole";
@@ -166,25 +167,58 @@ function NewInvoice() {
   }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sellerCode = branch?.state_code || stateCodeFromGSTIN(branch?.gstin) || null;
-  const buyerCode = (customer as any)?.state_code || stateCodeFromGSTIN(customer?.gst || null);
+  const buyerCode = (customer as any)?.state_code || stateCodeFromGSTIN(customer?.gst || null) || null;
   const sellerState = branch?.state_name || stateNameFromCode(sellerCode);
   const buyerState = customer?.state || stateNameFromCode(buyerCode);
   const gstinError = customer?.gst && !isValidGSTIN(customer.gst)
     ? "Buyer GSTIN format looks invalid"
     : null;
 
+  // H3: supply-class lock — nil / zero_rated / exempt must force GST 0%
+  const supplyClass = getSupplyClassForSalesType(salesType);
+  const isNilOrExempt = supplyClass === "nil" || supplyClass === "zero_rated" || supplyClass === "exempt";
+  const isTaxIncl = !!SALES_TYPE_META[salesType]?.isTaxInclusive;
+
+  // H4: place_of_supply fallback — buyerCode wins, else derive code from place_of_supply (buyerState)
+  // place_of_supply here is the user-visible state name (defaults to buyerState, editable in future)
+  const placeOfSupply = buyerState || "";
+  const placeOfSupplyCode = useMemo(() => {
+    if (!placeOfSupply) return null;
+    for (const [code, name] of Object.entries(GSTIN_STATE_CODES)) {
+      if (name.toLowerCase() === placeOfSupply.toLowerCase()) return code;
+    }
+    return null;
+  }, [placeOfSupply]);
+
   const totals = useMemo(
     () =>
       computeTotals({
         sellerStateCode: sellerCode,
         buyerStateCode: buyerCode,
+        placeOfSupplyStateCode: buyerCode || placeOfSupplyCode,
         items: items.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate })),
         headerDiscount,
         roundOff: true,
         salesType,
       }),
-    [items, sellerCode, buyerCode, headerDiscount, salesType],
+    [items, sellerCode, buyerCode, placeOfSupplyCode, headerDiscount, salesType],
   );
+
+  // H3: force gst_rate 0 in state when supply class is nil/zero/exempt
+  useEffect(() => {
+    if (!isNilOrExempt) return;
+    setItems((prev) => {
+      let changed = false;
+      const next = prev.map((it) => {
+        if (Number(it.gst_rate) !== 0) {
+          changed = true;
+          return { ...it, gst_rate: 0 };
+        }
+        return it;
+      });
+      return changed ? next : prev;
+    });
+  }, [isNilOrExempt]);
 
   // Keep transport_details transaction_type / e_invoice_reqd in sync with branch+customer+salesType
   useEffect(() => {
@@ -358,9 +392,19 @@ function NewInvoice() {
       });
       const { error: e2 } = await supabase.from("invoice_items").insert(itemRows);
       if (e2) {
+        // TODO(RPC): replace compensating delete with atomic DB transaction/RPC (insert header+items atomically) to avoid orphan window.
         // Compensating cleanup: never leave an orphan invoice header without
         // its line items — a retry would treat the broken invoice as done.
-        await supabase.from("invoices").delete().eq("id", inv.id);
+        try {
+          const { error: delErr } = await supabase.from("invoices").delete().eq("id", inv.id);
+          if (delErr) {
+            console.error("[invoices.new] compensating delete failed — orphan header may remain", delErr, { invoiceId: inv.id });
+            toast.error(`Invoice items failed and cleanup also failed (orphan ${inv.invoice_no || inv.id}): ${delErr.message}. Contact admin.`);
+          }
+        } catch (cleanupErr) {
+          console.error("[invoices.new] compensating delete threw", cleanupErr, { invoiceId: inv.id });
+          toast.error(`Invoice items failed and rollback threw: ${(cleanupErr as Error).message}`);
+        }
         throw new Error(`Invoice items could not be saved (header rolled back): ${e2.message}`);
       }
 
@@ -700,9 +744,28 @@ function NewInvoice() {
                       <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.rate} onChange={(e) => setItem(idx, { rate: Number(e.target.value) })} /></td>
                       <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.discount_pct} onChange={(e) => setItem(idx, { discount_pct: Number(e.target.value) })} /></td>
                       <td className="p-2">
-                        <select className="w-full h-8 rounded-md border bg-background px-1 text-xs" value={it.gst_rate} onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}>
-                          {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}
-                        </select>
+                        {isNilOrExempt ? (
+                          <div className="flex flex-col items-start gap-1">
+                            <select
+                              className="w-full h-8 rounded-md border bg-muted px-1 text-xs"
+                              value={0}
+                              disabled
+                              title="Nil — GST 0%"
+                            >
+                              <option value={0}>0%</option>
+                            </select>
+                            <Badge variant="secondary" className="text-[10px]">Nil — GST 0%</Badge>
+                          </div>
+                        ) : (
+                          <>
+                            <select className="w-full h-8 rounded-md border bg-background px-1 text-xs" value={it.gst_rate} onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}>
+                              {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}
+                            </select>
+                            {isTaxIncl && (
+                              <p className="text-[10px] text-amber-600 mt-1">Tax incl. — MRP back-calc active</p>
+                            )}
+                          </>
+                        )}
                       </td>
                       <td className="p-2 text-right font-medium">{inr(b?.line_total || 0)}</td>
                       <td className="p-2 text-right">

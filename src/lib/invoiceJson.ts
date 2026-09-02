@@ -3,7 +3,7 @@
 // Reuses: r2 (local deterministic), computeTotals / hsnSummary from gst.ts,
 // SalesType from sales.ts, TransportDetails from transport.ts, GSTIN_REGEX etc from india.ts.
 
-import { GSTIN_REGEX } from "@/lib/india";
+import { GSTIN_REGEX, validateGSTINChecksum } from "@/lib/india";
 import type { SalesType } from "@/lib/sales";
 import type { TransportDetails, DispatchDetails } from "@/lib/transport";
 import { computeTotals, hsnSummary } from "@/lib/gst";
@@ -111,22 +111,37 @@ export type CustomerLite = {
 // ── helpers ──────────────────────────────────────────────────────────────────
 export function isValidGSTIN(v: string | null | undefined): boolean {
   if (!v || typeof v !== "string") return false;
-  return GSTIN_REGEX.test(v.trim().toUpperCase());
+  const t = v.trim().toUpperCase();
+  if (t === "URP") return false;
+  return GSTIN_REGEX.test(t);
+}
+
+/** checksum-gated helper — true only if GSTIN passes regex AND mod-36 checksum */
+export function isValidGSTINWithChecksum(v: string | null | undefined): boolean {
+  if (!v || typeof v !== "string") return false;
+  const t = v.trim().toUpperCase();
+  if (t === "URP") return false;
+  return validateGSTINChecksum(t);
 }
 
 function normalizeGstin(v: string | null | undefined): string | null {
   if (!v) return null;
   const t = v.trim().toUpperCase();
-  return isValidGSTIN(t) ? t : null;
+  if (t === "URP") return null;
+  // H5: checksum gate — only checksum-valid GSTINs are considered present
+  return validateGSTINChecksum(t) ? t : null;
 }
 
 function stateCodeFromGSTINLocal(gstin: string | null | undefined): string | null {
   if (!gstin) return null;
   const s = gstin.trim().toUpperCase();
+  if (s === "URP") return null;
   if (!GSTIN_REGEX.test(s)) return null;
   const code = s.slice(0, 2);
   // light validation: 01-38 except 25 etc but keep simple: 01-99 numeric
   if (!/^[0-9]{2}$/.test(code)) return null;
+  // Note: state code extraction is permissive (regex only) for POS fallback.
+  // Checksum validation is done separately via validateGSTINChecksum for SupTyp/B2B gate (H5).
   return code;
 }
 
@@ -238,7 +253,17 @@ export function getSupTypForSalesType(
   // Optional EXP handling if caller passes export types
   if (st === "export_taxable" || st === "exp_wp") return "EXPWP";
   if (st === "export_zero_rated" || st === "exp_wop") return "EXPWOP";
-  const hasGstin = isValidGSTIN(buyerGstin);
+  // H10: explicit nil mapping — local_nil_rated is domestic Nil, not zero-rated;
+  // force GST 0 via gst.ts but SupTyp remains B2B/B2C based on buyer GSTIN (with URP/ checksum gate)
+  // H5: URP sentinel + checksum gate
+  if (st === "local_nil_rated") {
+    const buyerTrimNil = buyerGstin?.trim().toUpperCase() ?? "";
+    if (!buyerTrimNil || buyerTrimNil === "URP") return "B2C";
+    return validateGSTINChecksum(buyerGstin) ? "B2B" : "B2C";
+  }
+  const buyerTrim = buyerGstin?.trim().toUpperCase() ?? "";
+  if (!buyerTrim || buyerTrim === "URP") return "B2C";
+  const hasGstin = validateGSTINChecksum(buyerGstin);
   return hasGstin ? "B2B" : "B2C";
 }
 
@@ -466,23 +491,39 @@ export function buildGstInvoiceJson(
   const docDt = gstDateDDMMYYYY(invoice.invoice_date);
   if (!docDt) throw new Error(`buildGstInvoiceJson: invalid invoice_date '${invoice.invoice_date}' — expected YYYY-MM-DD`);
 
-  // Seller
-  const sellerGstin = normalizeGstin(branch?.gstin || invoice.seller_gstin || null);
+  // Seller — H11: branch nullable guard + robust pin/loc fallback
+  const sellerGstinRawFallback = branch?.gstin || invoice.seller_gstin || null;
+  if (!branch && !sellerGstinRawFallback) {
+    throw new Error("buildGstInvoiceJson: branch is required — seller_gstin missing and no branch to fallback");
+  }
+  const sellerGstin = normalizeGstin(sellerGstinRawFallback);
+  if (!sellerGstin && !branch?.gstin && !invoice.seller_gstin) {
+    throw new Error("buildGstInvoiceJson: seller GSTIN is required — provide branch.gstin or invoice.seller_gstin with valid checksum");
+  }
+  // H11: still enforce seller GSTIN exists for e-invoice; if branch missing and checksum fails, error
+  if (!branch && sellerGstinRawFallback && !sellerGstin) {
+    throw new Error(`buildGstInvoiceJson: seller_gstin '${String(sellerGstinRawFallback).trim()}' fails checksum validation`);
+  }
   const sellerStateCode =
     stateCodeFromGSTINLocal(sellerGstin) ||
     trimStr(branch?.state_code || invoice.seller_state_code || null, 2) ||
     null;
   const sellerName = trimStr(branch?.name || invoice.seller_name || "Seller", 100);
   const sellerAddrRaw = branch?.address || invoice.seller_address || "";
-  const sellerPin = extractPin(sellerAddrRaw);
-  const sellerLoc = locFromAddress(sellerAddrRaw, invoice.seller_state || branch?.state_name || null);
+  const sellerPin = extractPin(sellerAddrRaw) ?? null;
+  const sellerLocRaw = locFromAddress(sellerAddrRaw, invoice.seller_state || branch?.state_name || null);
+  const sellerLoc = sellerLocRaw || trimStr(invoice.seller_state || branch?.state_name || "", 50) || "";
 
-  // Buyer
+  // Buyer — H5: unified URP sentinel + checksum gate
   const buyerGstinRaw = trimStr(invoice.buyer_gstin || customer?.gst || "", 15);
-  const buyerGstin = normalizeGstin(buyerGstinRaw) || (buyerGstinRaw ? buyerGstinRaw.toUpperCase() : null);
-  // For B2C portal expects null or "URP" — we emit null and let caller decide URP display
-  const buyerHasGstin = isValidGSTIN(buyerGstin);
-  const buyerGstinForJson: string | null = buyerHasGstin ? (buyerGstin as string) : null;
+  const buyerGstinTrimUpper = buyerGstinRaw ? buyerGstinRaw.trim().toUpperCase() : "";
+  const isBuyerUrp = buyerGstinTrimUpper === "URP" || !buyerGstinTrimUpper;
+  const buyerGstinNorm = isBuyerUrp ? null : normalizeGstin(buyerGstinRaw);
+  const buyerGstin = buyerGstinNorm;
+  // H5: checksum-gated — only checksum-valid GSTIN is B2B, else URP/B2C
+  const buyerHasGstin = !!buyerGstin && validateGSTINChecksum(buyerGstin);
+  // H5: unify URP — both builders emit "URP" for B2C (not null)
+  const buyerGstinForJson: string = buyerHasGstin ? (buyerGstin as string) : "URP";
   const buyerStateCode =
     stateCodeFromGSTINLocal(buyerHasGstin ? buyerGstin : null) ||
     trimStr(invoice.buyer_state_code || invoice.place_of_supply_code || null, 2) ||
@@ -684,14 +725,20 @@ export function buildGstInvoiceJson(
     ContrDtls: null,
   };
 
-  // AddlDocDtls
+  // AddlDocDtls — H10: nil vs zero conflation guard; supply_class is DB-checked (nil/exempt/zero_rated)
   const addlDocs: NicAddlDoc[] = [];
   const lut = trimStr(invoice.lut_no || null, 60);
-  if (String(invoice.sales_type || "") === "sez_zero_rated" && lut) {
+  const stNorm = String(invoice.sales_type || "").toLowerCase();
+  if (stNorm === "local_nil_rated") {
+    // Nil-rated (Table 8): GST forced 0, supply_class='nil', NOT zero_rated/SEZ
+    addlDocs.push({ Url: null, Docs: null, Info: `Sales Type: ${invoice.sales_type} (Nil-rated)` });
+  } else if (stNorm === "sez_zero_rated" && lut) {
     addlDocs.push({ Url: null, Docs: `Lut No: ${lut}`, Info: `Sales Type: ${invoice.sales_type}` });
   } else if (invoice.sales_type) {
     addlDocs.push({ Url: null, Docs: null, Info: `Sales Type: ${invoice.sales_type}` });
   }
+  // H10 DB check note: invoices.supply_class CHECK (nil, exempt, zero_rated) — enforced in 20260902000000_invoicing_staged.sql:29
+  // Runtime guard: if sales_type is nil-rated but supply_class mismatched, builder still forces gst 0 via computeLine, but caller should persist supply_class='nil'.
 
   // EwbDtls — only when generate_eway_within_einvoice true
   let ewbDtls: NicEwbDtls | null = null;
@@ -742,24 +789,37 @@ export function buildEwayJson(
   const docDate = gstDateDDMMYYYY(invoice.invoice_date);
   if (!docDate) throw new Error(`buildEwayJson: invalid invoice_date '${invoice.invoice_date}'`);
 
-  const sellerGstin = normalizeGstin((invoice as any).seller_gstin || null);
-  // branch not passed here — derive from invoice seller fields
+  // H11: branch is not passed to E-Way builder — invoice.seller_gstin must be present + checksum-valid
+  const sellerGstinRawEway = trimStr((invoice as any).seller_gstin || "", 15);
+  if (!sellerGstinRawEway) {
+    throw new Error("buildEwayJson: seller_gstin is required — invoice.seller_gstin missing (branch GSTIN should be copied to invoice.seller_gstin)");
+  }
+  const sellerGstin = normalizeGstin(sellerGstinRawEway);
+  if (!sellerGstin) {
+    throw new Error(`buildEwayJson: seller_gstin '${sellerGstinRawEway}' fails checksum validation`);
+  }
   const sellerName = trimStr(invoice.seller_name || "Seller", 100);
   const sellerAddrRaw = invoice.seller_address || "";
-  const sellerPin = extractPin(sellerAddrRaw);
-  const sellerLoc = locFromAddress(sellerAddrRaw, invoice.seller_state || null);
+  const sellerPin = extractPin(sellerAddrRaw) ?? null;
+  const sellerLocRaw = locFromAddress(sellerAddrRaw, invoice.seller_state || null);
+  const sellerLoc = sellerLocRaw || trimStr(invoice.seller_state || "", 50) || "";
   const sellerStateCode = stateCodeToInt(stateCodeFromGSTINLocal(sellerGstin) || invoice.seller_state_code || null);
 
+  // H5: unified URP sentinel + checksum gate for E-Way buyer
   const buyerGstinRaw = trimStr(invoice.buyer_gstin || "", 15);
-  const buyerGstin = normalizeGstin(buyerGstinRaw);
-  // E-Way portal uses "URP" for unregistered buyers
-  const toGstin: string | null = buyerGstin ? buyerGstin : "URP";
+  const buyerTrimUpper = buyerGstinRaw ? buyerGstinRaw.trim().toUpperCase() : "";
+  const isBuyerUrpEway = buyerTrimUpper === "URP" || !buyerTrimUpper;
+  const buyerGstinNorm = isBuyerUrpEway ? null : normalizeGstin(buyerGstinRaw);
+  const buyerGstin = buyerGstinNorm;
+  const buyerHasGstinEway = !!buyerGstin && validateGSTINChecksum(buyerGstin);
+  const toGstin: string = buyerHasGstinEway ? (buyerGstin as string) : "URP";
   const buyerName = trimStr(invoice.buyer_name || "Buyer", 100);
   const billingAddrRaw = invoice.billing_address || "";
   const toAddr1 = addr1Line(billingAddrRaw, 100) || addr1Line(invoice.shipping_address || "", 100) || "";
-  const toPlace = locFromAddress(billingAddrRaw, invoice.buyer_state || null) || locFromAddress(invoice.shipping_address || null, null) || "";
-  const toPin = extractPin(billingAddrRaw) ?? extractPin(invoice.shipping_address || null);
-  const buyerStateCode = stateCodeToInt(stateCodeFromGSTINLocal(buyerGstin) || invoice.buyer_state_code || invoice.place_of_supply_code || null);
+  const toPlaceRaw = locFromAddress(billingAddrRaw, invoice.buyer_state || null) || locFromAddress(invoice.shipping_address || null, null);
+  const toPlace = toPlaceRaw || trimStr(invoice.buyer_state || "", 50) || "";
+  const toPin = extractPin(billingAddrRaw) ?? extractPin(invoice.shipping_address || null) ?? null;
+  const buyerStateCode = stateCodeToInt(stateCodeFromGSTINLocal(buyerHasGstinEway ? buyerGstin : null) || invoice.buyer_state_code || invoice.place_of_supply_code || null);
 
   const totalValue = r2(Number(invoice.total) || 0) || r2(Number(invoice.taxable_value) || 0);
   const cgstValue = r2(Number(invoice.cgst) || 0);

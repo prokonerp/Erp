@@ -28,14 +28,27 @@ alter table public.invoices add column if not exists is_tax_inclusive boolean no
 alter table public.invoices add column if not exists lut_no text;
 alter table public.invoices add column if not exists supply_class text check (supply_class in ('nil','exempt','zero_rated'));
 alter table public.invoices add column if not exists transport_details jsonb not null default '{}'::jsonb;
+-- H6: server-side guard — transport_details must be a JSON object (allow empty '{}')
+do $$ begin
+  alter table public.invoices add constraint chk_invoices_transport_details_is_object
+    check (jsonb_typeof(transport_details) = 'object');
+exception when duplicate_object then null;
+end $$;
 alter table public.invoices add column if not exists e_invoice_required boolean not null default false;
 alter table public.invoices add column if not exists e_way_required boolean not null default false;
 alter table public.invoices add column if not exists einvoice_status text not null default 'pending'
   check (einvoice_status in ('not_required','pending','json_ready','uploaded','generated','cancelled','failed'));
 alter table public.invoices add column if not exists eway_status text not null default 'not_required'
   check (eway_status in ('not_required','pending','json_ready','generated','cancelled'));
-alter table public.invoices add column if not exists compliance_json jsonb;
-alter table public.invoices add column if not exists portal_response jsonb;
+ alter table public.invoices add column if not exists compliance_json jsonb;
+ alter table public.invoices add column if not exists portal_response jsonb;
+-- S1/S2 (client trust boundary): portal_response is client-pasted untrusted JSON (IRN/EWB paste).
+-- Server guard (DB trigger comment — enforce in next migration if needed):
+--   create function validate_portal_response() returns trigger: check portal_response->>'raw_pasted' len ≤4000,
+--   block keys __proto__/constructor/prototype, and require irn ~ '^[0-9a-f]{64}$' when einvoice_status='generated'
+--   and ewbNo ~ '^[0-9]{12}$' when eway_status='generated'. Client also sanitizes via
+--   sanitizeRawPaste() + allowlisted parsed fields in src/routes/_app/sales.invoices.$id.tsx (S1/S2).
+--   Do not trust portal_response for business logic; authoritative columns are irn/ack_no/ewaybill_no.
 alter table public.invoices add column if not exists signed_qr text;
 alter table public.invoices add column if not exists compliance_pasted_at timestamptz;
 alter table public.invoices add column if not exists compliance_pasted_by uuid references auth.users(id) on delete set null;
@@ -71,7 +84,64 @@ create index if not exists idx_invoices_compliance_pasted on public.invoices (co
 -- alter table public.invoices add column if not exists vehicle_no_gen text
 --   generated always as (transport_details->>'vehicle_no') stored;
 -- create index if not exists idx_invoices_vehicle_gen on public.invoices(vehicle_no_gen);
- 
+
+-- 3c) Transport validation (H6) — distance 1-4000, vehicle regex, pin 6-digit, allow empty
+create or replace function public.validate_transport_details() returns trigger
+language plpgsql security definer set search_path=public as $$
+declare
+  v text;
+  p text;
+  n numeric;
+  raw text;
+begin
+  if new.transport_details is null then
+    return new;
+  end if;
+  if jsonb_typeof(new.transport_details) <> 'object' then
+    raise exception 'transport_details must be a JSON object (got %)', jsonb_typeof(new.transport_details);
+  end if;
+  -- allow empty object '{}' — no further checks
+  if new.transport_details = '{}'::jsonb then
+    return new;
+  end if;
+
+  -- distance_km: allow missing/empty, else must be numeric 1-4000
+  if new.transport_details ? 'distance_km' then
+    raw := btrim(coalesce(new.transport_details->>'distance_km',''));
+    if raw is not null and raw <> '' and lower(raw) <> 'null' then
+      begin
+        n := raw::numeric;
+      exception when others then
+        raise exception 'transport_details.distance_km must be a number between 1 and 4000 (got %)', raw;
+      end;
+      if n < 1 or n > 4000 then
+        raise exception 'transport_details.distance_km must be between 1 and 4000 (got %)', n;
+      end if;
+    end if;
+  end if;
+
+  -- vehicle_no: allow missing/empty, else regex ^[A-Z]{2}[0-9]{1,2}[A-Z]{0,2}[0-9]{4}$
+  v := btrim(coalesce(new.transport_details->>'vehicle_no',''));
+  if v is not null and v <> '' and lower(v) <> 'null' then
+    if upper(v) !~ '^[A-Z]{2}[0-9]{1,2}[A-Z]{0,2}[0-9]{4}$' then
+      raise exception 'transport_details.vehicle_no invalid ''%'' — expected ^[A-Z]{2}[0-9]{1,2}[A-Z]{0,2}[0-9]{4}$ (e.g. HR55AB1234)', v;
+    end if;
+  end if;
+
+  -- pin_code: allow missing/empty, else 6-digit ^[1-9][0-9]{5}$
+  p := btrim(coalesce(new.transport_details->>'pin_code',''));
+  if p is not null and p <> '' and lower(p) <> 'null' then
+    if p !~ '^[1-9][0-9]{5}$' then
+      raise exception 'transport_details.pin_code must be 6-digit ^[1-9][0-9]{5}$ (got ''%'')', p;
+    end if;
+  end if;
+
+  return new;
+end $$;
+drop trigger if exists trg_validate_transport_details on public.invoices;
+create trigger trg_validate_transport_details before insert or update on public.invoices
+  for each row execute function public.validate_transport_details();
+
 -- 4) Print log (append-only audit) — one row per logical print (bulk counts as 1)
 create table if not exists public.invoice_print_log (
   id uuid primary key default gen_random_uuid(),
@@ -125,7 +195,7 @@ begin
   return new;
 end $$;
  
--- 6) Lock after IRN (immutability) — invoices row
+-- 6) Lock after IRN (immutability) — invoices row (H8 expanded)
 create or replace function public.assert_no_edit_after_irn() returns trigger
 language plpgsql security definer set search_path=public as $$
 begin
@@ -133,7 +203,14 @@ begin
     new.taxable_value is distinct from old.taxable_value or
     new.cgst is distinct from old.cgst or new.sgst is distinct from old.sgst or
     new.igst is distinct from old.igst or new.total is distinct from old.total or
-    new.seller_gstin is distinct from old.seller_gstin or new.buyer_gstin is distinct from old.buyer_gstin
+    new.seller_gstin is distinct from old.seller_gstin or new.buyer_gstin is distinct from old.buyer_gstin or
+    new.sales_type is distinct from old.sales_type or
+    new.supply_class is distinct from old.supply_class or
+    new.lut_no is distinct from old.lut_no or
+    new.transport_details is distinct from old.transport_details or
+    new.discount is distinct from old.discount or
+    new.round_off is distinct from old.round_off or
+    new.billing_address is distinct from old.billing_address
   ) then
     raise exception 'Invoice % is locked after IRN % — cancel IRN within 24h or raise a credit note', old.invoice_no, old.irn;
   end if;
@@ -143,13 +220,16 @@ drop trigger if exists trg_lock_after_irn on public.invoices;
 create trigger trg_lock_after_irn before update on public.invoices
   for each row execute function public.assert_no_edit_after_irn();
  
--- also block item edits after IRN
+-- also block item edits after IRN (H8: allow DELETE when invoice status='cancelled')
 create or replace function public.assert_items_frozen_after_irn() returns trigger
 language plpgsql security definer set search_path=public as $$
-declare par_irn text;
+declare par_irn text; par_status text;
 begin
-  select irn into par_irn from public.invoices where id = coalesce(new.invoice_id, old.invoice_id);
+  select irn, status into par_irn, par_status from public.invoices where id = coalesce(new.invoice_id, old.invoice_id);
   if par_irn is not null then
+    if tg_op='DELETE' and par_status = 'cancelled' then
+      return old;
+    end if;
     raise exception 'Items of invoice % are frozen after IRN — cancel IRN on portal first', par_irn;
   end if;
   if tg_op='DELETE' then return old; else return new; end if;

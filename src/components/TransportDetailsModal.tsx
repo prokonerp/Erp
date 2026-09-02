@@ -98,15 +98,18 @@ export default function TransportDetailsModal({
     value.dispatch_details?.state_code ?? "",
   );
 
-  // sync when opening or value changes
+  // M8 fix: only reset on open transition (dep [open] + ref) — avoids stale closure where
+  // parent `value` changes while modal is open would clobber in-progress draft edits.
+  const valueRef = React.useRef(value);
+  valueRef.current = value;
   React.useEffect(() => {
     if (open) {
-      setDraft(cloneTransport(value));
+      setDraft(cloneTransport(valueRef.current));
       setErrors({});
-      setDispatchStateCode(value.dispatch_details?.state_code ?? "");
+      setDispatchStateCode(valueRef.current.dispatch_details?.state_code ?? "");
       setTransporterPromptOpen(false);
     }
-  }, [open, value]);
+  }, [open]);
 
   const pinStateHelper = React.useMemo(() => {
     const pin = draft.pin_code?.trim() ?? "";

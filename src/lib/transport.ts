@@ -1,7 +1,7 @@
 // TransportDetails — 25-field Tally parity (Image 2) — docs/Invoicing_Staged_Plan_Proposal.docx §5.2
 // Stored as invoices.transport_details JSONB; typed here as source of truth.
 
-import { GSTIN_REGEX } from "@/lib/india";
+import { GSTIN_REGEX, validateGSTINChecksum } from "@/lib/india";
 
 // ── enums ────────────────────────────────────────────────────────────────
 export const TRANSPORT_MODES = ["Self", "Road", "Rail", "Air", "Ship"] as const;
@@ -115,13 +115,17 @@ export function validateGSTIN(gstin: string | null | undefined): boolean {
  * §7 Business Rules — e_invoice_required
  * Recommended lockdown: B2B (buyer GSTIN) + branch GSTIN ⇒ mandatory Y.
  * No turnover gate now. URP / no GSTIN ⇒ N (B2C).
+ * H5 fix: checksum gate via validateGSTINChecksum + explicit URP sentinel.
  */
 export function computeEInvoiceRequired(
   branchGstin: string | null | undefined,
   buyerGstin: string | null | undefined,
 ): "Y" | "N" {
-  const branchValid = !!branchGstin && GSTIN_REGEX.test(branchGstin.trim().toUpperCase());
-  const buyerValid = !!buyerGstin && GSTIN_REGEX.test(buyerGstin.trim().toUpperCase());
+  const buyerTrim = buyerGstin?.trim().toUpperCase() ?? "";
+  // URP sentinel — unregistered person → always B2C → no e-invoice
+  if (buyerTrim === "URP") return "N";
+  const branchValid = validateGSTINChecksum(branchGstin);
+  const buyerValid = validateGSTINChecksum(buyerGstin);
   return branchValid && buyerValid ? "Y" : "N";
 }
 
@@ -134,17 +138,20 @@ export function isEInvoiceRequired(
 }
 
 /**
- * §7 — e_way_required
- * ≥₹50k ⇒ Y, or explicit e_way_reqd Y forces Y. Editable override per invoice.
+ * §7 — e_way_required (GST e-Way Bill — Rule 138: threshold is INCLUSIVE)
+ * Explicit N ⇒ false, explicit Y ⇒ true, else ≥₹50,000 ⇒ true (inclusive boundary).
+ * Explicit N overrides threshold. 50000 exactly IS required — see unit test below.
+ * Docs and code must stay inclusive (≥ not >): sales.index.tsx, sales.invoices.$id.tsx,
+ * and transport.ts all use >= 50000. Do not change to > 50000.
  */
 export function computeEWayRequired(
   total: number | null | undefined,
   e_way_reqd: "Y" | "N" | null | undefined,
 ): boolean {
   const t = Number(total) || 0;
+  if (e_way_reqd === "N") return false;
   if (e_way_reqd === "Y") return true;
-  if (e_way_reqd === "N" && t < 50000) return false;
-  return t >= 50000;
+  return t >= 50000; // inclusive: 50000 triggers e-Way (M5) — test: computeEWayRequired(50000,null)===true
 }
 
 /** Y/N variant */
@@ -157,7 +164,8 @@ export function computeEWayRequiredYN(
 
 /**
  * Auto transaction type from sales_type + buyer GSTIN.
- * SEZWP/SEZWOP dominate; else B2B if buyer GSTIN valid, else B2C.
+ * SEZWP/SEZWOP dominate; else B2B if buyer GSTIN valid (checksum), else B2C.
+ * H5 fix: URP sentinel handled explicitly + checksum gate (validateGSTINChecksum).
  */
 export function computeTransactionType(
   salesType: string | null | undefined,
@@ -167,7 +175,9 @@ export function computeTransactionType(
   const st = String(salesType || "").toLowerCase();
   if (st === "sez_taxable") return "SEZWP";
   if (st === "sez_zero_rated") return "SEZWOP";
-  const hasGstin = !!buyerGstin && GSTIN_REGEX.test(buyerGstin.trim().toUpperCase());
+  const buyerTrim = buyerGstin?.trim().toUpperCase() ?? "";
+  if (!buyerTrim || buyerTrim === "URP") return "B2C";
+  const hasGstin = validateGSTINChecksum(buyerGstin);
   return hasGstin ? "B2B" : "B2C";
 }
 

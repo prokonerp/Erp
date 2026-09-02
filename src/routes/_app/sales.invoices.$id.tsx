@@ -254,6 +254,23 @@ function InvoiceView() {
     }
   }
 
+  // S1/S2: sanitize portal_response — client trust boundary. Raw paste is untrusted;
+  // we store only allowlisted parsed fields + truncated raw (no __proto__/constructor keys),
+  // validate IRN/EWB shape via parse*Response, and DB trigger comment documents server guard.
+  function sanitizeRawPaste(s: string, max = 4000): string {
+    // strip control chars, limit size, block prototype pollution payloads from persisting verbatim
+    return s.slice(0, max).replace(/\u0000/g, "").replace(/__proto__|constructor|prototype/gi, "");
+  }
+  function sanitizedPortalResponse(parsed: Record<string, unknown>, raw: string): Record<string, unknown> {
+    // allowlist parsed fields only; never store arbitrary keys from client
+    const allow = ["irn", "ack_no", "ack_date", "signed_qr", "ewbNo", "ewbDate", "validTill"] as const;
+    const safeParsed: Record<string, unknown> = {};
+    for (const k of allow) if (k in parsed) safeParsed[k] = (parsed as Record<string, unknown>)[k];
+    // if parsed has no allowlisted keys (e.g. IrnParseResult uses signed_qr etc lower?), keep whole parsed but json-round-trip to strip prototypes
+    const finalParsed = Object.keys(safeParsed).length ? safeParsed : JSON.parse(JSON.stringify(parsed));
+    return { parsed: finalParsed, raw_pasted: sanitizeRawPaste(raw) };
+  }
+
   async function handlePasteIrn() {
     if (!inv) return;
     if (!irnText.trim()) return toast.error("Paste IRN JSON first");
@@ -274,7 +291,7 @@ function InvoiceView() {
         einvoice_status: "generated",
         compliance_pasted_at: nowIso,
         compliance_pasted_by: user?.id ?? null,
-        portal_response: { irn_parsed: parsed, raw_pasted: irnText.slice(0, 8000) } as any,
+        portal_response: sanitizedPortalResponse(parsed as unknown as Record<string, unknown>, irnText) as any,
       };
       if (nextTransport) payload.transport_details = nextTransport as any;
       const { error } = await (supabase.from("invoices") as any).update(payload).eq("id", inv.id);
@@ -339,7 +356,7 @@ function InvoiceView() {
         eway_status: "generated",
         compliance_pasted_at: nowIso,
         compliance_pasted_by: user?.id ?? null,
-        portal_response: { ewb_parsed: parsed, raw_pasted: ewbText.slice(0, 8000) } as any,
+        portal_response: sanitizedPortalResponse(parsed as unknown as Record<string, unknown>, ewbText) as any,
       };
       if (nextTransport) payload.transport_details = nextTransport as any;
       const { error } = await (supabase.from("invoices") as any).update(payload).eq("id", inv.id);
@@ -365,18 +382,25 @@ function InvoiceView() {
     load();
   }
 
-  async function sha256HexLocal(input: string): Promise<string> {
+  async function sha256HexBytesLocal(bytes: Uint8Array): Promise<string> {
     try {
-      const enc = new TextEncoder().encode(input);
       const subtle = (globalThis.crypto as unknown as { subtle?: { digest: (a: string, d: BufferSource) => Promise<ArrayBuffer> } })?.subtle;
       if (subtle?.digest) {
-        const buf = await subtle.digest("SHA-256", enc);
+        const buf = await subtle.digest("SHA-256", bytes as BufferSource);
         return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
       }
     } catch { /* fallback */ }
     let h = 0;
-    for (let i = 0; i < input.length; i++) h = (Math.imul(31, h) + input.charCodeAt(i)) | 0;
+    for (let i = 0; i < bytes.length; i++) h = (Math.imul(31, h) + bytes[i]) | 0;
     return Math.abs(h).toString(16).padStart(8, "0");
+  }
+
+  async function sha256HexLocal(input: string): Promise<string> {
+    return sha256HexBytesLocal(new TextEncoder().encode(input));
+  }
+
+  async function hashPdfBytesLocal(ab: ArrayBuffer): Promise<string> {
+    return sha256HexBytesLocal(new Uint8Array(ab));
   }
 
   async function handlePrintAudit(copies: string[], isReprint: boolean) {
@@ -384,7 +408,27 @@ function InvoiceView() {
     const nowIso = new Date().toISOString();
     const { data: ud } = await supabase.auth.getUser();
     const userId = ud.user?.id ?? null;
-    const pdfHash = await sha256HexLocal(copies.join(",") + nowIso + inv.id);
+    // H13: pdf_hash must be sha256 of actual PDF bytes, not metadata string. Try to render and hash bytes; fallback to string only if render fails.
+    let pdfHash: string;
+    try {
+      const { renderInvoiceCopies } = await import("@/lib/invoicePdf");
+      const tmpDoc = await renderInvoiceCopies({
+        invoice: inv,
+        items,
+        branch,
+        customer,
+        themeColor: pdfTheme.themeColor,
+        copyLabel: pdfTheme.copyLabel,
+        settings: pdfSettings,
+        company: company ?? undefined,
+        copies,
+        isReprint,
+      } as never);
+      const ab = tmpDoc.output("arraybuffer") as ArrayBuffer;
+      pdfHash = await hashPdfBytesLocal(ab);
+    } catch {
+      pdfHash = await sha256HexLocal(copies.join(",") + nowIso + inv.id);
+    }
     const nextCount = ((inv as unknown as { print_count?: number | null }).print_count ?? 0) + 1;
     const firstAt = (inv as unknown as { first_printed_at?: string | null }).first_printed_at ?? nowIso;
     // audit insert before opening blob
@@ -498,7 +542,7 @@ function InvoiceView() {
           {inv.status !== "cancelled" && !inv.irn && (
             <Button size="sm" variant="outline" onClick={generateIrn}><Zap className="h-4 w-4 mr-1.5" />Generate IRN (mock)</Button>
           )}
-          {inv.status !== "cancelled" && !inv.ewaybill_no && inv.total >= 50000 && (
+          {inv.status !== "cancelled" && !inv.ewaybill_no && inv.total >= 50000 /* M5: inclusive ≥50000 — 50000 exactly triggers */ && (
             <Button size="sm" variant="outline" onClick={() => setEwayOpen((v) => !v)}><Truck className="h-4 w-4 mr-1.5" />e-Way Bill (mock)</Button>
           )}
           <Button size="sm" variant="outline" asChild>

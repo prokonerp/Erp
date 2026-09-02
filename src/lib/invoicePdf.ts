@@ -1,5 +1,5 @@
 import type jsPDF from "jspdf";
-import { amountInWords, hsnSummary, upiPaymentUri } from "@/lib/gst";
+import { amountInWords, hsnSummary, rateSummary, upiPaymentUri } from "@/lib/gst";
 import type { InvoiceRow, InvoiceItemRow, BranchRow } from "@/lib/sales";
 import { inr } from "@/lib/sales";
 import type { CompanyProfile } from "@/lib/companyProfile";
@@ -112,6 +112,17 @@ function normalizeCopies(copies: string[] | undefined, copyLabel: string | undef
   return ["ORIGINAL"];
 }
 
+// M6 fix: normalize mixed boolean / "Y"/"N" / "true"/"1" via single helper (case-insensitive, trims)
+export function normalizeYNFlag(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v === 1;
+  if (typeof v === "string") {
+    const s = v.trim().toUpperCase();
+    return s === "Y" || s === "YES" || s === "TRUE" || s === "1";
+  }
+  return false;
+}
+
 function isProvisionalInvoice(invoice: InvoiceRow): boolean {
   const anyInv = invoice as unknown as Record<string, unknown>;
   const td = anyInv["transport_details"] as Record<string, unknown> | null | undefined;
@@ -120,15 +131,37 @@ function isProvisionalInvoice(invoice: InvoiceRow): boolean {
     anyInv["eInvoiceRequired"] ??
     anyInv["e_invoice_reqd"] ??
     (td ? (td["e_invoice_reqd"] as string | undefined) : undefined);
-  let eRequired = false;
-  if (typeof eReqRaw === "boolean") eRequired = eReqRaw;
-  else if (typeof eReqRaw === "string") eRequired = eReqRaw === "Y" || eReqRaw === "true" || eReqRaw === "1";
-  // If flag not present, fall back: treat as not provisional (explicit opt-in only)
+  const eRequired = normalizeYNFlag(eReqRaw);
+  // If flag not present, treat as not provisional (explicit opt-in only)
   if (!eRequired) return false;
   const hasIrn = !!invoice.irn;
   const status = String(anyInv["einvoice_status"] || anyInv["einvoiceStatus"] || "").toLowerCase();
   const generated = status === "generated" || hasIrn;
   return !generated;
+}
+
+// ── pdf_hash helper: sha256 of actual PDF bytes (subtle crypto with fallback) ───────
+async function sha256HexFromBytes(bytes: Uint8Array): Promise<string> {
+  try {
+    const subtle = (globalThis.crypto as unknown as { subtle?: { digest: (alg: string, data: BufferSource) => Promise<ArrayBuffer> } })?.subtle;
+    if (subtle?.digest) {
+      const buf = await subtle.digest("SHA-256", bytes as BufferSource);
+      return Array.from(new Uint8Array(buf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+  } catch {
+    /* fallback below */
+  }
+  // Fallback: simple 32-bit hash over bytes (deterministic over bytes, not cryptographic)
+  let h = 0;
+  for (let i = 0; i < bytes.length; i++) h = (Math.imul(31, h) + bytes[i]) | 0;
+  return Math.abs(h).toString(16).padStart(8, "0");
+}
+
+export async function hashPdfDoc(doc: jsPDF): Promise<string> {
+  const ab = doc.output("arraybuffer") as ArrayBuffer;
+  return sha256HexFromBytes(new Uint8Array(ab));
 }
 
 function drawDiagonalWatermark(
@@ -213,6 +246,7 @@ async function renderOneCopyContent(
   QRCode: typeof import("qrcode"),
   autoTable: (doc: jsPDF, opts: unknown) => void,
   watermark: { isReprint: boolean; isProvisional: boolean; showWatermark: boolean },
+  companyCached: CompanyProfile,
 ) {
   const { invoice, items, branch } = args;
   const customer = args.customer;
@@ -225,8 +259,8 @@ async function renderOneCopyContent(
 
   doc.setDrawColor(tr, tg, tb).setLineWidth(0.6);
 
-  // ============ RESOLVE COMPANY (Company Master only; no branch/settings fallback) ============
-  const company = await getCompany();
+  // ============ RESOLVE COMPANY (cached per renderInvoiceCopies — do not call getCompany per copy) ============
+  const company = companyCached;
   console.log("HEADER DATA:", company);
   const companyName = company.name.toString();
   const companyAddress = company.regd_address.toString();
@@ -501,20 +535,18 @@ async function renderOneCopyContent(
   y += 36;
 
   // ============ TAX SUMMARY ROW ============
-  const rateGroups = new Map<number, { taxable: number; cgst: number; sgst: number; igst: number }>();
-  items.forEach((it) => {
-    const g = rateGroups.get(it.gst_rate) || { taxable: 0, cgst: 0, sgst: 0, igst: 0 };
-    g.taxable += it.taxable_value; g.cgst += it.cgst; g.sgst += it.sgst; g.igst += it.igst;
-    rateGroups.set(it.gst_rate, g);
-  });
+  // H15 fix: unified via gst.ts rateSummary (single source of truth, r2-rounded) instead of
+  // local Map duplication that drifted from hsnSummary rounding.
+  void hsnSummary; // keep import used (HSN annex available if template needs it)
+  const rateRows = rateSummary(items as unknown as Array<import("@/lib/gst").GstItemBreakup & { gst_rate: number }>);
   const rateHead = isInter
     ? [["Tax Rate", "Taxable Amt", "IGST Amt", "Total Tax"]]
     : [["Tax Rate", "Taxable Amt", "CGST Amt", "SGST Amt", "Total Tax"]];
-  const rateBody = Array.from(rateGroups.entries()).map(([rate, g]) => {
+  const rateBody = rateRows.map((g) => {
     const total = g.cgst + g.sgst + g.igst;
     return isInter
-      ? [rate.toFixed(2) + "%", g.taxable.toFixed(2), g.igst.toFixed(2), total.toFixed(2)]
-      : [rate.toFixed(2) + "%", g.taxable.toFixed(2), g.cgst.toFixed(2), g.sgst.toFixed(2), total.toFixed(2)];
+      ? [g.gst_rate.toFixed(2) + "%", g.taxable_value.toFixed(2), g.igst.toFixed(2), total.toFixed(2)]
+      : [g.gst_rate.toFixed(2) + "%", g.taxable_value.toFixed(2), g.cgst.toFixed(2), g.sgst.toFixed(2), total.toFixed(2)];
   });
   autoTable(doc, {
     startY: y,
@@ -721,14 +753,28 @@ export async function renderInvoiceCopies(args: RenderInvoiceCopiesArgs): Promis
 
   const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
 
+  // Cache company header once per bulk render — avoids N× getCompany() calls (H13).
+  // Prefer caller-provided company if present; otherwise fetch once.
+  const companyCached: CompanyProfile = args.company ?? (await getCompany());
+
+  // Sequential loop with await — concurrency limit 1 to bound memory/QR/signature I/O.
+  // Do NOT parallelize with Promise.all; increase only with explicit memory test.
   for (let idx = 0; idx < safeCopies.length; idx++) {
     if (idx > 0) doc.addPage();
     const label = safeCopies[idx] || args.copyLabel || "ORIGINAL";
-    await renderOneCopyContent(doc, args, label, QRCode, autoTable as unknown as (doc: jsPDF, opts: unknown) => void, {
-      isReprint,
-      isProvisional,
-      showWatermark,
-    });
+    await renderOneCopyContent(
+      doc,
+      args,
+      label,
+      QRCode,
+      autoTable as unknown as (doc: jsPDF, opts: unknown) => void,
+      {
+        isReprint,
+        isProvisional,
+        showWatermark,
+      },
+      companyCached,
+    );
   }
 
   return doc;
@@ -771,6 +817,7 @@ export async function downloadInvoicePdfBulk(
       const jszipMod: any = await import("jszip");
       const JSZip = jszipMod.default || jszipMod;
       const zip = new JSZip();
+      // Sequential per-copy render — concurrency limit 1 (await in loop); avoids OOM on many copies.
       for (const label of copies) {
         const singleDoc = await renderInvoiceCopies({ ...args, copies: [label] });
         const blob: Blob = singleDoc.output("blob") as unknown as Blob;
@@ -808,5 +855,7 @@ export async function printInvoicePdfBulk(args: RenderInvoiceCopiesArgs): Promis
   const doc = await renderInvoiceCopies(args);
   const url = doc.output("bloburl") as unknown as string;
   window.open(url, "_blank");
+  // Revoke blob URL after 60s to free memory (bloburl is createObjectURL-backed).
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 

@@ -42,12 +42,11 @@ export type InvoicePrintModalProps = {
 const BASE_COPIES = ["Original", "Duplicate", "Triplicate", "Office"] as const;
 type BaseCopy = (typeof BASE_COPIES)[number];
 
-async function sha256Hex(input: string): Promise<string> {
+async function sha256HexBytes(bytes: Uint8Array): Promise<string> {
   try {
-    const enc = new TextEncoder().encode(input);
     const subtle = (globalThis.crypto as unknown as { subtle?: { digest: (alg: string, d: BufferSource) => Promise<ArrayBuffer> } })?.subtle;
     if (subtle?.digest) {
-      const buf = await subtle.digest("SHA-256", enc);
+      const buf = await subtle.digest("SHA-256", bytes as BufferSource);
       return Array.from(new Uint8Array(buf))
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
@@ -56,8 +55,17 @@ async function sha256Hex(input: string): Promise<string> {
     /* fallback below */
   }
   let h = 0;
-  for (let i = 0; i < input.length; i++) h = (Math.imul(31, h) + input.charCodeAt(i)) | 0;
+  for (let i = 0; i < bytes.length; i++) h = (Math.imul(31, h) + bytes[i]) | 0;
   return Math.abs(h).toString(16).padStart(8, "0");
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  return sha256HexBytes(new TextEncoder().encode(input));
+}
+
+// Preferred: hash actual PDF bytes (arraybuffer) — caller should pass doc.output('arraybuffer')
+async function sha256HexPdfBytes(ab: ArrayBuffer): Promise<string> {
+  return sha256HexBytes(new Uint8Array(ab));
 }
 
 function formatFirstPrinted(iso?: string | null): string {

@@ -142,9 +142,18 @@ describe("gst/computeTotals — header discount apportionment (B-03)", () => {
   });
 
   it("apportionHeaderDiscount never discounts a line below zero", () => {
+    // H1 fix: discount > subtotal must throw; verify error and that capped redistribution never goes negative
+    expect(() =>
+      apportionHeaderDiscount(
+        [{ qty: 1, rate: 10, gst_rate: 0 }, { qty: 1, rate: 90, gst_rate: 0 }],
+        500,
+        false,
+      ),
+    ).toThrow(/exceeds subtotal/);
+    // valid discount at exactly subtotal should clamp and keep Σ paise correct without negative lines
     const out = apportionHeaderDiscount(
       [{ qty: 1, rate: 10, gst_rate: 0 }, { qty: 1, rate: 90, gst_rate: 0 }],
-      500,
+      100,
       false,
     );
     expect(out.every((b) => b.taxable_value >= 0)).toBe(true);
