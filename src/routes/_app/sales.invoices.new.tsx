@@ -267,10 +267,14 @@ function NewInvoice() {
     // Prevent duplicate serials across lines
     const allSerials = items.flatMap((it) => it.serial_numbers);
     if (new Set(allSerials).size !== allSerials.length) return toast.error("Duplicate serial numbers across lines");
-    if (gstinError) return toast.error(gstinError);
+    if (gstinError) {
+      if (status === "issued") return toast.error(gstinError);
+      toast.error(`${gstinError} — saving as Draft anyway, fix before Issue`);
+    }
     const buyerGstRawForChecksum = String((customer as any)?.gst ?? "").trim();
     if (buyerGstRawForChecksum && buyerGstRawForChecksum.toUpperCase() !== "URP" && !validateGSTINChecksum(buyerGstRawForChecksum)) {
-      return toast.error("Buyer GSTIN checksum invalid");
+      if (status === "issued") return toast.error("Buyer GSTIN checksum invalid — correct customer GSTIN before Issue (or save as Draft)");
+      toast.error("Buyer GSTIN checksum invalid — saving as Draft (fix GSTIN before Issue)");
     }
 
     // Non-serialized products: verify pooled availability before posting.
