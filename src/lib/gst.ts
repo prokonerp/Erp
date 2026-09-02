@@ -5,6 +5,25 @@
 
 import { GSTIN_REGEX, GSTIN_STATE_CODES } from "@/lib/india";
 
+// ── P1 Foundation — SalesType branching (docs §5.1, §7) ───────────────────
+export type SalesType =
+  | "local_itemwise"
+  | "local_multirate"
+  | "local_multirate_cons"
+  | "local_nil_rated"
+  | "local_tax_incl"
+  | "sez_taxable"
+  | "sez_zero_rated";
+
+export type SupplyClass = "nil" | "exempt" | "zero_rated" | null;
+
+export function getSupplyClass(salesType: SalesType | string | null | undefined): SupplyClass {
+  const st = String(salesType || "") as SalesType;
+  if (st === "local_nil_rated") return "nil";
+  if (st === "sez_zero_rated") return "zero_rated";
+  return null;
+}
+
 export type GstItemInput = {
   qty: number;
   rate: number;
@@ -58,15 +77,40 @@ export function stateNameFromCode(code: string | null | undefined): string | nul
 export function computeLine(
   item: GstItemInput,
   isInterstate: boolean,
+  salesType?: SalesType | string | null,
 ): GstItemBreakup {
+  const st = String(salesType || "") as SalesType;
+  // §5.1 branching: local_nil_rated → force gst 0; sez_taxable → force interstate; sez_zero_rated → force gst 0
+  const isNil = st === "local_nil_rated";
+  const isZeroRated = st === "sez_zero_rated";
+  const isTaxIncl = st === "local_tax_incl";
+  const isSezTaxable = st === "sez_taxable";
+  const effectiveInterstate = isSezTaxable ? true : isInterstate;
+  let gstRate = Number(item.gst_rate) || 0;
+  let cessRate = Number(item.cess_rate) || 0;
+  if (isNil || isZeroRated) {
+    gstRate = 0;
+    cessRate = 0;
+  }
+
   const gross = (Number(item.qty) || 0) * (Number(item.rate) || 0);
   const discAmt = gross * (Number(item.discount_pct) || 0) / 100;
-  const taxable = r2(gross - discAmt);
-  const gstAmt = r2(taxable * (Number(item.gst_rate) || 0) / 100);
-  const cess = r2(taxable * (Number(item.cess_rate) || 0) / 100);
-  const cgst = isInterstate ? 0 : r2(gstAmt / 2);
-  const sgst = isInterstate ? 0 : r2(gstAmt - cgst);
-  const igst = isInterstate ? gstAmt : 0;
+  const netGross = gross - discAmt;
+
+  let taxable: number;
+  if (isTaxIncl) {
+    // back-calc: taxable = r2(gross*100/(100+gst_rate)) — spec §7 / Table 7
+    // Apply on netGross (after discount) so discount on inclusive price is correct
+    taxable = gstRate === 0 ? r2(netGross) : r2((netGross * 100) / (100 + gstRate));
+  } else {
+    taxable = r2(netGross);
+  }
+
+  const gstAmt = r2(taxable * gstRate / 100);
+  const cess = r2(taxable * cessRate / 100);
+  const cgst = effectiveInterstate ? 0 : r2(gstAmt / 2);
+  const sgst = effectiveInterstate ? 0 : r2(gstAmt - cgst);
+  const igst = effectiveInterstate ? gstAmt : 0;
   return {
     taxable_value: taxable,
     cgst,
@@ -94,8 +138,9 @@ export function apportionHeaderDiscount(
   items: GstItemInput[],
   headerDiscount: number,
   isInterstate: boolean,
+  salesType?: SalesType | string | null,
 ): GstItemBreakup[] {
-  const breakups = items.map((it) => computeLine(it, isInterstate));
+  const breakups = items.map((it) => computeLine(it, isInterstate, salesType));
   const disc = r2(Number(headerDiscount) || 0);
   if (disc <= 0) return breakups;
   const subtotal = r2(breakups.reduce((s, b) => s + b.taxable_value, 0));
@@ -122,12 +167,18 @@ export function apportionHeaderDiscount(
   }
 
   return breakups.map((b, i) => {
+    const st = String(salesType || "") as SalesType;
+    const isZero = st === "local_nil_rated" || st === "sez_zero_rated";
+    let gstRate = Number(items[i].gst_rate) || 0;
+    let cessRate = Number(items[i].cess_rate) || 0;
+    if (isZero) { gstRate = 0; cessRate = 0; }
     const taxable = r2(b.taxable_value - paise[i] / 100);
-    const gstAmt = r2((taxable * (Number(items[i].gst_rate) || 0)) / 100);
-    const cessAmt = r2((taxable * (Number(items[i].cess_rate) || 0)) / 100);
-    const cgst = isInterstate ? 0 : r2(gstAmt / 2);
-    const sgst = isInterstate ? 0 : r2(gstAmt - cgst);
-    const igst = isInterstate ? gstAmt : 0;
+    const gstAmt = r2((taxable * gstRate) / 100);
+    const cessAmt = r2((taxable * cessRate) / 100);
+    const effInter = st === "sez_taxable" ? true : isInterstate;
+    const cgst = effInter ? 0 : r2(gstAmt / 2);
+    const sgst = effInter ? 0 : r2(gstAmt - cgst);
+    const igst = effInter ? gstAmt : 0;
     return {
       taxable_value: taxable,
       cgst,
@@ -146,20 +197,24 @@ export function computeTotals(args: {
   headerDiscount?: number;
   roundOff?: boolean;
   placeOfSupplyStateCode?: string | null | undefined;
+  salesType?: SalesType | string | null;
 }): GstTotals {
   const buyerCode = args.buyerStateCode || args.placeOfSupplyStateCode || null;
   const missingState = !buyerCode;
-  const isInterstate =
+  const rawInterstate =
     !!args.sellerStateCode && !!buyerCode && args.sellerStateCode !== buyerCode;
+  // §5.1: sez_taxable forces IGST regardless of state; sez_zero_rated also interstate but rate 0
+  const st = String(args.salesType || "") as SalesType;
+  const isInterstate = st === "sez_taxable" || st === "sez_zero_rated" ? true : rawInterstate;
   // B-03: a header-level discount must be pushed into the line breakups so
   // that Σ(line.taxable_value) equals the invoice-level taxable value and
   // GST is computed on the post-discount amount. Without this, stored
   // invoice_items disagree with the invoice header (GSTR-1 mismatch).
   const headerDisc = r2(Number(args.headerDiscount) || 0);
-  const preDiscountBreakups = args.items.map((it) => computeLine(it, isInterstate));
+  const preDiscountBreakups = args.items.map((it) => computeLine(it, isInterstate, args.salesType));
   const breakups =
     headerDisc > 0
-      ? apportionHeaderDiscount(args.items, headerDisc, isInterstate)
+      ? apportionHeaderDiscount(args.items, headerDisc, isInterstate, args.salesType)
       : preDiscountBreakups;
   const subtotal = r2(preDiscountBreakups.reduce((s, b) => s + b.taxable_value, 0));
   // When neither a buyer state nor a place of supply is known we must NOT

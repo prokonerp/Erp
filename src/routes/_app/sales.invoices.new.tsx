@@ -39,6 +39,16 @@ import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } fr
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 import { GDC_PREFILL_KEY, updateGeneralDc, type GeneralDcInvoicePrefill } from "@/lib/generalDc";
 import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
+import { SALES_TYPE_META, type SalesType, getSupplyClassForSalesType } from "@/lib/sales";
+import TransportDetailsModal from "@/components/TransportDetailsModal";
+import {
+  DEFAULT_TRANSPORT,
+  type TransportDetails,
+  computeEInvoiceRequired,
+  computeEWayRequired,
+  computeTransactionType,
+} from "@/lib/transport";
+import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_app/sales/invoices/new")({
   component: NewInvoice,
@@ -79,6 +89,11 @@ function NewInvoice() {
   // Prefill coming from an issued General Delivery Challan — stock was already
   // reduced on Issue, so the invoice must NOT deduct it a second time.
   const [fromGeneralDc, setFromGeneralDc] = useState<{ id: string; no: string | null } | null>(null);
+  // ── P1 SalesType + Transport (staged) ──────────────────────────────────
+  const [salesType, setSalesType] = useState<SalesType>("local_itemwise");
+  const [lutNo, setLutNo] = useState("");
+  const [transportDetails, setTransportDetails] = useState<TransportDetails>(DEFAULT_TRANSPORT);
+  const [transportOpen, setTransportOpen] = useState(false);
 
   useEffect(() => {
     let raw: string | null = null;
@@ -166,9 +181,22 @@ function NewInvoice() {
         items: items.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate })),
         headerDiscount,
         roundOff: true,
+        salesType,
       }),
-    [items, sellerCode, buyerCode, headerDiscount],
+    [items, sellerCode, buyerCode, headerDiscount, salesType],
   );
+
+  // Keep transport_details transaction_type / e_invoice_reqd in sync with branch+customer+salesType
+  useEffect(() => {
+    const buyerGst = (customer as any)?.gst ?? null;
+    const sellerGst = branch?.gstin ?? null;
+    const nextTx = computeTransactionType(salesType, totals.is_interstate, buyerGst);
+    const nextEInv = computeEInvoiceRequired(sellerGst, buyerGst);
+    setTransportDetails((prev) => {
+      if (prev.transaction_type === nextTx && prev.e_invoice_reqd === nextEInv) return prev;
+      return { ...prev, transaction_type: nextTx, e_invoice_reqd: nextEInv };
+    });
+  }, [salesType, customer, branch, totals.is_interstate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function setItem(idx: number, patch: Partial<ItemDraft>) {
     setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -178,6 +206,7 @@ function NewInvoice() {
     if (!branchId) return toast.error("Choose a branch (seller)");
     if (!branch?.gstin) return toast.error("Selected branch has no GSTIN — set it in Sales → Settings");
     if (!customer) return toast.error("Choose a customer");
+    if (salesType === "sez_zero_rated" && !lutNo.trim()) return toast.error("LUT No. is required for SEZ Zero Rated (SEZWOP)");
     if (items.length === 0 || items.some((it) => !it.description.trim())) return toast.error("Every line needs a description");
     if (items.some((it) => Number(it.gst_rate) > 0 && !it.hsn.trim())) return toast.error("HSN code is mandatory when GST > 0");
     for (let i = 0; i < items.length; i++) {
@@ -268,6 +297,7 @@ function NewInvoice() {
         }
       }
       const company = await getCompany();
+      const meta = SALES_TYPE_META[salesType];
       const invoicePayload: any = {
         invoice_date: invoiceDate,
         due_date: dueDate || null,
@@ -289,6 +319,16 @@ function NewInvoice() {
         place_of_supply: buyerState,
         place_of_supply_code: buyerCode,
         is_interstate: totals.is_interstate,
+        // ── P1 SalesType branching ──────────────────────────────────
+        sales_type: salesType,
+        is_tax_inclusive: meta.isTaxInclusive,
+        supply_class: meta.supplyClass,
+        lut_no: salesType === "sez_zero_rated" ? (lutNo.trim() || null) : null,
+        transport_details: transportDetails as any,
+        e_invoice_required: computeEInvoiceRequired(company.gstin || branch.gstin, customer.gst) === "Y" || transportDetails.e_invoice_reqd === "Y",
+        e_way_required: computeEWayRequired(totals.total, transportDetails.e_way_reqd),
+        einvoice_status: (computeEInvoiceRequired(company.gstin || branch.gstin, customer.gst) === "Y" || transportDetails.e_invoice_reqd === "Y") ? "pending" : "not_required",
+        eway_status: computeEWayRequired(totals.total, transportDetails.e_way_reqd) ? "pending" : "not_required",
         subtotal: totals.subtotal,
         discount: totals.discount,
         taxable_value: totals.taxable_value,
@@ -473,23 +513,100 @@ function NewInvoice() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">GST Determination</CardTitle></CardHeader>
-          <CardContent className="text-sm space-y-2">
-            <div className="flex justify-between"><span className="text-muted-foreground">Seller State</span><span>{sellerState || "—"} {sellerCode && `(${sellerCode})`}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Buyer State</span><span>{buyerState || "—"} {buyerCode && `(${buyerCode})`}</span></div>
-            <div className="pt-2 border-t">
-              {totals.is_interstate ? (
-                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">Inter-state supply — IGST applies</span>
-              ) : sellerCode && buyerCode ? (
-                <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-medium">Intra-state supply — CGST + SGST</span>
-              ) : (
-                <span className="text-xs text-muted-foreground">Pick branch and customer to determine tax type.</span>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Sales Type</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <select
+                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                value={salesType}
+                onChange={(e) => {
+                  const v = e.target.value as SalesType;
+                  setSalesType(v);
+                  markDirty();
+                }}
+              >
+                {Object.entries(SALES_TYPE_META).map(([key, meta]) => (
+                  <option key={key} value={key}>{meta.label} — {meta.gstrBucket}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {SALES_TYPE_META[salesType].gstrBucket}
+                {SALES_TYPE_META[salesType].isTaxInclusive ? " · Tax Inclusive" : ""}
+                {SALES_TYPE_META[salesType].supplyClass ? ` · ${SALES_TYPE_META[salesType].supplyClass}` : ""}
+              </p>
+              {salesType === "sez_zero_rated" && (
+                <div className="space-y-1">
+                  <Label className="text-xs">LUT No. *</Label>
+                  <Input
+                    value={lutNo}
+                    onChange={(e) => setLutNo(e.target.value)}
+                    placeholder="LUT/2025-26/001 — required for SEZ Zero Rated"
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Required for SEZWOP — shown on GST JSON & PDF.</p>
+                </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">GST Determination</CardTitle></CardHeader>
+            <CardContent className="text-sm space-y-2">
+              <div className="flex justify-between"><span className="text-muted-foreground">Seller State</span><span>{sellerState || "—"} {sellerCode && `(${sellerCode})`}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Buyer State</span><span>{buyerState || "—"} {buyerCode && `(${buyerCode})`}</span></div>
+              <div className="pt-2 border-t">
+                {totals.is_interstate ? (
+                  <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">Inter-state supply — IGST applies</span>
+                ) : sellerCode && buyerCode ? (
+                  <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-medium">Intra-state supply — CGST + SGST</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Pick branch and customer to determine tax type.</span>
+                )}
+              </div>
+              {SALES_TYPE_META[salesType].supplyClass && (
+                <div className="text-xs text-muted-foreground">Supply Class: <span className="font-medium text-foreground">{SALES_TYPE_META[salesType].supplyClass}</span> · {SALES_TYPE_META[salesType].gstrBucket}</div>
+              )}
+              {SALES_TYPE_META[salesType].isTaxInclusive && (
+                <div className="text-xs text-amber-700">Tax Inclusive — MRP back-calc active.</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Transport &amp; Dispatch</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => setTransportOpen(true)}>Edit</Button>
+        </CardHeader>
+        <CardContent className="text-sm space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <div className="text-xs text-muted-foreground">Transport Mode</div>
+              <div className="font-medium">{transportDetails.transport_mode} / {transportDetails.mode_of_transport}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Vehicle No</div>
+              <div className="font-mono text-xs">{transportDetails.vehicle_no || "—"}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Station / To Place</div>
+              <div className="truncate">{transportDetails.station_to_place || "—"}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Distance</div>
+              <div>{transportDetails.distance_km != null ? `${transportDetails.distance_km} km` : "—"}</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <Badge variant={transportDetails.e_invoice_reqd === "Y" ? "default" : "secondary"}>e-Invoice {transportDetails.e_invoice_reqd}</Badge>
+            <Badge variant={transportDetails.e_way_reqd === "Y" ? "default" : "secondary"}>e-Way {transportDetails.e_way_reqd}</Badge>
+            {transportDetails.gr_rr_no && <span className="text-xs text-muted-foreground">GR/RR: <span className="font-mono text-foreground">{transportDetails.gr_rr_no}</span></span>}
+            {transportDetails.transporter_name && <span className="text-xs text-muted-foreground truncate">Transporter: <span className="font-medium text-foreground">{transportDetails.transporter_name}</span></span>}
+          </div>
+          <p className="text-[11px] text-muted-foreground">Stored as <span className="font-mono">transport_details</span> JSONB — edit via TransportDetailsModal (F2-Done, F4-Pick from DB).</p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
@@ -699,6 +816,16 @@ function NewInvoice() {
             })),
           ]);
         }}
+      />
+
+      <TransportDetailsModal
+        open={transportOpen}
+        onOpenChange={setTransportOpen}
+        value={transportDetails}
+        onSave={(v) => { setTransportDetails(v); markDirty(); }}
+        billAmt={totals.total}
+        taxableAmt={totals.taxable_value}
+        taxAmt={totals.cgst + totals.sgst + totals.igst}
       />
     </div>
   );

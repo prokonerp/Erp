@@ -2,15 +2,18 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Receipt, Wallet, Truck, FileText, IndianRupee, AlertCircle, CheckCircle2, Clock,
-  TrendingUp, ShoppingCart, ArrowRightLeft, Activity, RotateCcw, PackageCheck,
+  TrendingUp, ShoppingCart, ArrowRightLeft, Activity, RotateCcw, PackageCheck, ShieldCheck,
 } from "lucide-react";
 import { inr, statusMeta, fetchBranches, type InvoiceRow, type BranchRow } from "@/lib/sales";
+import { isValidGSTIN } from "@/lib/gst";
 import { istTodayIso, daysAgoIst } from "@/lib/dateRange";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 
@@ -25,7 +28,7 @@ export const Route = createFileRoute("/_app/sales/")({
 
 type QuoteRow = { id: string; status: string; salesperson: string | null; branch_id: string | null; total: number | null; quote_date: string | null; customer_id: string | null };
 type SoRow = { id: string; status: string; salesperson: string | null; branch_id: string | null; total: number | null; so_date: string | null; customer_id: string | null; linked_quote_id: string | null };
-type InvSlim = { id: string; status: string; total: number | null; total_paid: number | null; invoice_date: string | null; branch_id: string | null; buyer_name: string | null; buyer_state: string | null; customer_id: string | null; sales_order_id: string | null };
+type InvSlim = { id: string; status: string; total: number | null; total_paid: number | null; invoice_date: string | null; branch_id: string | null; buyer_name: string | null; buyer_state: string | null; buyer_gstin: string | null; customer_id: string | null; sales_order_id: string | null; einvoice_status: string | null; eway_status: string | null; transport_details: unknown | null };
 type ItemSlim = { description: string | null; qty: number | null; line_total: number | null; invoice_id: string };
 
 const todayIso = () => istTodayIso();
@@ -83,7 +86,7 @@ function HeadSalesDashboard() {
       const [qRes, sRes, iRes, outRes, trendRes, recRes] = await Promise.all([
         supabase.from("quotations").select("id,status,salesperson,branch_id,total,quote_date,customer_id").gte("quote_date", from).lte("quote_date", to).limit(2000),
         supabase.from("sales_orders" as never).select("id,status,salesperson,branch_id,total,so_date,customer_id,linked_quote_id").gte("so_date", from).lte("so_date", to).limit(2000),
-        supabase.from("invoices").select("id,status,total,total_paid,invoice_date,branch_id,buyer_name,buyer_state,customer_id,sales_order_id").gte("invoice_date", from).lte("invoice_date", to).neq("status", "cancelled").limit(2000),
+        supabase.from("invoices").select("id,status,total,total_paid,invoice_date,branch_id,buyer_name,buyer_state,buyer_gstin,customer_id,sales_order_id,einvoice_status,eway_status,transport_details").gte("invoice_date", from).lte("invoice_date", to).neq("status", "cancelled").limit(2000),
         supabase.from("invoices").select("total,total_paid").in("status", ["issued", "partial"]).limit(5000),
         supabase.from("invoices").select("invoice_date,total").gte("invoice_date", trendFrom).neq("status", "cancelled").limit(5000),
         supabase.from("invoices").select("*").order("created_at", { ascending: false }).limit(8),
@@ -92,7 +95,7 @@ function HeadSalesDashboard() {
 
       const qs = (qRes.data ?? []) as QuoteRow[];
       const so = (sRes.data ?? []) as unknown as SoRow[];
-      const inv = (iRes.data ?? []) as InvSlim[];
+      const inv = (iRes.data ?? []) as unknown as InvSlim[];
 
       // Batch item fetch — single query keyed on filtered invoice ids.
       let it: ItemSlim[] = [];
@@ -205,6 +208,42 @@ function HeadSalesDashboard() {
 
   const monthlySeries = useMemo(() => monthly.map((m) => ({ month: monthLabel(m.ym), total: m.total })), [monthly]);
 
+  // ── §12 P5 Compliance KPI — IRN / E-Way / Complete ──────────────────────
+  // Derived per invoice:
+  //   e_invoice_required = transport_details.e_invoice_reqd==="Y" ? true : transport_details.e_invoice_reqd==="N" ? false : isValidGSTIN(branch.gstin) && isValidGSTIN(buyer_gstin)
+  //   e_way_required     = transport_details.e_way_reqd==="Y" ? true : Number(total) >= 50000
+  //   irn_pending  when e_invoice_required && einvoice_status !== "generated"
+  //   eway_pending when e_way_required     && eway_status     !== "generated"
+  //   complete     when (!eInvReq || generated) && (!eWayReq || generated)
+  const compliance = useMemo(() => {
+    const branchMap = new Map<string, string | null>(branches.map((b) => [b.id, b.gstin ?? null]));
+    let irnPending = 0;
+    let ewayPending = 0;
+    let complete = 0;
+    for (const inv of fi) {
+      const branchGstin = inv.branch_id ? (branchMap.get(inv.branch_id) ?? null) : null;
+      const td = inv.transport_details as { e_invoice_reqd?: string | null; e_way_reqd?: string | null } | null;
+      let eInvReq: boolean;
+      if (td?.e_invoice_reqd === "Y") eInvReq = true;
+      else if (td?.e_invoice_reqd === "N") eInvReq = false;
+      else eInvReq = isValidGSTIN(branchGstin) && isValidGSTIN(inv.buyer_gstin);
+      let eWayReq: boolean;
+      if (td?.e_way_reqd === "Y") eWayReq = true;
+      else eWayReq = Number(inv.total ?? 0) >= 50000;
+
+      const eInvStatus = String(inv.einvoice_status ?? "pending").toLowerCase();
+      const eWayStatus = String(inv.eway_status ?? "not_required").toLowerCase();
+      const hasIrn = eInvStatus === "generated";
+      const hasEwb = eWayStatus === "generated";
+
+      if (eInvReq && !hasIrn) irnPending += 1;
+      if (eWayReq && !hasEwb) ewayPending += 1;
+      if ((!eInvReq || hasIrn) && (!eWayReq || hasEwb)) complete += 1;
+    }
+    const total = fi.length;
+    return { irnPending, ewayPending, complete, total };
+  }, [fi, branches]);
+
   const resetFilters = () => { setFrom(daysAgoIso(90)); setTo(todayIso()); setBranchId("all"); setSalesperson("all"); setRegion("all"); };
   const winRate = pipeline.total ? (pipeline.won / pipeline.total) * 100 : 0;
 
@@ -286,6 +325,84 @@ function HeadSalesDashboard() {
           <Kpi icon={ShoppingCart} label="Sales Orders" value={loading ? "…" : fso.length.toLocaleString("en-IN")} />
         </div>
       </div>
+
+      {/* §12 P5 Compliance KPI — IRN / E-Way / Complete */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" /> Compliance — e-Invoice &amp; e-Way
+            <span className="ml-auto text-xs font-normal text-muted-foreground">
+              {loading ? "…" : `${compliance.total} invoices in range`}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-lg border bg-amber-500/5 border-amber-200 dark:border-amber-900/30 p-3 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">IRN Pending</span>
+                <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200">amber</Badge>
+              </div>
+              <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">{loading ? "…" : compliance.irnPending.toLocaleString("en-IN")}</div>
+              <div className="text-[11px] leading-tight text-muted-foreground">einvoice_status ∈ pending / json_ready / uploaded (not generated) where e-Invoice required</div>
+            </div>
+            <div className="rounded-lg border bg-sky-500/5 border-sky-200 dark:border-sky-900/30 p-3 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">E-Way Pending</span>
+                <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100 border-sky-200 dark:bg-sky-900/30 dark:text-sky-200">blue</Badge>
+              </div>
+              <div className="text-2xl font-bold text-sky-700 dark:text-sky-300">{loading ? "…" : compliance.ewayPending.toLocaleString("en-IN")}</div>
+              <div className="text-[11px] leading-tight text-muted-foreground">eway_status ≠ generated where e-Way required (total ≥ ₹50k or e_way_reqd=Y)</div>
+            </div>
+            <div className="rounded-lg border bg-emerald-500/5 border-emerald-200 dark:border-emerald-900/30 p-3 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Complete</span>
+                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200">green</Badge>
+              </div>
+              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{loading ? "…" : compliance.complete.toLocaleString("en-IN")}</div>
+              <div className="text-[11px] leading-tight text-muted-foreground">(!eInvReq || generated) &amp;&amp; (!eWayReq || generated) — ready to print final</div>
+            </div>
+          </div>
+          <Separator />
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-medium">Derived rules:</span>
+            <Badge variant="outline" className="text-[11px]">e-Invoice req: isValidGSTIN(branch.gstin) &amp;&amp; isValidGSTIN(buyer_gstin) || transport e_invoice_reqd=Y</Badge>
+            <Badge variant="outline" className="text-[11px]">e-Way req: total ≥ ₹50,000 || e_way_reqd=Y</Badge>
+            <span className="ml-auto text-[11px] opacity-60">Source: invoices (einvoice_status / eway_status / transport_details)</span>
+          </div>
+          {/* Mini table — pending breakdown by status */}
+          {!loading && compliance.total > 0 && (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/50 text-muted-foreground">
+                  <tr>
+                    <th className="text-left p-2 font-medium">Metric</th>
+                    <th className="text-right p-2 font-medium">Count</th>
+                    <th className="text-left p-2 font-medium">Badge</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t">
+                    <td className="p-2">IRN Pending</td>
+                    <td className="p-2 text-right font-mono">{compliance.irnPending}</td>
+                    <td className="p-2"><Badge className="bg-amber-500 hover:bg-amber-600 text-white border-transparent text-[10px]">pending</Badge></td>
+                  </tr>
+                  <tr className="border-t">
+                    <td className="p-2">E-Way Pending</td>
+                    <td className="p-2 text-right font-mono">{compliance.ewayPending}</td>
+                    <td className="p-2"><Badge className="bg-sky-500 hover:bg-sky-600 text-white border-transparent text-[10px]">pending</Badge></td>
+                  </tr>
+                  <tr className="border-t bg-emerald-500/5">
+                    <td className="p-2 font-medium">Complete</td>
+                    <td className="p-2 text-right font-mono font-medium">{compliance.complete}</td>
+                    <td className="p-2"><Badge className="bg-emerald-500 hover:bg-emerald-600 text-white border-transparent text-[10px]">complete</Badge></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Suspense fallback={<div className="h-64 animate-pulse bg-muted rounded-lg" />}>
         <SalesDashboardCharts loading={loading} monthlySeries={monthlySeries} topCustomers={topCustomers} topProducts={topProducts} />

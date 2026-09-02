@@ -206,6 +206,7 @@ function SalesSettings() {
                 <option>Triplicate Copy</option>
                 <option>Office Copy</option>
               </select>
+              <p className="text-[11px] text-muted-foreground mt-1">Default for new invoices only — per-print choice overrides</p>
             </div>
             <div className="md:col-span-2 flex gap-2">
               {["#000000", "#1f3864", "#7c2d12", "#065f46", "#7c3aed", "#b91c1c"].map((c) => (
