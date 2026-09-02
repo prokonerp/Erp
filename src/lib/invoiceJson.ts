@@ -497,17 +497,21 @@ export function buildGstInvoiceJson(
   if (!docDt) throw new Error(`buildGstInvoiceJson: invalid invoice_date '${invoice.invoice_date}' — expected YYYY-MM-DD`);
 
   // Seller — H11: branch nullable guard + robust pin/loc fallback
+  // Lenient: emit raw GSTIN even if checksum fails (portal will validate), only throw if completely missing
   const sellerGstinRawFallback = branch?.gstin || invoice.seller_gstin || null;
   if (!branch && !sellerGstinRawFallback) {
     throw new Error("buildGstInvoiceJson: branch is required — seller_gstin missing and no branch to fallback");
   }
-  const sellerGstin = normalizeGstin(sellerGstinRawFallback);
-  if (!sellerGstin && !branch?.gstin && !invoice.seller_gstin) {
-    throw new Error("buildGstInvoiceJson: seller GSTIN is required — provide branch.gstin or invoice.seller_gstin with valid checksum");
+  const sellerGstinRawUpper = sellerGstinRawFallback ? String(sellerGstinRawFallback).trim().toUpperCase() : null;
+  const sellerGstinNorm = sellerGstinRawUpper ? normalizeGstin(sellerGstinRawUpper) : null;
+  // Use normalized if valid, otherwise raw upper (lenient) so portal gives clear error, not silent URP/null
+  const sellerGstin = sellerGstinNorm || sellerGstinRawUpper || null;
+  if (!sellerGstin) {
+    throw new Error("buildGstInvoiceJson: seller GSTIN is required — provide branch.gstin or invoice.seller_gstin");
   }
-  // H11: still enforce seller GSTIN exists for e-invoice; if branch missing and checksum fails, error
-  if (!branch && sellerGstinRawFallback && !sellerGstin) {
-    throw new Error(`buildGstInvoiceJson: seller_gstin '${String(sellerGstinRawFallback).trim()}' fails checksum validation`);
+  // No longer throw on checksum fail for seller — emit raw and let NIC validate (warn in UI)
+  if (sellerGstinRawUpper && sellerGstinRawUpper !== "URP" && !sellerGstinNorm) {
+    console.warn(`[invoiceJson] seller_gstin '${sellerGstinRawUpper}' fails checksum — emitting raw for portal validation`);
   }
   const sellerStateCode =
     stateCodeFromGSTINLocal(sellerGstin) ||
@@ -519,16 +523,21 @@ export function buildGstInvoiceJson(
   const sellerLocRaw = locFromAddress(sellerAddrRaw, invoice.seller_state || branch?.state_name || null);
   const sellerLoc = sellerLocRaw || trimStr(invoice.seller_state || branch?.state_name || "", 50) || "";
 
-  // Buyer — H5: unified URP sentinel + checksum gate
+  // Buyer — H5: unified URP sentinel + lenient checksum (emit raw even if bad checksum)
   const buyerGstinRaw = trimStr(invoice.buyer_gstin || customer?.gst || "", 15);
   const buyerGstinTrimUpper = buyerGstinRaw ? buyerGstinRaw.trim().toUpperCase() : "";
   const isBuyerUrp = buyerGstinTrimUpper === "URP" || !buyerGstinTrimUpper;
   const buyerGstinNorm = isBuyerUrp ? null : normalizeGstin(buyerGstinRaw);
-  const buyerGstin = buyerGstinNorm;
-  // H5: checksum-gated — only checksum-valid GSTIN is B2B, else URP/B2C
-  const buyerHasGstin = !!buyerGstin && validateGSTINChecksum(buyerGstin);
-  // H5: unify URP — both builders emit "URP" for B2C (not null)
+  // Lenient: if raw passes format (normalize succeeded) emit it even if checksum fails — portal will error clearly
+  // Only fallback to URP when raw is empty/URP or format invalid (normalize null)
+  const buyerHasGstinRaw = !!buyerGstinTrimUpper && buyerGstinTrimUpper !== "URP";
+  const buyerGstin: string | null = buyerGstinNorm || (buyerHasGstinRaw && /^[0-9]{2}[A-Z0-9]{13}$/.test(buyerGstinTrimUpper) ? buyerGstinTrimUpper : null);
+  const buyerHasGstin = !!buyerGstin && buyerGstin !== "URP";
+  // H5: unify URP — both builders emit "URP" for B2C (not null), but now also emit raw invalid for portal validation
   const buyerGstinForJson: string = buyerHasGstin ? (buyerGstin as string) : "URP";
+  if (buyerHasGstin && buyerGstinForJson !== "URP" && !validateGSTINChecksum(buyerGstinForJson)) {
+    console.warn(`[invoiceJson] buyer_gstin '${buyerGstinForJson}' fails checksum — emitting raw for portal validation`);
+  }
   const buyerStateCode =
     stateCodeFromGSTINLocal(buyerHasGstin ? buyerGstin : null) ||
     trimStr(invoice.buyer_state_code || invoice.place_of_supply_code || null, 2) ||
@@ -808,14 +817,15 @@ export function buildEwayJson(
   const docDate = gstDateDDMMYYYY(invoice.invoice_date);
   if (!docDate) throw new Error(`buildEwayJson: invalid invoice_date '${invoice.invoice_date}'`);
 
-  // H11: branch is not passed to E-Way builder — invoice.seller_gstin must be present + checksum-valid
+  // H11: branch is not passed to E-Way builder — invoice.seller_gstin should be present; lenient on checksum
   const sellerGstinRawEway = trimStr((invoice as any).seller_gstin || "", 15);
   if (!sellerGstinRawEway) {
     throw new Error("buildEwayJson: seller_gstin is required — invoice.seller_gstin missing (branch GSTIN should be copied to invoice.seller_gstin)");
   }
-  const sellerGstin = normalizeGstin(sellerGstinRawEway);
-  if (!sellerGstin) {
-    throw new Error(`buildEwayJson: seller_gstin '${sellerGstinRawEway}' fails checksum validation`);
+  const sellerGstinNormEway = normalizeGstin(sellerGstinRawEway);
+  const sellerGstin = sellerGstinNormEway || sellerGstinRawEway.toUpperCase();
+  if (sellerGstin.toUpperCase() !== "URP" && !validateGSTINChecksum(sellerGstin) && sellerGstinNormEway === null) {
+    console.warn(`[eway] seller_gstin '${sellerGstinRawEway}' fails checksum — emitting raw for portal validation`);
   }
   const sellerName = trimStr(invoice.seller_name || "Seller", 100);
   const sellerAddrRaw = invoice.seller_address || "";
