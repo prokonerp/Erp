@@ -47,6 +47,7 @@ import {
   type TransportDetails,
   computeEInvoiceRequired,
   computeEWayRequired,
+  computeEWayRequiredYN,
   computeTransactionType,
 } from "@/lib/transport";
 import { Badge } from "@/components/ui/badge";
@@ -220,17 +221,20 @@ function NewInvoice() {
     });
   }, [isNilOrExempt]);
 
-  // Keep transport_details transaction_type / e_invoice_reqd in sync with branch+customer+salesType
+  // Keep transport_details transaction_type / e_invoice_reqd / e_way_reqd in sync with branch+customer+salesType+total
+  // e_way_reqd null = AUTO (threshold ≥50000); explicit Y/N overrides threshold (H2) but default null lets threshold win
   useEffect(() => {
     const buyerGst = (customer as any)?.gst ?? null;
     const sellerGst = branch?.gstin ?? null;
     const nextTx = computeTransactionType(salesType, totals.is_interstate, buyerGst);
     const nextEInv = computeEInvoiceRequired(sellerGst, buyerGst);
+    const nextEWayAuto = computeEWayRequiredYN(totals.total, null);
     setTransportDetails((prev) => {
-      if (prev.transaction_type === nextTx && prev.e_invoice_reqd === nextEInv) return prev;
-      return { ...prev, transaction_type: nextTx, e_invoice_reqd: nextEInv };
+      const derivedEWay = prev.e_way_reqd == null ? nextEWayAuto : prev.e_way_reqd;
+      if (prev.transaction_type === nextTx && prev.e_invoice_reqd === nextEInv && prev.e_way_reqd === derivedEWay) return prev;
+      return { ...prev, transaction_type: nextTx, e_invoice_reqd: nextEInv, e_way_reqd: derivedEWay };
     });
-  }, [salesType, customer, branch, totals.is_interstate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [salesType, customer, branch, totals.is_interstate, totals.total]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function setItem(idx: number, patch: Partial<ItemDraft>) {
     setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)));

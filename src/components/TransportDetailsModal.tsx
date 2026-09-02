@@ -668,7 +668,7 @@ export default function TransportDetailsModal({
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">E-Way Reqd (Y/N)</Label>
               <Select
-                value={draft.e_way_reqd}
+                value={draft.e_way_reqd ?? undefined}
                 onValueChange={(v) => setField("e_way_reqd", v as "Y" | "N")}
               >
                 <SelectTrigger className="bg-white">

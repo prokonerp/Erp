@@ -52,7 +52,7 @@ export type TransportDetails = {
   transaction_type: TransactionType; // auto from sales_type
 
   e_invoice_reqd: "Y" | "N"; // auto B2B? Y:N (editable)
-  e_way_reqd: "Y" | "N"; // auto total>=50000? Y:N (editable)
+  e_way_reqd: "Y" | "N" | null; // auto total>=50000? Y:N (editable) — null = AUTO via threshold
   generate_eway_within_einvoice: boolean; // checkbox → embed EwbDtls
   update_port_address: string | null; // Export/SEZ utility
 
@@ -84,7 +84,7 @@ export const DEFAULT_TRANSPORT: TransportDetails = {
   sub_type: "Supply",
   transaction_type: "B2B",
   e_invoice_reqd: "N",
-  e_way_reqd: "N",
+  e_way_reqd: null,
   generate_eway_within_einvoice: false,
   update_port_address: null,
   dispatch_details: null,
