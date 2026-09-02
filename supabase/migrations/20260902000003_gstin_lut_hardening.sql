@@ -17,7 +17,7 @@ language plpgsql immutable as $$
 declare
   s text;
   charset text := '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  factor int := 2;
+  factor int := 1; -- NIC GSTIN mod-36: start factor 1 (alternate 1↔2)
   sumv int := 0;
   i int;
   ch text;

@@ -65,7 +65,7 @@ function gstinCharValue(ch: string): number {
 export function gstinChecksumChar(gstin14: string): string | null {
   const s = gstin14.trim().toUpperCase();
   if (s.length !== 14) return null;
-  let factor = 2;
+  let factor = 1; // FIX: factor 1 LTR per NIC, was 2
   let sum = 0;
   for (let i = 0; i < 14; i++) {
     const v = gstinCharValue(s[i]);
