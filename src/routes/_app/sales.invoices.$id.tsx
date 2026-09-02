@@ -216,6 +216,9 @@ function InvoiceView() {
 
   async function handleGenerateGstJson() {
     if (!inv || !branch || !customer) return toast.error("Invoice/branch/customer missing");
+    if ((inv as any)?.sales_type === "sez_zero_rated" && !String((inv as any)?.lut_no ?? "").trim()) {
+      return toast.error("SEZ Zero Rated requires LUT No. before IRN");
+    }
     setGstGenerating(true);
     try {
       const tr = getTransport();
@@ -273,6 +276,9 @@ function InvoiceView() {
 
   async function handlePasteIrn() {
     if (!inv) return;
+    if ((inv as any)?.sales_type === "sez_zero_rated" && !String((inv as any)?.lut_no ?? "").trim()) {
+      return toast.error("SEZ Zero Rated requires LUT No. before IRN");
+    }
     if (!irnText.trim()) return toast.error("Paste IRN JSON first");
     try {
       const parsed = parseGstPortalIrnResponse(irnText);
@@ -340,6 +346,9 @@ function InvoiceView() {
 
   async function handlePasteEwb() {
     if (!inv) return;
+    if ((inv as any)?.sales_type === "sez_zero_rated" && !String((inv as any)?.lut_no ?? "").trim()) {
+      return toast.error("SEZ Zero Rated requires LUT No. before IRN");
+    }
     if (!ewbText.trim()) return toast.error("Paste EWB JSON first");
     try {
       const parsed = parseEwayResponse(ewbText);
@@ -519,7 +528,7 @@ function InvoiceView() {
     return y && m && day ? `${day}-${m}-${y}` : d;
   };
   const pdfMeta = { po_no: inv.po_number || "", po_date: fmtDMY(inv.po_date), payment_terms: inv.payment_terms || "" };
-  console.log("HEADER DATA:", company);
+  if (import.meta.env.DEV) console.debug("[sales.invoices.$id] header loaded", company.name);
 
   const salesTypeLabel = (inv as any).sales_type ? (SALES_TYPE_META[(inv as any).sales_type as keyof typeof SALES_TYPE_META]?.label ?? (inv as any).sales_type) : "—";
   const lutNoDisplay = (inv as any).lut_no ?? null;

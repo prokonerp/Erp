@@ -409,6 +409,11 @@ export type NicEwbDtls = {
   VehType: "R" | "O";
 };
 
+export type NicExpDtls = {
+  Addr1: string;
+  Port: string;
+};
+
 export type NicInvoiceJson = {
   Version: "1.03";
   TranDtls: NicTranDtls;
@@ -422,7 +427,7 @@ export type NicInvoiceJson = {
   PayDtls: NicPayDtls | null;
   RefDtls: NicRefDtls | null;
   AddlDocDtls: NicAddlDoc[] | null;
-  ExpDtls: null;
+  ExpDtls: NicExpDtls | null;
   EwbDtls: NicEwbDtls | null;
 };
 
@@ -729,6 +734,9 @@ export function buildGstInvoiceJson(
   const addlDocs: NicAddlDoc[] = [];
   const lut = trimStr(invoice.lut_no || null, 60);
   const stNorm = String(invoice.sales_type || "").toLowerCase();
+  if (stNorm === "sez_zero_rated" && !lut) {
+    throw new Error("SEZ Zero Rated requires LUT No. before IRN");
+  }
   if (stNorm === "local_nil_rated") {
     // Nil-rated (Table 8): GST forced 0, supply_class='nil', NOT zero_rated/SEZ
     addlDocs.push({ Url: null, Docs: null, Info: `Sales Type: ${invoice.sales_type} (Nil-rated)` });
@@ -739,6 +747,17 @@ export function buildGstInvoiceJson(
   }
   // H10 DB check note: invoices.supply_class CHECK (nil, exempt, zero_rated) — enforced in 20260902000000_invoicing_staged.sql:29
   // Runtime guard: if sales_type is nil-rated but supply_class mismatched, builder still forces gst 0 via computeLine, but caller should persist supply_class='nil'.
+
+  // M9: ExpDtls — map transport.update_port_address for SEZ/export when present
+  // sales_type sez_* or export/exp* + trimmed port address -> { Addr1, Port } else null
+  const _stM9 = String(invoice.sales_type ?? "").toLowerCase().trim();
+  const _isSezOrExport =
+    _stM9.startsWith("sez_") || _stM9.startsWith("sez") || _stM9.startsWith("export") || _stM9.startsWith("exp");
+  const _portTrimmed = transport?.update_port_address ? String(transport.update_port_address).trim() : "";
+  const expDtls: NicExpDtls | null =
+    _isSezOrExport && _portTrimmed
+      ? { Addr1: trimStr(_portTrimmed, 100), Port: trimStr(_portTrimmed, 100) }
+      : null;
 
   // EwbDtls — only when generate_eway_within_einvoice true
   let ewbDtls: NicEwbDtls | null = null;
@@ -772,7 +791,7 @@ export function buildGstInvoiceJson(
     PayDtls: payDtls,
     RefDtls: refDtls,
     AddlDocDtls: addlDocs.length ? addlDocs : null,
-    ExpDtls: null,
+    ExpDtls: expDtls,
     EwbDtls: ewbDtls,
   };
 }

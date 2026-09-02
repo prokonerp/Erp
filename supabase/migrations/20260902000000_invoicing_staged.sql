@@ -120,11 +120,11 @@ begin
     end if;
   end if;
 
-  -- vehicle_no: allow missing/empty, else regex ^[A-Z]{2}[0-9]{1,2}[A-Z]{0,2}[0-9]{4}$
+  -- vehicle_no: allow missing/empty, else regex ^(?:[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$ (std + BH series)
   v := btrim(coalesce(new.transport_details->>'vehicle_no',''));
   if v is not null and v <> '' and lower(v) <> 'null' then
-    if upper(v) !~ '^[A-Z]{2}[0-9]{1,2}[A-Z]{0,2}[0-9]{4}$' then
-      raise exception 'transport_details.vehicle_no invalid ''%'' — expected ^[A-Z]{2}[0-9]{1,2}[A-Z]{0,2}[0-9]{4}$ (e.g. HR55AB1234)', v;
+    if upper(v) !~ '^(?:[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$' then
+      raise exception 'transport_details.vehicle_no invalid ''%'' — expected ^(?:[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$ (e.g. HR55AB1234 or 22BH1234AA)', v;
     end if;
   end if;
 

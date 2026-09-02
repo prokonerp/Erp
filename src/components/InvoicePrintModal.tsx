@@ -126,7 +126,7 @@ export default function InvoicePrintModal({ open, onOpenChange, invoice, onDownl
       invoice_id: invoice.id,
       copies,
       copy_labels_snapshot: copies.join("/"),
-      theme_color_snapshot: themeColor ?? copyLabel ?? null,
+      theme_color_snapshot: themeColor ?? null,
       is_reprint: isReprintFlag,
       pdf_hash: pdfHash,
       printed_by: userId,

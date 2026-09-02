@@ -161,17 +161,23 @@ const PIN_PREFIX_TO_STATE_CODE: Record<string, string> = {
   "83": "20", // Jharkhand
   "84": "10",
   "85": "37",
+  // ── M2 3-digit PIN overrides (p3 was sliced but void — now live) ──
+  "110": "07", // Delhi 110xxx
+  "122": "06", // Haryana Gurgaon 122xxx
+  "500": "36", // Telangana Hyderabad 500xxx
+  "560": "29", // Karnataka Bangalore 560xxx
+  "400": "27", // Maharashtra Mumbai 400xxx
+  "700": "19", // West Bengal Kolkata 700xxx
+  "600": "33", // Tamil Nadu Chennai 600xxx
 };
 
 export function pinToStateCode(pin: string | number | null | undefined): string | null {
   if (pin == null) return null;
   const s = String(pin).trim();
   if (!/^[1-9][0-9]{5}$/.test(s)) return null;
-  // try 3-digit then 2-digit prefix
   const p3 = s.slice(0, 3);
   const p2 = s.slice(0, 2);
-  // Special 3-digit overrides could go here; for now 2-digit is sufficient
-  void p3;
+  if (PIN_PREFIX_TO_STATE_CODE[p3]) return PIN_PREFIX_TO_STATE_CODE[p3];
   return PIN_PREFIX_TO_STATE_CODE[p2] ?? null;
 }
 

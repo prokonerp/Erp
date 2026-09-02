@@ -94,8 +94,9 @@ export default function TransportDetailsModal({
   const [transporterPromptOpen, setTransporterPromptOpen] = React.useState(false);
   const [newTransporterName, setNewTransporterName] = React.useState("");
   const [newTransporterId, setNewTransporterId] = React.useState("");
-  const [dispatchStateCode, setDispatchStateCode] = React.useState<string>(
-    value.dispatch_details?.state_code ?? "",
+  const dispatchStateCode = React.useMemo(
+    () => draft.dispatch_details?.state_code ?? "",
+    [draft.dispatch_details?.state_code],
   );
 
   // M8 fix: only reset on open transition (dep [open] + ref) — avoids stale closure where
@@ -106,7 +107,6 @@ export default function TransportDetailsModal({
     if (open) {
       setDraft(cloneTransport(valueRef.current));
       setErrors({});
-      setDispatchStateCode(valueRef.current.dispatch_details?.state_code ?? "");
       setTransporterPromptOpen(false);
     }
   }, [open]);
@@ -231,19 +231,13 @@ export default function TransportDetailsModal({
       ? draft.vehicle_no.trim().toUpperCase()
       : draft.vehicle_no;
 
-    // normalize GSTIN
+    // normalize GSTIN — single source: draft.dispatch_details already holds state_code/state via setDispatchField
     const dd = draft.dispatch_details
       ? {
           ...draft.dispatch_details,
           gstin: draft.dispatch_details.gstin
             ? draft.dispatch_details.gstin.trim().toUpperCase()
             : draft.dispatch_details.gstin,
-          // persist state name from selected code if changed via dropdown
-          state_code: dispatchStateCode || draft.dispatch_details.state_code,
-          state:
-            dispatchStateCode && GSTIN_STATE_CODES[dispatchStateCode]
-              ? GSTIN_STATE_CODES[dispatchStateCode]
-              : draft.dispatch_details.state,
         }
       : null;
 
@@ -276,7 +270,6 @@ export default function TransportDetailsModal({
       const parsed = JSON.parse(raw) as TransportDetails;
       // merge last into draft (keep compliance read-only fields? spec says copy from last — copy all)
       setDraft(cloneTransport(parsed));
-      setDispatchStateCode(parsed.dispatch_details?.state_code ?? "");
       toast.success("Loaded last transport details — review and press F2-Done to save");
     } catch {
       toast.error("Failed to load last transport details");
@@ -338,7 +331,6 @@ export default function TransportDetailsModal({
     const code = g.slice(0, 2);
     const stateName = GSTIN_STATE_CODES[code];
     if (stateName) {
-      setDispatchStateCode(code);
       setDispatchField("state", stateName);
       setDispatchField("state_code", code);
     }
@@ -362,7 +354,7 @@ export default function TransportDetailsModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, draft, dispatchStateCode]);
+  }, [open, draft]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -802,7 +794,6 @@ export default function TransportDetailsModal({
                 <Select
                   value={dispatchStateCode}
                   onValueChange={(v) => {
-                    setDispatchStateCode(v);
                     const name = GSTIN_STATE_CODES[v] ?? null;
                     setDispatchField("state_code", v || null);
                     setDispatchField("state", name);

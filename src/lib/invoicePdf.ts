@@ -261,7 +261,7 @@ async function renderOneCopyContent(
 
   // ============ RESOLVE COMPANY (cached per renderInvoiceCopies — do not call getCompany per copy) ============
   const company = companyCached;
-  console.log("HEADER DATA:", company);
+  if (import.meta.env.DEV) console.debug("[invoicePdf] header loaded", company.name);
   const companyName = company.name.toString();
   const companyAddress = company.regd_address.toString();
   const companyGstin = company.gstin || "";
@@ -443,6 +443,25 @@ async function renderOneCopyContent(
   doc.line(margin + col * 2, y, margin + col * 2, y + eiH);
   drawEi("Ack Date", ackDateFmt, margin + col * 2);
   y += eiH;
+
+  // M9: Exp/Port line for SEZ/Export when update_port_address present (non-destructive)
+  {
+    const tdForPdf = (invoice as unknown as Record<string, unknown>)["transport_details"] as
+      | { update_port_address?: string | null }
+      | null
+      | undefined;
+    const stForPdf = String((invoice as unknown as Record<string, unknown>)["sales_type"] ?? "").toLowerCase();
+    const isSezExpPdf = stForPdf.startsWith("sez") || stForPdf.startsWith("export") || stForPdf.startsWith("exp");
+    const portAddrPdf = tdForPdf?.update_port_address ? String(tdForPdf.update_port_address).trim() : "";
+    if (isSezExpPdf && portAddrPdf) {
+      const expH = 14;
+      drawRect(doc, margin, y, cw, expH);
+      doc.setFont("helvetica", "bold").setFontSize(7.5);
+      doc.text(`Exp/Port: ${portAddrPdf.slice(0, 100)}`, margin + 6, y + 9.5);
+      doc.setFont("helvetica", "normal");
+      y += expH;
+    }
+  }
 
   // ============ ITEMS TABLE ============
   const isInter = invoice.is_interstate;

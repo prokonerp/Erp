@@ -32,7 +32,7 @@ import {
   stateNameFromCode,
   amountInWords,
 } from "@/lib/gst";
-import { GSTIN_STATE_CODES } from "@/lib/india";
+import { GSTIN_STATE_CODES, validateGSTINChecksum } from "@/lib/india";
 import { getCompany } from "@/lib/letterhead";
 import { productDisplayName, productShortName } from "@/lib/productNames";
 import { useIsAdmin } from "@/lib/useRole";
@@ -264,6 +264,10 @@ function NewInvoice() {
     const allSerials = items.flatMap((it) => it.serial_numbers);
     if (new Set(allSerials).size !== allSerials.length) return toast.error("Duplicate serial numbers across lines");
     if (gstinError) return toast.error(gstinError);
+    const buyerGstRawForChecksum = String((customer as any)?.gst ?? "").trim();
+    if (buyerGstRawForChecksum && buyerGstRawForChecksum.toUpperCase() !== "URP" && !validateGSTINChecksum(buyerGstRawForChecksum)) {
+      return toast.error("Buyer GSTIN checksum invalid");
+    }
 
     // Non-serialized products: verify pooled availability before posting.
     // Converted General DCs already consumed the stock — skip the check.

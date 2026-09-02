@@ -66,27 +66,35 @@ export function showExpectedSalesTypes(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Minimal demo transport_details payload (25-field shape, keep most null)
+// Minimal demo transport_details payload — aligned to TransportDetails shape
+// (src/lib/transport.ts, 25-field Tally parity). Non-destructive demo only.
 // ---------------------------------------------------------------------------
 function demoTransport(suffix: string): Record<string, unknown> {
   return {
-    vehicle_no: `MH12AB${suffix.padStart(4, "0")}`,
-    transporter_name: "Prokon Demo Transporter",
-    transporter_gstin: "27AACCP1234A1Z5",
+    transport_mode: "Road",
     transporter_id: null,
-    transport_mode: "road",
+    transporter_name: "Prokon Demo Transporter",
+    gr_rr_no: `GR-DEMO-${suffix}`,
+    gr_rr_date: new Date().toISOString().slice(0, 10),
+    vehicle_no: `MH12AB${suffix.padStart(4, "0")}`,
+    station_to_place: "Pune",
+    pin_code: "411001",
     distance_km: 120,
-    lr_no: `LR-DEMO-${suffix}`,
-    lr_date: new Date().toISOString().slice(0, 10),
-    ewaybill_no: null,
-    ewaybill_date: null,
-    ewaybill_valid_till: null,
-    driver_name: "Demo Driver",
-    driver_mobile: "9876543210",
-    place_of_supply: "Maharashtra",
-    place_of_supply_code: "27",
-    // remaining 10+ fields left as null/empty for P1 verification
-    _seed_note: `demo-${suffix}`,
+    mode_of_transport: "road",
+    sub_type: "Supply",
+    transaction_type: "B2B",
+    e_invoice_reqd: "Y",
+    e_way_reqd: "Y",
+    generate_eway_within_einvoice: false,
+    update_port_address: null,
+    dispatch_details: null,
+    eway_bill_no: null,
+    eway_bill_date: null,
+    eway_bill_valid_till: null,
+    einvoice_irn: null,
+    einvoice_ack_no: null,
+    einvoice_ack_date: null,
+    einvoice_qr: null,
   };
 }
 

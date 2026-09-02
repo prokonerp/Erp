@@ -43,7 +43,7 @@ export type TransportDetails = {
   transporter_name: string | null;
   gr_rr_no: string | null;
   gr_rr_date: string | null; // ISO YYYY-MM-DD (UI shows DD-MM-YYYY)
-  vehicle_no: string | null; // /^[A-Z]{2}[0-9]{1,2}[A-Z]{0,2}[0-9]{4}$/
+  vehicle_no: string | null; // /^(?:[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$/ — std + BH series
   station_to_place: string | null;
   pin_code: string | null; // 6-digit /^[1-9][0-9]{5}$/
   distance_km: number | null; // int 1-4000, haversine auto if PINs known
@@ -99,7 +99,7 @@ export const DEFAULT_TRANSPORT: TransportDetails = {
 
 // ── regexes ──────────────────────────────────────────────────────────────
 export const PIN_REGEX = /^[1-9][0-9]{5}$/;
-export const VEHICLE_REGEX = /^[A-Z]{2}[0-9]{1,2}[A-Z]{0,2}[0-9]{4}$/;
+export const VEHICLE_REGEX = /^(?:[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$/;
 export const EWB_REGEX = /^[0-9]{12}$/;
 export const ACK_REGEX = /^[0-9]{15}$/;
 export const IRN_REGEX = /^[0-9a-fA-F]{64}$/;
@@ -196,6 +196,7 @@ export function isValidDistanceKm(v: number | null | undefined): boolean {
   return isFinite(n) && n >= 1 && n <= 4000;
 }
 
+/** VehicleNo: std ^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}$ or BH ^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$; lenient upper-trim */
 export function isValidVehicleNo(v: string | null | undefined): boolean {
   if (!v) return false;
   return VEHICLE_REGEX.test(v.trim().toUpperCase());
