@@ -96,6 +96,18 @@ export type BranchLite = {
   bank_account?: string | null;
   bank_ifsc?: string | null;
   upi_id?: string | null;
+  company_name?: string | null;
+  company_address?: string | null;
+  city?: string | null;
+  pin_code?: string | null;
+  code?: string | null;
+};
+
+export type CompanyProfileLite = {
+  name?: string | null;
+  regd_address?: string | null;
+  address?: string | null;
+  gstin?: string | null;
 };
 
 export type CustomerLite = {
@@ -106,6 +118,12 @@ export type CustomerLite = {
   state?: string | null;
   phone?: string | null;
   email?: string | null;
+  billing_pincode?: string | null;
+  billing_city?: string | null;
+  billing_state?: string | null;
+  shipping_pincode?: string | null;
+  shipping_city?: string | null;
+  shipping_state?: string | null;
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -238,6 +256,17 @@ function stateCodeToInt(code: string | null | undefined): number | null {
 function trimStr(v: unknown, max = 100): string {
   if (v == null) return "";
   return String(v).trim().slice(0, max);
+}
+
+/** Tron guard: short branch codes like "NIT-3", "DEL027" must not masquerade as legal name */
+function isShortBranchCode(v: string | null | undefined): boolean {
+  if (!v) return false;
+  const s = String(v).trim();
+  if (!s || s.length > 14) return false;
+  if (/^[A-Z]{2,4}[-_]\d{1,3}$/i.test(s)) return true; // NIT-3, BP-1
+  if (/^DEL\d{2,4}$/i.test(s)) return true;
+  if (/^[A-Z0-9]{2,6}-[A-Z0-9]{1,4}$/i.test(s) && s.length <= 8) return true;
+  return false;
 }
 
 // ── SupTyp mapping ───────────────────────────────────────────────────────────
@@ -480,6 +509,20 @@ export type EwayJson = {
 };
 
 // ── Builder: GST e-Invoice JSON (NIC 1.03) ──────────────────────────────────
+function sanitizeDocNoForNic(raw: string): string {
+  const s = String(raw).trim();
+  // NIC allows 1-16 chars; our DB uses "PHS/INV/26-27/0008" (18). Preserve uniqueness: replace "/" with "-" then keep suffix (seq) if still >16.
+  // Warn so operator knows portal will see sanitized No (IRN will echo sanitized).
+  let sanitized = s.replace(/\//g, "-");
+  if (sanitized.length > 16) {
+    const truncated = sanitized.slice(-16); // keep suffix like "0008" not prefix
+    console.warn(`[invoiceJson] DocNo '${raw}' sanitized to '${sanitized}' exceeds NIC 16-char limit — truncating to suffix '${truncated}'`);
+    sanitized = truncated;
+  }
+  // NIC regex for Doc No is typically [A-Z0-9/-]{1,16} — keep our sanitized as-is
+  return sanitized || s.slice(-16);
+}
+
 export function buildGstInvoiceJson(
   invoice: InvoiceLite,
   items: InvoiceItemLite[],
@@ -487,12 +530,14 @@ export function buildGstInvoiceJson(
   customer: CustomerLite | null,
   transport: TransportDetails | null,
   dispDetails?: DispatchDetails | null,
+  companyProfile?: CompanyProfileLite | null,
 ): NicInvoiceJson {
   if (!invoice) throw new Error("buildGstInvoiceJson: invoice is required");
   if (!Array.isArray(items) || items.length === 0) throw new Error("buildGstInvoiceJson: at least one item is required");
 
-  const invNo = trimStr(invoice.invoice_no, 64);
-  if (!invNo) throw new Error("buildGstInvoiceJson: invoice.invoice_no is required");
+  const invNoRaw = trimStr(invoice.invoice_no, 64);
+  if (!invNoRaw) throw new Error("buildGstInvoiceJson: invoice.invoice_no is required");
+  const invNo = sanitizeDocNoForNic(invNoRaw);
   const docDt = gstDateDDMMYYYY(invoice.invoice_date);
   if (!docDt) throw new Error(`buildGstInvoiceJson: invalid invoice_date '${invoice.invoice_date}' — expected YYYY-MM-DD`);
 
@@ -517,11 +562,44 @@ export function buildGstInvoiceJson(
     stateCodeFromGSTINLocal(sellerGstin) ||
     trimStr(branch?.state_code || invoice.seller_state_code || null, 2) ||
     null;
-  const sellerName = trimStr(branch?.name || invoice.seller_name || "Seller", 100);
-  const sellerAddrRaw = branch?.address || invoice.seller_address || "";
-  const sellerPin = extractPin(sellerAddrRaw) ?? null;
-  const sellerLocRaw = locFromAddress(sellerAddrRaw, invoice.seller_state || branch?.state_name || null);
-  const sellerLoc = sellerLocRaw || trimStr(invoice.seller_state || branch?.state_name || "", 50) || "";
+  // Fix: prefer legal name (company_profile / company / invoice) over branch code like "NIT-3"
+  const companyLegalName = trimStr(companyProfile?.name || (branch as any)?.company_name || null, 100);
+  const invoiceSellerClean = (() => {
+    const v = trimStr(invoice.seller_name || null, 100);
+    if (!v) return "";
+    if (isShortBranchCode(v) && companyLegalName) return "";
+    return v;
+  })();
+  const branchNameLegal = (() => {
+    const v = trimStr(branch?.name || null, 100);
+    if (!v) return "";
+    if (isShortBranchCode(v) && (companyLegalName || invoiceSellerClean)) return "";
+    if ((branch as any)?.code && v === String((branch as any).code).trim() && (companyLegalName || invoiceSellerClean)) return "";
+    return v;
+  })();
+  const sellerName =
+    companyLegalName || invoiceSellerClean || branchNameLegal || trimStr(branch?.name || invoice.seller_name || "Seller", 100);
+  // Addr1: prefer company address (company_profile.regd_address) || branch.address (composed with city/pin if truncated) || invoice.seller_address
+  const companyAddrRaw = trimStr(companyProfile?.regd_address || companyProfile?.address || (branch as any)?.company_address || null, 300);
+  const branchAddrBase = trimStr(branch?.address || null, 300);
+  const branchCity = trimStr((branch as any)?.city || null, 50);
+  const branchPinCodeStr = trimStr((branch as any)?.pin_code || null, 10);
+  let branchComposedAddr = branchAddrBase;
+  if (branchAddrBase && !extractPin(branchAddrBase) && (branchCity || branchPinCodeStr)) {
+    const parts: string[] = [branchAddrBase.replace(/,\s*$/, "")];
+    if (branchCity && !branchAddrBase.includes(branchCity)) parts.push(branchCity);
+    if (branchPinCodeStr && !branchAddrBase.includes(branchPinCodeStr)) parts.push(branchPinCodeStr);
+    if (branch?.state_name && !branchAddrBase.includes(branch.state_name)) parts.push(branch.state_name);
+    branchComposedAddr = parts.join(", ").replace(/,\s*,/g, ",").trim();
+  }
+  const sellerAddrRaw = companyAddrRaw || branchComposedAddr || trimStr(invoice.seller_address || "", 300) || "";
+  // Full address trimmed to 100 — not first comma segment (old addr1Line gave "3C-58")
+  const sellerAddr1 = trimStr(sellerAddrRaw.replace(/\s+/g, " ").trim(), 100) || "";
+  const sellerPinRaw = extractPin(sellerAddrRaw) ?? (branchPinCodeStr ? Number(branchPinCodeStr.replace(/\D/g, "")) || null : null) ?? extractPin(invoice.seller_address || null) ?? null;
+  const sellerPin = sellerPinRaw != null && PIN_REGEX.test(String(sellerPinRaw)) ? sellerPinRaw : null;
+  const sellerLocRaw = trimStr(branchCity || locFromAddress(sellerAddrRaw, invoice.seller_state || branch?.state_name || null) || "", 50);
+  const sellerLocAdjusted = isShortBranchCode(sellerLocRaw) && branchCity ? branchCity : sellerLocRaw;
+  const sellerLoc = sellerLocAdjusted || trimStr(invoice.seller_state || branch?.state_name || "", 50) || branchCity || "";
 
   // Buyer — H5: unified URP sentinel + lenient checksum (emit raw even if bad checksum)
   const buyerGstinRaw = trimStr(invoice.buyer_gstin || customer?.gst || "", 15);
@@ -544,23 +622,63 @@ export function buildGstInvoiceJson(
     null;
   const posCode = trimStr(invoice.place_of_supply_code || buyerStateCode || null, 2) || buyerStateCode || null;
   const buyerName = trimStr(invoice.buyer_name || customer?.company || "Buyer", 100);
-  const billingAddrRaw = invoice.billing_address || customer?.billing_address || "";
-  const buyerAddr1 = addr1Line(billingAddrRaw, 100);
-  const buyerAddr2Raw = String(billingAddrRaw).split(/[\n]+/)[1]?.trim().slice(0, 100) || null;
-  const buyerPin = extractPin(billingAddrRaw);
-  const buyerLoc = locFromAddress(billingAddrRaw, invoice.buyer_state || customer?.state || null);
+  // Buyer address: prefer invoice billing_address only if it looks valid, else fallback to customer master
+  // Detect garbage like "WDWFEFWGRG" (10 chars, no pin, no comma, no city) — was leaking from invoice snapshot
+  function isGarbageAddress(addr: string | null | undefined): boolean {
+    if (!addr) return true;
+    const s = String(addr).trim();
+    if (!s || s.length < 10) return true;
+    if (/^[A-Z]{5,}$/i.test(s.replace(/\s/g, "")) && !s.includes(",") && !s.includes(" ") ) return true; // WDWFEFWGRG
+    if (s === "WDWFEFWGRG") return true;
+    // If address has no PIN and is very short / lacks comma separation, likely garbage
+    const hasPin = /\b[1-9][0-9]{5}\b/.test(s);
+    const hasComma = s.includes(",");
+    if (!hasPin && !hasComma && s.length < 25) return true;
+    return false;
+  }
+  const billingAddrCandidate = trimStr(invoice.billing_address || null, 300);
+  const billingAddrMaster = trimStr(customer?.billing_address || null, 300);
+  const billingAddrRaw = !isGarbageAddress(billingAddrCandidate) ? billingAddrCandidate : billingAddrMaster || billingAddrCandidate || "";
+  // Full address trimmed to 100 — not first comma segment (old addr1Line gave "WDWFEFWGRG"/"1653 P")
+  const billingAddrFull = billingAddrRaw.replace(/\s+/g, " ").trim();
+  const buyerAddr1 = trimStr(billingAddrFull, 100) || addr1Line(billingAddrRaw, 100) || "";
+  const buyerAddr2Raw = billingAddrRaw.includes("\n") ? String(billingAddrRaw).split(/[\n]+/)[1]?.trim().slice(0, 100) || null : null;
+  const buyerCityFallback = trimStr((customer as any)?.billing_city || customer?.state || null, 50);
+  const buyerPinRawFromAddr = extractPin(billingAddrRaw);
+  const buyerPinFromCustomer = (() => {
+    const pc = (customer as any)?.billing_pincode || (customer as any)?.shipping_pincode || null;
+    if (pc && PIN_REGEX.test(String(pc).trim())) return Number(String(pc).trim());
+    return null;
+  })();
+  const buyerPin = buyerPinRawFromAddr ?? buyerPinFromCustomer ?? extractPin(customer?.billing_address || null) ?? null;
+  const buyerPinValidated = buyerPin != null && PIN_REGEX.test(String(buyerPin)) ? buyerPin : null;
+  // Loc: prefer structured billing_city (Gurgaon) over derived "India" from address tail; avoids country fallback
+  const buyerLocRaw = locFromAddress(billingAddrRaw, invoice.buyer_state || customer?.state || buyerCityFallback || null);
+  const buyerLoc = buyerCityFallback || (isShortBranchCode(buyerLocRaw) ? "" : buyerLocRaw) || trimStr(customer?.state || invoice.buyer_state || "", 50) || "";
 
-  // Ship
-  const shipAddrRaw = invoice.shipping_address || billingAddrRaw || "";
-  const shipLoc = locFromAddress(shipAddrRaw, invoice.buyer_state || null);
-  const shipPin = extractPin(shipAddrRaw);
+  // Ship — fallback similarly: invoice shipping_address -> customer shipping -> billing fallback
+  const shipAddrCandidate = trimStr(invoice.shipping_address || null, 300);
+  const shipAddrMaster = trimStr(customer?.shipping_address || customer?.billing_address || null, 300);
+  const shipAddrRaw = !isGarbageAddress(shipAddrCandidate) ? shipAddrCandidate : shipAddrMaster || shipAddrCandidate || billingAddrRaw || "";
+  const shipAddrFull = shipAddrRaw.replace(/\s+/g, " ").trim();
+  const shipLocRaw = locFromAddress(shipAddrRaw, invoice.buyer_state || customer?.state || null);
+  const shipCityFallback = trimStr((customer as any)?.shipping_city || (customer as any)?.billing_city || customer?.state || null, 50);
+  const shipLoc = shipCityFallback || (isShortBranchCode(shipLocRaw) ? "" : shipLocRaw) || buyerLoc || "";
+  const shipPinRawFromAddr = extractPin(shipAddrRaw);
+  const shipPinFromCustomer = (() => {
+    const pc = (customer as any)?.shipping_pincode || (customer as any)?.billing_pincode || null;
+    if (pc && PIN_REGEX.test(String(pc).trim())) return Number(String(pc).trim());
+    return null;
+  })();
+  const shipPin = shipPinRawFromAddr ?? shipPinFromCustomer ?? buyerPinValidated ?? extractPin(customer?.shipping_address || null) ?? null;
+  const shipPinValidated = shipPin != null && PIN_REGEX.test(String(shipPin)) ? shipPin : buyerPinValidated;
 
   // Disp (explicit param wins over transport.dispatch_details)
   const disp: DispatchDetails | null = dispDetails ?? transport?.dispatch_details ?? null;
   const dispDtls: NicDispDtls | null = disp
     ? {
         Nm: trimStr(disp.name || branch?.name || sellerName, 100) || sellerName,
-        Addr1: trimStr(disp.address || disp.addr1 || "", 100) || addr1Line(sellerAddrRaw, 100),
+        Addr1: trimStr(disp.address || disp.addr1 || "", 100) || sellerAddr1 || addr1Line(sellerAddrRaw, 100),
         Addr2: null,
         Loc: trimStr(disp.place || "", 50) || locFromAddress(disp.address || disp.addr1 || null, disp.state || null) || sellerLoc || "",
         Pin: disp.pin_code ? Number(String(disp.pin_code).trim()) : sellerPin,
@@ -571,10 +689,10 @@ export function buildGstInvoiceJson(
   const shipDtls: NicShipDtls | null = {
     Gstin: buyerGstinForJson,
     LglNm: buyerName,
-    Addr1: addr1Line(shipAddrRaw, 100) || buyerAddr1 || "",
+    Addr1: trimStr(shipAddrFull, 100) || buyerAddr1 || addr1Line(shipAddrRaw, 100) || "",
     Addr2: null,
     Loc: shipLoc || buyerLoc || "",
-    Pin: shipPin ?? buyerPin,
+    Pin: shipPinValidated ?? buyerPinValidated,
     Stcd: buyerStateCode,
   };
 
@@ -598,13 +716,13 @@ export function buildGstInvoiceJson(
     OrgInvNo: null,
   };
 
-  // Seller / Buyer Dtls
+  // Seller / Buyer Dtls — Addr1 is full address (not first segment), Pin/ Loc prefer city
   const sellerDtls: NicPartyDtls = {
     Gstin: sellerGstin,
     LglNm: sellerName,
     TrdNm: sellerName,
-    Addr1: addr1Line(sellerAddrRaw, 100) || "",
-    Addr2: buyerAddr2Raw ? null : null, // Seller Addr2 always null / "" per NIC
+    Addr1: sellerAddr1 || addr1Line(sellerAddrRaw, 100) || "",
+    Addr2: null, // Seller Addr2 always null per NIC
     Loc: sellerLoc || "",
     Pin: sellerPin,
     Stcd: sellerStateCode,
@@ -619,7 +737,7 @@ export function buildGstInvoiceJson(
     Addr1: buyerAddr1 || "",
     Addr2: buyerAddr2Raw,
     Loc: buyerLoc || "",
-    Pin: buyerPin,
+    Pin: buyerPinValidated,
     Stcd: buyerStateCode,
     Pos: posCode,
     Ph: trimStr(customer?.phone || null, 15) || null,
@@ -810,10 +928,12 @@ export function buildEwayJson(
   invoice: InvoiceLite,
   transport: TransportDetails | null,
   itemsInput?: InvoiceItemLite[],
+  customer?: CustomerLite | null,
 ): EwayJson {
   if (!invoice) throw new Error("buildEwayJson: invoice is required");
-  const invNo = trimStr(invoice.invoice_no, 64);
-  if (!invNo) throw new Error("buildEwayJson: invoice.invoice_no is required");
+  const invNoRawEway = trimStr(invoice.invoice_no, 64);
+  if (!invNoRawEway) throw new Error("buildEwayJson: invoice.invoice_no is required");
+  const invNo = sanitizeDocNoForNic(invNoRawEway);
   const docDate = gstDateDDMMYYYY(invoice.invoice_date);
   if (!docDate) throw new Error(`buildEwayJson: invalid invoice_date '${invoice.invoice_date}'`);
 
@@ -829,25 +949,55 @@ export function buildEwayJson(
   }
   const sellerName = trimStr(invoice.seller_name || "Seller", 100);
   const sellerAddrRaw = invoice.seller_address || "";
+  const sellerAddrFull = sellerAddrRaw.replace(/\s+/g, " ").trim();
+  const sellerAddr1Eway = trimStr(sellerAddrFull, 100) || addr1Line(sellerAddrRaw, 100) || "";
   const sellerPin = extractPin(sellerAddrRaw) ?? null;
   const sellerLocRaw = locFromAddress(sellerAddrRaw, invoice.seller_state || null);
   const sellerLoc = sellerLocRaw || trimStr(invoice.seller_state || "", 50) || "";
   const sellerStateCode = stateCodeToInt(stateCodeFromGSTINLocal(sellerGstin) || invoice.seller_state_code || null);
 
-  // H5: unified URP sentinel + checksum gate for E-Way buyer
+  // H5: unified URP sentinel + lenient checksum for E-Way buyer (emit raw for portal validation, not silent URP)
   const buyerGstinRaw = trimStr(invoice.buyer_gstin || "", 15);
   const buyerTrimUpper = buyerGstinRaw ? buyerGstinRaw.trim().toUpperCase() : "";
   const isBuyerUrpEway = buyerTrimUpper === "URP" || !buyerTrimUpper;
   const buyerGstinNorm = isBuyerUrpEway ? null : normalizeGstin(buyerGstinRaw);
-  const buyerGstin = buyerGstinNorm;
-  const buyerHasGstinEway = !!buyerGstin && validateGSTINChecksum(buyerGstin);
+  const buyerHasGstinRawEway = !!buyerTrimUpper && buyerTrimUpper !== "URP";
+  const buyerGstinLenient: string | null = buyerGstinNorm || (buyerHasGstinRawEway && /^[0-9]{2}[A-Z0-9]{13}$/.test(buyerTrimUpper) ? buyerTrimUpper : null);
+  const buyerGstin = buyerGstinLenient;
+  const buyerHasGstinEway = !!buyerGstin && buyerGstin !== "URP";
+  if (buyerHasGstinEway && !validateGSTINChecksum(buyerGstin as string)) {
+    console.warn(`[eway] buyer_gstin '${buyerGstin}' fails checksum — emitting raw for portal validation`);
+  }
   const toGstin: string = buyerHasGstinEway ? (buyerGstin as string) : "URP";
   const buyerName = trimStr(invoice.buyer_name || "Buyer", 100);
-  const billingAddrRaw = invoice.billing_address || "";
-  const toAddr1 = addr1Line(billingAddrRaw, 100) || addr1Line(invoice.shipping_address || "", 100) || "";
-  const toPlaceRaw = locFromAddress(billingAddrRaw, invoice.buyer_state || null) || locFromAddress(invoice.shipping_address || null, null);
-  const toPlace = toPlaceRaw || trimStr(invoice.buyer_state || "", 50) || "";
-  const toPin = extractPin(billingAddrRaw) ?? extractPin(invoice.shipping_address || null) ?? null;
+  // E-Way to address: full address, garbage-aware fallback to invoice shipping -> billing
+  function isGarbageEwayAddr(a: string | null | undefined): boolean {
+    if (!a) return true;
+    const s = String(a).trim();
+    if (!s || s.length < 10) return true;
+    if (s === "WDWFEFWGRG") return true;
+    const hasPin = /\b[1-9][0-9]{5}\b/.test(s);
+    const hasComma = s.includes(",");
+    if (!hasPin && !hasComma && s.length < 25 && /^[A-Z]{5,}$/i.test(s.replace(/\s/g,""))) return true;
+    return false;
+  }
+  // E-Way address: prefer customer master when invoice is garbage (mirrors GST fallback)
+  const ewayCustomerAddr = (customer as any)?.billing_address || (customer as any)?.shipping_address || null;
+  const ewayCustomerCity = (customer as any)?.billing_city || (customer as any)?.shipping_city || (customer as any)?.state || null;
+  const ewayCustomerPin = (customer as any)?.billing_pincode || (customer as any)?.shipping_pincode || null;
+  const billingAddrRawEwayBase = invoice.billing_address || "";
+  const shipAddrRawEwayBase = invoice.shipping_address || "";
+  const billingAddrRawEway = isGarbageEwayAddr(billingAddrRawEwayBase) ? (ewayCustomerAddr || shipAddrRawEwayBase || "") : billingAddrRawEwayBase;
+  const shipAddrRawEway = isGarbageEwayAddr(shipAddrRawEwayBase) ? (ewayCustomerAddr || billingAddrRawEway || shipAddrRawEwayBase || "") : shipAddrRawEwayBase;
+  const billingAddrFallback = billingAddrRawEway || ewayCustomerAddr || "";
+  const shipAddrFallback = shipAddrRawEway || billingAddrFallback || ewayCustomerAddr || "";
+  const toAddr1Full = (billingAddrFallback || shipAddrFallback || "").replace(/\s+/g, " ").trim();
+  const toAddr1 = trimStr(toAddr1Full, 100) || addr1Line(billingAddrFallback, 100) || addr1Line(shipAddrFallback, 100) || trimStr(ewayCustomerAddr || "", 100) || "";
+  const toPlaceRaw = locFromAddress(billingAddrFallback, invoice.buyer_state || ewayCustomerCity || null) || locFromAddress(shipAddrFallback, null);
+  const toPlace = ewayCustomerCity || (toPlaceRaw && !/^(India)$/i.test(toPlaceRaw.trim()) ? toPlaceRaw : "") || trimStr(invoice.buyer_state || ewayCustomerCity || "", 50) || "";
+  const toPinFromAddr = extractPin(billingAddrFallback) ?? extractPin(shipAddrFallback) ?? null;
+  const toPinFromCustomer = ewayCustomerPin && PIN_REGEX.test(String(ewayCustomerPin).trim()) ? Number(String(ewayCustomerPin).trim()) : null;
+  const toPin = toPinFromAddr ?? toPinFromCustomer ?? extractPin(ewayCustomerAddr || null) ?? null;
   const buyerStateCode = stateCodeToInt(stateCodeFromGSTINLocal(buyerHasGstinEway ? buyerGstin : null) || invoice.buyer_state_code || invoice.place_of_supply_code || null);
 
   const totalValue = r2(Number(invoice.total) || 0) || r2(Number(invoice.taxable_value) || 0);
@@ -912,7 +1062,7 @@ export function buildEwayJson(
     docDate,
     fromGstin: sellerGstin,
     fromTrdName: sellerName,
-    fromAddr1: addr1Line(sellerAddrRaw, 100) || "",
+    fromAddr1: sellerAddr1Eway || addr1Line(sellerAddrRaw, 100) || "",
     fromAddr2: null,
     fromPlace: sellerLoc || "",
     fromPincode: sellerPin,

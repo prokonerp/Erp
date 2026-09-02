@@ -222,13 +222,21 @@ function InvoiceView() {
     setGstGenerating(true);
     try {
       const tr = getTransport();
+      const branchLite = branch
+        ? {
+            ...branch,
+            company_name: (company as any)?.name ?? (pdfSettings as any)?.company_name ?? null,
+            company_address: (company as any)?.regd_address ?? (pdfSettings as any)?.company_address ?? null,
+          }
+        : null;
       const json = buildGstInvoiceJson(
         inv as any,
         items as any,
-        branch as any,
+        branchLite as any,
         customer as any,
         tr as any,
-        (tr as any)?.dispatch_details ?? null
+        (tr as any)?.dispatch_details ?? null,
+        company as any
       );
       const base = (inv.invoice_no || inv.id).replace(/\//g, "_");
       const fname = base.startsWith("PHS_INV") ? `${base}_gst.json` : `PHS_INV_${base}_gst.json`;
@@ -313,10 +321,11 @@ function InvoiceView() {
 
   async function handleGenerateEwayJson() {
     if (!inv) return toast.error("Invoice missing");
+    if (!customer) return toast.error("Customer missing for E-Way");
     setEwayGenerating(true);
     try {
       const tr = getTransport();
-      const json = buildEwayJson(inv as any, tr as any, items as any);
+      const json = buildEwayJson(inv as any, tr as any, items as any, customer as any);
       const base = (inv.invoice_no || inv.id).replace(/\//g, "_");
       const fname = `${base}_eway.json`;
       const blob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
