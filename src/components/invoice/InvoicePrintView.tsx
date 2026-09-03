@@ -871,6 +871,7 @@ export function InvoicePrintView({
                 .filter(Boolean);
               const head = dLines[0] || "";
               const rest = dLines.slice(1);
+              const serials = (it.serial_numbers || []).filter(Boolean);
               return (
                 <tr key={it.id}>
                   <td
@@ -904,6 +905,23 @@ export function InvoicePrintView({
                           {ln}
                         </div>
                       ),
+                    )}
+                    {serials.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: 3,
+                          fontSize: 7,
+                          lineHeight: 1.35,
+                          fontFamily: "JetBrains Mono, ui-monospace, monospace",
+                          color: "#6b7280",
+                          overflowWrap: "anywhere",
+                          wordBreak: "break-word",
+                          whiteSpace: "pre-line",
+                        }}
+                      >
+                        <span style={{ fontWeight: 700, color: "#374151" }}>Sl. No.: </span>
+                        {serials.join(", ")}
+                      </div>
                     )}
                   </td>
                   {/* Warranty / AMC */}
