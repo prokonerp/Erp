@@ -57,7 +57,7 @@ export function CustomerPicker({
     let active = true;
     supabase
       .from("customers")
-      .select("id, company, contact_name, phone, gst, state, city")
+      .select("id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address")
       .eq("id", value)
       .single()
       .then(({ data }) => {

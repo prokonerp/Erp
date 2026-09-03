@@ -334,16 +334,28 @@ function NewQuotation() {
     toast.success(`Added ${parsed.length} rows`);
   };
 
-  const applyCustomer = (id: string | null, c: Customer | null) => {
+  const applyCustomer = async (id: string | null, c: Customer | null) => {
     setCustomerId(id);
-    setCustomer(c);
-    if (!c) return;
-    setBilling((v) => v || c.billing_address || c.address || "");
-    setShipping((v) => v || c.shipping_address || c.billing_address || c.address || "");
-    setPlaceOfSupply((v) => v || c.state || "");
-    setContactName((v) => v || c.contact_name || "");
-    setContactEmail((v) => v || c.email || "");
-    setContactPhone((v) => v || c.phone || "");
+    if (!c || !id) {
+      setCustomer(c);
+      return;
+    }
+    // Picker now returns addresses, but handle stale cache — fetch full if addresses missing
+    let full: Customer = c;
+    const anyC = c as unknown as Record<string, unknown>;
+    if (anyC["billing_address"] === undefined && anyC["shipping_address"] === undefined && anyC["address"] === undefined) {
+      const { data } = await supabase.from("customers").select("*").eq("id", id).maybeSingle();
+      if (data) full = data as unknown as Customer;
+    }
+    setCustomer(full);
+    // Instant auto-populate — overwrite with customer's data as soon as picked
+    setBilling(full.billing_address || full.address || "");
+    setShipping(full.shipping_address || full.billing_address || full.address || "");
+    setPlaceOfSupply(full.state || "");
+    setContactName(full.contact_name || "");
+    setContactEmail(full.email || "");
+    setContactPhone(full.phone || "");
+    markDirty();
   };
 
   const validate = (): string | null => {
