@@ -14,6 +14,7 @@
 import React from "react";
 import { Globe, Landmark, Mail, MapPin, Phone, Warehouse } from "lucide-react";
 import type { CompanyProfile } from "@/lib/companyProfile";
+import type { TransportDetails } from "@/lib/transport";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import apcLogo from "@/assets/oem-apc.png.asset.json";
 import { amountInWords } from "@/lib/gst";
@@ -327,6 +328,21 @@ export function InvoicePrintView({
   const ackDate = invoice.ack_date ? fmtDateTimeLocal(invoice.ack_date) : "";
   const hasEinvoice = !!(invoice.irn || invoice.qr_payload);
 
+  // ---- transport / e-way ----------------------------------------------------
+  const td = (invoice.transport_details as TransportDetails | null) || null;
+  const vehicleNo = td?.vehicle_no || "";
+  const ewayNo = invoice.ewaybill_no || td?.eway_bill_no || "";
+
+  // ---- e-invoice band (IRN / Ack strip above items) -------------------------
+  const irn = invoice.irn || td?.einvoice_irn || "";
+  const ackNo = invoice.ack_no || td?.einvoice_ack_no || "";
+  const ackDateStr = invoice.ack_date
+    ? fmtDate(invoice.ack_date)
+    : td?.einvoice_ack_date
+      ? fmtDate(td.einvoice_ack_date)
+      : "";
+  const showIrnBand = !!(irn || ackNo || ackDateStr);
+
   // ---- bill / ship ----------------------------------------------------------
   const billName = invoice.buyer_name || customer?.company || "";
   const billAddrLines = cleanAddr(
@@ -359,13 +375,19 @@ export function InvoicePrintView({
     .filter(Boolean)
     .map((s, i) => (/^\d+\./.test(s) ? s : `${i + 1}. ${s}`));
 
-  // ---- meta box ---------------------------------------------------------------
-  const metaRows: Array<[string, string]> = [
+  // ---- meta box (2-column Tally-parity grid) --------------------------------
+  const metaLeft: Array<[string, string]> = [
     ["Invoice No.", invoice.invoice_no || "—"],
-    ["Invoice Date", fmtDate(invoice.invoice_date)],
+    ["Dated", fmtDate(invoice.invoice_date)],
+    ["Place of Supply", invoice.place_of_supply || buyerStateLine || "—"],
+    ["Reverse Charge", invoice.reverse_charge ? "Y" : "N"],
+    ["Vehicle No.", vehicleNo || "—"],
+  ];
+  const metaRight: Array<[string, string]> = [
+    ["E-Way Bill No.", ewayNo || "—"],
+    ["Payment Terms", invoice.payment_terms || "—"],
     ["PO No.", invoice.po_number || "—"],
     ["PO Date", invoice.po_date ? fmtDate(invoice.po_date) : "—"],
-    ["Due Date", invoice.due_date ? fmtDate(invoice.due_date) : "—"],
   ];
 
   const regdOffice = company.registered_office_address || company.regd_address || "";
@@ -468,18 +490,19 @@ export function InvoicePrintView({
         }
       `}</style>
 
-      {copyLabel && !/^original\s*copy$/i.test(copyLabel.trim()) ? (
+      {copyLabel ? (
         <div
           style={{
             position: "absolute",
             top: 3,
             right: 6,
-            fontSize: 6.5,
+            fontSize: 7,
+            fontWeight: 700,
             color: "#777",
-            letterSpacing: 0.5,
+            letterSpacing: 0.8,
           }}
         >
-          {copyLabel.toUpperCase()}
+          {copyLabel.trim().toUpperCase()}
         </div>
       ) : null}
 
@@ -621,30 +644,60 @@ export function InvoicePrintView({
         }}
       />
 
-      {/* ====================== INVOICE META ====================== */}
+      {/* ====================== INVOICE META (2-col Tally grid) ====================== */}
       <div
+        className="section-frame"
         style={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "flex-end",
           marginTop: 10,
+          border: `0.5px solid ${INNER}`,
+          borderRadius: RADIUS,
+          overflow: "hidden",
         }}
       >
-        <table
-          className="section-frame"
-          style={{
-            width: "32%",
-            flex: "0 0 auto",
-            position: "relative",
-          }}
-        >
+        {/* Left column (5 rows) */}
+        <table style={{ width: "50%", flex: "0 0 50%" }}>
           <tbody>
-            {metaRows.map(([k, v]) => (
+            {metaLeft.map(([k, v]) => (
               <tr key={k}>
                 <td
                   className="section-header"
                   style={{
-                    width: "40%",
+                    width: "42%",
+                    fontSize: 8.8,
+                    fontWeight: 700,
+                    padding: "2.5px 7px",
+                    border: `0.5px solid ${INNER}`,
+                  }}
+                >
+                  {k}
+                </td>
+                <td
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: "2.5px 7px",
+                    border: `0.5px solid ${INNER}`,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {v}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {/* Vertical rule between columns */}
+        <div style={{ width: 1, background: INNER, alignSelf: "stretch" }} />
+        {/* Right column (4 rows) */}
+        <table style={{ width: "50%", flex: "0 0 50%" }}>
+          <tbody>
+            {metaRight.map(([k, v]) => (
+              <tr key={k}>
+                <td
+                  className="section-header"
+                  style={{
+                    width: "42%",
                     fontSize: 8.8,
                     fontWeight: 700,
                     padding: "2.5px 7px",
@@ -733,6 +786,29 @@ export function InvoicePrintView({
           {buyerEmail && <KV label="Email" value={buyerEmail} />}
         </div>
       </div>
+
+      {/* ============ E-INVOICE IRN / ACK BAND (above items) ============ */}
+      {showIrnBand && (
+        <div
+          style={{
+            marginTop: 5,
+            border: `0.5px solid ${GREEN}`,
+            borderRadius: RADIUS,
+            padding: "3px 8px",
+            textAlign: "center",
+            fontSize: 8,
+            fontFamily: "monospace",
+            lineHeight: 1.4,
+            color: INK,
+            background: "#fff",
+            WebkitPrintColorAdjust: "exact",
+            printColorAdjust: "exact",
+          }}
+        >
+          IRN : {irn || "—"} &nbsp;&nbsp;|&nbsp;&nbsp; Ack.No. : {ackNo || "—"}{" "}
+          &nbsp;&nbsp;|&nbsp;&nbsp; Ack. Date : {ackDateStr || "—"}
+        </div>
+      )}
 
       {/* ============================ ITEMS TABLE ============================ */}
       <div className="section-frame items-wrap" style={{ marginTop: 5, minHeight: 160 }}>

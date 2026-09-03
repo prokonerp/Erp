@@ -3,6 +3,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import type { GstItemBreakup } from "@/lib/gst";
+import type { TransportDetails } from "@/lib/transport";
 
 export type InvoiceStatus = "draft" | "issued" | "partial" | "paid" | "cancelled";
 
@@ -92,7 +93,7 @@ export type InvoiceRow = {
   is_tax_inclusive?: boolean | null;
   supply_class?: SupplyClass | null;
   lut_no?: string | null;
-  transport_details?: unknown | null;
+  transport_details?: TransportDetails | null;
   reverse_charge: boolean;
   linked_quote_id: string | null;
   linked_dc_ids: string[] | null;

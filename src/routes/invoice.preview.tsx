@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { InvoicePrintView } from "@/components/invoice/InvoicePrintView";
 import type { BranchRow, InvoiceItemRow, InvoiceRow } from "@/lib/sales";
 import { DEFAULT_COMPANY_PROFILE } from "@/lib/companyProfile";
+import { DEFAULT_TRANSPORT } from "@/lib/transport";
 
 export const Route = createFileRoute("/invoice/preview")({
   component: InvoicePreviewPage,
@@ -37,7 +38,14 @@ const sampleInvoice: InvoiceRow = {
   is_tax_inclusive: false,
   supply_class: null,
   lut_no: null,
-  transport_details: null,
+  transport_details: {
+    ...DEFAULT_TRANSPORT,
+    vehicle_no: "HR55AE1826",
+    eway_bill_no: "398009981155",
+    einvoice_irn: "1f5577b003b47725a02664545495159b6d92083b04f4",
+    einvoice_ack_no: "232610074654534",
+    einvoice_ack_date: "2026-03-02",
+  },
   reverse_charge: false,
   linked_quote_id: null,
   linked_dc_ids: null,
@@ -61,9 +69,9 @@ const sampleInvoice: InvoiceRow = {
   cancel_reason: null,
   cancelled_at: null,
 
-  irn: "3906740a3906740a3906740a3906740a3906740a3906740a3906740a3906740a",
-  ack_no: "3906740a3906740a3906740a3906740a3906740a3906740a3906740a3906740a",
-  ack_date: "2026-09-03T10:00:00Z",
+  irn: "1f5577b003b47725a02664545495159b6d92083b04f4",
+  ack_no: "232610074654534",
+  ack_date: "2026-03-02T10:00:00Z",
   qr_payload: "3906740a3906740a3906740a3906740a3906740a3906740a3906740a3906740a",
   einvoice_status: "IRN_GENERATED",
   einvoice_error: null,
@@ -79,7 +87,7 @@ const sampleInvoice: InvoiceRow = {
 4. Interest @18% p.a. applicable on delayed payments.
 5. Subject to Gurugram jurisdiction.`,
   pdf_url: null,
-  payment_terms: "Advance",
+  payment_terms: "50% Advance & Bal At Delivery",
 
   created_by: null,
   created_at: "2026-09-03T09:00:00Z",
