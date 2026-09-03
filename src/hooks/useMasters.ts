@@ -47,7 +47,7 @@ export function useCustomers() {
           promises.push(
             (supabase
               .from("customers")
-              .select(CUSTOMER_PICKER_COLS)
+              .select(CUSTOMER_LIST_COLS)
               .order("company")
               .range(p * PAGE, p * PAGE + PAGE - 1) as unknown as Promise<any>),
           );
@@ -83,7 +83,7 @@ export function useCustomers() {
 // Returns only top N matches for the current search term. Falls back to small
 // initial list when search is empty (first 25 by company). This makes the
 // picker open in fractions-of-ms vs loading 3101 rows.
-const CUSTOMER_PICKER_COLS = "id, company, contact_name, phone, gst, state, city";
+const CUSTOMER_PICKER_COLS = "id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address";
 export function useCustomersForPicker(search: string = "") {
   const term = search.trim();
   return useQuery({

@@ -246,20 +246,32 @@ function QuoteEditor() {
     if (t && q) setQ({ ...q, terms: t.body });
   };
 
-  const applyCustomer = (id: string | null, c: Customer | null) => {
+  const applyCustomer = async (id: string | null, c: Customer | null) => {
     if (!q) return;
-    setCustomer(c);
+    if (!c || !id) {
+      setCustomer(c);
+      setQ({ ...q, customer_id: id || null } as Quotation);
+      return;
+    }
+    // Ensure full addresses — handle stale cache where picker lacked them
+    let full: Customer = c;
+    const anyC = c as unknown as Record<string, unknown>;
+    if (anyC["billing_address"] === undefined && anyC["shipping_address"] === undefined && anyC["address"] === undefined) {
+      const { data } = await supabase.from("customers").select("*").eq("id", id).maybeSingle();
+      if (data) full = data as unknown as Customer;
+    }
+    setCustomer(full);
     setQ({
       ...q,
-      customer_id: id || (q as any).customer_id,
-      // Snapshot party fields — user can still edit before saving
-      billing_address: c?.billing_address || q.billing_address || "",
-      shipping_address: c?.shipping_address || c?.billing_address || q.shipping_address || "",
-      place_of_supply: c?.state || q.place_of_supply,
-      contact_name: c?.contact_name || q.contact_name || null,
-      contact_email: c?.email || q.contact_email || null,
-      contact_phone: c?.phone || q.contact_phone || null,
-      payment_terms: q.payment_terms || (c as any)?.payment_terms || null,
+      customer_id: id,
+      // Instant auto-populate — overwrite with customer's master data
+      billing_address: full.billing_address || (full as any).address || "",
+      shipping_address: full.shipping_address || full.billing_address || (full as any).address || "",
+      place_of_supply: full.state || q.place_of_supply || "",
+      contact_name: full.contact_name || "",
+      contact_email: full.email || "",
+      contact_phone: full.phone || "",
+      payment_terms: q.payment_terms || (full as any)?.payment_terms || null,
     } as Quotation);
   };
 

@@ -1,4 +1,5 @@
 import { stateCodeFromGSTIN } from "@/lib/gst";
+import { r2 } from "@/lib/money";
 
 export type Customer = {
   id: string;
@@ -10,7 +11,11 @@ export type Customer = {
   billing_address: string | null;
   shipping_address: string | null;
   state: string | null;
+  city: string | null;
   gst: string | null;
+  pan?: string | null;
+  gst_status?: string | null;
+  customer_type?: string | null;
   remarks: string | null;
   created_at: string;
 };
@@ -316,10 +321,10 @@ export const INDIAN_STATES = [
 export function lineAmount(it: QuoteItem): number {
   const gross = Number(it.qty || 0) * Number(it.rate || 0);
   const disc = gross * (Number(it.discount_percent || 0) / 100);
-  return +(gross - disc).toFixed(2);
+  return r2(gross - disc);
 }
 export function lineTax(it: QuoteItem): number {
-  return +((lineAmount(it) * Number(it.tax_percent || 0)) / 100).toFixed(2);
+  return r2((lineAmount(it) * Number(it.tax_percent || 0)) / 100);
 }
 
 /**
@@ -355,8 +360,8 @@ export function computeQuoteTotals(q: {
   seller_gstin?: string | null;
   buyer_gstin?: string | null;
 }) {
-  const subtotal = +q.items.reduce((s, it) => s + lineAmount(it), 0).toFixed(2);
-  const total_tax = +q.items.reduce((s, it) => s + lineTax(it), 0).toFixed(2);
+  const subtotal = r2(q.items.reduce((s, it) => s + lineAmount(it), 0));
+  const total_tax = r2(q.items.reduce((s, it) => s + lineTax(it), 0));
 
   const intra = isIntraSupply({
     seller_gstin: q.seller_gstin,
@@ -364,22 +369,22 @@ export function computeQuoteTotals(q: {
     place_of_supply: q.place_of_supply,
     business_state: q.business_state,
   });
-  const cgst_amount = intra ? +(total_tax / 2).toFixed(2) : 0;
-  const sgst_amount = intra ? +(total_tax - cgst_amount).toFixed(2) : 0;
+  const cgst_amount = intra ? r2(total_tax / 2) : 0;
+  const sgst_amount = intra ? r2(total_tax - cgst_amount) : 0;
   const igst_amount = intra ? 0 : total_tax;
 
   const after_disc = subtotal - Number(q.discount_amount || 0);
   const tcs_base = after_disc + Number(q.shipping_charges || 0);
-  const tcs_amount = +(tcs_base * (Number(q.tcs_percent || 0) / 100)).toFixed(2);
+  const tcs_amount = r2(tcs_base * (Number(q.tcs_percent || 0) / 100));
 
-  const total = +(
+  const total = r2(
     after_disc
     + Number(q.shipping_charges || 0)
     + Number(q.adjustment || 0)
     + cgst_amount + sgst_amount + igst_amount
     + tcs_amount
     + Number(q.round_off || 0)
-  ).toFixed(2);
+  );
 
   return { subtotal, total_tax, cgst_amount, sgst_amount, igst_amount, tcs_amount, total };
 }
