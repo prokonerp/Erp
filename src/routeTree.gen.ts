@@ -13,6 +13,7 @@ import { Route as RaiseTicketRouteImport } from './routes/raise-ticket'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InvoicePreviewRouteImport } from './routes/invoice.preview'
 import { Route as AppTicketsRouteImport } from './routes/_app/tickets'
 import { Route as AppSalesRouteImport } from './routes/_app/sales'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
@@ -142,6 +143,11 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicePreviewRoute = InvoicePreviewRouteImport.update({
+  id: '/invoice/preview',
+  path: '/invoice/preview',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppTicketsRoute = AppTicketsRouteImport.update({
@@ -723,6 +729,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof AppReportsRoute
   '/sales': typeof AppSalesRouteWithChildren
   '/tickets': typeof AppTicketsRouteWithChildren
+  '/invoice/preview': typeof InvoicePreviewRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
   '/amc/oem': typeof AppAmcOemRouteWithChildren
@@ -830,6 +837,7 @@ export interface FileRoutesByTo {
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
+  '/invoice/preview': typeof InvoicePreviewRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
   '/amc/oem': typeof AppAmcOemRouteWithChildren
@@ -942,6 +950,7 @@ export interface FileRoutesById {
   '/_app/reports': typeof AppReportsRoute
   '/_app/sales': typeof AppSalesRouteWithChildren
   '/_app/tickets': typeof AppTicketsRouteWithChildren
+  '/invoice/preview': typeof InvoicePreviewRoute
   '/_app/amc/$id': typeof AppAmcIdRoute
   '/_app/amc/new': typeof AppAmcNewRoute
   '/_app/amc/oem': typeof AppAmcOemRouteWithChildren
@@ -1060,6 +1069,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales'
     | '/tickets'
+    | '/invoice/preview'
     | '/amc/$id'
     | '/amc/new'
     | '/amc/oem'
@@ -1167,6 +1177,7 @@ export interface FileRouteTypes {
     | '/products'
     | '/records'
     | '/reports'
+    | '/invoice/preview'
     | '/amc/$id'
     | '/amc/new'
     | '/amc/oem'
@@ -1278,6 +1289,7 @@ export interface FileRouteTypes {
     | '/_app/reports'
     | '/_app/sales'
     | '/_app/tickets'
+    | '/invoice/preview'
     | '/_app/amc/$id'
     | '/_app/amc/new'
     | '/_app/amc/oem'
@@ -1377,6 +1389,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
   RaiseTicketRoute: typeof RaiseTicketRoute
+  InvoicePreviewRoute: typeof InvoicePreviewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1407,6 +1420,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoice/preview': {
+      id: '/invoice/preview'
+      path: '/invoice/preview'
+      fullPath: '/invoice/preview'
+      preLoaderRoute: typeof InvoicePreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/tickets': {
@@ -2616,6 +2636,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
   RaiseTicketRoute: RaiseTicketRoute,
+  InvoicePreviewRoute: InvoicePreviewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -43,3 +43,7 @@ data/
 *.sln
 *.sw?
 .env*
+
+# Playwright MCP test artifacts (browser page dumps / screenshots)
+.playwright-mcp/
+invoice-preview.png

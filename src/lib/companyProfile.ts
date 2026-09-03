@@ -18,6 +18,8 @@ export type CompanyProfile = {
   bank_account_number: string | null;
   bank_ifsc: string | null;
   bank_branch: string | null;
+  /** Optional company seal + signature image (printed in the signatory block). */
+  seal_url?: string | null;
 };
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
