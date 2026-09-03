@@ -32,6 +32,7 @@ import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
   computeExpiryDate, DEFAULT_VALIDITY_DAYS,
+  validateQuotation,
 } from "@/lib/crm";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
@@ -88,6 +89,10 @@ function QuoteEditor() {
   const printRef = useRef<HTMLDivElement>(null);
   const { action } = Route.useSearch();
   const autoRan = useRef(false);
+  const applyCustomerSeqRef = useRef(0);
+  const [saving, setSaving] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const savedOnceRef = useRef(false);
 
   const load = async () => {
     let sourceId = id;
@@ -248,83 +253,135 @@ function QuoteEditor() {
 
   const applyCustomer = async (id: string | null, c: Customer | null) => {
     if (!q) return;
+    const seq = ++applyCustomerSeqRef.current;
     if (!c || !id) {
       setCustomer(c);
-      setQ({ ...q, customer_id: id || null } as Quotation);
+      setQ((prev) => (prev ? ({ ...prev, customer_id: id || null } as Quotation) : prev));
       return;
     }
-    // Ensure full addresses — handle stale cache where picker lacked them
     let full: Customer = c;
     const anyC = c as unknown as Record<string, unknown>;
-    if (anyC["billing_address"] === undefined && anyC["shipping_address"] === undefined && anyC["address"] === undefined) {
-      const { data } = await supabase.from("customers").select("*").eq("id", id).maybeSingle();
-      if (data) full = data as unknown as Customer;
+    const isStale = ["billing_address", "shipping_address", "address"].some(
+      (k) => !(k in anyC) || anyC[k] === undefined,
+    );
+    if (isStale) {
+      try {
+        const { data } = await supabase.from("customers").select("*").eq("id", id).maybeSingle();
+        if (seq !== applyCustomerSeqRef.current) return;
+        if (data) full = data as unknown as Customer;
+      } catch {
+        if (seq !== applyCustomerSeqRef.current) return;
+        // on failure keep full as c and preserve old values below
+      }
     }
+    if (seq !== applyCustomerSeqRef.current) return;
     setCustomer(full);
-    setQ({
-      ...q,
-      customer_id: id,
-      // Instant auto-populate — overwrite with customer's master data
-      billing_address: full.billing_address || (full as any).address || "",
-      shipping_address: full.shipping_address || full.billing_address || (full as any).address || "",
-      place_of_supply: full.state || q.place_of_supply || "",
-      contact_name: full.contact_name || "",
-      contact_email: full.email || "",
-      contact_phone: full.phone || "",
-      payment_terms: q.payment_terms || (full as any)?.payment_terms || null,
-    } as Quotation);
+    setQ((prev) => {
+      if (!prev) return prev;
+      const billing = (full.billing_address || "").trim()
+        ? full.billing_address
+        : (((full as unknown as Record<string, unknown>)["address"] as string) || "").trim()
+          ? ((full as unknown as Record<string, unknown>)["address"] as string)
+          : prev.billing_address || "";
+      const shippingRaw = (full.shipping_address || "").trim()
+        ? full.shipping_address
+        : (full.billing_address || "").trim()
+          ? full.billing_address
+          : (((full as unknown as Record<string, unknown>)["address"] as string) || "").trim()
+            ? ((full as unknown as Record<string, unknown>)["address"] as string)
+            : null;
+      const shipping = shippingRaw !== null ? (shippingRaw as string) : prev.shipping_address || "";
+      const place = (full.state || "").trim() ? full.state : prev.place_of_supply || "";
+      const cn = (full.contact_name || "").trim() ? full.contact_name : prev.contact_name || "";
+      const ce = (full.email || "").trim() ? full.email : prev.contact_email || "";
+      const cp = (full.phone || "").trim() ? full.phone : prev.contact_phone || "";
+      const pt = prev.payment_terms || ((full as unknown as Record<string, unknown>)["payment_terms"] as string) || null;
+      return {
+        ...prev,
+        customer_id: id,
+        billing_address: billing as string,
+        shipping_address: shipping as string,
+        place_of_supply: place as string,
+        contact_name: cn as string,
+        contact_email: ce as string,
+        contact_phone: cp as string,
+        payment_terms: pt as string | null,
+      } as Quotation;
+    });
   };
 
   const save = async () => {
     if (!q) return;
-    const payload: any = {
-      customer_id: (q as any).customer_id,
+    if (saving) return;
+    if (isClone && savedOnceRef.current) return;
+    const vErr = validateQuotation({
+      items: q.items,
       branch_id: q.branch_id,
-      reference_no: q.reference_no, subject: q.subject,
-      quote_date: q.quote_date, expiry_date: q.expiry_date, validity_days: q.validity_days,
-      salesperson: q.salesperson, project_name: q.project_name,
-      payment_terms: q.payment_terms,
-      delivery_timeline: q.delivery_timeline,
-      contact_name: q.contact_name,
-      contact_email: q.contact_email,
-      contact_phone: q.contact_phone,
-      billing_address: q.billing_address, shipping_address: q.shipping_address,
       place_of_supply: q.place_of_supply,
-      items: q.items as any,
-      discount_amount: q.discount_amount || 0,
-      shipping_charges: q.shipping_charges || 0,
-      adjustment: q.adjustment || 0,
-      tcs_percent: q.tcs_percent || 0,
-      round_off: q.round_off || 0,
-      subtotal: totals.subtotal,
-      gst_percent: q.gst_percent,
-      discount_label: discountLabel.trim() || "Discount",
-      gst_amount: totals.total_tax,
-      cgst_amount: totals.cgst_amount,
-      sgst_amount: totals.sgst_amount,
-      igst_amount: totals.igst_amount,
-      tcs_amount: totals.tcs_amount,
-      total: totals.total,
-      status: q.status,
-      terms: q.terms,
-      customer_notes: q.customer_notes,
-      remarks: q.remarks,
-      include_oem_logos: (q as any).include_oem_logos !== false,
-    };
-    if (isClone) {
-      const { data: u } = await supabase.auth.getUser();
-      payload.owner_id = u.user!.id;
-      const { data, error } = await supabase.from("quotations").insert(payload).select().single();
-      if (error) return toast.error(error.message);
-      try { sessionStorage.removeItem("quote_clone_source"); } catch {}
+      discount_amount: q.discount_amount,
+      shipping_charges: q.shipping_charges,
+      adjustment: q.adjustment,
+      tcs_percent: q.tcs_percent,
+      round_off: q.round_off,
+      customer_id: (q as any).customer_id,
+      require_branch: true,
+      require_place_of_supply: false,
+    });
+    if (vErr) { toast.error(vErr); return; }
+    setSaving(true);
+    try {
+      const payload: any = {
+        customer_id: (q as any).customer_id,
+        branch_id: q.branch_id,
+        reference_no: q.reference_no, subject: q.subject,
+        quote_date: q.quote_date, expiry_date: q.expiry_date, validity_days: q.validity_days,
+        salesperson: q.salesperson, project_name: q.project_name,
+        payment_terms: q.payment_terms,
+        delivery_timeline: q.delivery_timeline,
+        contact_name: q.contact_name,
+        contact_email: q.contact_email,
+        contact_phone: q.contact_phone,
+        billing_address: q.billing_address, shipping_address: q.shipping_address,
+        place_of_supply: q.place_of_supply,
+        items: q.items as any,
+        discount_amount: q.discount_amount || 0,
+        shipping_charges: q.shipping_charges || 0,
+        adjustment: q.adjustment || 0,
+        tcs_percent: q.tcs_percent || 0,
+        round_off: q.round_off || 0,
+        subtotal: totals.subtotal,
+        gst_percent: q.gst_percent,
+        discount_label: discountLabel.trim() || "Discount",
+        gst_amount: totals.total_tax,
+        cgst_amount: totals.cgst_amount,
+        sgst_amount: totals.sgst_amount,
+        igst_amount: totals.igst_amount,
+        tcs_amount: totals.tcs_amount,
+        total: totals.total,
+        status: q.status,
+        terms: q.terms,
+        customer_notes: q.customer_notes,
+        remarks: q.remarks,
+        include_oem_logos: (q as any).include_oem_logos !== false,
+      };
+      if (isClone) {
+        const { data: u } = await supabase.auth.getUser();
+        payload.owner_id = u.user!.id;
+        const { data, error } = await supabase.from("quotations").insert(payload).select().single();
+        if (error) { toast.error(error.message); return; }
+        savedOnceRef.current = true;
+        try { sessionStorage.removeItem("quote_clone_source"); } catch {}
+        toast.success("Saved");
+        nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
+        return;
+      }
+      const { error } = await supabase.from("quotations").update(payload).eq("id", id);
+      if (error) throw new Error(error.message);
       toast.success("Saved");
-      nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
-      return;
+      await load();
+    } finally {
+      setSaving(false);
     }
-    const { error } = await supabase.from("quotations").update(payload).eq("id", id);
-    if (error) throw new Error(error.message);
-    toast.success("Saved");
-    await load();
   };
 
   const setStatus = async (s: QuoteStatus) => {
@@ -353,14 +410,19 @@ function QuoteEditor() {
 
   const convertToSo = async () => {
     if (!q) return;
+    if (converting || saving) return;
+    setConverting(true);
     try {
       await save();
       // Re-fetch the freshly saved quotation so createSalesOrderFromQuote
       // works off DB-accurate data (stale `q` state would otherwise be used).
+      const targetId = isClone ? null : id;
+      // For clone, save() already navigates — no conversion needed until persisted
+      if (isClone) return;
       const { data: fresh, error: fetchErr } = await supabase
         .from("quotations")
         .select("*")
-        .eq("id", id)
+        .eq("id", targetId as string)
         .single();
       if (fetchErr) throw new Error(fetchErr.message);
       if (!fresh) throw new Error("Quotation not found after saving.");
@@ -371,6 +433,8 @@ function QuoteEditor() {
       nav({ to: "/sales/orders/$id", params: { id: r.id } });
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Failed to convert");
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -428,8 +492,8 @@ function QuoteEditor() {
           <Button size="sm" variant="outline" disabled={isClone} onClick={doPrint}><Printer className="h-4 w-4 mr-1" />Print</Button>
           <Button size="sm" variant="outline" disabled={isClone} onClick={doDownload}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
           <Button size="sm" onClick={() => setShareOpen(true)} disabled={isClone}><Share2 className="h-4 w-4 mr-1" />Share</Button>
-          <Button size="sm" variant="outline" onClick={convertToSo} disabled={isClone}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
-          <Button size="sm" onClick={save}><Save className="h-4 w-4 mr-1" />Save</Button>
+          <Button size="sm" variant="outline" onClick={convertToSo} disabled={isClone || saving || converting}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
+          <Button size="sm" onClick={save} disabled={saving || converting}><Save className="h-4 w-4 mr-1" />{saving ? "Saving…" : "Save"}</Button>
         </div>
       </div>
 
