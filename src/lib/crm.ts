@@ -1,4 +1,4 @@
-import { stateCodeFromGSTIN } from "@/lib/gst";
+import { resolveSupplyType } from "@/lib/gst";
 import { r2 } from "@/lib/money";
 
 export type Customer = {
@@ -11,7 +11,7 @@ export type Customer = {
   billing_address: string | null;
   shipping_address: string | null;
   state: string | null;
-  city: string | null;
+  city?: string | null;
   gst: string | null;
   pan?: string | null;
   gst_status?: string | null;
@@ -328,9 +328,11 @@ export function lineTax(it: QuoteItem): number {
 }
 
 /**
- * B-04: single source of truth for intra- vs inter-state supply.
- * GSTIN state codes win when both sides are known (matching the invoice
- * engine); free-text state names are only the fallback.
+ * B-04 + H3: single source of truth for intra- vs inter-state supply.
+ * Delegates to `resolveSupplyType` in gst.ts so CRM and invoice engine share
+ * identical rules: GSTIN state codes win when available; free-text state
+ * names are resolved via GSTIN_STATE_CODES inverse; missing buyer state
+ * returns missingState (caller must zero tax, see computeQuoteTotals).
  */
 export function isIntraSupply(opts: {
   seller_gstin?: string | null;
@@ -338,10 +340,17 @@ export function isIntraSupply(opts: {
   place_of_supply?: string | null;
   business_state: string;
 }): boolean {
-  const sellerCode = opts.seller_gstin ? stateCodeFromGSTIN(opts.seller_gstin) : null;
-  const buyerCode = opts.buyer_gstin ? stateCodeFromGSTIN(opts.buyer_gstin) : null;
-  if (sellerCode && buyerCode) return sellerCode === buyerCode;
-  return (opts.place_of_supply || "").trim().toLowerCase() === opts.business_state.trim().toLowerCase();
+  const r = resolveSupplyType({
+    seller_gstin: opts.seller_gstin,
+    buyer_gstin: opts.buyer_gstin,
+    business_state: opts.business_state,
+    place_of_supply: opts.place_of_supply,
+  });
+  // Missing buyer state previously mapped to inter (false); preserve that
+  // boolean for backwards compat — the tax-zeroing is handled at the
+  // computeQuoteTotals level via missingState (mirrors gst.ts).
+  if (r.missingState) return false;
+  return !r.isInterstate;
 }
 
 export function computeQuoteTotals(q: {
@@ -363,15 +372,26 @@ export function computeQuoteTotals(q: {
   const subtotal = r2(q.items.reduce((s, it) => s + lineAmount(it), 0));
   const total_tax = r2(q.items.reduce((s, it) => s + lineTax(it), 0));
 
-  const intra = isIntraSupply({
+  // H3: use shared resolver — maps business_state / place_of_supply to
+  // GSTIN codes via GSTIN_STATE_CODES inverse, and surfaces missingState so
+  // we can zero tax instead of mis-classifying as IGST/CGST.
+  const resolved = resolveSupplyType({
     seller_gstin: q.seller_gstin,
     buyer_gstin: q.buyer_gstin,
-    place_of_supply: q.place_of_supply,
     business_state: q.business_state,
+    place_of_supply: q.place_of_supply,
   });
-  const cgst_amount = intra ? r2(total_tax / 2) : 0;
-  const sgst_amount = intra ? r2(total_tax - cgst_amount) : 0;
-  const igst_amount = intra ? 0 : total_tax;
+  const missingState = resolved.missingState;
+  const intra = !resolved.isInterstate;
+  const raw_cgst = intra ? r2(total_tax / 2) : 0;
+  const raw_sgst = intra ? r2(total_tax - raw_cgst) : 0;
+  const raw_igst = intra ? 0 : total_tax;
+  // H3: when buyer state / place of supply missing we must NOT silently
+  // assume intra or inter — zero tax lines and warn (mirrors gst.ts computeTotals).
+  const cgst_amount = missingState ? 0 : raw_cgst;
+  const sgst_amount = missingState ? 0 : raw_sgst;
+  const igst_amount = missingState ? 0 : raw_igst;
+  const gstWarning = resolved.gstWarning;
 
   const after_disc = subtotal - Number(q.discount_amount || 0);
   const tcs_base = after_disc + Number(q.shipping_charges || 0);
@@ -386,8 +406,113 @@ export function computeQuoteTotals(q: {
     + Number(q.round_off || 0)
   );
 
-  return { subtotal, total_tax, cgst_amount, sgst_amount, igst_amount, tcs_amount, total };
+  return { subtotal, total_tax, cgst_amount, sgst_amount, igst_amount, tcs_amount, total, gstWarning };
 }
+
+// ── Centralized quotation validation (H8) ──
+// Single source for new.tsx and $id.tsx save guards.
+// Returns first error string or null if ok. Reuses lineAmount for subtotal.
+export function validateQuotation(opts: {
+  items: QuoteItem[];
+  branch_id?: string | null;
+  place_of_supply?: string | null;
+  discount_amount?: number | null;
+  shipping_charges?: number | null;
+  adjustment?: number | null;
+  tcs_percent?: number | null;
+  round_off?: number | null;
+  customer_id?: string | null;
+  require_branch?: boolean;
+  require_place_of_supply?: boolean;
+}): string | null {
+  const {
+    items,
+    branch_id,
+    place_of_supply,
+    discount_amount,
+    shipping_charges,
+    adjustment,
+    tcs_percent,
+    round_off,
+    customer_id,
+    require_branch = true,
+    require_place_of_supply = false,
+  } = opts;
+
+  if (customer_id !== undefined && !customer_id) return "Select a customer";
+  if (require_branch && !branch_id) return "Select a warehouse / branch";
+  if (require_place_of_supply && !(place_of_supply || "").trim()) return "Select place of supply";
+
+  // Numeric doc-level fields must be finite
+  const numChecks: Array<[string, number | null | undefined, string]> = [
+    ["Discount", discount_amount, "Discount amount must be a valid number"],
+    ["Shipping", shipping_charges, "Shipping charges must be a valid number"],
+    ["Adjustment", adjustment, "Adjustment must be a valid number"],
+    ["TCS %", tcs_percent, "TCS % must be a valid number"],
+    ["Round-off", round_off, "Round-off must be a valid number"],
+  ];
+  for (const [, val, msg] of numChecks) {
+    if (val == null) continue;
+    const n = Number(val);
+    if (!Number.isFinite(n)) return msg;
+  }
+
+  // TCS % bounds
+  if (tcs_percent != null) {
+    const n = Number(tcs_percent);
+    if (Number.isFinite(n) && (n < 0 || n > 100)) return "TCS % must be between 0 and 100";
+  }
+
+  // Filter to valid items (non-empty description or product_id)
+  const valid = (items || []).filter((it) => ((it.description || "").trim() || (it.product_id || "").trim()));
+  if (!valid.length) return "Add at least one item";
+
+  // Per-line checks
+  for (let idx = 0; idx < valid.length; idx++) {
+    const it = valid[idx];
+    const label = (it.description || it.product_name || `Item ${idx + 1}`).trim() || `Item ${idx + 1}`;
+    const qty = Number(it.qty);
+    if (!Number.isFinite(qty)) return `Quantity for "${label}" must be a valid number`;
+    if (qty <= 0) return `Quantity for "${label}" must be greater than zero`;
+    if (!Number.isInteger(qty)) return `Quantity for "${label}" must be a whole number`;
+    const rate = Number(it.rate);
+    if (!Number.isFinite(rate)) return `Rate for "${label}" must be a valid number`;
+    if (rate < 0) return `Rate for "${label}" cannot be negative`;
+    const disc = Number(it.discount_percent ?? 0);
+    if (!Number.isFinite(disc)) return `Discount % for "${label}" must be a valid number`;
+    if (disc < 0 || disc > 100) return `Discount % for "${label}" must be between 0 and 100`;
+    const tax = Number(it.tax_percent ?? 0);
+    if (!Number.isFinite(tax)) return `Tax % for "${label}" must be a valid number`;
+    if (tax < 0 || tax > 100) return `Tax % for "${label}" must be between 0 and 100`;
+  }
+
+  // Duplicate detection: trim + lowercased, skip empty keys, product_id wins
+  const seen = new Set<string>();
+  for (const it of valid) {
+    const raw = (it.product_id || "").trim() ? (it.product_id as string).trim() : (it.description || "").trim();
+    const key = raw.toLowerCase();
+    if (!key) continue;
+    if (seen.has(key)) return `Duplicate item: ${it.description || it.product_name || raw}`;
+    seen.add(key);
+  }
+
+  // Discount amount vs subtotal
+  if (discount_amount != null) {
+    const da = Number(discount_amount);
+    if (Number.isFinite(da) && da !== 0) {
+      const subtotal = valid.reduce((s, it) => s + lineAmount(it), 0);
+      if (da < 0) return "Discount amount cannot be negative";
+      if (da > subtotal) return "Discount cannot exceed subtotal";
+    }
+  }
+
+  // Discount/tax already handled isFinite above, but also ensure shipping etc. not NaN handled.
+
+  return null;
+}
+
+// Alias for task spec naming
+export const validateQuote = validateQuotation;
 
 // Number to words (Indian) for invoice totals
 export function amountInWords(num: number): string {

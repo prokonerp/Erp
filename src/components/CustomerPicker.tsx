@@ -49,15 +49,30 @@ export function CustomerPicker({
   const rows = (data as any)?.rows ?? [];
 
   // Selected may not be in the current 25-row window; fetch it separately for display
+  // Fallback select columns MUST match CUSTOMER_PICKER_COLS so the cached shape is identical
+  // and partial selects never return undefined for required display fields.
+  const FALLBACK_COLS = "id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address";
   const [selectedFallback, setSelectedFallback] = useState<Customer | null>(null);
   const selected = useMemo(() => rows.find((r: any) => r.id === value) || selectedFallback, [rows, value, selectedFallback]);
 
   useEffect(() => {
-    if (!value || rows.find((r: any) => r.id === value) || selectedFallback?.id === value) return;
+    // Clear stale fallback when selection cleared or now present in the window
+    if (!value) {
+      if (selectedFallback) setSelectedFallback(null);
+      return;
+    }
+    if (rows.find((r: any) => r.id === value)) {
+      if (selectedFallback) setSelectedFallback(null);
+      return;
+    }
+    if (selectedFallback?.id === value) return;
+    // Value exists but not in current picker window → fetch by id
+    // If value changed while previous fetch was in-flight, discard stale fallback first
+    if (selectedFallback && selectedFallback.id !== value) setSelectedFallback(null);
     let active = true;
     supabase
       .from("customers")
-      .select("id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address")
+      .select(FALLBACK_COLS)
       .eq("id", value)
       .single()
       .then(({ data }) => {

@@ -22,6 +22,7 @@ import {
   fmtMoney, computeQuoteTotals, lineAmount, isIntraSupply, INDIAN_STATES,
   computeExpiryDate, DEFAULT_VALIDITY_DAYS,
   syncLeadExpectedValue,
+  validateQuotation,
 } from "@/lib/crm";
 import type { QuoteTermsTemplate } from "@/lib/crm";
 import { getCurrentUserName } from "@/lib/currentUser";
@@ -94,6 +95,7 @@ function NewQuotation() {
   const [pasteText, setPasteText] = useState("");
   const [stockByProduct, setStockByProduct] = useState<Record<string, StockRow[]>>({});
   const savedOnceRef = useRef(false);
+  const applyCustomerSeqRef = useRef(0);
 
   // ── Revise trail (Option A) ──
   const [reviseOf, setReviseOf] = useState<string | null>(null);
@@ -109,7 +111,7 @@ function NewQuotation() {
     fetchBranches().then((bs) => {
       setBranches(bs);
       const def = bs.find((b) => b.is_default) || bs[0];
-      if (def) setBranchId(def.id);
+      if (def) setBranchId((prev) => prev ?? def.id);
     }).catch(() => {});
 
     supabase.from("crm_settings").select("*").eq("id", 1).maybeSingle().then(({ data }) => {
@@ -335,41 +337,72 @@ function NewQuotation() {
   };
 
   const applyCustomer = async (id: string | null, c: Customer | null) => {
-    setCustomerId(id);
+    const seq = ++applyCustomerSeqRef.current;
     if (!c || !id) {
+      setCustomerId(id);
       setCustomer(c);
+      markDirty();
       return;
     }
-    // Picker now returns addresses, but handle stale cache — fetch full if addresses missing
     let full: Customer = c;
     const anyC = c as unknown as Record<string, unknown>;
-    if (anyC["billing_address"] === undefined && anyC["shipping_address"] === undefined && anyC["address"] === undefined) {
-      const { data } = await supabase.from("customers").select("*").eq("id", id).maybeSingle();
-      if (data) full = data as unknown as Customer;
+    const isStale = ["billing_address", "shipping_address", "address"].some(
+      (k) => !(k in anyC) || anyC[k] === undefined,
+    );
+    if (isStale) {
+      try {
+        const { data } = await supabase.from("customers").select("*").eq("id", id).maybeSingle();
+        if (seq !== applyCustomerSeqRef.current) return;
+        if (data) full = data as unknown as Customer;
+      } catch {
+        if (seq !== applyCustomerSeqRef.current) return;
+        // on fetch failure keep old values (don't wipe) — full stays as c
+      }
     }
+    if (seq !== applyCustomerSeqRef.current) return;
+    // batch id+customer together after resolve to avoid flash
+    setCustomerId(id);
     setCustomer(full);
-    // Instant auto-populate — overwrite with customer's data as soon as picked
-    setBilling(full.billing_address || full.address || "");
-    setShipping(full.shipping_address || full.billing_address || full.address || "");
-    setPlaceOfSupply(full.state || "");
-    setContactName(full.contact_name || "");
-    setContactEmail(full.email || "");
-    setContactPhone(full.phone || "");
+    // preserve previous manual edits if customer value is empty/whitespace
+    const hasBilling = !!(full.billing_address || "").trim();
+    const hasAddress = !!(((full as unknown as Record<string, unknown>)["address"] as string) || "").trim();
+    const hasShipping = !!(full.shipping_address || "").trim();
+    const hasState = !!(full.state || "").trim();
+    const hasContactName = !!(full.contact_name || "").trim();
+    const hasContactEmail = !!(full.email || "").trim();
+    const hasContactPhone = !!(full.phone || "").trim();
+    setBilling((prev) => {
+      if (hasBilling) return full.billing_address as string;
+      if (hasAddress) return (full as unknown as Record<string, unknown>)["address"] as string;
+      return prev;
+    });
+    setShipping((prev) => {
+      if (hasShipping) return full.shipping_address as string;
+      if (hasBilling) return full.billing_address as string;
+      if (hasAddress) return (full as unknown as Record<string, unknown>)["address"] as string;
+      return prev;
+    });
+    setPlaceOfSupply((prev) => (hasState ? (full.state as string) : prev));
+    setContactName((prev) => (hasContactName ? (full.contact_name as string) : prev));
+    setContactEmail((prev) => (hasContactEmail ? (full.email as string) : prev));
+    setContactPhone((prev) => (hasContactPhone ? (full.phone as string) : prev));
     markDirty();
   };
 
   const validate = (): string | null => {
-    if (!customerId) return "Select a customer";
-    const valid = items.filter((it) => (it.description || "").trim() || it.product_id);
-    if (!valid.length) return "Add at least one item";
-    if (valid.some((it) => Number(it.qty) <= 0)) return "Quantity must be greater than zero";
-    const seen = new Set<string>();
-    for (const it of valid) {
-      const key = (it.product_id || it.description || "").toLowerCase();
-      if (key && seen.has(key)) return `Duplicate item: ${it.description || it.product_name || key}`;
-      seen.add(key);
-    }
-    return null;
+    return validateQuotation({
+      items,
+      branch_id: branchId,
+      place_of_supply: placeOfSupply,
+      discount_amount: discountAmount,
+      shipping_charges: shippingCharges,
+      adjustment,
+      tcs_percent: tcsPercent,
+      round_off: roundOff,
+      customer_id: customerId,
+      require_branch: true,
+      require_place_of_supply: false,
+    });
   };
 
   const save = async (opts?: { andSend?: boolean }): Promise<string | null> => {
@@ -433,11 +466,45 @@ function NewQuotation() {
 
       // ── Revise path: copy lead_id, set revision trail, pipeline-sync, no new lead ──
       if (isRevise) {
+        // Optimistic guard: verify predecessor still latest (race check H6)
+        const { data: pred } = await (supabase as any)
+          .from("quotations")
+          .select("is_latest,revision_no")
+          .eq("id", reviseOf)
+          .maybeSingle();
+        if (!pred || (pred as any).is_latest === false) {
+          toast.error("Cannot revise a superseded quotation — revise the latest instead");
+          setReviseBlocked(true);
+          return null;
+        }
+        // Compute max revision_no for thread (lead_id grouping when present) to avoid dup revision_no
+        let maxRev = Number((pred as any).revision_no ?? reviseNo ?? 1);
+        try {
+          if (reviseLeadId) {
+            const { data: siblings } = await (supabase as any)
+              .from("quotations")
+              .select("revision_no")
+              .eq("lead_id", reviseLeadId);
+            if (siblings) {
+              for (const r of siblings as any[]) maxRev = Math.max(maxRev, Number(r.revision_no || 1));
+            }
+          } else {
+            const { data: siblings } = await (supabase as any)
+              .from("quotations")
+              .select("revision_no")
+              .or(`id.eq.${reviseOf},revision_of.eq.${reviseOf}`);
+            if (siblings) {
+              for (const r of siblings as any[]) maxRev = Math.max(maxRev, Number(r.revision_no || 1));
+            }
+          }
+        } catch { /* ignore — fallback to pred */ }
+        const finalRevNo = maxRev + 1;
+
         const payload: Record<string, unknown> = {
           ...basePayload,
           lead_id: reviseLeadId,
           revision_of: reviseOf,
-          revision_no: reviseNo,
+          revision_no: finalRevNo,
           is_latest: true,
           superseded_at: null,
         };
@@ -447,13 +514,21 @@ function NewQuotation() {
         const saved = data as { id: string; quote_no?: string | null; lead_id?: string | null };
         const newId = saved.id;
 
-        // Mark predecessor as superseded
-        const { error: supErr } = await (supabase as any)
+        // Mark predecessor as superseded with optimistic is_latest=true filter (H6 atomic guard)
+        const { data: updated, error: supErr } = await (supabase as any)
           .from("quotations")
           .update({ is_latest: false, superseded_at: new Date().toISOString() })
-          .eq("id", reviseOf);
+          .eq("id", reviseOf)
+          .eq("is_latest", true)
+          .select("id");
         if (supErr) {
           toast.error(`Revision created but predecessor could not be marked superseded: ${supErr.message}`);
+        } else if (!updated || (updated as unknown as any[]).length === 0) {
+          // Race: another revision won — rollback duplicate is_latest=true
+          await (supabase as any).from("quotations").delete().eq("id", newId);
+          savedOnceRef.current = false;
+          toast.error("Revision conflict: another revision was created first. Please refresh and try again.");
+          return null;
         }
 
         // Pipeline sync: update leads.expected_value to new total (same lead, no new lead)
@@ -467,7 +542,7 @@ function NewQuotation() {
 
         const oldStr = fmtMoney(reviseOldTotal ?? 0);
         const newStr = fmtMoney(totals.total);
-        toast.success(`Revised v${reviseNo} created — pipeline updated ${oldStr} → ${newStr} (no new lead)`);
+        toast.success(`Revised v${finalRevNo} created — pipeline updated ${oldStr} → ${newStr} (no new lead)`);
         return newId;
       }
 

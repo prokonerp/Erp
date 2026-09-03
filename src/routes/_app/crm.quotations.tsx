@@ -432,6 +432,21 @@ function QuotesWorkspace() {
     });
   }, []);
 
+  // H4 Tenant isolation: quotations are tenant-isolated via Supabase RLS
+  // (owner_id / branch policies). All reads go through `supabase.from("quotations")`
+  // which is RLS-gated; never bypass with service_role. No client-side tenant filter.
+
+  // H9: escape PostgREST `or` filter — raw interpolation would let `, ( ) % _ \`
+  // break the filter or inject extra predicates.
+  const escapePostgrestOrIlike = (term: string) =>
+    term
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_")
+      .replace(/,/g, "\\,")
+      .replace(/\(/g, "\\(")
+      .replace(/\)/g, "\\)");
+
   const buildQuery = useCallback(
     (from: number, to: number) => {
       let query = supabase
@@ -446,7 +461,10 @@ function QuotesWorkspace() {
       const s = search.trim();
       if (s) {
         // Server-side search on quote_no/subject; customer/amount filtered client-side.
-        query = query.or(`quote_no.ilike.%${s}%,subject.ilike.%${s}%,reference_no.ilike.%${s}%`);
+        // H9: escaped so `% _ , ( ) \` in user input cannot inject PostgREST `or` predicates.
+        const esc = escapePostgrestOrIlike(s);
+        const q = `%${esc}%`;
+        query = query.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q}`);
       }
       return query;
     },

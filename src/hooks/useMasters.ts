@@ -42,8 +42,12 @@ export function useCustomers() {
       let count: number | null = first.count ?? null;
       if (count != null && count > PAGE) {
         const pages = Math.ceil(count / PAGE);
+        // Cap fan-out to avoid unbounded parallel requests (max 10 pages = 10k rows).
+        // If count exceeds cap, fetch in capped batches; caller gets first 10k and
+        // table/picker should be used for larger datasets. Payload stays bounded.
+        const cappedPages = Math.min(pages, 10);
         const promises: Promise<any>[] = [];
-        for (let p = 1; p < pages; p++) {
+        for (let p = 1; p < cappedPages; p++) {
           promises.push(
             (supabase
               .from("customers")
@@ -56,6 +60,11 @@ export function useCustomers() {
         for (const r of results) {
           if (r.error) throw r.error;
           all.push(...((r.data || []) as unknown as Customer[]));
+        }
+        // Return accurate count even when capped (count = actual total)
+        if (pages > cappedPages) {
+          // Caller can detect truncation via rows.length < count
+          count = first.count ?? null;
         }
       } else if (count == null && first.data.length === PAGE) {
         // Fallback when count not returned — fetch remaining sequentially but in parallel batches
@@ -98,10 +107,13 @@ export function useCustomersForPicker(search: string = "") {
           .order("company")
           .limit(25);
         if (error) throw error;
-        return { rows: (data || []) as unknown as Customer[], count: 25 };
+        const rows = (data || []) as unknown as Customer[];
+        return { rows, count: rows.length };
       }
       // Server-side ilike search across indexed columns + limit 30
-      const q = `%${term}%`;
+      // Escape %, _, \ so user input cannot inject wildcards; PG uses \ as default escape.
+      const escaped = term.replace(/[%_\\]/g, "\\$&");
+      const q = `%${escaped}%`;
       const { data, error } = await supabase
         .from("customers")
         .select(cols)
@@ -113,8 +125,8 @@ export function useCustomersForPicker(search: string = "") {
     },
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
-    keepPreviousData: true,
-  } as any);
+    placeholderData: (prev: any) => prev,
+  });
 }
 
 // Production-grade paginated table query for Customer Master.
@@ -134,7 +146,8 @@ export function useCustomersTable(opts: {
     queryFn: async () => {
       let q = supabase.from("customers").select(CUSTOMER_LIST_COLS, { count: "exact" });
       if (term) {
-        const p = `%${term}%`;
+        const escaped = term.replace(/[%_\\]/g, "\\$&");
+        const p = `%${escaped}%`;
         q = q.or(`company.ilike.${p},contact_name.ilike.${p},phone.ilike.${p},gst.ilike.${p},state.ilike.${p},city.ilike.${p}`);
       }
       q = q.order(sortBy, { ascending: sortDir === "asc", nullsFirst: sortDir === "asc" }).range(page * pageSize, (page + 1) * pageSize - 1);
@@ -143,8 +156,8 @@ export function useCustomersTable(opts: {
       return { rows: (data || []) as unknown as Customer[], count: count ?? 0 };
     },
     staleTime: 30 * 1000,
-    keepPreviousData: true,
-  } as any);
+    placeholderData: (prev: any) => prev,
+  });
 }
 
 export function useProducts() {
@@ -181,7 +194,8 @@ export function useProductsForPicker(search: string = "") {
         if (error) throw error;
         return (data || []) as unknown as ProductMaster[];
       }
-      const q = `%${term}%`;
+      const escaped = term.replace(/[%_\\]/g, "\\$&");
+      const q = `%${escaped}%`;
       const { data, error } = await supabase
         .from("products")
         .select("id, name, model, short_name, display_name, brand, category, hsn, unit, is_serialized, serial_tracking")
@@ -195,7 +209,7 @@ export function useProductsForPicker(search: string = "") {
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
     placeholderData: (prev: any) => prev,
-  } as any);
+  });
 }
 
 export function useProductsTable(opts: {
@@ -212,7 +226,8 @@ export function useProductsTable(opts: {
     queryFn: async () => {
       let q = supabase.from("products").select(PRODUCT_LIST_COLS, { count: "exact" });
       if (term) {
-        const p = `%${term}%`;
+        const escaped = term.replace(/[%_\\]/g, "\\$&");
+        const p = `%${escaped}%`;
         q = q.or(`name.ilike.${p},model.ilike.${p},brand.ilike.${p},category.ilike.${p},hsn.ilike.${p}`);
       }
       if (category !== "__all") q = q.eq("category", category);
@@ -224,7 +239,7 @@ export function useProductsTable(opts: {
     },
     staleTime: 30 * 1000,
     placeholderData: (prev: any) => prev,
-  } as any);
+  });
 }
 
 export function useVendors() {
