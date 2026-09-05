@@ -76,6 +76,7 @@ function NewInvoice() {
   const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
   const [negOpen, setNegOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<"draft" | "issued">("issued");
+  const [reverseCharge, setReverseCharge] = useState(false);
   // Prefill coming from an issued General Delivery Challan — stock was already
   // reduced on Issue, so the invoice must NOT deduct it a second time.
   const [fromGeneralDc, setFromGeneralDc] = useState<{ id: string; no: string | null } | null>(null);
@@ -163,7 +164,7 @@ function NewInvoice() {
       computeTotals({
         sellerStateCode: sellerCode,
         buyerStateCode: buyerCode,
-        items: items.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate })),
+        items: items.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate, cess_rate: (i as any).cess_rate || 0 })),
         headerDiscount,
         roundOff: true,
       }),
@@ -289,6 +290,7 @@ function NewInvoice() {
         place_of_supply: buyerState,
         place_of_supply_code: buyerCode,
         is_interstate: totals.is_interstate,
+        reverse_charge: reverseCharge,
         subtotal: totals.subtotal,
         discount: totals.discount,
         taxable_value: totals.taxable_value,
@@ -487,6 +489,13 @@ function NewInvoice() {
                 <span className="text-xs text-muted-foreground">Pick branch and customer to determine tax type.</span>
               )}
             </div>
+            {totals.cess > 0 && (
+              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Cess</span><span>{inr(totals.cess)}</span></div>
+            )}
+            <label className="flex items-center gap-2 pt-2 border-t cursor-pointer">
+              <input type="checkbox" checked={reverseCharge} onChange={(e) => { setReverseCharge(e.target.checked); markDirty(); }} />
+              <span className="text-xs font-medium">Reverse Charge</span>
+            </label>
           </CardContent>
         </Card>
       </div>
@@ -510,6 +519,7 @@ function NewInvoice() {
                   <th className="p-2 text-right w-24">Rate</th>
                   <th className="p-2 text-right w-16">Disc%</th>
                   <th className="p-2 text-right w-20">GST%</th>
+                  <th className="p-2 text-right w-16">Cess%</th>
                   <th className="p-2 text-right w-24">Amount</th>
                   <th className="p-2 w-10"></th>
                 </tr>
@@ -587,6 +597,7 @@ function NewInvoice() {
                           {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}
                         </select>
                       </td>
+                      <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={(it as any).cess_rate ?? 0} onChange={(e) => setItem(idx, { cess_rate: Number(e.target.value) } as any)} /></td>
                       <td className="p-2 text-right font-medium">{inr(b?.line_total || 0)}</td>
                       <td className="p-2 text-right">
                         <Button size="icon" variant="ghost" onClick={() => { setItems((a) => a.filter((_, i) => i !== idx)); markDirty(); }}>

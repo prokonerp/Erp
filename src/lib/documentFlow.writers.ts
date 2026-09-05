@@ -102,7 +102,14 @@ export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id:
   const totals = computeTotals({
     sellerStateCode: sellerCode,
     buyerStateCode: buyerCode,
-    items: (payload.items || []).map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate })),
+    items: (payload.items || []).map((i) => ({
+      qty: i.qty,
+      rate: i.rate,
+      discount_pct: i.discount_pct,
+      gst_rate: i.gst_rate,
+      cess_rate: Number((i as any).cess_rate) || 0,
+    })),
+    headerDiscount: Number((payload as any).discount_amount ?? payload.discount) || 0,
     roundOff: true,
   });
 
@@ -111,8 +118,19 @@ export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id:
     return { ...it, taxable_value: b.taxable_value, cgst: b.cgst, sgst: b.sgst, igst: b.igst, cess: b.cess, line_total: b.line_total };
   });
 
+  // Preserve shipping/TCS/adjustment that were previously dropped (#3)
+  const shipping = Number((payload as any).shipping_charges) || 0;
+  const adjustment = Number((payload as any).adjustment) || 0;
+  const tcsAmt = Number((payload as any).tcs_amount) || 0;
+  const payloadRound = Number((payload as any).round_off) || 0;
+  // totals.total already includes headerDiscount + GST + round_off; add shipping/adjustment/TCS on top
+  const extra = shipping + adjustment + tcsAmt;
+  const finalRound = totals.round_off;
+  const finalTotal = totals.total + extra;
+
+  const { shipping_charges: _sc, adjustment: _adj, tcs_percent: _tcsP, tcs_amount: _tcsA, discount_label: _dl, discount_amount: _da, ...payloadSansExtra } = payload as any;
   const insert = {
-    ...payload,
+    ...payloadSansExtra,
     branch_id: branch?.id ?? payload.branch_id,
     seller_name: company.name,
     seller_gstin: company.gstin ?? branch?.gstin ?? null,
@@ -133,9 +151,9 @@ export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id:
     sgst: totals.sgst,
     igst: totals.igst,
     cess: totals.cess,
-    round_off: totals.round_off,
-    total: totals.total,
-    total_in_words: amountInWords(totals.total),
+    round_off: finalRound,
+    total: finalTotal,
+    total_in_words: amountInWords(finalTotal),
     items: itemsWithBreakup,
   };
 
@@ -175,7 +193,9 @@ export async function createChallanFromSalesOrder(so: SalesOrder): Promise<{ id:
   if (dcLookupErr) throw dcLookupErr;
   if (existingDc) return existingDc as unknown as Created;
 
-  const payload = salesOrderToDeliveryChallan(so);
+  const rawPayload = salesOrderToDeliveryChallan(so);
+  // Strip synthetic fields that are not columns in delivery_challans (branch_id etc — kept only inside items JSON)
+  const { branch_id: _b, buyer_state: _bs, buyer_state_code: _bsc, ...payload } = rawPayload as any;
   const { data, error } = await supabase.from("delivery_challans" as never).insert(payload as never).select("id, challan_no").single();
   if (error) throw error;
 
@@ -208,30 +228,49 @@ async function insertInvoiceFromPayload(
   const sellerCode = branch.state_code || stateCodeFromGSTIN(branch.gstin) || null;
   const buyerCode = (customer as unknown as { state_code?: string }).state_code || stateCodeFromGSTIN(customer.gst || null);
 
-  const drafts: ItemDraft[] = (payload.items || []).map((it) => ({
-    product_id: it.product_id,
-    description: it.description,
+  const drafts: ItemDraft[] = (payload.items || []).map((it: any) => ({
+    product_id: it.product_id ?? null,
+    description: it.description || "",
     hsn: it.hsn || "",
     qty: Number(it.qty) || 0,
     unit: it.unit || "Nos",
     rate: Number(it.rate) || 0,
     discount_pct: Number(it.discount_pct) || 0,
     gst_rate: Number(it.gst_rate) || 0,
-    warehouse_id: null,
-    serial_numbers: [],
-    is_serialized: false,
-    part_model_no: null,
-    part_name: null,
+    cess_rate: Number(it.cess_rate) || 0,
+    warehouse_id: it.warehouse_id ?? null,
+    serial_numbers: Array.isArray(it.serial_numbers) ? it.serial_numbers : [],
+    is_serialized: !!(it.is_serialized ?? (Array.isArray(it.serial_numbers) && it.serial_numbers.length > 0)),
+    part_model_no: it.part_model_no ?? null,
+    part_name: it.part_name ?? null,
   }));
 
-  const totals = computeTotals({
+  // Preserve header-level extras (shipping/TCS/adjustment) — previously dropped
+  const ship = Number((payload as any).shipping_charges) || 0;
+  const adj = Number((payload as any).adjustment) || 0;
+  const tcsP = Number((payload as any).tcs_percent) || 0;
+  let tcsA = Number((payload as any).tcs_amount) || 0;
+  // If tcs_amount not explicit but percent given, derive it on discounted total + shipping (mirrors crm.computeQuoteTotals)
+  // computeTotals already yields taxable+gst; tcs base = taxable + shipping
+
+  const baseTotals = computeTotals({
     sellerStateCode: sellerCode,
     buyerStateCode: buyerCode,
-    items: drafts.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate })),
+    items: drafts.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate, cess_rate: (i as any).cess_rate || 0 })),
     roundOff: true,
   });
+  if (tcsP > 0 && tcsA === 0) {
+    const tcsBase = baseTotals.taxable_value + ship;
+    tcsA = Math.round((tcsBase * tcsP) / 100 * 100) / 100;
+  }
+  const extraInv = ship + adj + tcsA;
+  const totals = {
+    ...baseTotals,
+    total: baseTotals.total + extraInv,
+    round_off: baseTotals.round_off,
+  } as typeof baseTotals;
 
-  const insertPayload = {
+  const insertPayload: any = {
     invoice_date: payload.invoice_date,
     branch_id: branch.id,
     customer_id: customer.id,
@@ -251,6 +290,7 @@ async function insertInvoiceFromPayload(
     place_of_supply: payload.place_of_supply ?? customer.state,
     place_of_supply_code: buyerCode,
     is_interstate: totals.is_interstate,
+    reverse_charge: !!(payload as any).reverse_charge,
     subtotal: totals.subtotal,
     discount: totals.discount,
     taxable_value: totals.taxable_value,

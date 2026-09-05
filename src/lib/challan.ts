@@ -4,7 +4,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { challanKeys, dcKeys } from "@/lib/queryKeys";
 
 export type ChallanItem = {
-  product_id?: string;
+  product_id?: string | null;
   part_no: string;
   part_name: string;
   description: string;
@@ -15,7 +15,7 @@ export type ChallanItem = {
   // Unified DC fields (optional; used depending on DC Type)
   oem_ref_id?: string;
   oracle_no?: string;
-  hsn?: string;
+  hsn?: string | null;
   unit_price?: string;
   weight_kg?: string;
   // OEM-specific
@@ -27,6 +27,17 @@ export type ChallanItem = {
   defective_serial?: string;
   good_model?: string;
   good_serial?: string;
+  // Preserved financials + stock tracking — allows DC→Invoice chain to retain pricing
+  rate?: number | null;
+  discount_pct?: number | null;
+  gst_rate?: number | null;
+  cess_rate?: number | null;
+  warehouse_id?: string | null;
+  serial_numbers?: string[];
+  is_serialized?: boolean;
+  branch_id?: string | null;
+  buyer_state?: string | null;
+  buyer_state_code?: string | null;
 };
 
 export type DocType = "customer" | "oem";

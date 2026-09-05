@@ -106,6 +106,7 @@ export type ItemDraft = {
   rate: number;
   discount_pct: number;
   gst_rate: number;
+  cess_rate?: number;
   warehouse_id: string | null;
   serial_numbers: string[];
   is_serialized: boolean;
@@ -122,6 +123,7 @@ export const emptyItem = (): ItemDraft => ({
   rate: 0,
   discount_pct: 0,
   gst_rate: 18,
+  cess_rate: 0,
   warehouse_id: null,
   serial_numbers: [],
   is_serialized: false,

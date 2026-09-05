@@ -14,12 +14,18 @@ export type SoItem = {
   rate: number;
   discount_pct: number;
   gst_rate: number;
+  cess_rate?: number;
   taxable_value?: number;
   cgst?: number;
   sgst?: number;
   igst?: number;
   cess?: number;
   line_total?: number;
+  warehouse_id?: string | null;
+  serial_numbers?: string[];
+  is_serialized?: boolean;
+  part_model_no?: string | null;
+  part_name?: string | null;
 };
 
 export type SalesOrder = {
