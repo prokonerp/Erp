@@ -221,8 +221,36 @@ export function ProductMasterPage() {
 
   const queryClient = useQueryClient();
 
-  const { data: productsData } = useProducts();
-  const rows = (productsData ?? []) as ProductFull[];
+  // Server-paginated master list — replaces client-only useProducts()+filter (limit 1000 bypass).
+  // Keeps the CustomerMaster pattern: manual debounce 250ms + range 25 + server ilike.
+  const [page, setPage] = useRouteState<number>("page", 0);
+  const pageSize = 25;
+  const [debouncedQ, setDebouncedQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedQ(q);
+      setPage(0);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+  useEffect(() => {
+    setPage(0);
+  }, [filterCategory, filterBrand]);
+
+  const { data: productsPage, isLoading: productsLoading } = useProductsTable({
+    search: debouncedQ,
+    category: filterCategory,
+    brand: filterBrand,
+    page,
+    pageSize,
+  });
+  const rows = (productsPage?.rows ?? []) as ProductFull[];
+  const totalCount = productsPage?.count ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  // Full list for auxiliary UIs (parent picker, brand/category dropdowns) — small table (235 rows).
+  const { data: allProductsData } = useProducts();
+  const allRows = (allProductsData ?? []) as ProductFull[];
 
   const { data: dbCategoriesData } = useCategories();
   const dbCategories = dbCategoriesData ?? [];
@@ -246,13 +274,14 @@ export function ProductMasterPage() {
   }, [dbCategories]);
 
   // Eligible parents for spare-part linking: active, non-spare-parts category, not self.
+  // Use allRows (full list) so the picker is not limited to the current page.
   const eligibleParents = useMemo(
     () =>
-      rows.filter(
+      allRows.filter(
         (p) =>
           p.active !== false && (p.category || "") !== SPARE_PARTS_CATEGORY && p.id !== editingId,
       ),
-    [rows, editingId],
+    [allRows, editingId],
   );
   const filteredParents = useMemo(() => {
     const s = parentSearch.trim().toLowerCase();
@@ -295,7 +324,7 @@ export function ProductMasterPage() {
       ).map((r) => ({ parent_product_id: r.parent_product_id, active: r.active !== false }));
       setParentLinks(links);
       const ids = links.map((l) => l.parent_product_id);
-      setLinkedParents(rows.filter((r) => ids.includes(r.id)));
+      setLinkedParents(allRows.filter((r) => ids.includes(r.id)));
     }
     if (!hasParentTagging || (p.category || "") !== SPARE_PARTS_CATEGORY) {
       const { data } = await supabase
@@ -307,7 +336,7 @@ export function ProductMasterPage() {
       ).map((r) => ({ spare_part_id: r.spare_part_id, active: r.active !== false }));
       setSpareLinks(links);
       const ids = links.map((l) => l.spare_part_id);
-      setLinkedSpares(rows.filter((r) => ids.includes(r.id)));
+      setLinkedSpares(allRows.filter((r) => ids.includes(r.id)));
     }
     // Load bundle configuration where this product is the parent.
     try {
@@ -326,30 +355,18 @@ export function ProductMasterPage() {
     }
   }
 
+  // Filter dropdown values come from allRows so the list is complete even when paginated.
   const categories = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.category).filter(Boolean))) as string[],
-    [rows],
+    () => Array.from(new Set(allRows.map((r) => r.category).filter(Boolean))) as string[],
+    [allRows],
   );
   const brands = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.brand).filter(Boolean))) as string[],
-    [rows],
+    () => Array.from(new Set(allRows.map((r) => r.brand).filter(Boolean))) as string[],
+    [allRows],
   );
 
-  const filtered = useMemo(
-    () =>
-      rows.filter((p) => {
-        const s = q.toLowerCase();
-        const matchQ =
-          !s ||
-          [p.name, p.brand, p.model, p.category, p.hsn].some((v) =>
-            (v || "").toLowerCase().includes(s),
-          );
-        const matchCat = filterCategory === "__all" || (p.category || "") === filterCategory;
-        const matchBrand = filterBrand === "__all" || (p.brand || "") === filterBrand;
-        return matchQ && matchCat && matchBrand;
-      }),
-    [rows, q, filterCategory, filterBrand],
-  );
+  // Server already filters + paginates — no client filter. Keep alias for minimal diff.
+  const filtered = rows;
 
   function resetForm() {
     setForm(empty);
@@ -813,7 +830,7 @@ export function ProductMasterPage() {
       .from("product_spare_parts" as any)
       .select("parent_product_id, spare_part_id");
     const links = (data || []) as unknown as { parent_product_id: string; spare_part_id: string }[];
-    const byId = new Map(rows.map((r) => [r.id, r]));
+    const byId = new Map(allRows.map((r) => [r.id, r]));
     const out = links.map((l) => {
       const sp = byId.get(l.spare_part_id);
       const pp = byId.get(l.parent_product_id);
@@ -1106,6 +1123,9 @@ export function ProductMasterPage() {
       <DataTable
         columns={productColumns}
         data={filtered}
+        isLoading={productsLoading}
+        totalRecords={totalCount}
+        serverPagination={{ page, pageSize, total: totalCount, onPageChange: setPage }}
         emptyIcon={Package}
         emptyTitle={
           q || filterCategory !== "__all" || filterBrand !== "__all"
@@ -1127,7 +1147,7 @@ export function ProductMasterPage() {
         }
         toolbar={
           <div className="flex items-center gap-2 flex-wrap w-full">
-            <span className="text-sm font-medium">All Products ({rows.length})</span>
+            <span className="text-sm font-medium">All Products ({totalCount.toLocaleString()}){totalCount > pageSize ? ` · Page ${page + 1} of ${pageCount}` : ""}</span>
             <div className="ml-auto flex items-center gap-2">
               <Select value={filterCategory} onValueChange={setFilterCategory}>
                 <SelectTrigger className="w-40 h-8">

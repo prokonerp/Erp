@@ -232,7 +232,7 @@ export async function fetchStockPage(
   if (stockType) q = q.eq("stock_type", stockType);
   if (stockStatus) q = q.eq("stock_status", stockStatus);
   if (search && search.trim()) {
-    const s = search.trim().replace(/%/g, "");
+    const s = search.trim().replace(/[%_\\]/g, "\\$&").replace(/[,()]/g, "\\$&");
     // Server-side ilike across the most-searched columns; avoid pulling full table.
     q = q.or(`part_name.ilike.%${s}%,part_model_no.ilike.%${s}%,part_serial_no.ilike.%${s}%`);
   }
@@ -355,7 +355,7 @@ export async function fetchTransactionsPage(
 
   if (txnType) q = q.eq("txn_type", txnType);
   if (search && search.trim()) {
-    const s = search.trim().replace(/%/g, "");
+    const s = search.trim().replace(/[%_\\]/g, "\\$&").replace(/[,()]/g, "\\$&");
     q = q.or(
       `part_name.ilike.%${s}%,part_model_no.ilike.%${s}%,part_serial_no.ilike.%${s}%,txn_no.ilike.%${s}%`,
     );

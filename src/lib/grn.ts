@@ -158,7 +158,7 @@ export async function fetchGrnsPage(
   if (fromDate) q = q.gte("grn_date", fromDate);
   if (toDate) q = q.lte("grn_date", toDate);
   if (search && search.trim()) {
-    const s = search.trim().replace(/%/g, "");
+    const s = search.trim().replace(/[%_\\]/g, "\\$&").replace(/[,()]/g, "\\$&");
     q = q.or(`grn_no.ilike.%${s}%,source_name.ilike.%${s}%,reference_no.ilike.%${s}%,source_doc_no.ilike.%${s}%`);
   }
 

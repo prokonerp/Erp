@@ -71,12 +71,23 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
     return () => clearTimeout(t);
   }, [q]);
 
+  // H9: escape PostgREST `or` filter — raw interpolation would let `% _ \ , ( )` break ilike or inject predicates.
+  const escapePostgrestOrIlike = (term: string) =>
+    term
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_")
+      .replace(/,/g, "\\,")
+      .replace(/\(/g, "\\(")
+      .replace(/\)/g, "\\)");
+
   const rowsQuery = useQuery({
     queryKey: ["masters", table, { page, pageSize, debouncedQ, cols, orderBy }],
     queryFn: async () => {
       let query = supabase.from(table as any).select(cols, { count: "exact" });
       if (debouncedQ) {
-        const p = `%${debouncedQ}%`;
+        const safe = escapePostgrestOrIlike(debouncedQ);
+        const p = `%${safe}%`;
         // Search first 3 text-like fields server-side for instant filtering
         const searchKeys = fields
           .filter((f) => ["text", "title", "upper", "textarea", "email", "phone"].includes(f.type || "text"))

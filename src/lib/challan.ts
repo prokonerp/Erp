@@ -149,7 +149,7 @@ export async function fetchChallansPage(
   if (fromDate) q = q.gte("challan_date", fromDate);
   if (toDate) q = q.lte("challan_date", toDate);
   if (search && search.trim()) {
-    const s = search.trim().replace(/%/g, "");
+    const s = search.trim().replace(/[%_\\]/g, "\\$&").replace(/[,()]/g, "\\$&");
     q = q.or(`challan_no.ilike.%${s}%,party_name.ilike.%${s}%,reference_no.ilike.%${s}%,gate_pass_no.ilike.%${s}%`);
   }
 

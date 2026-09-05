@@ -111,6 +111,40 @@ export async function fetchSalesOrders(): Promise<SalesOrder[]> {
   return ((data ?? []) as unknown as SalesOrder[]).map(normalizeSo);
 }
 
+// ── Paginated (server-side) — replaces client-only filter that hit 1k cap ──
+
+export type SalesOrdersPaginatedParams = {
+  page: number;
+  pageSize: number;
+  search?: string | null;
+};
+
+export async function fetchSalesOrdersPage(
+  params: SalesOrdersPaginatedParams,
+): Promise<{ data: SalesOrder[]; count: number }> {
+  const { page, pageSize, search } = params;
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+
+  let q: any = supabase
+    .from("sales_orders" as never)
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (search && search.trim()) {
+    const safe = search
+      .trim()
+      .replace(/[%_\\]/g, "\\$&")
+      .replace(/[,()]/g, "\\$&");
+    q = q.or(`so_no.ilike.%${safe}%,buyer_name.ilike.%${safe}%`);
+  }
+
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return { data: ((data ?? []) as unknown as SalesOrder[]).map(normalizeSo), count: count ?? 0 };
+}
+
 export async function fetchSalesOrder(id: string): Promise<SalesOrder> {
   const { data, error } = await supabase
     .from("sales_orders" as never)
