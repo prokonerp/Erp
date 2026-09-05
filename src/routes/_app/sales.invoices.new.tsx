@@ -32,6 +32,7 @@ import {
   stateNameFromCode,
   amountInWords,
 } from "@/lib/gst";
+import { GSTIN_STATE_CODES, validateGSTINChecksum } from "@/lib/india";
 import { getCompany } from "@/lib/letterhead";
 import { productDisplayName, productShortName } from "@/lib/productNames";
 import { useIsAdmin } from "@/lib/useRole";
@@ -39,6 +40,17 @@ import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } fr
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 import { GDC_PREFILL_KEY, updateGeneralDc, type GeneralDcInvoicePrefill } from "@/lib/generalDc";
 import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
+import { SALES_TYPE_META, type SalesType, getSupplyClassForSalesType } from "@/lib/sales";
+import TransportDetailsModal from "@/components/TransportDetailsModal";
+import {
+  DEFAULT_TRANSPORT,
+  type TransportDetails,
+  computeEInvoiceRequired,
+  computeEWayRequired,
+  computeEWayRequiredYN,
+  computeTransactionType,
+} from "@/lib/transport";
+import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_app/sales/invoices/new")({
   component: NewInvoice,
@@ -68,6 +80,7 @@ function NewInvoice() {
   const [warehouses, setWarehouses] = useState<{ id: string; name: string; code: string }[]>([]);
   const [serialPickerIdx, setSerialPickerIdx] = useState<number | null>(null);
   const [sameAsBilling, setSameAsBilling] = useState(true);
+  const [reverseCharge, setReverseCharge] = useState(false);
   const [termsTouched, setTermsTouched] = useState(false);
   const [bundleFor, setBundleFor] = useState<ProductMaster | null>(null);
   const [bundleOpen, setBundleOpen] = useState(false);
@@ -76,10 +89,14 @@ function NewInvoice() {
   const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
   const [negOpen, setNegOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<"draft" | "issued">("issued");
-  const [reverseCharge, setReverseCharge] = useState(false);
   // Prefill coming from an issued General Delivery Challan — stock was already
   // reduced on Issue, so the invoice must NOT deduct it a second time.
   const [fromGeneralDc, setFromGeneralDc] = useState<{ id: string; no: string | null } | null>(null);
+  // ── P1 SalesType + Transport (staged) ──────────────────────────────────
+  const [salesType, setSalesType] = useState<SalesType>("local_itemwise");
+  const [lutNo, setLutNo] = useState("");
+  const [transportDetails, setTransportDetails] = useState<TransportDetails>(DEFAULT_TRANSPORT);
+  const [transportOpen, setTransportOpen] = useState(false);
 
   useEffect(() => {
     let raw: string | null = null;
@@ -152,24 +169,79 @@ function NewInvoice() {
   }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sellerCode = branch?.state_code || stateCodeFromGSTIN(branch?.gstin) || null;
-  const buyerCode = (customer as any)?.state_code || stateCodeFromGSTIN(customer?.gst || null);
+  const buyerCode = (customer as any)?.state_code || stateCodeFromGSTIN(customer?.gst || null) || null;
   const sellerState = branch?.state_name || stateNameFromCode(sellerCode);
   const buyerState = customer?.state || stateNameFromCode(buyerCode);
   const gstinError = customer?.gst && !isValidGSTIN(customer.gst)
     ? "Buyer GSTIN format looks invalid"
     : null;
 
+  // H3: supply-class lock — nil / zero_rated / exempt must force GST 0%
+  const supplyClass = getSupplyClassForSalesType(salesType);
+  const isNilOrExempt = supplyClass === "nil" || supplyClass === "zero_rated" || supplyClass === "exempt";
+  const isTaxIncl = !!SALES_TYPE_META[salesType]?.isTaxInclusive;
+
+  // H4: place_of_supply fallback — buyerCode wins, else derive code from place_of_supply (buyerState)
+  // place_of_supply here is the user-visible state name (defaults to buyerState, editable in future)
+  const placeOfSupply = buyerState || "";
+  const placeOfSupplyCode = useMemo(() => {
+    if (!placeOfSupply) return null;
+    for (const [code, name] of Object.entries(GSTIN_STATE_CODES)) {
+      if (name.toLowerCase() === placeOfSupply.toLowerCase()) return code;
+    }
+    return null;
+  }, [placeOfSupply]);
+
   const totals = useMemo(
     () =>
       computeTotals({
         sellerStateCode: sellerCode,
         buyerStateCode: buyerCode,
+        placeOfSupplyStateCode: buyerCode || placeOfSupplyCode,
         items: items.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate, cess_rate: (i as any).cess_rate || 0 })),
         headerDiscount,
         roundOff: true,
+        salesType,
       }),
-    [items, sellerCode, buyerCode, headerDiscount],
+    [items, sellerCode, buyerCode, placeOfSupplyCode, headerDiscount, salesType],
   );
+
+  // H3: force gst_rate 0 in state when supply class is nil/zero/exempt
+  useEffect(() => {
+    if (!isNilOrExempt) return;
+    setItems((prev) => {
+      let changed = false;
+      const next = prev.map((it) => {
+        if (Number(it.gst_rate) !== 0) {
+          changed = true;
+          return { ...it, gst_rate: 0 };
+        }
+        return it;
+      });
+      return changed ? next : prev;
+    });
+  }, [isNilOrExempt]);
+
+  // Keep transport_details transaction_type / e_invoice_reqd / e_way_reqd in sync with branch+customer+salesType+total
+  // e_way_reqd null = AUTO (threshold ≥50000); explicit Y/N overrides threshold (H2) but default null lets threshold win
+  // Deps are stable primitives (not object refs) to avoid hook size churn and infinite loops
+  const customerGstKey = (customer as any)?.gst ?? "";
+  const branchGstinKey = branch?.gstin ?? "";
+  const branchIdKey = branchId ?? "";
+  const isInterstateKey = totals.is_interstate;
+  const totalKey = totals.total;
+  useEffect(() => {
+    const buyerGst = customerGstKey || null;
+    const sellerGst = branchGstinKey || null;
+    const nextTx = computeTransactionType(salesType, isInterstateKey, buyerGst);
+    const nextEInv = computeEInvoiceRequired(sellerGst, buyerGst);
+    const nextEWayAuto = computeEWayRequiredYN(totalKey, null);
+    setTransportDetails((prev) => {
+      const derivedEWay = prev.e_way_reqd == null ? nextEWayAuto : prev.e_way_reqd;
+      if (prev.transaction_type === nextTx && prev.e_invoice_reqd === nextEInv && prev.e_way_reqd === derivedEWay) return prev;
+      return { ...prev, transaction_type: nextTx, e_invoice_reqd: nextEInv, e_way_reqd: derivedEWay };
+    });
+  }, [salesType, customerGstKey, branchGstinKey, branchIdKey, isInterstateKey, totalKey]);
 
   function setItem(idx: number, patch: Partial<ItemDraft>) {
     setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -179,6 +251,7 @@ function NewInvoice() {
     if (!branchId) return toast.error("Choose a branch (seller)");
     if (!branch?.gstin) return toast.error("Selected branch has no GSTIN — set it in Sales → Settings");
     if (!customer) return toast.error("Choose a customer");
+    if (salesType === "sez_zero_rated" && !lutNo.trim()) return toast.error("LUT No. is required for SEZ Zero Rated (SEZWOP)");
     if (items.length === 0 || items.some((it) => !it.description.trim())) return toast.error("Every line needs a description");
     if (items.some((it) => Number(it.gst_rate) > 0 && !it.hsn.trim())) return toast.error("HSN code is mandatory when GST > 0");
     for (let i = 0; i < items.length; i++) {
@@ -201,7 +274,15 @@ function NewInvoice() {
     // Prevent duplicate serials across lines
     const allSerials = items.flatMap((it) => it.serial_numbers);
     if (new Set(allSerials).size !== allSerials.length) return toast.error("Duplicate serial numbers across lines");
-    if (gstinError) return toast.error(gstinError);
+    if (gstinError) {
+      if (status === "issued") return toast.error(gstinError);
+      toast.error(`${gstinError} — saving as Draft anyway, fix before Issue`);
+    }
+    const buyerGstRawForChecksum = String((customer as any)?.gst ?? "").trim();
+    if (buyerGstRawForChecksum && buyerGstRawForChecksum.toUpperCase() !== "URP" && !validateGSTINChecksum(buyerGstRawForChecksum)) {
+      if (status === "issued") return toast.error("Buyer GSTIN checksum invalid — correct customer GSTIN before Issue (or save as Draft)");
+      toast.error("Buyer GSTIN checksum invalid — saving as Draft (fix GSTIN before Issue)");
+    }
 
     // Non-serialized products: verify pooled availability before posting.
     // Converted General DCs already consumed the stock — skip the check.
@@ -269,6 +350,7 @@ function NewInvoice() {
         }
       }
       const company = await getCompany();
+      const meta = SALES_TYPE_META[salesType];
       const invoicePayload: any = {
         invoice_date: invoiceDate,
         due_date: dueDate || null,
@@ -291,6 +373,16 @@ function NewInvoice() {
         place_of_supply_code: buyerCode,
         is_interstate: totals.is_interstate,
         reverse_charge: reverseCharge,
+        // ── P1 SalesType branching ──────────────────────────────────
+        sales_type: salesType,
+        is_tax_inclusive: meta.isTaxInclusive,
+        supply_class: meta.supplyClass,
+        lut_no: salesType === "sez_zero_rated" ? (lutNo.trim() || null) : null,
+        transport_details: transportDetails as any,
+        e_invoice_required: computeEInvoiceRequired(company.gstin || branch.gstin, customer.gst) === "Y" || transportDetails.e_invoice_reqd === "Y",
+        e_way_required: computeEWayRequired(totals.total, transportDetails.e_way_reqd),
+        einvoice_status: (computeEInvoiceRequired(company.gstin || branch.gstin, customer.gst) === "Y" || transportDetails.e_invoice_reqd === "Y") ? "pending" : "not_required",
+        eway_status: computeEWayRequired(totals.total, transportDetails.e_way_reqd) ? "pending" : "not_required",
         subtotal: totals.subtotal,
         discount: totals.discount,
         taxable_value: totals.taxable_value,
@@ -320,9 +412,19 @@ function NewInvoice() {
       });
       const { error: e2 } = await supabase.from("invoice_items").insert(itemRows);
       if (e2) {
+        // TODO(RPC): replace compensating delete with atomic DB transaction/RPC (insert header+items atomically) to avoid orphan window.
         // Compensating cleanup: never leave an orphan invoice header without
         // its line items — a retry would treat the broken invoice as done.
-        await supabase.from("invoices").delete().eq("id", inv.id);
+        try {
+          const { error: delErr } = await supabase.from("invoices").delete().eq("id", inv.id);
+          if (delErr) {
+            console.error("[invoices.new] compensating delete failed — orphan header may remain", delErr, { invoiceId: inv.id });
+            toast.error(`Invoice items failed and cleanup also failed (orphan ${inv.invoice_no || inv.id}): ${delErr.message}. Contact admin.`);
+          }
+        } catch (cleanupErr) {
+          console.error("[invoices.new] compensating delete threw", cleanupErr, { invoiceId: inv.id });
+          toast.error(`Invoice items failed and rollback threw: ${(cleanupErr as Error).message}`);
+        }
         throw new Error(`Invoice items could not be saved (header rolled back): ${e2.message}`);
       }
 
@@ -475,30 +577,100 @@ function NewInvoice() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">GST Determination</CardTitle></CardHeader>
-          <CardContent className="text-sm space-y-2">
-            <div className="flex justify-between"><span className="text-muted-foreground">Seller State</span><span>{sellerState || "—"} {sellerCode && `(${sellerCode})`}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Buyer State</span><span>{buyerState || "—"} {buyerCode && `(${buyerCode})`}</span></div>
-            <div className="pt-2 border-t">
-              {totals.is_interstate ? (
-                <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">Inter-state supply — IGST applies</span>
-              ) : sellerCode && buyerCode ? (
-                <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-medium">Intra-state supply — CGST + SGST</span>
-              ) : (
-                <span className="text-xs text-muted-foreground">Pick branch and customer to determine tax type.</span>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Sales Type</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              <select
+                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                value={salesType}
+                onChange={(e) => {
+                  const v = e.target.value as SalesType;
+                  setSalesType(v);
+                  markDirty();
+                }}
+              >
+                {Object.entries(SALES_TYPE_META).map(([key, meta]) => (
+                  <option key={key} value={key}>{meta.label} — {meta.gstrBucket}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {SALES_TYPE_META[salesType].gstrBucket}
+                {SALES_TYPE_META[salesType].isTaxInclusive ? " · Tax Inclusive" : ""}
+                {SALES_TYPE_META[salesType].supplyClass ? ` · ${SALES_TYPE_META[salesType].supplyClass}` : ""}
+              </p>
+              {salesType === "sez_zero_rated" && (
+                <div className="space-y-1">
+                  <Label className="text-xs">LUT No. *</Label>
+                  <Input
+                    value={lutNo}
+                    onChange={(e) => setLutNo(e.target.value)}
+                    placeholder="LUT/2025-26/001 — required for SEZ Zero Rated"
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Required for SEZWOP — shown on GST JSON & PDF.</p>
+                </div>
               )}
-            </div>
-            {totals.cess > 0 && (
-              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Cess</span><span>{inr(totals.cess)}</span></div>
-            )}
-            <label className="flex items-center gap-2 pt-2 border-t cursor-pointer">
-              <input type="checkbox" checked={reverseCharge} onChange={(e) => { setReverseCharge(e.target.checked); markDirty(); }} />
-              <span className="text-xs font-medium">Reverse Charge</span>
-            </label>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">GST Determination</CardTitle></CardHeader>
+            <CardContent className="text-sm space-y-2">
+              <div className="flex justify-between"><span className="text-muted-foreground">Seller State</span><span>{sellerState || "—"} {sellerCode && `(${sellerCode})`}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Buyer State</span><span>{buyerState || "—"} {buyerCode && `(${buyerCode})`}</span></div>
+              <div className="pt-2 border-t">
+                {totals.is_interstate ? (
+                  <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">Inter-state supply — IGST applies</span>
+                ) : sellerCode && buyerCode ? (
+                  <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-medium">Intra-state supply — CGST + SGST</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Pick branch and customer to determine tax type.</span>
+                )}
+              </div>
+              {SALES_TYPE_META[salesType].supplyClass && (
+                <div className="text-xs text-muted-foreground">Supply Class: <span className="font-medium text-foreground">{SALES_TYPE_META[salesType].supplyClass}</span> · {SALES_TYPE_META[salesType].gstrBucket}</div>
+              )}
+              {SALES_TYPE_META[salesType].isTaxInclusive && (
+                <div className="text-xs text-amber-700">Tax Inclusive — MRP back-calc active.</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">Transport &amp; Dispatch</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => setTransportOpen(true)}>Edit</Button>
+        </CardHeader>
+        <CardContent className="text-sm space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <div className="text-xs text-muted-foreground">Transport Mode</div>
+              <div className="font-medium">{transportDetails.transport_mode} / {transportDetails.mode_of_transport}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Vehicle No</div>
+              <div className="font-mono text-xs">{transportDetails.vehicle_no || "—"}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Station / To Place</div>
+              <div className="truncate">{transportDetails.station_to_place || "—"}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Distance</div>
+              <div>{transportDetails.distance_km != null ? `${transportDetails.distance_km} km` : "—"}</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <Badge variant={transportDetails.e_invoice_reqd === "Y" ? "default" : "secondary"}>e-Invoice {transportDetails.e_invoice_reqd}</Badge>
+            <Badge variant={transportDetails.e_way_reqd === "Y" ? "default" : "secondary"}>e-Way {transportDetails.e_way_reqd}</Badge>
+            {transportDetails.gr_rr_no && <span className="text-xs text-muted-foreground">GR/RR: <span className="font-mono text-foreground">{transportDetails.gr_rr_no}</span></span>}
+            {transportDetails.transporter_name && <span className="text-xs text-muted-foreground truncate">Transporter: <span className="font-medium text-foreground">{transportDetails.transporter_name}</span></span>}
+          </div>
+          <p className="text-[11px] text-muted-foreground">Stored as <span className="font-mono">transport_details</span> JSONB — edit via TransportDetailsModal (F2-Done, F4-Pick from DB).</p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
@@ -519,7 +691,6 @@ function NewInvoice() {
                   <th className="p-2 text-right w-24">Rate</th>
                   <th className="p-2 text-right w-16">Disc%</th>
                   <th className="p-2 text-right w-20">GST%</th>
-                  <th className="p-2 text-right w-16">Cess%</th>
                   <th className="p-2 text-right w-24">Amount</th>
                   <th className="p-2 w-10"></th>
                 </tr>
@@ -593,11 +764,29 @@ function NewInvoice() {
                       <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.rate} onChange={(e) => setItem(idx, { rate: Number(e.target.value) })} /></td>
                       <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.discount_pct} onChange={(e) => setItem(idx, { discount_pct: Number(e.target.value) })} /></td>
                       <td className="p-2">
-                        <select className="w-full h-8 rounded-md border bg-background px-1 text-xs" value={it.gst_rate} onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}>
-                          {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}
-                        </select>
+                        {isNilOrExempt ? (
+                          <div className="flex flex-col items-start gap-1">
+                            <select
+                              className="w-full h-8 rounded-md border bg-muted px-1 text-xs"
+                              value={0}
+                              disabled
+                              title="Nil — GST 0%"
+                            >
+                              <option value={0}>0%</option>
+                            </select>
+                            <Badge variant="secondary" className="text-[10px]">Nil — GST 0%</Badge>
+                          </div>
+                        ) : (
+                          <>
+                            <select className="w-full h-8 rounded-md border bg-background px-1 text-xs" value={it.gst_rate} onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}>
+                              {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}
+                            </select>
+                            {isTaxIncl && (
+                              <p className="text-[10px] text-amber-600 mt-1">Tax incl. — MRP back-calc active</p>
+                            )}
+                          </>
+                        )}
                       </td>
-                      <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={(it as any).cess_rate ?? 0} onChange={(e) => setItem(idx, { cess_rate: Number(e.target.value) } as any)} /></td>
                       <td className="p-2 text-right font-medium">{inr(b?.line_total || 0)}</td>
                       <td className="p-2 text-right">
                         <Button size="icon" variant="ghost" onClick={() => { setItems((a) => a.filter((_, i) => i !== idx)); markDirty(); }}>
@@ -677,6 +866,13 @@ function NewInvoice() {
             {totals.round_off !== 0 && (
               <div className="flex justify-between"><span>Round Off</span><span>{inr(totals.round_off)}</span></div>
             )}
+            {totals.cess > 0 && (
+              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Cess</span><span>{inr(totals.cess)}</span></div>
+            )}
+            <label className="flex items-center gap-2 pt-2 border-t cursor-pointer">
+              <input type="checkbox" checked={reverseCharge} onChange={(e) => { setReverseCharge(e.target.checked); markDirty(); }} />
+              <span className="text-xs font-medium">Reverse Charge</span>
+            </label>
             <div className="flex justify-between pt-2 border-t font-bold text-base">
               <span>Total</span><span>{inr(totals.total)}</span>
             </div>
@@ -710,6 +906,16 @@ function NewInvoice() {
             })),
           ]);
         }}
+      />
+
+      <TransportDetailsModal
+        open={transportOpen}
+        onOpenChange={setTransportOpen}
+        value={transportDetails}
+        onSave={(v) => { setTransportDetails(v); markDirty(); }}
+        billAmt={totals.total}
+        taxableAmt={totals.taxable_value}
+        taxAmt={totals.cgst + totals.sgst + totals.igst}
       />
     </div>
   );

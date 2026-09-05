@@ -6,6 +6,63 @@ import type { GstItemBreakup } from "@/lib/gst";
 
 export type InvoiceStatus = "draft" | "issued" | "partial" | "paid" | "cancelled";
 
+// ── P1 Foundation — Tally Sales Types (Image 1) — docs §5.1 ──────────────
+export type SalesType =
+  | "local_itemwise"
+  | "local_multirate"
+  | "local_multirate_cons"
+  | "local_nil_rated"
+  | "local_tax_incl"
+  | "sez_taxable"
+  | "sez_zero_rated";
+
+export const SALES_TYPES = [
+  "local_itemwise",
+  "local_multirate",
+  "local_multirate_cons",
+  "local_nil_rated",
+  "local_tax_incl",
+  "sez_taxable",
+  "sez_zero_rated",
+] as const;
+
+export type SupplyClass = "nil" | "exempt" | "zero_rated" | null;
+
+/** Tally parity labels + GST branching hints (Table 7) */
+export const SALES_TYPE_META: Record<
+  SalesType,
+  { label: string; tallyLabel: string; isTaxInclusive: boolean; supplyClass: SupplyClass; gstrBucket: string }
+> = {
+  local_itemwise: { label: "Local ItemWise", tallyLabel: "Local-ItemWise", isTaxInclusive: false, supplyClass: null, gstrBucket: "B2B regular" },
+  local_multirate: { label: "Local MultiRate", tallyLabel: "Local-MultiRate", isTaxInclusive: false, supplyClass: null, gstrBucket: "B2B multi-rate" },
+  local_multirate_cons: { label: "Local MultiRate Cons", tallyLabel: "Local-MultiRate Cons", isTaxInclusive: false, supplyClass: null, gstrBucket: "Consumption" },
+  local_nil_rated: { label: "Local Nil Rated", tallyLabel: "Local-Nil Rated", isTaxInclusive: false, supplyClass: "nil", gstrBucket: "Table 8 Nil" },
+  local_tax_incl: { label: "Local Tax Incl.", tallyLabel: "Local-TaxIncl.", isTaxInclusive: true, supplyClass: null, gstrBucket: "B2B regular (incl.)" },
+  sez_taxable: { label: "SEZ Taxable", tallyLabel: "SEZ-Taxable", isTaxInclusive: false, supplyClass: null, gstrBucket: "SEZWP" },
+  sez_zero_rated: { label: "SEZ Zero Rated", tallyLabel: "SEZ-ZeroRated", isTaxInclusive: false, supplyClass: "zero_rated", gstrBucket: "SEZWOP (LUT)" },
+};
+
+/** quick map — true only for local_tax_incl */
+export const IS_TAX_INCLUSIVE: Record<SalesType, boolean> = {
+  local_itemwise: false,
+  local_multirate: false,
+  local_multirate_cons: false,
+  local_nil_rated: false,
+  local_tax_incl: true,
+  sez_taxable: false,
+  sez_zero_rated: false,
+};
+
+export function isTaxInclusive(salesType: SalesType | string | null | undefined): boolean {
+  if (!salesType) return false;
+  return IS_TAX_INCLUSIVE[salesType as SalesType] ?? false;
+}
+
+export function getSupplyClassForSalesType(salesType: SalesType | string | null | undefined): SupplyClass {
+  if (!salesType) return null;
+  return SALES_TYPE_META[salesType as SalesType]?.supplyClass ?? null;
+}
+
 export type InvoiceRow = {
   id: string;
   invoice_no: string | null;
@@ -30,6 +87,12 @@ export type InvoiceRow = {
   place_of_supply_code: string | null;
 
   is_interstate: boolean;
+  // P1 staged — nullable until migration fills DEFAULT 'local_itemwise'
+  sales_type?: SalesType | null;
+  is_tax_inclusive?: boolean | null;
+  supply_class?: SupplyClass | null;
+  lut_no?: string | null;
+  transport_details?: unknown | null;
   reverse_charge: boolean;
   linked_quote_id: string | null;
   linked_dc_ids: string[] | null;

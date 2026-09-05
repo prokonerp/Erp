@@ -1,3 +1,4 @@
+// TODO(after migration): regen via supabase gen types typescript --local > src/integrations/supabase/types.ts — new fields: sales_type, is_tax_inclusive, lut_no, supply_class, transport_details, einvoice_status, eway_status, compliance_json, etc.
 export type Json =
   | string
   | number
