@@ -366,6 +366,7 @@ type QuoteListRow = Pick<
   revision_of?: string | null;
   revision_no?: number;
   is_latest?: boolean;
+  customer_company?: string | null;
 };
 
 const PAGE_SIZE = 20;
@@ -446,27 +447,43 @@ function QuotesWorkspace() {
 
   // Abort / seq guard for infinite scroll race (loadFirst vs loadMore)
   const loadSeqRef = useRef(0);
+  // Keep previous rows while searching to avoid blank flash — server fetch happens in background
+  const isFirstLoadRef = useRef(true);
+  // Cache whether customer_company column exists (set after first 400). Avoids extra round-trip every query.
+  const hasCustomerCompanyRef = useRef<boolean | null>(null);
 
   const buildQuery = useCallback(
     (from: number, to: number) => {
-      // Server-filter customer via FK join — fixes split-brain where customer search
-      // was client-only on paginated page (returned 0 results).
+      // Fast single-table search via denormalized customer_company (no JOIN).
+      // Uses trigram indexes idx_quotations_*_trgm for %term% ilike. Falls back to
+      // customer_id lookup only if customer_company column missing (pre-migration).
+      // If we already know column missing (hasCustomerCompanyRef === false), skip it to avoid 400 + extra RTT.
+      const useCustomerCompany = hasCustomerCompanyRef.current !== false;
+      const cols = useCustomerCompany
+        ? "id, quote_no, reference_no, subject, customer_id, customer_company, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest"
+        : "id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest";
       let query: any = supabase
         .from("quotations")
-        .select(
-          "id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest, customers(company)",
-        )
+        .select(cols as any)
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
         .range(from, to);
       if (statusF !== "all") query = query.eq("status", statusF);
       const s = search.trim();
       if (s) {
-        // Server-side search now includes customer name via join.
-        // H9: escaped so `% _ , ( ) \` in user input cannot inject PostgREST `or` predicates.
-        const esc = escapePostgrestOrIlike(s);
-        const q = `%${esc}%`;
-        query = query.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q},customers.company.ilike.${q}`);
+        // Short terms (<2 chars) skip trigram search — avoid scanning all rows
+        if (s.length < 2) {
+          // No server filter for tiny term; client filter will handle already-fetched rows
+        } else {
+          const esc = escapePostgrestOrIlike(s);
+          const q = `%${esc}%`;
+          if (useCustomerCompany) {
+            query = query.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q},customer_company.ilike.${q}`);
+          } else {
+            // Pre-migration: server filter without customer (customer handled via fallback customer_id.in)
+            query = query.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q}`);
+          }
+        }
       }
       return query;
     },
@@ -475,13 +492,45 @@ function QuotesWorkspace() {
 
   const loadFirst = useCallback(async () => {
     const seq = ++loadSeqRef.current;
-    // Reset pagination equivalent to setPage(0) — clear stale rows when search changes
-    // (debounced 300ms already via useDebounced). Avoids showing previous search page.
+    const sEarly = search.trim();
+    // Pre-migration fast path: if we already know customer_company missing, go directly to customer-id lookup
+    // instead of trying the column and getting 400 + extra RTT.
+    if (hasCustomerCompanyRef.current === false && sEarly.length >= 2) {
+      let fallbackQuery: any = supabase
+        .from("quotations")
+        .select("id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(0, PAGE_SIZE - 1);
+      if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
+      const esc = escapePostgrestOrIlike(sEarly);
+      const q = `%${esc}%`;
+      try {
+        const { data: matched } = await supabase.from("customers").select("id").ilike("company", q).limit(100) as any;
+        const ids: string[] = (matched || []).map((r: any) => r.id);
+        if (ids.length) fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q},customer_id.in.(${ids.join(",")})`);
+        else fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q}`);
+      } catch {
+        const q2 = `%${esc}%`;
+        fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q2},subject.ilike.${q2},reference_no.ilike.${q2}`);
+      }
+      const { data: fData } = await fallbackQuery as any;
+      if (seq !== loadSeqRef.current) return;
+      const list = (fData || []) as unknown as QuoteListRow[];
+      setRows(list);
+      setHasMore(list.length === PAGE_SIZE);
+      isFirstLoadRef.current = false;
+      return;
+    }
+    // Keep previous data while searching — don't clear rows to avoid blank flash.
     const { data, error } = await buildQuery(0, PAGE_SIZE - 1) as any;
     if (seq !== loadSeqRef.current) return;
-    // Fallback if FK join not configured: fallback to customer-id lookup + client filter
-    if (error && String(error.message || "").toLowerCase().includes("customers")) {
-      // Rebuild without join and fetch customer ids matching search for server filter
+    // Detect customer_company missing and cache; fallback to customer lookup only for customer-matching searches
+    const errMsg = String(error?.message || "").toLowerCase();
+    const isMissingColumn = error && (errMsg.includes("customer_company") || (errMsg.includes("column") && errMsg.includes("customer_company")));
+    if (isMissingColumn) hasCustomerCompanyRef.current = false;
+    else if (!error && hasCustomerCompanyRef.current === null) hasCustomerCompanyRef.current = true;
+    if (isMissingColumn) {
       const s = search.trim();
       let fallbackQuery: any = supabase
         .from("quotations")
@@ -490,12 +539,11 @@ function QuotesWorkspace() {
         .order("id", { ascending: false })
         .range(0, PAGE_SIZE - 1);
       if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
-      if (s) {
+      if (s && s.length >= 2) {
         const esc = escapePostgrestOrIlike(s);
         const q = `%${esc}%`;
-        // Try customer id lookup for server-side customer filter
         try {
-          const { data: matched } = await supabase.from("customers").select("id").ilike("company", q).limit(200) as any;
+          const { data: matched } = await supabase.from("customers").select("id").ilike("company", q).limit(100) as any;
           const ids: string[] = (matched || []).map((r: any) => r.id);
           if (ids.length) {
             fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q},customer_id.in.(${ids.join(",")})`);
@@ -512,21 +560,64 @@ function QuotesWorkspace() {
       const list = (fData || []) as unknown as QuoteListRow[];
       setRows(list);
       setHasMore(list.length === PAGE_SIZE);
+      isFirstLoadRef.current = false;
+      return;
+    }
+    if (error) {
+      // Don't clear rows on error — keep stale data, show toast
+      console.error("loadFirst error", error);
       return;
     }
     const list = (data || []) as unknown as QuoteListRow[];
     setRows(list);
     setHasMore(list.length === PAGE_SIZE);
+    isFirstLoadRef.current = false;
   }, [buildQuery, search, statusF]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     const seq = loadSeqRef.current;
+    const sEarly = search.trim();
+    if (hasCustomerCompanyRef.current === false && sEarly.length >= 2) {
+      setLoadingMore(true);
+      let fallbackQuery: any = supabase
+        .from("quotations")
+        .select("id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(rows.length, rows.length + PAGE_SIZE - 1);
+      if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
+      const esc = escapePostgrestOrIlike(sEarly);
+      const q = `%${esc}%`;
+      try {
+        const { data: matched } = await supabase.from("customers").select("id").ilike("company", q).limit(100) as any;
+        const ids: string[] = (matched || []).map((r: any) => r.id);
+        if (ids.length) fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q},customer_id.in.(${ids.join(",")})`);
+        else fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q}`);
+      } catch {
+        const q2 = `%${esc}%`;
+        fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q2},subject.ilike.${q2},reference_no.ilike.${q2}`);
+      }
+      const { data: fData } = await fallbackQuery as any;
+      if (seq !== loadSeqRef.current) { setLoadingMore(false); return; }
+      const list = (fData || []) as unknown as QuoteListRow[];
+      setRows((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        const deduped = list.filter((r) => !seen.has(r.id));
+        return [...prev, ...deduped];
+      });
+      setHasMore(list.length === PAGE_SIZE);
+      setLoadingMore(false);
+      return;
+    }
     setLoadingMore(true);
     const { data, error } = await buildQuery(rows.length, rows.length + PAGE_SIZE - 1) as any;
     if (seq !== loadSeqRef.current) { setLoadingMore(false); return; }
-    if (error && String(error.message || "").toLowerCase().includes("customers")) {
-      // Fallback path for environments without FK join
+    const errMsg = String(error?.message || "").toLowerCase();
+    const isMissingCol = error && (errMsg.includes("customer_company") || (errMsg.includes("column") && errMsg.includes("customer_company")));
+    if (isMissingCol) hasCustomerCompanyRef.current = false;
+    else if (!error && hasCustomerCompanyRef.current === null) hasCustomerCompanyRef.current = true;
+    if (isMissingCol) {
       const s = search.trim();
       let fallbackQuery: any = supabase
         .from("quotations")
@@ -535,11 +626,11 @@ function QuotesWorkspace() {
         .order("id", { ascending: false })
         .range(rows.length, rows.length + PAGE_SIZE - 1);
       if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
-      if (s) {
+      if (s && s.length >= 2) {
         const esc = escapePostgrestOrIlike(s);
         const q = `%${esc}%`;
         try {
-          const { data: matched } = await supabase.from("customers").select("id").ilike("company", q).limit(200) as any;
+          const { data: matched } = await supabase.from("customers").select("id").ilike("company", q).limit(100) as any;
           const ids: string[] = (matched || []).map((r: any) => r.id);
           if (ids.length) fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q},customer_id.in.(${ids.join(",")})`);
           else fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q}`);
@@ -560,6 +651,7 @@ function QuotesWorkspace() {
       setLoadingMore(false);
       return;
     }
+    if (error) { setLoadingMore(false); console.error("loadMore error", error); return; }
     const list = (data || []) as unknown as QuoteListRow[];
     setRows((prev) => {
       const seen = new Set(prev.map((r) => r.id));
@@ -570,11 +662,13 @@ function QuotesWorkspace() {
     setLoadingMore(false);
   }, [buildQuery, rows.length, loadingMore, hasMore, search, statusF]);
 
-  // Reset rows/hasMore when debounced search or status changes — setPage(0) equivalent for infinite scroll
+  // Reset pagination when debounced search/status changes — keep previous rows while loading new search
   useEffect(() => {
-    setRows([]);
+    if (isFirstLoadRef.current) return; // initial mount handled by loadFirst effect below
+    // Don't clear rows — keep stale data visible until server returns (perceived instant)
     setHasMore(true);
     loadSeqRef.current++;
+    // loadFirst will be triggered by the [loadFirst] effect below due to search/status change
   }, [search, statusF]);
 
   useEffect(() => {
@@ -584,9 +678,9 @@ function QuotesWorkspace() {
     resolveCustomers(rows.map((r) => r.customer_id ?? null));
   }, [rows, resolveCustomers]);
 
-  // Filter by customer / amount client-side (list is already narrow).
-  // Also hide superseded unless showHistory toggled — keeps default pipeline view clean (latest only)
-  // Dedupe by id defensively (range pagination + re-fetches can otherwise emit duplicates)
+  // Fast client filter for instant feedback while server fetch is in flight.
+  // Server already filters quote_no/subject/reference_no/customer_company via trigram indexes.
+  // Client filter here keeps amount search and denormalized fallback instant on already-fetched page.
   const filtered = useMemo(() => {
     const seen = new Set<string>();
     const dedupedRows = rows.filter((r) => {
@@ -597,16 +691,25 @@ function QuotesWorkspace() {
     const base = showHistory ? dedupedRows : dedupedRows.filter((r) => r.is_latest !== false);
     const s = search.trim().toLowerCase();
     if (!s) return base;
-    return base.filter((r) => {
-      const cust = cmap[r.customer_id || ""]?.company?.toLowerCase() || "";
-      const amt = String(r.total ?? "");
-      return (
-        r.quote_no.toLowerCase().includes(s) ||
-        (r.subject || "").toLowerCase().includes(s) ||
-        cust.includes(s) ||
-        amt.includes(s)
-      );
-    });
+    if (s.length < 2) {
+      // Tiny term — client-only filter on fetched page for instant feedback
+      return base.filter((r) => {
+        const cust = (r.customer_company || cmap[r.customer_id || ""]?.company || "").toLowerCase();
+        const amt = String(r.total ?? "");
+        return (
+          r.quote_no.toLowerCase().includes(s) ||
+          (r.subject || "").toLowerCase().includes(s) ||
+          cust.includes(s) ||
+          amt.includes(s)
+        );
+      });
+    }
+    // For 2+ chars, server already filtered; keep amount search as client complement
+    // (server doesn't filter amount). Letter/number search is server-driven, so return base
+    // but still support amount substring if user typed digits.
+    const isAmountSearch = /^\d/.test(s);
+    if (!isAmountSearch) return base;
+    return base.filter((r) => String(r.total ?? "").includes(s));
   }, [rows, cmap, search, showHistory]);
 
   // Auto-select first item when list changes and nothing selected.
@@ -811,7 +914,7 @@ function QuotesWorkspace() {
               <QuoteRow
                 key={`${r.id}-${r.revision_no ?? 1}-${r.is_latest ? "latest" : "old"}`}
                 row={r}
-                customer={cmap[r.customer_id || ""]?.company || "—"}
+                customer={(r as any).customer_company || cmap[r.customer_id || ""]?.company || "—"}
                 selected={r.id === selectedId}
                 onSelect={setSelectedId}
               />
