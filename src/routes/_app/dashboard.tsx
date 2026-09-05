@@ -298,19 +298,22 @@ type TicketRow = {
 
 function TicketsWidget({ scope }: { scope: { engineerName: string | null } }) {
   const [rows, setRows] = useState<TicketRow[] | null>(null);
-  const load = async () => {
-    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 30d window
-    // React Query staleTime 30s / keepPreviousData: keep previous rows while refetching — don't clear on error
+  const load = async (signal?: AbortSignal) => {
     const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
     let q = supabase.from("tickets")
       .select("id,case_id,status,created_at,closed_at")
       .eq("is_deleted", false).gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
     if (scope.engineerName) q = q.eq("assigned_engineer_name", scope.engineerName);
     const { data, error } = await q;
-    if (error) { toast.error(error.message); return; }
+    if (signal?.aborted) return;
+    if (error) { if (!signal?.aborted) toast.error(error.message); return; }
     setRows((data || []) as TicketRow[]);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [scope.engineerName]);
+  useEffect(() => {
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
+  }, [scope.engineerName]);
   useRealtimeRefetch("tickets", load);
 
   const k = useMemo(() => {
@@ -396,14 +399,18 @@ type IndentRow = { id: string; indent_no: string; created_at: string; oracles_da
 
 function IndentWidget() {
   const [rows, setRows] = useState<IndentRow[] | null>(null);
-  const load = async () => {
-    // Phase 0.2 debloat: minimal cols + limit 200 + 30d window — staleTime 30s / keepPreviousData
+  const load = async (signal?: AbortSignal) => {
     const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
     const { data, error } = await supabase.from("indents" as never).select("id,indent_no,created_at,oracles_data,created_by").eq("is_deleted", false).gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
-    if (error) { toast.error(error.message); return; }
+    if (signal?.aborted) return;
+    if (error) { if (!signal?.aborted) toast.error(error.message); return; }
     setRows((data || []) as unknown as IndentRow[]);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
+  }, []);
   useRealtimeRefetch("indents", load);
   const k = useMemo(() => {
     const r = rows || [];
@@ -587,14 +594,18 @@ function quarterRange(offset = 0) {
 
 function QuarterlyTicketsCard() {
   const [rows, setRows] = useState<{ created_at: string; status: string }[] | null>(null);
-  const load = async () => {
-    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 90d window — staleTime 60s
+  const load = async (signal?: AbortSignal) => {
     const since90d = new Date(); since90d.setDate(since90d.getDate() - 90);
     const { data, error } = await supabase.from("tickets").select("id,case_id,status,created_at,closed_at").eq("is_deleted", false).gte("created_at", since90d.toISOString()).order("created_at", { ascending: false }).limit(200);
-    if (error) { toast.error(error.message); return; }
+    if (signal?.aborted) return;
+    if (error) { if (!signal?.aborted) toast.error(error.message); return; }
     setRows((data || []) as any);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
+  }, []);
   useRealtimeRefetch("tickets", load);
   const cur = quarterRange(0); const prev = quarterRange(-1);
   const inRange = (iso: string, s: Date, e: Date) => { const d = new Date(iso); return d >= s && d < e; };
@@ -649,18 +660,22 @@ function BarLine({ label, value, max, tone }: { label: string; value: number; ma
 
 function TeamPerformanceCard() {
   const [rows, setRows] = useState<{ assigned_engineer_name: string | null; status: string; closed_at: string | null }[] | null>(null);
-  const load = async () => {
-    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 90d window (already had 90d) — keepPreviousData
+  const load = async (signal?: AbortSignal) => {
     const since = new Date(); since.setDate(since.getDate() - 90);
     const { data, error } = await supabase.from("tickets")
       .select("id,case_id,status,created_at,closed_at,assigned_engineer_name")
       .eq("is_deleted", false)
       .gte("created_at", since.toISOString())
       .limit(200);
-    if (error) { toast.error(error.message); return; }
+    if (signal?.aborted) return;
+    if (error) { if (!signal?.aborted) toast.error(error.message); return; }
     setRows((data || []) as any);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
+  }, []);
   useRealtimeRefetch("tickets", load);
   const top = useMemo(() => {
     const r = rows || [];
@@ -715,52 +730,70 @@ type FeedItem = { id: string; module: ModuleKey; title: string; subtitle: string
 function ActivityFeed({ can, isAdmin, engineerName }: { can: (m: ModuleKey, a?: any) => boolean; isAdmin: boolean; engineerName: string | null }) {
   const [items, setItems] = useState<FeedItem[] | null>(null);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     try {
       const collected: FeedItem[] = [];
       const showAll = isAdmin;
+      const promises: Promise<void>[] = [];
+
       if (showAll || can("tickets", "read")) {
-        let q = supabase.from("tickets").select("id,case_id,status,customer_name,assigned_engineer_name,created_at")
-          .eq("is_deleted", false).order("created_at", { ascending: false }).limit(15);
-        if (!showAll && engineerName) q = q.eq("assigned_engineer_name", engineerName);
-        const { data, error } = await q;
-        if (error) { toast.error(error.message); } else {
-          (data || []).forEach((t: any) => collected.push({
-            id: `t-${t.id}`, module: "tickets",
-            title: `${t.case_id} · ${t.customer_name}`, subtitle: `Ticket ${t.status}`,
-            ts: t.created_at, to: `/tickets/${t.id}`,
-          }));
-        }
+        promises.push((async () => {
+          let q = supabase.from("tickets").select("id,case_id,status,customer_name,assigned_engineer_name,created_at")
+            .eq("is_deleted", false).order("created_at", { ascending: false }).limit(15);
+          if (!showAll && engineerName) q = q.eq("assigned_engineer_name", engineerName);
+          const { data, error } = await q;
+          if (signal?.aborted) return;
+          if (error) { if (!signal?.aborted) toast.error(error.message); } else {
+            (data || []).forEach((t: any) => collected.push({
+              id: `t-${t.id}`, module: "tickets",
+              title: `${t.case_id} · ${t.customer_name}`, subtitle: `Ticket ${t.status}`,
+              ts: t.created_at, to: `/tickets/${t.id}`,
+            }));
+          }
+        })());
       }
       if (showAll || can("indent", "read")) {
-        const { data, error } = await supabase.from("indents" as never)
-          .select("id,indent_no,company,created_at").eq("is_deleted", false).order("created_at", { ascending: false }).limit(10);
-        if (error) { toast.error(error.message); } else {
-          (data || []).forEach((x: any) => collected.push({
-            id: `i-${x.id}`, module: "indent",
-            title: `${x.indent_no} · ${x.company || "—"}`, subtitle: "Indent created",
-            ts: x.created_at, to: `/indent/${x.id}`,
-          }));
-        }
+        promises.push((async () => {
+          const { data, error } = await supabase.from("indents" as never)
+            .select("id,indent_no,company,created_at").eq("is_deleted", false).order("created_at", { ascending: false }).limit(10);
+          if (signal?.aborted) return;
+          if (error) { if (!signal?.aborted) toast.error(error.message); } else {
+            (data || []).forEach((x: any) => collected.push({
+              id: `i-${x.id}`, module: "indent",
+              title: `${x.indent_no} · ${x.company || "—"}`, subtitle: "Indent created",
+              ts: x.created_at, to: `/indent/${x.id}`,
+            }));
+          }
+        })());
       }
       if (showAll || can("amc", "read")) {
-        const { data, error } = await supabase.from("amcs")
-          .select("id,agreement_no,client_company,client_name,created_at").eq("is_deleted", false).order("created_at", { ascending: false }).limit(10);
-        if (error) { toast.error(error.message); } else {
-          (data || []).forEach((x: any) => collected.push({
-            id: `a-${x.id}`, module: "amc",
-            title: `${x.agreement_no} · ${x.client_company || x.client_name || "—"}`, subtitle: "AMC created",
-            ts: x.created_at, to: `/amc/${x.id}`,
-          }));
-        }
+        promises.push((async () => {
+          const { data, error } = await supabase.from("amcs")
+            .select("id,agreement_no,client_company,client_name,created_at").eq("is_deleted", false).order("created_at", { ascending: false }).limit(10);
+          if (signal?.aborted) return;
+          if (error) { if (!signal?.aborted) toast.error(error.message); } else {
+            (data || []).forEach((x: any) => collected.push({
+              id: `a-${x.id}`, module: "amc",
+              title: `${x.agreement_no} · ${x.client_company || x.client_name || "—"}`, subtitle: "AMC created",
+              ts: x.created_at, to: `/amc/${x.id}`,
+            }));
+          }
+        })());
       }
+
+      await Promise.allSettled(promises);
+      if (signal?.aborted) return;
       collected.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
       setItems(collected.slice(0, 15));
     } catch (e: any) {
-      toast.error(e?.message || "Failed to load activity");
+      if (!signal?.aborted) toast.error(e?.message || "Failed to load activity");
     }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [isAdmin, engineerName]);
+  useEffect(() => {
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
+  }, [isAdmin, engineerName]);
   useRealtimeRefetch(["tickets", "indents", "amcs"], load);
 
   const moduleIcon = (m: ModuleKey) => {
