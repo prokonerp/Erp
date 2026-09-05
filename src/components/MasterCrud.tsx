@@ -101,7 +101,7 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
       const { data, error, count } = await query;
       if (error) {
         toast.error(error.message);
-        return { rows: [], count: 0 };
+        throw new Error(error.message);
       }
       return { rows: (data as any) ?? [], count: count ?? 0 };
     },
@@ -114,24 +114,29 @@ export function MasterCrud({ table, title, fields, canEdit, orderBy = "created_a
   const loading = rowsQuery.isLoading;
 
   const optionsQuery = useQuery({
-    queryKey: ["masters", table, "options"],
+    queryKey: ["masters", table, "options", fields.filter((f) => f.type === "select").map((f) => f.optionsFrom?.table ?? f.key)],
     queryFn: async () => {
       const map: Record<string, { value: string; label: string }[]> = {};
+      // Parallelize option fetches — was sequential 3×RTT
+      const tasks = fields
+        .filter((f) => f.type === "select" && !f.options && f.optionsFrom)
+        .map(async (f) => {
+          const vk = f.optionsFrom!.valueKey ?? "id";
+          const lk = f.optionsFrom!.labelKey ?? "name";
+          const ob = f.optionsFrom!.orderBy ?? lk;
+          const { data } = await supabase
+            .from(f.optionsFrom!.table as any)
+            .select(`${vk},${lk}`)
+            .order(ob, { ascending: true });
+          return [f.key, ((data as any[]) ?? []).map((r) => ({ value: r[vk], label: r[lk] }))] as const;
+        });
+      const results = await Promise.all(tasks);
       for (const f of fields) {
         if (f.type === "select") {
-          if (f.options) {
-            map[f.key] = f.options;
-            continue;
-          }
-          if (f.optionsFrom) {
-            const vk = f.optionsFrom.valueKey ?? "id";
-            const lk = f.optionsFrom.labelKey ?? "name";
-            const ob = f.optionsFrom.orderBy ?? lk;
-            const { data } = await supabase
-              .from(f.optionsFrom.table as any)
-              .select(`${vk},${lk}`)
-              .order(ob, { ascending: true });
-            map[f.key] = ((data as any[]) ?? []).map((r) => ({ value: r[vk], label: r[lk] }));
+          if (f.options) map[f.key] = f.options;
+          else {
+            const hit = results.find(([k]) => k === f.key);
+            if (hit) map[f.key] = hit[1];
           }
         }
       }

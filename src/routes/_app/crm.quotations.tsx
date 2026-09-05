@@ -458,6 +458,7 @@ function QuotesWorkspace() {
       // Uses trigram indexes idx_quotations_*_trgm for %term% ilike. Falls back to
       // customer_id lookup only if customer_company column missing (pre-migration).
       // If we already know column missing (hasCustomerCompanyRef === false), skip it to avoid 400 + extra RTT.
+      // hasCustomerCompanyRef is a mutable ref — intentionally not in deps (avoid extra rebuild per probe).
       const useCustomerCompany = hasCustomerCompanyRef.current !== false;
       const cols = useCustomerCompany
         ? "id, quote_no, reference_no, subject, customer_id, customer_company, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest"
@@ -469,6 +470,8 @@ function QuotesWorkspace() {
         .order("id", { ascending: false })
         .range(from, to);
       if (statusF !== "all") query = query.eq("status", statusF);
+      // Pipeline view: hide superseded unless Show history toggled — push to server so hasMore is accurate
+      if (!showHistory) query = query.eq("is_latest", true);
       const s = search.trim();
       if (s) {
         // Short terms (<2 chars) skip trigram search — avoid scanning all rows
@@ -487,7 +490,8 @@ function QuotesWorkspace() {
       }
       return query;
     },
-    [statusF, search],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [statusF, search, showHistory],
   );
 
   const loadFirst = useCallback(async () => {
@@ -503,6 +507,7 @@ function QuotesWorkspace() {
         .order("id", { ascending: false })
         .range(0, PAGE_SIZE - 1);
       if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
+      if (!showHistory) fallbackQuery = fallbackQuery.eq("is_latest", true);
       const esc = escapePostgrestOrIlike(sEarly);
       const q = `%${esc}%`;
       try {
@@ -514,8 +519,13 @@ function QuotesWorkspace() {
         const q2 = `%${esc}%`;
         fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q2},subject.ilike.${q2},reference_no.ilike.${q2}`);
       }
-      const { data: fData } = await fallbackQuery as any;
+      const { data: fData, error: fErr } = await fallbackQuery as any;
       if (seq !== loadSeqRef.current) return;
+      if (fErr) {
+        toast.error(fErr.message || "Failed to load quotations");
+        isFirstLoadRef.current = false;
+        return;
+      }
       const list = (fData || []) as unknown as QuoteListRow[];
       setRows(list);
       setHasMore(list.length === PAGE_SIZE);
@@ -539,6 +549,7 @@ function QuotesWorkspace() {
         .order("id", { ascending: false })
         .range(0, PAGE_SIZE - 1);
       if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
+      if (!showHistory) fallbackQuery = fallbackQuery.eq("is_latest", true);
       if (s && s.length >= 2) {
         const esc = escapePostgrestOrIlike(s);
         const q = `%${esc}%`;
@@ -555,8 +566,13 @@ function QuotesWorkspace() {
           fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q2},subject.ilike.${q2},reference_no.ilike.${q2}`);
         }
       }
-      const { data: fData } = await fallbackQuery as any;
+      const { data: fData, error: fErr } = await fallbackQuery as any;
       if (seq !== loadSeqRef.current) return;
+      if (fErr) {
+        toast.error(fErr.message || "Failed to load quotations");
+        isFirstLoadRef.current = false;
+        return;
+      }
       const list = (fData || []) as unknown as QuoteListRow[];
       setRows(list);
       setHasMore(list.length === PAGE_SIZE);
@@ -564,15 +580,15 @@ function QuotesWorkspace() {
       return;
     }
     if (error) {
-      // Don't clear rows on error — keep stale data, show toast
-      console.error("loadFirst error", error);
+      isFirstLoadRef.current = false;
+      toast.error((error as any)?.message || "Failed to load quotations");
       return;
     }
     const list = (data || []) as unknown as QuoteListRow[];
     setRows(list);
     setHasMore(list.length === PAGE_SIZE);
     isFirstLoadRef.current = false;
-  }, [buildQuery, search, statusF]);
+  }, [buildQuery]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -587,6 +603,7 @@ function QuotesWorkspace() {
         .order("id", { ascending: false })
         .range(rows.length, rows.length + PAGE_SIZE - 1);
       if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
+      if (!showHistory) fallbackQuery = fallbackQuery.eq("is_latest", true);
       const esc = escapePostgrestOrIlike(sEarly);
       const q = `%${esc}%`;
       try {
@@ -598,8 +615,9 @@ function QuotesWorkspace() {
         const q2 = `%${esc}%`;
         fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q2},subject.ilike.${q2},reference_no.ilike.${q2}`);
       }
-      const { data: fData } = await fallbackQuery as any;
+      const { data: fData, error: fErr } = await fallbackQuery as any;
       if (seq !== loadSeqRef.current) { setLoadingMore(false); return; }
+      if (fErr) { setLoadingMore(false); toast.error(fErr.message || "Failed to load more"); return; }
       const list = (fData || []) as unknown as QuoteListRow[];
       setRows((prev) => {
         const seen = new Set(prev.map((r) => r.id));
@@ -626,6 +644,7 @@ function QuotesWorkspace() {
         .order("id", { ascending: false })
         .range(rows.length, rows.length + PAGE_SIZE - 1);
       if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
+      if (!showHistory) fallbackQuery = fallbackQuery.eq("is_latest", true);
       if (s && s.length >= 2) {
         const esc = escapePostgrestOrIlike(s);
         const q = `%${esc}%`;
@@ -639,8 +658,9 @@ function QuotesWorkspace() {
           fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q2},subject.ilike.${q2},reference_no.ilike.${q2}`);
         }
       }
-      const { data: fData } = await fallbackQuery as any;
+      const { data: fData, error: fErr } = await fallbackQuery as any;
       if (seq !== loadSeqRef.current) { setLoadingMore(false); return; }
+      if (fErr) { setLoadingMore(false); toast.error(fErr.message || "Failed to load more"); return; }
       const list = (fData || []) as unknown as QuoteListRow[];
       setRows((prev) => {
         const seen = new Set(prev.map((r) => r.id));
@@ -651,7 +671,7 @@ function QuotesWorkspace() {
       setLoadingMore(false);
       return;
     }
-    if (error) { setLoadingMore(false); console.error("loadMore error", error); return; }
+    if (error) { setLoadingMore(false); toast.error((error as any)?.message || "Failed to load more"); return; }
     const list = (data || []) as unknown as QuoteListRow[];
     setRows((prev) => {
       const seen = new Set(prev.map((r) => r.id));
@@ -660,23 +680,27 @@ function QuotesWorkspace() {
     });
     setHasMore(list.length === PAGE_SIZE);
     setLoadingMore(false);
-  }, [buildQuery, rows.length, loadingMore, hasMore, search, statusF]);
+  }, [buildQuery, rows.length, loadingMore, hasMore, showHistory]);
 
   // Reset pagination when debounced search/status changes — keep previous rows while loading new search
   useEffect(() => {
     if (isFirstLoadRef.current) return; // initial mount handled by loadFirst effect below
     // Don't clear rows — keep stale data visible until server returns (perceived instant)
     setHasMore(true);
-    loadSeqRef.current++;
+    // loadFirst's own ++loadSeqRef will cancel inflight; no double bump here
     // loadFirst will be triggered by the [loadFirst] effect below due to search/status change
-  }, [search, statusF]);
+  }, [search, statusF, showHistory]);
 
   useEffect(() => {
     loadFirst();
   }, [loadFirst]);
   useEffect(() => {
+    if (!rows.length) return;
     resolveCustomers(rows.map((r) => r.customer_id ?? null));
   }, [rows, resolveCustomers]);
+
+  // Throttled scroll — avoid calling loadMore on every pixel
+  const tickingRef = useRef(false);
 
   // Fast client filter for instant feedback while server fetch is in flight.
   // Server already filters quote_no/subject/reference_no/customer_company via trigram indexes.
@@ -763,8 +787,14 @@ function QuotesWorkspace() {
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) loadMore();
+    if (!el || tickingRef.current) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
+      tickingRef.current = true;
+      requestAnimationFrame(() => {
+        tickingRef.current = false;
+        loadMore();
+      });
+    }
   }, [loadMore]);
 
   const createNew = async () => {
