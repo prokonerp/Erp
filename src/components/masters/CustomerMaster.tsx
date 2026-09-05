@@ -126,46 +126,80 @@ export function CustomerMasterPage() {
       key: "company",
       header: "Customer",
       sortable: true,
-      render: (c) => <span className="font-medium">{c.company}</span>,
+      render: (c) => (
+        <div className="min-w-0">
+          <span className="font-semibold text-foreground truncate block">{c.company}</span>
+          {c.contact_name ? (
+            <span className="text-[11px] text-muted-foreground truncate block">{c.contact_name}</span>
+          ) : null}
+        </div>
+      ),
+      className: "min-w-[180px]",
     },
     {
-      key: "customer_type",
-      header: "Type",
-      render: (c) => <span className="text-xs">{(c as any).customer_type || "\u2014"}</span>,
+      key: "phone",
+      header: "Phone",
+      render: (c) => <span className="text-xs tabular-nums">{c.phone || "—"}</span>,
     },
-    { key: "contact_name", header: "Contact", render: (c) => c.contact_name || "\u2014" },
-    { key: "phone", header: "Phone", render: (c) => c.phone || "\u2014" },
+    {
+      key: "email",
+      header: "Email",
+      render: (c) => (
+        <span className="text-xs text-muted-foreground truncate max-w-[160px] block">
+          {c.email || "—"}
+        </span>
+      ),
+    },
     {
       key: "gst",
       header: "GSTIN",
-      render: (c) => <span className="text-xs">{c.gst || "\u2014"}</span>,
+      render: (c) =>
+        c.gst ? (
+          <span className="text-[11px] font-mono tracking-tight bg-muted/60 rounded px-1.5 py-0.5 inline-block">
+            {c.gst}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
-    { key: "state", header: "State", sortable: true, render: (c) => c.state || "\u2014" },
+    {
+      key: "state",
+      header: "State",
+      sortable: true,
+      render: (c) => <span className="text-xs">{c.state || "—"}</span>,
+    },
+    {
+      key: "city",
+      header: "City",
+      render: (c) => <span className="text-xs">{(c as any).city || "—"}</span>,
+    },
     {
       key: "_actions",
-      header: "Actions",
+      header: "",
       align: "right",
       render: (c) => (
-        <>
+        <div className="flex items-center justify-end gap-0.5">
           <Button
             size="icon"
             variant="ghost"
+            className="h-7 w-7"
             aria-label={`Edit ${c.company}`}
             onClick={() => startEdit(c)}
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-3.5 w-3.5" />
           </Button>
           <Button
             size="icon"
             variant="ghost"
+            className="h-7 w-7"
             aria-label={`Delete ${c.company}`}
             onClick={() => setDeleteTarget(c)}
           >
-            <Trash2 className="h-4 w-4 text-destructive" />
+            <Trash2 className="h-3.5 w-3.5 text-destructive" />
           </Button>
-        </>
+        </div>
       ),
-      className: "w-24",
+      className: "w-20",
     },
   ];
 
@@ -226,6 +260,7 @@ export function CustomerMasterPage() {
         columns={columns}
         data={filtered}
         isLoading={isLoading}
+        density="compact"
         totalRecords={totalCount}
         serverPagination={{ page, pageSize, total: totalCount, onPageChange: setPage }}
         emptyIcon={Users}
