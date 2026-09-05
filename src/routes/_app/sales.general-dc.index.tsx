@@ -80,7 +80,8 @@ function GeneralDcList() {
     try {
       const data = await listGeneralDcs();
       setRows(data);
-      setReturnedNos(await fetchReturnedDcNos(data.map((r) => r.dc_no || "")).catch(() => new Set<string>()));
+      const s = await fetchReturnedDcNos(data.map((r) => r.dc_no || "")).catch(() => new Set<string>());
+      setReturnedNos(s);
     } catch (e: any) {
       toast.error(e.message || "Could not refresh list");
     }

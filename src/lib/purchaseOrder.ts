@@ -249,8 +249,7 @@ export async function safeInsertPOItems(rows: Record<string, any>[]): Promise<vo
     const stripped = rows.map(({ warranty_months: _w, ...rest }) => rest);
     const retry = await (supabase as any).from("purchase_order_items").insert(stripped);
     if (retry.error) throw retry.error;
-    // Non-blocking warn - UI callers may toast
-    console.warn("[safeInsertPOItems] warranty_months column missing on remote, inserted without it. Apply migration 20260901000000_add_po_warranty.sql");
+    if (import.meta.env.DEV) console.warn("[safeInsertPOItems] warranty_months column missing on remote, inserted without it. Apply migration 20260901000000_add_po_warranty.sql");
     return;
   }
   if (error) throw error;

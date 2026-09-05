@@ -556,13 +556,15 @@ export async function fetchCustomersByIds(
   const { supabase } = await import("@/integrations/supabase/client");
   const unique = Array.from(new Set(ids.filter((x): x is string => !!x)));
   if (!unique.length) return [];
-  const out: Customer[] = [];
   const CHUNK = 200;
-  for (let i = 0; i < unique.length; i += CHUNK) {
-    const slice = unique.slice(i, i + CHUNK);
-    const { data, error } = await supabase.from("customers").select(columns).in("id", slice);
-    if (error) throw error;
-    out.push(...((data || []) as unknown as Customer[]));
-  }
-  return out;
+  const slices: string[][] = [];
+  for (let i = 0; i < unique.length; i += CHUNK) slices.push(unique.slice(i, i + CHUNK));
+  const results = await Promise.all(
+    slices.map(async (slice) => {
+      const { data, error } = await supabase.from("customers").select(columns).in("id", slice);
+      if (error) throw error;
+      return (data || []) as unknown as Customer[];
+    }),
+  );
+  return results.flat();
 }
