@@ -95,6 +95,11 @@
     grid-column: 1 / -1;
   }
 }
+/* Perf/UI fix: hardcoded w-60 / w-56 / w-72 break <375px (iPhone SE). Cap them to 100% on very narrow viewport */
+@media (max-width: 375px) {
+  .w-60, .w-56, .w-72 { max-width: 100% !important; width: 100% !important; }
+  input.w-56, input.w-60, input.w-72 { max-width: 100% !important; }
+}
 /* Long values inside narrow fields should truncate, not overflow */
 .fk-col :where(input, [role="combobox"], [data-slot="select-trigger"], button[data-slot="popover-trigger"]) {
   max-width: 100%;

@@ -200,7 +200,6 @@ function InvoiceView() {
     return y && m && day ? `${day}-${m}-${y}` : d;
   };
   const pdfMeta = { po_no: inv.po_number || "", po_date: fmtDMY(inv.po_date), payment_terms: inv.payment_terms || "" };
-  console.log("HEADER DATA:", company);
 
   return (
     <div className="space-y-4">

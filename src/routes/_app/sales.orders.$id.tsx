@@ -29,7 +29,6 @@ function SalesOrderDetail() {
   if (!so || !company) return <PageLoader />;
 
   const st = soStatusMeta(so.status);
-  console.log("HEADER DATA:", company);
 
   const setStatus = async (s: SoStatus) => {
     const { error } = await supabase.from("sales_orders" as never).update({ status: s } as never).eq("id", id);

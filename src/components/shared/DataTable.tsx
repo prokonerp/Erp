@@ -331,7 +331,7 @@ export function DataTable<T extends Record<string, any>>({
           style={{ contain: "content" }}
         >
           {isLoading ? (
-            <TableSkeleton rows={6} />
+            <TableSkeleton rows={6} colCount={columns.length || 4} />
           ) : effectiveSortedData.length === 0 ? (
             <EmptyState icon={emptyIcon} title={emptyTitle} hint={emptyHint} action={emptyAction} />
           ) : (

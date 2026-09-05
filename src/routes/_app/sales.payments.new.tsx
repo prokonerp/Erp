@@ -10,6 +10,9 @@ import { CustomerPicker } from "@/components/CustomerPicker";
 import type { Customer } from "@/lib/crm";
 import { istTodayIso } from "@/lib/dateRange";
 import { PAYMENT_MODES, inr, type InvoiceRow, type PaymentMode } from "@/lib/sales";
+import { TableSkeleton } from "@/components/shared/skeletons";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { Wallet } from "lucide-react";
 
 type Search = { invoice_id?: string };
 
@@ -32,6 +35,7 @@ function NewPayment() {
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [alloc, setAlloc] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
 
@@ -57,13 +61,15 @@ function NewPayment() {
   useEffect(() => {
     if (!customer) { setInvoices([]); return; }
     void (async () => {
+      setInvoicesLoading(true);
       try {
         const { data, error } = await supabase
           .from("invoices")
-          .select("*")
+          .select("id,invoice_no,invoice_date,total,total_paid,status,customer_id")
           .eq("customer_id", customer.id)
           .in("status", ["issued", "partial"])
-          .order("invoice_date", { ascending: true });
+          .order("invoice_date", { ascending: true })
+          .limit(200);
         if (error) {
           toast.error(`Could not load open invoices: ${error.message}`);
           return;
@@ -79,6 +85,8 @@ function NewPayment() {
         }
       } catch (e) {
         toast.error(`Could not load open invoices: ${(e as Error).message}`);
+      } finally {
+        setInvoicesLoading(false);
       }
     })();
   }, [customer?.id, invoice_id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -229,8 +237,10 @@ function NewPayment() {
               </tr>
             </thead>
             <tbody>
-              {invoices.length === 0 ? (
-                <tr><td colSpan={6} className="p-4 text-center text-muted-foreground">No open invoices for this customer.</td></tr>
+              {invoicesLoading ? (
+                <tr><td colSpan={6} className="p-0"><TableSkeleton rows={4} colCount={6} /></td></tr>
+              ) : invoices.length === 0 ? (
+                <tr><td colSpan={6} className="p-0"><EmptyState icon={Wallet} title="No open invoices" hint="No open invoices for this customer." /></td></tr>
               ) : invoices.map((inv) => {
                 const due = Math.max(0, Number(inv.total) - Number(inv.total_paid));
                 return (

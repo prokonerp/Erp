@@ -30,20 +30,24 @@ export function PageLoader({
   );
 }
 
-/** Row-shaped skeleton matching a data table's visual rhythm. */
-export function TableSkeleton({ rows = 8, className }: { rows?: number; className?: string }) {
+/** Row-shaped skeleton matching a data table's visual rhythm. Supports dynamic column count. */
+export function TableSkeleton({ rows = 8, colCount = 4, className }: { rows?: number; colCount?: number; className?: string }) {
+  const headerPalette = [64, 96, 80, 72, 88, 104];
+  const rowPalette = [120, 88, 104, 64, 96, 72];
+  const headers = Array.from({ length: Math.max(1, colCount) }, (_, i) => headerPalette[i % headerPalette.length]);
+  const cells = Array.from({ length: Math.max(1, colCount) }, (_, i) => rowPalette[i % rowPalette.length]);
   return (
     <div className={cn("w-full", className)} aria-busy="true" aria-label="Loading">
       <div className="border-b bg-muted/40 px-4 py-2.5">
         <div className="flex gap-6">
-          {[64, 96, 80, 72].map((w, i) => (
+          {headers.map((w, i) => (
             <Skeleton key={i} className="h-3" style={{ width: w }} />
           ))}
         </div>
       </div>
       {Array.from({ length: rows }).map((_, r) => (
         <div key={r} className="flex items-center gap-6 border-b px-4 py-3 last:border-0">
-          {[120, 88, 104, 64].map((w, i) => (
+          {cells.map((w, i) => (
             <Skeleton key={i} className="h-3.5" style={{ width: w }} />
           ))}
         </div>

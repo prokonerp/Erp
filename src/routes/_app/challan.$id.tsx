@@ -80,7 +80,6 @@ function ChallanView() {
   // Legacy 'Draft' rows shouldn't exist after migration, but stay defensive.
   const isCancelled = status === "Cancelled";
   const isActive = !isCancelled;
-  console.log("HEADER DATA:", company);
 
   const handleDownload = async () => {
     const el = document.getElementById("print-area");

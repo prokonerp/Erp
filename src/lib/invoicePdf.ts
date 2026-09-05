@@ -81,7 +81,6 @@ export async function renderInvoicePdf(args: {
 
   // ============ RESOLVE COMPANY (Company Master only; no branch/settings fallback) ============
   const company = await getCompany();
-  console.log("HEADER DATA:", company);
   const companyName = company.name.toString();
   const companyAddress = company.regd_address.toString();
   const companyGstin = company.gstin || "";

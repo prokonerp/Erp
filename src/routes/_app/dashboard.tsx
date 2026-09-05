@@ -6,6 +6,7 @@ import { usePermissions } from "@/lib/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { CardSkeleton } from "@/components/shared/skeletons";
@@ -299,12 +300,14 @@ function TicketsWidget({ scope }: { scope: { engineerName: string | null } }) {
   const [rows, setRows] = useState<TicketRow[] | null>(null);
   const load = async () => {
     // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 30d window
+    // React Query staleTime 30s / keepPreviousData: keep previous rows while refetching — don't clear on error
     const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
     let q = supabase.from("tickets")
       .select("id,case_id,status,created_at,closed_at")
       .eq("is_deleted", false).gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
     if (scope.engineerName) q = q.eq("assigned_engineer_name", scope.engineerName);
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) { toast.error(error.message); return; }
     setRows((data || []) as TicketRow[]);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [scope.engineerName]);
@@ -342,9 +345,12 @@ function AmcWidget() {
   const [pms, setPms] = useState<PmRow[] | null>(null);
   const load = async () => {
     // Phase 0.2 debloat: minimal cols + limit 200 + keep Promise.all but smaller payload
-    const { data: a } = await supabase.from("amcs").select("id,agreement_no,end_date").eq("is_deleted", false).order("end_date", { ascending: true }).limit(200);
+    // keepPreviousData: retain previous tiles on error / refetch
+    const { data: a, error: e1 } = await supabase.from("amcs").select("id,agreement_no,end_date").eq("is_deleted", false).order("end_date", { ascending: true }).limit(200);
+    if (e1) { toast.error(e1.message); return; }
     setAmcs((a || []) as AmcRow[]);
-    const { data: p } = await supabase.from("pm_visits").select("id,scheduled_date,completed_at").gte("scheduled_date", new Date(Date.now() - 30*86400000).toISOString().slice(0,10)).limit(200);
+    const { data: p, error: e2 } = await supabase.from("pm_visits").select("id,scheduled_date,completed_at").gte("scheduled_date", new Date(Date.now() - 30*86400000).toISOString().slice(0,10)).limit(200);
+    if (e2) { toast.error(e2.message); return; }
     setPms((p || []) as PmRow[]);
   };
   useEffect(() => { load(); }, []);
@@ -386,9 +392,10 @@ type IndentRow = { id: string; indent_no: string; created_at: string; oracles_da
 function IndentWidget() {
   const [rows, setRows] = useState<IndentRow[] | null>(null);
   const load = async () => {
-    // Phase 0.2 debloat: minimal cols + limit 200 + 30d window
+    // Phase 0.2 debloat: minimal cols + limit 200 + 30d window — staleTime 30s / keepPreviousData
     const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
-    const { data } = await supabase.from("indents" as never).select("id,indent_no,created_at,oracles_data,created_by").eq("is_deleted", false).gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
+    const { data, error } = await supabase.from("indents" as never).select("id,indent_no,created_at,oracles_data,created_by").eq("is_deleted", false).gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
+    if (error) { toast.error(error.message); return; }
     setRows((data || []) as unknown as IndentRow[]);
   };
   useEffect(() => { load(); }, []);
@@ -430,11 +437,13 @@ function CrmWidget() {
   const [quotes, setQuotes] = useState<QuoteRow[] | null>(null);
   useEffect(() => {
     (async () => {
-      // Phase 0.2 debloat: minimal cols + limit 200 + keep Promise.all smaller payload
+      // Phase 0.2 debloat: minimal cols + limit 200 + keep Promise.all smaller payload — keepPreviousData on error
       const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
-      const { data: l } = await supabase.from("leads").select("id,status,expected_value,next_followup,owner_id").gte("created_at", since30d.toISOString()).limit(200);
+      const { data: l, error: e1 } = await supabase.from("leads").select("id,status,expected_value,next_followup,owner_id").gte("created_at", since30d.toISOString()).limit(200);
+      if (e1) { toast.error(e1.message); return; }
       setLeads((l || []) as LeadRow[]);
-      const { data: q } = await supabase.from("quotations").select("id,status,total").gte("created_at", since30d.toISOString()).limit(200);
+      const { data: q, error: e2 } = await supabase.from("quotations").select("id,status,total").gte("created_at", since30d.toISOString()).limit(200);
+      if (e2) { toast.error(e2.message); return; }
       setQuotes((q || []) as QuoteRow[]);
     })();
   }, []);
@@ -471,11 +480,13 @@ function ImsWidget() {
   const [grns, setGrns] = useState<GrnRow[] | null>(null);
   useEffect(() => {
     (async () => {
-      // Phase 0.2 debloat: minimal cols + limit 200 + 30d window where applicable
+      // Phase 0.2 debloat: minimal cols + limit 200 + 30d window where applicable — staleTime 30s / keepPreviousData
       const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
-      const { data: s } = await supabase.from("ims_stock_items").select("id,stock_status,part_name").limit(200);
+      const { data: s, error: e1 } = await supabase.from("ims_stock_items").select("id,stock_status,part_name").limit(200);
+      if (e1) { toast.error(e1.message); return; }
       setStock((s || []) as StockRow[]);
-      const { data: g } = await supabase.from("grns").select("id,status,grn_date").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
+      const { data: g, error: e2 } = await supabase.from("grns").select("id,status,grn_date").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
+      if (e2) { toast.error(e2.message); return; }
       setGrns((g || []) as GrnRow[]);
     })();
   }, []);
@@ -518,13 +529,16 @@ function MaterialMovementWidget() {
   const [grns, setGrns] = useState<GrnRow[] | null>(null);
   useEffect(() => {
     (async () => {
-      // Phase 0.2 debloat: minimal cols + limit 200 + 30d window where applicable
+      // Phase 0.2 debloat: minimal cols + limit 200 + 30d window where applicable — keepPreviousData
       const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
-      const { data: g } = await supabase.from("gatepasses").select("id,return_type,created_at").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
+      const { data: g, error: e1 } = await supabase.from("gatepasses").select("id,return_type,created_at").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
+      if (e1) { toast.error(e1.message); return; }
       setGps((g || []) as GpRow[]);
-      const { data: d } = await supabase.from("delivery_challans").select("id,status,challan_date").gte("challan_date", since30d.toISOString().slice(0,10)).order("challan_date", { ascending: false }).limit(200);
+      const { data: d, error: e2 } = await supabase.from("delivery_challans").select("id,status,challan_date").gte("challan_date", since30d.toISOString().slice(0,10)).order("challan_date", { ascending: false }).limit(200);
+      if (e2) { toast.error(e2.message); return; }
       setDcs((d || []) as DcRow[]);
-      const { data: r } = await supabase.from("grns").select("id,status,grn_date").gte("grn_date", since30d.toISOString().slice(0,10)).order("grn_date", { ascending: false }).limit(200);
+      const { data: r, error: e3 } = await supabase.from("grns").select("id,status,grn_date").gte("grn_date", since30d.toISOString().slice(0,10)).order("grn_date", { ascending: false }).limit(200);
+      if (e3) { toast.error(e3.message); return; }
       setGrns((r || []) as GrnRow[]);
     })();
   }, []);
@@ -564,9 +578,10 @@ function quarterRange(offset = 0) {
 function QuarterlyTicketsCard() {
   const [rows, setRows] = useState<{ created_at: string; status: string }[] | null>(null);
   const load = async () => {
-    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 90d window
+    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 90d window — staleTime 60s
     const since90d = new Date(); since90d.setDate(since90d.getDate() - 90);
-    const { data } = await supabase.from("tickets").select("id,case_id,status,created_at,closed_at").eq("is_deleted", false).gte("created_at", since90d.toISOString()).order("created_at", { ascending: false }).limit(200);
+    const { data, error } = await supabase.from("tickets").select("id,case_id,status,created_at,closed_at").eq("is_deleted", false).gte("created_at", since90d.toISOString()).order("created_at", { ascending: false }).limit(200);
+    if (error) { toast.error(error.message); return; }
     setRows((data || []) as any);
   };
   useEffect(() => { load(); }, []);
@@ -625,13 +640,14 @@ function BarLine({ label, value, max, tone }: { label: string; value: number; ma
 function TeamPerformanceCard() {
   const [rows, setRows] = useState<{ assigned_engineer_name: string | null; status: string; closed_at: string | null }[] | null>(null);
   const load = async () => {
-    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 90d window (already had 90d)
+    // Phase 0.2 debloat: minimal cols (id,case_id,status,created_at,closed_at) + limit 200 + 90d window (already had 90d) — keepPreviousData
     const since = new Date(); since.setDate(since.getDate() - 90);
-    const { data } = await supabase.from("tickets")
+    const { data, error } = await supabase.from("tickets")
       .select("id,case_id,status,created_at,closed_at,assigned_engineer_name")
       .eq("is_deleted", false)
       .gte("created_at", since.toISOString())
       .limit(200);
+    if (error) { toast.error(error.message); return; }
     setRows((data || []) as any);
   };
   useEffect(() => { load(); }, []);
@@ -690,39 +706,49 @@ function ActivityFeed({ can, isAdmin, engineerName }: { can: (m: ModuleKey, a?: 
   const [items, setItems] = useState<FeedItem[] | null>(null);
 
   const load = async () => {
+    try {
       const collected: FeedItem[] = [];
       const showAll = isAdmin;
       if (showAll || can("tickets", "read")) {
         let q = supabase.from("tickets").select("id,case_id,status,customer_name,assigned_engineer_name,created_at")
           .eq("is_deleted", false).order("created_at", { ascending: false }).limit(15);
         if (!showAll && engineerName) q = q.eq("assigned_engineer_name", engineerName);
-        const { data } = await q;
-        (data || []).forEach((t: any) => collected.push({
-          id: `t-${t.id}`, module: "tickets",
-          title: `${t.case_id} · ${t.customer_name}`, subtitle: `Ticket ${t.status}`,
-          ts: t.created_at, to: `/tickets/${t.id}`,
-        }));
+        const { data, error } = await q;
+        if (error) { toast.error(error.message); } else {
+          (data || []).forEach((t: any) => collected.push({
+            id: `t-${t.id}`, module: "tickets",
+            title: `${t.case_id} · ${t.customer_name}`, subtitle: `Ticket ${t.status}`,
+            ts: t.created_at, to: `/tickets/${t.id}`,
+          }));
+        }
       }
       if (showAll || can("indent", "read")) {
-        const { data } = await supabase.from("indents" as never)
+        const { data, error } = await supabase.from("indents" as never)
           .select("id,indent_no,company,created_at").eq("is_deleted", false).order("created_at", { ascending: false }).limit(10);
-        (data || []).forEach((x: any) => collected.push({
-          id: `i-${x.id}`, module: "indent",
-          title: `${x.indent_no} · ${x.company || "—"}`, subtitle: "Indent created",
-          ts: x.created_at, to: `/indent/${x.id}`,
-        }));
+        if (error) { toast.error(error.message); } else {
+          (data || []).forEach((x: any) => collected.push({
+            id: `i-${x.id}`, module: "indent",
+            title: `${x.indent_no} · ${x.company || "—"}`, subtitle: "Indent created",
+            ts: x.created_at, to: `/indent/${x.id}`,
+          }));
+        }
       }
       if (showAll || can("amc", "read")) {
-        const { data } = await supabase.from("amcs")
+        const { data, error } = await supabase.from("amcs")
           .select("id,agreement_no,client_company,client_name,created_at").eq("is_deleted", false).order("created_at", { ascending: false }).limit(10);
-        (data || []).forEach((x: any) => collected.push({
-          id: `a-${x.id}`, module: "amc",
-          title: `${x.agreement_no} · ${x.client_company || x.client_name || "—"}`, subtitle: "AMC created",
-          ts: x.created_at, to: `/amc/${x.id}`,
-        }));
+        if (error) { toast.error(error.message); } else {
+          (data || []).forEach((x: any) => collected.push({
+            id: `a-${x.id}`, module: "amc",
+            title: `${x.agreement_no} · ${x.client_company || x.client_name || "—"}`, subtitle: "AMC created",
+            ts: x.created_at, to: `/amc/${x.id}`,
+          }));
+        }
       }
       collected.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
       setItems(collected.slice(0, 15));
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to load activity");
+    }
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [isAdmin, engineerName]);
   useRealtimeRefetch(["tickets", "indents", "amcs"], load);

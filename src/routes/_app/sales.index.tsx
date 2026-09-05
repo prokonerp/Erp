@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 import {
   Receipt, Wallet, Truck, FileText, IndianRupee, AlertCircle, CheckCircle2, Clock,
   TrendingUp, ShoppingCart, ArrowRightLeft, Activity, RotateCcw, PackageCheck,
@@ -127,9 +128,17 @@ function HeadSalesDashboard() {
       setOutstandingAll(outstandingTotal);
       setOutstandingCount(out.filter((r) => Number(r.total || 0) > Number(r.total_paid || 0)).length);
       setMonthly(Array.from(grouped, ([ym, total]) => ({ ym, total })));
+      // Keep previous data on error (keepPreviousData semantics) — don't clear on failure
+      if (qRes.error) throw qRes.error;
+      if (sRes.error) throw sRes.error;
+      if (iRes.error) throw iRes.error;
+      if (outRes.error) throw outRes.error;
+      if (trendRes.error) throw trendRes.error;
+      if (recRes.error) throw recRes.error;
+
       setRecent((recRes.data ?? []) as unknown as InvoiceRow[]);
       setLoading(false);
-    })().catch((e) => { console.error(e); if (!cancelled) setLoading(false); });
+    })().catch((e) => { toast.error(e?.message || "Failed to load sales dashboard"); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [from, to]);
 

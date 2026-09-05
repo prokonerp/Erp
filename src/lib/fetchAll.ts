@@ -14,6 +14,12 @@ import { supabase } from "@/integrations/supabase/client";
  * Fetch ALL rows for a Supabase query, bypassing the default 1000-row cap
  * by paging through with .range() in batches of `pageSize`.
  *
+ * Concurrency: intentionally sequential (concurrency = 1) — Supabase PostgREST
+ * rate-limits parallel range scans; parallelizing this loop with Promise.all
+ * would hit 429s and break exports. If you need faster exports, use
+ * p-limit(3) at most and keep pageSize ≤ 1000. For UI lists, DO NOT use this;
+ * use bounded server queries with explicit cols + limit + staleTime instead.
+ *
  * Usage:
  *   const rows = await fetchAllWith<Grn>((q) => q.from("grns").select("*").order("created_at"));
  */
@@ -23,7 +29,7 @@ export async function fetchAllWith<T = any>(
 ): Promise<T[]> {
   const all: T[] = [];
   let from = 0;
-  // Safety cap to avoid runaway loops
+  // Safety cap to avoid runaway loops — concurrency limit: 1 sequential request at a time
   for (let i = 0; i < 1000; i++) {
     const to = from + pageSize - 1;
     const q = build(supabase).range(from, to);
