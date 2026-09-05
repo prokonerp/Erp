@@ -127,25 +127,31 @@ export function CustomerMasterPage() {
       header: "Customer",
       sortable: true,
       render: (c) => (
-        <div className="min-w-0 space-y-0.5">
-          <span className="font-semibold text-foreground text-[13px] leading-[1.25] block break-words whitespace-normal">
+        <div className="min-w-0 space-y-0.5 overflow-hidden">
+          <span
+            className="font-semibold text-foreground text-[13px] leading-[1.25] block truncate"
+            title={c.company}
+          >
             {c.company}
           </span>
           {c.contact_name ? (
-            <span className="text-[11px] text-muted-foreground leading-tight block break-words whitespace-normal">
+            <span
+              className="text-[11px] text-muted-foreground leading-tight block truncate"
+              title={c.contact_name}
+            >
               {c.contact_name}
             </span>
           ) : null}
         </div>
       ),
-      // 40% of table — guarantees 20% minimum even on narrow viewports, wraps full names
-      className: "!whitespace-normal w-[40%] min-w-[20%]",
+      // 30% of table — 0% minimum, single line per row, no overflow
+      className: "w-[30%] min-w-0 overflow-hidden",
     },
     {
       key: "phone",
       header: "Phone",
       render: (c) => <span className="text-xs tabular-nums whitespace-nowrap">{c.phone || "—"}</span>,
-      className: "w-[9%]",
+      className: "w-[11%]",
     },
     {
       key: "email",
@@ -153,7 +159,7 @@ export function CustomerMasterPage() {
       render: (c) => (
         <span className="text-xs text-muted-foreground truncate block">{c.email || "—"}</span>
       ),
-      className: "w-[14%]",
+      className: "w-[17%]",
     },
     {
       key: "gst",
@@ -166,20 +172,20 @@ export function CustomerMasterPage() {
         ) : (
           <span className="text-muted-foreground text-xs">—</span>
         ),
-      className: "w-[13%]",
+      className: "w-[15%]",
     },
     {
       key: "state",
       header: "State",
       sortable: true,
       render: (c) => <span className="text-xs whitespace-nowrap">{c.state || "—"}</span>,
-      className: "w-[10%]",
+      className: "w-[11%]",
     },
     {
       key: "city",
       header: "City",
       render: (c) => <span className="text-xs whitespace-nowrap">{(c as any).city || "—"}</span>,
-      className: "w-[8%]",
+      className: "w-[10%]",
     },
     {
       key: "_actions",
