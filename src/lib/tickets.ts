@@ -101,6 +101,55 @@ export function formatHours(hours: number): string {
 
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
+export type Ticket = {
+  id: string;
+  case_id: string;
+  call_type: string;
+  product: string | null;
+  serial_no: string | null;
+  customer_name: string;
+  customer_address: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  location: string | null;
+  sector: string | null;
+  complaint: string | null;
+  status: TicketStatus;
+  priority: string | null;
+  assigned_engineer_name: string | null;
+  assigned_engineer_phone: string | null;
+  assigned_at: string | null;
+  equipment_id: string | null;
+  parts_used: boolean;
+  parts_details: PartLine[];
+  defective_parts_received: boolean;
+  defective_parts_details: PartLine[];
+  good_parts_used: boolean;
+  good_parts_details: PartLine[];
+  quotation_id: string | null;
+  customer_id: string | null;
+  closed_at: string | null;
+  remarks: string | null;
+  created_at: string;
+  updated_at: string;
+  source: string | null;
+  amc_id: string | null;
+  pm_visit_id: string | null;
+  special_instruction: string | null;
+  special_instruction_acknowledged: boolean;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
+  preferred_visit_datetime: string | null;
+  oem_call: boolean;
+  oem_brand: string | null;
+  oem_ref_id: string | null;
+  oem_purchase_date: string | null;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  created_by?: string | null;
+};
+
 /** Sort weight so terminal statuses always sink to the bottom of any list.
  *  Any status not listed returns 0 so unknown/legacy values float to the TOP
  *  and get noticed instead of hiding in the middle. */

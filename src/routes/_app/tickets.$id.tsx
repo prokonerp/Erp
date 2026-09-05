@@ -53,6 +53,7 @@ type Ticket = {
   assigned_engineer_name: string | null;
   assigned_engineer_phone: string | null;
   assigned_at: string | null;
+  equipment_id: string | null;
   parts_used: boolean;
   parts_details: PartLine[];
   defective_parts_received: boolean;
@@ -795,6 +796,14 @@ function TicketDetail() {  const confirm = useConfirm();
               </div>
             </CardContent>
           </Card>
+
+          {t.equipment_id && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+              <span className="font-medium">Linked Equipment:</span>{" "}
+              <span className="font-mono">{t.equipment_id.slice(0, 8)}…</span>
+              <span className="text-muted-foreground ml-2">(synced from Installed Equipment register)</span>
+            </div>
+          )}
 
           <Card>
             <CardHeader><CardTitle>Customer</CardTitle></CardHeader>

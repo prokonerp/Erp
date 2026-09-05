@@ -3323,7 +3323,6 @@ export type Database = {
       }
       leads: {
         Row: {
-          acknowledged: boolean
           acknowledged_at: string | null
           acknowledged_by: string | null
           assigned_at: string | null
@@ -3347,7 +3346,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          acknowledged?: boolean
           acknowledged_at?: string | null
           acknowledged_by?: string | null
           assigned_at?: string | null
@@ -3371,7 +3369,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          acknowledged?: boolean
           acknowledged_at?: string | null
           acknowledged_by?: string | null
           assigned_at?: string | null
@@ -5053,6 +5050,7 @@ export type Database = {
           defective_parts_received?: boolean
           deleted_at?: string | null
           deleted_by?: string | null
+          equipment_id?: string | null
           good_parts_details?: Json
           good_parts_used?: boolean
           id?: string
@@ -5103,6 +5101,7 @@ export type Database = {
           defective_parts_received?: boolean
           deleted_at?: string | null
           deleted_by?: string | null
+          equipment_id?: string | null
           good_parts_details?: Json
           good_parts_used?: boolean
           id?: string

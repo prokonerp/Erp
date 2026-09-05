@@ -40,6 +40,7 @@ export type Lead = {
   assigned_by: string | null;
   assigned_at: string | null;
   acknowledged_at: string | null;
+  acknowledged_by: string | null;
   created_at: string;
   updated_at: string;
 };

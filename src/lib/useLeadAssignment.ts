@@ -59,6 +59,22 @@ export function useLeadAssignment() {
         return { error: error.message };
       }
       await logActivity(leadId, `Assigned to ${nameOf(staffId)} by ${myName()}`);
+      // Client-side notification fallback: insert into notifications (stub table) and rely on polling/toast elsewhere.
+      // Best-effort only; ignore errors if table/RLS not yet migrated.
+      try {
+        const { data: leadRow } = await supabase.from("leads").select("title").eq("id", leadId).maybeSingle();
+        const title = (leadRow as any)?.title || "Lead";
+        await supabase.from("notifications").insert({
+          user_id: staffId,
+          title: `Lead assigned: ${title}`,
+          message: `Assigned to you by ${myName()}`,
+          link: `/crm/leads/${leadId}`,
+          entity_type: "lead",
+          entity_id: leadId,
+        } as any);
+      } catch {
+        // ignore notification failures — assignment itself succeeded
+      }
       setBusy(false);
       return {};
     },

@@ -100,7 +100,6 @@ function LeadDetail() {
     const { error } = await supabase.from("leads").update({
       acknowledged_at: new Date().toISOString(),
       acknowledged_by: userId,
-      acknowledged: true,
     } as any).eq("id", id);
     if (error) { setAssignBusy(false); return toast.error(error.message); }
     await logActivity(id, `Acknowledged by ${myName()}`);
