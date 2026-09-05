@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { toast } from "sonner";
 import { type Customer } from "@/lib/crm";
 import { INDIAN_STATES, isValidGSTIN, stateFromGSTIN } from "@/lib/india";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { fetchBranches } from "@/lib/sales";
 import { cn } from "@/lib/utils";
 
 export const GST_TREATMENTS = ["Regular", "Composition", "Unregistered", "Consumer"] as const;
@@ -61,6 +63,8 @@ export type CustomerFormState = {
   contacts: ContactRow[];
   sector: string;
   remarks: string;
+  /** Owning branch (nullable = global / shared by all branches). */
+  branch_id: string | null;
 };
 
 export const emptyCustomerForm: CustomerFormState = {
@@ -76,6 +80,7 @@ export const emptyCustomerForm: CustomerFormState = {
   contacts: [],
   sector: "",
   remarks: "",
+  branch_id: null,
 };
 
 export function panFromGstin(gst: string): string {
@@ -138,6 +143,7 @@ export function customerToForm(c: Customer): CustomerFormState {
     contacts: Array.isArray(any.contacts) ? (any.contacts as ContactRow[]).map((x) => ({ ...emptyContact, ...x })) : [],
     sector: any.sector || "",
     remarks: c.remarks || "",
+    branch_id: c.branch_id ?? null,
   };
 }
 
@@ -206,6 +212,7 @@ export function buildCustomerPayload(form: CustomerFormState): Record<string, an
 
   return {
     customer_type: form.customer_type,
+    branch_id: form.branch_id ?? null,
     salutation: form.salutation || null,
     first_name: toTitleCaseSmart(form.first_name) || null,
     last_name: toTitleCaseSmart(form.last_name) || null,
@@ -273,6 +280,13 @@ function generateCustomerCode(): string {
  * GSTIN when a non-empty one was entered. `dup_exempt` rows are ignored (they
  * are intentional, sanctioned duplicates). If the lookup itself errors, we log
  * and return null so an infra problem never blocks a legitimate save.
+ *
+ * Branch-aware (customers.branch_id): a new branch-scoped row must not collide
+ * with an existing row in the SAME branch or with a GLOBAL row (branch_id
+ * null — globals are canonical and shared by every branch). A new global row
+ * must not collide with an existing global row. The same GSTIN / company+phone
+ * is therefore allowed across DIFFERENT branches while still blocked inside
+ * one branch and among globals.
  */
 async function findDuplicateCustomer(form: CustomerFormState): Promise<string | null> {
   const rawGst = upperTrim(form.gst);
@@ -285,19 +299,32 @@ async function findDuplicateCustomer(form: CustomerFormState): Promise<string | 
       : toTitleCaseSmart([form.salutation, form.first_name, form.last_name].filter(Boolean).join(" "));
   const phone = (form.phone || "").trim();
 
+  // Scope each lookup to the duplicate domain of the row being created:
+  // same branch OR globals when branch-scoped; globals only when global.
+  // (.or with is.null is valid PostgREST: `branch_id.eq.<id>,branch_id.is.null`)
+  const scope = (q: any) =>
+    form.branch_id ? q.or(`branch_id.eq.${form.branch_id},branch_id.is.null`) : q.is("branch_id", null);
+
   const queries: PromiseLike<{ data: any; error: any }>[] = [];
   if (gst) {
     queries.push(
-      supabase.from("customers").select("id,company,phone,gst,dup_exempt").eq("gst", gst) as any,
+      scope(
+        supabase
+          .from("customers")
+          .select("id,company,phone,gst,dup_exempt,branch_id")
+          .eq("gst", gst),
+      ) as any,
     );
   }
   if (company && phone) {
     queries.push(
-      supabase
-        .from("customers")
-        .select("id,company,phone,gst,dup_exempt")
-        .eq("company", company)
-        .eq("phone", phone) as any,
+      scope(
+        supabase
+          .from("customers")
+          .select("id,company,phone,gst,dup_exempt,branch_id")
+          .eq("company", company)
+          .eq("phone", phone),
+      ) as any,
     );
   }
   if (!queries.length) return null;
@@ -311,10 +338,21 @@ async function findDuplicateCustomer(form: CustomerFormState): Promise<string | 
       }
       const match = (data || []).find((r: any) => !r.dup_exempt);
       if (match) {
+        // Best-effort: name the matched row's branch so the staff member can tell
+        // Acme – Gurgaon apart from Acme – Faridabad in the message.
+        let branchName = "";
+        if (match.branch_id) {
+          const { data: br } = await supabase
+            .from("branches")
+            .select("name")
+            .eq("id", match.branch_id)
+            .maybeSingle();
+          if (br?.name) branchName = br.name;
+        }
         const byGst = gst && match.gst === gst;
         return `A customer already exists with the same ${
           byGst ? `GSTIN (${gst})` : "company name and phone number"
-        } (${match.company || "—"}, ${match.phone || "—"}). Please reuse the existing record instead of creating a duplicate.`;
+        } (${match.company || "—"}, ${match.phone || "—"}${branchName ? `, ${branchName}` : ""}). Please reuse the existing record instead of creating a duplicate.`;
       }
     }
     return null;
@@ -409,6 +447,11 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
   setTab: (t: string) => void;
 }) {
   const [emailError, setEmailError] = useState("");
+  const { data: branchRows } = useQuery({
+    queryKey: ["branches"],
+    queryFn: fetchBranches,
+    staleTime: 5 * 60 * 1000,
+  });
 
   function onGstChange(v: string) {
     const up = v.toUpperCase().trim();
@@ -460,6 +503,27 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
               <RadioGroupItem value="Individual" /> Individual
             </label>
           </RadioGroup>
+        </FieldRow>
+
+        <FieldRow label="Branch (optional — blank = global)" labelClassName="text-[#000000]">
+          <Select
+            value={form.branch_id ?? "__global"}
+            onValueChange={(v) => setForm((f) => ({ ...f, branch_id: v === "__global" ? null : v }))}
+          >
+            <SelectTrigger className="text-[#000000]">
+              <SelectValue placeholder="Branch" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__global">Global — shared by all branches</SelectItem>
+              {(branchRows ?? []).map((b) => (
+                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Leave as Global unless this customer belongs to one specific branch. A GSTIN
+            can repeat across different branches, but not twice in the same branch.
+          </p>
         </FieldRow>
 
         <FieldRow label="Primary Contact" required labelClassName="text-[#000000]">
@@ -623,12 +687,14 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
  * Used by the Masters page and by the inline picker modal — one source of truth.
  */
 export function CustomerFormDialog({
-  open, onOpenChange, editing, initialCompany, onSaved, allowSaveAndNew = false,
+  open, onOpenChange, editing, initialCompany, initialBranchId, onSaved, allowSaveAndNew = false,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   editing?: Customer | null;
   initialCompany?: string;
+  /** Pre-tag a NEW customer with a branch (create mode only). Default null = global. */
+  initialBranchId?: string | null;
   onSaved: (customer: Customer, mode: "create" | "update") => void;
   allowSaveAndNew?: boolean;
 }) {
@@ -639,10 +705,18 @@ export function CustomerFormDialog({
   // Re-seed the form whenever the dialog is (re)opened — useEffect to avoid setState during render.
   useEffect(() => {
     if (open) {
-      setForm(editing ? customerToForm(editing) : { ...emptyCustomerForm, company: (initialCompany || "").trim() });
+      setForm(
+        editing
+          ? customerToForm(editing)
+          : {
+              ...emptyCustomerForm,
+              company: (initialCompany || "").trim(),
+              branch_id: initialBranchId ?? null,
+            },
+      );
       setTab("basic");
     }
-  }, [open, editing?.id, initialCompany]); // editing id is stable; re-seed when dialog opens or target changes
+  }, [open, editing?.id, initialCompany, initialBranchId]); // editing id is stable; re-seed when dialog opens or target changes
 
   async function submit(addAnother: boolean) {
     const err = validateCustomerForm(form);
@@ -653,7 +727,7 @@ export function CustomerFormDialog({
       toast.success(editing ? "Customer updated" : "Customer added");
       onSaved(saved, editing ? "update" : "create");
       if (addAnother) {
-        setForm({ ...emptyCustomerForm });
+        setForm({ ...emptyCustomerForm, branch_id: initialBranchId ?? null });
         setTab("basic");
       } else {
         onOpenChange(false);

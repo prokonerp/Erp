@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCustomersForPicker, masterKeys } from "@/hooks/useMasters";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Customer } from "@/lib/crm";
+import { fetchBranches } from "@/lib/sales";
 import { CustomerFormDialog } from "@/components/CustomerForm";
 
 type Props = {
@@ -23,6 +24,10 @@ type Props = {
   required?: boolean;
   placeholder?: string;
   className?: string;
+  /** Optional server-side filter — when set, only this branch's customers are listed. */
+  branchId?: string | null;
+  /** Pre-tag a customer created via quick-add with this branch (create mode only). */
+  initialBranchId?: string | null;
 };
 
 export function CustomerPicker({
@@ -31,6 +36,8 @@ export function CustomerPicker({
   required,
   placeholder = "Search by name, mobile or GST…",
   className,
+  branchId,
+  initialBranchId,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -39,19 +46,29 @@ export function CustomerPicker({
   const [seedCompany, setSeedCompany] = useState("");
   const queryClient = useQueryClient();
 
+  const { data: branchRows = [] } = useQuery({
+    queryKey: ["branches"],
+    queryFn: fetchBranches,
+    staleTime: 5 * 60 * 1000,
+  });
+  const branchMap = useMemo(
+    () => new Map<string, (typeof branchRows)[number]>(branchRows.map((b) => [b.id, b])),
+    [branchRows],
+  );
+
   // Debounce search -> server query (150ms) to avoid firing on every keystroke
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 150);
     return () => clearTimeout(t);
   }, [search]);
 
-  const { data, isLoading } = useCustomersForPicker(debounced);
+  const { data, isLoading } = useCustomersForPicker(debounced, branchId);
   const rows = (data as any)?.rows ?? [];
 
   // Selected may not be in the current 25-row window; fetch it separately for display
   // Fallback select columns MUST match CUSTOMER_PICKER_COLS so the cached shape is identical
   // and partial selects never return undefined for required display fields.
-  const FALLBACK_COLS = "id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address";
+  const FALLBACK_COLS = "id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address, branch_id";
   const [selectedFallback, setSelectedFallback] = useState<Customer | null>(null);
   const selected = useMemo(() => rows.find((r: any) => r.id === value) || selectedFallback, [rows, value, selectedFallback]);
 
@@ -120,6 +137,11 @@ export function CustomerPicker({
                   {selected.phone ? (
                     <span className="text-muted-foreground ml-2">· {selected.phone}</span>
                   ) : null}
+                  {selected.branch_id && branchMap.get(selected.branch_id) ? (
+                    <span className="text-muted-foreground ml-2">
+                      · {branchMap.get(selected.branch_id)!.name}
+                    </span>
+                  ) : null}
                 </>
               ) : isLoading ? (
                 "Loading customers…"
@@ -156,7 +178,8 @@ export function CustomerPicker({
               <CommandGroup heading={debounced ? `${rows.length} matches` : `${rows.length} customers — type to search`}>
                 {rows.map((c: any) => {
                   const cAny = c as Customer & { city?: string };
-                  const searchBlob = [c.company, c.contact_name, c.phone, c.gst, cAny.city, c.state]
+                  const branchName = c.branch_id ? branchMap.get(c.branch_id)?.name ?? "" : "";
+                  const searchBlob = [c.company, c.contact_name, c.phone, c.gst, cAny.city, c.state, branchName]
                     .filter(Boolean)
                     .join(" ")
                     .toLowerCase();
@@ -175,7 +198,7 @@ export function CustomerPicker({
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">{c.company}</div>
                         <div className="text-xs text-muted-foreground truncate">
-                          {[c.phone, c.gst, c.state].filter(Boolean).join(" · ")}
+                          {[c.phone, c.gst, c.state, branchName].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                     </CommandItem>
@@ -200,6 +223,7 @@ export function CustomerPicker({
         open={addOpen}
         onOpenChange={setAddOpen}
         initialCompany={seedCompany}
+        initialBranchId={initialBranchId}
         onSaved={(created) => handleSaved(created)}
       />
     </>

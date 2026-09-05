@@ -510,7 +510,7 @@ function NewInvoice() {
             </div>
             <div>
               <Label className="text-xs">Customer *</Label>
-              <CustomerPicker value={customer?.id} onChange={(_id, c) => { setCustomer(c); markDirty(); }} />
+              <CustomerPicker value={customer?.id} onChange={(_id, c) => { setCustomer(c); markDirty(); }} initialBranchId={branchId || undefined} />
               {gstinError && <p className="text-xs text-destructive mt-1">{gstinError}</p>}
             </div>
             <div>

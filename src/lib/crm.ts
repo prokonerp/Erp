@@ -16,6 +16,7 @@ export type Customer = {
   pan?: string | null;
   gst_status?: string | null;
   customer_type?: string | null;
+  branch_id?: string | null;
   remarks: string | null;
   created_at: string;
 };

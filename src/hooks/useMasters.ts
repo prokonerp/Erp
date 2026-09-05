@@ -17,7 +17,7 @@ export const masterKeys = {
 // Columns needed for list views + pickers (not select("*")). Edit-only fields
 // are loaded on demand via useCustomerDetail/useProductDetail.
 const CUSTOMER_LIST_COLS =
-  "id, company, contact_name, phone, email, gst, state, customer_type, city, pan, gst_status, billing_address, shipping_address, address, remarks";
+  "id, company, contact_name, phone, email, gst, state, customer_type, city, pan, gst_status, billing_address, shipping_address, address, remarks, branch_id";
 const PRODUCT_LIST_COLS =
   "id, name, sku, short_name, display_name, model, brand, category, hsn, unit, description, active, item_type, serial_tracking, is_serialized, serial_format, default_price, weight_kg, warranty_applicable, warranty_duration, warranty_unit, warranty_start_from, warranty_manual_override";
 const VENDOR_LIST_COLS = "id, name, gstin, contact_name, phone, email, address";
@@ -92,20 +92,19 @@ export function useCustomers() {
 // Returns only top N matches for the current search term. Falls back to small
 // initial list when search is empty (first 25 by company). This makes the
 // picker open in fractions-of-ms vs loading 3101 rows.
-const CUSTOMER_PICKER_COLS = "id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address";
-export function useCustomersForPicker(search: string = "") {
+const CUSTOMER_PICKER_COLS = "id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address, branch_id";
+export function useCustomersForPicker(search: string = "", branchId?: string | null) {
   const term = search.trim();
   return useQuery({
-    queryKey: [...masterKeys.customers(), "picker", term] as const,
+    // branchId in the key isolates cache per branch scope (null/undefined = all)
+    queryKey: [...masterKeys.customers(), "picker", term, branchId ?? "__all"] as const,
     queryFn: async () => {
       const cols = CUSTOMER_PICKER_COLS;
       // Empty term → first 25 alphabetically (instant, tiny payload)
+      let q = supabase.from("customers").select(cols);
+      if (branchId) q = q.eq("branch_id", branchId);
       if (!term) {
-        const { data, error } = await supabase
-          .from("customers")
-          .select(cols)
-          .order("company")
-          .limit(25);
+        const { data, error } = await q.order("company").limit(25);
         if (error) throw error;
         const rows = (data || []) as unknown as Customer[];
         return { rows, count: rows.length };
@@ -113,11 +112,9 @@ export function useCustomersForPicker(search: string = "") {
       // Server-side ilike search across indexed columns + limit 30
       // Escape %, _, \ so user input cannot inject wildcards; PG uses \ as default escape.
       const escaped = term.replace(/[%_\\]/g, "\\$&");
-      const q = `%${escaped}%`;
-      const { data, error } = await supabase
-        .from("customers")
-        .select(cols)
-        .or(`company.ilike.${q},contact_name.ilike.${q},phone.ilike.${q},gst.ilike.${q},city.ilike.${q}`)
+      const p = `%${escaped}%`;
+      const { data, error } = await q
+        .or(`company.ilike.${p},contact_name.ilike.${p},phone.ilike.${p},gst.ilike.${p},city.ilike.${p}`)
         .order("company")
         .limit(30);
       if (error) throw error;
@@ -138,13 +135,15 @@ export function useCustomersTable(opts: {
   pageSize: number;
   sortBy?: string;
   sortDir?: "asc" | "desc";
+  branchId?: string | null;
 }) {
-  const { search, page, pageSize, sortBy = "company", sortDir = "asc" } = opts;
+  const { search, page, pageSize, sortBy = "company", sortDir = "asc", branchId } = opts;
   const term = search.trim();
   return useQuery({
-    queryKey: [...masterKeys.customers(), "table", { term, page, pageSize, sortBy, sortDir }] as const,
+    queryKey: [...masterKeys.customers(), "table", { term, page, pageSize, sortBy, sortDir, branchId: branchId ?? "__all" }] as const,
     queryFn: async () => {
       let q = supabase.from("customers").select(CUSTOMER_LIST_COLS, { count: "exact" });
+      if (branchId) q = q.eq("branch_id", branchId);
       if (term) {
         const escaped = term.replace(/[%_\\]/g, "\\$&");
         const p = `%${escaped}%`;

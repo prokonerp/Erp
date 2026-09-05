@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteState } from "@/lib/routeState";
-import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCustomersTable, useCustomerDetail, masterKeys } from "@/hooks/useMasters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Upload, Users, Search } from "lucide-react";
 import { toast } from "sonner";
 import { type Customer } from "@/lib/crm";
+import { fetchBranches } from "@/lib/sales";
 import { stateFromGSTIN } from "@/lib/india";
 import { ExportButtons } from "@/components/ExportButtons";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
@@ -52,6 +54,21 @@ export function CustomerMasterPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
+  // Branch filter — "__all" shows every customer; a specific branch shows only
+  // customers tagged with that branch (globals are branch_id NULL and always
+  // appear under "All branches").
+  const [branchId, setBranchId] = useState<string | null>(null);
+  const { data: branchRows = [] } = useQuery({
+    queryKey: ["branches"],
+    queryFn: fetchBranches,
+    staleTime: 5 * 60 * 1000,
+  });
+  const branchMap = useMemo(
+    () => new Map<string, (typeof branchRows)[number]>(branchRows.map((b) => [b.id, b])),
+    [branchRows],
+  );
+  const branchLabel = branchId ? branchMap.get(branchId)?.name ?? null : null;
+
   // Server-paginated, debounced search — avoids loading 3101 rows into DOM
   const [page, setPage] = useRouteState<number>("page", 0);
   const pageSize = 25;
@@ -68,6 +85,7 @@ export function CustomerMasterPage() {
     search: debouncedQ,
     page,
     pageSize,
+    branchId,
   });
   const rows = (customersData as any)?.rows ?? [];
   const totalCount = (customersData as any)?.count ?? 0;
@@ -113,8 +131,18 @@ export function CustomerMasterPage() {
           );
           const isBiz = !!(r["Company"] || "").trim();
           const gstStatus = r["GST Treatment"] || (gst ? "Regular" : "Unregistered");
+          // Optional "Branch" column (branch NAME — resolved case-insensitively).
+          // Unknown branch names abort the import so rows can't silently mis-file.
+          let branchId: string | null = null;
+          const branchRaw = (r["Branch"] || "").trim();
+          if (branchRaw) {
+            const hit = branchRows.find((b) => b.name.toLowerCase() === branchRaw.toLowerCase());
+            if (!hit) throw new Error(`Unknown branch "${branchRaw}" in CSV — fix the Branch column and retry`);
+            branchId = hit.id;
+          }
           return {
             customer_type: isBiz ? "Business" : "Individual",
+            branch_id: branchId,
             company: companyName,
             contact_name: toTitleCaseSmart(r["Contact"] || r["Contact Name"] || ""),
             phone: (r["Phone"] || r["Mobile"] || "").trim(),
@@ -170,6 +198,21 @@ export function CustomerMasterPage() {
       },
       // auto width to fit full single-line name — no truncate, no wrap, no overflow
       className: "whitespace-nowrap w-auto min-w-[280px]",
+    },
+    {
+      key: "branch_id",
+      header: "Branch",
+      render: (c) => {
+        const b = c.branch_id ? branchMap.get(c.branch_id) : undefined;
+        return b ? (
+          <span title={b.name} className="text-xs whitespace-nowrap block">
+            {b.name}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
+      className: "w-[140px] whitespace-nowrap",
     },
     {
       key: "phone",
@@ -310,6 +353,7 @@ export function CustomerMasterPage() {
               rows={filtered}
               columns={[
                 { header: "Company", get: (c: any) => c.company },
+                { header: "Branch", get: (c: any) => (c.branch_id ? branchMap.get(c.branch_id)?.name ?? "" : "") },
                 { header: "Contact", get: (c: any) => c.contact_name || "" },
                 { header: "Phone", get: (c: any) => c.phone || "" },
                 { header: "Email", get: (c: any) => c.email || "" },
@@ -360,17 +404,36 @@ export function CustomerMasterPage() {
         toolbar={
           <div className="flex items-center gap-2 w-full">
             <span className="text-sm font-medium">
-              All Customers ({totalCount.toLocaleString()})
+              {branchLabel ? `${branchLabel} Customers` : "All Customers"} ({totalCount.toLocaleString()})
               {totalCount > pageSize ? ` · Page ${page + 1} of ${pageCount}` : ""}
             </span>
-            <div className="ml-auto relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Search name, phone, GST…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="w-56 pl-8 h-8 text-xs"
-              />
+            <div className="ml-auto flex items-center gap-2">
+              <Select
+                value={branchId ?? "__all"}
+                onValueChange={(v) => {
+                  setBranchId(v === "__all" ? null : v);
+                  setPage(0);
+                }}
+              >
+                <SelectTrigger className="h-8 w-44 text-xs">
+                  <SelectValue placeholder="All branches" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">All branches</SelectItem>
+                  {branchRows.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search name, phone, GST…"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  className="w-56 pl-8 h-8 text-xs"
+                />
+              </div>
             </div>
           </div>
         }

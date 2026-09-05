@@ -528,7 +528,7 @@ function QuoteEditor() {
           </div>
           <div className="md:col-span-3">
             <Label>Customer <span className="text-muted-foreground font-normal">(from Customer Master)</span></Label>
-            <CustomerPicker value={(q as any).customer_id || null} onChange={applyCustomer} />
+            <CustomerPicker value={(q as any).customer_id || null} onChange={applyCustomer} initialBranchId={q?.branch_id ?? null} />
             {customer && (
               <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                 {customer.gst && <span>GSTIN: <span className="font-mono">{customer.gst}</span></span>}

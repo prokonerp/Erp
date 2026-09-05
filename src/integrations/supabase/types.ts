@@ -946,6 +946,7 @@ export type Database = {
           billing_line2: string | null
           billing_pincode: string | null
           billing_state: string | null
+          branch_id: string | null
           city: string | null
           company: string
           contact_name: string | null
@@ -992,6 +993,7 @@ export type Database = {
           billing_line2?: string | null
           billing_pincode?: string | null
           billing_state?: string | null
+          branch_id?: string | null
           city?: string | null
           company: string
           contact_name?: string | null
@@ -1038,6 +1040,7 @@ export type Database = {
           billing_line2?: string | null
           billing_pincode?: string | null
           billing_state?: string | null
+          branch_id?: string | null
           city?: string | null
           company?: string
           contact_name?: string | null
@@ -1074,7 +1077,14 @@ export type Database = {
           street?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_branch_id_fkey"
+            columns: ["branch_id"]
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       defective_tag_sequence: {
         Row: {

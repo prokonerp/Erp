@@ -632,7 +632,7 @@ function NewQuotation() {
           <CardContent className="space-y-2">
             <div>
               <Label className="text-xs">Customer *</Label>
-              <CustomerPicker value={customerId} onChange={applyCustomer} required />
+              <CustomerPicker value={customerId} onChange={applyCustomer} required initialBranchId={branchId} />
             </div>
             {customer && (
               <div className="text-[11px] text-muted-foreground space-y-0.5">
