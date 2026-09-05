@@ -192,6 +192,9 @@ type Row = {
   created_at: string;
   closed_at?: string | null;
   oem_call?: boolean | null;
+  oem_ref_id?: string | null;
+  oem_brand?: string | null;
+  oem_purchase_date?: string | null;
   parts_used?: boolean | null;
   parts_details?: Array<{ name?: string; confirmed?: boolean }> | null;
   defective_parts_received?: boolean | null;
@@ -391,7 +394,9 @@ function TicketsList() {
         (r.product || "").toLowerCase().includes(s) ||
         (r.serial_no || "").toLowerCase().includes(s) ||
         (r.location || "").toLowerCase().includes(s) ||
-        (r.sector || "").toLowerCase().includes(s)
+        (r.sector || "").toLowerCase().includes(s) ||
+        (r.oem_ref_id || "").toLowerCase().includes(s) ||
+        (r.oem_brand || "").toLowerCase().includes(s)
       );
     });
     // Secondary sort key applied WITHIN each status_priority group.
@@ -719,9 +724,9 @@ function TicketsList() {
               title="Service Tickets"
               rows={filtered}
               columns={[
-                { header: "Case ID", get: (r) => r.case_id },
+                { header: "Case ID", get: (r) => `${r.case_id} [${r.oem_call ? "OEM" : "PHS"}] ${r.call_type}` },
                 { header: "Type", get: (r) => r.call_type },
-                { header: "Tag", get: (r) => (r.oem_call ? "OEM" : "PHS") },
+                { header: "OEM Case ID", get: (r) => (r.oem_call ? (r.oem_ref_id || "") : "") },
                 { header: "Priority", get: (r) => r.priority || "" },
                 { header: "Customer", get: (r) => r.customer_name },
                 { header: "Phone", get: (r) => r.customer_phone || "" },
@@ -752,7 +757,7 @@ function TicketsList() {
             <div className="relative flex-1 min-w-[220px] max-w-sm">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search case, customer, serial…"
+                placeholder="Search case, customer, serial, OEM ID…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 className="h-9 pl-8 text-sm"
@@ -1134,7 +1139,7 @@ function TicketsList() {
                     <thead className="bg-muted sticky top-0 z-10">
                       <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
                         <th className="p-2">Case ID</th>
-                        <th className="p-2 w-14 text-center">Tag</th>
+                        <th className="p-2 w-36">OEM Case ID</th>
                         <th className="p-2 w-10 text-center">
                           <SortBtn k="priority" label="Pr." />
                         </th>
@@ -1225,15 +1230,37 @@ function TicketsList() {
               </div>
             ))}
           <div className="font-semibold text-foreground">{r.case_id}</div>
-          <div className="text-[10px] text-muted-foreground leading-tight">{r.call_type}</div>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-[10px] text-muted-foreground leading-tight">{r.call_type}</span>
+            {r.oem_call ? (
+              <Badge
+                className="bg-purple-100 text-purple-800 px-1 py-0 text-[9px] h-4 leading-none"
+                variant="secondary"
+              >
+                OEM
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="px-1 py-0 text-[9px] h-4 leading-none">
+                PHS
+              </Badge>
+            )}
+          </div>
         </td>
-        <td className="p-2 text-center">
-          {r.oem_call ? (
-            <Badge className="bg-purple-100 text-purple-800" variant="secondary">
-              OEM
-            </Badge>
+        <td
+          className="p-2 font-mono text-xs max-w-[150px] truncate align-top"
+          title={r.oem_ref_id || undefined}
+        >
+          {r.oem_call && r.oem_ref_id ? (
+            <>
+              <div className="font-medium text-foreground truncate">{r.oem_ref_id}</div>
+              {r.oem_brand && (
+                <div className="text-[10px] text-muted-foreground leading-tight truncate">
+                  {r.oem_brand}
+                </div>
+              )}
+            </>
           ) : (
-            <Badge variant="outline">PHS</Badge>
+            <span className="text-muted-foreground">—</span>
           )}
         </td>
         <td className="p-2 text-center">
@@ -1672,6 +1699,14 @@ function TicketCard({
         {r.product || "—"}
         {r.serial_no ? ` · ${r.serial_no}` : ""}
       </div>
+      {r.oem_call && r.oem_ref_id && (
+        <div className="mt-1.5 rounded border border-purple-200 bg-purple-50 px-2 py-1">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-purple-700 leading-none">
+            OEM Case ID{r.oem_brand ? ` · ${r.oem_brand}` : ""}
+          </div>
+          <div className="font-mono text-[11px] font-medium text-purple-900 truncate">{r.oem_ref_id}</div>
+        </div>
+      )}
 
       <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
         <div className="flex items-center gap-1 min-w-0 text-muted-foreground">

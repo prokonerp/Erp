@@ -24,6 +24,9 @@ export type TicketTableRow = {
   created_at: string;
   closed_at?: string | null;
   oem_call?: boolean | null;
+  oem_ref_id?: string | null;
+  oem_brand?: string | null;
+  oem_purchase_date?: string | null;
   parts_used?: boolean | null;
   defective_parts_received?: boolean | null;
   good_parts_used?: boolean | null;
@@ -35,7 +38,7 @@ export type TicketTableRow = {
 };
 
 const TICKET_LIST_COLS =
-  "id,case_id,status,priority,customer_name,customer_id,serial_no,created_at,assigned_engineer_name,good_parts_details,defective_parts_details,call_type,product,customer_phone,customer_address,customer_email,location,sector,complaint,assigned_engineer_phone,raised_by_type,raised_by_name,oem_call,parts_used,defective_parts_received,good_parts_used,special_instruction,special_instruction_acknowledged,closed_at,assigned_at";
+  "id,case_id,status,priority,customer_name,customer_id,serial_no,created_at,assigned_engineer_name,good_parts_details,defective_parts_details,call_type,product,customer_phone,customer_address,customer_email,location,sector,complaint,assigned_engineer_phone,raised_by_type,raised_by_name,oem_call,oem_ref_id,oem_brand,oem_purchase_date,parts_used,defective_parts_received,good_parts_used,special_instruction,special_instruction_acknowledged,closed_at,assigned_at";
 
 export function useTicketsTable(opts: {
   status: string;
@@ -75,7 +78,7 @@ export function useTicketsTable(opts: {
         const p = `%${safe}%`;
         // Server-side free-text: cover the fields the UI searches client-side
         sel = sel.or(
-          `case_id.ilike.${p},customer_name.ilike.${p},serial_no.ilike.${p},product.ilike.${p},customer_phone.ilike.${p},location.ilike.${p}`,
+          `case_id.ilike.${p},customer_name.ilike.${p},serial_no.ilike.${p},product.ilike.${p},customer_phone.ilike.${p},location.ilike.${p},oem_ref_id.ilike.${p},oem_brand.ilike.${p}`,
         );
       }
       const { data, count, error } = await sel;
