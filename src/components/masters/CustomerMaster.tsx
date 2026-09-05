@@ -156,26 +156,20 @@ export function CustomerMasterPage() {
       render: (c) => {
         const contact = displayContactName(c.contact_name);
         return (
-          <div className="min-w-0 overflow-hidden flex flex-col justify-center min-h-[32px] space-y-0.5">
-            <span
-              className="font-semibold text-foreground text-[13px] leading-[1.25] block truncate overflow-hidden"
-              title={c.company}
-            >
+          <div className="whitespace-nowrap flex items-center gap-1.5 min-w-0">
+            <span className="font-semibold text-foreground text-[13px] leading-none" title={c.company}>
               {c.company}
             </span>
             {contact ? (
-              <span
-                className="text-[11px] text-muted-foreground leading-tight block truncate overflow-hidden"
-                title={contact}
-              >
-                {contact}
+              <span className="text-[11px] text-muted-foreground leading-none whitespace-nowrap" title={contact}>
+                · {contact}
               </span>
             ) : null}
           </div>
         );
       },
-      // 30% of table — 0% minimum, single line per row, no overflow
-      className: "w-[30%] min-w-0 overflow-hidden",
+      // auto width to fit full single-line name — no truncate, no wrap, no overflow
+      className: "whitespace-nowrap w-auto min-w-[280px]",
     },
     {
       key: "phone",
@@ -183,17 +177,14 @@ export function CustomerMasterPage() {
       render: (c) => {
         const v = String(c.phone ?? "").trim();
         return v ? (
-          <span
-            title={v}
-            className="text-xs tabular-nums whitespace-nowrap block truncate overflow-hidden"
-          >
+          <span title={v} className="text-xs tabular-nums whitespace-nowrap block">
             {v}
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
         );
       },
-      className: "w-[11%]",
+      className: "w-[110px] whitespace-nowrap",
     },
     {
       key: "email",
@@ -201,17 +192,14 @@ export function CustomerMasterPage() {
       render: (c) => {
         const v = String(c.email ?? "").trim();
         return v ? (
-          <span
-            title={v}
-            className="text-xs truncate block overflow-hidden max-w-full"
-          >
+          <span title={v} className="text-xs truncate block overflow-hidden max-w-[150px]">
             {v}
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
         );
       },
-      className: "w-[17%] overflow-hidden",
+      className: "w-[150px] overflow-hidden",
     },
     {
       key: "gst",
@@ -224,13 +212,13 @@ export function CustomerMasterPage() {
         return (
           <span
             title={g}
-            className="text-[11px] font-mono tracking-tight bg-muted/60 rounded px-1 py-0.5 inline-block whitespace-nowrap max-w-full truncate overflow-hidden"
+            className="text-[11px] font-mono tracking-tight bg-muted/60 rounded px-1 py-0.5 inline-block whitespace-nowrap"
           >
             {g}
           </span>
         );
       },
-      className: "w-[15%] overflow-hidden",
+      className: "w-[140px] whitespace-nowrap",
     },
     {
       key: "state",
@@ -239,17 +227,14 @@ export function CustomerMasterPage() {
       render: (c) => {
         const v = String(c.state ?? "").trim();
         return v ? (
-          <span
-            title={v}
-            className="text-xs whitespace-nowrap block truncate overflow-hidden"
-          >
+          <span title={v} className="text-xs whitespace-nowrap block">
             {v}
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
         );
       },
-      className: "w-[11%] overflow-hidden",
+      className: "w-[110px] whitespace-nowrap",
     },
     {
       key: "city",
@@ -257,17 +242,14 @@ export function CustomerMasterPage() {
       render: (c) => {
         const v = String((c as any).city ?? "").trim();
         return v ? (
-          <span
-            title={v}
-            className="text-xs whitespace-nowrap block truncate overflow-hidden"
-          >
+          <span title={v} className="text-xs whitespace-nowrap block">
             {v}
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
         );
       },
-      className: "w-[10%] overflow-hidden",
+      className: "w-[110px] whitespace-nowrap",
     },
     {
       key: "_actions",
@@ -295,7 +277,7 @@ export function CustomerMasterPage() {
           </Button>
         </div>
       ),
-      className: "w-[6%]",
+      className: "w-[70px] whitespace-nowrap",
     },
   ];
 
@@ -357,6 +339,7 @@ export function CustomerMasterPage() {
         data={filtered}
         isLoading={isLoading}
         density="compact"
+        className="!table-auto w-max min-w-full"
         totalRecords={totalCount}
         serverPagination={{ page, pageSize, total: totalCount, onPageChange: setPage }}
         emptyIcon={Users}
