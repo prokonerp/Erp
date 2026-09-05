@@ -127,62 +127,67 @@ export function CustomerMasterPage() {
       header: "Customer",
       sortable: true,
       render: (c) => (
-        <div className="min-w-0">
-          <span className="font-semibold text-foreground leading-tight block">{c.company}</span>
+        <div className="min-w-0 space-y-0.5">
+          <span className="font-semibold text-foreground text-[13px] leading-[1.25] block break-words whitespace-normal">
+            {c.company}
+          </span>
           {c.contact_name ? (
-            <span className="text-[11px] text-muted-foreground leading-tight block mt-0.5">{c.contact_name}</span>
+            <span className="text-[11px] text-muted-foreground leading-tight block break-words whitespace-normal">
+              {c.contact_name}
+            </span>
           ) : null}
         </div>
       ),
+      className: "!whitespace-normal",
     },
     {
       key: "phone",
       header: "Phone",
       render: (c) => <span className="text-xs tabular-nums whitespace-nowrap">{c.phone || "—"}</span>,
-      className: "w-[110px]",
+      className: "w-[105px]",
     },
     {
       key: "email",
       header: "Email",
       render: (c) => (
-        <span className="text-xs text-muted-foreground truncate block max-w-[140px]">
+        <span className="text-xs text-muted-foreground truncate block max-w-[115px]">
           {c.email || "—"}
         </span>
       ),
-      className: "w-[150px]",
+      className: "w-[125px]",
     },
     {
       key: "gst",
       header: "GSTIN",
       render: (c) =>
         c.gst ? (
-          <span className="text-[11px] font-mono tracking-tight bg-muted/60 rounded px-1.5 py-0.5 inline-block whitespace-nowrap">
+          <span className="text-[11px] font-mono tracking-tight bg-muted/60 rounded px-1 py-0.5 inline-block whitespace-nowrap">
             {c.gst}
           </span>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground text-xs">—</span>
         ),
-      className: "w-[160px]",
+      className: "w-[138px]",
     },
     {
       key: "state",
       header: "State",
       sortable: true,
       render: (c) => <span className="text-xs whitespace-nowrap">{c.state || "—"}</span>,
-      className: "w-[120px]",
+      className: "w-[95px]",
     },
     {
       key: "city",
       header: "City",
       render: (c) => <span className="text-xs whitespace-nowrap">{(c as any).city || "—"}</span>,
-      className: "w-[100px]",
+      className: "w-[85px]",
     },
     {
       key: "_actions",
       header: "",
       align: "right",
       render: (c) => (
-        <div className="flex items-center justify-end gap-0.5">
+        <div className="flex items-center justify-end gap-0">
           <Button
             size="icon"
             variant="ghost"
@@ -203,7 +208,7 @@ export function CustomerMasterPage() {
           </Button>
         </div>
       ),
-      className: "w-[70px]",
+      className: "w-[62px]",
     },
   ];
 
