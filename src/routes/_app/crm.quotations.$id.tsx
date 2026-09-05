@@ -32,7 +32,7 @@ import {
   type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
   computeExpiryDate, DEFAULT_VALIDITY_DAYS,
-  validateQuotation,
+  validateQuotation, getValidItems,
 } from "@/lib/crm";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
@@ -185,11 +185,11 @@ function QuoteEditor() {
       });
   }, [q?.items]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Default branch on first load
+  // Default branch on first load — functional update avoids stale closure
   useEffect(() => {
     if (!q || q.branch_id || branches.length === 0) return;
     const def = branches.find((b) => b.is_default) || branches[0];
-    if (def) setQ({ ...q, branch_id: def.id });
+    if (def) setQ((prev) => (prev && !prev.branch_id ? { ...prev, branch_id: def.id } : prev as Quotation));
   }, [branches, q?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const branch = useMemo(() => branches.find((b) => b.id === q?.branch_id) || null, [branches, q?.branch_id]);
@@ -330,6 +330,8 @@ function QuoteEditor() {
     if (vErr) { toast.error(vErr); return; }
     setSaving(true);
     try {
+      // Ensure blank rows don't drift totals / persist as empty
+      const filtered = getValidItems(q.items);
       const payload: any = {
         customer_id: (q as any).customer_id,
         branch_id: q.branch_id,
@@ -343,7 +345,7 @@ function QuoteEditor() {
         contact_phone: q.contact_phone,
         billing_address: q.billing_address, shipping_address: q.shipping_address,
         place_of_supply: q.place_of_supply,
-        items: q.items as any,
+        items: filtered as any,
         discount_amount: q.discount_amount || 0,
         shipping_charges: q.shipping_charges || 0,
         adjustment: q.adjustment || 0,

@@ -22,7 +22,7 @@ import {
   fmtMoney, computeQuoteTotals, lineAmount, isIntraSupply, INDIAN_STATES,
   computeExpiryDate, DEFAULT_VALIDITY_DAYS,
   syncLeadExpectedValue,
-  validateQuotation,
+  validateQuotation, getValidItems,
 } from "@/lib/crm";
 import type { QuoteTermsTemplate } from "@/lib/crm";
 import { getCurrentUserName } from "@/lib/currentUser";
@@ -442,7 +442,7 @@ function NewQuotation() {
         billing_address: billing || null,
         shipping_address: shipping || null,
         place_of_supply: placeOfSupply || null,
-        items: items.filter((it) => (it.description || "").trim() || it.product_id) as unknown,
+        items: getValidItems(items) as unknown,
         discount_amount: discountAmount,
         discount_label: discountLabel.trim() || "Discount",
         shipping_charges: shippingCharges,

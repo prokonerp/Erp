@@ -79,12 +79,14 @@ import {
   fetchCustomersByIds,
   revisionLabel,
   isSuperseded,
+  validateQuotation,
 } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
 import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { cn } from "@/lib/utils";
 import { istTodayIso } from "@/lib/dateRange";
 import { useDebounced } from "@/lib/sales.hooks";
+import { fetchBranches, type BranchRow } from "@/lib/sales";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { StatusBadge } from "@/components/crm/StatusBadge";
 import { EmptyState } from "@/components/crm/EmptyState";
@@ -111,6 +113,7 @@ function QuotesList() {
   const [custId, setCustId] = useState("");
   const [subject, setSubject] = useState("");
   const [delId, setDelId] = useState<string | null>(null);
+  const [branches, setBranches] = useState<BranchRow[]>([]);
 
   const load = async () => {
     const { data: a } = await supabase
@@ -127,41 +130,26 @@ function QuotesList() {
   useEffect(() => {
     load();
   }, []);
+  useEffect(() => {
+    fetchBranches()
+      .then((bs) => setBranches(bs))
+      .catch(() => {});
+  }, []);
 
   const cmap = Object.fromEntries(customers.map((c) => [c.id, c]));
 
   const create = async () => {
     if (!custId) return toast.error("Select customer");
-    const cust = cmap[custId] || (await fetchCustomersByIds([custId]))[0];
-    const { data: u } = await supabase.auth.getUser();
-    const today = istTodayIso();
-    const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);
-    const { data, error } = await supabase
-      .from("quotations")
-      .insert({
-        customer_id: custId,
-        owner_id: u.user!.id,
-        subject: subject || null,
-        quote_date: today,
-        expiry_date: exp,
-        validity_days: DEFAULT_VALIDITY_DAYS,
-        billing_address: cust?.billing_address || cust?.address || null,
-        shipping_address: cust?.shipping_address || cust?.billing_address || cust?.address || null,
-        place_of_supply: cust?.state || null,
-        items: [],
-        subtotal: 0,
-        gst_percent: 18,
-        gst_amount: 0,
-        total: 0,
-        status: "draft",
-      } as any)
-      .select()
-      .single();
-    if (error) return toast.error(error.message);
-    setOpen(false);
-    setCustId("");
-    setSubject("");
-    nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
+    // Branch default handling — functional guard prevents null inserts
+    const def = branches.find((b) => b.is_default) || branches[0];
+    const branchId = def?.id ?? null;
+    // Block empty-quote factory: validate via central helper with require_branch:true
+    const vErr = validateQuotation({ items: [], branch_id: branchId, customer_id: custId, require_branch: true });
+    if (vErr) return toast.error(vErr);
+    // Empty items blocked above; redirect to full form so a proper quote is created via new.tsx validation
+    toast.error(vErr || "Add at least one item — use New Quotation form");
+    nav({ to: "/crm/quotations/new" });
+    return;
   };
 
   const duplicate = (r: Quotation) => {
@@ -405,6 +393,15 @@ function QuotesWorkspace() {
   const cacheRef = useRef<Map<string, Quotation>>(new Map());
   const search = useDebounced(q, 300);
 
+  const [branches, setBranches] = useState<BranchRow[]>([]);
+  useEffect(() => {
+    fetchBranches()
+      .then((bs) => {
+        setBranches(bs);
+      })
+      .catch(() => {});
+  }, []);
+
   const cmap = useMemo(
     () => Object.fromEntries(customers.map((c) => [c.id, c])) as Record<string, Customer>,
     [customers],
@@ -447,12 +444,17 @@ function QuotesWorkspace() {
       .replace(/\(/g, "\\(")
       .replace(/\)/g, "\\)");
 
+  // Abort / seq guard for infinite scroll race (loadFirst vs loadMore)
+  const loadSeqRef = useRef(0);
+
   const buildQuery = useCallback(
     (from: number, to: number) => {
-      let query = supabase
+      // Server-filter customer via FK join — fixes split-brain where customer search
+      // was client-only on paginated page (returned 0 results).
+      let query: any = supabase
         .from("quotations")
         .select(
-          "id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest",
+          "id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest, customers(company)",
         )
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
@@ -460,11 +462,11 @@ function QuotesWorkspace() {
       if (statusF !== "all") query = query.eq("status", statusF);
       const s = search.trim();
       if (s) {
-        // Server-side search on quote_no/subject; customer/amount filtered client-side.
+        // Server-side search now includes customer name via join.
         // H9: escaped so `% _ , ( ) \` in user input cannot inject PostgREST `or` predicates.
         const esc = escapePostgrestOrIlike(s);
         const q = `%${esc}%`;
-        query = query.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q}`);
+        query = query.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q},customers.company.ilike.${q}`);
       }
       return query;
     },
@@ -472,16 +474,92 @@ function QuotesWorkspace() {
   );
 
   const loadFirst = useCallback(async () => {
-    const { data } = await buildQuery(0, PAGE_SIZE - 1);
+    const seq = ++loadSeqRef.current;
+    // Reset pagination equivalent to setPage(0) — clear stale rows when search changes
+    // (debounced 300ms already via useDebounced). Avoids showing previous search page.
+    const { data, error } = await buildQuery(0, PAGE_SIZE - 1) as any;
+    if (seq !== loadSeqRef.current) return;
+    // Fallback if FK join not configured: fallback to customer-id lookup + client filter
+    if (error && String(error.message || "").toLowerCase().includes("customers")) {
+      // Rebuild without join and fetch customer ids matching search for server filter
+      const s = search.trim();
+      let fallbackQuery: any = supabase
+        .from("quotations")
+        .select("id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(0, PAGE_SIZE - 1);
+      if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
+      if (s) {
+        const esc = escapePostgrestOrIlike(s);
+        const q = `%${esc}%`;
+        // Try customer id lookup for server-side customer filter
+        try {
+          const { data: matched } = await supabase.from("customers").select("id").ilike("company", q).limit(200) as any;
+          const ids: string[] = (matched || []).map((r: any) => r.id);
+          if (ids.length) {
+            fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q},customer_id.in.(${ids.join(",")})`);
+          } else {
+            fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q}`);
+          }
+        } catch {
+          const q2 = `%${esc}%`;
+          fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q2},subject.ilike.${q2},reference_no.ilike.${q2}`);
+        }
+      }
+      const { data: fData } = await fallbackQuery as any;
+      if (seq !== loadSeqRef.current) return;
+      const list = (fData || []) as unknown as QuoteListRow[];
+      setRows(list);
+      setHasMore(list.length === PAGE_SIZE);
+      return;
+    }
     const list = (data || []) as unknown as QuoteListRow[];
     setRows(list);
     setHasMore(list.length === PAGE_SIZE);
-  }, [buildQuery]);
+  }, [buildQuery, search, statusF]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
+    const seq = loadSeqRef.current;
     setLoadingMore(true);
-    const { data } = await buildQuery(rows.length, rows.length + PAGE_SIZE - 1);
+    const { data, error } = await buildQuery(rows.length, rows.length + PAGE_SIZE - 1) as any;
+    if (seq !== loadSeqRef.current) { setLoadingMore(false); return; }
+    if (error && String(error.message || "").toLowerCase().includes("customers")) {
+      // Fallback path for environments without FK join
+      const s = search.trim();
+      let fallbackQuery: any = supabase
+        .from("quotations")
+        .select("id, quote_no, reference_no, subject, customer_id, quote_date, expiry_date, status, total, created_at, updated_at, lead_id, revision_of, revision_no, is_latest")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(rows.length, rows.length + PAGE_SIZE - 1);
+      if (statusF !== "all") fallbackQuery = fallbackQuery.eq("status", statusF);
+      if (s) {
+        const esc = escapePostgrestOrIlike(s);
+        const q = `%${esc}%`;
+        try {
+          const { data: matched } = await supabase.from("customers").select("id").ilike("company", q).limit(200) as any;
+          const ids: string[] = (matched || []).map((r: any) => r.id);
+          if (ids.length) fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q},customer_id.in.(${ids.join(",")})`);
+          else fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q},subject.ilike.${q},reference_no.ilike.${q}`);
+        } catch {
+          const q2 = `%${esc}%`;
+          fallbackQuery = fallbackQuery.or(`quote_no.ilike.${q2},subject.ilike.${q2},reference_no.ilike.${q2}`);
+        }
+      }
+      const { data: fData } = await fallbackQuery as any;
+      if (seq !== loadSeqRef.current) { setLoadingMore(false); return; }
+      const list = (fData || []) as unknown as QuoteListRow[];
+      setRows((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        const deduped = list.filter((r) => !seen.has(r.id));
+        return [...prev, ...deduped];
+      });
+      setHasMore(list.length === PAGE_SIZE);
+      setLoadingMore(false);
+      return;
+    }
     const list = (data || []) as unknown as QuoteListRow[];
     setRows((prev) => {
       const seen = new Set(prev.map((r) => r.id));
@@ -490,7 +568,14 @@ function QuotesWorkspace() {
     });
     setHasMore(list.length === PAGE_SIZE);
     setLoadingMore(false);
-  }, [buildQuery, rows.length, loadingMore, hasMore]);
+  }, [buildQuery, rows.length, loadingMore, hasMore, search, statusF]);
+
+  // Reset rows/hasMore when debounced search or status changes — setPage(0) equivalent for infinite scroll
+  useEffect(() => {
+    setRows([]);
+    setHasMore(true);
+    loadSeqRef.current++;
+  }, [search, statusF]);
 
   useEffect(() => {
     loadFirst();
@@ -581,36 +666,16 @@ function QuotesWorkspace() {
 
   const createNew = async () => {
     if (!newCustId) return toast.error("Select customer");
-    const cust = cmap[newCustId] || (await fetchCustomersByIds([newCustId]))[0];
-    const { data: u } = await supabase.auth.getUser();
-    const today = istTodayIso();
-    const exp = computeExpiryDate(today, DEFAULT_VALIDITY_DAYS);
-    const { data, error } = await supabase
-      .from("quotations")
-      .insert({
-        customer_id: newCustId,
-        owner_id: u.user!.id,
-        subject: newSubject || null,
-        quote_date: today,
-        expiry_date: exp,
-        validity_days: DEFAULT_VALIDITY_DAYS,
-        billing_address: cust?.billing_address || cust?.address || null,
-        shipping_address: cust?.shipping_address || cust?.billing_address || cust?.address || null,
-        place_of_supply: cust?.state || null,
-        items: [],
-        subtotal: 0,
-        gst_percent: 18,
-        gst_amount: 0,
-        total: 0,
-        status: "draft",
-      } as any)
-      .select()
-      .single();
-    if (error) return toast.error(error.message);
-    setOpenNew(false);
-    setNewCustId("");
-    setNewSubject("");
-    nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
+    // Branch default — functional fallback prevents null inserts (consistent with new.tsx:111)
+    const defBranch = branches.find((b) => b.is_default) || branches[0];
+    const branchId = defBranch?.id ?? null;
+    // Block empty-quote factory: route through validateQuotation with require_branch:true
+    const vErr = validateQuotation({ items: [], branch_id: branchId, customer_id: newCustId, require_branch: true });
+    if (vErr) return toast.error(vErr);
+    // Validation blocks empty items — direct users to full form which enforces proper items + branch
+    toast.message("Use New Quotation form to add items");
+    nav({ to: "/crm/quotations/new" });
+    return;
   };
 
   const clone = (row: QuoteListRow) => {

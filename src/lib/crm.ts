@@ -318,6 +318,11 @@ export const INDIAN_STATES = [
 
 // ---------- Quotation calculations (Zoho-style) ----------
 
+/** Blank-row filter: non-empty description or product_id (trimmed). Shared by compute + validate. */
+export function getValidItems(items: QuoteItem[] | null | undefined): QuoteItem[] {
+  return (items || []).filter((it) => ((it.description || "").trim() || (it.product_id || "").trim()));
+}
+
 export function lineAmount(it: QuoteItem): number {
   const gross = Number(it.qty || 0) * Number(it.rate || 0);
   const disc = gross * (Number(it.discount_percent || 0) / 100);
@@ -369,8 +374,9 @@ export function computeQuoteTotals(q: {
   seller_gstin?: string | null;
   buyer_gstin?: string | null;
 }) {
-  const subtotal = r2(q.items.reduce((s, it) => s + lineAmount(it), 0));
-  const total_tax = r2(q.items.reduce((s, it) => s + lineTax(it), 0));
+  const validItems = getValidItems(q.items);
+  const subtotal = r2(validItems.reduce((s, it) => s + lineAmount(it), 0));
+  const total_tax = r2(validItems.reduce((s, it) => s + lineTax(it), 0));
 
   // H3: use shared resolver — maps business_state / place_of_supply to
   // GSTIN codes via GSTIN_STATE_CODES inverse, and surfaces missingState so
@@ -464,7 +470,7 @@ export function validateQuotation(opts: {
   }
 
   // Filter to valid items (non-empty description or product_id)
-  const valid = (items || []).filter((it) => ((it.description || "").trim() || (it.product_id || "").trim()));
+  const valid = getValidItems(items);
   if (!valid.length) return "Add at least one item";
 
   // Per-line checks
