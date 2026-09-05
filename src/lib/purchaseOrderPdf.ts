@@ -136,28 +136,29 @@ export async function renderPurchaseOrderPdf(args: {
       styles: { fontSize: 8.5, cellPadding: 3.5, lineColor: [tr, tg, tb], lineWidth: 0.3, textColor: 20 },
       headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontStyle: "bold", halign: "center" },
       head: [[
-        "#", "Product / Description", "HSN", "Qty", "Unit", "Rate",
-        po.is_interstate ? "IGST%" : "GST%", "Warranty", "Amount",
+        "#", "Product / Description", "Warranty", "HSN", "Qty", "Unit", "Rate",
+        po.is_interstate ? "IGST%" : "GST%", "Amount",
       ]],
       body: safeItems.map((it: any, i: number) => [
         String(i + 1),
         String(it.description || "—").slice(0, 400),
+        `${(it as any).warranty_months ?? 12} mo`,
         it.hsn || "—",
         String(Number(it.qty) || 0),
         it.unit || "",
         inrPdf(Number(it.rate) || 0),
         `${Number(it.gst_rate) || 0}%`,
-        `${(it as any).warranty_months ?? 12} mo`,
-        inrPdf(Number(it.line_total) || 0),
+        // Amount is price without tax (taxable_value), per PO print requirement — not line_total (which includes GST)
+        inrPdf(Number(it.taxable_value ?? it.qty * it.rate) || 0),
       ]),
       columnStyles: {
         0: { halign: "center", cellWidth: 20 },
         2: { halign: "center", cellWidth: 42 },
-        3: { halign: "center", cellWidth: 32 },
-        4: { halign: "center", cellWidth: 34 },
-        5: { halign: "right", cellWidth: 52 },
-        6: { halign: "center", cellWidth: 36 },
-        7: { halign: "center", cellWidth: 42 },
+        3: { halign: "center", cellWidth: 42 },
+        4: { halign: "center", cellWidth: 32 },
+        5: { halign: "center", cellWidth: 34 },
+        6: { halign: "right", cellWidth: 52 },
+        7: { halign: "center", cellWidth: 36 },
         8: { halign: "right", cellWidth: 62 },
       },
     });
@@ -166,7 +167,7 @@ export async function renderPurchaseOrderPdf(args: {
     let fy = y + 14;
     doc.setFont("helvetica", "normal").setFontSize(9);
     safeItems.forEach((it: any, i: number) => {
-      const line = `${i + 1}. ${String(it.description || "—").slice(0, 80)}  Qty:${it.qty}  Rate:${inrPdf(it.rate)}  GST:${it.gst_rate}%  Warranty:${(it as any).warranty_months ?? 12} mo  Amt:${inrPdf(it.line_total)}`;
+      const line = `${i + 1}. ${String(it.description || "—").slice(0, 80)}  Warranty:${(it as any).warranty_months ?? 12} mo  HSN:${it.hsn || "—"}  Qty:${it.qty}  Rate:${inrPdf(it.rate)}  GST:${it.gst_rate}%  Amt:${inrPdf(it.taxable_value ?? 0)}`;
       const parts = doc.splitTextToSize(line, cw) as string[];
       parts.slice(0, 2).forEach((p: string) => { doc.text(p, margin, fy); fy += 10; });
     });

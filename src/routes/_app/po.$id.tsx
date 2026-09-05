@@ -271,12 +271,12 @@ function POView() {
               <tr>
                 <th className="p-2 text-left w-8">#</th>
                 <th className="p-2 text-left">Description</th>
+                <th className="p-2 text-center w-20">Warranty</th>
                 <th className="p-2 text-left w-24">HSN</th>
                 <th className="p-2 text-right w-20">Qty</th>
                 <th className="p-2 text-left w-16">Unit</th>
                 <th className="p-2 text-right w-24">Rate</th>
                 <th className="p-2 text-right w-20">GST%</th>
-                <th className="p-2 text-center w-20">Warranty</th>
                 <th className="p-2 text-right w-28">Amount</th>
               </tr>
             </thead>
@@ -285,13 +285,14 @@ function POView() {
                 <tr key={it.id} className="border-t">
                   <td className="p-2 text-xs">{it.sr_no}</td>
                   <td className="p-2">{it.description}</td>
+                  <td className="p-2 text-center"><span className="inline-flex items-center rounded-full bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 text-xs font-semibold">{(it as any).warranty_months ?? 12} mo</span></td>
                   <td className="p-2 font-mono text-xs">{it.hsn || "—"}</td>
                   <td className="p-2 text-right font-mono tabular-nums">{it.qty}</td>
                   <td className="p-2">{it.unit}</td>
                   <td className="p-2 text-right font-mono tabular-nums">{inrPO(it.rate)}</td>
                   <td className="p-2 text-right">{it.gst_rate}%</td>
-                  <td className="p-2 text-center"><span className="inline-flex items-center rounded-full bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 text-xs font-semibold">{(it as any).warranty_months ?? 12} mo</span></td>
-                  <td className="p-2 text-right font-medium font-mono tabular-nums">{inrPO(it.line_total)}</td>
+                  {/* Amount is price without tax (taxable_value), not final line_total with GST */}
+                  <td className="p-2 text-right font-medium font-mono tabular-nums">{inrPO(it.taxable_value)}</td>
                 </tr>
               ))}
             </tbody>

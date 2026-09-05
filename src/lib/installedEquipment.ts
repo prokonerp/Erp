@@ -103,7 +103,7 @@ export const listEquipmentForCustomer = async (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as unknown as { from: (t: string) => any };
   const cols =
-    "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,status,remarks,created_at";
+    "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,remarks,created_at";
   const { data, error } = await sb
     .from("installed_equipment")
     .select(cols)
@@ -137,7 +137,7 @@ export const deleteEquipment = async (id: string): Promise<void> => {
 
 /** Lookup by serial (used by the global serial search fallback). */
 export const findEquipmentBySerial = async (serial: string): Promise<InstalledEquipment[]> => {
-  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_date,warranty_months,status";
+  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_date,warranty_months";
   const { data, error } = await table().select(cols).ilike("serial_no", `%${serial}%`).limit(25);
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
@@ -148,7 +148,7 @@ export const findEquipmentBySerial = async (serial: string): Promise<InstalledEq
 export const findEquipmentBySerialExact = async (serial: string): Promise<InstalledEquipment[]> => {
   const s = serial.trim().toUpperCase();
   if (!s) return [];
-  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_date,warranty_months,status";
+  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_date,warranty_months";
   const { data, error } = await table().select(cols).eq("serial_no", s).limit(5);
   if (error) throw error;
   return (data || []) as InstalledEquipment[];
@@ -185,7 +185,7 @@ export const findEquipmentByCustomerAndSerial = async (
 ): Promise<InstalledEquipment | null> => {
   const s = serial.trim().toUpperCase();
   if (!customerId || !s) return null;
-  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_date,warranty_months,status";
+  const cols = "id,customer_id,product_id,serial_no,model_no,invoice_date,warranty_months";
   const { data, error } = await table()
     .select(cols)
     .eq("customer_id", customerId)
@@ -226,7 +226,7 @@ export const getOrCreateEquipmentForTicket = async (input: {
 /** Every equipment row across all customers (used by the Summary tab) — bounded, explicit cols (export uses paginated RPC). */
 export const listAllEquipment = async (): Promise<InstalledEquipment[]> => {
   const cols =
-    "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,status,remarks,created_at";
+    "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,amc_start_date,amc_end_date,remarks,created_at";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("installed_equipment")
@@ -240,7 +240,7 @@ export const listAllEquipment = async (): Promise<InstalledEquipment[]> => {
 export const listAllEquipmentForExport = async (): Promise<InstalledEquipment[]> =>
   fetchAll<InstalledEquipment>("installed_equipment", (q) =>
     q.select(
-      "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months,status",
+      "id,customer_id,product_id,serial_no,model_no,invoice_no,invoice_date,warranty_months",
     ),
   );
 
@@ -250,10 +250,17 @@ export type ImportOutcome = {
   failed: { row: number; reason: string }[];
 };
 
+const FALSE_SENTINELS = new Set(["false", "null", "nil", "#n/a", "na", "-"]);
+
 const pick = (r: Record<string, string>, keys: string[]) => {
   for (const k of keys) {
     const hit = Object.keys(r).find((h) => h.trim().toLowerCase() === k.toLowerCase());
-    if (hit && (r[hit] || "").trim()) return r[hit].trim();
+    if (hit == null) continue;
+    const raw = (r[hit] ?? "").trim();
+    if (!raw) continue;
+    // Excel exports boolean FALSE / #N/A for empty cells — treat as blank
+    if (FALSE_SENTINELS.has(raw.toLowerCase())) continue;
+    return raw;
   }
   return "";
 };
@@ -261,6 +268,8 @@ const pick = (r: Record<string, string>, keys: string[]) => {
 const toIso = (s: string): string | null => {
   if (!s) return null;
   const t = s.trim();
+  if (!t) return null;
+  if (FALSE_SENTINELS.has(t.toLowerCase())) return null;
   if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
   const m = t.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (m) {
@@ -340,7 +349,15 @@ export const importEquipmentRows = async (
     }
   }
 
-  const existing = await listAllEquipment();
+  // Duplicate guard: fetch existing serials; if the read fails (e.g. schema drift)
+  // we degrade gracefully to a file-internal dedup only, so the import still
+  // surfaces per-row successes/failures instead of throwing a blanket error.
+  let existing: InstalledEquipment[] = [];
+  try {
+    existing = await listAllEquipment();
+  } catch (e) {
+    console.warn("[importEquipmentRows] listAllEquipment failed – falling back to file-only dedup:", e);
+  }
   const seen = new Set(
     existing
       .filter((e) => e.serial_no)
