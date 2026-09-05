@@ -43,3 +43,5 @@ data/
 *.sln
 *.sw?
 .env*
+.playwright-mcp/
+invoice-preview.png

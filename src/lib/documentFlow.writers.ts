@@ -73,7 +73,7 @@ export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id:
       .update({ converted_to_so_id: existing.id, status: "accepted" } as never)
       .eq("id", quote.id)
       .is("converted_to_so_id", null);
-    if (backfillErr) console.error("quotation converted_to_so_id backfill failed:", backfillErr.message);
+    if (backfillErr && import.meta.env.DEV) console.error("quotation converted_to_so_id backfill failed:", backfillErr.message);
     return existing;
   }
 
@@ -352,7 +352,7 @@ export async function createInvoiceFromSalesOrder(so: SalesOrder) {
       .from("sales_orders" as never)
       .update({ status: "invoiced" } as never)
       .eq("id", so.id);
-    if (statusErr) console.error("sales_orders status flip failed:", statusErr.message);
+    if (statusErr && import.meta.env.DEV) console.error("sales_orders status flip failed:", statusErr.message);
     return existingInv;
   }
 

@@ -344,16 +344,21 @@ function AmcWidget() {
   const [amcs, setAmcs] = useState<AmcRow[] | null>(null);
   const [pms, setPms] = useState<PmRow[] | null>(null);
   const load = async () => {
-    // Phase 0.2 debloat: minimal cols + limit 200 + keep Promise.all but smaller payload
-    // keepPreviousData: retain previous tiles on error / refetch
-    const { data: a, error: e1 } = await supabase.from("amcs").select("id,agreement_no,end_date").eq("is_deleted", false).order("end_date", { ascending: true }).limit(200);
-    if (e1) { toast.error(e1.message); return; }
-    setAmcs((a || []) as AmcRow[]);
-    const { data: p, error: e2 } = await supabase.from("pm_visits").select("id,scheduled_date,completed_at").gte("scheduled_date", new Date(Date.now() - 30*86400000).toISOString().slice(0,10)).limit(200);
-    if (e2) { toast.error(e2.message); return; }
-    setPms((p || []) as PmRow[]);
+    const [{ data: a, error: e1 }, { data: p, error: e2 }] = await Promise.all([
+      supabase.from("amcs").select("id,agreement_no,end_date").eq("is_deleted", false).order("end_date", { ascending: true }).limit(200),
+      supabase.from("pm_visits").select("id,scheduled_date,completed_at").gte("scheduled_date", new Date(Date.now() - 30*86400000).toISOString().slice(0,10)).limit(200),
+    ]);
+    if (e1) { toast.error(e1.message); } else setAmcs((a || []) as AmcRow[]);
+    if (e2) { toast.error(e2.message); } else setPms((p || []) as PmRow[]);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      await load();
+    })();
+    return () => { cancelled = true; };
+  }, []);
   useRealtimeRefetch("amcs", load);
 
   const k = useMemo(() => {
@@ -436,16 +441,18 @@ function CrmWidget() {
   const [leads, setLeads] = useState<LeadRow[] | null>(null);
   const [quotes, setQuotes] = useState<QuoteRow[] | null>(null);
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      // Phase 0.2 debloat: minimal cols + limit 200 + keep Promise.all smaller payload — keepPreviousData on error
       const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
-      const { data: l, error: e1 } = await supabase.from("leads").select("id,status,expected_value,next_followup,owner_id").gte("created_at", since30d.toISOString()).limit(200);
-      if (e1) { toast.error(e1.message); return; }
-      setLeads((l || []) as LeadRow[]);
-      const { data: q, error: e2 } = await supabase.from("quotations").select("id,status,total").gte("created_at", since30d.toISOString()).limit(200);
-      if (e2) { toast.error(e2.message); return; }
-      setQuotes((q || []) as QuoteRow[]);
+      const [{ data: l, error: e1 }, { data: q, error: e2 }] = await Promise.all([
+        supabase.from("leads").select("id,status,expected_value,next_followup,owner_id").gte("created_at", since30d.toISOString()).limit(200),
+        supabase.from("quotations").select("id,status,total").gte("created_at", since30d.toISOString()).limit(200),
+      ]);
+      if (cancelled) return;
+      if (e1) toast.error(e1.message); else setLeads((l || []) as LeadRow[]);
+      if (e2) toast.error(e2.message); else setQuotes((q || []) as QuoteRow[]);
     })();
+    return () => { cancelled = true; };
   }, []);
   const k = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -479,16 +486,18 @@ function ImsWidget() {
   const [stock, setStock] = useState<StockRow[] | null>(null);
   const [grns, setGrns] = useState<GrnRow[] | null>(null);
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      // Phase 0.2 debloat: minimal cols + limit 200 + 30d window where applicable — staleTime 30s / keepPreviousData
       const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
-      const { data: s, error: e1 } = await supabase.from("ims_stock_items").select("id,stock_status,part_name").limit(200);
-      if (e1) { toast.error(e1.message); return; }
-      setStock((s || []) as StockRow[]);
-      const { data: g, error: e2 } = await supabase.from("grns").select("id,status,grn_date").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
-      if (e2) { toast.error(e2.message); return; }
-      setGrns((g || []) as GrnRow[]);
+      const [{ data: s, error: e1 }, { data: g, error: e2 }] = await Promise.all([
+        supabase.from("ims_stock_items").select("id,stock_status,part_name").limit(200),
+        supabase.from("grns").select("id,status,grn_date").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200),
+      ]);
+      if (cancelled) return;
+      if (e1) toast.error(e1.message); else setStock((s || []) as StockRow[]);
+      if (e2) toast.error(e2.message); else setGrns((g || []) as GrnRow[]);
     })();
+    return () => { cancelled = true; };
   }, []);
   const k = useMemo(() => {
     const s = stock || []; const g = grns || [];
@@ -528,19 +537,20 @@ function MaterialMovementWidget() {
   const [dcs, setDcs] = useState<DcRow[] | null>(null);
   const [grns, setGrns] = useState<GrnRow[] | null>(null);
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      // Phase 0.2 debloat: minimal cols + limit 200 + 30d window where applicable — keepPreviousData
       const since30d = new Date(); since30d.setDate(since30d.getDate() - 30);
-      const { data: g, error: e1 } = await supabase.from("gatepasses").select("id,return_type,created_at").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200);
-      if (e1) { toast.error(e1.message); return; }
-      setGps((g || []) as GpRow[]);
-      const { data: d, error: e2 } = await supabase.from("delivery_challans").select("id,status,challan_date").gte("challan_date", since30d.toISOString().slice(0,10)).order("challan_date", { ascending: false }).limit(200);
-      if (e2) { toast.error(e2.message); return; }
-      setDcs((d || []) as DcRow[]);
-      const { data: r, error: e3 } = await supabase.from("grns").select("id,status,grn_date").gte("grn_date", since30d.toISOString().slice(0,10)).order("grn_date", { ascending: false }).limit(200);
-      if (e3) { toast.error(e3.message); return; }
-      setGrns((r || []) as GrnRow[]);
+      const [{ data: g, error: e1 }, { data: d, error: e2 }, { data: r, error: e3 }] = await Promise.all([
+        supabase.from("gatepasses").select("id,return_type,created_at").gte("created_at", since30d.toISOString()).order("created_at", { ascending: false }).limit(200),
+        supabase.from("delivery_challans").select("id,status,challan_date").gte("challan_date", since30d.toISOString().slice(0,10)).order("challan_date", { ascending: false }).limit(200),
+        supabase.from("grns").select("id,status,grn_date").gte("grn_date", since30d.toISOString().slice(0,10)).order("grn_date", { ascending: false }).limit(200),
+      ]);
+      if (cancelled) return;
+      if (e1) toast.error(e1.message); else setGps((g || []) as GpRow[]);
+      if (e2) toast.error(e2.message); else setDcs((d || []) as DcRow[]);
+      if (e3) toast.error(e3.message); else setGrns((r || []) as GrnRow[]);
     })();
+    return () => { cancelled = true; };
   }, []);
   const k = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
