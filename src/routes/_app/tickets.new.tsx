@@ -177,7 +177,10 @@ function NewTicket() {
       location: cu?.billing_city || cu?.city || "",
       product_id: resolvedProductId,
       product: e.model_no || "",
-      ...(resolvedBrand ? { oem_brand: resolvedBrand } : {}),
+      // Only auto-fill OEM brand from the product if the user hasn't already
+      // chosen one — avoids silently overwriting a manual OEM selection when
+      // the serial/equipment lookup fires.
+      ...(resolvedBrand && !f.oem_brand ? { oem_brand: resolvedBrand } : {}),
       serial_no: (e.serial_no || "").toUpperCase(),
       complaint: `Service request for ${e.model_no}${e.serial_no ? ` / ${e.serial_no}` : ""}`,
     }));
@@ -683,6 +686,19 @@ function NewTicket() {
               required
               onChange={(id, c) => {
                 const cAny = (c || {}) as { city?: string; billing_city?: string; sector?: string };
+                // Preserve OEM state, call_type, complaint, and parts config across
+                // customer switches — the previous impl wiped oem_call + oem fields +
+                // product/complaint whenever the customer was (re-)selected, so a
+                // service person who enabled OEM and filled details BEFORE picking
+                // the customer would silently lose all OEM data. The form still
+                // looked "fine" until submit, where the payload was sent as
+                // oem_call=false with cleared fields — ticket row is created with
+                // only case_id, and OEM/product/complaint appear missing in the
+                // Tickets tab and require recreation. Fix: only reset fields that
+                // are genuinely customer-equipment-specific (product/serial); keep
+                // OEM, call_type, complaint and other user input intact.
+                // Product/serial are cleared because the equipment register is
+                // per-customer and stale values must not carry over.
                 set({
                   customer_id: id || "",
                   customer_name: c?.company || "",
@@ -691,17 +707,9 @@ function NewTicket() {
                   customer_address: c?.billing_address || c?.address || "",
                   sector: cAny.sector || "",
                   location: cAny.billing_city || cAny.city || c?.state || "",
-                  // Reset product-specific fields so stale data from a different
-                  // customer doesn't carry over. User picks fresh equipment/model.
                   product_id: "",
                   product: "",
                   serial_no: "",
-                  call_type: "OOW",
-                  oem_brand: "",
-                  oem_ref_id: "",
-                  oem_purchase_date: "",
-                  oem_call: false,
-                  complaint: "",
                 });
                 setSourceEquipId(null);
                 setSourceMeta(null);
@@ -803,11 +811,13 @@ function NewTicket() {
               onChange={(id, p) => {
                 const modelName = p?.model || p?.name || "";
                 const brand = p?.brand || "";
-                set({
+                // Only auto-fill OEM brand from product when user hasn't already picked one
+                setForm((prev) => ({
+                  ...prev,
                   product_id: id || "",
                   product: modelName,
-                  ...(brand ? { oem_brand: brand } : {}),
-                });
+                  oem_brand: brand && !prev.oem_brand ? brand : prev.oem_brand,
+                }));
               }}
             />
           </FormField>
