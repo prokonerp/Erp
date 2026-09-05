@@ -138,23 +138,22 @@ export function CustomerMasterPage() {
           ) : null}
         </div>
       ),
-      className: "!whitespace-normal",
+      // 40% of table — guarantees 20% minimum even on narrow viewports, wraps full names
+      className: "!whitespace-normal w-[40%] min-w-[20%]",
     },
     {
       key: "phone",
       header: "Phone",
       render: (c) => <span className="text-xs tabular-nums whitespace-nowrap">{c.phone || "—"}</span>,
-      className: "w-[105px]",
+      className: "w-[9%]",
     },
     {
       key: "email",
       header: "Email",
       render: (c) => (
-        <span className="text-xs text-muted-foreground truncate block max-w-[115px]">
-          {c.email || "—"}
-        </span>
+        <span className="text-xs text-muted-foreground truncate block">{c.email || "—"}</span>
       ),
-      className: "w-[125px]",
+      className: "w-[14%]",
     },
     {
       key: "gst",
@@ -167,20 +166,20 @@ export function CustomerMasterPage() {
         ) : (
           <span className="text-muted-foreground text-xs">—</span>
         ),
-      className: "w-[138px]",
+      className: "w-[13%]",
     },
     {
       key: "state",
       header: "State",
       sortable: true,
       render: (c) => <span className="text-xs whitespace-nowrap">{c.state || "—"}</span>,
-      className: "w-[95px]",
+      className: "w-[10%]",
     },
     {
       key: "city",
       header: "City",
       render: (c) => <span className="text-xs whitespace-nowrap">{(c as any).city || "—"}</span>,
-      className: "w-[85px]",
+      className: "w-[8%]",
     },
     {
       key: "_actions",
@@ -208,7 +207,7 @@ export function CustomerMasterPage() {
           </Button>
         </div>
       ),
-      className: "w-[62px]",
+      className: "w-[6%]",
     },
   ];
 
