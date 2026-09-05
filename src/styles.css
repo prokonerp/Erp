@@ -436,6 +436,32 @@ button[role="combobox"][name*="uom" i],
   }
 }
 
+/* =========================
+ * DataTable — premium enterprise dense grid polish
+ * Crisp header (white + slate-200) over glacier canvas, subtle
+ * row dividers (slate-100), hover muted/40, actions breathing room.
+ * Keeps table-fixed layout untouched — only color/spacing/hover.
+ * ========================= */
+table thead th {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+}
+/* Actions column — ensure ghost icon buttons have correct hierarchy
+   even when CustomerMaster renders generic ghost variants. */
+table td:last-child button:has(.lucide-pencil),
+table td:last-child a:has(.lucide-pencil) {
+  color: var(--muted-foreground);
+}
+table td:last-child button:has(.lucide-pencil):hover,
+table td:last-child a:has(.lucide-pencil):hover {
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+}
+table td:last-child button:has(.lucide-trash2):hover,
+table td:last-child a:has(.lucide-trash2):hover {
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
+}
+
 /* PO A4 print: explicit fallback so window.print() never yields blank page
    even if Tailwind v4 tree-shakes the `print:` variant. */
 .po-a4-print { display: none; }

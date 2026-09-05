@@ -18,6 +18,33 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 
 
+function isEmptyContactName(v: unknown): boolean {
+  if (v == null) return true;
+  const t = String(v).trim();
+  if (!t) return true;
+  if (t === "—" || t === "-" || t === "--") return true;
+  const lower = t.toLowerCase().replace(/\s+/g, " ").trim();
+  if (
+    lower === "mr" ||
+    lower === "mr." ||
+    lower === "mr. ." ||
+    lower === "mr ." ||
+    lower === "." ||
+    lower === ".." ||
+    lower === "..."
+  )
+    return true;
+  const stripped = t.replace(/[\s.\-—]/g, "").toLowerCase();
+  if (stripped === "") return true; // only punctuation / spaces
+  if (stripped === "mr") return true; // Mr + any dots/spaces combo
+  return false;
+}
+
+function displayContactName(v: string | null | undefined): string | null {
+  if (isEmptyContactName(v)) return null;
+  return String(v).trim();
+}
+
 export function CustomerMasterPage() {
   const [q, setQ] = useRouteState("q", "");
   const [open, setOpen] = useState(false);
@@ -126,66 +153,121 @@ export function CustomerMasterPage() {
       key: "company",
       header: "Customer",
       sortable: true,
-      render: (c) => (
-        <div className="min-w-0 space-y-0.5 overflow-hidden">
-          <span
-            className="font-semibold text-foreground text-[13px] leading-[1.25] block truncate"
-            title={c.company}
-          >
-            {c.company}
-          </span>
-          {c.contact_name ? (
+      render: (c) => {
+        const contact = displayContactName(c.contact_name);
+        return (
+          <div className="min-w-0 overflow-hidden flex flex-col justify-center min-h-[32px] space-y-0.5">
             <span
-              className="text-[11px] text-muted-foreground leading-tight block truncate"
-              title={c.contact_name}
+              className="font-semibold text-foreground text-[13px] leading-[1.25] block truncate overflow-hidden"
+              title={c.company}
             >
-              {c.contact_name}
+              {c.company}
             </span>
-          ) : null}
-        </div>
-      ),
+            {contact ? (
+              <span
+                className="text-[11px] text-muted-foreground leading-tight block truncate overflow-hidden"
+                title={contact}
+              >
+                {contact}
+              </span>
+            ) : null}
+          </div>
+        );
+      },
       // 30% of table — 0% minimum, single line per row, no overflow
       className: "w-[30%] min-w-0 overflow-hidden",
     },
     {
       key: "phone",
       header: "Phone",
-      render: (c) => <span className="text-xs tabular-nums whitespace-nowrap">{c.phone || "—"}</span>,
+      render: (c) => {
+        const v = String(c.phone ?? "").trim();
+        return v ? (
+          <span
+            title={v}
+            className="text-xs tabular-nums whitespace-nowrap block truncate overflow-hidden"
+          >
+            {v}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
       className: "w-[11%]",
     },
     {
       key: "email",
       header: "Email",
-      render: (c) => (
-        <span className="text-xs text-muted-foreground truncate block">{c.email || "—"}</span>
-      ),
-      className: "w-[17%]",
+      render: (c) => {
+        const v = String(c.email ?? "").trim();
+        return v ? (
+          <span
+            title={v}
+            className="text-xs truncate block overflow-hidden max-w-full"
+          >
+            {v}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
+      className: "w-[17%] overflow-hidden",
     },
     {
       key: "gst",
       header: "GSTIN",
-      render: (c) =>
-        c.gst ? (
-          <span className="text-[11px] font-mono tracking-tight bg-muted/60 rounded px-1 py-0.5 inline-block whitespace-nowrap">
-            {c.gst}
+      render: (c) => {
+        const g = String(c.gst ?? "").trim();
+        if (!g || g === "—" || g === "-" || g === "--") {
+          return <span className="text-muted-foreground text-xs">—</span>;
+        }
+        return (
+          <span
+            title={g}
+            className="text-[11px] font-mono tracking-tight bg-muted/60 rounded px-1 py-0.5 inline-block whitespace-nowrap max-w-full truncate overflow-hidden"
+          >
+            {g}
           </span>
-        ) : (
-          <span className="text-muted-foreground text-xs">—</span>
-        ),
-      className: "w-[15%]",
+        );
+      },
+      className: "w-[15%] overflow-hidden",
     },
     {
       key: "state",
       header: "State",
       sortable: true,
-      render: (c) => <span className="text-xs whitespace-nowrap">{c.state || "—"}</span>,
-      className: "w-[11%]",
+      render: (c) => {
+        const v = String(c.state ?? "").trim();
+        return v ? (
+          <span
+            title={v}
+            className="text-xs whitespace-nowrap block truncate overflow-hidden"
+          >
+            {v}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
+      className: "w-[11%] overflow-hidden",
     },
     {
       key: "city",
       header: "City",
-      render: (c) => <span className="text-xs whitespace-nowrap">{(c as any).city || "—"}</span>,
-      className: "w-[10%]",
+      render: (c) => {
+        const v = String((c as any).city ?? "").trim();
+        return v ? (
+          <span
+            title={v}
+            className="text-xs whitespace-nowrap block truncate overflow-hidden"
+          >
+            {v}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        );
+      },
+      className: "w-[10%] overflow-hidden",
     },
     {
       key: "_actions",

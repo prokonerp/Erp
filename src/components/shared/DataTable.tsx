@@ -55,12 +55,12 @@ type Density = "comfortable" | "compact";
 
 const CELL_DENSITY: Record<Density, string> = {
   comfortable: "px-4 py-3",
-  compact: "px-3 py-1.5",
+  compact: "px-3 py-2",
 };
 
 const HEADER_DENSITY: Record<Density, string> = {
   comfortable: "px-4 py-2.5",
-  compact: "px-3 py-1.5",
+  compact: "px-3 py-2",
 };
 
 const DENSITY_STORAGE_KEY = "prokon-table-density";
@@ -105,24 +105,28 @@ function MemoRowInner<T extends Record<string, any>>({
   return (
     <tr
       style={
-        { contentVisibility: "auto", containIntrinsicSize: "auto 48px" } as React.CSSProperties
+        { contentVisibility: "auto", containIntrinsicSize: "auto 44px" } as React.CSSProperties
       }
       className={cn(
-        "border-b last:border-0 transition-colors",
-        onRowClick && "cursor-pointer hover:bg-muted/40",
+        "border-b border-slate-100 last:border-0 transition-colors duration-150 hover:bg-muted/40 dark:hover:bg-muted/20",
+        onRowClick && "cursor-pointer",
       )}
       onClick={onRowClick ? () => onRowClick(row) : undefined}
     >
-      {columns.map((col) => {
+      {columns.map((col, idx) => {
         const isRight = col.align === "right";
+        const isLast = idx === columns.length - 1;
+        const isFirst = idx === 0;
         const content = col.render ? col.render(row, globalIndex) : row[col.key];
         return (
           <td
             key={col.key}
             className={cn(
-              "whitespace-nowrap",
+              "whitespace-nowrap align-middle text-sm",
               CELL_DENSITY[density],
               isRight && "text-right tabular-nums",
+              isFirst && "pl-4",
+              isLast && "pr-4",
               col.className,
             )}
           >
@@ -319,9 +323,9 @@ export function DataTable<T extends Record<string, any>>({
   const hasFooterBar = !!(footer || paginationNode);
 
   return (
-    <Card className={cn("overflow-hidden", cardClassName)}>
+    <Card className={cn("overflow-hidden border-slate-200 shadow-sm", cardClassName)}>
       {toolbar && (
-        <CardHeader className="flex flex-row items-center justify-between gap-2 border-b p-3">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-slate-200 bg-white p-3 dark:bg-card">
           {toolbar}
         </CardHeader>
       )}
@@ -336,18 +340,22 @@ export function DataTable<T extends Record<string, any>>({
             <EmptyState icon={emptyIcon} title={emptyTitle} hint={emptyHint} action={emptyAction} />
           ) : (
             <table className={cn("w-full table-fixed text-sm", className)}>
-              <thead className="sticky top-0 z-10 border-b bg-muted text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-white text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground shadow-[0_1px_0_0_rgba(15,23,42,0.04)] select-none dark:bg-card">
                 <tr>
-                  {columns.map((col) => {
+                  {columns.map((col, idx) => {
                     const isRight = col.align === "right";
                     const isActiveCol = sort?.key === col.key;
+                    const isLast = idx === columns.length - 1;
+                    const isFirst = idx === 0;
                     return (
                       <th
                         key={col.key}
                         className={cn(
-                          "whitespace-nowrap font-medium",
+                          "whitespace-nowrap text-left font-semibold",
                           HEADER_DENSITY[density],
                           isRight && "text-right",
+                          isFirst && "pl-4",
+                          isLast && "pr-4",
                           col.headerClassName,
                         )}
                         aria-sort={
@@ -365,11 +373,14 @@ export function DataTable<T extends Record<string, any>>({
                             type="button"
                             onClick={() => toggleSort(col.key)}
                             className={cn(
-                              "inline-flex items-center gap-1 rounded outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                              "inline-flex items-center gap-1.5 rounded-sm -mx-1 px-1 py-0.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                              isActiveCol
+                                ? "text-foreground"
+                                : "text-muted-foreground hover:text-foreground",
                               isRight && "float-right",
                             )}
                           >
-                            {col.header}
+                            <span className="tracking-[0.06em]">{col.header}</span>
                             <SortIndicator
                               active={isActiveCol}
                               dir={isActiveCol ? sort!.dir : null}
@@ -378,7 +389,7 @@ export function DataTable<T extends Record<string, any>>({
                         ) : (
                           <span
                             className={cn(
-                              "inline-flex items-center gap-1",
+                              "inline-flex items-center gap-1.5 tracking-[0.06em]",
                               isRight && "float-right",
                             )}
                           >
@@ -412,8 +423,8 @@ export function DataTable<T extends Record<string, any>>({
           )}
         </div>
         {hasFooterBar && (
-          <div className="flex items-center justify-between border-t bg-muted/30 px-4 py-2">
-            <span className="text-xs text-muted-foreground">
+          <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/70 px-4 py-2.5 backdrop-blur-sm dark:bg-muted/20">
+            <span className="text-[11px] font-medium tracking-wide text-muted-foreground">
               {totalForDisplay.toLocaleString()} record{totalForDisplay === 1 ? "" : "s"}
             </span>
             <div className="flex items-center gap-3">
@@ -434,11 +445,11 @@ export function DataTable<T extends Record<string, any>>({
 /* ──────── Internal sub-components ──────── */
 
 function SortIndicator({ active, dir }: { active: boolean; dir: "asc" | "desc" | null }) {
-  if (!active) return <ChevronsUpDown className="h-3 w-3 opacity-40" />;
+  if (!active) return <ChevronsUpDown className="h-3 w-3 text-slate-400" aria-hidden />;
   return dir === "asc" ? (
-    <ChevronUp className="h-3 w-3 text-primary" />
+    <ChevronUp className="h-3 w-3 text-slate-700 dark:text-slate-200" aria-hidden />
   ) : (
-    <ChevronDown className="h-3 w-3 text-primary" />
+    <ChevronDown className="h-3 w-3 text-slate-700 dark:text-slate-200" aria-hidden />
   );
 }
 
