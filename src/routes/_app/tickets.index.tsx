@@ -1135,27 +1135,27 @@ function TicketsList() {
                 {isLoading ? (
                   <TableSkeleton rows={6} />
                 ) : (
-                  <table className="w-full text-sm">
+                  <table className="w-full text-xs">
                     <thead className="bg-muted sticky top-0 z-10">
-                      <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="p-2">Case ID</th>
-                        <th className="p-2 w-36">OEM Case ID</th>
-                        <th className="p-2 w-10 text-center">
+                      <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <th className="px-2 py-1.5 font-semibold">Case ID</th>
+                        <th className="px-2 py-1.5 w-36 font-semibold">OEM Case ID</th>
+                        <th className="px-1.5 py-1.5 w-10 text-center font-semibold">
                           <SortBtn k="priority" label="Pr." />
                         </th>
-                        <th className="p-2 w-20">
+                        <th className="px-1.5 py-1.5 w-[72px] font-semibold">
                           <SortBtn k="timer" label="Timer" />
                         </th>
-                        <th className="p-2">
+                        <th className="px-2 py-1.5 font-semibold">
                           <SortBtn k="customer" label="Customer" />
                         </th>
-                        <th className="p-2">Model / Serial</th>
-                        <th className="p-2">Sector · City</th>
-                        <th className="p-2 max-w-[180px]">Complaint</th>
-                        <th className="p-2">Engineer</th>
-                        <th className="p-2">Raised By</th>
-                        <th className="p-2">Status</th>
-                        <th className="p-2 w-12 text-center">·</th>
+                        <th className="px-2 py-1.5 font-semibold">Model / Serial</th>
+                        <th className="px-2 py-1.5 font-semibold">Sector · City</th>
+                        <th className="px-2 py-1.5 max-w-[180px] font-semibold">Complaint</th>
+                        <th className="px-2 py-1.5 font-semibold">Engineer</th>
+                        <th className="px-2 py-1.5 font-semibold">Raised By</th>
+                        <th className="px-2 py-1.5 font-semibold">Status</th>
+                        <th className="px-1 py-1.5 w-8 text-center font-semibold">·</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1209,52 +1209,52 @@ function TicketsList() {
 
   function renderTicketRow(r: Row, dim = false) {
     return (
-      <tr key={r.id} className="border-t align-top hover:bg-muted/30">
-        <td className="p-2 font-mono text-xs whitespace-nowrap">
+      <tr key={r.id} className="border-t align-top hover:bg-muted/30 leading-none">
+        <td className="px-2 py-1.5 font-mono text-[11px] whitespace-nowrap align-top">
           {(r.has_special_activity || (r.special_instruction && r.special_instruction.trim())) &&
             (r.special_instruction_acknowledged ? (
               <div
-                className="mb-1 inline-flex items-center gap-1 rounded border border-green-400 bg-green-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-green-800"
+                className="mb-0.5 inline-flex items-center gap-1 rounded border border-green-400 bg-green-100 px-1 py-0 text-[8px] font-bold uppercase tracking-wider text-green-800 leading-none"
                 title="Special instruction acknowledged"
               >
-                <AlertTriangle className="h-2.5 w-2.5" />
+                <AlertTriangle className="h-2 w-2" />
                 Special · Ack
               </div>
             ) : (
               <div
-                className="mb-1 inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700 animate-pulse"
+                className="mb-0.5 inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-1 py-0 text-[8px] font-bold uppercase tracking-wider text-red-700 animate-pulse leading-none"
                 title={r.special_instruction || "Special instruction tagged in activity log"}
               >
-                <AlertTriangle className="h-2.5 w-2.5" />
+                <AlertTriangle className="h-2 w-2" />
                 Special
               </div>
             ))}
-          <div className="font-semibold text-foreground">{r.case_id}</div>
-          <div className="flex items-center gap-1 mt-0.5">
-            <span className="text-[10px] text-muted-foreground leading-tight">{r.call_type}</span>
+          <div className="font-semibold text-foreground leading-tight text-[11px]">{r.case_id}</div>
+          <div className="flex items-center gap-1 mt-0.5 leading-none">
+            <span className="text-[9px] text-muted-foreground">{r.call_type}</span>
             {r.oem_call ? (
               <Badge
-                className="bg-purple-100 text-purple-800 px-1 py-0 text-[9px] h-4 leading-none"
+                className="bg-purple-100 text-purple-800 px-1 py-0 text-[8px] h-3.5 leading-none border-purple-200"
                 variant="secondary"
               >
                 OEM
               </Badge>
             ) : (
-              <Badge variant="outline" className="px-1 py-0 text-[9px] h-4 leading-none">
+              <Badge variant="outline" className="px-1 py-0 text-[8px] h-3.5 leading-none">
                 PHS
               </Badge>
             )}
           </div>
         </td>
         <td
-          className="p-2 font-mono text-xs max-w-[150px] truncate align-top"
+          className="px-2 py-1.5 font-mono text-[11px] max-w-[150px] truncate align-top leading-tight"
           title={r.oem_ref_id || undefined}
         >
           {r.oem_call && r.oem_ref_id ? (
             <>
-              <div className="font-medium text-foreground truncate">{r.oem_ref_id}</div>
+              <div className="font-medium text-foreground truncate leading-tight">{r.oem_ref_id}</div>
               {r.oem_brand && (
-                <div className="text-[10px] text-muted-foreground leading-tight truncate">
+                <div className="text-[9px] text-muted-foreground truncate leading-none">
                   {r.oem_brand}
                 </div>
               )}
@@ -1263,15 +1263,15 @@ function TicketsList() {
             <span className="text-muted-foreground">—</span>
           )}
         </td>
-        <td className="p-2 text-center">
+        <td className="px-1.5 py-1.5 text-center align-top">
           <PrioritySelect value={r.priority || "P3"} onChange={(v) => setPriority(r.id, v)} />
         </td>
-        <td className="p-2">
+        <td className="px-1.5 py-1.5 align-top">
           {(() => {
             const h = ticketElapsedHours(r);
             return (
               <span
-                className={`inline-block px-2 py-0.5 rounded border text-xs font-medium ${timerBadgeColor(h)}`}
+                className={`inline-block px-1.5 py-0 rounded border text-[10px] font-medium leading-tight ${timerBadgeColor(h)}`}
                 title={`${h.toFixed(2)}h since creation (excl. Sundays)`}
               >
                 {formatHours(h)}
@@ -1279,50 +1279,50 @@ function TicketsList() {
             );
           })()}
         </td>
-        <td className="p-2">
-          <div className="text-sm font-semibold text-foreground leading-tight">
+        <td className="px-2 py-1.5 align-top leading-tight">
+          <div className="text-xs font-semibold text-foreground truncate max-w-[140px]">
             {r.customer_name}
           </div>
-          <div className="text-[11px] text-muted-foreground leading-tight font-mono">
+          <div className="text-[10px] text-muted-foreground font-mono leading-none truncate">
             {r.customer_phone || "—"}
           </div>
         </td>
-        <td className="p-2">
-          <div className="text-sm font-semibold text-foreground leading-tight">
+        <td className="px-2 py-1.5 align-top leading-tight">
+          <div className="text-xs font-medium text-foreground truncate max-w-[130px]">
             {r.product || "—"}
           </div>
-          <div className="text-[11px] text-muted-foreground leading-tight font-mono">
+          <div className="text-[10px] text-muted-foreground font-mono leading-none truncate">
             {r.serial_no || "—"}
           </div>
         </td>
-        <td className="p-2 max-w-[140px]">
-          <div className="text-sm leading-tight break-words whitespace-normal">
-            {r.sector || "—"}
-          </div>
-          <div className="text-[11px] text-muted-foreground leading-tight">{r.location || "—"}</div>
+        <td className="px-2 py-1.5 max-w-[130px] align-top leading-tight">
+          <div className="text-[11px] leading-tight truncate">{r.sector || "—"}</div>
+          <div className="text-[10px] text-muted-foreground leading-none truncate">{r.location || "—"}</div>
         </td>
-        <td className="p-2 max-w-[180px] break-words whitespace-normal text-xs">
+        <td className="px-2 py-1.5 max-w-[180px] break-words whitespace-normal text-[11px] leading-tight align-top">
           {r.complaint || "—"}
         </td>
-        <td className="p-2 text-xs whitespace-nowrap">
+        <td className="px-2 py-1.5 text-[11px] whitespace-nowrap align-top leading-tight">
           {r.assigned_engineer_name || <span className="text-muted-foreground">Unassigned</span>}
         </td>
-        <td className="p-2 text-xs">
+        <td className="px-2 py-1.5 text-[11px] align-top leading-tight">
           {r.raised_by_type === "external" ? (
-            <Badge variant="outline">Customer</Badge>
+            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+              Customer
+            </Badge>
           ) : (
-            <span className="text-muted-foreground">{r.raised_by_name || "—"}</span>
+            <span className="text-muted-foreground truncate max-w-[90px] inline-block">{r.raised_by_name || "—"}</span>
           )}
         </td>
-        <td className="p-2">
+        <td className="px-2 py-1.5 align-top">
           <Badge
-            className={STATUS_COLOR[r.status] || "bg-zinc-100 text-zinc-700"}
+            className={`${STATUS_COLOR[r.status] || "bg-zinc-100 text-zinc-700"} text-[10px] px-1.5 py-0 h-4 leading-none`}
             variant="secondary"
           >
             {r.status}
           </Badge>
         </td>
-        <td className="p-2 text-center">
+        <td className="px-1 py-1 text-center align-top">
           <RowActions
             r={r}
             employees={employees}
@@ -1362,8 +1362,8 @@ function RowActions({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="icon" variant="ghost" className="h-8 w-8" title="Actions">
-          <MoreHorizontal className="h-4 w-4" />
+        <Button size="icon" variant="ghost" className="h-6 w-6" title="Actions">
+          <MoreHorizontal className="h-3.5 w-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
