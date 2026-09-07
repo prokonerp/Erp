@@ -946,7 +946,6 @@ export type Database = {
           billing_line2: string | null
           billing_pincode: string | null
           billing_state: string | null
-          branch_id: string | null
           city: string | null
           company: string
           contact_name: string | null
@@ -993,7 +992,6 @@ export type Database = {
           billing_line2?: string | null
           billing_pincode?: string | null
           billing_state?: string | null
-          branch_id?: string | null
           city?: string | null
           company: string
           contact_name?: string | null
@@ -1040,7 +1038,6 @@ export type Database = {
           billing_line2?: string | null
           billing_pincode?: string | null
           billing_state?: string | null
-          branch_id?: string | null
           city?: string | null
           company?: string
           contact_name?: string | null
@@ -1077,13 +1074,98 @@ export type Database = {
           street?: string | null
           updated_at?: string
         }
+        Relationships: []
+      }
+      customer_branches: {
+        Row: {
+          billing_city: string | null
+          billing_country: string | null
+          billing_landmark: string | null
+          billing_line1: string | null
+          billing_line2: string | null
+          billing_pincode: string | null
+          billing_state: string | null
+          contact_name: string | null
+          created_at: string
+          customer_id: string
+          email: string | null
+          gstin: string | null
+          id: string
+          is_default: boolean
+          name: string
+          phone: string | null
+          shipping_city: string | null
+          shipping_country: string | null
+          shipping_landmark: string | null
+          shipping_line1: string | null
+          shipping_line2: string | null
+          shipping_pincode: string | null
+          shipping_state: string | null
+          state: string | null
+          updated_at: string
+        }
+        Insert: {
+          billing_city?: string | null
+          billing_country?: string | null
+          billing_landmark?: string | null
+          billing_line1?: string | null
+          billing_line2?: string | null
+          billing_pincode?: string | null
+          billing_state?: string | null
+          contact_name?: string | null
+          created_at?: string
+          customer_id: string
+          email?: string | null
+          gstin?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          phone?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_landmark?: string | null
+          shipping_line1?: string | null
+          shipping_line2?: string | null
+          shipping_pincode?: string | null
+          shipping_state?: string | null
+          state?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billing_city?: string | null
+          billing_country?: string | null
+          billing_landmark?: string | null
+          billing_line1?: string | null
+          billing_line2?: string | null
+          billing_pincode?: string | null
+          billing_state?: string | null
+          contact_name?: string | null
+          created_at?: string
+          customer_id?: string
+          email?: string | null
+          gstin?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          phone?: string | null
+          shipping_city?: string | null
+          shipping_country?: string | null
+          shipping_landmark?: string | null
+          shipping_line1?: string | null
+          shipping_line2?: string | null
+          shipping_pincode?: string | null
+          shipping_state?: string | null
+          state?: string | null
+          updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "customers_branch_id_fkey"
-            columns: ["branch_id"]
-            referencedRelation: "branches"
+            foreignKeyName: "customer_branches_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       defective_tag_sequence: {

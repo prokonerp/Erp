@@ -16,9 +16,72 @@ export type Customer = {
   pan?: string | null;
   gst_status?: string | null;
   customer_type?: string | null;
-  branch_id?: string | null;
   remarks: string | null;
   created_at: string;
+};
+
+/** A billing/shipping address block (used by branch offices). */
+export type AddressBlockInput = {
+  line1: string;
+  line2?: string;
+  landmark?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  pincode?: string;
+};
+
+/**
+ * A branch office belonging to a single customer (legal entity). One customer
+ * can have many branch offices — e.g. "XYZ" (Entity) with "Head Office" and
+ * "Delhi Branch". When creating quotations/POs/invoices you select the customer
+ * AND the specific branch office. Branch offices are NOT separate customer
+ * rows — they are sub-records sharing the parent's GSTIN/company/phone
+ * uniqueness domain.
+ */
+export type CustomerBranch = {
+  id: string;
+  customer_id: string;
+  name: string;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+
+  billing_line1: string | null;
+  billing_line2: string | null;
+  billing_landmark: string | null;
+  billing_city: string | null;
+  billing_state: string | null;
+  billing_country: string | null;
+  billing_pincode: string | null;
+
+  shipping_line1: string | null;
+  shipping_line2: string | null;
+  shipping_landmark: string | null;
+  shipping_city: string | null;
+  shipping_state: string | null;
+  shipping_country: string | null;
+  shipping_pincode: string | null;
+
+  state: string | null;
+  gstin: string | null;
+
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Create/update payload for a customer branch office. */
+export type CustomerBranchInput = {
+  name: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  billing?: AddressBlockInput;
+  shipping?: AddressBlockInput;
+  state?: string | null;
+  gstin?: string | null;
+  is_default?: boolean;
 };
 
 export type LeadStatus = "new" | "follow_up" | "quoted" | "won" | "lost";
@@ -568,4 +631,185 @@ export async function fetchCustomersByIds(
     }),
   );
   return results.flat();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Customer Branch Offices
+// ─────────────────────────────────────────────────────────────────────
+
+const CUSTOMER_BRANCH_COLS =
+  "id, customer_id, name, contact_name, phone, email, billing_line1, billing_line2, billing_landmark, billing_city, billing_state, billing_country, billing_pincode, shipping_line1, shipping_line2, shipping_landmark, shipping_city, shipping_state, shipping_country, shipping_pincode, state, gstin, is_default, created_at, updated_at";
+
+/** Join an address block into a single-line string (mirrors joinAddress). */
+function joinAddressBlock(b: AddressBlockInput | undefined | null): string {
+  if (!b) return "";
+  return [b.line1, b.line2, b.landmark, b.city, b.state, b.pincode, b.country]
+    .map((s) => (s || "").trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** Load all branch offices for a customer. */
+export async function fetchCustomerBranches(customerId: string): Promise<CustomerBranch[]> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { data, error } = await supabase
+    .from("customer_branches")
+    .select(CUSTOMER_BRANCH_COLS)
+    .eq("customer_id", customerId)
+    .order("name");
+  if (error) throw error;
+  return (data || []) as unknown as CustomerBranch[];
+}
+
+/** Build a payload for inserting/updating a customer branch from a form input. */
+export function buildCustomerBranchPayload(input: CustomerBranchInput): Record<string, any> {
+  const billing = input.billing;
+  const shipping = input.shipping ?? billing;
+  return {
+    name: input.name.trim(),
+    contact_name: input.contact_name?.trim() || null,
+    phone: input.phone?.trim() || null,
+    email: input.email?.trim().toLowerCase() || null,
+    billing_line1: billing?.line1?.trim() || null,
+    billing_line2: billing?.line2?.trim() || null,
+    billing_landmark: billing?.landmark?.trim() || null,
+    billing_city: billing?.city?.trim() || null,
+    billing_state: billing?.state || null,
+    billing_country: billing?.country || "India",
+    billing_pincode: billing?.pincode?.trim() || null,
+    shipping_line1: shipping?.line1?.trim() || null,
+    shipping_line2: shipping?.line2?.trim() || null,
+    shipping_landmark: shipping?.landmark?.trim() || null,
+    shipping_city: shipping?.city?.trim() || null,
+    shipping_state: shipping?.state || null,
+    shipping_country: shipping?.country || "India",
+    shipping_pincode: shipping?.pincode?.trim() || null,
+    state: input.state?.trim() || null,
+    gstin: input.gstin?.trim().toUpperCase() || null,
+    is_default: !!input.is_default,
+  };
+}
+
+/** Validate a customer branch input. Returns error message or null. */
+export function validateCustomerBranch(input: CustomerBranchInput): string | null {
+  if (!input.name || !input.name.trim()) return "Branch office name is required";
+  return null;
+}
+
+/** Insert (or update) a customer branch office. */
+export async function saveCustomerBranch(
+  customerId: string,
+  input: CustomerBranchInput,
+  editingId?: string | null,
+): Promise<CustomerBranch> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const payload = buildCustomerBranchPayload(input);
+
+  // If marking this branch default, unset any other default for the customer.
+  if (input.is_default) {
+    await supabase
+      .from("customer_branches")
+      .update({ is_default: false } as any)
+      .eq("customer_id", customerId)
+      .eq("is_default", true)
+      .neq("id", editingId ?? "__none");
+  }
+
+  const q = editingId
+    ? supabase
+        .from("customer_branches")
+        .update({ ...payload, customer_id: customerId } as any)
+        .eq("id", editingId)
+        .select(CUSTOMER_BRANCH_COLS)
+        .single()
+    : supabase
+        .from("customer_branches")
+        .insert({ ...payload, customer_id: customerId } as any)
+        .select(CUSTOMER_BRANCH_COLS)
+        .single();
+
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return data as unknown as CustomerBranch;
+}
+
+/** Delete a customer branch office. */
+export async function deleteCustomerBranch(id: string): Promise<void> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { error } = await supabase.from("customer_branches").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/** Return the full display (billing) address for a branch. */
+export function customerBranchAddress(b: CustomerBranch | null | undefined): string {
+  if (!b) return "";
+  return joinAddressBlock({
+    line1: b.billing_line1 || "",
+    line2: b.billing_line2 || "",
+    landmark: b.billing_landmark || "",
+    city: b.billing_city || "",
+    state: b.billing_state || "",
+    country: b.billing_country || "",
+    pincode: b.billing_pincode || "",
+  });
+}
+
+/** Shipping address for a branch — falls back to billing when identical/empty. */
+export function customerBranchShippingAddress(b: CustomerBranch | null | undefined): string {
+  if (!b) return "";
+  const hasShipping =
+    (b.shipping_line1 || "").trim() ||
+    (b.shipping_line2 || "").trim() ||
+    (b.shipping_city || "").trim() ||
+    (b.shipping_state || "").trim();
+  if (!hasShipping) return customerBranchAddress(b);
+  return joinAddressBlock({
+    line1: b.shipping_line1 || "",
+    line2: b.shipping_line2 || "",
+    landmark: b.shipping_landmark || "",
+    city: b.shipping_city || "",
+    state: b.shipping_state || "",
+    country: b.shipping_country || "",
+    pincode: b.shipping_pincode || "",
+  });
+}
+
+/** Preferred place-of-supply state for a branch (branch state → billing state). */
+export function customerBranchState(b: CustomerBranch | null | undefined): string {
+  return (b?.state || b?.billing_state || "").trim();
+}
+
+/**
+ * Map a customer branch to a pseudo-customer view (billing/shipping/POS/contact)
+ * so document forms can apply the branch's address identically to how they apply
+ * a customer's. Falls back gracefully when a field is missing.
+ */
+export function branchToDocumentFields(b: CustomerBranch | null | undefined): {
+  billing_address: string;
+  shipping_address: string;
+  place_of_supply: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
+} {
+  if (!b) {
+    return {
+      billing_address: "",
+      shipping_address: "",
+      place_of_supply: "",
+      contact_name: "",
+      contact_email: "",
+      contact_phone: "",
+    };
+  }
+  const billing = customerBranchAddress(b);
+  const shipping = customerBranchShippingAddress(b);
+  return {
+    billing_address: billing,
+    shipping_address: shipping || billing,
+    place_of_supply: customerBranchState(b),
+    contact_name: (b.contact_name || "").trim(),
+    contact_email: (b.email || "").trim(),
+    contact_phone: (b.phone || "").trim(),
+  };
 }

@@ -318,7 +318,8 @@ function LeadsList() {
               <CustomerPicker
                 value={form.customer_id}
                 required
-                onChange={(id) => setForm({ ...form, customer_id: id || "" })}
+                branched
+                onChange={(id, _c, _branch) => setForm({ ...form, customer_id: id || "" })}
               />
             </div>
             <div>

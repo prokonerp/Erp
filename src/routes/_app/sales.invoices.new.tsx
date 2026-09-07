@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,8 @@ import type { ProductMaster } from "@/components/ProductPicker";
 import { BundleApplyDialog } from "@/components/BundleApplyDialog";
 import { fetchBundleChildrenRaw } from "@/lib/productBundles";
 import { SerialMultiPicker } from "@/components/SerialMultiPicker";
-import type { Customer } from "@/lib/crm";
+import type { Customer, CustomerBranch } from "@/lib/crm";
+import { branchToDocumentFields } from "@/lib/crm";
 import { istTodayIso } from "@/lib/dateRange";
 import {
   fetchBranches,
@@ -135,18 +136,40 @@ function NewInvoice() {
 
   const branch = useMemo(() => branches.find((b) => b.id === branchId) || null, [branches, branchId]);
 
+  // Selected customer branch office (transient — not persisted to the document;
+  // its address fields feed the sync effect below).
+  const [branchOverride, setBranchOverride] = useState<CustomerBranch | null>(null);
+  // Suppresses the "same as billing" sync effect for one commit after a
+  // customer/branch selection applies a (possibly distinct) shipping address.
+  const skipShipSync = useRef(false);
+
   useEffect(() => {
     if (customer) {
+      if (branchOverride) {
+        // Branch wins over the customer's main address; customer fields fall back.
+        const bf = branchToDocumentFields(branchOverride);
+        const bill = bf.billing_address || customer.billing_address || (customer as any).address || "";
+        const ship = bf.shipping_address || bf.billing_address || (customer as any).shipping_address || bill;
+        setBilling(bill);
+        setShipping(ship);
+        setSameAsBilling(!ship || ship === bill);
+        // The branch may carry a distinct shipping address — do not let the
+        // "same as billing" sync effect (below) override it in the same commit.
+        skipShipSync.current = true;
+        return;
+      }
       setBilling(customer.billing_address || (customer as any).address || "");
       const ship = (customer as any).shipping_address || customer.billing_address || (customer as any).address || "";
       setShipping(ship);
       setSameAsBilling(!ship || ship === (customer.billing_address || (customer as any).address || ""));
+      skipShipSync.current = true;
     }
-  }, [customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [customer?.id, branchOverride]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync shipping with billing when "same as" is on
   useEffect(() => {
-    if (sameAsBilling) setShipping(billing);
+    if (sameAsBilling && !skipShipSync.current) setShipping(billing);
+    skipShipSync.current = false;
   }, [sameAsBilling, billing]);
 
   // Auto-load default terms + place-of-supply from invoice_settings when branch is chosen
@@ -169,10 +192,26 @@ function NewInvoice() {
   }, [branchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sellerCode = branch?.state_code || stateCodeFromGSTIN(branch?.gstin) || null;
-  const buyerCode = (customer as any)?.state_code || stateCodeFromGSTIN(customer?.gst || null) || null;
   const sellerState = branch?.state_name || stateNameFromCode(sellerCode);
-  const buyerState = customer?.state || stateNameFromCode(buyerCode);
-  const gstinError = customer?.gst && !isValidGSTIN(customer.gst)
+  // When a customer branch office is selected it supplies the buyer's
+  // place-of-supply state (and optional branch GSTIN) in place of the
+  // customer's main/registered state — this keeps GST classification
+  // (CGST/SGST vs IGST) correct for inter-state branch shipments.
+  const branchPos = branchOverride ? branchToDocumentFields(branchOverride).place_of_supply : null;
+  const branchGstCode = branchOverride?.gstin ? stateCodeFromGSTIN(branchOverride.gstin) : null;
+  const customerCode = (customer as any)?.state_code || stateCodeFromGSTIN(customer?.gst || null) || null;
+  const buyerState = branchPos || customer?.state || stateNameFromCode(customerCode);
+  const buyerCode = useMemo(() => {
+    // Branch GSTIN / state takes precedence over the customer's registered state.
+    if (branchGstCode) return branchGstCode;
+    if (branchPos) {
+      for (const [code, name] of Object.entries(GSTIN_STATE_CODES)) {
+        if (name.toLowerCase() === branchPos.toLowerCase()) return code;
+      }
+    }
+    return customerCode;
+  }, [branchGstCode, branchPos, customerCode]);
+  const gstinError = (branchOverride?.gstin || customer?.gst) && !isValidGSTIN(branchOverride?.gstin || customer?.gst)
     ? "Buyer GSTIN format looks invalid"
     : null;
 
@@ -364,7 +403,7 @@ function NewInvoice() {
         seller_state_code: sellerCode,
         seller_address: company.regd_address,
         buyer_name: customer.company,
-        buyer_gstin: customer.gst,
+        buyer_gstin: branchOverride?.gstin || customer.gst,
         buyer_state: buyerState,
         buyer_state_code: buyerCode,
         billing_address: billing,
@@ -379,9 +418,9 @@ function NewInvoice() {
         supply_class: meta.supplyClass,
         lut_no: salesType === "sez_zero_rated" ? (lutNo.trim() || null) : null,
         transport_details: transportDetails as any,
-        e_invoice_required: computeEInvoiceRequired(company.gstin || branch.gstin, customer.gst) === "Y" || transportDetails.e_invoice_reqd === "Y",
+        e_invoice_required: computeEInvoiceRequired(company.gstin || branch.gstin, branchOverride?.gstin || customer.gst) === "Y" || transportDetails.e_invoice_reqd === "Y",
         e_way_required: computeEWayRequired(totals.total, transportDetails.e_way_reqd),
-        einvoice_status: (computeEInvoiceRequired(company.gstin || branch.gstin, customer.gst) === "Y" || transportDetails.e_invoice_reqd === "Y") ? "pending" : "not_required",
+        einvoice_status: (computeEInvoiceRequired(company.gstin || branch.gstin, branchOverride?.gstin || customer.gst) === "Y" || transportDetails.e_invoice_reqd === "Y") ? "pending" : "not_required",
         eway_status: computeEWayRequired(totals.total, transportDetails.e_way_reqd) ? "pending" : "not_required",
         subtotal: totals.subtotal,
         discount: totals.discount,
@@ -510,7 +549,7 @@ function NewInvoice() {
             </div>
             <div>
               <Label className="text-xs">Customer *</Label>
-              <CustomerPicker value={customer?.id} onChange={(_id, c) => { setCustomer(c); markDirty(); }} initialBranchId={branchId || undefined} />
+              <CustomerPicker value={customer?.id} branchValue={branchOverride?.id} onChange={(_id, c, branch) => { setCustomer(c); setBranchOverride(branch || null); markDirty(); }} branched />
               {gstinError && <p className="text-xs text-destructive mt-1">{gstinError}</p>}
             </div>
             <div>

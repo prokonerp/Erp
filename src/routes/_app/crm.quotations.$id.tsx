@@ -29,10 +29,10 @@ import {
   type OemLogoWithUrl, SIZE_PX,
 } from "@/lib/oemLogos.data";
 import {
-  type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus,
+  type Quotation, type QuoteItem, type Customer, type QuoteTermsTemplate, type CrmSettings, type QuoteStatus, type CustomerBranch,
   fmtMoney, fmtDate, quoteStatusClass, computeQuoteTotals, lineAmount, lineTax, amountInWords, INDIAN_STATES,
   computeExpiryDate, DEFAULT_VALIDITY_DAYS,
-  validateQuotation, getValidItems,
+  validateQuotation, getValidItems, branchToDocumentFields,
 } from "@/lib/crm";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
@@ -205,12 +205,17 @@ function QuoteEditor() {
       .then(({ data }) => {
         const s = (data as InvoiceSettingsRow | null) || null;
         setInvSettings(s);
-        if (!q) return;
-        const patch: Partial<Quotation> = {};
-        if (!termsTouched && !q.terms && s?.terms_default) patch.terms = s.terms_default;
-        if (!q.customer_notes && s?.notes_default) patch.customer_notes = s.notes_default;
-        if (!q.place_of_supply && s?.place_of_supply_default) patch.place_of_supply = s.place_of_supply_default;
-        if (Object.keys(patch).length) setQ({ ...q, ...patch });
+        // Functional update: reads the freshest quotation state so a branch
+        // pick (which sets place_of_supply) made while this fetch is in flight
+        // is not reverted by a stale `q` snapshot from the effect closure.
+        setQ((prev) => {
+          if (!prev) return prev;
+          const patch: Partial<Quotation> = {};
+          if (!termsTouched && !prev.terms && s?.terms_default) patch.terms = s.terms_default;
+          if (!prev.customer_notes && s?.notes_default) patch.customer_notes = s.notes_default;
+          if (!prev.place_of_supply && s?.place_of_supply_default) patch.place_of_supply = s.place_of_supply_default;
+          return Object.keys(patch).length ? ({ ...prev, ...patch } as Quotation) : prev;
+        });
       });
   }, [q?.branch_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -251,7 +256,7 @@ function QuoteEditor() {
     if (t && q) setQ({ ...q, terms: t.body });
   };
 
-  const applyCustomer = async (id: string | null, c: Customer | null) => {
+  const applyCustomer = async (id: string | null, c: Customer | null, customerBranch?: CustomerBranch | null) => {
     if (!q) return;
     const seq = ++applyCustomerSeqRef.current;
     if (!c || !id) {
@@ -308,6 +313,22 @@ function QuoteEditor() {
         payment_terms: pt as string | null,
       } as Quotation;
     });
+    // Branch office override: a selected branch office wins over the main
+    // customer address for billing/shipping/place-of-supply/contact.
+    if (customerBranch) {
+      const branchFields = branchToDocumentFields(customerBranch);
+      setQ((prev) => {
+        if (!prev) return prev;
+        const patch: Partial<Quotation> = {};
+        if (branchFields.billing_address) patch.billing_address = branchFields.billing_address;
+        if (branchFields.shipping_address) patch.shipping_address = branchFields.shipping_address;
+        if (branchFields.place_of_supply) patch.place_of_supply = branchFields.place_of_supply;
+        if (branchFields.contact_name) patch.contact_name = branchFields.contact_name;
+        if (branchFields.contact_email) patch.contact_email = branchFields.contact_email;
+        if (branchFields.contact_phone) patch.contact_phone = branchFields.contact_phone;
+        return Object.keys(patch).length ? ({ ...prev, ...patch } as Quotation) : prev;
+      });
+    }
   };
 
   const save = async () => {
@@ -528,7 +549,7 @@ function QuoteEditor() {
           </div>
           <div className="md:col-span-3">
             <Label>Customer <span className="text-muted-foreground font-normal">(from Customer Master)</span></Label>
-            <CustomerPicker value={(q as any).customer_id || null} onChange={applyCustomer} initialBranchId={q?.branch_id ?? null} />
+            <CustomerPicker value={(q as any).customer_id || null} onChange={applyCustomer} branched />
             {customer && (
               <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                 {customer.gst && <span>GSTIN: <span className="font-mono">{customer.gst}</span></span>}

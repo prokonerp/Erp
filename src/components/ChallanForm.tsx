@@ -15,7 +15,8 @@ import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
-import type { Customer } from "@/lib/crm";
+import type { Customer, CustomerBranch } from "@/lib/crm";
+import { branchToDocumentFields } from "@/lib/crm";
 import { istTodayIso } from "@/lib/dateRange";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { getCurrentUserName } from "@/lib/currentUser";
@@ -472,7 +473,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       }),
     );
 
-  const applyCustomer = (id: string | null, c: Customer | null) => {
+  const applyCustomer = (id: string | null, c: Customer | null, branch?: CustomerBranch | null) => {
     setPartyId(id);
     if (!c) {
       setForm((f) => ({ ...f, party_name: "", party_code: "", gstin: "", contact_person: "", contact_number: "", email: "", delivery_address: "" }));
@@ -488,6 +489,22 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       email: c.email || "",
       delivery_address: c.shipping_address || c.billing_address || c.address || "",
     }));
+    if (branch) {
+      const branchFields = branchToDocumentFields(branch);
+      const branchAddr = branchFields.shipping_address || branchFields.billing_address;
+      const branchGstin = (branch.gstin || "").trim();
+      setForm((f) => ({
+        ...f,
+        // A branch carries its own GSTIN (optional) and delivery location; the
+        // shipping address falls back to billing (branchToDocumentFields).
+        gstin: branchGstin ? branchGstin.toUpperCase() : c.gst || "",
+        ...(branchAddr ? { delivery_address: branchAddr } : {}),
+      }));
+      if (branchFields.place_of_supply) setForm((f) => ({ ...f, state: branchFields.place_of_supply }));
+      if (branchFields.contact_name) setForm((f) => ({ ...f, contact_person: branchFields.contact_name }));
+      if (branchFields.contact_email) setForm((f) => ({ ...f, email: branchFields.contact_email }));
+      if (branchFields.contact_phone) setForm((f) => ({ ...f, contact_number: branchFields.contact_phone }));
+    }
   };
 
   const applyVendor = (id: string | null, v: any) => {
@@ -686,7 +703,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
             {isOem ? (
               <VendorPicker value={partyId} onChange={applyVendor} required label="OEM" placeholder="Search OEM / vendor…" />
             ) : (
-              <CustomerPicker value={partyId} onChange={applyCustomer} required placeholder="Search customer by name, mobile or GSTIN…" />
+              <CustomerPicker value={partyId} onChange={applyCustomer} branched required placeholder="Search customer by name, mobile or GSTIN…" />
             )}
           </FormField>
           <FormField size="md" label={`${partyLabel} Name`} required>

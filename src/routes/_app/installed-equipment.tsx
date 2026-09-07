@@ -370,7 +370,8 @@ function InstalledEquipmentPage() {
           <div className="min-w-[280px] flex-1">
             <CustomerPicker
               value={customerId}
-              onChange={(id, c) => { setCustomerId(id); setCustomerName(c?.company || ""); }}
+              branched
+              onChange={(id, c, _branch) => { setCustomerId(id); setCustomerName(c?.company || ""); }}
             />
           </div>
           {isAdmin && (

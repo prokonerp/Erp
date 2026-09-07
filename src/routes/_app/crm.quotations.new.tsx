@@ -23,8 +23,9 @@ import {
   computeExpiryDate, DEFAULT_VALIDITY_DAYS,
   syncLeadExpectedValue,
   validateQuotation, getValidItems,
+  branchToDocumentFields,
 } from "@/lib/crm";
-import type { QuoteTermsTemplate } from "@/lib/crm";
+import type { QuoteTermsTemplate, CustomerBranch } from "@/lib/crm";
 import { getCurrentUserName } from "@/lib/currentUser";
 import { productDisplayName } from "@/lib/productNames";
 import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
@@ -336,7 +337,7 @@ function NewQuotation() {
     toast.success(`Added ${parsed.length} rows`);
   };
 
-  const applyCustomer = async (id: string | null, c: Customer | null) => {
+  const applyCustomer = async (id: string | null, c: Customer | null, branch?: CustomerBranch | null) => {
     const seq = ++applyCustomerSeqRef.current;
     if (!c || !id) {
       setCustomerId(id);
@@ -386,6 +387,19 @@ function NewQuotation() {
     setContactName((prev) => (hasContactName ? (full.contact_name as string) : prev));
     setContactEmail((prev) => (hasContactEmail ? (full.email as string) : prev));
     setContactPhone((prev) => (hasContactPhone ? (full.phone as string) : prev));
+
+    // Branch office override: a selected branch office wins over the main
+    // customer address for billing/shipping/place-of-supply/contact.
+    if (branch) {
+      const branchFields = branchToDocumentFields(branch);
+      if (branchFields.billing_address) setBilling(branchFields.billing_address);
+      if (branchFields.shipping_address) setShipping((prev) => branchFields.shipping_address || prev);
+      if (branchFields.place_of_supply) setPlaceOfSupply(branchFields.place_of_supply);
+      if (branchFields.contact_name) setContactName(branchFields.contact_name);
+      if (branchFields.contact_email) setContactEmail(branchFields.contact_email);
+      if (branchFields.contact_phone) setContactPhone(branchFields.contact_phone);
+    }
+
     markDirty();
   };
 
@@ -632,7 +646,7 @@ function NewQuotation() {
           <CardContent className="space-y-2">
             <div>
               <Label className="text-xs">Customer *</Label>
-              <CustomerPicker value={customerId} onChange={applyCustomer} required initialBranchId={branchId} />
+              <CustomerPicker value={customerId} onChange={applyCustomer} branched required />
             </div>
             {customer && (
               <div className="text-[11px] text-muted-foreground space-y-0.5">

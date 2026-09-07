@@ -14,7 +14,8 @@ import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { GrnSerialInputs } from "@/components/GrnSerialInputs";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
-import type { Customer } from "@/lib/crm";
+import type { Customer, CustomerBranch } from "@/lib/crm";
+import { branchToDocumentFields } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
 import { BranchPicker } from "@/components/BranchPicker";
 import { listWarehouses, type WarehouseLite } from "@/lib/ims";
@@ -259,7 +260,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   const updateItem = (i: number, patch: Partial<GrnItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
 
-  const applyCustomer = (id: string | null, c: Customer | null) => {
+  const applyCustomer = (id: string | null, c: Customer | null, branch?: CustomerBranch | null) => {
     setSourceId(id);
     if (!c) {
       setForm((f) => ({ ...f, source_name: "", source_code: "", source_gstin: "", source_contact_person: "", source_contact_number: "", source_email: "", source_address: "" }));
@@ -275,6 +276,21 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       source_email: c.email || "",
       source_address: c.shipping_address || c.billing_address || c.address || "",
     }));
+    if (branch) {
+      const branchFields = branchToDocumentFields(branch);
+      const branchAddr = branchFields.shipping_address || branchFields.billing_address;
+      const branchGstin = (branch.gstin || "").trim();
+      setForm((f) => ({
+        ...f,
+        // A branch carries its own GSTIN (optional) and source location; the
+        // shipping address falls back to billing (branchToDocumentFields).
+        source_gstin: branchGstin ? branchGstin.toUpperCase() : c.gst || "",
+        ...(branchAddr ? { source_address: branchAddr } : {}),
+      }));
+      if (branchFields.contact_name) setForm((f) => ({ ...f, source_contact_person: branchFields.contact_name }));
+      if (branchFields.contact_email) setForm((f) => ({ ...f, source_email: branchFields.contact_email }));
+      if (branchFields.contact_phone) setForm((f) => ({ ...f, source_contact_number: branchFields.contact_phone }));
+    }
   };
 
   const applyVendor = (id: string | null, v: any) => {
@@ -612,7 +628,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
             required
           >
             {isCust ? (
-              <CustomerPicker value={sourceId} onChange={applyCustomer} required placeholder="Search customer…" />
+              <CustomerPicker value={sourceId} onChange={applyCustomer} branched required placeholder="Search customer…" />
             ) : (
               <VendorPicker value={sourceId} onChange={applyVendor} required label={isOem ? "OEM" : "Vendor"} placeholder={`Search ${isOem ? "OEM" : "vendor"}…`} />
             )}

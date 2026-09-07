@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import { type AmcUnit, addYears, fmtDate, generatePMDates } from "@/lib/amc";
 import { DatePicker } from "@/components/DatePicker";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
+import { branchToDocumentFields } from "@/lib/crm";
+import type { CustomerBranch } from "@/lib/crm";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { AgreementDocUpload } from "@/components/AgreementDocUpload";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
@@ -284,16 +286,28 @@ function NewAmc() {
             <CustomerPicker
               value={form.customer_id}
               required
-              onChange={(id, c) => setForm({
-                ...form,
-                customer_id: id || "",
-                client_name: c?.contact_name || c?.company || "",
-                client_company: c?.company || "",
-                client_address: c?.billing_address || c?.address || "",
-                client_gst: c?.gst || "",
-                contact_no: c?.phone || "",
-                email: c?.email || "",
-              })}
+              branched
+              onChange={(id, c, branch?: CustomerBranch | null) => {
+                const next = {
+                  ...form,
+                  customer_id: id || "",
+                  client_name: c?.contact_name || c?.company || "",
+                  client_company: c?.company || "",
+                  client_address: (c as any)?.billing_address || (c as any)?.address || "",
+                  client_gst: (c as any)?.gst || "",
+                  contact_no: (c as any)?.phone || "",
+                  email: (c as any)?.email || "",
+                };
+                if (branch) {
+                  const branchFields = branchToDocumentFields(branch);
+                  if (branchFields.billing_address) next.client_address = branchFields.billing_address;
+                  if (branchFields.contact_name) next.client_name = branchFields.contact_name;
+                  if (branchFields.contact_email) next.email = branchFields.contact_email;
+                  if (branchFields.contact_phone) next.contact_no = branchFields.contact_phone;
+                  if (branch.gstin) next.client_gst = branch.gstin;
+                }
+                setForm(next);
+              }}
             />
           </FormField>
           <FormField label="Client / Contact Person" name="client_name" size="md">

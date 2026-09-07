@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,12 +11,14 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Plus, Trash2, Check, ChevronsUpDown, Save, X } from "lucide-react";
+import { Plus, Trash2, Check, ChevronsUpDown, Save, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { type Customer } from "@/lib/crm";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCustomerBranches, masterKeys } from "@/hooks/useMasters";
+import { type Customer, type CustomerBranch, type CustomerBranchInput, type AddressBlockInput, saveCustomerBranch, deleteCustomerBranch, customerBranchAddress, validateCustomerBranch } from "@/lib/crm";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { INDIAN_STATES, isValidGSTIN, stateFromGSTIN } from "@/lib/india";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
-import { fetchBranches } from "@/lib/sales";
 import { cn } from "@/lib/utils";
 
 export const GST_TREATMENTS = ["Regular", "Composition", "Unregistered", "Consumer"] as const;
@@ -63,8 +64,6 @@ export type CustomerFormState = {
   contacts: ContactRow[];
   sector: string;
   remarks: string;
-  /** Owning branch (nullable = global / shared by all branches). */
-  branch_id: string | null;
 };
 
 export const emptyCustomerForm: CustomerFormState = {
@@ -80,7 +79,6 @@ export const emptyCustomerForm: CustomerFormState = {
   contacts: [],
   sector: "",
   remarks: "",
-  branch_id: null,
 };
 
 export function panFromGstin(gst: string): string {
@@ -143,7 +141,6 @@ export function customerToForm(c: Customer): CustomerFormState {
     contacts: Array.isArray(any.contacts) ? (any.contacts as ContactRow[]).map((x) => ({ ...emptyContact, ...x })) : [],
     sector: any.sector || "",
     remarks: c.remarks || "",
-    branch_id: c.branch_id ?? null,
   };
 }
 
@@ -212,7 +209,6 @@ export function buildCustomerPayload(form: CustomerFormState): Record<string, an
 
   return {
     customer_type: form.customer_type,
-    branch_id: form.branch_id ?? null,
     salutation: form.salutation || null,
     first_name: toTitleCaseSmart(form.first_name) || null,
     last_name: toTitleCaseSmart(form.last_name) || null,
@@ -280,13 +276,6 @@ function generateCustomerCode(): string {
  * GSTIN when a non-empty one was entered. `dup_exempt` rows are ignored (they
  * are intentional, sanctioned duplicates). If the lookup itself errors, we log
  * and return null so an infra problem never blocks a legitimate save.
- *
- * Branch-aware (customers.branch_id): a new branch-scoped row must not collide
- * with an existing row in the SAME branch or with a GLOBAL row (branch_id
- * null — globals are canonical and shared by every branch). A new global row
- * must not collide with an existing global row. The same GSTIN / company+phone
- * is therefore allowed across DIFFERENT branches while still blocked inside
- * one branch and among globals.
  */
 async function findDuplicateCustomer(form: CustomerFormState): Promise<string | null> {
   const rawGst = upperTrim(form.gst);
@@ -299,32 +288,19 @@ async function findDuplicateCustomer(form: CustomerFormState): Promise<string | 
       : toTitleCaseSmart([form.salutation, form.first_name, form.last_name].filter(Boolean).join(" "));
   const phone = (form.phone || "").trim();
 
-  // Scope each lookup to the duplicate domain of the row being created:
-  // same branch OR globals when branch-scoped; globals only when global.
-  // (.or with is.null is valid PostgREST: `branch_id.eq.<id>,branch_id.is.null`)
-  const scope = (q: any) =>
-    form.branch_id ? q.or(`branch_id.eq.${form.branch_id},branch_id.is.null`) : q.is("branch_id", null);
-
   const queries: PromiseLike<{ data: any; error: any }>[] = [];
   if (gst) {
     queries.push(
-      scope(
-        supabase
-          .from("customers")
-          .select("id,company,phone,gst,dup_exempt,branch_id")
-          .eq("gst", gst),
-      ) as any,
+      supabase.from("customers").select("id,company,phone,gst,dup_exempt").eq("gst", gst) as any,
     );
   }
   if (company && phone) {
     queries.push(
-      scope(
-        supabase
-          .from("customers")
-          .select("id,company,phone,gst,dup_exempt,branch_id")
-          .eq("company", company)
-          .eq("phone", phone),
-      ) as any,
+      supabase
+        .from("customers")
+        .select("id,company,phone,gst,dup_exempt")
+        .eq("company", company)
+        .eq("phone", phone) as any,
     );
   }
   if (!queries.length) return null;
@@ -338,21 +314,10 @@ async function findDuplicateCustomer(form: CustomerFormState): Promise<string | 
       }
       const match = (data || []).find((r: any) => !r.dup_exempt);
       if (match) {
-        // Best-effort: name the matched row's branch so the staff member can tell
-        // Acme – Gurgaon apart from Acme – Faridabad in the message.
-        let branchName = "";
-        if (match.branch_id) {
-          const { data: br } = await supabase
-            .from("branches")
-            .select("name")
-            .eq("id", match.branch_id)
-            .maybeSingle();
-          if (br?.name) branchName = br.name;
-        }
         const byGst = gst && match.gst === gst;
         return `A customer already exists with the same ${
           byGst ? `GSTIN (${gst})` : "company name and phone number"
-        } (${match.company || "—"}, ${match.phone || "—"}${branchName ? `, ${branchName}` : ""}). Please reuse the existing record instead of creating a duplicate.`;
+        } (${match.company || "—"}, ${match.phone || "—"}). Please reuse the existing record instead of creating a duplicate.`;
       }
     }
     return null;
@@ -440,18 +405,15 @@ export function StateCombobox({ value, onChange }: { value: string; onChange: (v
 }
 
 /** The full Customer Master field set (tabs). Controlled. */
-export function CustomerFormFields({ form, setForm, tab, setTab }: {
+export function CustomerFormFields({ form, setForm, tab, setTab, customerId }: {
   form: CustomerFormState;
   setForm: React.Dispatch<React.SetStateAction<CustomerFormState>>;
   tab: string;
   setTab: (t: string) => void;
+  /** Present when editing an existing customer — enables the Branch Offices tab. */
+  customerId?: string | null;
 }) {
   const [emailError, setEmailError] = useState("");
-  const { data: branchRows } = useQuery({
-    queryKey: ["branches"],
-    queryFn: fetchBranches,
-    staleTime: 5 * 60 * 1000,
-  });
 
   function onGstChange(v: string) {
     const up = v.toUpperCase().trim();
@@ -487,6 +449,7 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
         <TabsTrigger value="gst">GST / PAN</TabsTrigger>
         <TabsTrigger value="address">Address</TabsTrigger>
         <TabsTrigger value="contacts">Contacts ({form.contacts.length})</TabsTrigger>
+        {customerId && <TabsTrigger value="branches">Branch Offices</TabsTrigger>}
       </TabsList>
 
       <TabsContent value="basic" className="mt-4 space-y-4">
@@ -503,27 +466,6 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
               <RadioGroupItem value="Individual" /> Individual
             </label>
           </RadioGroup>
-        </FieldRow>
-
-        <FieldRow label="Branch (optional — blank = global)" labelClassName="text-[#000000]">
-          <Select
-            value={form.branch_id ?? "__global"}
-            onValueChange={(v) => setForm((f) => ({ ...f, branch_id: v === "__global" ? null : v }))}
-          >
-            <SelectTrigger className="text-[#000000]">
-              <SelectValue placeholder="Branch" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__global">Global — shared by all branches</SelectItem>
-              {(branchRows ?? []).map((b) => (
-                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground mt-1">
-            Leave as Global unless this customer belongs to one specific branch. A GSTIN
-            can repeat across different branches, but not twice in the same branch.
-          </p>
         </FieldRow>
 
         <FieldRow label="Primary Contact" required labelClassName="text-[#000000]">
@@ -678,6 +620,12 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
           </div>
         ))}
       </TabsContent>
+
+      {customerId && (
+        <TabsContent value="branches" className="mt-4 space-y-3">
+          <BranchOfficesEditor customerId={customerId} />
+        </TabsContent>
+      )}
     </Tabs>
   );
 }
@@ -687,14 +635,12 @@ export function CustomerFormFields({ form, setForm, tab, setTab }: {
  * Used by the Masters page and by the inline picker modal — one source of truth.
  */
 export function CustomerFormDialog({
-  open, onOpenChange, editing, initialCompany, initialBranchId, onSaved, allowSaveAndNew = false,
+  open, onOpenChange, editing, initialCompany, onSaved, allowSaveAndNew = false,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   editing?: Customer | null;
   initialCompany?: string;
-  /** Pre-tag a NEW customer with a branch (create mode only). Default null = global. */
-  initialBranchId?: string | null;
   onSaved: (customer: Customer, mode: "create" | "update") => void;
   allowSaveAndNew?: boolean;
 }) {
@@ -705,18 +651,10 @@ export function CustomerFormDialog({
   // Re-seed the form whenever the dialog is (re)opened — useEffect to avoid setState during render.
   useEffect(() => {
     if (open) {
-      setForm(
-        editing
-          ? customerToForm(editing)
-          : {
-              ...emptyCustomerForm,
-              company: (initialCompany || "").trim(),
-              branch_id: initialBranchId ?? null,
-            },
-      );
+      setForm(editing ? customerToForm(editing) : { ...emptyCustomerForm, company: (initialCompany || "").trim() });
       setTab("basic");
     }
-  }, [open, editing?.id, initialCompany, initialBranchId]); // editing id is stable; re-seed when dialog opens or target changes
+  }, [open, editing?.id, initialCompany]); // editing id is stable; re-seed when dialog opens or target changes
 
   async function submit(addAnother: boolean) {
     const err = validateCustomerForm(form);
@@ -727,7 +665,7 @@ export function CustomerFormDialog({
       toast.success(editing ? "Customer updated" : "Customer added");
       onSaved(saved, editing ? "update" : "create");
       if (addAnother) {
-        setForm({ ...emptyCustomerForm, branch_id: initialBranchId ?? null });
+        setForm({ ...emptyCustomerForm });
         setTab("basic");
       } else {
         onOpenChange(false);
@@ -749,7 +687,7 @@ export function CustomerFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <CustomerFormFields form={form} setForm={setForm} tab={tab} setTab={setTab} />
+        <CustomerFormFields form={form} setForm={setForm} tab={tab} setTab={setTab} customerId={editing?.id} />
 
         <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted sticky bottom-0">
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
@@ -761,6 +699,263 @@ export function CustomerFormDialog({
               <Save className="h-4 w-4 mr-1" />{saving ? "Saving…" : editing ? "Update" : "Save"}
             </Button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Customer Branch Offices
+// ─────────────────────────────────────────────────────────────────────
+
+const EMPTY_BRANCH_FORM: BranchFormState = {
+  name: "",
+  contact_name: "",
+  phone: "",
+  email: "",
+  billing: { line1: "", line2: "", landmark: "", city: "", state: "", country: "India", pincode: "" },
+  state: "",
+  gstin: "",
+  is_default: false,
+};
+
+/** Branch form state — billing is always materialized so the UI can edit it directly. */
+type BranchFormState = CustomerBranchInput & { billing: AddressBlockInput };
+
+function branchToForm(b: CustomerBranch): BranchFormState {
+  return {
+    name: b.name,
+    contact_name: b.contact_name ?? "",
+    phone: b.phone ?? "",
+    email: b.email ?? "",
+    billing: {
+      line1: b.billing_line1 ?? "",
+      line2: b.billing_line2 ?? "",
+      landmark: b.billing_landmark ?? "",
+      city: b.billing_city ?? "",
+      state: b.billing_state ?? "",
+      country: b.billing_country ?? "India",
+      pincode: b.billing_pincode ?? "",
+    },
+    state: b.state ?? "",
+    gstin: b.gstin ?? "",
+    is_default: b.is_default,
+  };
+}
+
+function BranchOfficesEditor({ customerId }: { customerId: string }) {
+  const queryClient = useQueryClient();
+  const { data: branches = [], isLoading } = useCustomerBranches(customerId);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<CustomerBranch | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  async function confirmSetDefault(b: CustomerBranch) {
+    try {
+      await saveCustomerBranch(customerId, branchToForm(b), b.id);
+      queryClient.invalidateQueries({ queryKey: masterKeys.customerBranches(customerId) });
+      toast.success(`"${b.name}" set as default`);
+    } catch (e: any) {
+      toast.error(e?.message || "Could not update branch");
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirmId) return;
+    try {
+      await deleteCustomerBranch(confirmId);
+      queryClient.invalidateQueries({ queryKey: masterKeys.customerBranches(customerId) });
+      toast.success("Branch office deleted");
+    } catch (e: any) {
+      toast.error(e?.message || "Could not delete branch");
+    }
+    setConfirmId(null);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">Branch Offices</p>
+          <p className="text-xs text-muted-foreground">
+            One legal entity can have multiple branch locations. Select the branch when creating quotations, POs, invoices, etc.
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => { setEditing(null); setAddOpen(true); }}>
+          <Plus className="h-4 w-4 mr-1" /> Add Branch
+        </Button>
+      </div>
+
+      {isLoading && <p className="text-sm text-muted-foreground">Loading branches…</p>}
+      {!isLoading && branches.length === 0 && (
+        <div className="text-center text-sm text-muted-foreground py-6 border rounded bg-muted/20">
+          No branch offices yet. Add one to associate a location (address, POS state) with this customer.
+        </div>
+      )}
+      {branches.length > 0 && (
+        <div className="space-y-2">
+          {branches.map((b) => (
+            <div key={b.id} className="flex items-start justify-between gap-3 border rounded p-3 bg-muted/20">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium truncate">{b.name}</span>
+                  {b.is_default && (
+                    <span className="text-[10px] uppercase tracking-wide bg-primary/10 text-primary border border-primary/20 rounded px-1.5 py-0.5">
+                      Default
+                    </span>
+                  )}
+                  {((b.state || b.billing_state) && (
+                    <span className="text-xs text-muted-foreground">· {b.state || b.billing_state}</span>
+                  ))}
+                </div>
+                {customerBranchAddress(b) && (
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{customerBranchAddress(b)}</p>
+                )}
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-1">
+                  {b.contact_name ? <span>{b.contact_name}</span> : null}
+                  {b.phone ? <span>{b.phone}</span> : null}
+                  {b.email ? <span>{b.email}</span> : null}
+                  {((b.gstin || "").trim() ? <span className="font-mono">{b.gstin}</span> : null)}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {!b.is_default && (
+                  <Button type="button" size="icon" variant="ghost" title="Set as default" onClick={() => confirmSetDefault(b)}>
+                    <Check className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button type="button" size="icon" variant="ghost" title="Edit branch" onClick={() => { setEditing(b); setAddOpen(true); }}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button type="button" size="icon" variant="ghost" title="Delete branch" onClick={() => setConfirmId(b.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <BranchOfficeFormDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        customerId={customerId}
+        editing={editing}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: masterKeys.customerBranches(customerId) });
+          setAddOpen(false);
+        }}
+      />
+      <ConfirmDialog
+        open={!!confirmId}
+        title="Delete branch office?"
+        description="This removes the branch office and its address information. Documents already created are not affected."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDelete}
+        onOpenChange={(o) => { if (!o) setConfirmId(null); }}
+      />
+    </div>
+  );
+}
+
+function BranchOfficeFormDialog({
+  open, onOpenChange, customerId, editing, onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  customerId: string;
+  editing: CustomerBranch | null;
+  onSaved: (b: CustomerBranch) => void;
+}) {
+  const [form, setForm] = useState<BranchFormState>(EMPTY_BRANCH_FORM);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) setForm(editing ? branchToForm(editing) : { ...EMPTY_BRANCH_FORM });
+  }, [open, editing?.id]);
+
+  async function submit() {
+    const err = validateCustomerBranch(form);
+    if (err) { toast.error(err); return; }
+    setSaving(true);
+    try {
+      const saved = await saveCustomerBranch(customerId, form, editing?.id ?? null);
+      toast.success(editing ? "Branch office updated" : "Branch office added");
+      onSaved(saved);
+    } catch (e: any) {
+      toast.error(e?.message || "Could not save branch");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto" aria-describedby={undefined}>
+        <DialogHeader>
+          <DialogTitle>{editing ? "Edit Branch Office" : "Add Branch Office"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Branch name *</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Delhi Branch" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>State (Place of Supply)</Label>
+              <Select value={form.state ?? ""} onValueChange={(v) => setForm({ ...form, state: v })}>
+                <SelectTrigger><SelectValue placeholder="Select state" /></SelectTrigger>
+                <SelectContent>
+                  {INDIAN_STATES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label>Contact person</Label>
+              <Input value={form.contact_name ?? ""} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Phone</Label>
+              <Input inputMode="numeric" value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 12) })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input type="email" value={form.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Billing address</Label>
+            <Textarea
+              value={form.billing.line1}
+              onChange={(e) => setForm({ ...form, billing: { ...form.billing, line1: e.target.value } })}
+              placeholder="Line 1 (street, area)…"
+            />
+            <Input value={form.billing.line2} onChange={(e) => setForm({ ...form, billing: { ...form.billing, line2: e.target.value } })} placeholder="Line 2 (opt.)" />
+            <div className="grid grid-cols-3 gap-2">
+              <Input value={form.billing.city} onChange={(e) => setForm({ ...form, billing: { ...form.billing, city: e.target.value } })} placeholder="City" />
+              <Input value={form.billing.state} onChange={(e) => setForm({ ...form, billing: { ...form.billing, state: e.target.value } })} placeholder="State" />
+              <Input inputMode="numeric" value={form.billing.pincode} onChange={(e) => setForm({ ...form, billing: { ...form.billing, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) } })} placeholder="Pincode" />
+            </div>
+            <Input value={form.billing.country} onChange={(e) => setForm({ ...form, billing: { ...form.billing, country: e.target.value } })} placeholder="Country (default India)" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>GSTIN (branch specific, optional)</Label>
+            <Input className="font-mono uppercase" value={form.gstin ?? ""} onChange={(e) => setForm({ ...form, gstin: e.target.value })} placeholder="e.g. 07AAACP1234F1Z5" />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={!!form.is_default} onCheckedChange={(v) => setForm({ ...form, is_default: v === true })} />
+            Set as default branch office
+          </label>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t pt-4 mt-2">
+          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}><X className="h-4 w-4 mr-1" />Cancel</Button>
+          <Button type="button" size="sm" disabled={saving} onClick={submit}>
+            <Save className="h-4 w-4 mr-1" />{saving ? "Saving…" : editing ? "Update" : "Add Branch"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

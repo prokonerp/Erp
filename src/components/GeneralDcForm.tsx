@@ -12,7 +12,8 @@ import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { SerialMultiPicker } from "@/components/SerialMultiPicker";
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
-import type { Customer } from "@/lib/crm";
+import type { Customer, CustomerBranch } from "@/lib/crm";
+import { branchToDocumentFields } from "@/lib/crm";
 import { fetchBranches, inr, type BranchRow } from "@/lib/sales";
 import { productShortName } from "@/lib/productNames";
 import { istTodayIso } from "@/lib/dateRange";
@@ -58,6 +59,9 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   const [saving, setSaving] = useState(false);
   const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
   const [negOpen, setNegOpen] = useState(false);
+  // Selected customer branch office (transient — not persisted to the document;
+  // its address/POS/contact fields feed the sync effect below).
+  const [branchOverride, setBranchOverride] = useState<CustomerBranch | null>(null);
 
   useEffect(() => {
     fetchBranches()
@@ -77,6 +81,9 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   }, []);
 
   const skipAddrSync = useRef(isEdit);
+  // Suppresses the "same as billing" sync effect for one commit after a
+  // customer/branch selection applies a (possibly distinct) shipping address.
+  const skipShipSync = useRef(false);
 
   // Sweep fix (B-08 class): an Issued GDC has already consumed stock, and
   // Cancelled/Converted are terminal — editing their items would silently
@@ -107,16 +114,40 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
       skipAddrSync.current = false;
       return;
     }
+    // A selected branch office supplies billing/shipping/contact in place of the
+    // customer's main address (branch wins; customer fields are the fallback).
+    if (branchOverride) {
+      const bf = branchToDocumentFields(branchOverride);
+      const bill =
+        bf.billing_address ||
+        customer.billing_address ||
+        (customer as unknown as { address?: string }).address ||
+        "";
+      const ship =
+        bf.shipping_address ||
+        bf.billing_address ||
+        (customer as unknown as { shipping_address?: string }).shipping_address ||
+        bill;
+      setBilling(bill);
+      setShipping(ship);
+      setSameAsBilling(!ship || ship === bill);
+      // The branch may carry a distinct shipping address — do not let the
+      // "same as billing" sync effect below override it in the same commit.
+      skipShipSync.current = true;
+      return;
+    }
     const bill =
       customer.billing_address || (customer as unknown as { address?: string }).address || "";
     const ship = (customer as unknown as { shipping_address?: string }).shipping_address || bill;
     setBilling(bill);
     setShipping(ship);
     setSameAsBilling(!ship || ship === bill);
-  }, [customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    skipShipSync.current = true;
+  }, [customer?.id, branchOverride]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (sameAsBilling) setShipping(billing);
+    if (sameAsBilling && !skipShipSync.current) setShipping(billing);
+    skipShipSync.current = false;
   }, [sameAsBilling, billing]);
 
   const total = useMemo(() => gdcTotal(items), [items]);
@@ -311,7 +342,7 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
           </div>
           <div>
             <Label className="text-xs">Customer *</Label>
-            <CustomerPicker value={customer?.id} onChange={(_id, c) => setCustomer(c)} />
+            <CustomerPicker value={customer?.id} branchValue={branchOverride?.id} onChange={(_id, c, branch) => { setCustomer(c); setBranchOverride(branch || null); }} branched />
           </div>
           <div className="md:col-span-2">
             <Label className="text-xs">Purpose of Dispatch</Label>

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { type Customer } from "@/lib/crm";
+import { type Customer, type CustomerBranch } from "@/lib/crm";
 import { type ProductMaster } from "@/components/ProductPicker";
 
 // Shared query keys for masters data. All masters pages + pickers use these so
@@ -8,6 +8,7 @@ import { type ProductMaster } from "@/components/ProductPicker";
 export const masterKeys = {
   all: ["masters"] as const,
   customers: () => [...masterKeys.all, "customers"] as const,
+  customerBranches: (customerId: string) => [...masterKeys.all, "customerBranches", customerId] as const,
   products: () => [...masterKeys.all, "products"] as const,
   vendors: () => [...masterKeys.all, "vendors"] as const,
   employees: () => [...masterKeys.all, "employees"] as const,
@@ -17,7 +18,7 @@ export const masterKeys = {
 // Columns needed for list views + pickers (not select("*")). Edit-only fields
 // are loaded on demand via useCustomerDetail/useProductDetail.
 const CUSTOMER_LIST_COLS =
-  "id, company, contact_name, phone, email, gst, state, customer_type, city, pan, gst_status, billing_address, shipping_address, address, remarks, branch_id";
+  "id, company, contact_name, phone, email, gst, state, customer_type, city, pan, gst_status, billing_address, shipping_address, address, remarks";
 const PRODUCT_LIST_COLS =
   "id, name, sku, short_name, display_name, model, brand, category, hsn, unit, description, active, item_type, serial_tracking, is_serialized, serial_format, default_price, weight_kg, warranty_applicable, warranty_duration, warranty_unit, warranty_start_from, warranty_manual_override";
 const VENDOR_LIST_COLS = "id, name, gstin, contact_name, phone, email, address";
@@ -92,19 +93,20 @@ export function useCustomers() {
 // Returns only top N matches for the current search term. Falls back to small
 // initial list when search is empty (first 25 by company). This makes the
 // picker open in fractions-of-ms vs loading 3101 rows.
-const CUSTOMER_PICKER_COLS = "id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address, branch_id";
-export function useCustomersForPicker(search: string = "", branchId?: string | null) {
+const CUSTOMER_PICKER_COLS = "id, company, contact_name, phone, email, gst, state, city, billing_address, shipping_address, address";
+export function useCustomersForPicker(search: string = "") {
   const term = search.trim();
   return useQuery({
-    // branchId in the key isolates cache per branch scope (null/undefined = all)
-    queryKey: [...masterKeys.customers(), "picker", term, branchId ?? "__all"] as const,
+    queryKey: [...masterKeys.customers(), "picker", term] as const,
     queryFn: async () => {
       const cols = CUSTOMER_PICKER_COLS;
       // Empty term → first 25 alphabetically (instant, tiny payload)
-      let q = supabase.from("customers").select(cols);
-      if (branchId) q = q.eq("branch_id", branchId);
       if (!term) {
-        const { data, error } = await q.order("company").limit(25);
+        const { data, error } = await supabase
+          .from("customers")
+          .select(cols)
+          .order("company")
+          .limit(25);
         if (error) throw error;
         const rows = (data || []) as unknown as Customer[];
         return { rows, count: rows.length };
@@ -112,9 +114,11 @@ export function useCustomersForPicker(search: string = "", branchId?: string | n
       // Server-side ilike search across indexed columns + limit 30
       // Escape %, _, \ so user input cannot inject wildcards; PG uses \ as default escape.
       const escaped = term.replace(/[%_\\]/g, "\\$&");
-      const p = `%${escaped}%`;
-      const { data, error } = await q
-        .or(`company.ilike.${p},contact_name.ilike.${p},phone.ilike.${p},gst.ilike.${p},city.ilike.${p}`)
+      const q = `%${escaped}%`;
+      const { data, error } = await supabase
+        .from("customers")
+        .select(cols)
+        .or(`company.ilike.${q},contact_name.ilike.${q},phone.ilike.${q},gst.ilike.${q},city.ilike.${q}`)
         .order("company")
         .limit(30);
       if (error) throw error;
@@ -135,15 +139,13 @@ export function useCustomersTable(opts: {
   pageSize: number;
   sortBy?: string;
   sortDir?: "asc" | "desc";
-  branchId?: string | null;
 }) {
-  const { search, page, pageSize, sortBy = "company", sortDir = "asc", branchId } = opts;
+  const { search, page, pageSize, sortBy = "company", sortDir = "asc" } = opts;
   const term = search.trim();
   return useQuery({
-    queryKey: [...masterKeys.customers(), "table", { term, page, pageSize, sortBy, sortDir, branchId: branchId ?? "__all" }] as const,
+    queryKey: [...masterKeys.customers(), "table", { term, page, pageSize, sortBy, sortDir }] as const,
     queryFn: async () => {
       let q = supabase.from("customers").select(CUSTOMER_LIST_COLS, { count: "exact" });
-      if (branchId) q = q.eq("branch_id", branchId);
       if (term) {
         const escaped = term.replace(/[%_\\]/g, "\\$&");
         const p = `%${escaped}%`;
@@ -295,6 +297,27 @@ export function useCustomerDetail(id: string | null) {
       return data as unknown as Customer;
     },
     enabled: !!id,
+  });
+}
+
+const CUSTOMER_BRANCH_COLS =
+  "id, customer_id, name, contact_name, phone, email, billing_line1, billing_line2, billing_landmark, billing_city, billing_state, billing_country, billing_pincode, shipping_line1, shipping_line2, shipping_landmark, shipping_city, shipping_state, shipping_country, shipping_pincode, state, gstin, is_default, created_at, updated_at";
+
+/** Branch offices for a single customer. Enabled only when a customer is selected. */
+export function useCustomerBranches(customerId: string | null | undefined) {
+  return useQuery({
+    queryKey: masterKeys.customerBranches(customerId ?? "__none"),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("customer_branches")
+        .select(CUSTOMER_BRANCH_COLS)
+        .eq("customer_id", customerId as string)
+        .order("name");
+      if (error) throw error;
+      return (data || []) as unknown as CustomerBranch[];
+    },
+    enabled: !!customerId,
+    staleTime: 30 * 1000,
   });
 }
 

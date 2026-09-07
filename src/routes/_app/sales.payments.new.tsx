@@ -192,7 +192,7 @@ function NewPayment() {
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="md:col-span-2">
             <Label className="text-xs">Customer *</Label>
-            <CustomerPicker value={customer?.id} onChange={(_id, c) => setCustomer(c)} />
+            <CustomerPicker value={customer?.id} branched onChange={(_id, c, _branch) => setCustomer(c)} />
           </div>
           <div>
             <Label className="text-xs">Date</Label>

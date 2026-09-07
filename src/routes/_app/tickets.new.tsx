@@ -16,6 +16,8 @@ import { toast } from "sonner";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
+import { branchToDocumentFields } from "@/lib/crm";
+import type { CustomerBranch } from "@/lib/crm";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -684,7 +686,8 @@ function NewTicket() {
             <CustomerPicker
               value={form.customer_id}
               required
-              onChange={(id, c) => {
+              branched
+              onChange={(id, c, branch?: CustomerBranch | null) => {
                 const cAny = (c || {}) as { city?: string; billing_city?: string; sector?: string };
                 // Preserve OEM state, call_type, complaint, and parts config across
                 // customer switches — the previous impl wiped oem_call + oem fields +
@@ -713,6 +716,15 @@ function NewTicket() {
                 });
                 setSourceEquipId(null);
                 setSourceMeta(null);
+                if (branch) {
+                  const branchFields = branchToDocumentFields(branch);
+                  const patch: Partial<typeof form> = {};
+                  if (branchFields.billing_address) patch.customer_address = branchFields.billing_address;
+                  if (branchFields.contact_phone) patch.customer_phone = branchFields.contact_phone;
+                  if (branchFields.contact_email) patch.customer_email = branchFields.contact_email;
+                  if (branchFields.place_of_supply) patch.location = branchFields.place_of_supply;
+                  if (Object.keys(patch).length) set(patch);
+                }
               }}
             />
           </FormField>

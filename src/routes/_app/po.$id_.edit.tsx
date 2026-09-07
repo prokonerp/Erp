@@ -382,7 +382,7 @@ function EditPO() {
           {deliveryType === "customer" && (
             <div>
               <Label className="text-xs">Customer (for direct delivery / project reference)</Label>
-              <CustomerPicker value={customer?.id} onChange={(_id, c) => setCustomer(c)} />
+              <CustomerPicker value={customer?.id} onChange={(_id, c, _branch) => setCustomer(c)} branched />
             </div>
           )}
           <div>
