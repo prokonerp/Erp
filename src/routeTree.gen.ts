@@ -94,6 +94,7 @@ import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
 import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
 import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
 import { Route as AppSalesPaymentsIndexRouteImport } from './routes/_app/sales.payments.index'
+import { Route as AppSalesOrdersIndexRouteImport } from './routes/_app/sales.orders.index'
 import { Route as AppSalesInvoicesIndexRouteImport } from './routes/_app/sales.invoices.index'
 import { Route as AppSalesGeneralDcIndexRouteImport } from './routes/_app/sales.general-dc.index'
 import { Route as AppSalesEwayIndexRouteImport } from './routes/_app/sales.eway.index'
@@ -549,6 +550,11 @@ const AppSalesPaymentsIndexRoute = AppSalesPaymentsIndexRouteImport.update({
   path: '/payments/',
   getParentRoute: () => AppSalesRoute,
 } as any)
+const AppSalesOrdersIndexRoute = AppSalesOrdersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSalesOrdersRoute,
+} as any)
 const AppSalesInvoicesIndexRoute = AppSalesInvoicesIndexRouteImport.update({
   id: '/invoices/',
   path: '/invoices/',
@@ -812,6 +818,7 @@ export interface FileRoutesByFullPath {
   '/sales/eway/': typeof AppSalesEwayIndexRoute
   '/sales/general-dc/': typeof AppSalesGeneralDcIndexRoute
   '/sales/invoices/': typeof AppSalesInvoicesIndexRoute
+  '/sales/orders/': typeof AppSalesOrdersIndexRoute
   '/sales/payments/': typeof AppSalesPaymentsIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
   '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
@@ -866,7 +873,6 @@ export interface FileRoutesByTo {
   '/po/$id': typeof AppPoIdRoute
   '/po/new': typeof AppPoNewRoute
   '/po/settings': typeof AppPoSettingsRoute
-  '/sales/orders': typeof AppSalesOrdersRouteWithChildren
   '/sales/quotations': typeof AppSalesQuotationsRoute
   '/sales/settings': typeof AppSalesSettingsRoute
   '/settings/signatures': typeof AppSettingsSignaturesRoute
@@ -913,6 +919,7 @@ export interface FileRoutesByTo {
   '/sales/eway': typeof AppSalesEwayIndexRoute
   '/sales/general-dc': typeof AppSalesGeneralDcIndexRoute
   '/sales/invoices': typeof AppSalesInvoicesIndexRoute
+  '/sales/orders': typeof AppSalesOrdersIndexRoute
   '/sales/payments': typeof AppSalesPaymentsIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
   '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
@@ -1031,6 +1038,7 @@ export interface FileRoutesById {
   '/_app/sales/eway/': typeof AppSalesEwayIndexRoute
   '/_app/sales/general-dc/': typeof AppSalesGeneralDcIndexRoute
   '/_app/sales/invoices/': typeof AppSalesInvoicesIndexRoute
+  '/_app/sales/orders/': typeof AppSalesOrdersIndexRoute
   '/_app/sales/payments/': typeof AppSalesPaymentsIndexRoute
   '/_app/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
   '/_app/sales/general-dc/$id_/edit': typeof AppSalesGeneralDcIdEditRoute
@@ -1149,6 +1157,7 @@ export interface FileRouteTypes {
     | '/sales/eway/'
     | '/sales/general-dc/'
     | '/sales/invoices/'
+    | '/sales/orders/'
     | '/sales/payments/'
     | '/amc/oem/$source/$id'
     | '/sales/general-dc/$id/edit'
@@ -1203,7 +1212,6 @@ export interface FileRouteTypes {
     | '/po/$id'
     | '/po/new'
     | '/po/settings'
-    | '/sales/orders'
     | '/sales/quotations'
     | '/sales/settings'
     | '/settings/signatures'
@@ -1250,6 +1258,7 @@ export interface FileRouteTypes {
     | '/sales/eway'
     | '/sales/general-dc'
     | '/sales/invoices'
+    | '/sales/orders'
     | '/sales/payments'
     | '/amc/oem/$source/$id'
     | '/sales/general-dc/$id/edit'
@@ -1367,6 +1376,7 @@ export interface FileRouteTypes {
     | '/_app/sales/eway/'
     | '/_app/sales/general-dc/'
     | '/_app/sales/invoices/'
+    | '/_app/sales/orders/'
     | '/_app/sales/payments/'
     | '/_app/amc/oem/$source/$id'
     | '/_app/sales/general-dc/$id_/edit'
@@ -1976,6 +1986,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSalesPaymentsIndexRouteImport
       parentRoute: typeof AppSalesRoute
     }
+    '/_app/sales/orders/': {
+      id: '/_app/sales/orders/'
+      path: '/'
+      fullPath: '/sales/orders/'
+      preLoaderRoute: typeof AppSalesOrdersIndexRouteImport
+      parentRoute: typeof AppSalesOrdersRoute
+    }
     '/_app/sales/invoices/': {
       id: '/_app/sales/invoices/'
       path: '/invoices'
@@ -2487,10 +2504,12 @@ const AppPoRouteWithChildren = AppPoRoute._addFileChildren(AppPoRouteChildren)
 
 interface AppSalesOrdersRouteChildren {
   AppSalesOrdersIdRoute: typeof AppSalesOrdersIdRoute
+  AppSalesOrdersIndexRoute: typeof AppSalesOrdersIndexRoute
 }
 
 const AppSalesOrdersRouteChildren: AppSalesOrdersRouteChildren = {
   AppSalesOrdersIdRoute: AppSalesOrdersIdRoute,
+  AppSalesOrdersIndexRoute: AppSalesOrdersIndexRoute,
 }
 
 const AppSalesOrdersRouteWithChildren = AppSalesOrdersRoute._addFileChildren(

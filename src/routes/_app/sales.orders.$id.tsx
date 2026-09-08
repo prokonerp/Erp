@@ -51,6 +51,28 @@ function SalesOrderDetail() {
       .catch(() => {});
   }, []);
 
+  // Hooks must be called unconditionally (before any early return) — Rules of Hooks.
+  const [runDc, dcBusy] = useSubmitOnce(async () => {
+    if (!so) return;
+    try {
+      const r = await createChallanFromSalesOrder(so);
+      toast.success(`Delivery Challan ${r.challan_no || ""} created`);
+      nav({ to: "/challan/$id", params: { id: r.id } });
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    }
+  });
+  const [runInvoice, invoiceBusy] = useSubmitOnce(async () => {
+    if (!so) return;
+    try {
+      const r = await createInvoiceFromSalesOrder(so);
+      toast.success(`Invoice ${r.invoice_no || ""} created`);
+      nav({ to: "/sales/invoices/$id", params: { id: r.id } });
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    }
+  });
+
   if (!so) return <PageLoader />;
 
   const st = soStatusMeta(so.status);
@@ -69,25 +91,6 @@ function SalesOrderDetail() {
     setSo({ ...so, status: s });
     toast.success("Status updated");
   };
-
-  const [runDc, dcBusy] = useSubmitOnce(async () => {
-    try {
-      const r = await createChallanFromSalesOrder(so);
-      toast.success(`Delivery Challan ${r.challan_no || ""} created`);
-      nav({ to: "/challan/$id", params: { id: r.id } });
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    }
-  });
-  const [runInvoice, invoiceBusy] = useSubmitOnce(async () => {
-    try {
-      const r = await createInvoiceFromSalesOrder(so);
-      toast.success(`Invoice ${r.invoice_no || ""} created`);
-      nav({ to: "/sales/invoices/$id", params: { id: r.id } });
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    }
-  });
 
   return (
     <div className="space-y-4">
