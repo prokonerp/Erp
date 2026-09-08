@@ -21,8 +21,8 @@ function SalesOrdersList() {
 
   // Reset paging when search changes (mirrors sales.invoices.index:33 + CustomerMaster)
   useEffect(() => {
-    setPage(0);
-  }, [debouncedQ]);
+    if (page !== 0) setPage(0);
+  }, [debouncedQ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const query = useQuery({
     queryKey: ["sales_orders", { q: debouncedQ, page, pageSize }],
@@ -41,7 +41,12 @@ function SalesOrdersList() {
         <CardTitle>Sales Orders</CardTitle>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input placeholder="Search SO # or customer…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs h-8 pl-8" />
+          <Input
+            placeholder="Search SO # or customer…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="max-w-xs h-8 pl-8"
+          />
         </div>
       </CardHeader>
       <CardContent>
@@ -49,7 +54,9 @@ function SalesOrdersList() {
           <div className="text-sm text-muted-foreground">Loading…</div>
         ) : rows.length === 0 ? (
           <div className="text-sm text-muted-foreground py-6 text-center">
-            {debouncedQ ? `No results for "${debouncedQ}"` : "No sales orders yet. Convert a Quotation from CRM → Quotations to create one."}
+            {debouncedQ
+              ? `No results for "${debouncedQ}"`
+              : "No sales orders yet. Convert a Quotation from CRM → Quotations to create one."}
           </div>
         ) : (
           <>
@@ -70,21 +77,33 @@ function SalesOrdersList() {
                     return (
                       <tr key={r.id} className="border-t hover:bg-muted/30">
                         <td className="p-2 font-mono">
-                          <Link to="/sales/orders/$id" params={{ id: r.id }} className="text-primary hover:underline">
+                          <Link
+                            to="/sales/orders/$id"
+                            params={{ id: r.id }}
+                            className="text-primary hover:underline"
+                          >
                             {r.so_no || "—"}
                           </Link>
                         </td>
                         <td className="p-2">{r.so_date}</td>
                         <td className="p-2">{r.buyer_name || "—"}</td>
                         <td className="p-2 text-right font-medium">{inr(r.total)}</td>
-                        <td className="p-2"><StatusBadge tone={st.badgeTone}>{st.label}</StatusBadge></td>
+                        <td className="p-2">
+                          <StatusBadge tone={st.badgeTone}>{st.label}</StatusBadge>
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            <PaginationFooter page={page} pageSize={pageSize} total={total} onPage={setPage} isFetching={query.isFetching && !query.isLoading} />
+            <PaginationFooter
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPage={setPage}
+              isFetching={query.isFetching && !query.isLoading}
+            />
           </>
         )}
       </CardContent>
