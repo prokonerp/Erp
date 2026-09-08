@@ -3691,19 +3691,27 @@ BEGIN
   end_yr := start_yr + 1;
   fy := lpad((start_yr % 100)::text, 2, '0') || '-' || lpad((end_yr % 100)::text, 2, '0');
 
+  -- Serialize allocation so two concurrent PO inserts cannot grab the same seq.
+  PERFORM pg_advisory_xact_lock(hashtextextended('po_no:' || COALESCE(NEW.branch_id::text, ''), 0));
+
   SELECT * INTO s FROM public.po_settings WHERE branch_id = NEW.branch_id;
   IF NOT FOUND THEN
     INSERT INTO public.po_settings (branch_id, prefix, fy_reset, current_fy, next_seq)
-      VALUES (NEW.branch_id, 'PROKON/PO/', true, fy, 1)
-      RETURNING * INTO s;
+      VALUES (NEW.branch_id, 'PROKON/PO/', true, fy, 2)
+      ON CONFLICT (branch_id) DO NOTHING;
+    SELECT * INTO s FROM public.po_settings WHERE branch_id = NEW.branch_id;
+    seq := 1;
+  ELSE
+    -- Single atomic UPDATE returns the reserved sequence number.
+    UPDATE public.po_settings
+       SET current_fy = CASE WHEN fy_reset AND (current_fy IS DISTINCT FROM fy) THEN fy ELSE current_fy END,
+           next_seq   = CASE WHEN fy_reset AND (current_fy IS DISTINCT FROM fy) THEN 2
+                             ELSE next_seq + 1 END
+     WHERE id = s.id
+     RETURNING next_seq - CASE WHEN fy_reset AND (current_fy IS DISTINCT FROM fy) THEN 1 ELSE 0 END
+       INTO seq;
   END IF;
 
-  IF s.fy_reset AND (s.current_fy IS NULL OR s.current_fy <> fy) THEN
-    UPDATE public.po_settings SET current_fy = fy, next_seq = 1
-      WHERE id = s.id RETURNING * INTO s;
-  END IF;
-
-  seq := s.next_seq;
   new_prefix := COALESCE(s.prefix, 'PROKON/PO/');
 
   IF s.fy_reset THEN
@@ -3712,7 +3720,6 @@ BEGIN
     NEW.po_no := new_prefix || to_char(d,'YYYY') || '/' || lpad(seq::text, 4, '0');
   END IF;
 
-  UPDATE public.po_settings SET next_seq = next_seq + 1 WHERE id = s.id;
   RETURN NEW;
 END $$;
 
@@ -3850,7 +3857,13 @@ CREATE TABLE IF NOT EXISTS public.sales_order_settings (
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sales_order_settings TO authenticated;
 GRANT ALL ON public.sales_order_settings TO service_role;
 ALTER TABLE public.sales_order_settings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "so_settings authenticated read"  ON public.sales_order_settings FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "so_settings authenticated read" ON public.sales_order_settings;
+CREATE POLICY "sales_order_settings_select_authenticated"
+  ON public.sales_order_settings FOR SELECT TO authenticated
+  USING (
+    has_permission(auth.uid(), 'sales', 'create')
+    OR has_permission(auth.uid(), 'sales', 'edit')
+  );
 CREATE POLICY "so_settings authenticated write" ON public.sales_order_settings FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "so_settings authenticated update" ON public.sales_order_settings FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "so_settings authenticated delete" ON public.sales_order_settings FOR DELETE TO authenticated USING (true);
@@ -3913,15 +3926,24 @@ CREATE INDEX IF NOT EXISTS sales_orders_status_idx ON public.sales_orders(status
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sales_orders TO authenticated;
 GRANT ALL ON public.sales_orders TO service_role;
 ALTER TABLE public.sales_orders ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "sales_orders authenticated read"   ON public.sales_orders FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "sales_orders authenticated read" ON public.sales_orders;
+CREATE POLICY "sales_orders authenticated read"
+  ON public.sales_orders FOR SELECT TO authenticated
+  USING (
+    has_permission(auth.uid(), 'sales', 'read')
+    OR has_permission(auth.uid(), 'quotations', 'read')
+  );
 CREATE POLICY "sales_orders authenticated insert" ON public.sales_orders FOR INSERT TO authenticated WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "sales_orders authenticated update" ON public.sales_orders FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "sales_orders authenticated delete" ON public.sales_orders FOR DELETE TO authenticated USING (true);
 
--- 3. Numbering trigger
+-- 3. Numbering trigger (atomic reservation, SECURITY DEFINER so it works
+--    under tightened sales_order_settings RLS — matches migration
+--    20260829000001 fix + 20260909000001 security hardening)
 CREATE OR REPLACE FUNCTION public.set_so_no()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = public
 AS $function$
 DECLARE
@@ -3942,21 +3964,28 @@ BEGIN
   end_yr := start_yr + 1;
   fy := lpad((start_yr % 100)::text, 2, '0') || '-' || lpad((end_yr % 100)::text, 2, '0');
 
+  PERFORM pg_advisory_xact_lock(hashtextextended('so_no:' || COALESCE(NEW.branch_id::text, ''), 0));
+
   SELECT * INTO s FROM public.sales_order_settings WHERE branch_id IS NOT DISTINCT FROM NEW.branch_id;
   IF NOT FOUND THEN
     INSERT INTO public.sales_order_settings (branch_id, current_fy, next_seq)
-      VALUES (NEW.branch_id, fy, 1) RETURNING * INTO s;
+      VALUES (NEW.branch_id, fy, 2)
+      ON CONFLICT (branch_id) DO NOTHING;
+    SELECT * INTO s FROM public.sales_order_settings WHERE branch_id IS NOT DISTINCT FROM NEW.branch_id;
+    seq := 1;
+  ELSE
+    -- Single atomic UPDATE returns the reserved sequence number.
+    UPDATE public.sales_order_settings
+       SET current_fy = CASE WHEN fy_reset AND (current_fy IS DISTINCT FROM fy) THEN fy ELSE current_fy END,
+           next_seq   = CASE WHEN fy_reset AND (current_fy IS DISTINCT FROM fy) THEN 2
+                             ELSE next_seq + 1 END
+     WHERE id = s.id
+     RETURNING next_seq - CASE WHEN fy_reset AND (current_fy IS DISTINCT FROM fy) THEN 1 ELSE 0 END
+       INTO seq;
   END IF;
 
-  IF s.fy_reset AND (s.current_fy IS NULL OR s.current_fy <> fy) THEN
-    UPDATE public.sales_order_settings SET current_fy = fy, next_seq = 1
-      WHERE id = s.id RETURNING * INTO s;
-  END IF;
-
-  seq := s.next_seq;
   new_prefix := COALESCE(s.prefix, 'PHS/SO/');
   NEW.so_no := new_prefix || fy || '/' || lpad(seq::text, 4, '0');
-  UPDATE public.sales_order_settings SET next_seq = next_seq + 1 WHERE id = s.id;
   RETURN NEW;
 END $function$;
 
