@@ -25,6 +25,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { signSignatureUrl } from "@/lib/userSignature";
 import { getCurrentUserName } from "@/lib/currentUser";
+import { resolvePoLetterhead, signPoLogoUrl } from "@/lib/poPrint";
 
 export const Route = createFileRoute("/_app/po/$id")({
   component: POView,
@@ -46,6 +47,8 @@ function POView() {
     udyam_no: string | null;
     phone: string | null;
     email: string | null;
+    logo_url?: string | null;
+    letterhead_label?: string | null;
   } | null>(null);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
   const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
@@ -79,6 +82,45 @@ function POView() {
         email: st.email ?? null,
       } : null);
       try { setCompany(await fetchCompanyProfile()); } catch { /* keep default */ }
+
+      // PO print settings (logo + letterhead address source)
+      try {
+        const { data: poSettings } = await (supabase as any)
+          .from("po_settings")
+          .select("logo_url, letterhead_address_source")
+          .eq("branch_id", r.po.branch_id)
+          .maybeSingle();
+
+        let companyProfile = DEFAULT_COMPANY_PROFILE;
+        try { companyProfile = await fetchCompanyProfile(); } catch { /* keep default */ }
+
+        const lh = resolvePoLetterhead({
+          source: (poSettings?.letterhead_address_source as any) ?? "branch",
+          branch: bs.find((b) => b.id === r.po.branch_id) ?? null,
+          company: companyProfile,
+        });
+
+        const logoPath = poSettings?.logo_url ?? null;
+        const signedLogoUrl = logoPath ? await signPoLogoUrl(logoPath) : null;
+
+        const branchAddr = bs.find((b) => b.id === r.po.branch_id)?.address || "";
+        setPdfSettings((prev) => ({
+          ...(prev ?? {
+            company_name: st?.company_name ?? null,
+            company_address: st?.company_address ?? null,
+            udyam_no: st?.udyam_no ?? null,
+            phone: st?.phone ?? null,
+            email: st?.email ?? null,
+          }),
+          company_address: lh.address || (prev as any)?.company_address || st?.company_address || branchAddr || "",
+          logo_url: signedLogoUrl || "/prokon-logo.jpeg",
+          letterhead_label: lh.officialLabel,
+        }));
+      } catch (e) {
+        console.warn("[po.$id] po_settings load failed", e);
+        // Ensure at least a default logo is present even if po_settings fetch fails
+        setPdfSettings((prev) => prev ? { ...prev, logo_url: (prev as any).logo_url ?? "/prokon-logo.jpeg" } : prev);
+      }
     } catch (e: any) {
       const msg = e?.message || "Failed to load Purchase Order";
       // Map uuid 400 to friendly message already done in fetchPOWithItems,

@@ -43,7 +43,9 @@ function EditPO() {
   const { loading: permLoading, isAdmin } = usePermissions();
   const [pageLoading, setPageLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
-  const markDirty = () => { if (!dirty) setDirty(true); };
+  const markDirty = () => {
+    if (!dirty) setDirty(true);
+  };
   const { blocker, markClean } = useUnsavedChanges(dirty);
 
   const [branches, setBranches] = useState<BranchRow[]>([]);
@@ -55,6 +57,8 @@ function EditPO() {
   const [deliveryType, setDeliveryType] = useState<DeliveryAddressType>("org");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customAddress, setCustomAddress] = useState<string>("");
+  const [deliveryAddressManual, setDeliveryAddressManual] = useState<string>("");
+  const [deliveryAddressTouched, setDeliveryAddressTouched] = useState(false);
   const [items, setItems] = useState<POItemDraft[]>([emptyPOItem()]);
   const [headerDiscount, setHeaderDiscount] = useState(0);
   const [notes, setNotes] = useState("");
@@ -75,10 +79,7 @@ function EditPO() {
       }
       setPageLoading(true);
       try {
-        const [bs, poData] = await Promise.all([
-          fetchBranches(),
-          fetchPOWithItems(id),
-        ]);
+        const [bs, poData] = await Promise.all([fetchBranches(), fetchPOWithItems(id)]);
         if (!active) return;
         setBranches(bs);
         const { po, items: poItems } = poData;
@@ -108,27 +109,34 @@ function EditPO() {
         } as Vendor);
         if (po.customer_id) {
           try {
-            const { data: c } = await (supabase as any).from("customers").select("*").eq("id", po.customer_id).maybeSingle();
+            const { data: c } = await (supabase as any)
+              .from("customers")
+              .select("*")
+              .eq("id", po.customer_id)
+              .maybeSingle();
             if (c) setCustomer(c as Customer);
             else if (po.customer_name) {
               setCustomer({ id: po.customer_id, company: po.customer_name } as unknown as Customer);
             }
           } catch {
-            if (po.customer_name) setCustomer({ id: po.customer_id, company: po.customer_name } as unknown as Customer);
+            if (po.customer_name)
+              setCustomer({ id: po.customer_id, company: po.customer_name } as unknown as Customer);
           }
         }
         if (poItems.length > 0) {
-          setItems(poItems.map((it) => ({
-            product_id: it.product_id,
-            description: it.description,
-            hsn: it.hsn || "",
-            qty: Number(it.qty) || 1,
-            unit: it.unit || "Nos",
-            rate: Number(it.rate) || 0,
-            discount_pct: Number(it.discount_pct) || 0,
-            gst_rate: Number(it.gst_rate) || 0,
-            warranty_months: Number((it as any).warranty_months ?? 12) || 12,
-          })));
+          setItems(
+            poItems.map((it) => ({
+              product_id: it.product_id,
+              description: it.description,
+              hsn: it.hsn || "",
+              qty: Number(it.qty) || 1,
+              unit: it.unit || "Nos",
+              rate: Number(it.rate) || 0,
+              discount_pct: Number(it.discount_pct) || 0,
+              gst_rate: Number(it.gst_rate) || 0,
+              warranty_months: Number((it as any).warranty_months ?? 12) || 12,
+            })),
+          );
         }
         setHeaderDiscount(Number(po.discount) || 0);
         setNotes(po.notes || "");
@@ -141,10 +149,15 @@ function EditPO() {
       }
     }
     load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const branch = useMemo(() => branches.find((b) => b.id === branchId) || null, [branches, branchId]);
+  const branch = useMemo(
+    () => branches.find((b) => b.id === branchId) || null,
+    [branches, branchId],
+  );
   const sellerCode = branch?.state_code || stateCodeFromGSTIN(branch?.gstin) || null;
   const vendorCode = stateCodeFromGSTIN(vendor?.gstin || null);
   const vendorState = stateNameFromCode(vendorCode);
@@ -154,7 +167,12 @@ function EditPO() {
       computeTotals({
         sellerStateCode: sellerCode,
         buyerStateCode: vendorCode,
-        items: items.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate })),
+        items: items.map((i) => ({
+          qty: i.qty,
+          rate: i.rate,
+          discount_pct: i.discount_pct,
+          gst_rate: i.gst_rate,
+        })),
         headerDiscount,
         roundOff: true,
       }),
@@ -167,20 +185,33 @@ function EditPO() {
   }
 
   const deliveryAddress = useMemo(() => {
+    if (deliveryAddressTouched && deliveryAddressManual) return deliveryAddressManual;
     if (deliveryType === "org") return branch?.address || "";
     if (deliveryType === "customer") {
-      return customer?.shipping_address || customer?.billing_address || (customer as any)?.address || "";
+      return (
+        customer?.shipping_address || customer?.billing_address || (customer as any)?.address || ""
+      );
     }
     return customAddress;
-  }, [deliveryType, branch, customer, customAddress]);
+  }, [
+    deliveryType,
+    branch,
+    customer,
+    customAddress,
+    deliveryAddressManual,
+    deliveryAddressTouched,
+  ]);
 
   async function save(status: "draft" | "approved") {
-    if (!isValidUuid(id)) return toast.error("Invalid Purchase Order ID — the link may be outdated or malformed.");
+    if (!isValidUuid(id))
+      return toast.error("Invalid Purchase Order ID — the link may be outdated or malformed.");
     if (!branchId) return toast.error("Select branch");
     if (!vendor) return toast.error("Select vendor");
-    if (items.length === 0 || items.some((it) => !it.description.trim())) return toast.error("Every line needs a description");
+    if (items.length === 0 || items.some((it) => !it.description.trim()))
+      return toast.error("Every line needs a description");
     if (!deliveryAddress.trim()) return toast.error("Delivery address is required");
-    if (deliveryType === "customer" && !customer) return toast.error("Select a customer for delivery");
+    if (deliveryType === "customer" && !customer)
+      return toast.error("Select a customer for delivery");
     if (poStatus !== "draft") {
       toast.error("Only Draft POs can be edited.");
       return;
@@ -207,8 +238,8 @@ function EditPO() {
         buyer_address: branch?.address,
         delivery_address_type: deliveryType,
         delivery_address: deliveryAddress,
-        customer_id: deliveryType === "customer" ? customer?.id ?? null : null,
-        customer_name: deliveryType === "customer" ? (customer as any)?.company ?? null : null,
+        customer_id: deliveryType === "customer" ? (customer?.id ?? null) : null,
+        customer_name: deliveryType === "customer" ? ((customer as any)?.company ?? null) : null,
         payment_terms: payTerms || null,
         is_interstate: totals.is_interstate,
         subtotal: totals.subtotal,
@@ -225,7 +256,10 @@ function EditPO() {
         notes,
         terms,
       };
-      const { error: e1 } = await (supabase as any).from("purchase_orders").update(payload).eq("id", id);
+      const { error: e1 } = await (supabase as any)
+        .from("purchase_orders")
+        .update(payload)
+        .eq("id", id);
       if (e1) throw e1;
 
       // Use validated delete helper — prevents `po_id=eq.1` 400 and maps uuid errors to friendly toast
@@ -239,7 +273,9 @@ function EditPO() {
         await safeInsertPOItems(itemRows as any);
       } catch (eIns: any) {
         if (isMissingWarrantyColumnError(eIns)) {
-          toast.error("PO saved but warranty column not yet migrated — items saved with default warranty. Apply migration 20260901000000.");
+          toast.error(
+            "PO saved but warranty column not yet migrated — items saved with default warranty. Apply migration 20260901000000.",
+          );
           throw eIns;
         }
         throw eIns;
@@ -260,16 +296,26 @@ function EditPO() {
   if (!isAdmin) {
     return (
       <div className="p-6 text-center space-y-3">
-        <p className="text-sm text-muted-foreground">Only administrators can edit purchase orders before approval.</p>
-        <Button variant="outline" size="sm" onClick={() => nav({ to: "/po/$id", params: { id } })}><ArrowLeft className="h-4 w-4 mr-1" />Back to PO</Button>
+        <p className="text-sm text-muted-foreground">
+          Only administrators can edit purchase orders before approval.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => nav({ to: "/po/$id", params: { id } })}>
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to PO
+        </Button>
       </div>
     );
   }
   if (poStatus !== "draft") {
     return (
       <div className="p-6 text-center space-y-3">
-        <p className="text-sm text-muted-foreground">This PO is <b>{poStatus}</b> — only Draft POs can be edited.</p>
-        <Button variant="outline" size="sm" onClick={() => nav({ to: "/po/$id", params: { id } })}><ArrowLeft className="h-4 w-4 mr-1" />Back to PO</Button>
+        <p className="text-sm text-muted-foreground">
+          This PO is <b>{poStatus}</b> — only Draft POs can be edited.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => nav({ to: "/po/$id", params: { id } })}>
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to PO
+        </Button>
       </div>
     );
   }
@@ -282,30 +328,57 @@ function EditPO() {
       <UnsavedChangesPrompt blocker={blocker} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => nav({ to: "/po/$id", params: { id } })}><ArrowLeft className="h-4 w-4 mr-1" />Back</Button>
-          <h2 className="text-lg font-semibold">Edit Purchase Order <span className="font-mono text-muted-foreground font-normal text-sm">{poNo || id.slice(0,8)}</span></h2>
-          <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-medium">Draft — Admin Edit</span>
+          <Button variant="ghost" size="sm" onClick={() => nav({ to: "/po/$id", params: { id } })}>
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back
+          </Button>
+          <h2 className="text-lg font-semibold">
+            Edit Purchase Order{" "}
+            <span className="font-mono text-muted-foreground font-normal text-sm">
+              {poNo || id.slice(0, 8)}
+            </span>
+          </h2>
+          <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-medium">
+            Draft — Admin Edit
+          </span>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => save("draft")} disabled={saving} className="h-9 px-4">
-            <Save className="h-4 w-4 mr-1.5" />Save Changes
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => save("draft")}
+            disabled={saving}
+            className="h-9 px-4"
+          >
+            <Save className="h-4 w-4 mr-1.5" />
+            Save Changes
           </Button>
           <Button size="sm" onClick={() => save("approved")} disabled={saving} className="h-9 px-5">
-            <Zap className="h-4 w-4 mr-1.5" />Save & Approve
+            <Zap className="h-4 w-4 mr-1.5" />
+            Save & Approve
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Header</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Header</CardTitle>
+          </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Branch (Buyer) *</Label>
-              <select className="w-full h-9 rounded-md border bg-background px-2 text-sm" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+              <select
+                className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+              >
                 <option value="">— select —</option>
                 {branches.map((b) => (
-                  <option key={b.id} value={b.id}>{b.name}{b.gstin ? ` · ${b.gstin}` : ""}</option>
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                    {b.gstin ? ` · ${b.gstin}` : ""}
+                  </option>
                 ))}
               </select>
             </div>
@@ -315,11 +388,21 @@ function EditPO() {
             </div>
             <div>
               <Label className="text-xs">PO Date</Label>
-              <Input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} className="h-9" />
+              <Input
+                type="date"
+                value={poDate}
+                onChange={(e) => setPoDate(e.target.value)}
+                className="h-9"
+              />
             </div>
             <div>
               <Label className="text-xs">Delivery Date</Label>
-              <Input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="h-9" />
+              <Input
+                type="date"
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+                className="h-9"
+              />
             </div>
             <div className="md:col-span-2">
               <Label className="text-xs">Payment Terms</Label>
@@ -329,52 +412,110 @@ function EditPO() {
                   value={isCustomPay ? "Custom" : payTerms}
                   onChange={(e) => setPayTerms(e.target.value === "Custom" ? "" : e.target.value)}
                 >
-                  {PAY_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  {PAY_OPTS.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
                   <option value="Custom">Custom</option>
                 </select>
-                <Input className="flex-1 h-9" placeholder="e.g. 45 Days / Against Delivery" value={payTerms} onChange={(e) => setPayTerms(e.target.value)} />
+                <Input
+                  className="flex-1 h-9"
+                  placeholder="e.g. 45 Days / Against Delivery"
+                  value={payTerms}
+                  onChange={(e) => setPayTerms(e.target.value)}
+                />
               </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Vendor Details</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Vendor Details</CardTitle>
+          </CardHeader>
           <CardContent className="text-xs space-y-1.5">
             {vendor ? (
               <>
                 <div className="font-medium text-sm">{vendor.name}</div>
-                {vendor.address && <div className="text-muted-foreground whitespace-pre-line">{vendor.address}</div>}
-                {vendor.gstin && <div><span className="text-muted-foreground">GSTIN:</span> <span className="font-mono">{vendor.gstin}</span></div>}
-                {vendorState && <div><span className="text-muted-foreground">State:</span> {vendorState} ({vendorCode})</div>}
+                {vendor.address && (
+                  <div className="text-muted-foreground whitespace-pre-line">{vendor.address}</div>
+                )}
+                {vendor.gstin && (
+                  <div>
+                    <span className="text-muted-foreground">GSTIN:</span>{" "}
+                    <span className="font-mono">{vendor.gstin}</span>
+                  </div>
+                )}
+                {vendorState && (
+                  <div>
+                    <span className="text-muted-foreground">State:</span> {vendorState} (
+                    {vendorCode})
+                  </div>
+                )}
                 <div className="pt-1 border-t">
                   {vendor.contact_name && <div>{vendor.contact_name}</div>}
-                  {(vendor.phone || vendor.email) && <div className="text-muted-foreground">{[vendor.phone, vendor.email].filter(Boolean).join(" · ")}</div>}
+                  {(vendor.phone || vendor.email) && (
+                    <div className="text-muted-foreground">
+                      {[vendor.phone, vendor.email].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
                 </div>
                 <div className="pt-2">
                   {totals.is_interstate ? (
-                    <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">Inter-state — IGST</span>
+                    <span className="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                      Inter-state — IGST
+                    </span>
                   ) : sellerCode && vendorCode ? (
-                    <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-medium">Intra-state — CGST + SGST</span>
+                    <span className="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded text-xs font-medium">
+                      Intra-state — CGST + SGST
+                    </span>
                   ) : (
-                    <span className="text-muted-foreground">Choose branch and vendor to determine tax type.</span>
+                    <span className="text-muted-foreground">
+                      Choose branch and vendor to determine tax type.
+                    </span>
                   )}
                 </div>
               </>
-            ) : <div className="text-muted-foreground">Select a vendor to auto-fetch details.</div>}
+            ) : (
+              <div className="text-muted-foreground">Select a vendor to auto-fetch details.</div>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-base">Delivery Destination</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Delivery Destination</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap gap-3 text-sm">
-            {(["org","customer","custom"] as DeliveryAddressType[]).map((t) => (
+            {(["org", "customer", "custom"] as DeliveryAddressType[]).map((t) => (
               <label key={t} className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="dtype" checked={deliveryType === t} onChange={() => setDeliveryType(t)} />
+                <input
+                  type="radio"
+                  name="dtype"
+                  checked={deliveryType === t}
+                  onChange={() => {
+                    setDeliveryType(t);
+                    setDeliveryAddressTouched(false);
+                    setDeliveryAddressManual("");
+                    if (t === "org") setCustomAddress(branch?.address || "");
+                    if (t === "customer")
+                      setCustomAddress(
+                        customer?.shipping_address ||
+                          customer?.billing_address ||
+                          (customer as any)?.address ||
+                          "",
+                      );
+                  }}
+                />
                 <span>
-                  {t === "org" ? "Organization Address" : t === "customer" ? "Customer Address" : "Custom Address"}
+                  {t === "org"
+                    ? "Organization Address"
+                    : t === "customer"
+                      ? "Customer Address"
+                      : "Custom Address"}
                 </span>
               </label>
             ))}
@@ -382,60 +523,104 @@ function EditPO() {
           {deliveryType === "customer" && (
             <div>
               <Label className="text-xs">Customer (for direct delivery / project reference)</Label>
-              <CustomerPicker value={customer?.id} onChange={(_id, c, _branch) => setCustomer(c)} branched />
+              <CustomerPicker
+                value={customer?.id}
+                onChange={(_id, c, _branch) => setCustomer(c)}
+                branched
+              />
             </div>
           )}
           <div>
             <Label className="text-xs">Delivery Address *</Label>
             <Textarea
               rows={3}
-              value={deliveryType === "custom" ? customAddress : deliveryAddress}
+              value={deliveryAddress}
               onChange={(e) => {
-                if (deliveryType === "custom") setCustomAddress(e.target.value);
+                setDeliveryAddressManual(e.target.value);
+                setDeliveryAddressTouched(true);
               }}
-              readOnly={deliveryType !== "custom"}
-              className={deliveryType !== "custom" ? "bg-muted/50" : ""}
-              placeholder={deliveryType === "custom" ? "Enter delivery address…" : ""}
+              placeholder="Delivery address — auto-populated, editable."
             />
-            {deliveryType !== "custom" && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Auto-populated from {deliveryType === "org" ? "branch" : "customer"} master. Switch to Custom to override.
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Auto-populated from{" "}
+              {deliveryType === "org"
+                ? "branch"
+                : deliveryType === "customer"
+                  ? "customer"
+                  : "custom"}{" "}
+              master. You can edit this address for this PO.
+            </p>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Items <span className="text-xs font-normal text-muted-foreground ml-2">Warranty defaults to 12 months — editable</span></CardTitle>
-          <Button size="sm" variant="outline" onClick={() => { setItems((a) => [...a, emptyPOItem()]); markDirty(); }}><Plus className="h-4 w-4 mr-1" />Add row</Button>
+          <CardTitle className="text-base">
+            Items{" "}
+            <span className="text-xs font-normal text-muted-foreground ml-2">
+              Warranty auto-fills from product master — editable per line
+            </span>
+          </CardTitle>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setItems((a) => [...a, emptyPOItem()]);
+              markDirty();
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add row
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1230px]">
-              <thead className="bg-muted text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="p-2 text-left w-10">#</th>
-                  <th className="p-2 text-left min-w-[300px]">Product / Description</th>
-                  <th className="p-2 text-left w-32">HSN</th>
-                  <th className="p-2 text-right w-20">Qty</th>
-                  <th className="p-2 text-left w-20">Unit</th>
-                  <th className="p-2 text-right w-40">Rate</th>
-                  <th className="p-2 text-right w-20">Disc%</th>
-                  <th className="p-2 text-center w-20">GST%</th>
-                  <th className="p-2 text-center w-24">Warranty</th>
-                  <th className="p-2 text-right w-32">Amount</th>
-                  <th className="p-2 w-10"></th>
+            <table className="w-full text-[13px] min-w-[1140px] border-collapse">
+              <thead>
+                <tr className="border-y border-border bg-muted/50">
+                  <th className="px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-10">
+                    #
+                  </th>
+                  <th className="px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground min-w-[232px]">
+                    Product / Description
+                  </th>
+                  <th className="px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-28">
+                    HSN
+                  </th>
+                  <th className="px-2 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-20">
+                    Qty
+                  </th>
+                  <th className="px-2 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-20">
+                    Unit
+                  </th>
+                  <th className="px-2 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-44">
+                    Rate
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-20">
+                    GST%
+                  </th>
+                  <th className="px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-36">
+                    Warranty
+                  </th>
+                  <th className="px-2 py-1.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground w-40">
+                    Amount
+                  </th>
+                  <th className="px-2 py-1.5 w-8"></th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((it, idx) => {
                   const b = totals.items[idx];
                   return (
-                    <tr key={idx} className="border-t align-top">
-                      <td className="p-2 text-xs pt-3">{idx + 1}</td>
-                      <td className="p-2 space-y-1.5">
+                    <tr
+                      key={idx}
+                      className="border-b border-border/70 align-top hover:bg-muted/30 transition-colors"
+                    >
+                      <td className="px-2 py-1.5 text-xs text-muted-foreground tabular-nums">
+                        {idx + 1}
+                      </td>
+                      <td className="px-2 py-1.5 space-y-1">
                         <ProductMasterPicker
                           value={it.product_id}
                           onPick={(p) => {
@@ -450,28 +635,114 @@ function EditPO() {
                             });
                           }}
                         />
-                        <Input className="h-9 text-sm font-medium" placeholder="Description" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} />
+                        <Input
+                          className="h-8 text-[13px] font-medium"
+                          placeholder="Description"
+                          value={it.description}
+                          onChange={(e) => setItem(idx, { description: e.target.value })}
+                        />
                       </td>
-                      <td className="p-2"><Input className="h-9 text-sm font-mono" value={it.hsn} onChange={(e) => setItem(idx, { hsn: e.target.value })} placeholder="—" title={it.hsn} /></td>
-                      <td className="p-2"><Input type="text" inputMode="numeric" maxLength={3} className="h-9 text-sm font-mono font-medium tabular-nums text-right w-full" value={it.qty} onChange={(e) => { const v = e.target.value.replace(/\D/g, "").slice(0,3); setItem(idx, { qty: v === "" ? 0 : Math.min(999, Number(v)) }); }} title={String(it.qty)} placeholder="0" onFocus={(e) => e.target.select()} /></td>
-                      <td className="p-2"><Input className="h-9 text-sm" value={it.unit} onChange={(e) => setItem(idx, { unit: e.target.value })} /></td>
-                      <td className="p-2"><Input type="number" step="0.01" max={100000000} className="h-9 text-sm font-mono font-semibold tabular-nums text-right w-full" value={it.rate} onChange={(e) => { const v = Number(e.target.value); if (v > 100000000) return; setItem(idx, { rate: v }); }} title={String(it.rate)} placeholder="0.00" onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()} /></td>
-                      <td className="p-2"><Input type="number" step="0.01" className="h-9 text-sm font-mono tabular-nums text-right w-full" value={it.discount_pct} onChange={(e) => setItem(idx, { discount_pct: Number(e.target.value) })} onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()} /></td>
-                      <td className="p-2">
-                        <select className="w-full h-9 rounded-md border bg-background px-1 text-sm font-medium text-center" value={it.gst_rate} onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}>
-                          {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => <option key={r} value={r}>{r}%</option>)}
+                      <td className="px-2 py-1.5">
+                        <Input
+                          className="h-8 text-[13px] font-mono px-2"
+                          value={it.hsn}
+                          onChange={(e) => setItem(idx, { hsn: e.target.value })}
+                          placeholder="—"
+                          title={it.hsn}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={3}
+                          className="h-8 text-[13px] font-mono font-medium tabular-nums text-right px-2 w-full"
+                          value={it.qty}
+                          onChange={(e) => {
+                            const v = e.target.value.replace(/\D/g, "").slice(0, 3);
+                            setItem(idx, { qty: v === "" ? 0 : Math.min(999, Number(v)) });
+                          }}
+                          title={String(it.qty)}
+                          placeholder="0"
+                          onFocus={(e) => e.target.select()}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          className="h-8 text-[13px] px-2"
+                          value={it.unit}
+                          onChange={(e) => setItem(idx, { unit: e.target.value })}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          max={100000000}
+                          className="h-8 text-[13px] font-mono font-semibold tabular-nums text-right px-2 w-full"
+                          value={it.rate}
+                          onChange={(e) => {
+                            const v = Number(e.target.value);
+                            if (v > 100000000) return;
+                            setItem(idx, { rate: v });
+                          }}
+                          title={String(it.rate)}
+                          placeholder="0.00"
+                          onFocus={(e) => e.target.select()}
+                          onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <select
+                          className="w-full h-8 rounded-md border bg-background px-1 text-[13px] font-medium text-center"
+                          value={it.gst_rate}
+                          onChange={(e) => setItem(idx, { gst_rate: Number(e.target.value) })}
+                        >
+                          {[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28].map((r) => (
+                            <option key={r} value={r}>
+                              {r}%
+                            </option>
+                          ))}
                         </select>
                       </td>
-                      <td className="p-2">
+                      <td className="px-2 py-1.5">
                         <div className="flex items-center gap-1">
-                          <Input type="number" min={0} max={120} className="h-9 w-full text-sm font-mono font-semibold tabular-nums bg-amber-50 border-amber-200 text-center" value={it.warranty_months} onChange={(e) => { let v = Number(e.target.value); if (!Number.isFinite(v)) v = 12; v = Math.round(v); v = Math.max(0, Math.min(120, v)); setItem(idx, { warranty_months: v }); }} title={String(it.warranty_months)} onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()} />
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">mo</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={120}
+                            className="h-8 w-full text-[13px] font-mono font-semibold tabular-nums border-input text-center"
+                            value={it.warranty_months}
+                            onChange={(e) => {
+                              let v = Number(e.target.value);
+                              if (!Number.isFinite(v)) v = 12;
+                              v = Math.round(v);
+                              v = Math.max(0, Math.min(120, v));
+                              setItem(idx, { warranty_months: v });
+                            }}
+                            title={String(it.warranty_months)}
+                            onFocus={(e) => e.target.select()}
+                            onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                          />
+                          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                            mo
+                          </span>
                         </div>
                       </td>
-                      <td className="p-2 text-right font-mono font-bold tabular-nums pt-3 whitespace-nowrap">{inrPO(b?.line_total || 0)}</td>
-                      <td className="p-2 text-right">
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setItems((a) => a.filter((_, i) => i !== idx))}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                      <td className="px-2 py-1.5 text-right font-mono font-bold tabular-nums pt-2.5 whitespace-nowrap text-[13px]">
+                        {inrPO(b?.line_total || 0)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            setItems((a) => a.filter((_, i) => i !== idx));
+                            markDirty();
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                         </Button>
                       </td>
                     </tr>
@@ -480,43 +751,95 @@ function EditPO() {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-muted-foreground px-3 py-2 border-t bg-zinc-50/50">Tip: scroll horizontally if needed. Rate / HSN / Qty fields are now wide enough to show full numbers like “564566”.</p>
+          <p className="text-xs text-muted-foreground px-3 py-2 border-t bg-zinc-50/50">
+            Tip: select a product to auto-fill description, HSN, unit, GST and warranty. Type a
+            description manually for non-catalog lines (HSN/GST apply at 18% default).
+          </p>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Notes & Terms</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Notes & Terms</CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
-            <div><Label className="text-xs">Notes (internal)</Label><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes" /></div>
-            <div><Label className="text-xs">Terms & Conditions (printable)</Label><Textarea rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="Warranty, delivery, payment terms that will appear on the printed PO" /></div>
+            <div>
+              <Label className="text-xs">Notes (internal)</Label>
+              <Textarea
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Internal notes"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Terms & Conditions (printable)</Label>
+              <Textarea
+                rows={3}
+                value={terms}
+                onChange={(e) => setTerms(e.target.value)}
+                placeholder="Warranty, delivery, payment terms that will appear on the printed PO"
+              />
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Totals</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Totals</CardTitle>
+          </CardHeader>
           <CardContent className="text-sm space-y-1.5">
-            <div className="flex justify-between"><span>Subtotal</span><span className="font-mono tabular-nums">{inrPO(totals.subtotal)}</span></div>
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span className="font-mono tabular-nums">{inrPO(totals.subtotal)}</span>
+            </div>
             <div className="flex items-center justify-between gap-2">
               <span>Discount</span>
-              <Input type="number" step="0.01" className="h-8 w-28 text-right font-mono font-semibold tabular-nums" value={headerDiscount} onChange={(e) => setHeaderDiscount(Number(e.target.value))} onFocus={(e) => e.target.select()} onWheel={(e) => (e.target as HTMLInputElement).blur()} />
+              <Input
+                type="number"
+                step="0.01"
+                className="h-8 w-28 text-right font-mono font-semibold tabular-nums"
+                value={headerDiscount}
+                onChange={(e) => setHeaderDiscount(Number(e.target.value))}
+                onFocus={(e) => e.target.select()}
+                onWheel={(e) => (e.target as HTMLInputElement).blur()}
+              />
             </div>
-            <div className="flex justify-between"><span>Taxable Value</span><span className="font-mono tabular-nums">{inrPO(totals.taxable_value)}</span></div>
+            <div className="flex justify-between">
+              <span>Taxable Value</span>
+              <span className="font-mono tabular-nums">{inrPO(totals.taxable_value)}</span>
+            </div>
             {totals.is_interstate ? (
-              <div className="flex justify-between"><span>IGST</span><span className="font-mono tabular-nums">{inrPO(totals.igst)}</span></div>
+              <div className="flex justify-between">
+                <span>IGST</span>
+                <span className="font-mono tabular-nums">{inrPO(totals.igst)}</span>
+              </div>
             ) : (
               <>
-                <div className="flex justify-between"><span>CGST</span><span className="font-mono tabular-nums">{inrPO(totals.cgst)}</span></div>
-                <div className="flex justify-between"><span>SGST</span><span className="font-mono tabular-nums">{inrPO(totals.sgst)}</span></div>
+                <div className="flex justify-between">
+                  <span>CGST</span>
+                  <span className="font-mono tabular-nums">{inrPO(totals.cgst)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>SGST</span>
+                  <span className="font-mono tabular-nums">{inrPO(totals.sgst)}</span>
+                </div>
               </>
             )}
             {totals.round_off !== 0 && (
-              <div className="flex justify-between"><span>Round Off</span><span className="font-mono tabular-nums">{inrPO(totals.round_off)}</span></div>
+              <div className="flex justify-between">
+                <span>Round Off</span>
+                <span className="font-mono tabular-nums">{inrPO(totals.round_off)}</span>
+              </div>
             )}
             <div className="flex justify-between pt-2 border-t font-bold text-base">
-              <span>Total</span><span className="font-mono tabular-nums">{inrPO(totals.total)}</span>
+              <span>Total</span>
+              <span className="font-mono tabular-nums">{inrPO(totals.total)}</span>
             </div>
-            <p className="text-xs text-muted-foreground pt-1 italic">{amountInWords(totals.total)}</p>
+            <p className="text-xs text-muted-foreground pt-1 italic">
+              {amountInWords(totals.total)}
+            </p>
           </CardContent>
         </Card>
       </div>

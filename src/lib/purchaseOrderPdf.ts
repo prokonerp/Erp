@@ -36,6 +36,8 @@ export async function renderPurchaseOrderPdf(args: {
     udyam_no?: string | null;
     phone?: string | null;
     email?: string | null;
+    logo_url?: string | null;
+    letterhead_label?: string | null;
   } | null;
   authorisedSignatureUrl?: string | null;
   preparedBy?: { name?: string | null; phone?: string | null; email?: string | null } | null;
@@ -67,17 +69,88 @@ export async function renderPurchaseOrderPdf(args: {
   let y = margin;
   const headerH = 78;
   doc.rect(margin, y, cw, headerH);
-  // Left: company
+
+  // Resolve logo FIRST so we can reserve its left column and keep text clear of it.
+  const logoUrl = args.settings?.logo_url;
+  let logoW = 0;
+  let logoH = 0;
+  let logoFmt: "PNG" | "JPEG" = "PNG";
+  let logoDataUrl: string | null = null;
+  if (logoUrl) {
+    try {
+      const logoResolvedUrl =
+        logoUrl.startsWith("http") || logoUrl.startsWith("data:") || logoUrl.startsWith("/")
+          ? logoUrl
+          : await (async () => {
+              try {
+                const { supabase } = await import("@/integrations/supabase/client");
+                const { data } = await supabase.storage
+                  .from("po-logos")
+                  .createSignedUrl(logoUrl, 60);
+                return data?.signedUrl ?? logoUrl;
+              } catch {
+                return logoUrl;
+              }
+            })();
+      if (logoResolvedUrl) {
+        const sig = await fetchSignatureDataUrl(logoResolvedUrl);
+        if (sig?.dataUrl) {
+          logoDataUrl = sig.dataUrl;
+          logoFmt = sig.format === "JPEG" ? "JPEG" : "PNG";
+          let iw = 68;
+          let ih = 34;
+          try {
+            const dims = await getImageDimensions(sig.dataUrl);
+            if (dims?.w && dims?.h) {
+              const scale = Math.min(68 / dims.w, 34 / dims.h, 1);
+              iw = dims.w * scale;
+              ih = dims.h * scale;
+            }
+          } catch {
+            /* keep defaults */
+          }
+          logoW = iw;
+          logoH = ih;
+        }
+      }
+    } catch (e) {
+      console.warn("[PO PDF] logo embed failed", e);
+    }
+  }
+
+  // Left: company (shifted right of the logo so they never overlap)
+  const leftX = margin + 10 + (logoW > 0 ? logoW + 12 : 0);
+  const leftMaxW = Math.max(120, cw * 0.55 - (logoW > 0 ? logoW + 12 : 0));
   doc.setFont("helvetica", "bold").setFontSize(15).setTextColor(tr, tg, tb);
-  doc.text(companyName, margin + 10, y + 20);
+  doc.text(companyName, leftX, y + 20);
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal").setFontSize(9);
-  const addrLines = doc.splitTextToSize(companyAddress, cw * 0.55) as string[];
+  const addrLines = doc.splitTextToSize(companyAddress, leftMaxW) as string[];
   let ay = y + 34;
-  addrLines.slice(0, 3).forEach((l) => { doc.text(l, margin + 10, ay); ay += 10; });
-  if (companyGstin) { doc.setFont("helvetica", "bold"); doc.text(`GSTIN: ${companyGstin}`, margin + 10, ay); ay += 10; doc.setFont("helvetica", "normal"); }
-  const c = [companyPhone ? `Tel: ${companyPhone}` : "", companyEmail ? `Email: ${companyEmail}` : ""].filter(Boolean).join("   ");
-  if (c) doc.text(c, margin + 10, ay);
+  addrLines.slice(0, 3).forEach((l) => {
+    doc.text(l, leftX, ay);
+    ay += 10;
+  });
+  if (companyGstin) {
+    doc.setFont("helvetica", "bold");
+    doc.text(`GSTIN: ${companyGstin}`, leftX, ay);
+    ay += 10;
+    doc.setFont("helvetica", "normal");
+  }
+  const c = [
+    companyPhone ? `Tel: ${companyPhone}` : "",
+    companyEmail ? `Email: ${companyEmail}` : "",
+  ]
+    .filter(Boolean)
+    .join("   ");
+  if (c) doc.text(c, leftX, ay);
+
+  // Logo (top-left of the box, vertically centered, clear of company text + title)
+  if (logoDataUrl) {
+    const logoX = margin + 10;
+    const logoY = y + (headerH - logoH) / 2;
+    doc.addImage(logoDataUrl, logoFmt, logoX, logoY, logoW, logoH);
+  }
 
   // Right: title
   doc.setFont("helvetica", "bold").setFontSize(18).setTextColor(tr, tg, tb);
@@ -85,7 +158,8 @@ export async function renderPurchaseOrderPdf(args: {
   doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(0, 0, 0);
   doc.text(`PO No: ${po.po_no || "—"}`, margin + cw - 10, y + 42, { align: "right" });
   doc.text(`PO Date: ${fmtDMY(po.po_date)}`, margin + cw - 10, y + 55, { align: "right" });
-  if (po.delivery_date) doc.text(`Delivery: ${fmtDMY(po.delivery_date)}`, margin + cw - 10, y + 68, { align: "right" });
+  if (po.delivery_date)
+    doc.text(`Delivery: ${fmtDMY(po.delivery_date)}`, margin + cw - 10, y + 68, { align: "right" });
 
   y += headerH;
 
@@ -106,20 +180,33 @@ export async function renderPurchaseOrderPdf(args: {
   let ly = y + 26;
   const putLines = (lines: string[], x: number, maxW: number, maxLines: number) => {
     const wrapped = lines.flatMap((l) => doc.splitTextToSize(l || "", maxW) as string[]);
-    wrapped.slice(0, maxLines).forEach((l) => { doc.text(l, x, ly); ly += 10; });
+    wrapped.slice(0, maxLines).forEach((l) => {
+      doc.text(l, x, ly);
+      ly += 10;
+    });
   };
 
   const vLines: string[] = [];
   vLines.push(`Name: ${po.vendor_name || "—"}`);
   if (po.vendor_address) vLines.push(po.vendor_address);
   if (po.vendor_gstin) vLines.push(`GSTIN: ${po.vendor_gstin}`);
-  if (po.vendor_state_name) vLines.push(`State: ${po.vendor_state_name}${po.vendor_state_code ? ` (${po.vendor_state_code})` : ""}`);
-  const cLine = [po.vendor_contact_name, po.vendor_phone, po.vendor_email].filter(Boolean).join(" · ");
+  if (po.vendor_state_name)
+    vLines.push(
+      `State: ${po.vendor_state_name}${po.vendor_state_code ? ` (${po.vendor_state_code})` : ""}`,
+    );
+  const cLine = [po.vendor_contact_name, po.vendor_phone, po.vendor_email]
+    .filter(Boolean)
+    .join(" · ");
   if (cLine) vLines.push(cLine);
   putLines(vLines, margin + 6, halfW - 12, 9);
 
   ly = y + 26;
-  const dType = po.delivery_address_type === "customer" ? "Customer Site" : po.delivery_address_type === "custom" ? "Custom" : "Organization";
+  const dType =
+    po.delivery_address_type === "customer"
+      ? "Customer Site"
+      : po.delivery_address_type === "custom"
+        ? "Custom"
+        : "Organization";
   const dLines: string[] = [`Type: ${dType}`];
   if (po.customer_name) dLines.push(`Customer: ${po.customer_name}`);
   if (po.delivery_address) dLines.push(po.delivery_address);
@@ -128,17 +215,45 @@ export async function renderPurchaseOrderPdf(args: {
   y += boxH;
 
   // Items table — includes Warranty per line (default 12 mo, editable). Guarded so a single defective row never crashes the whole PDF.
-  const safeItems = (items ?? []).length ? items : [{ description: "No items", hsn: "—", qty: 0, unit: "", rate: 0, gst_rate: 0, warranty_months: 12, line_total: 0 } as any];
+  const safeItems = (items ?? []).length
+    ? items
+    : [
+        {
+          description: "No items",
+          hsn: "—",
+          qty: 0,
+          unit: "",
+          rate: 0,
+          gst_rate: 0,
+          warranty_months: 12,
+          line_total: 0,
+        } as any,
+      ];
   try {
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
-      styles: { fontSize: 8.5, cellPadding: 3.5, lineColor: [tr, tg, tb], lineWidth: 0.3, textColor: 20 },
+      styles: {
+        fontSize: 8.5,
+        cellPadding: 3.5,
+        lineColor: [tr, tg, tb],
+        lineWidth: 0.3,
+        textColor: 20,
+      },
       headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontStyle: "bold", halign: "center" },
-      head: [[
-        "#", "Product / Description", "Warranty", "HSN", "Qty", "Unit", "Rate",
-        po.is_interstate ? "IGST%" : "GST%", "Amount",
-      ]],
+      head: [
+        [
+          "#",
+          "Product / Description",
+          "Warranty",
+          "HSN",
+          "Qty",
+          "Unit",
+          "Rate",
+          po.is_interstate ? "IGST%" : "GST%",
+          "Amount",
+        ],
+      ],
       body: safeItems.map((it: any, i: number) => [
         String(i + 1),
         String(it.description || "—").slice(0, 400),
@@ -169,12 +284,15 @@ export async function renderPurchaseOrderPdf(args: {
     safeItems.forEach((it: any, i: number) => {
       const line = `${i + 1}. ${String(it.description || "—").slice(0, 80)}  Warranty:${(it as any).warranty_months ?? 12} mo  HSN:${it.hsn || "—"}  Qty:${it.qty}  Rate:${inrPdf(it.rate)}  GST:${it.gst_rate}%  Amt:${inrPdf(it.taxable_value ?? 0)}`;
       const parts = doc.splitTextToSize(line, cw) as string[];
-      parts.slice(0, 2).forEach((p: string) => { doc.text(p, margin, fy); fy += 10; });
+      parts.slice(0, 2).forEach((p: string) => {
+        doc.text(p, margin, fy);
+        fy += 10;
+      });
     });
     (doc as any).lastAutoTable = { finalY: fy };
   }
 
-  let ty = ((doc as any).lastAutoTable?.finalY ?? (y + 120)) + 8;
+  let ty = ((doc as any).lastAutoTable?.finalY ?? y + 120) + 8;
 
   // Totals block — right-aligned column with label left / value right, same column width.
   const totalsW = 260;
@@ -210,7 +328,10 @@ export async function renderPurchaseOrderPdf(args: {
   doc.setFont("helvetica", "italic").setFontSize(8);
   const words = po.total_in_words || amountInWords(po.total);
   const wLines = doc.splitTextToSize(`Amount in Words: ${words}`, cw) as string[];
-  wLines.slice(0, 2).forEach((l) => { doc.text(l, margin, ty); ty += 10; });
+  wLines.slice(0, 2).forEach((l) => {
+    doc.text(l, margin, ty);
+    ty += 10;
+  });
 
   ty += 8;
 
@@ -229,7 +350,10 @@ export async function renderPurchaseOrderPdf(args: {
     ty += 12;
     doc.setFont("helvetica", "normal").setFontSize(8);
     const tLines = doc.splitTextToSize(po.terms, cw) as string[];
-    tLines.slice(0, 8).forEach((l) => { doc.text(l, margin, ty); ty += 10; });
+    tLines.slice(0, 8).forEach((l) => {
+      doc.text(l, margin, ty);
+      ty += 10;
+    });
   }
 
   // Signature block
@@ -278,7 +402,9 @@ export async function renderPurchaseOrderPdf(args: {
     try {
       doc.setFont("helvetica", "normal").setFontSize(7);
       doc.setTextColor(80, 80, 80);
-      doc.text(String(args.preparedBy.name).slice(0, 40), margin + cw - 100, sigY + 22, { align: "center" });
+      doc.text(String(args.preparedBy.name).slice(0, 40), margin + cw - 100, sigY + 22, {
+        align: "center",
+      });
       doc.setTextColor(0, 0, 0);
     } catch {
       /* ignore */
@@ -288,7 +414,9 @@ export async function renderPurchaseOrderPdf(args: {
   return doc;
 }
 
-export async function printPurchaseOrderPdf(args: Parameters<typeof renderPurchaseOrderPdf>[0]): Promise<void> {
+export async function printPurchaseOrderPdf(
+  args: Parameters<typeof renderPurchaseOrderPdf>[0],
+): Promise<void> {
   const doc = await renderPurchaseOrderPdf(args);
   const blob = doc.output("blob");
   const url = URL.createObjectURL(blob);
@@ -300,17 +428,29 @@ export async function printPurchaseOrderPdf(args: Parameters<typeof renderPurcha
     throw new Error("Popup blocked — PDF downloaded instead. Allow popups for direct print.");
   }
   const doPrint = () => {
-    try { win.focus(); win.print(); } catch { /* ignore */ }
+    try {
+      win.focus();
+      win.print();
+    } catch {
+      /* ignore */
+    }
   };
   // Print once content loads; fallback timer for browsers that don't fire load
   try {
     win.addEventListener("load", doPrint, { once: true } as any);
   } catch {}
   setTimeout(doPrint, 900);
-  setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 60_000);
+  setTimeout(() => {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {}
+  }, 60_000);
 }
 
-export async function downloadPurchaseOrderPdf(args: Parameters<typeof renderPurchaseOrderPdf>[0], filename: string): Promise<void> {
+export async function downloadPurchaseOrderPdf(
+  args: Parameters<typeof renderPurchaseOrderPdf>[0],
+  filename: string,
+): Promise<void> {
   try {
     const doc = await renderPurchaseOrderPdf(args);
     doc.save(filename);

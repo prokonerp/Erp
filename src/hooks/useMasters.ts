@@ -188,7 +188,7 @@ export function useProductsForPicker(search: string = "") {
       if (!term) {
         const { data, error } = await supabase
           .from("products")
-          .select("id, name, model, short_name, display_name, brand, category, hsn, unit, is_serialized, serial_tracking")
+          .select("id, name, model, short_name, display_name, brand, category, hsn, unit, is_serialized, serial_tracking, warranty_applicable, warranty_duration, warranty_unit, warranty_start_from, warranty_manual_override")
           .eq("active", true)
           .order("name")
           .limit(25);
@@ -199,7 +199,7 @@ export function useProductsForPicker(search: string = "") {
       const q = `%${escaped}%`;
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, model, short_name, display_name, brand, category, hsn, unit, is_serialized, serial_tracking")
+        .select("id, name, model, short_name, display_name, brand, category, hsn, unit, is_serialized, serial_tracking, warranty_applicable, warranty_duration, warranty_unit, warranty_start_from, warranty_manual_override")
         .or(`name.ilike.${q},model.ilike.${q},brand.ilike.${q},category.ilike.${q}`)
         .eq("active", true)
         .order("name")
