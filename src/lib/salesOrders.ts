@@ -1,7 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type SoStatus =
-  | "draft" | "confirmed" | "partial" | "delivered" | "invoiced" | "cancelled";
+export type SoStatus = "draft" | "confirmed" | "partial" | "delivered" | "invoiced" | "cancelled";
 
 /** Line item stored inside sales_orders.items — mirrors invoice_items shape so
  *  the same GST engine and PDF helpers work on both. */
@@ -76,6 +75,13 @@ export type SalesOrder = {
   total: number;
   total_in_words: string | null;
 
+  shipping_charges: number;
+  adjustment: number;
+  tcs_percent: number;
+  tcs_amount: number;
+  discount_label: string | null;
+  discount_amount: number;
+
   status: SoStatus;
   notes: string | null;
   terms: string | null;
@@ -96,18 +102,42 @@ export const SO_STATUSES: {
   tone: string;
   badgeTone: "neutral" | "info" | "warning" | "success" | "danger" | "primary";
 }[] = [
-  { value: "draft",     label: "Draft",     tone: "bg-slate-200 text-slate-800", badgeTone: "neutral" },
+  { value: "draft", label: "Draft", tone: "bg-slate-200 text-slate-800", badgeTone: "neutral" },
   { value: "confirmed", label: "Confirmed", tone: "bg-blue-100 text-blue-800", badgeTone: "info" },
-  { value: "partial",   label: "Partially Delivered", tone: "bg-amber-100 text-amber-800", badgeTone: "warning" },
-  { value: "delivered", label: "Delivered", tone: "bg-emerald-100 text-emerald-800", badgeTone: "success" },
-  { value: "invoiced",  label: "Invoiced",  tone: "bg-purple-100 text-purple-800", badgeTone: "primary" },
-  { value: "cancelled", label: "Cancelled", tone: "bg-rose-100 text-rose-700", badgeTone: "danger" },
+  {
+    value: "partial",
+    label: "Partially Delivered",
+    tone: "bg-amber-100 text-amber-800",
+    badgeTone: "warning",
+  },
+  {
+    value: "delivered",
+    label: "Delivered",
+    tone: "bg-emerald-100 text-emerald-800",
+    badgeTone: "success",
+  },
+  {
+    value: "invoiced",
+    label: "Invoiced",
+    tone: "bg-purple-100 text-purple-800",
+    badgeTone: "primary",
+  },
+  {
+    value: "cancelled",
+    label: "Cancelled",
+    tone: "bg-rose-100 text-rose-700",
+    badgeTone: "danger",
+  },
 ];
 
 export function soStatusMeta(s: SoStatus) {
   return SO_STATUSES.find((x) => x.value === s) ?? SO_STATUSES[0];
 }
 
+/**
+ * @deprecated Use fetchSalesOrdersPage() instead — this hits PostgREST 1k cap
+ * and loads full items JSONB for every row. Retained for exports only.
+ */
 export async function fetchSalesOrders(): Promise<SalesOrder[]> {
   const { data, error } = await supabase
     .from("sales_orders" as never)
@@ -129,8 +159,9 @@ export async function fetchSalesOrdersPage(
   params: SalesOrdersPaginatedParams,
 ): Promise<{ data: SalesOrder[]; count: number }> {
   const { page, pageSize, search } = params;
-  const from = page * pageSize;
-  const to = from + pageSize - 1;
+  const capped = Math.min(Math.max(1, Math.floor(pageSize || 25)), 50);
+  const from = page * capped;
+  const to = from + capped - 1;
 
   let q: any = supabase
     .from("sales_orders" as never)
@@ -139,6 +170,11 @@ export async function fetchSalesOrdersPage(
     .range(from, to);
 
   if (search && search.trim()) {
+    // Best-effort PostgREST escaping for .or() ilike filters.
+    // PostgREST uses , as separator and () as grouping inside `or()`.
+    // We escape these characters, but this is NOT bulletproof — a determined
+    // attacker could still inject via unescaped characters like `:` or `"`.
+    // TODO: Replace with supabase.filter() or RPC for production-grade escaping.
     const safe = search
       .trim()
       .replace(/[%_\\]/g, "\\$&")
@@ -162,5 +198,14 @@ export async function fetchSalesOrder(id: string): Promise<SalesOrder> {
 }
 
 function normalizeSo(r: SalesOrder): SalesOrder {
+  if (r.items != null && !Array.isArray(r.items)) {
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[salesOrders] normalizeSo: non-array items for SO ${r.id}:`,
+        typeof r.items,
+        r.items,
+      );
+    }
+  }
   return { ...r, items: Array.isArray(r.items) ? r.items : [] };
 }
