@@ -32,15 +32,53 @@ import {
   type GeneralDcItem,
   type GeneralDcRow,
 } from "@/lib/generalDc";
+import { SO_PREFILL_KEY, type FulfillmentLine } from "@/lib/documentFlow";
+import { createGeneralDcFromSO } from "@/lib/documentFlow.writers";
+import { Link } from "@tanstack/react-router";
+import { Badge } from "@/components/ui/badge";
 
-export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
+export function GeneralDcForm({
+  existing,
+  sales_order_id,
+  conversion_id,
+  soPrefill: soPrefillProp,
+}: {
+  existing?: GeneralDcRow;
+  sales_order_id?: string | null;
+  conversion_id?: string | null;
+  soPrefill?: { lines: FulfillmentLine[] & any[]; sales_order_no?: string | null; po_number?: string | null; orderedTotal?: number; fulfilledTotal?: number; balanceTotal?: number } | null;
+}) {
   const isEdit = !!existing;
   const nav = useNavigate();
   const { isAdmin } = useIsAdmin();
   const [branches, setBranches] = useState<BranchRow[]>([]);
-  const [branchId, setBranchId] = useState(existing?.branch_id ?? "");
+  const [branchId, setBranchId] = useState(existing?.branch_id ?? (soPrefillProp as any)?.branch_id ?? "");
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
+  // SO prefill state (prop or sessionStorage)
+  const [soPrefill, setSoPrefill] = useState<null | {
+    sales_order_id: string;
+    sales_order_no: string | null;
+    po_number: string | null;
+    lines: any[];
+    orderedTotal?: number;
+    fulfilledTotal?: number;
+    balanceTotal?: number;
+  }>(() => {
+    if (soPrefillProp && (soPrefillProp as any).lines) {
+      const p: any = soPrefillProp as any;
+      return {
+        sales_order_id: (sales_order_id as string) || p.sales_order_id || "",
+        sales_order_no: p.sales_order_no || null,
+        po_number: p.po_number || null,
+        lines: p.lines,
+        orderedTotal: p.orderedTotal,
+        fulfilledTotal: p.fulfilledTotal,
+        balanceTotal: p.balanceTotal,
+      };
+    }
+    return null;
+  });
   const [dcDate, setDcDate] = useState(existing?.dc_date ?? istTodayIso());
   const [returnable, setReturnable] = useState(!!existing?.returnable);
   const [expectedReturn, setExpectedReturn] = useState(existing?.expected_return_date ?? "");
@@ -79,6 +117,107 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
       .order("name")
       .then(({ data }) => setWarehouses((data ?? []) as { id: string; name: string }[]));
   }, []);
+
+  // If soPrefill prop present and not edit, prefill items from ThisQty slice
+  useEffect(() => {
+    if (isEdit) return;
+    if (!soPrefillProp || !(soPrefillProp as any).lines) return;
+    const lines: any[] = (soPrefillProp as any).lines;
+    const mapped: GeneralDcItem[] = lines.map((l: any) => ({
+      product_id: l.product_id ?? null,
+      part_name: l.part_name ?? l.description ?? null,
+      model_no: l.model_no ?? l.part_model_no ?? null,
+      hsn: l.hsn ?? null,
+      uom: l.unit ?? l.uom ?? "Nos",
+      qty: Number(l.this_qty ?? l.qty ?? 0) || 0,
+      unit_price: Number(l.rate ?? l.unit_price ?? 0) || 0,
+      warehouse_id: l.warehouse_id ?? null,
+      is_serialized: !!l.is_serialized,
+      serial_numbers: Array.isArray(l.serial_numbers) ? l.serial_numbers : [],
+    }));
+    if (mapped.length > 0) setItems(mapped);
+    if ((soPrefillProp as any).branch_id) setBranchId((soPrefillProp as any).branch_id);
+    if ((soPrefillProp as any).po_number) setPurpose((soPrefillProp as any).purpose || "");
+  }, [isEdit, soPrefillProp]);
+
+  // SessionStorage fallback for direct navigation (sessionStorage SO_PREFILL_KEY)
+  useEffect(() => {
+    if (isEdit) return;
+    if (soPrefill) return;
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem(SO_PREFILL_KEY); } catch { /* noop */ }
+    if (!raw) return;
+    // Only consume if it looks like a GDC conversion (or generic) — peek header
+    let p: any;
+    try { p = JSON.parse(raw); } catch { return; }
+    const salesOrderId: string | null = p.sales_order_id || p.salesOrderId || p.so_id || null;
+    // Heuristic: if payload has items that look like for GDC or invoice both use same key, we consume only if we are GDC form and payload hasn't been consumed by invoice new
+    // For now, only consume if gdc-specific flag or if we can map
+    // To avoid stealing invoice prefill, check if general_dc hint exists or if we're sure to handle
+    // We'll consume but leave info toast if it was invoice-only; simplest: if salesOrderId exists, treat as SO prefill for GDC too
+    if (!salesOrderId) return;
+    try { sessionStorage.removeItem(SO_PREFILL_KEY); } catch { /* noop */ }
+    const header = p.header || p;
+    const rawLines: any[] = Array.isArray(p.lines) ? p.lines : Array.isArray(p.items) ? p.items : [];
+    const enriched = rawLines.map((l: any, idx: number) => ({
+      line_index: l.line_index != null ? Number(l.line_index) : idx,
+      product_id: l.product_id ?? null,
+      description: l.description ?? l.part_name ?? "",
+      hsn: l.hsn ?? null,
+      unit: l.unit ?? l.uom ?? "Nos",
+      rate: Number(l.rate ?? l.unit_price ?? 0) || 0,
+      discount_pct: Number(l.discount_pct ?? 0) || 0,
+      gst_rate: Number(l.gst_rate ?? 0) || 0,
+      warehouse_id: l.warehouse_id ?? null,
+      serial_numbers: Array.isArray(l.serial_numbers) ? l.serial_numbers : [],
+      is_serialized: !!(l.is_serialized),
+      ordered_qty: Number(l.ordered_qty ?? l.qty ?? 0) || 0,
+      fulfilled_before: Number(l.fulfilled_before ?? 0) || 0,
+      balance: l.balance != null ? Number(l.balance) : Math.max(0, Number(l.ordered_qty ?? 0) - Number(l.fulfilled_before ?? 0)),
+      this_qty: Number(l.this_qty ?? l.qty ?? 0) || 0,
+      part_model_no: l.part_model_no ?? l.model_no ?? null,
+      part_name: l.part_name ?? l.description ?? null,
+    }));
+    const orderedTotal = enriched.reduce((s: number, l: any) => s + (Number(l.ordered_qty) || 0), 0);
+    const fulfilledTotal = enriched.reduce((s: number, l: any) => s + (Number(l.fulfilled_before) || 0), 0);
+    const balanceTotal = enriched.reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
+    setSoPrefill({
+      sales_order_id: salesOrderId,
+      sales_order_no: p.sales_order_no ?? p.so_no ?? header.sales_order_no ?? null,
+      po_number: header.po_number ?? p.po_number ?? null,
+      lines: enriched,
+      orderedTotal,
+      fulfilledTotal,
+      balanceTotal,
+    });
+    if (header.branch_id ?? p.branch_id) setBranchId(header.branch_id ?? p.branch_id);
+    if (header.billing_address ?? p.billing_address) setBilling(header.billing_address ?? p.billing_address);
+    if (header.shipping_address ?? p.shipping_address) {
+      const ship = header.shipping_address ?? p.shipping_address;
+      setShipping(ship);
+      const bill = header.billing_address ?? p.billing_address ?? "";
+      setSameAsBilling(ship === bill);
+    }
+    if (header.customer_id ?? p.customer_id) {
+      const cid = header.customer_id ?? p.customer_id;
+      supabase.from("customers").select("*").eq("id", cid).maybeSingle().then(({ data }) => { if (data) setCustomer(data as unknown as Customer); });
+    }
+    if (enriched.length > 0) {
+      const mapped: GeneralDcItem[] = enriched.map((l: any) => ({
+        product_id: l.product_id,
+        part_name: l.part_name || l.description,
+        model_no: l.part_model_no,
+        hsn: l.hsn,
+        uom: l.unit || "Nos",
+        qty: Number(l.this_qty) || 0,
+        unit_price: Number(l.rate) || 0,
+        warehouse_id: l.warehouse_id,
+        is_serialized: !!l.is_serialized,
+        serial_numbers: Array.isArray(l.serial_numbers) ? l.serial_numbers : [],
+      }));
+      setItems(mapped);
+    }
+  }, [isEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const skipAddrSync = useRef(isEdit);
   // Suppresses the "same as billing" sync effect for one commit after a
@@ -160,6 +299,20 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
   function validate(): string | null {
     if (!customer) return "Choose a customer";
     if (items.length === 0) return "Add at least one item";
+    // SO prefill: enforce qty cap per line (like SoConversionSheet)
+    const effectiveSoPrefill = soPrefill || (soPrefillProp as any);
+    if (effectiveSoPrefill && Array.isArray((effectiveSoPrefill as any).lines)) {
+      const lines: any[] = (effectiveSoPrefill as any).lines;
+      for (let i = 0; i < items.length; i++) {
+        const cap = lines[i]?.balance;
+        if (cap != null && Number(items[i].qty) > Number(cap)) {
+          return `Line ${i + 1}: quantity ${items[i].qty} exceeds balance ${cap} (Against SO)`;
+        }
+      }
+      if (items.length !== lines.length) {
+        // allow but warn via caller; for now permit extra lines as standalone
+      }
+    }
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.product_id) return `Line ${i + 1}: pick a product`;
@@ -223,6 +376,77 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
     reason: string | null,
   ) {
     if (!customer) return;
+    // ── SO-linked path: delegate to ledger-aware writer ──────────────────
+    const effectiveSoId: string | null = (sales_order_id as string | null) || (soPrefill?.sales_order_id as string | null) || ((soPrefillProp as any)?.sales_order_id as string | null) || null;
+    const effectiveSoPrefill: any = soPrefill || (soPrefillProp as any) || null;
+    if (effectiveSoId && !existing) {
+      setSaving(true);
+      try {
+        // Build FulfillmentLine[] from soPrefill if available, else from items (treat ordered = qty)
+        let linesForWriter: FulfillmentLine[];
+        if (effectiveSoPrefill && Array.isArray(effectiveSoPrefill.lines) && effectiveSoPrefill.lines.length > 0) {
+          linesForWriter = (effectiveSoPrefill.lines as any[]).map((l: any, idx: number) => ({
+            line_index: Number(l.line_index ?? idx),
+            product_id: l.product_id ?? null,
+            ordered_qty: Number(l.ordered_qty ?? 0) || 0,
+            fulfilled_before: Number(l.fulfilled_before ?? 0) || 0,
+            balance: Number(l.balance ?? 0) || 0,
+            this_qty: Number(items[idx]?.qty) || 0,
+            warehouse_id: (items[idx]?.warehouse_id as string | null) ?? (l.warehouse_id as string | null) ?? null,
+            serial_numbers: Array.isArray(items[idx]?.serial_numbers) ? items[idx].serial_numbers : Array.isArray(l.serial_numbers) ? l.serial_numbers : [],
+            is_serialized: !!(items[idx]?.is_serialized ?? l.is_serialized),
+          }));
+        } else {
+          // Fallback: treat each current item as a fulfillment line
+          linesForWriter = items.map((it, idx) => ({
+            line_index: idx,
+            product_id: it.product_id,
+            ordered_qty: Number(it.qty) || 0,
+            fulfilled_before: 0,
+            balance: Number(it.qty) || 0,
+            this_qty: Number(it.qty) || 0,
+            warehouse_id: it.warehouse_id,
+            serial_numbers: it.serial_numbers || [],
+            is_serialized: !!it.is_serialized,
+          }));
+        }
+        // Cap check already done in validate, but double-guard
+        for (let i = 0; i < linesForWriter.length; i++) {
+          const fl: any = linesForWriter[i];
+          if (Number(fl.this_qty) > Number(fl.balance)) throw new Error(`Line ${i + 1}: quantity ${fl.this_qty} exceeds balance ${fl.balance}`);
+        }
+        const r = await createGeneralDcFromSO(effectiveSoId, linesForWriter as any, {
+          allow_negative_stock: allowNegative,
+          returnable,
+          expected_return_date: returnable ? expectedReturn || null : null,
+          purpose: purpose || null,
+          issueImmediately: status === "Issued",
+        });
+        if (allowNegative && short.length > 0) {
+          try {
+            await logNegativeOverrides({
+              documentType: "dc",
+              documentId: r.id,
+              documentNo: r.dc_no,
+              shortfalls: short,
+              reason,
+            });
+          } catch (logErr) {
+            console.error("Negative-stock override logging failed:", logErr);
+            toast.error(`${r.dc_no} was saved, but recording the negative-stock approval failed (${(logErr as Error).message}).`);
+          }
+        }
+        toast.success(`${r.dc_no} ${status === "Issued" ? "issued" : "saved as draft"} (Against SO)`);
+        nav({ to: "/sales/general-dc/$id", params: { id: r.id } });
+        return;
+      } catch (e) {
+        toast.error((e as Error).message || "Save failed");
+        setSaving(false);
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
     setSaving(true);
     try {
       const { data: u } = await supabase.auth.getUser();
@@ -242,6 +466,9 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
         notes: notes || null,
         terms: terms || null,
         created_by: existing?.created_by ?? u.user?.id ?? null,
+        // preserve SO linkage if provided via props
+        ...(sales_order_id ? { sales_order_id: sales_order_id as any } : {}),
+        ...(conversion_id ? { conversion_id: conversion_id as any } : {}),
       };
       const row = existing
         ? await updateGeneralDc(existing.id, payload)
@@ -292,6 +519,35 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
           </Button>
         </div>
       </div>
+
+      {(soPrefill || (soPrefillProp as any)?.lines) && (
+        <Card className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/20">
+          <CardContent className="py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="font-medium">
+              Against Sales Order{" "}
+              {(soPrefill?.sales_order_id || (sales_order_id as string)) ? (
+                <Link
+                  to="/sales/orders/$id"
+                  params={{ id: (soPrefill?.sales_order_id || sales_order_id) as string }}
+                  className="font-mono underline decoration-dotted underline-offset-2 hover:text-amber-800"
+                >
+                  {soPrefill?.sales_order_no || (soPrefillProp as any)?.sales_order_no || (soPrefill?.sales_order_id || sales_order_id as string).slice(0, 8)}
+                </Link>
+              ) : (
+                <span className="font-mono">{soPrefill?.sales_order_no || "—"}</span>
+              )}
+              {soPrefill?.po_number && <span className="font-mono text-xs ml-2">PO {soPrefill.po_number}</span>}
+            </span>
+            <span className="text-muted-foreground tabular-nums text-xs">
+              Ordered <span className="font-semibold text-foreground">{soPrefill?.orderedTotal ?? (soPrefillProp as any)?.orderedTotal ?? "—"}</span>
+              {" · "}Already <span className="font-semibold text-foreground">{soPrefill?.fulfilledTotal ?? (soPrefillProp as any)?.fulfilledTotal ?? "—"}</span>
+              {" · "}Balance <span className="font-semibold text-amber-700">{soPrefill?.balanceTotal ?? (soPrefillProp as any)?.balanceTotal ?? "—"}</span>
+              {" · "}This shipment <span className="font-semibold text-emerald-700">{items.reduce((s, it) => s + (Number(it.qty) || 0), 0)}</span>
+            </span>
+            <Badge variant="outline" className="bg-white text-amber-800 border-amber-200 text-[11px] ml-auto">SO-linked — qty capped at balance</Badge>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">
@@ -472,8 +728,23 @@ export function GeneralDcForm({ existing }: { existing?: GeneralDcRow }) {
                         step="1"
                         className="h-8 text-xs text-right"
                         value={it.qty}
-                        onChange={(e) => setItem(idx, { qty: Number(e.target.value) })}
+                        max={(soPrefill?.lines as any[])?.[idx]?.balance ?? (soPrefillProp as any)?.lines?.[idx]?.balance ?? undefined}
+                        onChange={(e) => {
+                          const raw = Number(e.target.value);
+                          const bal = (soPrefill?.lines as any[])?.[idx]?.balance ?? (soPrefillProp as any)?.lines?.[idx]?.balance;
+                          if (bal != null && raw > Number(bal)) {
+                            toast.error(`Line ${idx + 1}: quantity ${raw} exceeds balance ${bal}`);
+                            setItem(idx, { qty: Number(bal) });
+                            return;
+                          }
+                          setItem(idx, { qty: raw });
+                        }}
                       />
+                      {(soPrefill?.lines as any[])?.[idx] || (soPrefillProp as any)?.lines?.[idx] ? (
+                        <div className="text-[10px] text-muted-foreground tabular-nums mt-0.5 leading-none">
+                          Ordered {((soPrefill?.lines as any[])?.[idx] ?? (soPrefillProp as any)?.lines?.[idx])?.ordered_qty ?? "?"} · Already {((soPrefill?.lines as any[])?.[idx] ?? (soPrefillProp as any)?.lines?.[idx])?.fulfilled_before ?? 0} · Bal {((soPrefill?.lines as any[])?.[idx] ?? (soPrefillProp as any)?.lines?.[idx])?.balance ?? "?"}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="p-2">
                       <Input

@@ -209,3 +209,97 @@ function normalizeSo(r: SalesOrder): SalesOrder {
   }
   return { ...r, items: Array.isArray(r.items) ? r.items : [] };
 }
+
+// ── Fulfillment ledger types (mirrors VIEW so_fulfillment_summary) ─────────
+
+export type SoFulfillmentSummary = {
+  sales_order_id: string;
+  line_index: number;
+  product_id: string | null;
+  ordered_qty: number;
+  fulfilled_stock: number;
+  fulfilled_proforma: number;
+  balance: number;
+  is_complete: boolean;
+};
+
+export type SoConversionType = "tax_invoice" | "general_dc" | "proforma_invoice" | "delivery_challan";
+
+export type FulfillmentLine = {
+  line_index: number;
+  product_id: string | null;
+  ordered_qty: number;
+  fulfilled_before: number;
+  balance: number;
+  this_qty: number;
+  warehouse_id?: string | null;
+  serial_numbers?: string[];
+  is_serialized?: boolean;
+};
+
+export type SoConversionRow = {
+  id: string;
+  sales_order_id: string;
+  conversion_type: SoConversionType;
+  target_table: string;
+  target_id: string;
+  target_no: string | null;
+  status: string;
+  prior_fulfilled: unknown;
+  this_fulfilled: unknown;
+  balance_after: unknown;
+  created_at: string;
+  created_by: string | null;
+};
+
+/**
+ * Pure helper: derive SO status from fulfillment summary + optional current
+ * status / conversions. No DB call.
+ *
+ * Rules (mirrors VIEW so_derived_status):
+ *  - cancelled is terminal (returns cancelled if currentStatus is cancelled)
+ *  - if no fulfillments (totalFulfilled === 0) → keep draft/confirmed as-is
+ *  - if every line balance === 0 → delivered (or invoiced if tax_invoice exists)
+ *  - otherwise if any fulfilled → partial
+ */
+export function soDerivedStatus(
+  summary: SoFulfillmentSummary[],
+  currentStatus?: SoStatus,
+  conversions?: Pick<SoConversionRow, "conversion_type" | "status">[],
+): SoStatus {
+  if (currentStatus === "cancelled") return "cancelled";
+  if (!summary || summary.length === 0) return currentStatus ?? "draft";
+  const totalFulfilled = summary.reduce((s, r) => s + (Number(r.fulfilled_stock) || 0), 0);
+  const totalBalance = summary.reduce((s, r) => s + (Number(r.balance) || 0), 0);
+  const allComplete = summary.every((r) => !!r.is_complete || (Number(r.balance) || 0) <= 0);
+  if (totalFulfilled === 0) return currentStatus ?? "draft";
+  if (allComplete && totalBalance <= 0) {
+    const hasTaxInvoice = (conversions ?? []).some(
+      (c) => c.conversion_type === "tax_invoice" && c.status !== "cancelled",
+    );
+    return hasTaxInvoice ? "invoiced" : "delivered";
+  }
+  return "partial";
+}
+
+// Alias for callers that prefer the longer name
+export const soStatusDerived = soDerivedStatus;
+
+export async function fetchSoFulfillmentSummary(salesOrderId: string): Promise<SoFulfillmentSummary[]> {
+  const { data, error } = await supabase
+    .from("so_fulfillment_summary" as never)
+    .select("*")
+    .eq("sales_order_id", salesOrderId);
+  if (error) throw error;
+  return (data ?? []) as unknown as SoFulfillmentSummary[];
+}
+
+export async function fetchSoConversions(salesOrderId: string): Promise<SoConversionRow[]> {
+  const { data, error } = await supabase
+    .from("so_conversions" as never)
+    .select("*")
+    .eq("sales_order_id", salesOrderId)
+    .order("created_at", { ascending: false } as never);
+  if (error) throw error;
+  return (data ?? []) as unknown as SoConversionRow[];
+}

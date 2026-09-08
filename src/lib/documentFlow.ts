@@ -327,3 +327,399 @@ export function deliveryChallanToInvoice(
     reverse_charge: !!anyDc.reverse_charge,
   };
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+//  Split-delivery / partial conversion helpers (pure)
+//  Added for SO 20→17+3 flow. All functions are pure and testable.
+// ──────────────────────────────────────────────────────────────────────────────
+
+export const SO_PREFILL_KEY = "invoice:prefill:from-so";
+export const PROFORMA_PREFILL_KEY = "proforma:prefill:from-so";
+
+export type ConversionType = "tax_invoice" | "general_dc" | "proforma_invoice" | "delivery_challan";
+
+export type SoFulfillmentSummary = {
+  sales_order_id: string;
+  line_index: number;
+  product_id: string | null;
+  ordered_qty: number;
+  fulfilled_stock: number;
+  fulfilled_proforma: number;
+  balance: number;
+  is_complete: boolean;
+};
+
+export type FulfillmentLine = {
+  line_index: number;
+  product_id: string | null;
+  ordered_qty: number;
+  fulfilled_before: number;
+  balance: number;
+  this_qty: number;
+  warehouse_id?: string | null;
+  serial_numbers?: string[];
+  is_serialized?: boolean;
+};
+
+/** General DC payload shape for partial conversions */
+export type GeneralDcItemForPartial = {
+  product_id: string | null;
+  part_name: string | null;
+  model_no: string | null;
+  hsn: string | null;
+  uom: string;
+  qty: number;
+  unit_price: number;
+  warehouse_id: string | null;
+  is_serialized: boolean;
+  serial_numbers: string[];
+};
+
+export type NewGeneralDcPayload = {
+  dc_date: string;
+  returnable: boolean;
+  expected_return_date: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  billing_address: string | null;
+  shipping_address: string | null;
+  purpose: string | null;
+  branch_id: string | null;
+  items: GeneralDcItemForPartial[];
+  status: "Draft" | "Issued";
+  allow_negative_stock: boolean;
+  notes: string | null;
+  terms: string | null;
+  sales_order_id?: string | null;
+  conversion_id?: string | null;
+};
+
+/** Proforma payload mirrors NewInvoicePayload but with proforma semantics */
+export type NewProformaPayload = {
+  branch_id: string | null;
+  customer_id: string | null;
+  proforma_date: string;
+  billing_address: string | null;
+  shipping_address: string | null;
+  place_of_supply: string | null;
+  buyer_name: string | null;
+  buyer_gstin: string | null;
+  buyer_state: string | null;
+  buyer_state_code: string | null;
+  po_number: string | null;
+  po_date: string | null;
+  notes: string | null;
+  terms: string | null;
+  payment_terms: string | null;
+  linked_quote_id: string | null;
+  sales_order_id: string | null;
+  items: SoItem[];
+  reverse_charge?: boolean;
+  shipping_charges?: number;
+  adjustment?: number;
+  tcs_percent?: number;
+  tcs_amount?: number;
+  round_off?: number;
+  discount_label?: string | null;
+  discount_amount?: number;
+  prior_fulfilled: { line_index: number; fulfilled_before: number }[];
+  this_fulfilled: { line_index: number; this_qty: number }[];
+  status: "draft" | "issued";
+  skip_stock_posting?: true;
+};
+
+/**
+ * Build a fulfillment preview: one FulfillmentLine per SO item, with
+ * already-delivered qty looked up from the view. this_qty defaults to balance
+ * (i.e. ship the remainder), clamped 0..balance.
+ */
+export function buildFulfillmentPreview(
+  so: SalesOrder,
+  summary: SoFulfillmentSummary[],
+): FulfillmentLine[] {
+  const items = so.items || [];
+  const map = new Map<number, SoFulfillmentSummary>();
+  for (const s of summary || []) {
+    map.set(Number(s.line_index), s);
+  }
+  return items.map((it, idx) => {
+    const orderedQty = Number((it as any).qty) || 0;
+    const s = map.get(idx);
+    const fulfilledBefore = s ? Number(s.fulfilled_stock) || 0 : 0;
+    const balanceRaw = s ? Number(s.balance) : orderedQty - fulfilledBefore;
+    const balance = Math.max(0, Math.min(orderedQty, balanceRaw));
+    const thisQty = Math.max(0, Math.min(balance, balance));
+    return {
+      line_index: idx,
+      product_id: (it.product_id as string | null) ?? (s?.product_id ?? null),
+      ordered_qty: orderedQty,
+      fulfilled_before: fulfilledBefore,
+      balance,
+      this_qty: thisQty,
+      warehouse_id: ((it as any).warehouse_id as string | null) ?? null,
+      serial_numbers: Array.isArray((it as any).serial_numbers)
+        ? ((it as any).serial_numbers as string[])
+        : [],
+      is_serialized: !!((it as any).is_serialized),
+    };
+  });
+}
+
+/**
+ * Validate this_qty per line.
+ *  - at least one line must have this_qty > 0
+ *  - each this_qty must be 0 <= this_qty <= balance
+ *  - serialized lines: qty must be integer and serial_numbers.length === this_qty
+ *  - stock lines (product_id present) with this_qty >0 must have warehouse_id
+ * Returns null if valid, otherwise an error string.
+ */
+export function validateThisQty(lines: FulfillmentLine[]): string | null {
+  if (!lines || lines.length === 0) return "No lines to validate";
+  let hasPositive = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const qty = Number(line.this_qty) || 0;
+    const balance = Number(line.balance) || 0;
+    if (qty > 0) hasPositive = true;
+    if (qty < 0) return `Line ${i + 1}: quantity cannot be negative`;
+    if (qty > balance) return `Line ${i + 1}: quantity ${qty} exceeds balance ${balance}`;
+    if (line.is_serialized) {
+      const expected = Math.floor(qty);
+      if (qty !== expected) {
+        return `Line ${i + 1}: serialized products need a whole-number quantity (got ${qty})`;
+      }
+      const actual = (line.serial_numbers || []).length;
+      // Only enforce serial count when qty >0 or when serials are present
+      if (qty > 0 && actual !== expected) {
+        return `Line ${i + 1}: select ${expected} serial number(s) (got ${actual})`;
+      }
+      if (qty === 0 && actual !== 0) {
+        return `Line ${i + 1}: select ${expected} serial number(s) (got ${actual})`;
+      }
+    }
+    if (qty > 0 && line.product_id != null && !line.warehouse_id) {
+      return `Line ${i + 1}: warehouse required`;
+    }
+  }
+  if (!hasPositive) return "Select at least one line with quantity greater than 0";
+  return null;
+}
+
+function fulfillmentMap(lines: FulfillmentLine[]): Map<number, FulfillmentLine> {
+  return new Map(lines.map((l) => [l.line_index, l]));
+}
+
+/**
+ * Sales Order → Invoice (partial). Clones header like salesOrderToInvoice
+ * but slices items to only lines where this_qty>0, replacing qty with
+ * this_qty and slicing serial_numbers accordingly.
+ */
+export function salesOrderToInvoicePartial(
+  so: SalesOrder,
+  lines: FulfillmentLine[],
+): NewInvoicePayload {
+  const base = salesOrderToInvoice(so);
+  const map = fulfillmentMap(lines);
+  const newItems: SoItem[] = [];
+  const allItems = so.items || [];
+  for (let i = 0; i < allItems.length; i++) {
+    const fl = map.get(i);
+    if (!fl || Number(fl.this_qty) <= 0) continue;
+    const orig = allItems[i] as SoItem & {
+      serial_numbers?: string[];
+      warehouse_id?: string | null;
+      is_serialized?: boolean;
+    };
+    const thisQty = Number(fl.this_qty) || 0;
+    const srcSerials = fl.serial_numbers && fl.serial_numbers.length > 0
+      ? fl.serial_numbers
+      : (orig.serial_numbers || []);
+    const slicedSerials = srcSerials.slice(0, thisQty);
+    newItems.push({
+      ...orig,
+      qty: thisQty,
+      serial_numbers: slicedSerials,
+      warehouse_id: (fl.warehouse_id ?? (orig as any).warehouse_id ?? null) as string | null,
+      is_serialized: (fl.is_serialized ?? (orig as any).is_serialized ?? false) as boolean,
+    });
+  }
+  return { ...base, items: newItems };
+}
+
+/**
+ * Sales Order → General DC (partial). Maps SOB to GeneralDcItem shape.
+ */
+export function salesOrderToGeneralDcPartial(
+  so: SalesOrder,
+  lines: FulfillmentLine[],
+): NewGeneralDcPayload {
+  const map = fulfillmentMap(lines);
+  const allItems = so.items || [];
+  const items: GeneralDcItemForPartial[] = [];
+  for (let i = 0; i < allItems.length; i++) {
+    const fl = map.get(i);
+    if (!fl || Number(fl.this_qty) <= 0) continue;
+    const orig = allItems[i] as any;
+    const qty = Number(fl.this_qty) || 0;
+    const srcSerials = fl.serial_numbers && fl.serial_numbers.length > 0
+      ? fl.serial_numbers
+      : (Array.isArray(orig.serial_numbers) ? orig.serial_numbers : []);
+    const sliced = (srcSerials as string[]).slice(0, qty);
+    items.push({
+      product_id: orig.product_id ?? null,
+      part_name: orig.description || orig.part_name || null,
+      model_no: orig.part_model_no || null,
+      hsn: orig.hsn ?? null,
+      uom: orig.unit || "Nos",
+      qty,
+      unit_price: Number(orig.rate) || 0,
+      warehouse_id: (fl.warehouse_id ?? orig.warehouse_id ?? null) as string | null,
+      is_serialized: !!((fl as any).is_serialized ?? orig.is_serialized),
+      serial_numbers: sliced,
+    });
+  }
+  return {
+    dc_date: istTodayIso(),
+    returnable: false,
+    expected_return_date: null,
+    customer_id: (so as any).customer_id ?? null,
+    customer_name: (so as any).buyer_name ?? null,
+    billing_address: (so as any).billing_address ?? null,
+    shipping_address: (so as any).shipping_address ?? null,
+    purpose: (so as any).notes ?? null,
+    branch_id: (so as any).branch_id ?? null,
+    items,
+    status: "Draft",
+    allow_negative_stock: false,
+    notes: (so as any).notes ?? null,
+    terms: (so as any).terms ?? null,
+    sales_order_id: so.id,
+  };
+}
+
+/**
+ * Sales Order → Proforma (partial). read-only, no stock posting.
+ */
+export function salesOrderToProformaPartial(
+  so: SalesOrder,
+  lines: FulfillmentLine[],
+): NewProformaPayload {
+  const map = fulfillmentMap(lines);
+  const allItems = so.items || [];
+  const newItems: SoItem[] = [];
+  for (let i = 0; i < allItems.length; i++) {
+    const fl = map.get(i);
+    if (!fl || Number(fl.this_qty) <= 0) continue;
+    const orig = allItems[i] as any;
+    const thisQty = Number(fl.this_qty) || 0;
+    const srcSerials = fl.serial_numbers && fl.serial_numbers.length > 0
+      ? fl.serial_numbers
+      : (Array.isArray(orig.serial_numbers) ? orig.serial_numbers : []);
+    const sliced = (srcSerials as string[]).slice(0, thisQty);
+    newItems.push({
+      ...orig,
+      qty: thisQty,
+      serial_numbers: sliced,
+      warehouse_id: (fl.warehouse_id ?? orig.warehouse_id ?? null) as string | null,
+      is_serialized: (fl.is_serialized ?? orig.is_serialized ?? false) as boolean,
+    });
+  }
+  const prior = (lines || []).map((l) => ({
+    line_index: l.line_index,
+    fulfilled_before: Number(l.fulfilled_before) || 0,
+  }));
+  const thisFulfilled = (lines || [])
+    .filter((l) => Number(l.this_qty) > 0)
+    .map((l) => ({ line_index: l.line_index, this_qty: Number(l.this_qty) || 0 }));
+  return {
+    branch_id: (so as any).branch_id ?? null,
+    customer_id: (so as any).customer_id ?? null,
+    proforma_date: istTodayIso(),
+    billing_address: (so as any).billing_address ?? null,
+    shipping_address: (so as any).shipping_address ?? null,
+    place_of_supply: (so as any).place_of_supply ?? null,
+    buyer_name: (so as any).buyer_name ?? null,
+    buyer_gstin: (so as any).buyer_gstin ?? null,
+    buyer_state: (so as any).buyer_state ?? null,
+    buyer_state_code: (so as any).buyer_state_code ?? null,
+    po_number: (so as any).po_number ?? null,
+    po_date: (so as any).po_date ?? null,
+    notes: (so as any).notes ?? null,
+    terms: (so as any).terms ?? null,
+    payment_terms: (so as any).payment_terms ?? null,
+    linked_quote_id: (so as any).linked_quote_id ?? null,
+    sales_order_id: so.id,
+    items: newItems,
+    reverse_charge: !!((so as any).reverse_charge),
+    shipping_charges: Number((so as any).shipping_charges) || 0,
+    adjustment: Number((so as any).adjustment) || 0,
+    tcs_percent: Number((so as any).tcs_percent) || 0,
+    tcs_amount: Number((so as any).tcs_amount) || 0,
+    round_off: Number((so as any).round_off) || 0,
+    discount_label: (so as any).discount_label ?? null,
+    discount_amount: Number((so as any).discount_amount) || 0,
+    prior_fulfilled: prior,
+    this_fulfilled: thisFulfilled,
+    status: "draft",
+    skip_stock_posting: true as const,
+  };
+}
+
+/**
+ * Sales Order → Delivery Challan (partial).
+ */
+export function salesOrderToDeliveryChallanPartial(
+  so: SalesOrder,
+  lines: FulfillmentLine[],
+): NewDeliveryChallan {
+  const base = salesOrderToDeliveryChallan(so);
+  const map = fulfillmentMap(lines);
+  const allItems = so.items || [];
+  const filtered: ChallanItem[] = [];
+  for (let i = 0; i < allItems.length; i++) {
+    const fl = map.get(i);
+    if (!fl || Number(fl.this_qty) <= 0) continue;
+    const orig = allItems[i] as any;
+    const thisQty = Number(fl.this_qty) || 0;
+    const srcSerials = fl.serial_numbers && fl.serial_numbers.length > 0
+      ? fl.serial_numbers
+      : (Array.isArray(orig.serial_numbers) ? orig.serial_numbers : []);
+    const sliced = (srcSerials as string[]).slice(0, thisQty);
+    const ci = soItemToChallanItem({ ...orig, qty: thisQty, serial_numbers: sliced, warehouse_id: fl.warehouse_id ?? orig.warehouse_id } as SoItem);
+    // Override qty/serials to reflect partial
+    ci.qty = String(thisQty);
+    ci.serial_numbers = sliced;
+    if (sliced.length > 0) ci.serial_no = String(sliced[0]);
+    else ci.serial_no = "";
+    ci.warehouse_id = (fl.warehouse_id ?? orig.warehouse_id ?? null) as string | null;
+    ci.is_serialized = !!((fl as any).is_serialized ?? orig.is_serialized);
+    // Keep header context
+    const branchId = (so as any).branch_id ?? null;
+    const buyerState = (so as any).buyer_state ?? so.place_of_supply ?? null;
+    const buyerCode = (so as any).buyer_state_code ?? so.place_of_supply_code ?? null;
+    filtered.push({ ...ci, branch_id: branchId, buyer_state: buyerState, buyer_state_code: buyerCode });
+  }
+  return { ...base, items: filtered };
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+export function orderedVsFulfilled(
+  so: SalesOrder,
+  summary: SoFulfillmentSummary[],
+): { ordered: number; fulfilled: number; balance: number; fulfilledProforma: number } {
+  const ordered = (summary && summary.length > 0)
+    ? summary.reduce((s, r) => s + (Number(r.ordered_qty) || 0), 0)
+    : (so.items || []).reduce((s, it) => s + (Number((it as any).qty) || 0), 0);
+  const fulfilled = (summary || []).reduce((s, r) => s + (Number(r.fulfilled_stock) || 0), 0);
+  const fulfilledProforma = (summary || []).reduce((s, r) => s + (Number(r.fulfilled_proforma) || 0), 0);
+  const balance = (summary && summary.length > 0)
+    ? summary.reduce((s, r) => s + (Number(r.balance) || 0), 0)
+    : Math.max(0, ordered - fulfilled);
+  return { ordered, fulfilled, balance, fulfilledProforma };
+}
+
+export function isSoFullyDelivered(summary: SoFulfillmentSummary[]): boolean {
+  if (!summary || summary.length === 0) return false;
+  return summary.every((r) => !!r.is_complete || (Number(r.balance) || 0) <= 0);
+}

@@ -1,5 +1,6 @@
 import { amountInWords } from "@/lib/crm";
 import type { CompanyProfile } from "@/lib/companyProfile";
+import type { SalesOrder, SoFulfillmentSummary } from "@/lib/salesOrders";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 
 export type PrintParty = {
@@ -100,7 +101,21 @@ const cleanAddress = (raw?: string | null) => {
  * Parent renders this inside a `hidden print:block` wrapper (or invokes
  * downloadElementAsPdf on the wrapper) and calls window.print().
  */
-export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: CompanyProfile }) {
+export function DocumentPrintView({
+  doc,
+  company,
+  salesOrder,
+  soFulfillments,
+  soConversions,
+  annexure,
+}: {
+  doc: PrintDoc;
+  company: CompanyProfile;
+  salesOrder?: SalesOrder | null;
+  soFulfillments?: SoFulfillmentSummary[] | null;
+  soConversions?: any[] | null;
+  annexure?: boolean;
+}) {
   const accent = (company.accent_color && company.accent_color.trim()) || "#14225C";
   const title = doc.type === "quotation" ? "QUOTATION" : "PURCHASE ORDER";
   const numLabel = doc.type === "quotation" ? "Ref No" : "PO No";
@@ -355,6 +370,83 @@ export function DocumentPrintView({ doc, company }: { doc: PrintDoc; company: Co
           })}
         </tbody>
       </table>
+
+      {/* Annexure — Previously Satisfied Quantity (SO-linked documents) */}
+      {(() => {
+        const showAnnexure = annexure ?? !!(salesOrder || (soConversions && soConversions.length > 0) || (soFulfillments && soFulfillments.length > 0));
+        if (!showAnnexure || !salesOrder) return null;
+        // Map current doc qty per SO line index
+        const currentQtyByIndex = new Map<number, number>();
+        // If doc has same number of lines as SO, assume 1:1 by index
+        if (doc.items.length === salesOrder.items.length) {
+          doc.items.forEach((it, i) => currentQtyByIndex.set(i, Number(it.qty) || 0));
+        } else {
+          // Partial doc: try to match by product_id/description; fallback to index if possible
+          doc.items.forEach((it, idx) => {
+            // Attempt to find matching SO line by product_id first
+            const anyIt = it as unknown as { product_id?: string | null; description?: string };
+            let matchedIdx: number | null = null;
+            if (anyIt.product_id) {
+              const found = salesOrder.items.findIndex((soIt) => (soIt.product_id || null) === anyIt.product_id);
+              if (found >= 0) matchedIdx = found;
+            }
+            if (matchedIdx == null) {
+              // Fallback: match by description substring
+              const found = salesOrder.items.findIndex((soIt) => soIt.description?.trim().toLowerCase() === (anyIt.description || "").trim().toLowerCase());
+              if (found >= 0) matchedIdx = found;
+            }
+            if (matchedIdx == null) matchedIdx = idx; // fallback to position
+            // If multiple doc items map to same SO line (shouldn't happen), sum
+            currentQtyByIndex.set(matchedIdx, (currentQtyByIndex.get(matchedIdx) || 0) + (Number(it.qty) || 0));
+          });
+        }
+        return (
+          <div className="mt-6 border-t pt-4">
+            <div className="text-xs font-semibold uppercase tracking-wider">
+              Against Sales Order <span className="font-mono">{salesOrder.so_no || salesOrder.id.slice(0, 8)}</span>
+              {salesOrder.po_number && <span className="font-normal normal-case"> (PO: {salesOrder.po_number}{salesOrder.po_date ? ` dtd ${salesOrder.po_date}` : ""})</span>}
+            </div>
+            <table className="w-full text-xs mt-2 border-collapse border" style={{ borderColor: "#d1d5db" }}>
+              <thead className="bg-slate-100">
+                <tr>
+                  <th className="border px-1.5 py-1 text-left" style={{ borderColor: "#d1d5db" }}>#</th>
+                  <th className="border px-1.5 py-1 text-left" style={{ borderColor: "#d1d5db" }}>Item</th>
+                  <th className="border px-1.5 py-1 text-right" style={{ borderColor: "#d1d5db" }}>Ordered</th>
+                  <th className="border px-1.5 py-1 text-right" style={{ borderColor: "#d1d5db" }}>Already Delivered</th>
+                  <th className="border px-1.5 py-1 text-right" style={{ borderColor: "#d1d5db" }}>This Document</th>
+                  <th className="border px-1.5 py-1 text-right" style={{ borderColor: "#d1d5db" }}>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {salesOrder.items.map((soIt: any, i: number) => {
+                  const sum = soFulfillments?.find((s) => Number(s.line_index) === i);
+                  const ordered = Number(soIt.qty) || 0;
+                  const fulfilled = sum ? Number(sum.fulfilled_stock) || 0 : 0;
+                  const currentQty = currentQtyByIndex.get(i) ?? 0;
+                  // If ledger already includes this doc, fulfilled includes current; derive prior
+                  const alreadyPrior = fulfilled >= currentQty && currentQty > 0 ? Math.max(0, fulfilled - currentQty) : fulfilled;
+                  const balanceAfter = sum ? Number(sum.balance) : Math.max(0, ordered - fulfilled);
+                  // For display, balance should be remaining after this doc: ordered - alreadyPrior - currentQty
+                  const balance = sum ? balanceAfter : Math.max(0, ordered - alreadyPrior - currentQty);
+                  return (
+                    <tr key={i}>
+                      <td className="border px-1.5 py-1 text-center" style={{ borderColor: "#d1d5db" }}>{i + 1}</td>
+                      <td className="border px-1.5 py-1" style={{ borderColor: "#d1d5db" }}>{soIt.description || "—"}</td>
+                      <td className="border px-1.5 py-1 text-right tabular-nums" style={{ borderColor: "#d1d5db" }}>{ordered}</td>
+                      <td className="border px-1.5 py-1 text-right tabular-nums" style={{ borderColor: "#d1d5db" }}>{alreadyPrior}</td>
+                      <td className="border px-1.5 py-1 text-right tabular-nums font-semibold" style={{ borderColor: "#d1d5db" }}>{currentQty}</td>
+                      <td className="border px-1.5 py-1 text-right tabular-nums" style={{ borderColor: "#d1d5db" }}>{balance}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="text-[11px] text-gray-600 mt-1">
+              Previously satisfied qty includes all prior Tax Invoices, General DCs and Delivery Challans linked to this SO (Proforma excluded).
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Totals */}
       <div className="grid grid-cols-2 gap-4 mt-3">

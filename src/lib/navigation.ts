@@ -185,6 +185,8 @@ export const NAV_ITEMS: NavItem[] = [
     group: "Sales",
   },
   { to: "/sales/invoices", label: "Invoices", icon: FileText, module: "sales", group: "Sales" },
+  { to: "/sales/proforma", label: "Proforma Invoices", icon: FileText, module: "sales", group: "Sales" },
+  { to: "/sales/orders", label: "Sales Orders", icon: ClipboardList, module: "sales", group: "Sales" },
   { to: "/sales/payments", label: "Payments", icon: Wallet, module: "sales", group: "Sales" },
   { to: "/sales/eway", label: "e-Way Bills", icon: Truck, module: "sales", group: "Sales" },
   {
@@ -299,6 +301,8 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { label: "New Gatepass", to: "/gatepass/new", module: "gatepass", icon: FileText },
   { label: "New Delivery Challan", to: "/challan/new", module: "gatepass", icon: PackageCheck },
   { label: "New GRN", to: "/grn/new", module: "gatepass", icon: PackageCheck },
+  { label: "New Sales Order", to: "/sales/orders", module: "sales", icon: ClipboardList },
+  { label: "New Proforma", to: "/sales/proforma/new", module: "sales", icon: FileText },
   { label: "New Invoice", to: "/sales/invoices/new", module: "sales", icon: Receipt },
   { label: "New Customer", to: "/masters/customers", module: "customers", icon: Users },
   { label: "New Product", to: "/masters/products", module: "customers", icon: Package },
