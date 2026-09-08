@@ -4,7 +4,13 @@
 // child items. Kept out of documentFlow.ts so the pure module stays testable.
 
 import { supabase } from "@/integrations/supabase/client";
-import { computeTotals, stateCodeFromGSTIN, stateNameFromCode, amountInWords } from "@/lib/gst";
+import {
+  computeTotals,
+  stateCodeFromGSTIN,
+  stateNameFromCode,
+  amountInWords,
+  stateCodeFromStateName,
+} from "@/lib/gst";
 import { fetchBranches, itemDraftFromBreakup, type ItemDraft } from "@/lib/sales";
 import type { Quotation, Customer } from "@/lib/crm";
 import type { SalesOrder } from "@/lib/salesOrders";
@@ -24,12 +30,12 @@ async function fetchCustomer(id: string | null): Promise<Customer | null> {
   return (data as unknown as Customer) || null;
 }
 
-async function hydrateParties(so: {
-  branch_id: string | null;
-  customer_id: string | null;
-}) {
+async function hydrateParties(so: { branch_id: string | null; customer_id: string | null }) {
   const [branches, customer] = await Promise.all([fetchBranches(), fetchCustomer(so.customer_id)]);
-  const branch = branches.find((b) => b.id === so.branch_id) || branches.find((b) => b.is_default) || branches[0];
+  const branch =
+    branches.find((b) => b.id === so.branch_id) ||
+    branches.find((b) => b.is_default) ||
+    branches[0];
   return { branch, customer };
 }
 
@@ -45,13 +51,20 @@ async function hydrateParties(so: {
  *     updated rows and reloads the winner's SO instead of inserting its own.
  *  3. Every write result is checked; nothing is swallowed (B-16).
  */
-export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id: string; so_no: string | null }> {
+export async function createSalesOrderFromQuote(
+  quote: Quotation,
+): Promise<{ id: string; so_no: string | null }> {
   type Created = { id: string; so_no: string | null };
 
   const findExisting = async (): Promise<Created | null> => {
-    const linkedId = (quote as unknown as { converted_to_so_id?: string | null }).converted_to_so_id;
+    const linkedId = (quote as unknown as { converted_to_so_id?: string | null })
+      .converted_to_so_id;
     if (linkedId) {
-      const { data, error } = await supabase.from("sales_orders" as never).select("id, so_no").eq("id", linkedId).maybeSingle();
+      const { data, error } = await supabase
+        .from("sales_orders" as never)
+        .select("id, so_no")
+        .eq("id", linkedId)
+        .maybeSingle();
       if (error) throw error;
       if (data) return data as Created;
     }
@@ -73,14 +86,16 @@ export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id:
       .update({ converted_to_so_id: existing.id, status: "accepted" } as never)
       .eq("id", quote.id)
       .is("converted_to_so_id", null);
-    if (backfillErr && import.meta.env.DEV) console.error("quotation converted_to_so_id backfill failed:", backfillErr.message);
+    if (backfillErr && import.meta.env.DEV)
+      console.error("quotation converted_to_so_id backfill failed:", backfillErr.message);
     return existing;
   }
 
   // Serialize concurrent conversions: only one caller can move the marker off NULL.
+  const PLACEHOLDER = "00000000-0000-0000-0000-000000000001";
   const { data: claimed, error: claimError } = await supabase
     .from("quotations")
-    .update({ status: "accepted" } as never)
+    .update({ status: "accepted", converted_to_so_id: PLACEHOLDER } as never)
     .eq("id", quote.id)
     .is("converted_to_so_id", null)
     .select("id");
@@ -93,78 +108,114 @@ export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id:
   }
 
   const payload = quoteToSalesOrder(quote);
-  const { customer, branch } = await hydrateParties({ branch_id: payload.branch_id, customer_id: payload.customer_id });
-  const company = await getCompany();
-
-  const sellerCode = branch?.state_code || stateCodeFromGSTIN(branch?.gstin) || null;
-  const buyerCode = (customer as unknown as { state_code?: string })?.state_code || stateCodeFromGSTIN(customer?.gst || null);
-
-  const totals = computeTotals({
-    sellerStateCode: sellerCode,
-    buyerStateCode: buyerCode,
-    items: (payload.items || []).map((i) => ({
-      qty: i.qty,
-      rate: i.rate,
-      discount_pct: i.discount_pct,
-      gst_rate: i.gst_rate,
-      cess_rate: Number((i as any).cess_rate) || 0,
-    })),
-    headerDiscount: Number((payload as any).discount_amount ?? payload.discount) || 0,
-    roundOff: true,
-  });
-
-  const itemsWithBreakup = payload.items.map((it, i) => {
-    const b = totals.items[i];
-    return { ...it, taxable_value: b.taxable_value, cgst: b.cgst, sgst: b.sgst, igst: b.igst, cess: b.cess, line_total: b.line_total };
-  });
-
-  // Preserve shipping/TCS/adjustment that were previously dropped (#3)
-  const shipping = Number((payload as any).shipping_charges) || 0;
-  const adjustment = Number((payload as any).adjustment) || 0;
-  const tcsAmt = Number((payload as any).tcs_amount) || 0;
-  const payloadRound = Number((payload as any).round_off) || 0;
-  // totals.total already includes headerDiscount + GST + round_off; add shipping/adjustment/TCS on top
-  const extra = shipping + adjustment + tcsAmt;
-  const finalRound = totals.round_off;
-  const finalTotal = totals.total + extra;
-
-  const { shipping_charges: _sc, adjustment: _adj, tcs_percent: _tcsP, tcs_amount: _tcsA, discount_label: _dl, discount_amount: _da, ...payloadSansExtra } = payload as any;
-  const insert = {
-    ...payloadSansExtra,
-    branch_id: branch?.id ?? payload.branch_id,
-    seller_name: company.name,
-    seller_gstin: company.gstin ?? branch?.gstin ?? null,
-    seller_state: branch?.state_name ?? stateNameFromCode(sellerCode) ?? null,
-    seller_state_code: sellerCode,
-    seller_address: company.regd_address,
-    buyer_name: customer?.company ?? null,
-    buyer_gstin: customer?.gst ?? null,
-    buyer_state: customer?.state ?? stateNameFromCode(buyerCode) ?? null,
-    buyer_state_code: buyerCode,
-    place_of_supply: payload.place_of_supply || customer?.state || null,
-    place_of_supply_code: buyerCode,
-    is_interstate: totals.is_interstate,
-    subtotal: totals.subtotal,
-    discount: totals.discount,
-    taxable_value: totals.taxable_value,
-    cgst: totals.cgst,
-    sgst: totals.sgst,
-    igst: totals.igst,
-    cess: totals.cess,
-    round_off: finalRound,
-    total: finalTotal,
-    total_in_words: amountInWords(finalTotal),
-    items: itemsWithBreakup,
-  };
 
   let created: Created;
   try {
-    const { data, error } = await supabase.from("sales_orders" as never).insert(insert as never).select("id, so_no").single();
-    if (error) throw error;
-    created = data as Created;
+    const { customer, branch } = await hydrateParties({
+      branch_id: payload.branch_id,
+      customer_id: payload.customer_id,
+    });
+    const company = await getCompany();
+
+    const sellerCode = branch?.state_code || stateCodeFromGSTIN(branch?.gstin) || null;
+    const buyerCode =
+      (customer as unknown as { state_code?: string })?.state_code ||
+      stateCodeFromGSTIN(customer?.gst || null) ||
+      stateCodeFromStateName((customer as unknown as { state?: string })?.state || null) ||
+      null;
+
+    const totals = computeTotals({
+      sellerStateCode: sellerCode,
+      buyerStateCode: buyerCode,
+      items: (payload.items || []).map((i) => ({
+        qty: i.qty,
+        rate: i.rate,
+        discount_pct: i.discount_pct,
+        gst_rate: i.gst_rate,
+        cess_rate: Number((i as any).cess_rate) || 0,
+      })),
+      headerDiscount: Number((payload as any).discount_amount ?? payload.discount) || 0,
+      roundOff: true,
+    });
+
+    const itemsWithBreakup = payload.items.map((it, i) => {
+      const b = totals.items[i];
+      return {
+        ...it,
+        taxable_value: b.taxable_value,
+        cgst: b.cgst,
+        sgst: b.sgst,
+        igst: b.igst,
+        cess: b.cess,
+        line_total: b.line_total,
+      };
+    });
+
+    // Preserve shipping/TCS/adjustment that were previously dropped (#3)
+    const shipping = Number((payload as any).shipping_charges) || 0;
+    const adjustment = Number((payload as any).adjustment) || 0;
+    const tcsAmt = Number((payload as any).tcs_amount) || 0;
+    // totals.total already includes headerDiscount + GST + round_off; add shipping/adjustment/TCS on top
+    const extra = shipping + adjustment + tcsAmt;
+    const finalRound = totals.round_off;
+    const finalTotal = totals.total + extra;
+
+    const {
+      shipping_charges: _sc,
+      adjustment: _adj,
+      tcs_percent: _tcsP,
+      tcs_amount: _tcsA,
+      discount_label: _dl,
+      discount_amount: _da,
+      ...payloadSansExtra
+    } = payload as any;
+    const insert = {
+      ...payloadSansExtra,
+      branch_id: branch?.id ?? payload.branch_id,
+      seller_name: company.name,
+      seller_gstin: company.gstin ?? branch?.gstin ?? null,
+      seller_state: branch?.state_name ?? stateNameFromCode(sellerCode) ?? null,
+      seller_state_code: sellerCode,
+      seller_address: company.regd_address,
+      buyer_name: customer?.company ?? null,
+      buyer_gstin: customer?.gst ?? null,
+      buyer_state: customer?.state ?? stateNameFromCode(buyerCode) ?? null,
+      buyer_state_code: buyerCode,
+      place_of_supply: payload.place_of_supply || customer?.state || null,
+      place_of_supply_code: buyerCode,
+      is_interstate: totals.is_interstate,
+      subtotal: totals.subtotal,
+      discount: totals.discount,
+      taxable_value: totals.taxable_value,
+      cgst: totals.cgst,
+      sgst: totals.sgst,
+      igst: totals.igst,
+      cess: totals.cess,
+      round_off: finalRound,
+      shipping_charges: shipping,
+      adjustment,
+      tcs_percent: Number((payload as any).tcs_percent) || 0,
+      tcs_amount: tcsAmt,
+      discount_label: (payload as any).discount_label ?? null,
+      discount_amount: Number((payload as any).discount_amount) || 0,
+      total: finalTotal,
+      total_in_words: amountInWords(finalTotal),
+      items: itemsWithBreakup,
+    };
+
+    const { data: invData, error: invError } = await supabase
+      .from("sales_orders" as never)
+      .insert(insert as never)
+      .select("id, so_no")
+      .single();
+    if (invError) throw invError;
+    created = invData as Created;
   } catch (e) {
-    // Release the claim so a fixed retry can proceed.
-    await supabase.from("quotations").update({ status: quote.status ?? "draft" } as never).eq("id", quote.id);
+    // Release claim so retry can proceed
+    await supabase
+      .from("quotations")
+      .update({ status: quote.status ?? "draft", converted_to_so_id: null } as never)
+      .eq("id", quote.id);
     throw e;
   }
 
@@ -174,13 +225,17 @@ export async function createSalesOrderFromQuote(quote: Quotation): Promise<{ id:
     .eq("id", quote.id);
   if (linkErr) {
     // The SO exists; the marker must still land or the quote looks unconverted.
-    throw new Error(`Sales Order ${created.so_no || created.id} created, but linking it back to the quotation failed: ${linkErr.message}`);
+    throw new Error(
+      `Sales Order ${created.so_no || created.id} created, but linking it back to the quotation failed: ${linkErr.message}`,
+    );
   }
   return created;
 }
 
 /** Idempotent: returns the DC already raised against this SO, if any (B-02/B-25). */
-export async function createChallanFromSalesOrder(so: SalesOrder): Promise<{ id: string; challan_no: string | null }> {
+export async function createChallanFromSalesOrder(
+  so: SalesOrder,
+): Promise<{ id: string; challan_no: string | null }> {
   type Created = { id: string; challan_no: string | null };
 
   const { data: existingDc, error: dcLookupErr } = await supabase
@@ -196,7 +251,11 @@ export async function createChallanFromSalesOrder(so: SalesOrder): Promise<{ id:
   const rawPayload = salesOrderToDeliveryChallan(so);
   // Strip synthetic fields that are not columns in delivery_challans (branch_id etc — kept only inside items JSON)
   const { branch_id: _b, buyer_state: _bs, buyer_state_code: _bsc, ...payload } = rawPayload as any;
-  const { data, error } = await supabase.from("delivery_challans" as never).insert(payload as never).select("id, challan_no").single();
+  const { data, error } = await supabase
+    .from("delivery_challans" as never)
+    .insert(payload as never)
+    .select("id, challan_no")
+    .single();
   if (error) throw error;
 
   // Status flip is conditional + checked: never clobber "invoiced", and a
@@ -207,7 +266,9 @@ export async function createChallanFromSalesOrder(so: SalesOrder): Promise<{ id:
     .update({ status: so.status === "invoiced" ? so.status : "partial" } as never)
     .eq("id", so.id);
   if (statusErr) {
-    throw new Error(`Delivery Challan created, but updating the Sales Order status failed: ${statusErr.message}`);
+    throw new Error(
+      `Delivery Challan created, but updating the Sales Order status failed: ${statusErr.message}`,
+    );
   }
   return data as Created;
 }
@@ -226,7 +287,11 @@ async function insertInvoiceFromPayload(
   const company = await getCompany();
 
   const sellerCode = branch.state_code || stateCodeFromGSTIN(branch.gstin) || null;
-  const buyerCode = (customer as unknown as { state_code?: string }).state_code || stateCodeFromGSTIN(customer.gst || null);
+  const buyerCode =
+    (customer as unknown as { state_code?: string }).state_code ||
+    stateCodeFromGSTIN(customer.gst || null) ||
+    stateCodeFromStateName((customer as unknown as { state?: string })?.state || null) ||
+    null;
 
   const drafts: ItemDraft[] = (payload.items || []).map((it: any) => ({
     product_id: it.product_id ?? null,
@@ -240,7 +305,10 @@ async function insertInvoiceFromPayload(
     cess_rate: Number(it.cess_rate) || 0,
     warehouse_id: it.warehouse_id ?? null,
     serial_numbers: Array.isArray(it.serial_numbers) ? it.serial_numbers : [],
-    is_serialized: !!(it.is_serialized ?? (Array.isArray(it.serial_numbers) && it.serial_numbers.length > 0)),
+    is_serialized: !!(
+      it.is_serialized ??
+      (Array.isArray(it.serial_numbers) && it.serial_numbers.length > 0)
+    ),
     part_model_no: it.part_model_no ?? null,
     part_name: it.part_name ?? null,
   }));
@@ -256,12 +324,18 @@ async function insertInvoiceFromPayload(
   const baseTotals = computeTotals({
     sellerStateCode: sellerCode,
     buyerStateCode: buyerCode,
-    items: drafts.map((i) => ({ qty: i.qty, rate: i.rate, discount_pct: i.discount_pct, gst_rate: i.gst_rate, cess_rate: (i as any).cess_rate || 0 })),
+    items: drafts.map((i) => ({
+      qty: i.qty,
+      rate: i.rate,
+      discount_pct: i.discount_pct,
+      gst_rate: i.gst_rate,
+      cess_rate: (i as any).cess_rate || 0,
+    })),
     roundOff: true,
   });
   if (tcsP > 0 && tcsA === 0) {
     const tcsBase = baseTotals.taxable_value + ship;
-    tcsA = Math.round((tcsBase * tcsP) / 100 * 100) / 100;
+    tcsA = Math.round(((tcsBase * tcsP) / 100) * 100) / 100;
   }
   const extraInv = ship + adj + tcsA;
   const totals = {
@@ -286,7 +360,8 @@ async function insertInvoiceFromPayload(
     buyer_state: customer.state ?? stateNameFromCode(buyerCode),
     buyer_state_code: buyerCode,
     billing_address: payload.billing_address ?? customer.billing_address,
-    shipping_address: payload.shipping_address ?? customer.shipping_address ?? customer.billing_address,
+    shipping_address:
+      payload.shipping_address ?? customer.shipping_address ?? customer.billing_address,
     place_of_supply: payload.place_of_supply ?? customer.state,
     place_of_supply_code: buyerCode,
     is_interstate: totals.is_interstate,
@@ -310,7 +385,11 @@ async function insertInvoiceFromPayload(
     sales_order_id: payload.sales_order_id,
   };
 
-  const { data: inv, error } = await supabase.from("invoices").insert(insertPayload as never).select("id, invoice_no").single();
+  const { data: inv, error } = await supabase
+    .from("invoices")
+    .insert(insertPayload as never)
+    .select("id, invoice_no")
+    .single();
   if (error) throw error;
 
   const rows = drafts.map((d, i) => {
@@ -323,25 +402,42 @@ async function insertInvoiceFromPayload(
     // Compensating cleanup (B-16/race #29): never leave an orphan invoice
     // header with no line items — a retry would otherwise find it via the
     // idempotency check and treat the broken invoice as complete.
-    await supabase.from("invoices").delete().eq("id", (inv as { id: string }).id);
+    await supabase
+      .from("invoices")
+      .delete()
+      .eq("id", (inv as { id: string }).id);
     throw new Error(`Invoice items could not be saved (header rolled back): ${e2.message}`);
   }
 
   return inv as { id: string; invoice_no: string | null };
 }
 
-/** Idempotency helper: an existing non-cancelled invoice linked to this SO. */
-async function findInvoiceForSalesOrder(soId: string): Promise<{ id: string; invoice_no: string | null } | null> {
-  const { data, error } = await supabase
+/** Idempotency helper: prefers issued invoice; falls back to draft (may be orphaned). */
+async function findInvoiceForSalesOrder(
+  soId: string,
+): Promise<{ id: string; invoice_no: string | null } | null> {
+  // Prefer a fully-issued invoice (idempotent success)
+  const { data: issued, error: e1 } = await supabase
     .from("invoices")
     .select("id, invoice_no")
     .eq("sales_order_id", soId)
-    .neq("status", "cancelled")
+    .in("status", ["issued", "partial", "paid"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (error) throw error;
-  return (data as unknown as { id: string; invoice_no: string | null }) || null;
+  if (e1) throw e1;
+  if (issued) return issued as { id: string; invoice_no: string | null };
+  // Fall back to draft (may be orphaned — caller should handle)
+  const { data: draft, error: e2 } = await supabase
+    .from("invoices")
+    .select("id, invoice_no")
+    .eq("sales_order_id", soId)
+    .eq("status", "draft")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (e2) throw e2;
+  return (draft as { id: string; invoice_no: string | null }) || null;
 }
 
 export async function createInvoiceFromSalesOrder(so: SalesOrder) {
@@ -352,12 +448,16 @@ export async function createInvoiceFromSalesOrder(so: SalesOrder) {
       .from("sales_orders" as never)
       .update({ status: "invoiced" } as never)
       .eq("id", so.id);
-    if (statusErr && import.meta.env.DEV) console.error("sales_orders status flip failed:", statusErr.message);
+    if (statusErr && import.meta.env.DEV)
+      console.error("sales_orders status flip failed:", statusErr.message);
     return existingInv;
   }
 
   const payload = salesOrderToInvoice(so);
-  const inv = await insertInvoiceFromPayload(payload, { branchId: so.branch_id, customerId: so.customer_id });
+  const inv = await insertInvoiceFromPayload(payload, {
+    branchId: so.branch_id,
+    customerId: so.customer_id,
+  });
 
   const { error: statusErr } = await supabase
     .from("sales_orders" as never)
@@ -365,12 +465,22 @@ export async function createInvoiceFromSalesOrder(so: SalesOrder) {
     .eq("id", so.id);
   if (statusErr) {
     // Safe to surface: a retry finds the existing invoice instead of duplicating.
-    throw new Error(`Invoice created, but updating the Sales Order status failed: ${statusErr.message}`);
+    throw new Error(
+      `Invoice created, but updating the Sales Order status failed: ${statusErr.message}`,
+    );
   }
   return inv;
 }
 
-export async function createInvoiceFromChallan(dc: DeliveryChallan, linked: { sales_order_id?: string | null; linked_quote_id?: string | null; branch_id?: string | null; customer_id?: string | null } = {}) {
+export async function createInvoiceFromChallan(
+  dc: DeliveryChallan,
+  linked: {
+    sales_order_id?: string | null;
+    linked_quote_id?: string | null;
+    branch_id?: string | null;
+    customer_id?: string | null;
+  } = {},
+) {
   // B-25: DC → Invoice idempotency — an invoice already raised from this DC
   // is returned instead of duplicated.
   const { data: existing, error: lookupErr } = await supabase
@@ -384,5 +494,8 @@ export async function createInvoiceFromChallan(dc: DeliveryChallan, linked: { sa
   if (existing) return existing as unknown as { id: string; invoice_no: string | null };
 
   const payload = deliveryChallanToInvoice(dc, linked);
-  return insertInvoiceFromPayload(payload, { branchId: linked.branch_id ?? null, customerId: linked.customer_id ?? null });
+  return insertInvoiceFromPayload(payload, {
+    branchId: linked.branch_id ?? null,
+    customerId: linked.customer_id ?? null,
+  });
 }
