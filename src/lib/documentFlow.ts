@@ -27,7 +27,7 @@ function quoteItemToSoItem(qi: QuoteItem): SoItem {
     description: qi.description || qi.product_name || "",
     hsn: qi.hsn ?? null,
     qty: Number(qi.qty) || 0,
-    unit: qi.unit ?? "Nos",
+    unit: qi.unit || "Nos",
     rate: Number(qi.rate) || 0,
     discount_pct: Number(qi.discount_percent) || 0,
     gst_rate: Number(qi.tax_percent) || 0,
@@ -40,6 +40,18 @@ function quoteItemToSoItem(qi: QuoteItem): SoItem {
   };
 }
 
+/**
+ * Payload for a new sales order.
+ *
+ * **Synthetic fields** (not in DDL until migration 20260909000001):
+ *   shipping_charges, adjustment, tcs_percent, tcs_amount,
+ *   discount_label, discount_amount — these are now persisted
+ *   in the sales_orders table. The writer layer must include
+ *   them in the INSERT.
+ *
+ * **Legacy fields** carried through from quotation for writer convenience
+ * but overwritten by the GST engine (e.g. subtotal, total, is_interstate).
+ */
 export type NewSalesOrder = Omit<
   SalesOrder,
   "id" | "so_no" | "created_at" | "updated_at" | "created_by"
@@ -52,6 +64,15 @@ export type NewSalesOrder = Omit<
   discount_amount?: number;
 };
 
+/**
+ * Pure mapping from Quotation to SalesOrder payload.
+ *
+ * NOTE: This produces a partial payload — `subtotal/total/cgst/sgst/igst`
+ * are copied from the quotation verbatim (two sources of truth). The writer
+ * layer (`createSalesOrderFromQuote`) RECOMPUTES everything via
+ * `computeTotals` + `hydrateParties`. Do NOT insert this payload directly
+ * without the writer.
+ */
 export function quoteToSalesOrder(q: Quotation): NewSalesOrder {
   const items = (q.items || []).map(quoteItemToSoItem);
   return {
@@ -118,7 +139,10 @@ function soItemToChallanItem(it: SoItem): ChallanItem {
     uom: it.unit || "Nos",
     qty: String(it.qty ?? ""),
     model_no: (it as any).part_model_no || "",
-    serial_no: Array.isArray((it as any).serial_numbers) && (it as any).serial_numbers.length > 0 ? String((it as any).serial_numbers[0]) : "",
+    serial_no:
+      Array.isArray((it as any).serial_numbers) && (it as any).serial_numbers.length > 0
+        ? String((it as any).serial_numbers[0])
+        : "",
     // Preserve financials so DC→Invoice chain does not lose pricing (fixes #1)
     product_id: it.product_id ?? null,
     hsn: it.hsn ?? null,
@@ -244,7 +268,12 @@ export function salesOrderToInvoice(so: SalesOrder): NewInvoicePayload {
 
 export function deliveryChallanToInvoice(
   dc: DeliveryChallan,
-  linked: { sales_order_id?: string | null; linked_quote_id?: string | null; branch_id?: string | null; customer_id?: string | null } = {},
+  linked: {
+    sales_order_id?: string | null;
+    linked_quote_id?: string | null;
+    branch_id?: string | null;
+    customer_id?: string | null;
+  } = {},
 ): NewInvoicePayload {
   const items: SoItem[] = (dc.items || []).map((ci: any) => ({
     product_id: (ci.product_id as string | null) ?? null,
@@ -252,13 +281,23 @@ export function deliveryChallanToInvoice(
     hsn: (ci.hsn as string | null) ?? null,
     qty: Number(ci.qty) || 0,
     unit: ci.uom || "Nos",
-    rate: ci.rate != null && ci.rate !== "" ? Number(ci.rate) : (ci.unit_price != null && ci.unit_price !== "" ? Number(ci.unit_price) : 0),
+    rate:
+      ci.rate != null && ci.rate !== ""
+        ? Number(ci.rate)
+        : ci.unit_price != null && ci.unit_price !== ""
+          ? Number(ci.unit_price)
+          : 0,
     discount_pct: ci.discount_pct != null ? Number(ci.discount_pct) : 0,
-    gst_rate: ci.gst_rate != null ? Number(ci.gst_rate) : 18,
+    gst_rate: ci.gst_rate != null ? Number(ci.gst_rate) : 0,
     cess_rate: ci.cess_rate != null ? Number(ci.cess_rate) : 0,
     warehouse_id: (ci.warehouse_id as string | null) ?? null,
-    serial_numbers: Array.isArray(ci.serial_numbers) ? ci.serial_numbers : (ci.serial_no ? [String(ci.serial_no)] : []),
-    is_serialized: !!ci.is_serialized || (Array.isArray(ci.serial_numbers) && ci.serial_numbers.length > 0),
+    serial_numbers: Array.isArray(ci.serial_numbers)
+      ? ci.serial_numbers
+      : ci.serial_no
+        ? [String(ci.serial_no)]
+        : [],
+    is_serialized:
+      !!ci.is_serialized || (Array.isArray(ci.serial_numbers) && ci.serial_numbers.length > 0),
     part_model_no: (ci.model_no as string | null) ?? null,
     part_name: (ci.part_name as string | null) ?? null,
   }));

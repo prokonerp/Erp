@@ -95,7 +95,7 @@ describe("documentFlow/salesOrderToInvoice", () => {
 });
 
 describe("documentFlow/deliveryChallanToInvoice", () => {
-  it("converts a goods DC into an invoice, defaulting GST to 18% and rate to 0", () => {
+  it("converts a goods DC into an invoice, defaulting GST to 0% (not 18%) and rate to 0", () => {
     const dc: any = {
       id: "dc1",
       items: [{ description: "Widget", qty: "2", uom: "Nos", part_name: "W" }],
@@ -113,7 +113,7 @@ describe("documentFlow/deliveryChallanToInvoice", () => {
     expect(inv.buyer_name).toBe("Acme");
     expect(inv.sales_order_id).toBe("so1");
     expect(inv.items).toHaveLength(1);
-    expect(inv.items[0].gst_rate).toBe(18);
+    expect(inv.items[0].gst_rate).toBe(0);
     expect(inv.items[0].rate).toBe(0);
   });
 });
