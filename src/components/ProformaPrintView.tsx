@@ -28,6 +28,8 @@ export function ProformaPrintView({
   so,
   fulfillments,
   authorised_signature_url,
+  docId,
+  soConversions,
 }: {
   proforma: ProformaRow;
   company: CompanyProfile;
@@ -35,6 +37,8 @@ export function ProformaPrintView({
   so?: SalesOrder | null;
   fulfillments?: SoFulfillmentSummary[] | null;
   authorised_signature_url?: string | null;
+  docId?: string | null;
+  soConversions?: any[] | null;
 }) {
   const accent = (company.accent_color && company.accent_color.trim()) || "#14225C";
   const salesOffice = cleanAddress(company.sales_office_address);
@@ -262,10 +266,13 @@ export function ProformaPrintView({
                   const idx = i; // assume same order as SO items; fallback to i
                   const soItem: any = so?.items[idx] || it;
                   const ordered = Number(soItem.qty) || Number(it.qty) || 0;
-                  const already = priorMap.get(idx) ?? 0;
+                  const rawAlready = priorMap.get(idx) ?? 0;
                   const thisQty = Number(it.qty) || 0;
-                  const balance = Math.max(0, ordered - already - (so ? 0 : 0));
-                  // For proforma annexure, balance shown is after excluding this doc's qty? Show ordered - already - thisQty for remaining?
+                  // B16: only subtract if this doc is already in ledger (prevents double-count)
+                  const effectiveDocId = docId ?? proforma.id;
+                  const isThisDocInLedger = !!soConversions?.some((c: any) => c.target_id === effectiveDocId);
+                  // If doc is in ledger and priorMap came from fulfillments (which may include current), derive prior
+                  const already = isThisDocInLedger && rawAlready >= thisQty && thisQty > 0 ? Math.max(0, rawAlready - thisQty) : rawAlready;
                   const remaining = Math.max(0, ordered - already - thisQty);
                   return (
                     <tr key={i}>

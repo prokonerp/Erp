@@ -49,7 +49,7 @@ function SalesOrdersList() {
   const soIds = useMemo(() => rows.map((r) => r.id), [rows]);
 
   const summariesQuery = useQuery({
-    queryKey: ["so-summaries", soIds.join(",")],
+    queryKey: ["so-summaries", [...soIds].sort().join(",")],
     enabled: soIds.length > 0,
     staleTime: 15_000,
     queryFn: async () => {

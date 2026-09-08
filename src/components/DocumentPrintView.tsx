@@ -108,6 +108,7 @@ export function DocumentPrintView({
   soFulfillments,
   soConversions,
   annexure,
+  docId,
 }: {
   doc: PrintDoc;
   company: CompanyProfile;
@@ -115,6 +116,7 @@ export function DocumentPrintView({
   soFulfillments?: SoFulfillmentSummary[] | null;
   soConversions?: any[] | null;
   annexure?: boolean;
+  docId?: string | null;
 }) {
   const accent = (company.accent_color && company.accent_color.trim()) || "#14225C";
   const title = doc.type === "quotation" ? "QUOTATION" : "PURCHASE ORDER";
@@ -423,8 +425,9 @@ export function DocumentPrintView({
                   const ordered = Number(soIt.qty) || 0;
                   const fulfilled = sum ? Number(sum.fulfilled_stock) || 0 : 0;
                   const currentQty = currentQtyByIndex.get(i) ?? 0;
-                  // If ledger already includes this doc, fulfilled includes current; derive prior
-                  const alreadyPrior = fulfilled >= currentQty && currentQty > 0 ? Math.max(0, fulfilled - currentQty) : fulfilled;
+                  // B16: only subtract currentQty if this doc is already in the ledger (prevents double-count)
+                  const isThisDocInLedger = docId ? !!soConversions?.some((c: any) => c.target_id === docId) : false;
+                  const alreadyPrior = isThisDocInLedger && fulfilled >= currentQty && currentQty > 0 ? Math.max(0, fulfilled - currentQty) : fulfilled;
                   const balanceAfter = sum ? Number(sum.balance) : Math.max(0, ordered - fulfilled);
                   // For display, balance should be remaining after this doc: ordered - alreadyPrior - currentQty
                   const balance = sum ? balanceAfter : Math.max(0, ordered - alreadyPrior - currentQty);

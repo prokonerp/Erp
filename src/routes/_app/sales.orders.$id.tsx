@@ -125,7 +125,11 @@ function SalesOrderDetail() {
   }, [so, summary]);
   const fulfilledTotal = useMemo(() => summary.reduce((s, r) => s + (Number(r.fulfilled_stock) || 0), 0), [summary]);
   const fulfilledProforma = useMemo(() => summary.reduce((s, r) => s + (Number((r as any).fulfilled_proforma) || 0), 0), [summary]);
-  const balanceTotal = Math.max(0, orderedTotal - fulfilledTotal);
+  // B13: use summary.reduce balance when summary non-empty (consistent with orderedVsFulfilled helper)
+  const balanceTotal = useMemo(() => {
+    if (summary.length > 0) return summary.reduce((s, r) => s + (Number((r as any).balance) || 0), 0);
+    return Math.max(0, orderedTotal - fulfilledTotal);
+  }, [summary, orderedTotal, fulfilledTotal]);
   const isFullyDelivered = orderedTotal > 0 && balanceTotal <= 0;
   const progressPct = orderedTotal > 0 ? Math.min(100, Math.round((fulfilledTotal / orderedTotal) * 100)) : 0;
 

@@ -40,23 +40,89 @@ const SO_FULFILL_LOCK_PREFIX = "so_fulfill:";
 /**
  * Serialize concurrent conversions on the same SO.
  * Canonical DB pattern is `pg_advisory_xact_lock(hashtextextended('so_fulfill:'||soId,0))`
- * inside `set_*_no()` triggers. No dedicated RPC exists for this key on the
- * Supabase JS client, so we attempt `supabase.rpc("pg_advisory_xact_lock", …)` and
- * fall back to optimistic concurrency (balance re-validation inside fn). The
- * true serialization guarantee is the re-validation of `balance` before insert
- * — the lock is opportunistic.
+ * inside `set_*_no()` triggers. JS (Supabase JS client) cannot hold a single
+ * Postgres transaction across multiple statements — each supabase.rpc / insert
+ * is its own transaction/statement. So `pg_advisory_xact_lock` (transaction-
+ * scoped) releases instantly after the single RPC statement and does NOT guard
+ * the subsequent inserts. The REAL race guard is therefore optimistic
+ * re-validation + post-insert verification (verifyNoOverFulfillment) which rolls
+ * back over-fulfillment if two concurrent writers slip through.
+ *
+ * We still attempt `pg_advisory_lock` (session-level) first — if the Supabase
+ * RPC exists it is held for the whole fn duration and released in finally.
+ * Then we try `pg_advisory_xact_lock` as fallback. If neither is available we
+ * fall back to optimistic + verification. The lock is opportunistic; verification
+ * is mandatory.
  */
 async function withSoFulfillLock<T>(soId: string, fn: () => Promise<T>): Promise<T> {
   const key = `${SO_FULFILL_LOCK_PREFIX}${soId}`;
+  let locked = false;
+  let lockMethod: "session" | "xact" | null = null;
   try {
-    const { error } = await supabase.rpc("pg_advisory_xact_lock" as never, { key } as never);
-    if (error && import.meta.env.DEV) {
-      console.warn("[withSoFulfillLock] advisory lock RPC not available, falling back to optimistic:", error.message);
+    const { error: e1 } = await supabase.rpc("pg_advisory_lock" as never, { key } as never);
+    if (!e1) {
+      locked = true;
+      lockMethod = "session";
+    } else {
+      const { error: e2 } = await supabase.rpc("pg_advisory_xact_lock" as never, { key } as never);
+      if (!e2) {
+        locked = true;
+        lockMethod = "xact";
+      } else if (import.meta.env.DEV) {
+        console.warn("[withSoFulfillLock] advisory lock RPC not available, falling back to optimistic+verification:", e2.message);
+      }
     }
   } catch (_e) {
-    if (import.meta.env.DEV) console.warn("[withSoFulfillLock] fallback to optimistic", _e);
+    if (import.meta.env.DEV) console.warn("[withSoFulfillLock] fallback to optimistic+verification", _e);
   }
-  return fn();
+  try {
+    return await fn();
+  } finally {
+    if (locked && lockMethod === "session") {
+      try {
+        await supabase.rpc("pg_advisory_unlock" as never, { key } as never);
+      } catch {}
+    }
+    // xact lock auto-releases at statement end — nothing to do; session lock released above
+  }
+}
+
+async function verifyNoOverFulfillment(params: {
+  soId: string;
+  so: SalesOrder;
+  lines: FulfillmentLine[];
+  targetTable: string;
+  targetId: string;
+  ledgerId: string;
+}): Promise<void> {
+  const { soId, so, lines, targetTable, targetId, ledgerId } = params;
+  for (const fl of lines) {
+    const qty = Number(fl.this_qty) || 0;
+    if (qty <= 0) continue;
+    const soItem = so.items?.[fl.line_index] as unknown as Record<string, unknown> | undefined;
+    const orderedQty = Number((soItem as { qty?: number; quantity?: number } | undefined)?.qty ?? (soItem as { quantity?: number } | undefined)?.quantity ?? fl.ordered_qty) || 0;
+    if (orderedQty <= 0) continue;
+    const { data, error } = await supabase
+      .from("so_fulfillments" as never)
+      .select("this_qty")
+      .eq("sales_order_id", soId)
+      .eq("line_index", fl.line_index);
+    if (error) throw error;
+    const total = ((data as unknown as Array<{ this_qty: number }> | null) ?? []).reduce(
+      (sum, r) => sum + (Number(r.this_qty) || 0),
+      0,
+    );
+    if (total > orderedQty) {
+      // Roll back: delete ledger (+ cascades fulfillments) and target doc
+      try {
+        await supabase.from("so_conversions" as never).delete().eq("id", ledgerId);
+      } catch {}
+      try {
+        await supabase.from(targetTable as never).delete().eq("id", targetId);
+      } catch {}
+      throw new Error("Over-fulfillment detected — concurrent update, please retry");
+    }
+  }
 }
 
 async function fetchSoViewSummary(soId: string): Promise<SoFulfillmentSummary[]> {
@@ -640,14 +706,23 @@ export async function createInvoiceFromChallan(
 
 // ── New ledger-aware partial writers (V2) ─────────────────────────────────
 
-function stockLinesFromFulfillment(so: SalesOrder, lines: FulfillmentLine[]) {
+async function stockLinesFromFulfillment(so: SalesOrder, lines: FulfillmentLine[]) {
   const stockLines: { model: string; label?: string | null; warehouseId?: string | null; qty: number; stockType?: "good" | "defective" }[] = [];
   for (const fl of lines) {
     const qty = Number(fl.this_qty) || 0;
     if (qty <= 0) continue;
     if (fl.product_id == null) continue;
     const soItem = (so.items?.[fl.line_index] as unknown as Record<string, unknown>) ?? {};
-    const model = String((soItem as { part_model_no?: string; model_no?: string; part_name?: string }).part_model_no || (soItem as { model_no?: string }).model_no || (soItem as { part_name?: string }).part_name || "").trim();
+    let model = String((soItem as { part_model_no?: string; model_no?: string; part_name?: string }).part_model_no || (soItem as { model_no?: string }).model_no || (soItem as { part_name?: string }).part_name || "").trim();
+    if (!model && fl.product_id) {
+      try {
+        const { data } = await supabase.from("products" as never).select("model").eq("id", fl.product_id as never).single();
+        model = String((data as unknown as { model?: string | null })?.model ?? "").trim();
+      } catch {}
+      if (!model) {
+        throw new Error(`Line ${fl.line_index + 1}: missing model — cannot verify stock`);
+      }
+    }
     if (!model) continue;
     stockLines.push({
       model,
@@ -660,13 +735,28 @@ function stockLinesFromFulfillment(so: SalesOrder, lines: FulfillmentLine[]) {
   return stockLines;
 }
 
-async function revalidateBalanceOrThrow(soId: string, lines: FulfillmentLine[]): Promise<SoFulfillmentSummary[]> {
+async function revalidateBalanceOrThrow(soId: string, lines: FulfillmentLine[], so?: SalesOrder | null): Promise<SoFulfillmentSummary[]> {
   const fresh = await fetchSoViewSummary(soId);
   const map = new Map<number, SoFulfillmentSummary>();
   for (const s of fresh) map.set(Number(s.line_index), s);
   for (const fl of lines) {
     const s = map.get(fl.line_index);
-    const balance = s ? Number(s.balance) : Number(fl.balance);
+    let balance: number;
+    if (s) {
+      balance = Number(s.balance);
+    } else {
+      // B3: never trust client-supplied fl.balance when view row is missing.
+      // Derive orderedQty from SO items and compute balance = orderedQty - fulfilledBefore.
+      let orderedQty: number;
+      if (so && so.items?.[fl.line_index] != null) {
+        const item = so.items[fl.line_index] as unknown as Record<string, unknown>;
+        orderedQty = Number((item as { qty?: number }).qty ?? (item as { quantity?: number }).quantity ?? fl.ordered_qty) || 0;
+      } else {
+        orderedQty = Number(fl.ordered_qty) || 0;
+      }
+      const fulfilledBefore = Number(fl.fulfilled_before) || 0;
+      balance = Math.max(0, orderedQty - fulfilledBefore);
+    }
     if (Number(fl.this_qty) > balance) {
       throw new Error(`Balance changed — ${balance} remaining for line ${fl.line_index + 1}, you asked ${fl.this_qty}. Refresh and try again.`);
     }
@@ -687,23 +777,29 @@ export async function createTaxInvoiceFromSO(
 
   for (const fl of lines) {
     const s = summary.find((x) => Number(x.line_index) === fl.line_index);
-    const balance = s ? Number(s.balance) : Number(fl.balance);
+    let balance: number;
+    if (s) balance = Number(s.balance);
+    else {
+      const item = so.items?.[fl.line_index] as unknown as Record<string, unknown> | undefined;
+      const orderedQty = Number((item as { qty?: number })?.qty ?? (item as { quantity?: number })?.quantity ?? fl.ordered_qty) || 0;
+      balance = Math.max(0, orderedQty - (Number(fl.fulfilled_before) || 0));
+    }
     if (Number(fl.this_qty) > balance) {
       throw new Error(`Balance changed — ${balance} remaining for line ${fl.line_index + 1}, you asked ${fl.this_qty}. Refresh and try again.`);
     }
   }
 
-  const stockLines = stockLinesFromFulfillment(so, lines);
-  let shortfalls: Awaited<ReturnType<typeof findShortfalls>> = [];
-  if (!opts?.allow_negative_stock && stockLines.length > 0) {
-    shortfalls = await findShortfalls(stockLines);
-    if (shortfalls.length > 0) throw new Error(blockMessage(shortfalls[0]));
-  } else if (opts?.allow_negative_stock && stockLines.length > 0) {
-    shortfalls = await findShortfalls(stockLines);
-  }
-
   return withSoFulfillLock(soId, async () => {
-    const freshSummary = await revalidateBalanceOrThrow(soId, lines);
+    const freshSummary = await revalidateBalanceOrThrow(soId, lines, so);
+    // B2: stock check inside lock after revalidation, immediately before insert
+    const stockLines = await stockLinesFromFulfillment(so, lines);
+    let shortfalls: Awaited<ReturnType<typeof findShortfalls>> = [];
+    if (!opts?.allow_negative_stock && stockLines.length > 0) {
+      shortfalls = await findShortfalls(stockLines);
+      if (shortfalls.length > 0) throw new Error(blockMessage(shortfalls[0]));
+    } else if (opts?.allow_negative_stock && stockLines.length > 0) {
+      shortfalls = await findShortfalls(stockLines);
+    }
     const payload = salesOrderToInvoicePartial(so, lines);
     let inv: { id: string; invoice_no: string | null } | null = null;
     let ledgerId: string | null = null;
@@ -723,6 +819,8 @@ export async function createTaxInvoiceFromSO(
         status: "draft",
       });
       ledgerId = res.ledgerId;
+      // B1: post-insert verification — guard against race over-fulfillment
+      await verifyNoOverFulfillment({ soId, so, lines, targetTable: "invoices", targetId: inv.id, ledgerId });
       const { error: updErr } = await supabase.from("invoices" as never).update({ conversion_id: ledgerId } as never).eq("id", inv.id);
       if (updErr) {
         try { await supabase.from("so_conversions" as never).delete().eq("id", ledgerId); } catch {}
@@ -763,21 +861,27 @@ export async function createGeneralDcFromSO(
   const summary = await fetchSoViewSummary(soId);
   for (const fl of lines) {
     const s = summary.find((x) => Number(x.line_index) === fl.line_index);
-    const balance = s ? Number(s.balance) : Number(fl.balance);
+    let balance: number;
+    if (s) balance = Number(s.balance);
+    else {
+      const item = so.items?.[fl.line_index] as unknown as Record<string, unknown> | undefined;
+      const orderedQty = Number((item as { qty?: number })?.qty ?? (item as { quantity?: number })?.quantity ?? fl.ordered_qty) || 0;
+      balance = Math.max(0, orderedQty - (Number(fl.fulfilled_before) || 0));
+    }
     if (Number(fl.this_qty) > balance) throw new Error(`Balance changed — ${balance} remaining for line ${fl.line_index + 1}, you asked ${fl.this_qty}. Refresh and try again.`);
   }
 
-  const stockLines = stockLinesFromFulfillment(so, lines);
-  let shortfalls: Awaited<ReturnType<typeof findShortfalls>> = [];
-  if (!opts?.allow_negative_stock && stockLines.length > 0) {
-    shortfalls = await findShortfalls(stockLines);
-    if (shortfalls.length > 0) throw new Error(blockMessage(shortfalls[0]));
-  } else if (opts?.allow_negative_stock && stockLines.length > 0) {
-    shortfalls = await findShortfalls(stockLines);
-  }
-
   return withSoFulfillLock(soId, async () => {
-    const freshSummary = await revalidateBalanceOrThrow(soId, lines);
+    const freshSummary = await revalidateBalanceOrThrow(soId, lines, so);
+    // B2: stock check inside lock after revalidation
+    const stockLines = await stockLinesFromFulfillment(so, lines);
+    let shortfalls: Awaited<ReturnType<typeof findShortfalls>> = [];
+    if (!opts?.allow_negative_stock && stockLines.length > 0) {
+      shortfalls = await findShortfalls(stockLines);
+      if (shortfalls.length > 0) throw new Error(blockMessage(shortfalls[0]));
+    } else if (opts?.allow_negative_stock && stockLines.length > 0) {
+      shortfalls = await findShortfalls(stockLines);
+    }
     const base = salesOrderToGeneralDcPartial(so, lines);
     if (opts?.returnable !== undefined) (base as unknown as Record<string, unknown>).returnable = !!opts.returnable;
     if (opts?.expected_return_date !== undefined) (base as unknown as Record<string, unknown>).expected_return_date = opts.expected_return_date;
@@ -805,6 +909,7 @@ export async function createGeneralDcFromSO(
         status: String(gdc.status ?? "Draft").toLowerCase(),
       });
       ledgerId = res.ledgerId;
+      await verifyNoOverFulfillment({ soId, so, lines, targetTable: "general_delivery_challans", targetId: gdc.id, ledgerId });
       const { error: updErr } = await supabase
         .from("general_delivery_challans" as never)
         .update({ conversion_id: ledgerId, sales_order_id: soId } as never)
@@ -844,12 +949,18 @@ export async function createProformaFromSO(
   const summary = await fetchSoViewSummary(soId);
   for (const fl of lines) {
     const s = summary.find((x) => Number(x.line_index) === fl.line_index);
-    const balance = s ? Number(s.balance) : Number(fl.balance);
+    let balance: number;
+    if (s) balance = Number(s.balance);
+    else {
+      const item = so.items?.[fl.line_index] as unknown as Record<string, unknown> | undefined;
+      const orderedQty = Number((item as { qty?: number })?.qty ?? (item as { quantity?: number })?.quantity ?? fl.ordered_qty) || 0;
+      balance = Math.max(0, orderedQty - (Number(fl.fulfilled_before) || 0));
+    }
     if (Number(fl.this_qty) > balance) throw new Error(`Balance changed — ${balance} remaining for line ${fl.line_index + 1}, you asked ${fl.this_qty}. Refresh and try again.`);
   }
 
   return withSoFulfillLock(soId, async () => {
-    const freshSummary = await revalidateBalanceOrThrow(soId, lines);
+    const freshSummary = await revalidateBalanceOrThrow(soId, lines, so);
     const base = salesOrderToProformaPartial(so, lines);
 
     const { branch, customer } = await hydrateParties({ branch_id: (so as unknown as { branch_id: string | null }).branch_id, customer_id: (so as unknown as { customer_id: string | null }).customer_id });
@@ -975,6 +1086,7 @@ export async function createProformaFromSO(
         status: "draft",
       });
       ledgerId = res.ledgerId;
+      await verifyNoOverFulfillment({ soId, so, lines, targetTable: "proforma_invoices", targetId: proforma.id, ledgerId });
       const { error: updErr } = await supabase.from("proforma_invoices" as never).update({ conversion_id: ledgerId } as never).eq("id", proforma.id);
       if (updErr) {
         try { await supabase.from("so_conversions" as never).delete().eq("id", ledgerId); } catch {}
@@ -1000,12 +1112,18 @@ export async function createDeliveryChallanFromSO(
   const summary = await fetchSoViewSummary(soId);
   for (const fl of lines) {
     const s = summary.find((x) => Number(x.line_index) === fl.line_index);
-    const balance = s ? Number(s.balance) : Number(fl.balance);
+    let balance: number;
+    if (s) balance = Number(s.balance);
+    else {
+      const item = so.items?.[fl.line_index] as unknown as Record<string, unknown> | undefined;
+      const orderedQty = Number((item as { qty?: number })?.qty ?? (item as { quantity?: number })?.quantity ?? fl.ordered_qty) || 0;
+      balance = Math.max(0, orderedQty - (Number(fl.fulfilled_before) || 0));
+    }
     if (Number(fl.this_qty) > balance) throw new Error(`Balance changed — ${balance} remaining for line ${fl.line_index + 1}, you asked ${fl.this_qty}. Refresh and try again.`);
   }
 
   return withSoFulfillLock(soId, async () => {
-    const freshSummary = await revalidateBalanceOrThrow(soId, lines);
+    const freshSummary = await revalidateBalanceOrThrow(soId, lines, so);
     const base = salesOrderToDeliveryChallanPartial(so, lines);
     const { branch_id: _b, buyer_state: _bs, buyer_state_code: _bsc, ...payload } = base as unknown as Record<string, unknown>;
 
@@ -1030,6 +1148,7 @@ export async function createDeliveryChallanFromSO(
         status: "Draft",
       });
       ledgerId = res.ledgerId;
+      await verifyNoOverFulfillment({ soId, so, lines, targetTable: "delivery_challans", targetId: dc.id, ledgerId });
       const { error: updErr } = await supabase.from("delivery_challans" as never).update({ conversion_id: ledgerId } as never).eq("id", dc.id);
       if (updErr) {
         try { await supabase.from("so_conversions" as never).delete().eq("id", ledgerId); } catch {}
@@ -1081,7 +1200,6 @@ export async function createInvoiceFromProforma(
     fulLines = derived;
     (payload as unknown as Record<string, unknown>).sales_order_id = soId;
   } else {
-    const items = (proforma.items || []) as unknown as FulfillmentLine[];
     payload = {
       branch_id: (proforma as unknown as { branch_id: string | null }).branch_id ?? null,
       customer_id: (proforma as unknown as { customer_id: string | null }).customer_id ?? null,
@@ -1111,11 +1229,14 @@ export async function createInvoiceFromProforma(
       discount_label: (proforma as unknown as { discount_label: string | null }).discount_label ?? null,
     };
     if (lines && lines.length > 0) {
-      const filtered = new Map(lines.filter((l) => Number(l.this_qty) > 0).map((l) => [l.line_index, l]));
-      payload.items = (payload.items as unknown as Array<Record<string, unknown>>).filter((_, idx) => filtered.has(idx)).map((it: Record<string, unknown>, idx: number) => {
-        const fl = (Array.from(filtered.values()) as FulfillmentLine[]).find((x) => x.line_index === idx) ?? filtered.get(idx);
-        if (!fl) return it as unknown as typeof payload.items[number];
-        return { ...(it as object), qty: Number(fl.this_qty) || (it.qty as number) } as unknown as typeof payload.items[number];
+      // B6 fix: reconstruct payload.items from lines via explicit line_index mapping,
+      // not by filtering payload order. Payload order may not match line_index order.
+      const activeLines = lines.filter((l) => Number(l.this_qty) > 0);
+      const origItems = payload.items as unknown as Array<Record<string, unknown>>;
+      payload.items = activeLines.map((fl) => {
+        const orig = origItems[fl.line_index] ?? origItems[0];
+        if (!orig) throw new Error(`Invalid line_index ${fl.line_index} for proforma items`);
+        return { ...(orig as object), qty: Number(fl.this_qty) } as unknown as typeof payload.items[number];
       });
       fulLines = lines;
     } else {
@@ -1125,15 +1246,56 @@ export async function createInvoiceFromProforma(
     if (!payload.items || payload.items.length === 0) throw new Error("Proforma has no items to invoice");
   }
 
+  // B4 + B2 + B1: SO-linked path must be serialized via lock, revalidate balance,
+  // check stock inside lock, and verify no over-fulfillment after ledger insert.
   if (soId && fulLines) {
-    const soForStock = await fetchSalesOrder(soId);
-    const stockLines = stockLinesFromFulfillment(soForStock, fulLines);
-    if (stockLines.length > 0) {
-      const shortfalls = await findShortfalls(stockLines);
-      if (shortfalls.length > 0) throw new Error(blockMessage(shortfalls[0]));
-    }
+    const soForFulfill = await fetchSalesOrder(soId);
+    return withSoFulfillLock(soId, async () => {
+      const freshSummary = await revalidateBalanceOrThrow(soId, fulLines!, soForFulfill);
+      const stockLines = await stockLinesFromFulfillment(soForFulfill, fulLines!);
+      if (stockLines.length > 0) {
+        const shortfalls = await findShortfalls(stockLines);
+        if (shortfalls.length > 0) throw new Error(blockMessage(shortfalls[0]));
+      }
+      let inv: { id: string; invoice_no: string | null } | null = null;
+      let ledgerId: string | null = null;
+      try {
+        inv = await insertInvoiceFromPayload(payload, { branchId: payload.branch_id, customerId: payload.customer_id });
+        const { error: linkErr } = await supabase.from("invoices" as never).update({ linked_proforma_id: proformaId } as never).eq("id", inv.id);
+        if (linkErr) {
+          try { await supabase.from("invoices" as never).delete().eq("id", inv.id); } catch {}
+          throw linkErr;
+        }
+        const { prior, thisFulfilled, balanceAfter } = buildPriorThisBalance(soForFulfill, freshSummary, fulLines!);
+        const res = await insertLedgerAndFulfillments({
+          sales_order_id: soId,
+          conversion_type: "tax_invoice",
+          target_table: "invoices",
+          target_id: inv.id,
+          target_no: inv.invoice_no,
+          prior,
+          thisFulfilled,
+          balanceAfter,
+          lines: fulLines!,
+          status: "draft",
+        });
+        ledgerId = res.ledgerId;
+        await verifyNoOverFulfillment({ soId, so: soForFulfill, lines: fulLines!, targetTable: "invoices", targetId: inv.id, ledgerId });
+        const { error: convErr } = await supabase.from("invoices" as never).update({ conversion_id: ledgerId } as never).eq("id", inv.id);
+        if (convErr) {
+          try { await supabase.from("so_conversions" as never).delete().eq("id", ledgerId); } catch {}
+          throw convErr;
+        }
+        return inv;
+      } catch (e) {
+        if (ledgerId) { try { await supabase.from("so_conversions" as never).delete().eq("id", ledgerId); } catch {} }
+        if (inv) { try { await supabase.from("invoices" as never).delete().eq("id", inv.id); } catch {} }
+        throw e;
+      }
+    });
   }
 
+  // SO-less or standalone proforma (no ledger/fulfillment needed)
   let inv: { id: string; invoice_no: string | null } | null = null;
   let ledgerId: string | null = null;
   try {
@@ -1145,29 +1307,6 @@ export async function createInvoiceFromProforma(
       throw linkErr;
     }
 
-    if (soId && fulLines) {
-      const so = await fetchSalesOrder(soId);
-      const summary = await fetchSoViewSummary(soId);
-      const { prior, thisFulfilled, balanceAfter } = buildPriorThisBalance(so, summary, fulLines);
-      const res = await insertLedgerAndFulfillments({
-        sales_order_id: soId,
-        conversion_type: "tax_invoice",
-        target_table: "invoices",
-        target_id: inv.id,
-        target_no: inv.invoice_no,
-        prior,
-        thisFulfilled,
-        balanceAfter,
-        lines: fulLines,
-        status: "draft",
-      });
-      ledgerId = res.ledgerId;
-      const { error: convErr } = await supabase.from("invoices" as never).update({ conversion_id: ledgerId } as never).eq("id", inv.id);
-      if (convErr) {
-        try { await supabase.from("so_conversions" as never).delete().eq("id", ledgerId); } catch {}
-        throw convErr;
-      }
-    }
     return inv;
   } catch (e) {
     if (ledgerId) { try { await supabase.from("so_conversions" as never).delete().eq("id", ledgerId); } catch {} }

@@ -2,6 +2,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
-import { listProformas, deleteProforma, updateProforma, type ProformaRow } from "@/lib/proforma";
+import { fetchProformasPage, deleteProforma, updateProforma, type ProformaRow } from "@/lib/proforma";
 import { inr } from "@/lib/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { saveElementAsPdf } from "@/lib/docPdf";
@@ -21,6 +22,7 @@ import { ProformaPrintView } from "@/components/ProformaPrintView";
 import { CompanyProfile, DEFAULT_COMPANY_PROFILE, fetchCompanyProfile } from "@/lib/companyProfile";
 import { useRouteState } from "@/lib/routeState";
 import { signSignatureUrl } from "@/lib/userSignature";
+import { PaginationFooter } from "@/components/PaginationFooter";
 
 export const Route = createFileRoute("/_app/sales/proforma/")({
   component: ProformaList,
@@ -43,39 +45,40 @@ const tone: Record<string, string> = {
 };
 
 function ProformaList() {
-  const [rows, setRows] = useState<ProformaRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
   const [tab, setTab] = useRouteState<"all" | "draft" | "issued">("proforma-tab", "all");
+  const [page, setPage] = useRouteState<number>("proforma-page", 0);
+  const pageSize = 25;
 
-  const refresh = async () => {
-    try {
-      const data = await listProformas();
-      setRows(data);
-    } catch (e: any) {
-      toast.error(e.message || "Could not refresh list");
-    }
-  };
+  useEffect(() => {
+    if (page !== 0) setPage(0);
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const query = useQuery({
+    queryKey: ["proformas", { tab, page, pageSize }],
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
+    queryFn: () => fetchProformasPage({ page, pageSize, status: tab as any }),
+  });
+
+  const rows = query.data?.data ?? [];
+  const total = query.data?.count ?? 0;
+  const loading = query.isLoading;
+  const filtered = rows;
+
+  const refresh = () => query.refetch();
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
     (async () => {
       try {
-        const [data, profile] = await Promise.all([listProformas(), fetchCompanyProfile()]);
+        const profile = await fetchCompanyProfile();
         if (!active) return;
-        setRows(data);
         setCompany(profile);
-      } catch (e: any) {
-        toast.error(e.message || "Could not load Proforma Invoices");
-      } finally {
-        if (active) setLoading(false);
-      }
+      } catch {}
     })();
     return () => { active = false; };
   }, []);
-
-  const filtered = tab === "all" ? rows : rows.filter((r) => r.status === tab);
 
   return (
     <div className="space-y-4">
@@ -86,9 +89,9 @@ function ProformaList() {
         </Button>
       </div>
       <div className="flex gap-2">
-        <Button size="sm" variant={tab === "all" ? "default" : "outline"} onClick={() => setTab("all")}>All ({rows.length})</Button>
-        <Button size="sm" variant={tab === "draft" ? "default" : "outline"} onClick={() => setTab("draft")}>Draft ({rows.filter((r) => r.status === "draft").length})</Button>
-        <Button size="sm" variant={tab === "issued" ? "default" : "outline"} onClick={() => setTab("issued")}>Issued ({rows.filter((r) => r.status === "issued").length})</Button>
+        <Button size="sm" variant={tab === "all" ? "default" : "outline"} onClick={() => setTab("all")}>All{tab === "all" ? ` (${total})` : ""}</Button>
+        <Button size="sm" variant={tab === "draft" ? "default" : "outline"} onClick={() => setTab("draft")}>Draft{tab === "draft" ? ` (${total})` : ""}</Button>
+        <Button size="sm" variant={tab === "issued" ? "default" : "outline"} onClick={() => setTab("issued")}>Issued{tab === "issued" ? ` (${total})` : ""}</Button>
       </div>
       <Card>
         <CardContent className="p-0 overflow-x-auto">
@@ -128,6 +131,7 @@ function ProformaList() {
               ))}
             </tbody>
           </table>
+          <PaginationFooter page={page} pageSize={pageSize} total={total} onPage={setPage} isFetching={query.isFetching && !query.isLoading} />
         </CardContent>
       </Card>
     </div>

@@ -98,6 +98,41 @@ export async function listProformas(): Promise<ProformaRow[]> {
   return rows.map(normalizeProforma);
 }
 
+export type ProformasPaginatedParams = {
+  page: number;
+  pageSize: number;
+  search?: string | null;
+  status?: ProformaStatus | "all" | null;
+};
+
+export async function fetchProformasPage(
+  params: ProformasPaginatedParams,
+): Promise<{ data: ProformaRow[]; count: number }> {
+  const { page, pageSize, search, status } = params;
+  const capped = Math.min(Math.max(1, Math.floor(pageSize || 25)), 50);
+  const from = page * capped;
+  const to = from + capped - 1;
+
+  let q: any = supabase
+    .from(TBL)
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (status && status !== "all") {
+    q = q.eq("status", status);
+  }
+
+  if (search && search.trim()) {
+    const safe = search.trim().replace(/[%_\\]/g, "\\$&").replace(/[,()]/g, "\\$&");
+    q = q.or(`proforma_no.ilike.%${safe}%,buyer_name.ilike.%${safe}%`);
+  }
+
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return { data: ((data ?? []) as unknown as ProformaRow[]).map(normalizeProforma), count: count ?? 0 };
+}
+
 export async function fetchProforma(id: string): Promise<ProformaRow> {
   const { data, error } = await supabase.from(TBL).select("*").eq("id", id).maybeSingle();
   if (error) throw error;

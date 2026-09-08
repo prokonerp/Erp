@@ -32,6 +32,7 @@ export function GeneralDcPrintView({
   soFulfillments,
   soConversions,
   annexure,
+  docId,
 }: {
   dc: GeneralDcRow;
   company: CompanyProfile;
@@ -41,6 +42,7 @@ export function GeneralDcPrintView({
   soFulfillments?: SoFulfillmentSummary[] | null;
   soConversions?: any[] | null;
   annexure?: boolean;
+  docId?: string | null;
 }) {
   const accent = (company.accent_color && company.accent_color.trim()) || "#14225C";
   const salesOffice = cleanAddress(company.sales_office_address);
@@ -239,7 +241,9 @@ export function GeneralDcPrintView({
                   const ordered = Number(soIt.qty) || 0;
                   const fulfilled = sum ? Number(sum.fulfilled_stock) || 0 : 0;
                   const currentQty = currentQtyByIndex.get(i) ?? 0;
-                  const alreadyPrior = fulfilled >= currentQty && currentQty > 0 ? Math.max(0, fulfilled - currentQty) : fulfilled;
+                  const effectiveDocId = docId ?? dc.id;
+                  const isThisDocInLedger = !!soConversions?.some((c: any) => c.target_id === effectiveDocId);
+                  const alreadyPrior = isThisDocInLedger && fulfilled >= currentQty && currentQty > 0 ? Math.max(0, fulfilled - currentQty) : fulfilled;
                   const balanceAfter = sum ? Number(sum.balance) : Math.max(0, ordered - fulfilled);
                   const balance = sum ? balanceAfter : Math.max(0, ordered - alreadyPrior - currentQty);
                   return (

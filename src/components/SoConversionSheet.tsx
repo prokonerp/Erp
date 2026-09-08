@@ -80,13 +80,37 @@ export function SoConversionSheet({ open, onOpenChange, salesOrder, defaultType,
     setTerms(salesOrder.terms || "");
   }, [salesOrder, open]);
 
+  // B8: reset transient state when sheet closes so re-open is clean
   useEffect(() => {
-    supabase
-      .from("warehouses")
-      .select("id,name")
-      .eq("status", "Active")
-      .order("name")
-      .then(({ data }) => setWarehouses((data ?? []) as { id: string; name: string }[]));
+    if (!open) {
+      setAllowNegative(false);
+      setShortfalls([]);
+      setNegOpen(false);
+      setPendingIssue(false);
+      setPurpose("");
+      setReturnable(false);
+      setExpectedReturnDate("");
+      setSerialIdx(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("warehouses")
+          .select("id,name")
+          .eq("status", "Active")
+          .order("name");
+        if (error) {
+          toast.error(error.message || "Could not load warehouses");
+          return;
+        }
+        setWarehouses((data ?? []) as { id: string; name: string }[]);
+      } catch (e: unknown) {
+        toast.error((e as Error).message || "Could not load warehouses");
+      }
+    })();
   }, []);
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
@@ -225,7 +249,7 @@ export function SoConversionSheet({ open, onOpenChange, salesOrder, defaultType,
         const r = await createGeneralDcFromSO(salesOrder.id, lines as any, {
           allow_negative_stock: allowNegative,
           returnable,
-          expected_return_date: returnable ? expectedReturnDate || null : null,
+          expected_return_date: returnable ? (expectedReturnDate || undefined) : undefined,
           purpose: purpose || null,
           issueImmediately: issue,
         } as any);

@@ -97,6 +97,7 @@ CREATE INDEX IF NOT EXISTS idx_dc_conversion ON public.delivery_challans(convers
 CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS trigger
 LANGUAGE plpgsql
+SET search_path = public
 AS $$
 BEGIN
   NEW.updated_at = now();
@@ -104,12 +105,12 @@ BEGIN
 END;
 $$;
 
--- Keep touch_updated_at as alias for compatibility if not exists (setup_new_supabase already has it)
-DO $$ BEGIN
-  CREATE OR REPLACE FUNCTION public.touch_updated_at()
-  RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $$;
-EXCEPTION WHEN others THEN NULL;
-END $$;
+-- Keep touch_updated_at as alias for compatibility (idempotent; no DO wrapper needed — CREATE OR REPLACE is already idempotent)
+CREATE OR REPLACE FUNCTION public.touch_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public
+AS $func$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $func$;
 
 DROP TRIGGER IF EXISTS trg_so_conv_updated ON public.so_conversions;
 CREATE TRIGGER trg_so_conv_updated BEFORE UPDATE ON public.so_conversions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();

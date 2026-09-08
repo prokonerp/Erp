@@ -233,8 +233,7 @@ export function GeneralDcForm({
       toast.error(`This General DC is ${st} — stock is already posted. Editing is blocked.`);
       nav({ to: "/sales/general-dc/$id", params: { id: existing!.id } });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [existing?.status, existing?.id, nav]);
   useEffect(() => {
     if (!existing?.customer_id) return;
     supabase
@@ -418,8 +417,8 @@ export function GeneralDcForm({
         const r = await createGeneralDcFromSO(effectiveSoId, linesForWriter as any, {
           allow_negative_stock: allowNegative,
           returnable,
-          expected_return_date: returnable ? expectedReturn || null : null,
-          purpose: purpose || null,
+          expected_return_date: returnable ? (expectedReturn || undefined) : undefined,
+          purpose: purpose || undefined,
           issueImmediately: status === "Issued",
         });
         if (allowNegative && short.length > 0) {
@@ -453,7 +452,7 @@ export function GeneralDcForm({
       const payload = {
         dc_date: dcDate,
         returnable,
-        expected_return_date: returnable ? expectedReturn || null : null,
+        expected_return_date: returnable ? (expectedReturn || undefined) : undefined,
         customer_id: customer.id,
         customer_name: customer.company,
         billing_address: billing || null,
