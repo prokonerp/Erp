@@ -451,20 +451,19 @@ function StockManagementBeta() {
               className="max-h-[60vh] overflow-auto overscroll-contain scroll-pt-0"
               style={{ contain: "content" }}
             >
-              <table className="w-full text-sm table-fixed min-w-[1080px]">
+              <table className="w-full text-sm table-fixed min-w-[1000px]">
                 <colgroup>
                   <col className="w-7" />
-                  <col className="w-[22%]" />
-                  <col className="w-[128px]" />
-                  <col className="w-[88px]" />
-                  <col className="w-[56px]" />
-                  <col className="w-[68px]" />
-                  <col className="w-[68px]" />
+                  <col className="w-[30%]" />
+                  <col className="w-[140px]" />
                   <col className="w-[58px]" />
-                  <col className="w-[58px]" />
-                  <col className="w-[72px]" />
+                  <col className="w-[70px]" />
+                  <col className="w-[70px]" />
+                  <col className="w-[60px]" />
+                  <col className="w-[60px]" />
+                  <col className="w-[74px]" />
                   <col className="w-[64px]" />
-                  <col className="w-[120px]" />
+                  <col className="w-[130px]" />
                   <col className="w-[44px]" />
                 </colgroup>
                 <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
@@ -472,7 +471,6 @@ function StockManagementBeta() {
                     <th scope="col" className="p-1.5 w-7"></th>
                     <th scope="col" className="px-2 py-1.5">Product</th>
                     <th scope="col" className="px-2 py-1.5">Model</th>
-                    <th scope="col" className="px-2 py-1.5">OEM</th>
                     <th scope="col" className="px-2 py-1.5 text-right tabular-nums">Total</th>
                     <th scope="col" className="px-2 py-1.5 text-right tabular-nums">Available</th>
                     <th scope="col" className="px-2 py-1.5 text-right tabular-nums">Reserved</th>
@@ -483,19 +481,19 @@ function StockManagementBeta() {
                       Received
                     </th>
                     <th scope="col" className="px-2 py-1.5">Latest GRN</th>
-                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums">WH</th>
+                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums" title="Warehouses where this model is stocked — hover to see names">WH</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={13} className="p-6 text-center text-muted-foreground">
+                      <td colSpan={12} className="p-6 text-center text-muted-foreground">
                         Loading inventory…
                       </td>
                     </tr>
                   ) : products.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="p-6 text-center text-muted-foreground">
+                      <td colSpan={12} className="p-6 text-center text-muted-foreground">
                         No stock matches your filters.
                       </td>
                     </tr>
@@ -550,7 +548,6 @@ function StockManagementBeta() {
                               </div>
                             </td>
                             <td className="px-2 py-1.5 font-mono text-xs break-all leading-tight" title={p.part_model_no || ""}>{p.part_model_no || "—"}</td>
-                            <td className="px-2 py-1.5 text-xs truncate" title={p.oem || ""}>{p.oem || "—"}</td>
                             <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-xs">{p.total}</td>
                             <td className="px-2 py-1.5 text-right">
                               <NumPill value={p.available} tone="emerald" />
@@ -571,11 +568,11 @@ function StockManagementBeta() {
                               {p.received.total || "—"}
                             </td>
                             <td className="px-2 py-1.5 text-xs font-mono leading-none" title={p.received.latestGrn || ""}>{p.received.latestGrn || "—"}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums text-xs">{p.warehouses.size}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-xs" title={Array.from(p.warehouses).map((id) => whName(id)).join(", ")}>{p.warehouses.size}</td>
                           </tr>
                           {isOpen && (
                             <tr key={p.key + "-exp"} className="bg-primary/[0.03]">
-                              <td colSpan={13} className="p-3">
+                              <td colSpan={12} className="p-3">
                                 <div className="text-[11px] font-semibold mb-2 text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
                                   <WarehouseIcon className="h-3.5 w-3.5" /> Warehouse Breakdown
                                 </div>
