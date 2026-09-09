@@ -451,21 +451,21 @@ function StockManagementBeta() {
               className="max-h-[60vh] overflow-auto overscroll-contain scroll-pt-0"
               style={{ contain: "content" }}
             >
-              <table className="w-full text-sm table-fixed min-w-[1020px]">
+              <table className="w-full text-sm table-auto">
                 <colgroup>
                   <col className="w-7" />
-                  <col className="w-[34%]" />
-                  <col className="w-[132px]" />
-                  <col className="w-[86px]" />
-                  <col className="w-[54px]" />
-                  <col className="w-[62px]" />
-                  <col className="w-[62px]" />
-                  <col className="w-[56px]" />
-                  <col className="w-[56px]" />
-                  <col className="w-[68px]" />
-                  <col className="w-[64px]" />
+                  <col />
+                  <col className="w-[1%]" />
+                  <col className="w-[1%]" />
+                  <col className="w-[1%]" />
+                  <col className="w-[1%]" />
+                  <col className="w-[1%]" />
+                  <col className="w-[1%]" />
+                  <col className="w-[1%]" />
+                  <col className="w-[1%]" />
+                  <col className="w-[1%]" />
                   <col className="w-[118px]" />
-                  <col className="w-[42px]" />
+                  <col className="w-[1%]" />
                 </colgroup>
                 <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
                   <tr className="text-left text-[11px] uppercase tracking-[0.06em] text-slate-600">
