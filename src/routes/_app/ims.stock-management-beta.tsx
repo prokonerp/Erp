@@ -570,20 +570,7 @@ function StockManagementBeta() {
                             <td className="px-2 py-1.5 text-right font-medium tabular-nums text-xs">
                               {p.received.total || "—"}
                             </td>
-                            <td className="px-2 py-1.5 text-xs">
-                              {p.received.latestGrn ? (
-                                <>
-                                  <div className="font-mono">{p.received.latestGrn}</div>
-                                  {p.received.latestDate && (
-                                    <div className="text-muted-foreground">
-                                      {new Date(p.received.latestDate).toLocaleDateString()}
-                                    </div>
-                                  )}
-                                </>
-                              ) : (
-                                "—"
-                              )}
-                            </td>
+                            <td className="px-2 py-1.5 text-xs font-mono leading-none" title={p.received.latestGrn || ""}>{p.received.latestGrn || "—"}</td>
                             <td className="px-2 py-1.5 text-right tabular-nums text-xs">{p.warehouses.size}</td>
                           </tr>
                           {isOpen && (
