@@ -1,11 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouteState } from "@/lib/routeState";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -13,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Package,
   Search,
@@ -31,22 +29,14 @@ import {
   Layers,
   ChevronRight,
   ChevronDown,
-  TrendingUp,
-  ExternalLink,
-  Printer,
-  FileText,
-  Activity,
-  Hash,
-  ArrowDownCircle,
-  ArrowUpCircle,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   fetchStockPage,
   fetchTransactionsPage,
   listWarehouses,
   STOCK_STATUS_LABEL,
-  TXN_TYPE_LABEL,
   type StockItem,
   type Transaction,
   type WarehouseLite,
@@ -57,8 +47,8 @@ import { TableSkeleton } from "@/components/shared/skeletons";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { useDebounced } from "@/lib/sales.hooks";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
-import { exportCSV } from "@/lib/exports";
-import { aggregateBeta, type BetaProductRow, grnSourceOf } from "@/lib/stockBetaAggregation";
+import { aggregateBeta, type BetaProductRow } from "@/lib/stockBetaAggregation";
+import { StockBetaDetail } from "@/components/ims/StockBetaDetail";
 
 // Lazy-load the recharts-backed chart sections (~400KB) so the stock table and filters render immediately
 const StockDashboardCharts = lazy(() =>
@@ -68,7 +58,7 @@ const ProductDetailCharts = lazy(() =>
   import("@/components/StockManagementCharts").then((m) => ({ default: m.ProductDetailCharts })),
 );
 
-export const Route = (createFileRoute as any)("/_app/ims/stock-management-beta")({
+export const Route = createFileRoute("/_app/ims/stock-management-beta")({
   component: StockManagementBeta,
 });
 
@@ -214,6 +204,12 @@ function StockManagementBeta() {
     if (!selectedProductKey) return null;
     return products.find((p) => p.key === selectedProductKey) ?? null;
   }, [products, selectedProductKey]);
+
+  // Clamp page when filtered set shrinks below current offset
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(products.length / pageSize) - 1);
+    if (page > maxPage) setPage(maxPage);
+  }, [products.length, page]);
 
   const oems = useMemo(
     () => Array.from(new Set(items.map((i) => i.oem).filter(Boolean))).sort() as string[],
@@ -455,24 +451,24 @@ function StockManagementBeta() {
               className="max-h-[60vh] overflow-auto overscroll-contain scroll-pt-0"
               style={{ contain: "content" }}
             >
-              <table className="w-full text-sm table-fixed">
-                <thead className="bg-muted sticky top-0 z-10 border-b">
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <th className="p-2.5 w-8"></th>
-                    <th className="p-2.5">Product</th>
-                    <th className="p-2.5">Model</th>
-                    <th className="p-2.5">OEM</th>
-                    <th className="p-2.5 text-right">Total</th>
-                    <th className="p-2.5 text-right">Available</th>
-                    <th className="p-2.5 text-right">Reserved</th>
-                    <th className="p-2.5 text-right">Issued</th>
-                    <th className="p-2.5 text-right">Good</th>
-                    <th className="p-2.5 text-right">Defective</th>
-                    <th className="p-2.5 text-right" title="Received via GRN — total">
+              <table className="w-full text-sm table-fixed min-w-[980px]">
+                <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
+                  <tr className="text-left text-[11px] uppercase tracking-[0.06em] text-slate-600">
+                    <th scope="col" className="p-2 w-8"></th>
+                    <th scope="col" className="p-2">Product</th>
+                    <th scope="col" className="p-2">Model</th>
+                    <th scope="col" className="p-2">OEM</th>
+                    <th scope="col" className="p-2 text-right tabular-nums">Total</th>
+                    <th scope="col" className="p-2 text-right tabular-nums">Available</th>
+                    <th scope="col" className="p-2 text-right tabular-nums">Reserved</th>
+                    <th scope="col" className="p-2 text-right tabular-nums">Issued</th>
+                    <th scope="col" className="p-2 text-right tabular-nums">Good</th>
+                    <th scope="col" className="p-2 text-right tabular-nums">Defective</th>
+                    <th scope="col" className="p-2 text-right tabular-nums" title="Received via GRN — total">
                       Received
                     </th>
-                    <th className="p-2.5">Latest GRN</th>
-                    <th className="p-2.5 text-right">WH</th>
+                    <th scope="col" className="p-2">Latest GRN</th>
+                    <th scope="col" className="p-2 text-right tabular-nums">WH</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -492,24 +488,31 @@ function StockManagementBeta() {
                     paginatedProducts.map((p, idx) => {
                       const isOpen = expanded.has(p.key);
                       const wh = warehouseBreakdown(p.items, whName);
-                      const zebra = idx % 2 === 1 ? "bg-muted/10" : "";
+                      const zebra = idx % 2 === 1 ? "bg-slate-50/60" : "";
                       return (
                         <React.Fragment key={p.key}>
                           <tr
                             key={`${p.key}-row`}
-                            className={`border-t transition-colors hover:bg-primary/5 cursor-pointer ${zebra}`}
+                            className={`border-t border-slate-100 transition-colors hover:bg-slate-50 cursor-pointer ${zebra}`}
                             onClick={() => setSelectedProductKey(p.key)}
                           >
-                            <td
-                              className="p-2.5"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleExpand(p.key);
-                              }}
-                            >
+                            <td className="p-1.5">
                               <button
-                                className="p-0.5 rounded hover:bg-muted"
-                                title={isOpen ? "Collapse" : "Expand"}
+                                type="button"
+                                aria-label={isOpen ? "Collapse warehouse breakdown" : "Expand warehouse breakdown"}
+                                aria-expanded={isOpen}
+                                className="h-7 w-7 grid place-items-center rounded hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpand(p.key);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    toggleExpand(p.key);
+                                  }
+                                }}
                               >
                                 {isOpen ? (
                                   <ChevronDown className="h-4 w-4" />
@@ -518,7 +521,7 @@ function StockManagementBeta() {
                                 )}
                               </button>
                             </td>
-                            <td className="p-2.5">
+                            <td className="p-2">
                               <div className="flex items-center gap-2.5">
                                 <div className="h-8 w-8 rounded-md bg-primary/10 text-primary grid place-items-center shrink-0">
                                   <Package className="h-4 w-4" />
@@ -531,28 +534,28 @@ function StockManagementBeta() {
                                 </div>
                               </div>
                             </td>
-                            <td className="p-2.5 font-mono text-xs">{p.part_model_no || "—"}</td>
-                            <td className="p-2.5">{p.oem || "—"}</td>
-                            <td className="p-2.5 text-right font-semibold tabular-nums">{p.total}</td>
-                            <td className="p-2.5 text-right">
+                            <td className="p-2 font-mono text-xs" title={p.part_model_no || ""}>{p.part_model_no || "—"}</td>
+                            <td className="p-2 truncate" title={p.oem || ""}>{p.oem || "—"}</td>
+                            <td className="p-2 text-right font-semibold tabular-nums">{p.total}</td>
+                            <td className="p-2 text-right">
                               <NumPill value={p.available} tone="emerald" />
                             </td>
-                            <td className="p-2.5 text-right">
+                            <td className="p-2 text-right">
                               <NumPill value={p.reserved} tone="amber" />
                             </td>
-                            <td className="p-2.5 text-right">
+                            <td className="p-2 text-right">
                               <NumPill value={p.issued} tone="violet" />
                             </td>
-                            <td className="p-2.5 text-right tabular-nums text-emerald-700">
+                            <td className="p-2 text-right tabular-nums text-emerald-700">
                               {p.good || "—"}
                             </td>
-                            <td className="p-2.5 text-right tabular-nums text-rose-700">
+                            <td className="p-2 text-right tabular-nums text-rose-700">
                               {p.defective || "—"}
                             </td>
-                            <td className="p-2.5 text-right font-medium tabular-nums">
+                            <td className="p-2 text-right font-medium tabular-nums">
                               {p.received.total || "—"}
                             </td>
-                            <td className="p-2.5 text-xs">
+                            <td className="p-2 text-xs">
                               {p.received.latestGrn ? (
                                 <>
                                   <div className="font-mono">{p.received.latestGrn}</div>
@@ -566,7 +569,7 @@ function StockManagementBeta() {
                                 "—"
                               )}
                             </td>
-                            <td className="p-2.5 text-right tabular-nums">{p.warehouses.size}</td>
+                            <td className="p-2 text-right tabular-nums">{p.warehouses.size}</td>
                           </tr>
                           {isOpen && (
                             <tr key={p.key + "-exp"} className="bg-primary/[0.03]">
@@ -615,7 +618,7 @@ function StockManagementBeta() {
 
       <StockBetaDetail
         product={selectedProduct}
-        open={!!selectedProduct}
+        isOpen={!!selectedProduct}
         onClose={() => setSelectedProductKey(null)}
         whName={whName}
       />
@@ -659,7 +662,7 @@ function Kpi({
   value,
   tone,
 }: {
-  icon: any;
+  icon: LucideIcon;
   label: string;
   value: number;
   tone: KpiTone;
@@ -712,7 +715,7 @@ function Chip({ children, onClear }: { children: React.ReactNode; onClear: () =>
         type="button"
         onClick={onClear}
         className="rounded-full h-4 w-4 grid place-items-center hover:bg-muted"
-        aria-label="Remove filter"
+        aria-label={`Remove filter ${typeof children === "string" ? children : "filter"}`}
       >
         <X className="h-3 w-3" />
       </button>
@@ -727,11 +730,11 @@ function MiniKpi({
   pct,
   tone,
 }: {
-  icon: any;
+  icon: LucideIcon;
   label: string;
   value: number;
   pct?: number;
-  tone: string;
+  tone: KpiTone;
 }) {
   const cls =
     tone === "emerald"
@@ -757,596 +760,3 @@ function MiniKpi({
     </Card>
   );
 }
-
-// StockBetaDetail — detailed Sheet like new window; also exported as ProductDetailSheet alias
-function StockBetaDetail({
-  product,
-  open,
-  onClose,
-  whName,
-}: {
-  product: BetaProductRow | null;
-  open: boolean;
-  onClose: () => void;
-  whName: (id: string | null) => string;
-}) {
-  const [txns, setTxns] = useState<Transaction[]>([]);
-  const [loadingTxns, setLoadingTxns] = useState(false);
-  const [serialQ, setSerialQ] = useState("");
-  const [serialWh, setSerialWh] = useState<string>("all");
-  const [serialCond, setSerialCond] = useState<string>("all");
-  const [serialStatus, setSerialStatus] = useState<string>("all");
-
-  useEffect(() => {
-    if (!product || !open) {
-      setTxns([]);
-      return;
-    }
-    setSerialQ("");
-    setSerialWh("all");
-    setSerialCond("all");
-    setSerialStatus("all");
-    setLoadingTxns(true);
-    fetchTransactionsPage({ page: 0, pageSize: 500 })
-      .then((res) => {
-        const all = res.data;
-        const modelKey = (product.part_model_no || "").toLowerCase();
-        const nameKey = product.part_name.toLowerCase();
-        const filtered = all.filter(
-          (t) =>
-            (t.part_model_no || "").toLowerCase() === modelKey ||
-            (t.part_name || "").toLowerCase() === nameKey,
-        );
-        setTxns(filtered);
-      })
-      .finally(() => setLoadingTxns(false));
-  }, [product, open]);
-
-  if (!product) return null;
-  const wh = warehouseBreakdown(product.items, whName);
-
-  const total = product.total || 0;
-  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
-  const scrap = product.scrapped || 0;
-  const conditionData = [
-    { name: "Good", value: product.good, color: "#10b981" },
-    {
-      name: "Defective",
-      value: product.defective - scrap > 0 ? product.defective - scrap : 0,
-      color: "#f43f5e",
-    },
-    { name: "Scrap", value: scrap, color: "#64748b" },
-  ].filter((d) => d.value > 0);
-
-  const whChart = wh.map((w) => ({
-    name: w.name,
-    Good: w.good - (w.scrap > w.defective ? w.defective : w.scrap),
-    Defective: Math.max(w.defective - w.scrap, 0),
-    Scrap: w.scrap,
-  }));
-
-  const goodPct = pct(product.good);
-  const defectivePct = pct(product.defective);
-  const scrapPct = pct(scrap);
-  const availPct = pct(product.available);
-  const issuedPct = pct(product.issued);
-  const alerts: { tone: "rose" | "amber" | "sky"; msg: string }[] = [];
-  if (defectivePct > 20)
-    alerts.push({ tone: "rose", msg: `High defective share: ${defectivePct}% of total inventory` });
-  if (scrapPct > 10) alerts.push({ tone: "rose", msg: `Scrap exceeds 10%: ${scrapPct}%` });
-  if (total > 0 && availPct < 15)
-    alerts.push({ tone: "amber", msg: `Low available stock: only ${availPct}% available` });
-  if (issuedPct > 60)
-    alerts.push({ tone: "sky", msg: `High issued share: ${issuedPct}% issued to customers` });
-
-  const allMoves: Array<{
-    id: string;
-    when: string;
-    type: string;
-    qty: number;
-    dir: 1 | -1 | 0;
-    wh: string;
-    ref: string;
-  }> = [];
-  const seen = new Set<string>();
-  for (const t of txns) {
-    if (seen.has(t.id)) continue;
-    seen.add(t.id);
-    const dir: 1 | -1 | 0 =
-      t.txn_type === "good_in" ||
-      t.txn_type === "defective_in" ||
-      t.txn_type === "transfer_in" ||
-      t.txn_type === "oem_replacement_receipt"
-        ? 1
-        : t.txn_type === "good_out" ||
-            t.txn_type === "defective_out" ||
-            t.txn_type === "transfer_out" ||
-            t.txn_type === "oem_return" ||
-            t.txn_type === "scrap_adjustment"
-          ? -1
-          : 0;
-    allMoves.push({
-      id: t.id,
-      when: t.txn_date,
-      type: TXN_TYPE_LABEL[t.txn_type] || t.txn_type,
-      qty: Number(t.qty) || 0,
-      dir,
-      wh: dir >= 0 ? whName(t.to_warehouse_id) : whName(t.from_warehouse_id),
-      ref: t.reference || t.txn_no || "—",
-    });
-  }
-  allMoves.sort((a, b) => new Date(a.when).getTime() - new Date(b.when).getTime());
-  let bal = 0;
-  const timeline = allMoves
-    .map((m) => {
-      bal += m.dir * m.qty;
-      return { ...m, balance: bal };
-    })
-    .reverse();
-
-  const serialFiltered = product.items.filter((s) => {
-    if (serialWh !== "all" && (s.warehouse_id || "") !== serialWh) return false;
-    if (serialCond !== "all" && s.stock_type !== serialCond) return false;
-    if (serialStatus !== "all" && s.stock_status !== serialStatus) return false;
-    if (!serialQ) return true;
-    const q = serialQ.toLowerCase();
-    return [s.part_serial_no, s.part_model_no, s.transaction_ref, s.customer_name]
-      .filter(Boolean)
-      .some((v) => String(v).toLowerCase().includes(q));
-  });
-
-  function exportSerials() {
-    exportCSV(
-      `${product!.part_name}-serials`,
-      [
-        { header: "Serial", get: (s: StockItem) => s.part_serial_no || "" },
-        { header: "Model", get: (s: StockItem) => s.part_model_no || "" },
-        { header: "Warehouse", get: (s: StockItem) => whName(s.warehouse_id) },
-        { header: "Condition", get: (s: StockItem) => s.stock_type },
-        { header: "Status", get: (s: StockItem) => s.stock_status },
-        { header: "Ref", get: (s: StockItem) => s.transaction_ref || "" },
-        { header: "Received", get: (s: StockItem) => new Date(s.created_at).toLocaleDateString() },
-        { header: "Last Move", get: (s: StockItem) => new Date(s.updated_at).toLocaleDateString() },
-      ],
-      serialFiltered,
-    );
-  }
-
-  return (
-    <Sheet
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) onClose();
-      }}
-    >
-      <SheetContent className="w-full sm:max-w-5xl overflow-y-auto">
-        <SheetHeader className="pb-3 border-b">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary grid place-items-center shrink-0">
-                <Package className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <SheetTitle className="truncate">{product.part_name}</SheetTitle>
-                <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
-                  <span className="font-mono">{product.part_model_no || "—"}</span>
-                  <span>· OEM: {product.oem || "—"}</span>
-                  <span>· {product.category || "Uncategorised"}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-              <Button asChild size="sm" variant="outline">
-                <Link to="/ims/ledger">
-                  <FileText className="h-3.5 w-3.5 mr-1" />
-                  Ledger
-                </Link>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/grn">
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                  GRNs
-                </Link>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/challan">
-                  <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                  DCs
-                </Link>
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => window.print()}>
-                <Printer className="h-3.5 w-3.5 mr-1" />
-                Print
-              </Button>
-            </div>
-          </div>
-        </SheetHeader>
-
-        <div className="mt-4 space-y-5">
-          {/* KPI grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-            <MiniKpi icon={Boxes} label="Total Qty" value={product.total} pct={100} tone="blue" />
-            <MiniKpi
-              icon={CheckCircle2}
-              label="Available"
-              value={product.available}
-              pct={pct(product.available)}
-              tone="emerald"
-            />
-            <MiniKpi
-              icon={Clock}
-              label="Reserved"
-              value={product.reserved}
-              pct={pct(product.reserved)}
-              tone="amber"
-            />
-            <MiniKpi icon={Send} label="Issued" value={product.issued} pct={pct(product.issued)} tone="violet" />
-            <MiniKpi icon={ShieldCheck} label="Good" value={product.good} pct={goodPct} tone="emerald" />
-            <MiniKpi
-              icon={AlertTriangle}
-              label="Defective"
-              value={product.defective}
-              pct={defectivePct}
-              tone="rose"
-            />
-            <MiniKpi icon={Trash2} label="Scrap" value={scrap} pct={scrapPct} tone="slate" />
-            <MiniKpi icon={WarehouseIcon} label="Warehouses" value={product.warehouses.size} tone="sky" />
-            <MiniKpi icon={Hash} label="Serial Units" value={product.items.length} tone="sky" />
-            <MiniKpi icon={Inbox} label="Received (GRN)" value={product.received.total} tone="sky" />
-          </div>
-
-          {/* Health alerts */}
-          {alerts.length > 0 && (
-            <div className="space-y-1.5">
-              {alerts.map((a, i) => (
-                <div
-                  key={i}
-                  className={`flex items-center gap-2 text-xs rounded-lg border px-3 py-2 ${
-                    a.tone === "rose"
-                      ? "bg-rose-50 border-rose-200 text-rose-800"
-                      : a.tone === "amber"
-                        ? "bg-amber-50 border-amber-200 text-amber-800"
-                        : "bg-sky-50 border-sky-200 text-sky-800"
-                  }`}
-                >
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  <span>{a.msg}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Charts */}
-          <Suspense fallback={<div className="h-56 animate-pulse bg-muted rounded-xl" />}>
-            <ProductDetailCharts conditionData={conditionData} whChart={whChart} pct={pct} />
-          </Suspense>
-
-          <Tabs defaultValue="warehouses">
-            <TabsList>
-              <TabsTrigger value="warehouses">Warehouses ({wh.length})</TabsTrigger>
-              <TabsTrigger value="timeline">Timeline ({timeline.length})</TabsTrigger>
-              <TabsTrigger value="received">Received ({product.received.txns.length})</TabsTrigger>
-              <TabsTrigger value="serials">Serials ({product.items.length})</TabsTrigger>
-              <TabsTrigger value="txns">Transactions ({txns.length})</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="warehouses">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
-                {wh.map((w) => (
-                  <div key={w.id} className="rounded-xl border p-3 bg-card">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-medium text-sm flex items-center gap-1.5">
-                        <WarehouseIcon className="h-4 w-4 text-muted-foreground" /> {w.name}
-                      </div>
-                      <Badge variant="outline" className="tabular-nums">
-                        {w.total}
-                      </Badge>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden mb-2 flex">
-                      {w.good > 0 && (
-                        <div style={{ width: `${(w.good / (w.total || 1)) * 100}%` }} className="bg-emerald-500" />
-                      )}
-                      {w.defective - w.scrap > 0 && (
-                        <div
-                          style={{ width: `${((w.defective - w.scrap) / (w.total || 1)) * 100}%` }}
-                          className="bg-rose-500"
-                        />
-                      )}
-                      {w.scrap > 0 && (
-                        <div style={{ width: `${(w.scrap / (w.total || 1)) * 100}%` }} className="bg-slate-500" />
-                      )}
-                    </div>
-                    <div className="grid grid-cols-3 gap-1 text-xs">
-                      <Stat label="Available" value={w.available} />
-                      <Stat label="Reserved" value={w.reserved} />
-                      <Stat label="Issued" value={w.issued} />
-                      <Stat label="Good" value={w.good} />
-                      <Stat label="Defective" value={w.defective} />
-                      <Stat label="Scrap" value={w.scrap} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="timeline">
-              <div className="rounded-xl border">
-                {timeline.length === 0 ? (
-                  <div className="p-4 text-xs text-muted-foreground text-center">
-                    No stock movements recorded yet.
-                  </div>
-                ) : (
-                  <ul className="divide-y">
-                    {timeline.map((m) => (
-                      <li key={m.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/30">
-                        <div
-                          className={`h-8 w-8 rounded-full grid place-items-center shrink-0 ${
-                            m.dir > 0
-                              ? "bg-emerald-50 text-emerald-700"
-                              : m.dir < 0
-                                ? "bg-rose-50 text-rose-700"
-                                : "bg-slate-50 text-slate-700"
-                          }`}
-                        >
-                          {m.dir > 0 ? (
-                            <ArrowDownCircle className="h-4 w-4" />
-                          ) : m.dir < 0 ? (
-                            <ArrowUpCircle className="h-4 w-4" />
-                          ) : (
-                            <Activity className="h-4 w-4" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{m.type}</div>
-                          <div className="text-[11px] text-muted-foreground truncate">
-                            {new Date(m.when).toLocaleString()} · {m.wh} ·{" "}
-                            <span className="font-mono">{m.ref}</span>
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div
-                            className={`text-sm font-semibold tabular-nums ${m.dir > 0 ? "text-emerald-700" : m.dir < 0 ? "text-rose-700" : ""}`}
-                          >
-                            {m.dir > 0 ? "+" : m.dir < 0 ? "−" : ""}
-                            {m.qty}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground tabular-nums flex items-center gap-0.5 justify-end">
-                            <TrendingUp className="h-3 w-3" /> {m.balance}
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="received">
-              <div className="overflow-x-auto border rounded">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted/50">
-                    <tr className="text-left">
-                      <th className="p-2">Date</th>
-                      <th className="p-2">GRN No</th>
-                      <th className="p-2">Source</th>
-                      <th className="p-2">From</th>
-                      <th className="p-2">Serial</th>
-                      <th className="p-2">Warehouse</th>
-                      <th className="p-2">Condition</th>
-                      <th className="p-2 text-right">Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {product.received.txns.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="p-3 text-muted-foreground">
-                          No GRN receipts for this product yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      [...product.received.txns]
-                        .sort((a, b) => new Date(b.txn_date).getTime() - new Date(a.txn_date).getTime())
-                        .map((t) => {
-                          const src = grnSourceOf(t.reference);
-                          const grnNo = (t.reference || "").replace(/^GRN\s+/i, "");
-                          const cond = t.txn_type === "good_in" ? "Good" : "Defective";
-                          return (
-                            <tr key={t.id} className="border-t">
-                              <td className="p-2">{new Date(t.txn_date).toLocaleDateString()}</td>
-                              <td className="p-2 font-mono">{grnNo || "—"}</td>
-                              <td className="p-2">
-                                <Badge
-                                  variant="outline"
-                                  className={
-                                    src === "oem"
-                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                      : src === "customer"
-                                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                                        : src === "general"
-                                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                                          : ""
-                                  }
-                                >
-                                  {src === "oem"
-                                    ? "From OEM"
-                                    : src === "customer"
-                                      ? "From Customer"
-                                      : src === "general"
-                                        ? "General"
-                                        : "Other"}
-                                </Badge>
-                              </td>
-                              <td className="p-2">{t.from_party || "—"}</td>
-                              <td className="p-2 font-mono">{t.part_serial_no || "—"}</td>
-                              <td className="p-2">{whName(t.to_warehouse_id)}</td>
-                              <td className="p-2">
-                                <Badge
-                                  variant="outline"
-                                  className={
-                                    cond === "Good"
-                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                      : "bg-rose-50 text-rose-700 border-rose-200"
-                                  }
-                                >
-                                  {cond}
-                                </Badge>
-                              </td>
-                              <td className="p-2 text-right">{t.qty}</td>
-                            </tr>
-                          );
-                        })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="serials">
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input
-                      className="pl-7 h-8 text-xs"
-                      placeholder="Search serial, model, ref, customer…"
-                      value={serialQ}
-                      onChange={(e) => setSerialQ(e.target.value)}
-                    />
-                  </div>
-                  <Select value={serialWh} onValueChange={setSerialWh}>
-                    <SelectTrigger className="h-8 w-[160px] text-xs">
-                      <SelectValue placeholder="Warehouse" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Warehouses</SelectItem>
-                      {wh.map((w) => (
-                        <SelectItem key={w.id} value={w.id}>
-                          {w.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={serialCond} onValueChange={setSerialCond}>
-                    <SelectTrigger className="h-8 w-[130px] text-xs">
-                      <SelectValue placeholder="Condition" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Conditions</SelectItem>
-                      <SelectItem value="good">Good</SelectItem>
-                      <SelectItem value="defective">Defective</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={serialStatus} onValueChange={setSerialStatus}>
-                    <SelectTrigger className="h-8 w-[150px] text-xs">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      {Object.entries(STOCK_STATUS_LABEL).map(([k, l]) => (
-                        <SelectItem key={k} value={k}>
-                          {l}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" size="sm" className="h-8" onClick={exportSerials}>
-                    <FileText className="h-3.5 w-3.5 mr-1" /> Export
-                  </Button>
-                </div>
-                <div className="overflow-x-auto border rounded max-h-[320px]">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted/50 sticky top-0">
-                      <tr className="text-left">
-                        <th className="p-2">Serial</th>
-                        <th className="p-2">Model</th>
-                        <th className="p-2">Warehouse</th>
-                        <th className="p-2">Condition</th>
-                        <th className="p-2">Status</th>
-                        <th className="p-2">Ref</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {serialFiltered.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="p-3 text-muted-foreground text-center">
-                            No units match filters.
-                          </td>
-                        </tr>
-                      ) : (
-                        serialFiltered.map((s) => (
-                          <tr key={s.id} className="border-t">
-                            <td className="p-2 font-mono">{s.part_serial_no || "—"}</td>
-                            <td className="p-2 font-mono">{s.part_model_no || "—"}</td>
-                            <td className="p-2">{whName(s.warehouse_id)}</td>
-                            <td className="p-2">
-                              <Badge variant={s.stock_type === "good" ? "default" : "secondary"}>
-                                {s.stock_type}
-                              </Badge>
-                            </td>
-                            <td className="p-2">
-                              <StockStatusBadge status={s.stock_status} type={s.stock_type} />
-                            </td>
-                            <td className="p-2 font-mono text-[11px] truncate max-w-[140px]">
-                              {s.transaction_ref || "—"}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="txns">
-              <div className="overflow-x-auto border rounded max-h-[320px]">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted/50 sticky top-0">
-                    <tr className="text-left">
-                      <th className="p-2">Date</th>
-                      <th className="p-2">Type</th>
-                      <th className="p-2">Qty</th>
-                      <th className="p-2">Warehouse</th>
-                      <th className="p-2">Ref</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loadingTxns ? (
-                      <tr>
-                        <td colSpan={5} className="p-3 text-muted-foreground text-center">
-                          Loading transactions…
-                        </td>
-                      </tr>
-                    ) : txns.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="p-3 text-muted-foreground text-center">
-                          No transactions for this model.
-                        </td>
-                      </tr>
-                    ) : (
-                      [...txns]
-                        .sort((a, b) => new Date(b.txn_date).getTime() - new Date(a.txn_date).getTime())
-                        .map((t) => (
-                          <tr key={t.id} className="border-t">
-                            <td className="p-2">{new Date(t.txn_date).toLocaleDateString()}</td>
-                            <td className="p-2">{TXN_TYPE_LABEL[t.txn_type] || t.txn_type}</td>
-                            <td className="p-2">{t.qty}</td>
-                            <td className="p-2">{whName(t.to_warehouse_id || t.from_warehouse_id)}</td>
-                            <td className="p-2 font-mono truncate max-w-[160px]">{t.reference || t.txn_no || "—"}</td>
-                          </tr>
-                        ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-// Alias for spec compatibility: ProductDetailSheet name
-const ProductDetailSheet = StockBetaDetail;
-export { StockBetaDetail, ProductDetailSheet };

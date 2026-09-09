@@ -246,20 +246,30 @@ export function StockBetaDetail({ product, isOpen, onClose, whName }: StockBetaD
     setSerialCond("all");
     setSerialStatus("all");
     setLoadingTxns(true);
+    let cancelled = false;
     fetchTransactionsPage({ page: 0, pageSize: 500 })
       .then((res) => {
+        if (cancelled) return;
         const all = res.data;
-        const modelKey = (product.part_model_no || "").trim().toLowerCase();
-        const nameKey = product.part_name.trim().toLowerCase();
+        const normalize = (v: string | null | undefined) => (v || "").trim().toLowerCase();
+        const modelKey = normalize(product.part_model_no);
+        const nameKey = normalize(product.part_name);
+        // Match aggregation: model-only key when model exists, else name fallback — keeps Received vs Timeline consistent
         const filtered = all.filter((t) => {
-          const tModel = (t.part_model_no || "").trim().toLowerCase();
-          const tName = (t.part_name || "").trim().toLowerCase();
-          if (modelKey) return tModel === modelKey || tName === nameKey;
-          return tName === nameKey;
+          const tModel = normalize(t.part_model_no);
+          const tName = normalize(t.part_name);
+          const tKey = tModel || `__name__${tName}`;
+          const pKey = modelKey || `__name__${nameKey}`;
+          return tKey === pKey;
         });
         setTxns(filtered);
       })
-      .finally(() => setLoadingTxns(false));
+      .finally(() => {
+        if (!cancelled) setLoadingTxns(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [product]);
 
   const wh = useMemo(() => {
@@ -272,31 +282,7 @@ export function StockBetaDetail({ product, isOpen, onClose, whName }: StockBetaD
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
   const scrap = product?.scrapped || 0;
 
-  const conditionData = useMemo(() => {
-    if (!product) return [] as { name: string; value: number; color: string }[];
-    return [
-      { name: "Good", value: product.good, color: "#10b981" },
-      {
-        name: "Defective",
-        value: product.defective - scrap > 0 ? product.defective - scrap : 0,
-        color: "#f43f5e",
-      },
-      { name: "Scrap", value: scrap, color: "#64748b" },
-    ].filter((d) => d.value > 0);
-  }, [product, scrap]);
 
-  const whChart = useMemo(() => {
-    return wh.map((w) => ({
-      name: w.name,
-      Good: w.good - (w.scrap > w.defective ? w.defective : w.scrap),
-      Defective: Math.max(w.defective - w.scrap, 0),
-      Scrap: w.scrap,
-    }));
-  }, [wh]);
-
-  // Keep derived values referenced to avoid unused warnings when product null guards skip UI
-  void conditionData;
-  void whChart;
 
   const alerts: { tone: "rose" | "amber" | "sky"; msg: string }[] = [];
   if (product) {
