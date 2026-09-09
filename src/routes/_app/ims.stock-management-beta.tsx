@@ -451,24 +451,39 @@ function StockManagementBeta() {
               className="max-h-[60vh] overflow-auto overscroll-contain scroll-pt-0"
               style={{ contain: "content" }}
             >
-              <table className="w-full text-sm table-fixed min-w-[980px]">
+              <table className="w-full text-sm table-fixed min-w-[1020px]">
+                <colgroup>
+                  <col className="w-7" />
+                  <col className="w-[34%]" />
+                  <col className="w-[132px]" />
+                  <col className="w-[86px]" />
+                  <col className="w-[54px]" />
+                  <col className="w-[62px]" />
+                  <col className="w-[62px]" />
+                  <col className="w-[56px]" />
+                  <col className="w-[56px]" />
+                  <col className="w-[68px]" />
+                  <col className="w-[64px]" />
+                  <col className="w-[118px]" />
+                  <col className="w-[42px]" />
+                </colgroup>
                 <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
                   <tr className="text-left text-[11px] uppercase tracking-[0.06em] text-slate-600">
-                    <th scope="col" className="p-2 w-8"></th>
-                    <th scope="col" className="p-2">Product</th>
-                    <th scope="col" className="p-2">Model</th>
-                    <th scope="col" className="p-2">OEM</th>
-                    <th scope="col" className="p-2 text-right tabular-nums">Total</th>
-                    <th scope="col" className="p-2 text-right tabular-nums">Available</th>
-                    <th scope="col" className="p-2 text-right tabular-nums">Reserved</th>
-                    <th scope="col" className="p-2 text-right tabular-nums">Issued</th>
-                    <th scope="col" className="p-2 text-right tabular-nums">Good</th>
-                    <th scope="col" className="p-2 text-right tabular-nums">Defective</th>
-                    <th scope="col" className="p-2 text-right tabular-nums" title="Received via GRN — total">
-                      Received
+                    <th scope="col" className="p-1.5 w-7"></th>
+                    <th scope="col" className="px-2 py-1.5">Product</th>
+                    <th scope="col" className="px-2 py-1.5">Model</th>
+                    <th scope="col" className="px-2 py-1.5">OEM</th>
+                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Total</th>
+                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Avail</th>
+                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Resvd</th>
+                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Iss</th>
+                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Good</th>
+                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Def</th>
+                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums" title="Received via GRN — total">
+                      Recd
                     </th>
-                    <th scope="col" className="p-2">Latest GRN</th>
-                    <th scope="col" className="p-2 text-right tabular-nums">WH</th>
+                    <th scope="col" className="px-2 py-1.5">Latest GRN</th>
+                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">WH</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -521,41 +536,41 @@ function StockManagementBeta() {
                                 )}
                               </button>
                             </td>
-                            <td className="p-2">
-                              <div className="flex items-center gap-2.5">
-                                <div className="h-8 w-8 rounded-md bg-primary/10 text-primary grid place-items-center shrink-0">
-                                  <Package className="h-4 w-4" />
+                            <td className="px-2 py-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="h-7 w-7 rounded-md bg-primary/10 text-primary grid place-items-center shrink-0">
+                                  <Package className="h-3.5 w-3.5" />
                                 </div>
-                                <div className="min-w-0">
-                                  <div className="font-medium truncate">{p.part_name}</div>
-                                  <div className="text-[11px] text-muted-foreground truncate">
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-medium leading-tight break-words whitespace-normal text-[13px]" title={p.part_name}>{p.part_name}</div>
+                                  <div className="text-[11px] text-muted-foreground leading-tight break-words whitespace-normal" title={p.category || ""}>
                                     {p.category || "—"}
                                   </div>
                                 </div>
                               </div>
                             </td>
-                            <td className="p-2 font-mono text-xs" title={p.part_model_no || ""}>{p.part_model_no || "—"}</td>
-                            <td className="p-2 truncate" title={p.oem || ""}>{p.oem || "—"}</td>
-                            <td className="p-2 text-right font-semibold tabular-nums">{p.total}</td>
-                            <td className="p-2 text-right">
+                            <td className="px-2 py-1.5 font-mono text-xs break-all leading-tight" title={p.part_model_no || ""}>{p.part_model_no || "—"}</td>
+                            <td className="px-2 py-1.5 text-xs truncate" title={p.oem || ""}>{p.oem || "—"}</td>
+                            <td className="px-1 py-1.5 text-right font-semibold tabular-nums text-xs">{p.total}</td>
+                            <td className="px-1 py-1.5 text-right">
                               <NumPill value={p.available} tone="emerald" />
                             </td>
-                            <td className="p-2 text-right">
+                            <td className="px-1 py-1.5 text-right">
                               <NumPill value={p.reserved} tone="amber" />
                             </td>
-                            <td className="p-2 text-right">
+                            <td className="px-1 py-1.5 text-right">
                               <NumPill value={p.issued} tone="violet" />
                             </td>
-                            <td className="p-2 text-right tabular-nums text-emerald-700">
+                            <td className="px-1 py-1.5 text-right tabular-nums text-emerald-700 text-xs">
                               {p.good || "—"}
                             </td>
-                            <td className="p-2 text-right tabular-nums text-rose-700">
+                            <td className="px-1 py-1.5 text-right tabular-nums text-rose-700 text-xs">
                               {p.defective || "—"}
                             </td>
-                            <td className="p-2 text-right font-medium tabular-nums">
+                            <td className="px-1 py-1.5 text-right font-medium tabular-nums text-xs">
                               {p.received.total || "—"}
                             </td>
-                            <td className="p-2 text-xs">
+                            <td className="px-2 py-1.5 text-xs">
                               {p.received.latestGrn ? (
                                 <>
                                   <div className="font-mono">{p.received.latestGrn}</div>
@@ -569,7 +584,7 @@ function StockManagementBeta() {
                                 "—"
                               )}
                             </td>
-                            <td className="p-2 text-right tabular-nums">{p.warehouses.size}</td>
+                            <td className="px-1 py-1.5 text-right tabular-nums text-xs">{p.warehouses.size}</td>
                           </tr>
                           {isOpen && (
                             <tr key={p.key + "-exp"} className="bg-primary/[0.03]">
@@ -700,7 +715,7 @@ function NumPill({
           : "bg-rose-50 text-rose-700 border-rose-200";
   return (
     <span
-      className={`inline-flex items-center justify-center min-w-[28px] px-1.5 py-0.5 rounded-md border text-xs font-medium tabular-nums ${cls}`}
+      className={`inline-flex items-center justify-center min-w-[22px] px-1 py-0 rounded-md border text-[11px] font-semibold tabular-nums leading-4 ${cls}`}
     >
       {value}
     </span>
