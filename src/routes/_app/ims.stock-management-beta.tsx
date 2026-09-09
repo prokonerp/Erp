@@ -451,21 +451,21 @@ function StockManagementBeta() {
               className="max-h-[60vh] overflow-auto overscroll-contain scroll-pt-0"
               style={{ contain: "content" }}
             >
-              <table className="w-full text-sm table-auto">
+              <table className="w-full text-sm table-fixed min-w-[1080px]">
                 <colgroup>
                   <col className="w-7" />
-                  <col />
-                  <col className="w-[1%]" />
-                  <col className="w-[1%]" />
-                  <col className="w-[1%]" />
-                  <col className="w-[1%]" />
-                  <col className="w-[1%]" />
-                  <col className="w-[1%]" />
-                  <col className="w-[1%]" />
-                  <col className="w-[1%]" />
-                  <col className="w-[1%]" />
-                  <col className="w-[118px]" />
-                  <col className="w-[1%]" />
+                  <col className="w-[22%]" />
+                  <col className="w-[128px]" />
+                  <col className="w-[88px]" />
+                  <col className="w-[56px]" />
+                  <col className="w-[68px]" />
+                  <col className="w-[68px]" />
+                  <col className="w-[58px]" />
+                  <col className="w-[58px]" />
+                  <col className="w-[72px]" />
+                  <col className="w-[64px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[44px]" />
                 </colgroup>
                 <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
                   <tr className="text-left text-[11px] uppercase tracking-[0.06em] text-slate-600">
@@ -473,17 +473,17 @@ function StockManagementBeta() {
                     <th scope="col" className="px-2 py-1.5">Product</th>
                     <th scope="col" className="px-2 py-1.5">Model</th>
                     <th scope="col" className="px-2 py-1.5">OEM</th>
-                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Total</th>
-                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Avail</th>
-                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Resvd</th>
-                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Iss</th>
-                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Good</th>
-                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">Def</th>
-                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums" title="Received via GRN — total">
-                      Recd
+                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums">Total</th>
+                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums">Available</th>
+                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums">Reserved</th>
+                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums">Issued</th>
+                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums">Good</th>
+                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums">Defective</th>
+                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums" title="Received via GRN — total">
+                      Received
                     </th>
                     <th scope="col" className="px-2 py-1.5">Latest GRN</th>
-                    <th scope="col" className="px-1 py-1.5 text-right tabular-nums">WH</th>
+                    <th scope="col" className="px-2 py-1.5 text-right tabular-nums">WH</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -551,23 +551,23 @@ function StockManagementBeta() {
                             </td>
                             <td className="px-2 py-1.5 font-mono text-xs break-all leading-tight" title={p.part_model_no || ""}>{p.part_model_no || "—"}</td>
                             <td className="px-2 py-1.5 text-xs truncate" title={p.oem || ""}>{p.oem || "—"}</td>
-                            <td className="px-1 py-1.5 text-right font-semibold tabular-nums text-xs">{p.total}</td>
-                            <td className="px-1 py-1.5 text-right">
+                            <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-xs">{p.total}</td>
+                            <td className="px-2 py-1.5 text-right">
                               <NumPill value={p.available} tone="emerald" />
                             </td>
-                            <td className="px-1 py-1.5 text-right">
+                            <td className="px-2 py-1.5 text-right">
                               <NumPill value={p.reserved} tone="amber" />
                             </td>
-                            <td className="px-1 py-1.5 text-right">
+                            <td className="px-2 py-1.5 text-right">
                               <NumPill value={p.issued} tone="violet" />
                             </td>
-                            <td className="px-1 py-1.5 text-right tabular-nums text-emerald-700 text-xs">
+                            <td className="px-2 py-1.5 text-right tabular-nums text-emerald-700 text-xs">
                               {p.good || "—"}
                             </td>
-                            <td className="px-1 py-1.5 text-right tabular-nums text-rose-700 text-xs">
+                            <td className="px-2 py-1.5 text-right tabular-nums text-rose-700 text-xs">
                               {p.defective || "—"}
                             </td>
-                            <td className="px-1 py-1.5 text-right font-medium tabular-nums text-xs">
+                            <td className="px-2 py-1.5 text-right font-medium tabular-nums text-xs">
                               {p.received.total || "—"}
                             </td>
                             <td className="px-2 py-1.5 text-xs">
@@ -584,7 +584,7 @@ function StockManagementBeta() {
                                 "—"
                               )}
                             </td>
-                            <td className="px-1 py-1.5 text-right tabular-nums text-xs">{p.warehouses.size}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-xs">{p.warehouses.size}</td>
                           </tr>
                           {isOpen && (
                             <tr key={p.key + "-exp"} className="bg-primary/[0.03]">
