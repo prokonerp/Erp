@@ -53,8 +53,7 @@ DECLARE
   emp record;
   norm_phone text;
   phone_cnt integer;
-  phone_id uuid;
-BEGIN
+  phone_id uuid;BEGIN
   -- Direction A: FK is set → overwrite text fields from employee row (authoritative)
   IF NEW.assigned_employee_id IS NOT NULL THEN
     SELECT name, phone INTO emp
@@ -77,12 +76,18 @@ BEGIN
     IF NEW.assigned_engineer_phone IS NOT NULL AND trim(NEW.assigned_engineer_phone) <> '' THEN
       norm_phone := regexp_replace(NEW.assigned_engineer_phone, '\D', '', 'g');
       IF norm_phone <> '' THEN
-        SELECT count(*), min(id) INTO phone_cnt, phone_id
+        SELECT count(*) INTO phone_cnt
           FROM public.employees
          WHERE active = true
            AND phone IS NOT NULL AND phone <> ''
            AND regexp_replace(phone, '\D', '', 'g') = norm_phone;
         IF phone_cnt = 1 THEN
+          SELECT id INTO phone_id
+            FROM public.employees
+           WHERE active = true
+             AND phone IS NOT NULL AND phone <> ''
+             AND regexp_replace(phone, '\D', '', 'g') = norm_phone
+           LIMIT 1;
           NEW.assigned_employee_id := phone_id;
         END IF;
       END IF;
