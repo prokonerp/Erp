@@ -257,6 +257,140 @@ export const deleteAppUser = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/* ---------------- Engineer Portal Access ---------------- */
+
+/** Pure helper: validates employee + password, returns normalized email or throws. */
+export function validateProvisionInput(
+  employee: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    active: boolean;
+    auth_user_id: string | null;
+  },
+  password: string,
+): { email: string; name: string; phone: string | null } {
+  const v = validateStrong(password);
+  if (v) throw new Error(v);
+  if (!employee.active) throw new Error("Only active employees can receive portal logins");
+  if (!employee.email)
+    throw new Error("Employee needs an email address first — set it in Employees master");
+  const email = employee.email.trim().toLowerCase();
+  if (employee.auth_user_id) throw new Error("This employee already has a portal login");
+  return { email, name: employee.name, phone: employee.phone };
+}
+
+export const provisionEngineerLogin = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
+  .inputValidator((d: { employee_id: string; password: string }) => d)
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const v = validateStrong(data.password);
+    if (v) throw new Error(v);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // 1. Load employee row (auth_user_id is not in generated types but exists in DB)
+    const { data: emp, error: empErr } = await (supabaseAdmin
+      .from("employees")
+      .select("id, name, email, phone, active, auth_user_id")
+      .eq("id", data.employee_id)
+      .single() as any);
+    if (empErr || !emp) throw new Error("Employee not found");
+
+    // 2. Validate (throws clear admin-facing messages)
+    const validated = validateProvisionInput(emp, data.password);
+
+    // 3. Resolve Engineer role id
+    const { data: roleRow, error: roleErr } = await supabaseAdmin
+      .from("app_roles")
+      .select("id")
+      .eq("name", "Engineer")
+      .single();
+    if (roleErr || !roleRow)
+      throw new Error("Engineer role not found — run migration 20260915000003");
+    const roleId = roleRow.id;
+
+    // 4. Check for pre-existing auth user with that email (paginate up to 10 pages)
+    let existingUserId: string | null = null;
+    const perPage = 200;
+    for (let page = 0; page < 10; page++) {
+      const { data: listed } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+      if (!listed?.users?.length) break;
+      const match = listed.users.find((u) => u.email?.toLowerCase() === validated.email);
+      if (match) {
+        existingUserId = match.id;
+        break;
+      }
+    }
+
+    let uid: string;
+    let createdNew: boolean;
+
+    if (existingUserId) {
+      // LINK path: auth user exists but not linked to this employee
+      const { error: updErr } = await supabaseAdmin.auth.admin.updateUserById(existingUserId, {
+        password: data.password,
+      });
+      if (updErr) throw new Error(updErr.message);
+      await recordPasswordHistory(supabaseAdmin, existingUserId, data.password);
+      uid = existingUserId;
+      createdNew = false;
+    } else {
+      // CREATE path: mirror createAppUser conventions
+      const { data: created, error: crErr } = await supabaseAdmin.auth.admin.createUser({
+        email: validated.email,
+        password: data.password,
+        email_confirm: true,
+        user_metadata: { name: validated.name, phone: validated.phone },
+      });
+      if (crErr || !created.user) throw new Error(crErr?.message ?? "Failed to create user");
+      uid = created.user.id;
+      createdNew = true;
+    }
+
+    // 5. Upsert app_users
+    const { error: upErr } = await supabaseAdmin.from("app_users").upsert({
+      user_id: uid,
+      name: validated.name,
+      email: validated.email,
+      phone: validated.phone,
+      role_id: roleId,
+      status: "active",
+      password_changed_at: new Date().toISOString(),
+      must_change_password: true,
+    });
+    if (upErr) throw new Error(upErr.message);
+
+    await recordPasswordHistory(supabaseAdmin, uid, data.password);
+
+    // 6. Link employee → auth user. Generated types lack auth_user_id on employees
+    // so we cast the query to `any` to avoid a TS error while the column exists in the DB.
+    // Operation order matters: if this throws after user creation, the retry will
+    // take the LINK path above (idempotent). No distributed-transaction needed.
+    const { error: linkErr } = await (supabaseAdmin
+      .from("employees")
+      .update({ auth_user_id: uid } as any)
+      .eq("id", data.employee_id) as any);
+    if (linkErr) throw new Error(linkErr.message);
+
+    // 7. Verify link — auth_user_id not in generated types
+    const { data: verify } = await (supabaseAdmin
+      .from("employees")
+      .select("id, auth_user_id")
+      .eq("id", data.employee_id)
+      .single() as any);
+    if (verify?.auth_user_id !== uid) throw new Error("link verification failed");
+
+    return {
+      user_id: uid,
+      email: validated.email,
+      created_new: createdNew,
+      must_change_password: true as const,
+    };
+  });
+
 /* ---------------- Self-service password change ---------------- */
 export const changeOwnPassword = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -326,7 +460,8 @@ export const getMyProfile = createServerFn({ method: "GET" })
       .eq("user_id", context.userId)
       .maybeSingle();
     const role = au?.role_id
-      ? (await supabaseAdmin.from("app_roles").select("name").eq("id", au.role_id).maybeSingle()).data
+      ? (await supabaseAdmin.from("app_roles").select("name").eq("id", au.role_id).maybeSingle())
+          .data
       : null;
     const { data: ur } = await supabaseAdmin
       .from("user_roles")
@@ -343,7 +478,7 @@ export const getMyProfile = createServerFn({ method: "GET" })
       name: au?.name ?? (authUser.user?.user_metadata as any)?.name ?? null,
       email: au?.email ?? authUser.user?.email ?? null,
       phone: au?.phone ?? null,
-      role_name: isAdmin ? "Admin" : role?.name ?? null,
+      role_name: isAdmin ? "Admin" : (role?.name ?? null),
       is_admin: isAdmin,
       last_sign_in_at: authUser.user?.last_sign_in_at ?? null,
       password_changed_at: changedAt.toISOString(),

@@ -8,6 +8,7 @@ import {
   updateAppUser,
   setUserPassword,
   deleteAppUser,
+  provisionEngineerLogin,
 } from "@/lib/admin-users.functions";
 import {
   Card,
@@ -38,7 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trash2, Plus, KeyRound, Pencil, ShieldAlert, Boxes } from "lucide-react";
+import { Trash2, Plus, KeyRound, Pencil, ShieldAlert, Boxes, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ModuleKey, ModulePerm, EMPTY_PERM } from "@/lib/permissions";
 import { useModules, type AppModule } from "@/lib/useModules";
@@ -118,6 +119,7 @@ export function RolesAndUsersPanel({ isAdmin }: { isAdmin: boolean }) {
         <TabsTrigger value="users">Users</TabsTrigger>
         <TabsTrigger value="roles">Roles &amp; Permissions</TabsTrigger>
         <TabsTrigger value="modules">Modules</TabsTrigger>
+        <TabsTrigger value="engineer-portal">Engineer Portal</TabsTrigger>
       </TabsList>
       <TabsContent value="users" className="mt-4">
         <UsersSection />
@@ -127,6 +129,9 @@ export function RolesAndUsersPanel({ isAdmin }: { isAdmin: boolean }) {
       </TabsContent>
       <TabsContent value="modules" className="mt-4">
         <ModulesSection />
+      </TabsContent>
+      <TabsContent value="engineer-portal" className="mt-4">
+        <EngineerPortalSection />
       </TabsContent>
     </Tabs>
   );
@@ -652,6 +657,256 @@ function UsersSection() {
         }}
       />
     </Card>
+  );
+}
+
+/* ---------------- Engineer Portal section ---------------- */
+function EngineerPortalSection() {
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [appUsers, setAppUsers] = useState<{ user_id: string; email: string | null; role_id: string | null }[]>([]);
+  const [engineerRoleId, setEngineerRoleId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [provisionFor, setProvisionFor] = useState<any | null>(null);
+
+  async function load() {
+    setLoading(true);
+    const [{ data: emp }, { data: au }, { data: ar }] = await Promise.all([
+      supabase.from("employees").select("id,name,email,phone,department,active,auth_user_id").order("name").limit(500),
+      supabase.from("app_users").select("user_id,email,role_id").limit(500),
+      supabase.from("app_roles").select("id,name").eq("name", "Engineer").limit(1),
+    ]);
+    setEmployees((emp as any[]) ?? []);
+    setAppUsers((au as { user_id: string; email: string | null; role_id: string | null }[]) ?? []);
+    setEngineerRoleId(ar && ar.length > 0 ? ar[0].id : null);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const engineerUserMap = useMemo(() => {
+    const m = new Map<string, { user_id: string; role_name: string }>();
+    if (!engineerRoleId) return m;
+    appUsers.forEach((u) => {
+      if (u.role_id === engineerRoleId) m.set(u.email?.toLowerCase() ?? "", { user_id: u.user_id, role_name: "Engineer" });
+    });
+    return m;
+  }, [appUsers, engineerRoleId]);
+
+  const employeeRows = useMemo(() => {
+    return [...employees].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [employees]);
+
+  const getDisableReason = (emp: any): string | null => {
+    if (!emp.email) return "No email on record — add one to the employee first";
+    if (emp.active === false) return "Employee is inactive";
+    if (engineerUserMap.has((emp.email ?? "").toLowerCase())) return "Already linked";
+    return null;
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-sm text-muted-foreground">Loading employees…</CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Engineer Portal Access</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Department / Phone</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-32">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {employeeRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-sm text-muted-foreground">No employees found.</TableCell>
+                </TableRow>
+              ) : (
+                employeeRows.map((emp) => {
+                  const linked = engineerUserMap.has((emp.email ?? "").toLowerCase());
+                  const reason = getDisableReason(emp);
+                  return (
+                    <TableRow key={emp.id}>
+                      <TableCell className="font-medium">{emp.name ?? "—"}</TableCell>
+                      <TableCell>
+                        {emp.email ?? (
+                          <span className="text-muted-foreground">— <span className="text-xs italic">no email</span></span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {emp.department ?? "—"}{emp.phone ? ` / ${emp.phone}` : ""}
+                      </TableCell>
+                      <TableCell>
+                        {linked ? (
+                          <Badge variant="outline" className="gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                            Linked — Engineer
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1.5 border-zinc-500/40 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300">
+                            No login
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant={linked ? "ghost" : "default"}
+                          disabled={!!reason}
+                          title={reason ?? undefined}
+                          onClick={() => setProvisionFor(emp)}
+                        >
+                          {linked ? "Linked" : "Create login"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+
+      <ProvisionDialog
+        employee={provisionFor}
+        onClose={() => setProvisionFor(null)}
+        onSuccess={() => { setProvisionFor(null); load(); }}
+      />
+    </Card>
+  );
+}
+
+function ProvisionDialog({
+  employee,
+  onClose,
+  onSuccess,
+}: {
+  employee: any | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const callProvision = useServerFn(provisionEngineerLogin);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setPassword("");
+    setConfirm("");
+    setShowPwd(false);
+  }, [employee]);
+
+  const mismatch = confirm.length > 0 && password !== confirm;
+
+  function pwdHint(): string {
+    if (password.length < 8) return "At least 8 characters";
+    if (!/[A-Z]/.test(password)) return "Must include an uppercase letter";
+    if (!/[a-z]/.test(password)) return "Must include a lowercase letter";
+    if (!/\d/.test(password)) return "Must include a digit";
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) return "Must include a special character";
+    return "Strong password";
+  }
+
+  async function handleSubmit() {
+    if (!employee || password.length < 8 || busy) return;
+    setBusy(true);
+    try {
+      const result = await callProvision({ data: { employee_id: employee.id, password } });
+      if (result?.created_new) {
+        toast.success(`Login created for ${employee.name ?? employee.email} — temporary password set, they must change it on first sign-in`);
+      } else {
+        toast.success(`Existing login linked + password reset for ${employee.name ?? employee.email}`);
+      }
+      onSuccess();
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to provision login");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!employee} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create Engineer Login</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Name</Label>
+              <Input value={employee?.name ?? ""} disabled />
+            </div>
+            <div>
+              <Label className="text-xs">Email</Label>
+              <Input value={employee?.email ?? ""} disabled />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Password</Label>
+            <div className="relative">
+              <Input
+                type={showPwd ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="min 8 chars, upper, lower, digit, special"
+                disabled={busy}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full px-3"
+                onClick={() => setShowPwd((v) => !v)}
+              >
+                {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+            {password.length > 0 && (
+              <p className={`text-xs ${pwdHint() === "Strong password" ? "text-emerald-600" : "text-muted-foreground"}`}>
+                {pwdHint()}
+              </p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Confirm password</Label>
+            <Input
+              type={showPwd ? "text" : "password"}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="re-enter password"
+              disabled={busy}
+            />
+            {mismatch && (
+              <p className="text-xs text-destructive">Passwords do not match</p>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={busy || password.length < 8 || mismatch}
+          >
+            {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Create login
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
