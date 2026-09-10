@@ -67,10 +67,16 @@ function EngTicketDetail() {
     let active = true;
     (async () => {
       const [tkRes, actRes] = await Promise.all([
-        supabase.from("tickets").select("*").eq("id", id).single(),
+        supabase
+          .from("tickets")
+          .select(
+            "id,case_id,call_type,product,serial_no,customer_name,customer_phone,location,complaint,status,priority,special_instruction,special_instruction_acknowledged,created_at",
+          )
+          .eq("id", id)
+          .single(),
         supabase
           .from("ticket_activities")
-          .select("*")
+          .select("id,kind,notes,created_at,actor")
           .eq("ticket_id", id)
           .order("created_at", { ascending: false }),
       ]);
@@ -111,7 +117,7 @@ function EngTicketDetail() {
       // Refresh activities
       const { data: actRes } = await supabase
         .from("ticket_activities")
-        .select("*")
+        .select("id,kind,notes,created_at,actor")
         .eq("ticket_id", id)
         .order("created_at", { ascending: false });
       setActivities((actRes || []) as Activity[]);
@@ -182,7 +188,7 @@ function EngTicketDetail() {
       // Refresh activities
       const { data: actRes } = await supabase
         .from("ticket_activities")
-        .select("*")
+        .select("id,kind,notes,created_at,actor")
         .eq("ticket_id", id)
         .order("created_at", { ascending: false });
       setActivities((actRes || []) as Activity[]);

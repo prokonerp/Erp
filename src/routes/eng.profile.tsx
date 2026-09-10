@@ -20,7 +20,7 @@ function EngProfile() {
   }
 
   const email = session?.user?.email ?? "—";
-  const open = tickets.filter((t) => t.status !== "Closed" && t.status !== "Cancelled").length;
+  const waiting = tickets.filter((t) => t.status === "Waiting for Parts").length;
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -45,8 +45,8 @@ function EngProfile() {
             <p className="text-xs text-muted-foreground">Assigned calls</p>
           </div>
           <div>
-            <p className="text-2xl font-semibold">{open}</p>
-            <p className="text-xs text-muted-foreground">Open</p>
+            <p className="text-2xl font-semibold">{waiting}</p>
+            <p className="text-xs text-muted-foreground">Waiting for Parts</p>
           </div>
         </CardContent>
       </Card>

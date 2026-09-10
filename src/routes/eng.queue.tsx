@@ -2,6 +2,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMyQueue } from "@/hooks/useMyQueue";
 import { STATUS_COLOR, PRIORITY_COLOR } from "@/lib/tickets";
+import {
+  priorityWeight,
+  isToday,
+  isCarryForward,
+  matchesSearch,
+  formatAge,
+} from "@/lib/eng-queue-utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
@@ -11,44 +18,32 @@ export const Route = createFileRoute("/eng/queue")({
 });
 
 function EngQueue() {
-  const { data: tickets = [], isLoading } = useMyQueue();
+  const { data: tickets = [], isLoading, isError, error, refetch } = useMyQueue();
   const [search, setSearch] = useState("");
 
-  const term = search.trim().toLowerCase();
+  const errMsg = error instanceof Error ? error.message : "";
+  const linkHint =
+    errMsg === "ACCOUNT_NOT_LINKED"
+      ? "Your login isn't linked to an employee record. Please contact admin."
+      : errMsg === "AMBIGUOUS_EMPLOYEE_MATCH"
+        ? "Multiple employee records share your login. Please contact admin."
+        : null;
+
+  const term = search.trim();
   const filtered = term
-    ? tickets.filter(
-        (t) =>
-          t.case_id.toLowerCase().includes(term) ||
-          (t.customer_name || "").toLowerCase().includes(term) ||
-          (t.product || "").toLowerCase().includes(term) ||
-          (t.serial_no || "").toLowerCase().includes(term) ||
-          (t.location || "").toLowerCase().includes(term),
+    ? tickets.filter((t) =>
+        matchesSearch(term, [t.case_id, t.customer_name, t.product, t.serial_no, t.location]),
       )
     : tickets;
 
   const sections = [
     {
       label: "Today",
-      filter: (t: (typeof tickets)[0]) => {
-        const created = new Date(t.created_at);
-        const now = new Date();
-        return (
-          created.toDateString() === now.toDateString() ||
-          (t.assigned_at && new Date(t.assigned_at).toDateString() === now.toDateString())
-        );
-      },
+      filter: (t: (typeof tickets)[0]) => isToday(t.created_at, t.assigned_at),
     },
     {
       label: "Carry Forward",
-      filter: (t: (typeof tickets)[0]) => {
-        const created = new Date(t.created_at);
-        const now = new Date();
-        return (
-          created.toDateString() !== now.toDateString() &&
-          (!t.assigned_at || new Date(t.assigned_at).toDateString() !== now.toDateString()) &&
-          t.status !== "Waiting for Parts"
-        );
-      },
+      filter: (t: (typeof tickets)[0]) => isCarryForward(t.created_at, t.assigned_at, t.status),
     },
     {
       label: "Waiting for Parts",
@@ -56,18 +51,27 @@ function EngQueue() {
     },
   ];
 
-  const priorityOrder = (p: string | null) => {
-    const map: Record<string, number> = { P1: 1, P2: 2, P3: 3, P4: 4, P5: 5 };
-    return map[(p || "").toUpperCase()] ?? 99;
-  };
-
   const sortTickets = (list: typeof tickets) =>
-    [...list].sort((a, b) => priorityOrder(a.priority) - priorityOrder(b.priority));
+    [...list].sort((a, b) => priorityWeight(a.priority) - priorityWeight(b.priority));
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
         Loading your queue…
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground text-sm gap-3 px-4 text-center">
+        <p>{linkHint ?? "Failed to load your queue."}</p>
+        <button
+          onClick={() => refetch()}
+          className="text-primary underline text-sm hover:text-primary/80"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -149,12 +153,4 @@ function EngQueue() {
       })}
     </div>
   );
-}
-
-function formatAge(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const hrs = ms / 3_600_000;
-  if (hrs < 1) return `${Math.max(1, Math.round(ms / 60_000))}m`;
-  if (hrs < 24) return `${Math.round(hrs)}h`;
-  return `${Math.round(hrs / 24)}d`;
 }

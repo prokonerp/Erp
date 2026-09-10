@@ -58,6 +58,7 @@ function EngLayout() {
             <Link
               key={tab.to}
               to={tab.to}
+              aria-current={active ? "page" : undefined}
               className={`flex flex-col items-center gap-0.5 text-[11px] px-4 py-1.5 rounded-md transition-colors ${
                 active ? "text-primary font-medium" : "text-muted-foreground hover:text-foreground"
               }`}

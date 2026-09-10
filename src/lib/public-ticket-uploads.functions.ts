@@ -23,7 +23,7 @@ const deleteSchema = z.object({
 
 async function signPath(path: string): Promise<string> {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!secret) throw new Error("Server misconfigured");
+  if (!secret) throw new Error("Server misconfigured: SUPABASE_SERVICE_ROLE_KEY is missing");
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -64,6 +64,14 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
     const name = `${data.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
     const path = `ticket/${data.ticket_id}/${new Date().toISOString().slice(0, 10)}/${name}`;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: ticket, error: ticketErr } = await supabaseAdmin
+      .from("tickets")
+      .select("id")
+      .eq("id", data.ticket_id)
+      .maybeSingle();
+    if (ticketErr || !ticket) {
+      throw new Error("Ticket not found");
+    }
     const { error } = await supabaseAdmin.storage
       .from("ticket-attachments")
       .upload(path, buf, { cacheControl: "3600", upsert: false, contentType: data.content_type });

@@ -109,3 +109,63 @@ describe("MIME type guard (pure logic)", () => {
     expect(ALLOWED_MIME).not.toContain("text/html");
   });
 });
+
+describe("upload path construction (pure logic)", () => {
+  function buildUploadPath(ticketId: string, kind: string): string {
+    const name = `${kind}-${Date.now()}-abc123.jpg`;
+    return `ticket/${ticketId}/${new Date().toISOString().slice(0, 10)}/${name}`;
+  }
+
+  it("embeds ticket_id in upload path", () => {
+    const tid = "550e8400-e29b-41d4-a716-446655440000";
+    const path = buildUploadPath(tid, "serial_photo");
+    expect(path).toMatch(/^ticket\/550e8400-e29b-41d4-a716-446655440000\//);
+  });
+
+  it("path starts with ticket/ prefix (not public/)", () => {
+    const path = buildUploadPath("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "issue_photo");
+    expect(path.startsWith("ticket/")).toBe(true);
+    expect(path.startsWith("public/")).toBe(false);
+  });
+});
+
+describe("storage policy compatibility (pure logic)", () => {
+  function storageInsertAllowed(path: string): boolean {
+    const folder1 = path.split("/")[0];
+    return folder1 === "public" || folder1 === "ticket";
+  }
+
+  it("allows new ticket-scoped upload paths", () => {
+    expect(
+      storageInsertAllowed("ticket/550e8400-e29b-41d4-a716-446655440000/2026-09-10/photo.jpg"),
+    ).toBe(true);
+  });
+
+  it("allows legacy public upload paths", () => {
+    expect(storageInsertAllowed("public/2026-09-10/photo.jpg")).toBe(true);
+  });
+
+  it("rejects paths outside public/ and ticket/", () => {
+    expect(storageInsertAllowed("admin/secret.jpg")).toBe(false);
+  });
+});
+
+describe("delete path guard - legacy and new paths", () => {
+  function canDeletePath(p: string): boolean {
+    return p.startsWith("public/") || p.startsWith("ticket/");
+  }
+
+  it("allows admin to delete legacy public/ paths", () => {
+    expect(canDeletePath("public/2026-09-10/serial_photo-123-abc.jpg")).toBe(true);
+  });
+
+  it("allows admin to delete new ticket/ paths", () => {
+    expect(canDeletePath("ticket/550e8400-e29b-41d4-a716-446655440000/2026-09-10/photo.jpg")).toBe(
+      true,
+    );
+  });
+
+  it("rejects non-standard paths even for admin", () => {
+    expect(canDeletePath("random/path.jpg")).toBe(false);
+  });
+});
