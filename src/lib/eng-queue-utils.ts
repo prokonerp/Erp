@@ -42,3 +42,24 @@ export function formatAge(iso: string): string {
   if (hrs < 24) return `${Math.round(hrs)}h`;
   return `${Math.round(hrs / 24)}d`;
 }
+
+/**
+ * Mark directory entries with portal-login status.
+ * `linkedIds` = employee ids with auth_user_id set (can actually sign in).
+ */
+export function attachLoginFlags<T extends { id: string }>(
+  list: T[],
+  linkedIds: Set<string>,
+): (T & { hasLogin: boolean })[] {
+  return list.map((e) => ({ ...e, hasLogin: linkedIds.has(e.id) }));
+}
+
+/** Portal engineers first, alphabetical within each group. Pure (no mutation). */
+export function sortEngineersLoginFirst<T extends { name: string; hasLogin: boolean }>(
+  list: T[],
+): T[] {
+  return [...list].sort((a, b) => {
+    if (a.hasLogin !== b.hasLogin) return a.hasLogin ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}

@@ -22,6 +22,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
+import { fetchEngineerLoginIds } from "@/hooks/useTicketsTable";
+import { attachLoginFlags, sortEngineersLoginFirst } from "@/lib/eng-queue-utils";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { ComplaintPicker } from "@/components/ComplaintPicker";
@@ -101,6 +103,8 @@ type Employee = {
   department: string | null;
   role: string | null;
   active: boolean;
+  /** True when linked to a portal login (can receive calls in /eng). */
+  hasLogin?: boolean;
 };
 
 type Activity = {
@@ -179,12 +183,13 @@ function TicketDetail() {  const confirm = useConfirm();
   );
 
   const load = async () => {
-    const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }] = await Promise.all([
+    const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }, linked] = await Promise.all([
       supabase.from("tickets").select("*").eq("id", id).single(),
       supabase.from("products").select("id,name,model,brand,description").order("name"),
       supabase.from("ticket_activities").select("*").eq("ticket_id", id).order("created_at", { ascending: false }),
       supabase.from("wa_templates").select("id,body"),
       supabase.from("assignable_engineers").select("id,name,phone,department,role,active").order("name"),
+      fetchEngineerLoginIds(),
     ]);
     if (tk) {
       const row = tk as unknown as Ticket;
@@ -224,7 +229,12 @@ function TicketDetail() {  const confirm = useConfirm();
     }
     setProducts((pr || []) as { id: string; name: string; model?: string | null; brand?: string | null }[]);
     setActivities((ac || []) as Activity[]);
-    setEmployees((emps || []) as Employee[]);
+    // Portal engineers first so assignment routes to real logins.
+    setEmployees(
+      sortEngineersLoginFirst(
+        attachLoginFlags((emps || []) as Omit<Employee, "hasLogin">[], linked),
+      ),
+    );
     const map: Record<string, string> = {};
     for (const r of (tpl || []) as { id: string; body: string }[]) map[r.id] = r.body;
     setTemplates(map);
@@ -1104,7 +1114,9 @@ function TicketDetail() {  const confirm = useConfirm();
                 </Select>
               </div>
               <div>
-                <Label>Engineer <span className="text-xs text-muted-foreground">(from Employee Master)</span></Label>
+                <Label>Engineer{" "}
+                  <span className="text-xs text-muted-foreground">(portal logins first)</span>
+                </Label>
                 <Select
                   value={employees.find((e) => e.name === t.assigned_engineer_name)?.id || ""}
                   onValueChange={(empId) => {
@@ -1118,7 +1130,10 @@ function TicketDetail() {  const confirm = useConfirm();
                       .filter((e) => deptFilter === "all" || e.department === deptFilter)
                       .map((e) => (
                         <SelectItem key={e.id} value={e.id}>
-                          {e.name}{e.department ? ` · ${e.department}` : ""}{e.phone ? ` · ${e.phone}` : ""}
+                          {e.name}
+                          {e.department ? ` · ${e.department}` : ""}
+                          {e.phone ? ` · ${e.phone}` : ""}
+                          {e.hasLogin ? " · Portal" : " · No login"}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -1130,6 +1145,14 @@ function TicketDetail() {  const confirm = useConfirm();
               <div className="text-xs text-muted-foreground">
                 {t.assigned_engineer_name ? <>Selected: <b>{t.assigned_engineer_name}</b>{t.assigned_engineer_phone ? ` (${t.assigned_engineer_phone})` : ""}</> : "No engineer selected"}
               </div>
+              {(() => {
+                const sel = employees.find((e) => e.name === t.assigned_engineer_name);
+                return sel && !sel.hasLogin ? (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                    {sel.name} has no portal login — this call won't appear in the engineer app until Admin links a login (Employees → link auth user).
+                  </p>
+                ) : null;
+              })()}
               {t.assigned_at && <p className="text-xs text-muted-foreground">Assigned: {new Date(t.assigned_at).toLocaleString()}</p>}
               <Button className="w-full" onClick={assignEngineer}>
                 <UserPlus className="h-4 w-4 mr-1" />Assign & Send WhatsApp

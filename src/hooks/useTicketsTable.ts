@@ -1,6 +1,7 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { pageRange } from "@/lib/sales.hooks";
+import { attachLoginFlags, sortEngineersLoginFirst } from "@/lib/eng-queue-utils";
 
 export type TicketTableRow = {
   id: string;
@@ -127,24 +128,52 @@ export function useTicketTabCounts() {
   });
 }
 
+export type AssignableEngineer = {
+  id: string;
+  name: string;
+  phone: string | null;
+  department: string | null;
+  active: boolean;
+  /** True when the employee row has a linked auth login (can use the /eng portal). */
+  hasLogin: boolean;
+};
+
+/**
+ * Employee ids that hold a portal login (employees.auth_user_id IS NOT NULL).
+ * Small admin-managed table; safe to fetch whole (id column only).
+ */
+export async function fetchEngineerLoginIds(): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("employees")
+    .select("id")
+    .not("auth_user_id", "is", null);
+  if (error) return new Set();
+  return new Set(((data || []) as { id: string }[]).map((r) => r.id));
+}
+
 export function useAssignableEngineers() {
   return useQuery({
     queryKey: ["tickets", "assignable_engineers"] as const,
     staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("assignable_engineers")
-        .select("id,name,phone,department,active")
-        .order("name")
-        .limit(200);
-      if (error) throw error;
-      return (data || []) as {
+    queryFn: async (): Promise<AssignableEngineer[]> => {
+      const [dir, linked] = await Promise.all([
+        supabase
+          .from("assignable_engineers")
+          .select("id,name,phone,department,active")
+          .order("name")
+          .limit(200),
+        fetchEngineerLoginIds(),
+      ]);
+      if (dir.error) throw dir.error;
+      const list = (dir.data || []) as {
         id: string;
         name: string;
         phone: string | null;
         department: string | null;
         active: boolean;
       }[];
+      // Portal engineers first so assignment routes to real logins.
+      return sortEngineersLoginFirst(attachLoginFlags(list, linked));
     },
   });
 }

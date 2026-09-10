@@ -5,6 +5,8 @@ import {
   isCarryForward,
   matchesSearch,
   formatAge,
+  attachLoginFlags,
+  sortEngineersLoginFirst,
 } from "@/lib/eng-queue-utils";
 
 describe("priorityWeight", () => {
@@ -83,5 +85,42 @@ describe("formatAge", () => {
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 3_600_000).toISOString();
     const result = formatAge(threeDaysAgo);
     expect(result).toMatch(/^\d+d$/);
+  });
+});
+
+describe("attachLoginFlags", () => {
+  it("marks engineers whose employee id has a linked login", () => {
+    const out = attachLoginFlags(
+      [
+        { id: "e1", name: "Asha" },
+        { id: "e2", name: "Ravi" },
+      ],
+      new Set(["e2"]),
+    );
+    expect(out).toEqual([
+      { id: "e1", name: "Asha", hasLogin: false },
+      { id: "e2", name: "Ravi", hasLogin: true },
+    ]);
+  });
+  it("marks everyone false for an empty login set", () => {
+    const out = attachLoginFlags([{ id: "e1", name: "Asha" }], new Set());
+    expect(out[0].hasLogin).toBe(false);
+  });
+});
+
+describe("sortEngineersLoginFirst", () => {
+  it("lists portal engineers before others, alphabetical within groups", () => {
+    const out = sortEngineersLoginFirst([
+      { id: "e1", name: "Zed", hasLogin: false },
+      { id: "e2", name: "Mira", hasLogin: true },
+      { id: "e3", name: "Asha", hasLogin: true },
+      { id: "e4", name: "Dev", hasLogin: false },
+    ]);
+    expect(out.map((e) => e.name)).toEqual(["Asha", "Mira", "Dev", "Zed"]);
+  });
+  it("does not mutate the input array", () => {
+    const input = [{ id: "e1", name: "Zed", hasLogin: false }];
+    sortEngineersLoginFirst(input);
+    expect(input).toHaveLength(1);
   });
 });

@@ -210,6 +210,8 @@ type Employee = {
   phone: string | null;
   department: string | null;
   active: boolean;
+  /** True when linked to a portal login (can receive calls in /eng). */
+  hasLogin?: boolean;
 };
 
 function TicketsList() {
@@ -1409,7 +1411,8 @@ function RowActions({
               {employees.map((e) => (
                 <DropdownMenuItem key={e.id} onClick={() => onReassign(r, e)}>
                   <div className="flex flex-col">
-                    <span className="font-medium">{e.name}</span>
+                    <span className="font-medium">{e.name}
+                      {e.hasLogin ? " · Portal" : " · No login"}</span>
                     <span className="text-xs text-muted-foreground">
                       {[e.department, e.phone].filter(Boolean).join(" · ")}
                     </span>
