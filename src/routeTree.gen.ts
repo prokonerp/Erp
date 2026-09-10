@@ -10,10 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RaiseTicketRouteImport } from './routes/raise-ticket'
+import { Route as EngRouteImport } from './routes/eng'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as InvoicePreviewRouteImport } from './routes/invoice.preview'
+import { Route as EngQueueRouteImport } from './routes/eng.queue'
+import { Route as EngProfileRouteImport } from './routes/eng.profile'
 import { Route as AppTicketsRouteImport } from './routes/_app/tickets'
 import { Route as AppSalesRouteImport } from './routes/_app/sales'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
@@ -43,6 +46,7 @@ import { Route as AppGatepassIndexRouteImport } from './routes/_app/gatepass.ind
 import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
 import { Route as AppChallanIndexRouteImport } from './routes/_app/challan.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
+import { Route as EngTicketIdRouteImport } from './routes/eng.ticket.$id'
 import { Route as AppTicketsTemplatesRouteImport } from './routes/_app/tickets.templates'
 import { Route as AppTicketsSettingsRouteImport } from './routes/_app/tickets.settings'
 import { Route as AppTicketsNewRouteImport } from './routes/_app/tickets.new'
@@ -139,6 +143,11 @@ const RaiseTicketRoute = RaiseTicketRouteImport.update({
   path: '/raise-ticket',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EngRoute = EngRouteImport.update({
+  id: '/eng',
+  path: '/eng',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -157,6 +166,16 @@ const InvoicePreviewRoute = InvoicePreviewRouteImport.update({
   id: '/invoice/preview',
   path: '/invoice/preview',
   getParentRoute: () => rootRouteImport,
+} as any)
+const EngQueueRoute = EngQueueRouteImport.update({
+  id: '/queue',
+  path: '/queue',
+  getParentRoute: () => EngRoute,
+} as any)
+const EngProfileRoute = EngProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => EngRoute,
 } as any)
 const AppTicketsRoute = AppTicketsRouteImport.update({
   id: '/tickets',
@@ -302,6 +321,11 @@ const AppAmcIndexRoute = AppAmcIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppAmcRoute,
+} as any)
+const EngTicketIdRoute = EngTicketIdRouteImport.update({
+  id: '/ticket/$id',
+  path: '/ticket/$id',
+  getParentRoute: () => EngRoute,
 } as any)
 const AppTicketsTemplatesRoute = AppTicketsTemplatesRouteImport.update({
   id: '/templates',
@@ -759,6 +783,7 @@ const AppAmcOemSourceIdRoute = AppAmcOemSourceIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/eng': typeof EngRouteWithChildren
   '/raise-ticket': typeof RaiseTicketRoute
   '/amc': typeof AppAmcRouteWithChildren
   '/archive': typeof AppArchiveRoute
@@ -779,6 +804,8 @@ export interface FileRoutesByFullPath {
   '/reports': typeof AppReportsRoute
   '/sales': typeof AppSalesRouteWithChildren
   '/tickets': typeof AppTicketsRouteWithChildren
+  '/eng/profile': typeof EngProfileRoute
+  '/eng/queue': typeof EngQueueRoute
   '/invoice/preview': typeof InvoicePreviewRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
@@ -832,6 +859,7 @@ export interface FileRoutesByFullPath {
   '/tickets/new': typeof AppTicketsNewRoute
   '/tickets/settings': typeof AppTicketsSettingsRoute
   '/tickets/templates': typeof AppTicketsTemplatesRoute
+  '/eng/ticket/$id': typeof EngTicketIdRoute
   '/amc/': typeof AppAmcIndexRoute
   '/challan/': typeof AppChallanIndexRoute
   '/crm/': typeof AppCrmIndexRoute
@@ -884,6 +912,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/eng': typeof EngRouteWithChildren
   '/raise-ticket': typeof RaiseTicketRoute
   '/archive': typeof AppArchiveRoute
   '/dashboard': typeof AppDashboardRoute
@@ -895,6 +924,8 @@ export interface FileRoutesByTo {
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
+  '/eng/profile': typeof EngProfileRoute
+  '/eng/queue': typeof EngQueueRoute
   '/invoice/preview': typeof InvoicePreviewRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
@@ -941,6 +972,7 @@ export interface FileRoutesByTo {
   '/tickets/new': typeof AppTicketsNewRoute
   '/tickets/settings': typeof AppTicketsSettingsRoute
   '/tickets/templates': typeof AppTicketsTemplatesRoute
+  '/eng/ticket/$id': typeof EngTicketIdRoute
   '/amc': typeof AppAmcIndexRoute
   '/challan': typeof AppChallanIndexRoute
   '/crm': typeof AppCrmIndexRoute
@@ -995,6 +1027,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/eng': typeof EngRouteWithChildren
   '/raise-ticket': typeof RaiseTicketRoute
   '/_app/amc': typeof AppAmcRouteWithChildren
   '/_app/archive': typeof AppArchiveRoute
@@ -1015,6 +1048,8 @@ export interface FileRoutesById {
   '/_app/reports': typeof AppReportsRoute
   '/_app/sales': typeof AppSalesRouteWithChildren
   '/_app/tickets': typeof AppTicketsRouteWithChildren
+  '/eng/profile': typeof EngProfileRoute
+  '/eng/queue': typeof EngQueueRoute
   '/invoice/preview': typeof InvoicePreviewRoute
   '/_app/amc/$id': typeof AppAmcIdRoute
   '/_app/amc/new': typeof AppAmcNewRoute
@@ -1068,6 +1103,7 @@ export interface FileRoutesById {
   '/_app/tickets/new': typeof AppTicketsNewRoute
   '/_app/tickets/settings': typeof AppTicketsSettingsRoute
   '/_app/tickets/templates': typeof AppTicketsTemplatesRoute
+  '/eng/ticket/$id': typeof EngTicketIdRoute
   '/_app/amc/': typeof AppAmcIndexRoute
   '/_app/challan/': typeof AppChallanIndexRoute
   '/_app/crm/': typeof AppCrmIndexRoute
@@ -1122,6 +1158,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/eng'
     | '/raise-ticket'
     | '/amc'
     | '/archive'
@@ -1142,6 +1179,8 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales'
     | '/tickets'
+    | '/eng/profile'
+    | '/eng/queue'
     | '/invoice/preview'
     | '/amc/$id'
     | '/amc/new'
@@ -1195,6 +1234,7 @@ export interface FileRouteTypes {
     | '/tickets/new'
     | '/tickets/settings'
     | '/tickets/templates'
+    | '/eng/ticket/$id'
     | '/amc/'
     | '/challan/'
     | '/crm/'
@@ -1247,6 +1287,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/eng'
     | '/raise-ticket'
     | '/archive'
     | '/dashboard'
@@ -1258,6 +1299,8 @@ export interface FileRouteTypes {
     | '/products'
     | '/records'
     | '/reports'
+    | '/eng/profile'
+    | '/eng/queue'
     | '/invoice/preview'
     | '/amc/$id'
     | '/amc/new'
@@ -1304,6 +1347,7 @@ export interface FileRouteTypes {
     | '/tickets/new'
     | '/tickets/settings'
     | '/tickets/templates'
+    | '/eng/ticket/$id'
     | '/amc'
     | '/challan'
     | '/crm'
@@ -1357,6 +1401,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_app'
     | '/auth'
+    | '/eng'
     | '/raise-ticket'
     | '/_app/amc'
     | '/_app/archive'
@@ -1377,6 +1422,8 @@ export interface FileRouteTypes {
     | '/_app/reports'
     | '/_app/sales'
     | '/_app/tickets'
+    | '/eng/profile'
+    | '/eng/queue'
     | '/invoice/preview'
     | '/_app/amc/$id'
     | '/_app/amc/new'
@@ -1430,6 +1477,7 @@ export interface FileRouteTypes {
     | '/_app/tickets/new'
     | '/_app/tickets/settings'
     | '/_app/tickets/templates'
+    | '/eng/ticket/$id'
     | '/_app/amc/'
     | '/_app/challan/'
     | '/_app/crm/'
@@ -1484,6 +1532,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
+  EngRoute: typeof EngRouteWithChildren
   RaiseTicketRoute: typeof RaiseTicketRoute
   InvoicePreviewRoute: typeof InvoicePreviewRoute
 }
@@ -1495,6 +1544,13 @@ declare module '@tanstack/react-router' {
       path: '/raise-ticket'
       fullPath: '/raise-ticket'
       preLoaderRoute: typeof RaiseTicketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/eng': {
+      id: '/eng'
+      path: '/eng'
+      fullPath: '/eng'
+      preLoaderRoute: typeof EngRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -1524,6 +1580,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/invoice/preview'
       preLoaderRoute: typeof InvoicePreviewRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/eng/queue': {
+      id: '/eng/queue'
+      path: '/queue'
+      fullPath: '/eng/queue'
+      preLoaderRoute: typeof EngQueueRouteImport
+      parentRoute: typeof EngRoute
+    }
+    '/eng/profile': {
+      id: '/eng/profile'
+      path: '/profile'
+      fullPath: '/eng/profile'
+      preLoaderRoute: typeof EngProfileRouteImport
+      parentRoute: typeof EngRoute
     }
     '/_app/tickets': {
       id: '/_app/tickets'
@@ -1727,6 +1797,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/amc/'
       preLoaderRoute: typeof AppAmcIndexRouteImport
       parentRoute: typeof AppAmcRoute
+    }
+    '/eng/ticket/$id': {
+      id: '/eng/ticket/$id'
+      path: '/ticket/$id'
+      fullPath: '/eng/ticket/$id'
+      preLoaderRoute: typeof EngTicketIdRouteImport
+      parentRoute: typeof EngRoute
     }
     '/_app/tickets/templates': {
       id: '/_app/tickets/templates'
@@ -2799,10 +2876,25 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
+interface EngRouteChildren {
+  EngProfileRoute: typeof EngProfileRoute
+  EngQueueRoute: typeof EngQueueRoute
+  EngTicketIdRoute: typeof EngTicketIdRoute
+}
+
+const EngRouteChildren: EngRouteChildren = {
+  EngProfileRoute: EngProfileRoute,
+  EngQueueRoute: EngQueueRoute,
+  EngTicketIdRoute: EngTicketIdRoute,
+}
+
+const EngRouteWithChildren = EngRoute._addFileChildren(EngRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
+  EngRoute: EngRouteWithChildren,
   RaiseTicketRoute: RaiseTicketRoute,
   InvoicePreviewRoute: InvoicePreviewRoute,
 }
