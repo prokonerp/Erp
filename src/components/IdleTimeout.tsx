@@ -104,10 +104,14 @@ export function IdleTimeout() {
       }
       await recordLogout();
       await supabase.auth.signOut();
+      // signOut triggers auth state change → useAuth updates →
+      // _app.tsx renders <Navigate to="/auth" replace />.
+      // Do NOT call navigate() here — it races with the <Navigate> redirect
+      // and causes TanStack Router's commitLocation loop (max update depth).
     } catch {
-      // ignore
+      // Fallback: navigate manually if signOut or recordLogout failed
+      navigate({ to: "/auth" });
     }
-    navigate({ to: "/auth" });
   }, [clearTimers, navigate]);
 
   // Keep refs in sync so interval / storage handler always calls latest
