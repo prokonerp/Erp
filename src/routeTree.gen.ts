@@ -130,6 +130,7 @@ import { Route as AppChallanOemNewRouteImport } from './routes/_app/challan.oem.
 import { Route as AppChallanCustomerNewRouteImport } from './routes/_app/challan.customer.new'
 import { Route as AppChallanIdEditRouteImport } from './routes/_app/challan.$id_.edit'
 import { Route as AppSalesProformaIdEditRouteImport } from './routes/_app/sales.proforma.$id_.edit'
+import { Route as AppSalesOrdersIdConvertRouteImport } from './routes/_app/sales.orders.$id_.convert'
 import { Route as AppSalesGeneralDcIdEditRouteImport } from './routes/_app/sales.general-dc.$id_.edit'
 import { Route as AppAmcOemSourceIdRouteImport } from './routes/_app/amc.oem.$source.$id'
 
@@ -739,6 +740,11 @@ const AppSalesProformaIdEditRoute = AppSalesProformaIdEditRouteImport.update({
   path: '/proforma/$id/edit',
   getParentRoute: () => AppSalesRoute,
 } as any)
+const AppSalesOrdersIdConvertRoute = AppSalesOrdersIdConvertRouteImport.update({
+  id: '/$id_/convert',
+  path: '/$id/convert',
+  getParentRoute: () => AppSalesOrdersRoute,
+} as any)
 const AppSalesGeneralDcIdEditRoute = AppSalesGeneralDcIdEditRouteImport.update({
   id: '/general-dc/$id_/edit',
   path: '/general-dc/$id/edit',
@@ -872,6 +878,7 @@ export interface FileRoutesByFullPath {
   '/sales/proforma/': typeof AppSalesProformaIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
   '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
+  '/sales/orders/$id/convert': typeof AppSalesOrdersIdConvertRoute
   '/sales/proforma/$id/edit': typeof AppSalesProformaIdEditRoute
 }
 export interface FileRoutesByTo {
@@ -980,6 +987,7 @@ export interface FileRoutesByTo {
   '/sales/proforma': typeof AppSalesProformaIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
   '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
+  '/sales/orders/$id/convert': typeof AppSalesOrdersIdConvertRoute
   '/sales/proforma/$id/edit': typeof AppSalesProformaIdEditRoute
 }
 export interface FileRoutesById {
@@ -1106,6 +1114,7 @@ export interface FileRoutesById {
   '/_app/sales/proforma/': typeof AppSalesProformaIndexRoute
   '/_app/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
   '/_app/sales/general-dc/$id_/edit': typeof AppSalesGeneralDcIdEditRoute
+  '/_app/sales/orders/$id_/convert': typeof AppSalesOrdersIdConvertRoute
   '/_app/sales/proforma/$id_/edit': typeof AppSalesProformaIdEditRoute
 }
 export interface FileRouteTypes {
@@ -1232,6 +1241,7 @@ export interface FileRouteTypes {
     | '/sales/proforma/'
     | '/amc/oem/$source/$id'
     | '/sales/general-dc/$id/edit'
+    | '/sales/orders/$id/convert'
     | '/sales/proforma/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -1340,6 +1350,7 @@ export interface FileRouteTypes {
     | '/sales/proforma'
     | '/amc/oem/$source/$id'
     | '/sales/general-dc/$id/edit'
+    | '/sales/orders/$id/convert'
     | '/sales/proforma/$id/edit'
   id:
     | '__root__'
@@ -1465,6 +1476,7 @@ export interface FileRouteTypes {
     | '/_app/sales/proforma/'
     | '/_app/amc/oem/$source/$id'
     | '/_app/sales/general-dc/$id_/edit'
+    | '/_app/sales/orders/$id_/convert'
     | '/_app/sales/proforma/$id_/edit'
   fileRoutesById: FileRoutesById
 }
@@ -2325,6 +2337,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSalesProformaIdEditRouteImport
       parentRoute: typeof AppSalesRoute
     }
+    '/_app/sales/orders/$id_/convert': {
+      id: '/_app/sales/orders/$id_/convert'
+      path: '/$id/convert'
+      fullPath: '/sales/orders/$id/convert'
+      preLoaderRoute: typeof AppSalesOrdersIdConvertRouteImport
+      parentRoute: typeof AppSalesOrdersRoute
+    }
     '/_app/sales/general-dc/$id_/edit': {
       id: '/_app/sales/general-dc/$id_/edit'
       path: '/general-dc/$id/edit'
@@ -2643,11 +2662,13 @@ const AppPoRouteWithChildren = AppPoRoute._addFileChildren(AppPoRouteChildren)
 interface AppSalesOrdersRouteChildren {
   AppSalesOrdersIdRoute: typeof AppSalesOrdersIdRoute
   AppSalesOrdersIndexRoute: typeof AppSalesOrdersIndexRoute
+  AppSalesOrdersIdConvertRoute: typeof AppSalesOrdersIdConvertRoute
 }
 
 const AppSalesOrdersRouteChildren: AppSalesOrdersRouteChildren = {
   AppSalesOrdersIdRoute: AppSalesOrdersIdRoute,
   AppSalesOrdersIndexRoute: AppSalesOrdersIndexRoute,
+  AppSalesOrdersIdConvertRoute: AppSalesOrdersIdConvertRoute,
 }
 
 const AppSalesOrdersRouteWithChildren = AppSalesOrdersRoute._addFileChildren(

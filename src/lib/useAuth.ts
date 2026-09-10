@@ -1,21 +1,79 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import { resetPermissionsCache } from "@/lib/usePermissions";
 import { recordLogin, recordLogout } from "@/lib/useActivityTracker";
 
+/** Server-side markers that a refresh token is permanently dead (retrying is futile). */
+const PERMANENT_REFRESH_DEATH =
+  /invalid_grant|refresh.*not.*found|refresh.*already.*used|refresh.*invalid|refresh_token_not_found|session.*(missing|not.*found)/i;
+
+function isNetworkThrow(msg: string): boolean {
+  return (
+    /Failed to fetch|NetworkError|network|timeout|AbortError|ERR_CONNECTION/i.test(msg) ||
+    (typeof navigator !== "undefined" && !navigator.onLine)
+  );
+}
+
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  // Consecutive refresh failures where the network provably works (we got an
+  // HTTP response). Two in a row with an unusable session => permanently dead.
+  const deadRefreshStrikes = useRef(0);
+
+  const killZombieSession = (why: string) => {
+    console.warn(`[auth] signing out (${why})`);
+    deadRefreshStrikes.current = 0;
+    resetPermissionsCache();
+    // Clear local state even if the server call itself fails — the redirect
+    // to /auth must happen regardless so the user can sign in fresh.
+    void supabase.auth.signOut().catch(() => {}).finally(() => {
+      setSession(null);
+      setLoading(false);
+    });
+  };
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((e, s) => {
-      // Supabase can emit TOKEN_REFRESH_FAILED on transient network issues while
-      // the user is actively working — don't treat it as a logout.
       if ((e as string) === "TOKEN_REFRESH_FAILED") {
-        console.warn("[auth] token refresh failed (transient), keeping session");
+        // The event carries no reason, so prove it with a live getUser():
+        // - network throw / offline            => transient, keep session
+        // - user returned                      => access token alive, keep session
+        // - permanent markers (invalid_grant,  => dead token, sign out now
+        //   refresh not found/used, no session)
+        // - any other HTTP failure twice in a  => dead session, sign out
+        //   row (network provably works, yet the session is unusable)
+        void (async () => {
+          let msg = "";
+          try {
+            const { data, error } = await supabase.auth.getUser();
+            if (data?.user) {
+              deadRefreshStrikes.current = 0;
+              return;
+            }
+            msg = `${(error as any)?.message ?? ""} ${(error as any)?.code ?? ""}`;
+          } catch (err: unknown) {
+            msg = (err as Error)?.message ?? String(err);
+          }
+          if (!msg || isNetworkThrow(msg)) {
+            console.warn("[auth] token refresh failed (transient), keeping session");
+            return;
+          }
+          if (PERMANENT_REFRESH_DEATH.test(msg)) {
+            killZombieSession(`refresh token permanently invalid: ${msg.trim()}`);
+            return;
+          }
+          deadRefreshStrikes.current += 1;
+          if (deadRefreshStrikes.current >= 2) {
+            killZombieSession(`session unusable after ${deadRefreshStrikes.current} verified failures: ${msg.trim()}`);
+          } else {
+            console.warn("[auth] token refresh failed, will re-verify on next failure:", msg.trim());
+          }
+        })();
         return;
       }
+      deadRefreshStrikes.current = 0;
       setSession(s);
       if (e === "SIGNED_OUT" || e === "SIGNED_IN" || e === "USER_UPDATED") {
         resetPermissionsCache();

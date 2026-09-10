@@ -28,17 +28,19 @@ import {
   fetchSoConversions,
   SO_STATUSES,
   soStatusMeta,
+  soDerivedStatus,
+  isSoCancellable,
   type SalesOrder,
   type SoStatus,
   type SoConversionRow,
   type SoFulfillmentSummary,
 } from "@/lib/salesOrders";
+import { getReverseEffect } from "@/lib/documentFlow";
 import { inr } from "@/lib/sales";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
-import { SoConversionSheet } from "@/components/SoConversionSheet";
-import type { ConversionType } from "@/lib/documentFlow";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/_app/sales/orders/$id")({ component: SalesOrderDetail });
 
@@ -53,7 +55,7 @@ function fmtDate(d: string | null | undefined) {
 
 function sumQty(arr: unknown): number {
   if (!Array.isArray(arr)) return 0;
-  return arr.reduce((s: number, x: any) => s + (Number(x?.this_qty ?? x?.qty ?? 0) || 0), 0);
+  return Math.round(arr.reduce((s: number, x: any) => s + (Number(x?.this_qty ?? x?.qty ?? 0) || 0), 0));
 }
 
 function convTypeMeta(t: string) {
@@ -61,11 +63,13 @@ function convTypeMeta(t: string) {
     case "tax_invoice":
       return { label: "Tax Invoice", tone: "primary" as const, short: "Tax" };
     case "general_dc":
-      return { label: "General DC", tone: "info" as const, short: "GDC" };
+      return { label: "General Challan", tone: "info" as const, short: "General Challan" };
     case "proforma_invoice":
       return { label: "Proforma", tone: "neutral" as const, short: "Proforma" };
+    // Legacy: old SO conversions created as `delivery_challan` (now removed from
+    // creation UI) still render in the timeline — keep the label so history doesn't break.
     case "delivery_challan":
-      return { label: "Delivery Challan", tone: "warning" as const, short: "DC" };
+      return { label: "Delivery Challan (legacy)", tone: "warning" as const, short: "DC" };
     default:
       return { label: t, tone: "neutral" as const, short: t };
   }
@@ -84,10 +88,9 @@ function SalesOrderDetail() {
   const { id } = Route.useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const [so, setSo] = useState<SalesOrder | null>(null);
   const [company, setCompany] = useState<CompanyProfile | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [defaultType, setDefaultType] = useState<ConversionType>("tax_invoice");
 
   const loadSo = () =>
     fetchSalesOrder(id)
@@ -121,17 +124,44 @@ function SalesOrderDetail() {
   // Derived stats — matches orderedVsFulfilled in documentFlow but computed from summary + so.items fallback
   const orderedTotal = useMemo(() => {
     if (summary.length > 0) return summary.reduce((s, r) => s + (Number(r.ordered_qty) || 0), 0);
-    return so ? so.items.reduce((s, i) => s + (Number((i as any).qty) || 0), 0) : 0;
+    if (!so || !Array.isArray(so.items)) return 0;
+    return so.items.reduce((s, i) => s + (Number((i as any)?.qty) || 0), 0);
   }, [so, summary]);
-  const fulfilledTotal = useMemo(() => summary.reduce((s, r) => s + (Number(r.fulfilled_stock) || 0), 0), [summary]);
-  const fulfilledProforma = useMemo(() => summary.reduce((s, r) => s + (Number((r as any).fulfilled_proforma) || 0), 0), [summary]);
+  const fulfilledTotal = useMemo(() => Math.round(summary.reduce((s, r) => s + (Number(r.fulfilled_stock) || 0), 0)), [summary]);
+  const fulfilledProforma = useMemo(() => Math.round(summary.reduce((s, r) => s + (Number((r as any).fulfilled_proforma) || 0), 0)), [summary]);
   // B13: use summary.reduce balance when summary non-empty (consistent with orderedVsFulfilled helper)
   const balanceTotal = useMemo(() => {
-    if (summary.length > 0) return summary.reduce((s, r) => s + (Number((r as any).balance) || 0), 0);
-    return Math.max(0, orderedTotal - fulfilledTotal);
+    if (summary.length > 0) return Math.round(summary.reduce((s, r) => s + (Number((r as any).balance) || 0), 0));
+    const raw = orderedTotal - fulfilledTotal;
+    return Number.isFinite(raw) ? Math.max(0, raw) : 0;
   }, [summary, orderedTotal, fulfilledTotal]);
   const isFullyDelivered = orderedTotal > 0 && balanceTotal <= 0;
-  const progressPct = orderedTotal > 0 ? Math.min(100, Math.round((fulfilledTotal / orderedTotal) * 100)) : 0;
+  const progressRaw = orderedTotal > 0 ? (fulfilledTotal / orderedTotal) * 100 : 0;
+  const progressPct = Number.isFinite(progressRaw) ? Math.min(100, Math.round(progressRaw)) : 0;
+
+  // Derived status for display (does not mutate DB); falls back to stored status
+  const derivedStatus: SoStatus = useMemo(() => {
+    if (!so) return "draft";
+    try {
+      return soDerivedStatus(summary, so.status as SoStatus, conversions as any);
+    } catch {
+      return so.status as SoStatus;
+    }
+  }, [so, summary, conversions]);
+
+  // Keep conversions in sync when cancelled externally: refetch on focus + every 30s poll
+  useEffect(() => {
+    const onFocus = () => {
+      qc.invalidateQueries({ queryKey: ["so-fulfillment", id] });
+      qc.invalidateQueries({ queryKey: ["so-conversions", id] });
+    };
+    window.addEventListener("focus", onFocus);
+    const iv = window.setInterval(onFocus, 30_000);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(iv);
+    };
+  }, [id, qc]);
 
   const typeCounts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -148,12 +178,33 @@ function SalesOrderDetail() {
 
   if (!so) return <PageLoader />;
 
-  const st = soStatusMeta(so.status);
+  const stStored = soStatusMeta(so.status);
+  const stDerived = soStatusMeta(derivedStatus);
+  // Prefer derived badge tone when fulfillment data exists; keep distinct cancelled styling
+  const st = summary.length > 0 ? stDerived : stStored;
+  const isCancelled = String(so.status || "").trim().toLowerCase() === "cancelled";
 
   const setStatus = async (s: SoStatus) => {
     if (s === "invoiced" && so.status !== "invoiced") {
       toast.error("Use 'Convert to Invoice' to set invoiced status");
       return;
+    }
+    if (s === "cancelled" && so.status !== "cancelled") {
+      const guard = isSoCancellable(so as any, summary as any, conversions as any);
+      if (!guard.allowed) {
+        toast.error(guard.reason);
+        return;
+      }
+      const stockFulfilled = fulfilledTotal;
+      const ok = await confirm({
+        title: "Cancel Sales Order?",
+        description: stockFulfilled > 0
+          ? `This SO has ${stockFulfilled} fulfilled unit(s) — cancel downstream documents first or they will remain. Proceed to cancel SO?`
+          : "This will mark the Sales Order as cancelled and block further conversions. Continue?",
+        confirmLabel: "Cancel SO",
+        variant: "danger",
+      });
+      if (!ok) return;
     }
     const { error } = await supabase
       .from("sales_orders" as never)
@@ -162,19 +213,39 @@ function SalesOrderDetail() {
     if (error) return toast.error(error.message);
     setSo({ ...so, status: s });
     toast.success("Status updated");
-  };
-
-  const handleConvertSuccess = (target: { type: string; id: string }) => {
-    // invalidate fulfillment ledger so summary + timeline refresh
     qc.invalidateQueries({ queryKey: ["so-fulfillment", id] });
     qc.invalidateQueries({ queryKey: ["so-conversions", id] });
-    // refresh SO itself (status may have changed)
-    loadSo();
-    // navigate to created document
-    if (target.type === "tax_invoice") nav({ to: "/sales/invoices/$id", params: { id: target.id } });
-    else if (target.type === "general_dc") nav({ to: "/sales/general-dc/$id", params: { id: target.id } });
-    else if (target.type === "proforma_invoice") nav({ to: "/sales/proforma/$id", params: { id: target.id } });
-    else if (target.type === "delivery_challan") nav({ to: "/challan/$id", params: { id: target.id } });
+  };
+
+  const handleCancelSO = async () => {
+    const guard = isSoCancellable(so as any, summary as any, conversions as any);
+    if (!guard.allowed) {
+      toast.error(guard.reason);
+      return;
+    }
+    const ok = await confirm({
+      title: "Cancel Sales Order?",
+      description: fulfilledTotal > 0
+        ? `This SO has ${fulfilledTotal} fulfilled unit(s) — cancel downstream docs first. Cancel SO anyway?`
+        : "Cancel this Sales Order? No further conversions will be allowed.",
+      confirmLabel: "Cancel SO",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const { error } = await supabase.from("sales_orders" as never).update({ status: "cancelled" } as never).eq("id", id);
+    if (error) return toast.error(error.message);
+    setSo({ ...so, status: "cancelled" as SoStatus });
+    toast.success("Sales Order cancelled");
+    qc.invalidateQueries({ queryKey: ["so-fulfillment", id] });
+    qc.invalidateQueries({ queryKey: ["so-conversions", id] });
+  };
+
+  // Conversion now opens as a full-window page (/sales/orders/$id/convert?type=…)
+  // instead of the old modal/side-panel sheet. Success navigation lives in the
+  // convert route — detail page just refreshes its ledger when revisited.
+  const goConvert = (t: "tax_invoice" | "general_dc" | "proforma_invoice") => {
+    if (isCancelled) return;
+    nav({ to: "/sales/orders/$id/convert", params: { id }, search: { type: t } });
   };
 
   return (
@@ -188,6 +259,9 @@ function SalesOrderDetail() {
         </Link>
         <div className="flex gap-2 flex-wrap items-center">
           <StatusBadge tone={st.badgeTone}>{st.label}</StatusBadge>
+          {derivedStatus !== so.status && !isCancelled && (
+            <span className="text-[11px] text-muted-foreground">(stored: {stStored.label})</span>
+          )}
           <Select value={so.status} onValueChange={(v) => setStatus(v as SoStatus)}>
             <SelectTrigger className="w-40 h-8">
               <SelectValue />
@@ -200,6 +274,16 @@ function SalesOrderDetail() {
               ))}
             </SelectContent>
           </Select>
+          {!isCancelled && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs border-rose-200 text-rose-700 hover:bg-rose-50"
+              onClick={handleCancelSO}
+            >
+              Cancel SO
+            </Button>
+          )}
           {so.linked_quote_id && (
             <Link to="/crm/quotations/$id" params={{ id: so.linked_quote_id }}>
               <Button variant="outline" size="sm">
@@ -212,44 +296,30 @@ function SalesOrderDetail() {
             <DropdownMenuTrigger asChild>
               <Button
                 size="sm"
-                disabled={isFullyDelivered}
-                title={isFullyDelivered ? "Fully delivered — create new SO for additional qty." : "Convert"}
+                disabled={isCancelled || isFullyDelivered}
+                title={isCancelled ? "SO cancelled — no conversions allowed" : isFullyDelivered ? "Fully delivered — create new SO for additional qty." : "Convert"}
               >
                 <ArrowRightLeft className="mr-2 h-4 w-4" /> Convert <ChevronDown className="ml-2 h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem
-                onClick={() => {
-                  setDefaultType("tax_invoice");
-                  setSheetOpen(true);
-                }}
+                disabled={isCancelled}
+                onClick={() => goConvert("tax_invoice")}
               >
                 Tax Invoice (stock)
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => {
-                  setDefaultType("general_dc");
-                  setSheetOpen(true);
-                }}
+                disabled={isCancelled}
+                onClick={() => goConvert("general_dc")}
               >
-                General DC (stock)
+                General Challan (stock)
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => {
-                  setDefaultType("proforma_invoice");
-                  setSheetOpen(true);
-                }}
+                disabled={isCancelled}
+                onClick={() => goConvert("proforma_invoice")}
               >
                 Proforma Invoice (no stock)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setDefaultType("delivery_challan");
-                  setSheetOpen(true);
-                }}
-              >
-                Delivery Challan
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -329,10 +399,15 @@ function SalesOrderDetail() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {isCancelled && (
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+              SO cancelled — no further conversions allowed. Cancel downstream docs to reverse stock where applicable.
+            </div>
+          )}
           <div className="space-y-1.5">
-            <Progress value={progressPct} className="h-2" />
+            <Progress value={Number.isFinite(progressPct) ? progressPct : 0} className="h-2" />
             <div className="flex justify-between text-[11px] text-muted-foreground tabular-nums">
-              <span>{progressPct}% fulfilled</span>
+              <span>{Number.isFinite(progressPct) ? progressPct : 0}% fulfilled</span>
               <span>{fulfilledTotal}/{orderedTotal}</span>
             </div>
           </div>
@@ -359,11 +434,17 @@ function SalesOrderDetail() {
               <span className="font-medium text-foreground">Breakdown:</span>
               <span className="tabular-nums">Tax Invoice {typeCounts["tax_invoice"] || 0}</span>
               <span className="opacity-30">·</span>
-              <span className="tabular-nums">GDC {typeCounts["general_dc"] || 0}</span>
-              <span className="opacity-30">·</span>
-              <span className="tabular-nums">DC {typeCounts["delivery_challan"] || 0}</span>
+              <span className="tabular-nums">General Challan {typeCounts["general_dc"] || 0}</span>
               <span className="opacity-30">·</span>
               <span className="tabular-nums">Proforma {typeCounts["proforma_invoice"] || 0}</span>
+              {(typeCounts["delivery_challan"] || 0) > 0 && (
+                <>
+                  <span className="opacity-30">·</span>
+                  <span className="tabular-nums" title="Legacy conversions created before the DC option was removed">
+                    DC (legacy) {typeCounts["delivery_challan"] || 0}
+                  </span>
+                </>
+              )}
               <span className="opacity-30">·</span>
               <span>Balance {balanceTotal} {isFullyDelivered ? "(0 remaining)" : `(${orderedTotal - fulfilledTotal} remaining)`}</span>
             </div>
@@ -397,26 +478,34 @@ function SalesOrderDetail() {
               </tr>
             </thead>
             <tbody>
-              {so.items.map((it, i) => {
-                const s = summaryByLine.get(i);
-                const already = s ? Number(s.fulfilled_stock) || 0 : 0;
-                const balance = s ? Number(s.balance) : Number((it as any).qty) || 0;
-                const balZero = balance <= 0;
-                return (
-                  <tr key={i} className="border-t">
-                    <td className="p-2">{i + 1}</td>
-                    <td className="p-2">{it.description}</td>
-                    <td className="p-2 font-mono text-xs">{it.hsn || "—"}</td>
-                    <td className="p-2 text-right tabular-nums">{it.qty} {it.unit}</td>
-                    <td className={`p-2 text-right tabular-nums text-xs ${already > 0 ? "bg-muted/30" : ""}`}>{already}</td>
-                    <td className={`p-2 text-right tabular-nums text-xs font-medium ${balZero ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-300"}`}>{balance}</td>
-                    <td className="p-2 text-right tabular-nums">{inr(it.rate)}</td>
-                    <td className="p-2 text-right tabular-nums">{it.discount_pct}%</td>
-                    <td className="p-2 text-right tabular-nums">{it.gst_rate}%</td>
-                    <td className="p-2 text-right font-medium tabular-nums">{inr(it.line_total ?? 0)}</td>
-                  </tr>
-                );
-              })}
+              {(Array.isArray(so.items) ? so.items : []).length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="p-4 text-center text-sm text-muted-foreground">No items</td>
+                </tr>
+              ) : (
+                (so.items as any[]).map((it: any, i: number) => {
+                  const s = summaryByLine.get(i);
+                  const already = s ? Math.round(Number((s as any).fulfilled_stock) || 0) : 0;
+                  const balanceRaw = s ? (s as any).balance : (Number(it?.qty) || 0);
+                  const balance = Number.isFinite(Number(balanceRaw)) ? Math.round(Number(balanceRaw)) : 0;
+                  const balZero = balance <= 0;
+                  const lineTotal = Number(it?.line_total);
+                  return (
+                    <tr key={i} className="border-t">
+                      <td className="p-2">{i + 1}</td>
+                      <td className="p-2">{String(it?.description || "—")}</td>
+                      <td className="p-2 font-mono text-xs">{it?.hsn || "—"}</td>
+                      <td className="p-2 text-right tabular-nums">{Number(it?.qty) || 0} {it?.unit || ""}</td>
+                      <td className={`p-2 text-right tabular-nums text-xs ${already > 0 ? "bg-muted/30" : ""}`}>{already}</td>
+                      <td className={`p-2 text-right tabular-nums text-xs font-medium ${balZero ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-300"}`}>{balance}</td>
+                      <td className="p-2 text-right tabular-nums">{inr(Number(it?.rate) || 0)}</td>
+                      <td className="p-2 text-right tabular-nums">{Number(it?.discount_pct) || 0}%</td>
+                      <td className="p-2 text-right tabular-nums">{Number(it?.gst_rate) || 0}%</td>
+                      <td className="p-2 text-right font-medium tabular-nums">{inr(Number.isFinite(lineTotal) ? lineTotal : 0)}</td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
             <tfoot className="border-t bg-muted/30">
               <tr>
@@ -523,7 +612,7 @@ function SalesOrderDetail() {
             <div className="text-sm text-muted-foreground py-4">Loading conversions…</div>
           ) : conversions.length === 0 ? (
             <div className="text-sm text-muted-foreground py-4 border border-dashed rounded-md px-4">
-              No conversions yet — use <span className="font-medium text-foreground">Convert</span> to create Tax Invoice, General DC or Proforma.
+              No conversions yet — use <span className="font-medium text-foreground">Convert</span> to create Tax Invoice, General Challan or Proforma.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -547,10 +636,10 @@ function SalesOrderDetail() {
                     let running = 0;
                     const withCum = sorted.map((c) => {
                       const thisQty = sumQty(c.this_fulfilled);
-                      running += thisQty;
+                      running = Math.round(running + thisQty);
                       const balanceAfterRaw = c.balance_after;
                       let balAfter: number | null = null;
-                      if (Array.isArray(balanceAfterRaw)) balAfter = (balanceAfterRaw as any[]).reduce((s, x: any) => s + (Number(x?.balance ?? 0) || 0), 0);
+                      if (Array.isArray(balanceAfterRaw)) balAfter = Math.round((balanceAfterRaw as any[]).reduce((s, x: any) => s + (Number(x?.balance ?? 0) || 0), 0));
                       else if (balanceAfterRaw != null && typeof balanceAfterRaw === "object") balAfter = 0;
                       // fallback: ordered - cumulative
                       if (balAfter == null || (Array.isArray(balanceAfterRaw) && (balanceAfterRaw as any[]).length === 0)) {
@@ -562,17 +651,27 @@ function SalesOrderDetail() {
                     return [...withCum].reverse().map(({ c, thisQty, cumulative, balanceAfter }) => {
                       const meta = convTypeMeta(c.conversion_type);
                       const link = convTargetLink(c);
+                      const isConvCancelled = String(c.status || "").trim().toLowerCase() === "cancelled";
+                      const reversesStock = getReverseEffect(c.conversion_type);
+                      const rowClass = isConvCancelled ? "border-t opacity-60 bg-muted/20" : "border-t";
+                      const docNoClass = isConvCancelled ? "p-2 font-mono text-xs line-through text-muted-foreground" : "p-2 font-mono text-xs";
+                      // balanceAfter graceful fallback: if conversions cancelled, balance math may still valid but show muted
+                      const balDisplay = balanceAfter == null || !Number.isFinite(Number(balanceAfter)) ? "—" : String(balanceAfter);
                       return (
-                        <tr key={c.id} className="border-t">
+                        <tr key={c.id} className={rowClass} title={isConvCancelled && reversesStock ? "Cancelled — stock reversed" : isConvCancelled ? "Cancelled (no stock effect)" : undefined}>
                           <td className="p-2 text-xs tabular-nums">{fmtDate(c.created_at)}</td>
-                          <td className="p-2 font-mono text-xs">{c.target_no || c.target_id.slice(0, 8)}</td>
+                          <td className={docNoClass}>{c.target_no || c.target_id.slice(0, 8)}</td>
                           <td className="p-2">
-                            <StatusBadge tone={meta.tone as any}>{meta.label}</StatusBadge>
+                            <StatusBadge tone={isConvCancelled ? "neutral" as any : (meta.tone as any)}>{meta.label}</StatusBadge>
+                            {isConvCancelled && <span className="ml-1 text-[10px] uppercase tracking-wide text-muted-foreground">(cancelled)</span>}
                           </td>
-                          <td className="p-2 text-right tabular-nums">{thisQty}</td>
-                          <td className="p-2 text-right tabular-nums">{cumulative}</td>
-                          <td className={`p-2 text-right tabular-nums font-medium ${Number(balanceAfter) <= 0 ? "text-emerald-600" : "text-amber-600"}`}>{balanceAfter}</td>
-                          <td className="p-2 text-xs capitalize">{c.status}</td>
+                          <td className={`p-2 text-right tabular-nums ${isConvCancelled ? "line-through text-muted-foreground" : ""}`}>{thisQty}</td>
+                          <td className={`p-2 text-right tabular-nums ${isConvCancelled ? "line-through text-muted-foreground" : ""}`}>{cumulative}</td>
+                          <td className={`p-2 text-right tabular-nums font-medium ${isConvCancelled ? "text-muted-foreground line-through" : Number(balanceAfter) <= 0 ? "text-emerald-600" : "text-amber-600"}`}>{balDisplay}</td>
+                          <td className={`p-2 text-xs capitalize ${isConvCancelled ? "text-muted-foreground line-through" : ""}`}>
+                            {c.status}
+                            {isConvCancelled && reversesStock && <span className="ml-1 text-[10px]">· stock restored</span>}
+                          </td>
                           <td className="p-2 text-right">
                             {link ? (
                               <Link to={link.to as any} params={link.params} className="text-primary hover:underline text-xs font-medium">
@@ -612,13 +711,9 @@ function SalesOrderDetail() {
         </Card>
       )}
 
-      <SoConversionSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        salesOrder={so}
-        defaultType={defaultType}
-        onSuccess={handleConvertSuccess}
-      />
+      {/* Conversion is now a full-window page (see sales.orders.$id_.convert.tsx).
+          The legacy SoConversionSheet Dialog wrapper is kept for compat but no
+          longer mounted here. */}
     </div>
   );
 }
