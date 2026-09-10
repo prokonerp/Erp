@@ -93,6 +93,8 @@ DO $$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_proc WHERE proname = 'has_role'
+  ) AND EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'has_permission'
   ) THEN
     -- Insert: admin or tickets.create
     DROP POLICY IF EXISTS "auth insert tact" ON public.ticket_activities;
@@ -119,9 +121,14 @@ BEGIN
 END $$;
 
 -- =====================================================================
--- 5) RLS hardening: storage.objects ticket-attachments DELETE → admin only
---    Restrictive policy (AND with existing permissive policies).
---    Engineers retain SELECT + INSERT via existing permissive policies.
+-- 5) RLS hardening: storage.objects ticket-attachments UPDATE/DELETE → admin only
+--    Why RESTRICTIVE (not DROP+replace): permissive policies combine with OR,
+--    so merely adding an admin-only permissive policy would change nothing.
+--    A RESTRICTIVE policy ANDs with every permissive policy, so it genuinely
+--    restricts regardless of which permissive policies exist today.
+--    Scope is bucket-pinned: rows in other buckets evaluate USING(true).
+--    Safe: the only app writer is the admin-gated server fn (service_role
+--    bypasses RLS); no client code writes this bucket directly (verified).
 --    Wrapped in DO block: skips if has_role helper is missing.
 -- =====================================================================
 DO $$
@@ -129,12 +136,30 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_proc WHERE proname = 'has_role'
   ) THEN
+    -- Cleanup of the known anyone-can-write policies (no-op if absent/renamed).
+    DROP POLICY IF EXISTS "Authenticated update ticket attachments" ON storage.objects;
+    DROP POLICY IF EXISTS "Authenticated delete ticket attachments" ON storage.objects;
+    DROP POLICY IF EXISTS "admin update ticket attachments" ON storage.objects;
     DROP POLICY IF EXISTS "admin delete ticket attachments" ON storage.objects;
+
+    CREATE POLICY "admin update ticket attachments" ON storage.objects
+      AS RESTRICTIVE
+      FOR UPDATE TO authenticated
+      USING (
+        bucket_id <> 'ticket-attachments'
+        OR public.has_role(auth.uid(), 'admin'::public.app_role)
+      )
+      WITH CHECK (
+        bucket_id <> 'ticket-attachments'
+        OR public.has_role(auth.uid(), 'admin'::public.app_role)
+      );
+
     CREATE POLICY "admin delete ticket attachments" ON storage.objects
+      AS RESTRICTIVE
       FOR DELETE TO authenticated
       USING (
-        bucket_id = 'ticket-attachments'
-        AND public.has_role(auth.uid(), 'admin'::public.app_role)
+        bucket_id <> 'ticket-attachments'
+        OR public.has_role(auth.uid(), 'admin'::public.app_role)
       );
   END IF;
 END $$;
