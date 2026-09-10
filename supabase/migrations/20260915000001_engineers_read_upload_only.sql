@@ -105,15 +105,18 @@ BEGIN
         OR public.has_permission(auth.uid(), 'tickets', 'create')
       );
 
-    -- Update: admin only
+    -- Update: admin only (drop BOTH the legacy name and our own name:
+    -- first run replaces legacy, re-runs must drop ours before recreating)
     DROP POLICY IF EXISTS "Actor or admin update tact" ON public.ticket_activities;
+    DROP POLICY IF EXISTS "auth update tact" ON public.ticket_activities;
     CREATE POLICY "auth update tact" ON public.ticket_activities
       FOR UPDATE TO authenticated
       USING (public.has_role(auth.uid(), 'admin'::public.app_role))
       WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
 
-    -- Delete: admin only
+    -- Delete: admin only (same dual-drop for idempotent re-runs)
     DROP POLICY IF EXISTS "Actor or admin delete tact" ON public.ticket_activities;
+    DROP POLICY IF EXISTS "auth delete tact" ON public.ticket_activities;
     CREATE POLICY "auth delete tact" ON public.ticket_activities
       FOR DELETE TO authenticated
       USING (public.has_role(auth.uid(), 'admin'::public.app_role));
