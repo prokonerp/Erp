@@ -264,6 +264,12 @@ function NewProforma() {
                           hsn: (p as any).hsn || it.hsn,
                           rate: (p as any).default_price != null ? Number((p as any).default_price) : it.rate,
                           gst_rate: 18,
+                          part_model_no: (p as any).model || null,
+                          part_name: (p as any).name || null,
+                          warranty_applicable: (p as any).warranty_applicable ?? null,
+                          warranty_duration: (p as any).warranty_duration != null ? Number((p as any).warranty_duration) : null,
+                          warranty_unit: (p as any).warranty_unit ?? null,
+                          warranty_start_from: (p as any).warranty_start_from ?? null,
                         })}
                       />
                       <Input className="h-7 text-xs mt-1" value={it.description} onChange={(e) => setItem(idx, { description: e.target.value })} placeholder="Description" />

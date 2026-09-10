@@ -201,7 +201,8 @@ export async function fetchUserNameMap(ids: string[]): Promise<Record<string, st
 
 export async function fetchChallan(id: string) {
   const { data, error } = await supabase
-    .from("delivery_challans" as never).select("*").eq("id", id).single();
+    .from("delivery_challans" as never).select("*").eq("id", id).maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Delivery Challan not found");
   return data as unknown as DeliveryChallan;
 }

@@ -6,7 +6,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MoreHorizontal, Eye, Pencil, Trash2, Ban, Download } from "lucide-react";
+import { Plus, MoreHorizontal, Eye, Pencil, Trash2, Ban, Download, Settings } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -84,9 +84,14 @@ function ProformaList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Proforma Invoices</h1>
-        <Button size="sm" asChild>
-          <Link to="/sales/proforma/new"><Plus className="h-4 w-4 mr-1.5" />New Proforma</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <Link to="/sales/proforma/settings"><Settings className="h-4 w-4 mr-1.5" />Settings</Link>
+          </Button>
+          <Button size="sm" asChild>
+            <Link to="/sales/proforma/new"><Plus className="h-4 w-4 mr-1.5" />New Proforma</Link>
+          </Button>
+        </div>
       </div>
       <div className="flex gap-2">
         <Button size="sm" variant={tab === "all" ? "default" : "outline"} onClick={() => setTab("all")}>All{tab === "all" ? ` (${total})` : ""}</Button>

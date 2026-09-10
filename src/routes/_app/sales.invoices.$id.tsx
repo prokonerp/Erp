@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageLoader } from "@/components/shared/skeletons";
 import { toast } from "sonner";
@@ -34,7 +34,8 @@ import {
 } from "@/lib/sales";
 import { mockIrnPayload } from "@/lib/gst";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { downloadInvoicePdfBulk, printInvoicePdfBulk } from "@/lib/invoicePdf";
+import { InvoicePrintView } from "@/components/invoice/InvoicePrintView";
+import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
 import InvoicePrintModal from "@/components/InvoicePrintModal";
 import { getDocumentHeader } from "@/lib/letterhead";
 import type { CompanyProfile } from "@/lib/companyProfile";
@@ -68,6 +69,8 @@ function InvoiceView() {
   const [loading, setLoading] = useState(true);
   const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
   const [preparedBy, setPreparedBy] = useState<{ name?: string | null; phone?: string | null; email?: string | null } | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+  const [printJob, setPrintJob] = useState<{ copies: string[]; showWatermark: boolean; isReprint: boolean; isProvisional: boolean } | null>(null);
 
   // e-Way form (legacy mock)
   const [ewayOpen, setEwayOpen] = useState(false);
@@ -396,7 +399,15 @@ function InvoiceView() {
       .update({ status: "cancelled", cancel_reason: cancelReason, cancelled_at: new Date().toISOString() })
       .eq("id", inv.id);
     if (error) return toast.error(error.message);
-    toast.success("Invoice cancelled");
+    // Sync SO fulfillment — view excludes cancelled conversions, keep balance accurate
+    try {
+      await (supabase as any).from("so_conversions").update({ status: "cancelled" }).eq("target_table", "invoices").eq("target_id", inv.id);
+      const convId = (inv as unknown as { conversion_id?: string | null }).conversion_id;
+      if (convId) await (supabase as any).from("so_conversions").update({ status: "cancelled" }).eq("id", convId);
+    } catch (e) {
+      console.warn("so_conversions sync on invoice cancel", e);
+    }
+    toast.success("Invoice cancelled — SO balance and stock will sync");
     load();
   }
 
@@ -426,30 +437,9 @@ function InvoiceView() {
     const nowIso = new Date().toISOString();
     const { data: ud } = await supabase.auth.getUser();
     const userId = ud.user?.id ?? null;
-    // H13: pdf_hash must be sha256 of actual PDF bytes, not metadata string. Try to render and hash bytes; fallback to string only if render fails.
-    let pdfHash: string;
-    try {
-      const { renderInvoiceCopies } = await import("@/lib/invoicePdf");
-      const tmpDoc = await renderInvoiceCopies({
-        invoice: inv,
-        items,
-        branch,
-        customer,
-        themeColor: pdfTheme.themeColor,
-        copyLabel: pdfTheme.copyLabel,
-        settings: pdfSettings,
-        company: company ?? undefined,
-        copies,
-        isReprint,
-      } as never);
-      const ab = tmpDoc.output("arraybuffer") as ArrayBuffer;
-      pdfHash = await hashPdfBytesLocal(ab);
-    } catch {
-      pdfHash = await sha256HexLocal(copies.join(",") + nowIso + inv.id);
-    }
+    const pdfHash = await sha256HexLocal(copies.join(",") + nowIso + inv.id);
     const nextCount = ((inv as unknown as { print_count?: number | null }).print_count ?? 0) + 1;
     const firstAt = (inv as unknown as { first_printed_at?: string | null }).first_printed_at ?? nowIso;
-    // audit insert before opening blob
     const { error: logErr } = await (supabase as unknown as { from: (t: string) => { insert: (v: unknown) => Promise<{ error: { message: string } | null }> } }).from("invoice_print_log").insert({
       invoice_id: inv.id,
       copies,
@@ -468,60 +458,84 @@ function InvoiceView() {
       last_printed_by: userId,
     } as never).eq("id", inv.id);
     if (updErr) throw new Error(updErr.message);
-    // keep local state in sync without full reload
     setInv((prev) => prev ? ({ ...prev, print_count: nextCount, first_printed_at: firstAt, last_printed_at: nowIso } as unknown as typeof prev) : prev);
   }
 
   async function handleModalPrint(opts: { copies: string[]; isReprint: boolean; showWatermark: boolean; asZip: boolean }): Promise<void> {
-    if (!inv || !branch || !company) { toast.error("Invoice data missing"); return; }
+    if (!inv || !company) { toast.error("Invoice data missing"); return; }
     try {
       await handlePrintAudit(opts.copies, opts.isReprint);
-      await printInvoicePdfBulk({
-        invoice: inv,
-        items,
-        branch,
-        customer,
-        themeColor: pdfTheme.themeColor,
-        copyLabel: pdfTheme.copyLabel,
-        settings: pdfSettings,
-        company,
-        showSupplyFrom,
-        meta: pdfMeta,
-        authorisedSignatureUrl,
-        preparedBy,
-        copies: opts.copies,
-        isReprint: opts.isReprint,
-        showWatermark: opts.showWatermark,
-      } as never);
-      toast.success("Print opened — audit logged");
+      const isProvisional = !completion.complete;
+      setPrintJob({ copies: opts.copies, showWatermark: opts.showWatermark, isReprint: opts.isReprint, isProvisional });
+      // wait for hidden DOM to render all copies
+      await new Promise<void>((r) => setTimeout(r, 80));
+      const el = printRef.current;
+      if (!el) throw new Error("Print not ready");
+      if (opts.copies.length > 1) {
+        const { printMultiPageElement } = await import("@/lib/docPdf");
+        await printMultiPageElement(el, `${(inv.invoice_no || inv.id).replace(/\//g, "_")}.pdf`);
+      } else {
+        await printElementSinglePage(el, `${(inv.invoice_no || inv.id).replace(/\//g, "_")}.pdf`);
+      }
+      toast.success(`Print opened — ${opts.copies.length} ${opts.copies.length === 1 ? "copy" : "copies"} — audit logged`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Print failed");
     }
   }
 
   async function handleModalDownload(opts: { copies: string[]; isReprint: boolean; showWatermark: boolean; asZip: boolean }): Promise<void> {
-    if (!inv || !branch || !company) { toast.error("Invoice data missing"); return; }
+    if (!inv || !company) { toast.error("Invoice data missing"); return; }
     try {
       await handlePrintAudit(opts.copies, opts.isReprint);
-      await downloadInvoicePdfBulk({
-        invoice: inv,
-        items,
-        branch,
-        customer,
-        themeColor: pdfTheme.themeColor,
-        copyLabel: pdfTheme.copyLabel,
-        settings: pdfSettings,
-        company,
-        showSupplyFrom,
-        meta: pdfMeta,
-        authorisedSignatureUrl,
-        preparedBy,
-        copies: opts.copies,
-        isReprint: opts.isReprint,
-        showWatermark: opts.showWatermark,
-        asZip: opts.asZip,
-      } as never);
-      toast.success(opts.asZip ? "ZIP downloaded — audit logged" : "PDF downloaded — audit logged");
+      const isProvisional = !completion.complete;
+      setPrintJob({ copies: opts.copies, showWatermark: opts.showWatermark, isReprint: opts.isReprint, isProvisional });
+      await new Promise<void>((r) => setTimeout(r, 80));
+      const el = printRef.current;
+      if (!el) throw new Error("Print not ready");
+      if (opts.asZip && opts.copies.length > 1) {
+        // ZIP: generate one PDF per copy and zip via jszip (like invoicePdf path)
+        const { default: JSZip } = await import("jszip");
+        const { default: html2canvas } = await import("html2canvas-pro");
+        const { default: jsPDF } = await import("jspdf");
+        const zip = new JSZip();
+        const pages = Array.from(el.querySelectorAll<HTMLElement>(".inv-print"));
+        const targets: HTMLElement[] = pages.length ? pages : [el];
+        for (let i = 0; i < opts.copies.length; i++) {
+          const target = targets[i] || targets[0];
+          const canvas = await html2canvas(target, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+          const imgData = canvas.toDataURL("image/jpeg", 0.95);
+          const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+          const pageW = pdf.internal.pageSize.getWidth();
+          const pageH = pdf.internal.pageSize.getHeight();
+          const margin = 5;
+          let imgW = pageW - margin * 2;
+          let imgH = (canvas.height * imgW) / canvas.width;
+          const availH = pageH - margin * 2;
+          if (imgH > availH) {
+            imgH = availH;
+            imgW = (canvas.width * imgH) / canvas.height;
+          }
+          pdf.addImage(imgData, "JPEG", (pageW - imgW) / 2, margin, imgW, imgH);
+          const blob = pdf.output("blob");
+          const safeCopy = opts.copies[i].replace(/\s+/g, "_");
+          zip.file(`${(inv.invoice_no || inv.id).replace(/\//g, "_")}_${safeCopy}.pdf`, blob);
+        }
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${(inv.invoice_no || inv.id).replace(/\//g, "_")}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      } else if (opts.copies.length > 1) {
+        const { saveMultiPageElementAsPdf } = await import("@/lib/docPdf");
+        await saveMultiPageElementAsPdf(el, `${(inv.invoice_no || inv.id).replace(/\//g, "_")}.pdf`);
+      } else {
+        await saveElementAsPdf(el, `${(inv.invoice_no || inv.id).replace(/\//g, "_")}.pdf`);
+      }
+      toast.success(opts.asZip && opts.copies.length > 1 ? `ZIP downloaded — ${opts.copies.length} PDFs — audit logged` : `PDF downloaded — ${opts.copies.length} ${opts.copies.length === 1 ? "copy" : "copies"} — audit logged`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Download failed");
     }
@@ -844,6 +858,48 @@ function InvoiceView() {
         themeColor={pdfTheme.themeColor}
         copyLabel={pdfTheme.copyLabel}
       />
+
+      {/* Hidden premium green print — multi-copy via docPdf */}
+      <div className="hidden">
+        <div ref={printRef}>
+          {(printJob?.copies ?? [pdfTheme.copyLabel]).map((label, idx) => (
+            <div
+              key={`${label}-${idx}`}
+              className={printJob && printJob.copies.length > 1 ? "defective-tag-page" : undefined}
+            >
+              <InvoicePrintView
+                invoice={inv}
+                items={items}
+                company={company!}
+                customer={customer ? {
+                  company: customer.company || inv.buyer_name || "",
+                  contact_name: customer.contact_name || null,
+                  phone: customer.phone || null,
+                  email: customer.email || null,
+                  gst: customer.gst || customer.gstin || inv.buyer_gstin || null,
+                  state: customer.state || inv.buyer_state || null,
+                  address: customer.billing_address || customer.address || inv.billing_address || null,
+                  billing_address: customer.billing_address || inv.billing_address || null,
+                  shipping_address: customer.shipping_address || inv.shipping_address || null,
+                } : {
+                  company: inv.buyer_name || "",
+                  gst: inv.buyer_gstin || null,
+                  state: inv.buyer_state || null,
+                  billing_address: inv.billing_address || null,
+                  shipping_address: inv.shipping_address || null,
+                }}
+                branch={branch}
+                udyamNo={pdfSettings?.udyam_no || null}
+                copyLabel={label}
+                authorisedSignatureUrl={authorisedSignatureUrl}
+                isReprint={printJob ? printJob.isReprint : (inv.print_count ?? 0) > 0}
+                isProvisional={printJob ? printJob.isProvisional : !completion.complete}
+                showWatermark={printJob ? printJob.showWatermark : false}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

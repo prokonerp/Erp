@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
+import { resetPermissionsCache } from "@/lib/usePermissions";
 import {
   listAuthUsers,
   createAppUser,
@@ -622,6 +623,7 @@ function UsersSection() {
           try {
             if (editing) {
               await callUpdate({ data: { user_id: editing.user_id, ...payload } });
+              resetPermissionsCache(); // FIX-12: bust client-side perm cache after role/branch change
             } else {
               if (!payload.email || !payload.password) throw new Error("Email and password required");
               await callCreate({ data: payload as any });

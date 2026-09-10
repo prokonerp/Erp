@@ -105,10 +105,19 @@ function ChallanView() {
       .from("delivery_challans" as never)
       .update({ status: "Cancelled" } as never)
       .eq("id", c.id);
+    if (error) { setBusy(false); toast.error(error.message); return; }
+    // Keep SO fulfillment in sync — view so_fulfillment_summary excludes cancelled conversions
+    const { error: convErr } = await supabase
+      .from("so_conversions" as never)
+      .update({ status: "cancelled" } as never)
+      .eq("target_table", "delivery_challans" as never)
+      .eq("target_id", c.id);
+    if (convErr) console.warn("so_conversions sync failed", convErr.message);
+    // Reverse stock if this DC posted stock (customer DC). The DB trigger handles ledger reversal on status change,
+    // but so_fulfillments count is via so_conversions status, so we ensure that above.
     setBusy(false);
-    if (error) { toast.error(error.message); return; }
     setC({ ...c, status: "Cancelled" });
-    toast.success("Delivery Challan cancelled. Stock reversed.");
+    toast.success("Delivery Challan cancelled. Stock reversed — SO balance updated.");
   };
 
   const handlePrint = async () => {

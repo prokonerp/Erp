@@ -5,7 +5,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { fetchSalesOrdersPage, soStatusMeta } from "@/lib/salesOrders";
+import { fetchSalesOrdersPage, soStatusMeta, soDerivedStatus, type SoFulfillmentSummary } from "@/lib/salesOrders";
 import { inr } from "@/lib/sales";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { useDebounced } from "@/lib/sales.hooks";
@@ -80,13 +80,15 @@ function SalesOrdersList() {
     // fallback: if view returns no rows but SO has items, derive ordered from items JSONB
     for (const r of rows) {
       if (!m.has(r.id)) {
-        const ordered = (r.items || []).reduce((s: number, it: any) => s + (Number(it.qty) || 0), 0);
+        const itemsArr = Array.isArray((r as any).items) ? (r as any).items : [];
+        const ordered = itemsArr.reduce((s: number, it: any) => s + (Number(it?.qty) || 0), 0);
         m.set(r.id, { ordered, fulfilled: 0, balance: ordered });
       } else {
         // if view returned 0 ordered due to missing items handling, patch
         const cur = m.get(r.id)!;
         if (cur.ordered === 0) {
-          const ordered = (r.items || []).reduce((s: number, it: any) => s + (Number(it.qty) || 0), 0);
+          const itemsArr = Array.isArray((r as any).items) ? (r as any).items : [];
+          const ordered = itemsArr.reduce((s: number, it: any) => s + (Number(it?.qty) || 0), 0);
           if (ordered > 0) {
             cur.ordered = ordered;
             cur.balance = Math.max(0, ordered - cur.fulfilled);
@@ -96,6 +98,38 @@ function SalesOrdersList() {
       }
     }
     return m;
+  }, [summariesQuery.data, rows]);
+
+  // Per-SO derived status: group raw summary rows by SO and run soDerivedStatus; fallback to stored status
+  const derivedMap = useMemo(() => {
+    const raw = (summariesQuery.data ?? []) as unknown as SoFulfillmentSummary[];
+    const bySo = new Map<string, SoFulfillmentSummary[]>();
+    for (const r of raw) {
+      const sid = (r as any).sales_order_id as string;
+      if (!sid) continue;
+      const arr = bySo.get(sid) ?? [];
+      arr.push(r as SoFulfillmentSummary);
+      bySo.set(sid, arr);
+    }
+    const out = new Map<string, ReturnType<typeof soDerivedStatus>>();
+    for (const r of rows) {
+      const stored = (r as any).status as string;
+      if (String(stored).trim().toLowerCase() === "cancelled") {
+        out.set(r.id, "cancelled");
+        continue;
+      }
+      const grp = bySo.get(r.id);
+      if (!grp || grp.length === 0) {
+        out.set(r.id, stored as any);
+        continue;
+      }
+      try {
+        out.set(r.id, soDerivedStatus(grp, stored as any, null));
+      } catch {
+        out.set(r.id, stored as any);
+      }
+    }
+    return out;
   }, [summariesQuery.data, rows]);
 
   return (
@@ -138,16 +172,20 @@ function SalesOrdersList() {
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const st = soStatusMeta(r.status);
+                    const derived = derivedMap.get(r.id) ?? (r.status as any);
+                    const st = soStatusMeta(derived as any);
+                    const isCancelledRow = String(derived).trim().toLowerCase() === "cancelled" || String(r.status).trim().toLowerCase() === "cancelled";
                     const s = summaryMap.get(r.id);
                     const ordered = s?.ordered ?? 0;
                     const fulfilled = s?.fulfilled ?? 0;
                     const balance = s?.balance ?? ordered;
-                    const pct = ordered > 0 ? Math.min(100, Math.round((fulfilled / ordered) * 100)) : 0;
+                    const pctRaw = ordered > 0 ? (fulfilled / ordered) * 100 : 0;
+                    const pct = Number.isFinite(pctRaw) ? Math.min(100, Math.round(pctRaw)) : 0;
                     const isZeroBalance = balance <= 0 && ordered > 0;
+                    const balDisplay = Number.isFinite(Number(balance)) ? (isZeroBalance ? "—" : String(balance)) : "—";
                     return (
-                      <tr key={r.id} className="border-t hover:bg-muted/30">
-                        <td className="p-2 font-mono text-xs">
+                      <tr key={r.id} className={`border-t hover:bg-muted/30 ${isCancelledRow ? "opacity-60 bg-muted/10" : ""}`}>
+                        <td className={`p-2 font-mono text-xs ${isCancelledRow ? "line-through text-muted-foreground" : ""}`}>
                           <Link
                             to="/sales/orders/$id"
                             params={{ id: r.id }}
@@ -156,23 +194,26 @@ function SalesOrdersList() {
                             {r.so_no || "—"}
                           </Link>
                         </td>
-                        <td className="p-2 text-xs tabular-nums">{r.so_date}</td>
+                        <td className="p-2 text-xs tabular-nums">{r.so_date || "—"}</td>
                         <td className="p-2 max-w-[180px] truncate">{r.buyer_name || "—"}</td>
-                        <td className="p-2 text-right font-medium tabular-nums">{inr(r.total)}</td>
+                        <td className="p-2 text-right font-medium tabular-nums">{inr(Number(r.total) || 0)}</td>
                         <td className="p-2">
                           <div className="flex items-center gap-2 min-w-[130px]">
-                            <Progress value={pct} className="h-1.5 w-[60px] shrink-0" />
+                            <Progress value={Number.isFinite(pct) ? pct : 0} className="h-1.5 w-[60px] shrink-0" />
                             <span className="text-xs tabular-nums whitespace-nowrap">
-                              {fulfilled}/{ordered}
+                              {Number.isFinite(fulfilled) ? fulfilled : 0}/{Number.isFinite(ordered) ? ordered : 0}
                             </span>
-                            <span className="text-[11px] text-muted-foreground tabular-nums">{pct}%</span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">{Number.isFinite(pct) ? pct : 0}%</span>
                           </div>
                         </td>
-                        <td className={`p-2 text-right tabular-nums text-xs font-medium ${isZeroBalance ? "text-emerald-600" : balance > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
-                          {isZeroBalance ? "—" : balance}
+                        <td className={`p-2 text-right tabular-nums text-xs font-medium ${isCancelledRow ? "text-muted-foreground line-through" : isZeroBalance ? "text-emerald-600" : balance > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+                          {isCancelledRow ? "—" : balDisplay}
                         </td>
                         <td className="p-2">
                           <StatusBadge tone={st.badgeTone}>{st.label}</StatusBadge>
+                          {derived !== r.status && !isCancelledRow && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">({soStatusMeta(r.status as any).label})</span>
+                          )}
                         </td>
                       </tr>
                     );

@@ -28,8 +28,11 @@ export type ProformaRow = {
   place_of_supply_code: string | null;
   is_interstate: boolean;
   reverse_charge: boolean;
-  po_number: string | null;
-  po_date: string | null;
+  po_number: string | null; // exists in DB (migr 20260910000002)
+  po_date: string | null; // exists in DB
+  // TODO(DB): proforma_invoices missing columns for full quotation print carry-through:
+  // payment_terms, salesperson, contact_person/email/mobile, delivery_timeline, sales_type
+  // — NewProformaPayload carries them; add migration then extend ProformaRow + writers payload.
   subtotal: number;
   discount: number;
   taxable_value: number;
@@ -77,6 +80,11 @@ export const emptyProformaItem = (): ProformaItem => ({
   is_serialized: false,
   part_model_no: null,
   part_name: null,
+  warranty_applicable: null,
+  warranty_duration: null,
+  warranty_unit: null,
+  warranty_start_from: null,
+  warranty_months: null,
 });
 
 export function isProformaEditable(status: string): boolean {

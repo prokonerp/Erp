@@ -1,6 +1,6 @@
 // src/lib/invoiceJson.ts — NIC v1.03 + E-Way builders + paste validators (pure)
 // No Supabase calls, no side effects, fully typed, deterministic rounding.
-// Reuses: r2 (local deterministic), computeTotals / hsnSummary from gst.ts,
+// Reuses: r2, r3 from money.ts (single source of truth), computeTotals / hsnSummary from gst.ts,
 // SalesType from sales.ts, TransportDetails from transport.ts, GSTIN_REGEX etc from india.ts.
 
 import { GSTIN_REGEX, validateGSTINChecksum } from "@/lib/india";
@@ -8,17 +8,15 @@ import type { SalesType } from "@/lib/sales";
 import type { TransportDetails, DispatchDetails } from "@/lib/transport";
 import { computeTotals, hsnSummary } from "@/lib/gst";
 import type { GstItemInput } from "@/lib/gst";
+import { r2, r3 } from "@/lib/money"; // FIX-13: single source of truth — removed local replica
 
 // Re-use gst helpers for totals parity — imported type-only where possible
-// r2 in gst.ts is private, so we replicate the exact impl here for determinism.
 // computeTotals / hsnSummary are imported to keep rounding & HSN aggregation
 // identical to the invoicing UI path; see buildGstInvoiceJson ValDtls fallback
 // and buildEwayJson item dedup comment.
 void computeTotals;
 void hsnSummary;
 type _GstCheck = GstItemInput;
-const r2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
-const r3 = (n: number): number => Math.round((n + Number.EPSILON) * 1000) / 1000;
 
 // ── regexes (exported for unit tests / triggers parity) ─────────────────────
 export const IRN_REGEX = /^[0-9a-f]{64}$/i;

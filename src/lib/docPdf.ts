@@ -1,10 +1,9 @@
 const PX_PER_MM = 96 / 25.4;
 const PAGE_W_MM = 210;
 const PAGE_H_MM = 297;
-const MARGIN_MM = 10;
-// Fraction of the printable area the document occupies on the sheet; the rest
-// becomes equal breathing room on both sides so the page sits dead-centre.
-const DOC_FIT = 0.94;
+const MARGIN_MM = 5;
+// Narrow borders — maximize usable area. DOC_FIT 0.98 leaves only 2% breathing room.
+const DOC_FIT = 0.98;
 const CONTENT_W_PX = Math.round((PAGE_W_MM - MARGIN_MM * 2) * PX_PER_MM);
 const CONTENT_H_PX = Math.round((PAGE_H_MM - MARGIN_MM * 2) * PX_PER_MM);
 
@@ -149,7 +148,7 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string) {
       `.pdf-page tr{page-break-inside:avoid;break-inside:avoid}` +
       `@media print{@page{size:A4;margin:${MARGIN_MM}mm !important}html,body{width:auto}` +
       `#pdf-shell,#pdf-root{width:${CONTENT_W_PX}px}` +
-      `#pdf-root{transform-origin:center;transform:scale(0.94)}}</style>` +
+      `#pdf-root{transform-origin:center;transform:scale(${DOC_FIT})}}</style>` +
       `</head><body><div id="pdf-shell"><div id="pdf-root">${el.outerHTML}</div></div></body></html>`,
   );
   idoc.close();
@@ -295,7 +294,7 @@ export async function printElementSinglePage(el: HTMLElement, filename: string) 
         `<style>html,body{margin:0;padding:0;background:#fff}` +
         `.ppage{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;page-break-after:always;break-after:page;overflow:hidden}` +
         `.ppage:last-child{page-break-after:auto;break-after:auto}` +
-        `.ppage img{display:block;max-width:94%;max-height:94%}</style>` +
+        `.ppage img{display:block;max-width:98%;max-height:98%}</style>` +
         `<style>@media print{@page{size:A4;margin:${MARGIN_MM}mm !important}html,body{width:100%;height:100%}}</style>` +
         `</head><body>${pageDivs}</body></html>`,
     );
@@ -375,7 +374,7 @@ async function buildMultiPageFrame(el: HTMLElement, docTitle: string, landscape 
       `.defective-tag-page{page-break-after:always;break-after:page}` +
       `.defective-tag-page:last-child{page-break-after:auto;break-after:auto}` +
       `.break-inside-avoid,.defective-tag{page-break-inside:avoid;break-inside:avoid}` +
-      `@media print{@page{size:A4 ${landscape ? "landscape" : "portrait"};margin:10mm !important}}</style>` +
+      `@media print{@page{size:A4 ${landscape ? "landscape" : "portrait"};margin:${MARGIN_MM}mm !important}}</style>` +
       `</head><body>${el.outerHTML}</body></html>`,
   );
   idoc.close();
@@ -461,12 +460,12 @@ export async function printElementToPdf(el: HTMLElement, filename: string) {
   const idoc = iframe.contentDocument!;
   const win = iframe.contentWindow!;
   idoc.open();
-  idoc.write(
+    idoc.write(
     `<!doctype html><html><head><meta charset="utf-8"><title>${docTitle}</title>${head}` +
       `<style>html,body{background:#fff;margin:0;padding:0}` +
       `#pdf-root,#pdf-root>*{display:block !important}` +
-      `@media print{@page{size:A4;margin:10mm !important}` +
-      `#pdf-root{transform-origin:center;transform:scale(0.94)}}</style>` +
+      `@media print{@page{size:A4;margin:${MARGIN_MM}mm !important}` +
+      `#pdf-root{transform-origin:center;transform:scale(${DOC_FIT})}}</style>` +
       `</head><body><div id="pdf-root">${el.outerHTML}</div></body></html>`,
   );
   idoc.close();

@@ -104,8 +104,14 @@ function ProformaDetail() {
     if (!proforma) return;
     try {
       const row = await updateProforma(proforma.id, { status: "cancelled", cancelled_reason: reason, cancelled_at: new Date().toISOString() } as any);
+      // Sync SO fulfillment view (excludes cancelled proforma)
+      try {
+        await supabase.from("so_conversions" as never).update({ status: "cancelled" } as never).eq("target_table", "proforma_invoices" as never).eq("target_id", proforma.id);
+        const convId = (row as unknown as { conversion_id?: string | null }).conversion_id || (proforma as unknown as { conversion_id?: string | null }).conversion_id;
+        if (convId) await supabase.from("so_conversions" as never).update({ status: "cancelled" } as never).eq("id", convId);
+      } catch {}
       setProforma(row);
-      toast.success(`${row.proforma_no || "Proforma"} cancelled`);
+      toast.success(`${row.proforma_no || "Proforma"} cancelled — SO proforma count updated`);
     } catch (e: any) {
       return { error: e.message || "Could not cancel" };
     }

@@ -3,6 +3,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import type { GstItemBreakup } from "@/lib/gst";
+import { r3 } from "@/lib/money";
 
 export type InvoiceStatus = "draft" | "issued" | "partial" | "paid" | "cancelled";
 
@@ -175,6 +176,13 @@ export type ItemDraft = {
   is_serialized: boolean;
   part_model_no: string | null;
   part_name: string | null;
+  // Warranty — carried through SO → invoice/proforma so print can show months
+  warranty_applicable?: boolean | null;
+  warranty_duration?: number | null;
+  warranty_unit?: string | null;
+  warranty_start_from?: string | null;
+  warranty_type?: string | null;
+  warranty_months?: number | null;
 };
 
 export const emptyItem = (): ItemDraft => ({
@@ -192,6 +200,11 @@ export const emptyItem = (): ItemDraft => ({
   is_serialized: false,
   part_model_no: null,
   part_name: null,
+  warranty_applicable: null,
+  warranty_duration: null,
+  warranty_unit: null,
+  warranty_start_from: null,
+  warranty_months: null,
 });
 
 /**
@@ -279,7 +292,7 @@ export function itemDraftFromBreakup(
     product_id: d.product_id,
     description: d.description,
     hsn: d.hsn || null,
-    qty: Number(d.qty) || 0,
+    qty: r3(Number(d.qty) || 0),
     unit: d.unit || null,
     rate: Number(d.rate) || 0,
     discount_pct: Number(d.discount_pct) || 0,

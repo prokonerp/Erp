@@ -53,7 +53,7 @@ export function GeneralDcPrintView({
     <div className="doc-print text-black">
       <style>{`
         @media print {
-          @page { size: A4; margin: 10mm; }
+          @page { size: A4; margin: 5mm; }
           .doc-print thead { display: table-header-group; }
           .doc-print tr { page-break-inside: avoid; }
         }
@@ -62,11 +62,11 @@ export function GeneralDcPrintView({
           color: #000;
           font-size: 10.5px;
           line-height: 1.35;
-          border: 2px solid ${accent};
-          padding: 14px 18px;
+          border: 1.5px solid ${accent};
+          padding: 8px 10px;
           display: flex;
           flex-direction: column;
-          min-height: 272mm;
+          min-height: 287mm;
           box-sizing: border-box;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;

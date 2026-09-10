@@ -1,0 +1,94 @@
+{
+  "generated_at": "2026-09-09T13:05:52.130Z",
+  "supabase_url": "https://cqjmcfwsrljxhixzfgpk.supabase.co",
+  "filters": {
+    "statuses": [
+      "Closed",
+      "New",
+      "In Progress",
+      "Under Observation",
+      "Parts Received"
+    ],
+    "exclude_is_deleted": true,
+    "require_customer_id": true,
+    "require_product": true,
+    "valid_serial": "not in (NA,-,NULL,NIL,#N/A,N/A,NONE,FALSE) and length>=3",
+    "dedupe": "customer_id|upper(serial_no) keep earliest",
+    "skip_existing": true
+  },
+  "counts": {
+    "tickets_total": 413,
+    "installed_existing": 230,
+    "candidates": 290,
+    "byStatus": {
+      "Closed": 273,
+      "New": 13,
+      "In Progress": 3,
+      "Parts Received": 1
+    },
+    "distinctKeys": 276,
+    "alreadyExists": 17,
+    "toInsert": 259,
+    "prodExactHit": 256,
+    "prodLowerHit": 0,
+    "prodMiss": 3
+  },
+  "toInsert_sample": [
+    {
+      "case_id": "PHS2506261535016",
+      "status": "Closed",
+      "customer": "0cfd181f-7f69-4116-a659-f6e65b90ae2a",
+      "product": "SURT10000XLI",
+      "serial": "YQ0504120048",
+      "product_id": "7cc692ef-dc56-4801-92a7-90931dbbcdc0"
+    },
+    {
+      "case_id": "PHS2506261546017",
+      "status": "Closed",
+      "customer": "900c0174-8500-4493-8c83-f1d2ef3833c4",
+      "product": "SRV20KUXI-IN",
+      "serial": "9S2402A02561",
+      "product_id": "a3736c1f-4c4f-46f8-83c6-9fcc1fd83976"
+    },
+    {
+      "case_id": "PHS2506261820018",
+      "status": "Closed",
+      "customer": "39b1d4d4-02ea-4d73-a4ec-35c13015d43c",
+      "product": "RBC44",
+      "serial": "0H2604G09704",
+      "product_id": "53773aae-30c3-45ba-804e-0c0b06b44bc6"
+    },
+    {
+      "case_id": "PHS2906261549019",
+      "status": "Closed",
+      "customer": "a332ac88-d29c-426c-8b00-8be54c86716e",
+      "product": "SRVPM10KRIL-IN",
+      "serial": "9S2346A00094",
+      "product_id": "0888d497-631c-4e03-9336-531bccb6aa04"
+    },
+    {
+      "case_id": "PHS2906261611020",
+      "status": "Closed",
+      "customer": "26106c4f-471c-4582-b04e-12b9c5c2910f",
+      "product": "SRC1KI-IN",
+      "serial": "9S2421A00589",
+      "product_id": "aed724b3-e28c-4215-ab07-9e94c043ab37"
+    }
+  ],
+  "skipped_sample": [
+    {
+      "case_id": "PHS2707261302175",
+      "serial": "9S1835A58076"
+    },
+    {
+      "case_id": "PHS2907261349195",
+      "serial": "9S2308A04424"
+    },
+    {
+      "case_id": "PHS2008261139326",
+      "serial": "ZS2414053987"
+    }
+  ],
+  "output_sql": "/Users/jai/Desktop/Prokon Erp/backups/backfill_installed_equipment_2026-09-09.sql",
+  "output_csv": "/Users/jai/Desktop/Prokon Erp/backups/backfill_preview_2026-09-09.csv"
+}

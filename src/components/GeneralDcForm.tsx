@@ -95,6 +95,7 @@ export function GeneralDcForm({
   );
   const [serialIdx, setSerialIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false); // FE-C3: synchronous re-entry lock
   const [shortfalls, setShortfalls] = useState<Shortfall[]>([]);
   const [negOpen, setNegOpen] = useState(false);
   // Selected customer branch office (transient — not persisted to the document;
@@ -334,8 +335,12 @@ export function GeneralDcForm({
   }
 
   async function save(status: "Draft" | "Issued") {
-    const err = validate();
-    if (err) return toast.error(err);
+    // FE-C3: Synchronous re-entry lock — prevents double-post on rapid click
+    if (savingRef.current) return;
+    savingRef.current = true;
+    try {
+      const err = validate();
+      if (err) return toast.error(err);
 
     if (status === "Issued") {
       let short: Shortfall[] = [];
@@ -366,6 +371,9 @@ export function GeneralDcForm({
       }
     }
     await doSave(status, false, [], null);
+    } finally {
+      savingRef.current = false;
+    }
   }
 
   async function doSave(

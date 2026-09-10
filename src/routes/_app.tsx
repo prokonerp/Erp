@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { resetPermissionsCache } from "@/lib/usePermissions";
 import { Button } from "@/components/ui/button";
 import {
   ChevronDown,
@@ -58,6 +60,14 @@ function isAccountGateError(err: unknown): { code: string } | null {
  * by gated server fns in descendant route loaders/handlers — previously these
  * were swallowed into the generic error page and left the user on a broken shell.
  */
+function AccountBlockedSignOut() {
+  useEffect(() => {
+    resetPermissionsCache();
+    void supabase.auth.signOut();
+  }, []);
+  return <Navigate to="/auth" />;
+}
+
 function AppErrorBoundary({ error }: { error: Error }) {
   const gate = isAccountGateError(error);
   if (gate?.code === PASSWORD_CHANGE_REQUIRED) {
@@ -81,7 +91,8 @@ function AppErrorBoundary({ error }: { error: Error }) {
           <p className="mt-2 text-sm text-muted-foreground">
             Your account is disabled — contact an administrator.
           </p>
-          <Navigate to="/auth" />
+          {/* WIR-C1: Sign out before redirect to prevent /dashboard ↔ /auth loop */}
+          <AccountBlockedSignOut />
         </div>
       </div>
     );
@@ -191,6 +202,14 @@ function AppLayout() {
     if (session) loadProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
+
+  // WIR-C1: Sign out when account is blocked — prevents /dashboard ↔ /auth redirect loop
+  useEffect(() => {
+    if (gateBlocked) {
+      resetPermissionsCache();
+      void supabase.auth.signOut();
+    }
+  }, [gateBlocked]);
 
   if (loading) return <PageLoader label="Loading your workspace…" />;
   if (!session) return <Navigate to="/auth" />;

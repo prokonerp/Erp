@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     general_dc_id: "",
   });
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false); // FE-C3: synchronous re-entry lock
   const [reviewOpen, setReviewOpen] = useState(false);
   // When GRN is auto-populated from a source document (Indent Section C/D),
   // material identification fields become read-only to preserve traceability.
@@ -365,12 +366,16 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     (form.qc_status || "").toLowerCase() === "accepted" && !!form.checked_by.trim();
 
   const submit = async (opts?: { approve?: boolean }) => {
-    const approve = !!opts?.approve;
-    if (!validate()) return;
-    if (approve && !qcReady) {
-      toast.error("Complete QC (Status = Accepted, Checked By filled) before approving");
-      return;
-    }
+    // FE-C3: Synchronous re-entry lock — prevents double-post on rapid click
+    if (busyRef.current) return;
+    busyRef.current = true;
+    try {
+      const approve = !!opts?.approve;
+      if (!validate()) return;
+      if (approve && !qcReady) {
+        toast.error("Complete QC (Status = Accepted, Checked By filled) before approving");
+        return;
+      }
     // Derive accepted/rejected qty from Condition so downstream views keep working.
     const clean = items
       .filter((it) => it.part_name.trim() || it.part_no.trim())
@@ -479,6 +484,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     setReviewOpen(false);
     toast.success(approve ? "GRN Approved & Stock Updated Successfully" : "GRN created");
     navigate({ to: "/grn/$id", params: { id: (data as { id: string }).id } });
+    } finally {
+      busyRef.current = false;
+    }
   };
 
   const actions = (
