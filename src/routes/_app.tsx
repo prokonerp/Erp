@@ -19,6 +19,7 @@ import {
   Command as CommandIcon,
 } from "lucide-react";
 import { usePermissions } from "@/lib/usePermissions";
+import { useIsEngineer } from "@/lib/useIsEngineer";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { getMyProfile } from "@/lib/admin-users.functions";
 import { PageLoader } from "@/components/shared/skeletons";
@@ -28,7 +29,13 @@ import { IdleTimeout } from "@/components/IdleTimeout";
 import { ClaimAdminBanner } from "@/components/AdminAccessNotices";
 import { useActivityTracker } from "@/lib/useActivityTracker";
 import { toast } from "sonner";
-import { NAV_ITEMS, QUICK_ACTIONS, GROUP_ORDER, groupForPath, type NavItem } from "@/lib/navigation";
+import {
+  NAV_ITEMS,
+  QUICK_ACTIONS,
+  GROUP_ORDER,
+  groupForPath,
+  type NavItem,
+} from "@/lib/navigation";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ConfirmProvider } from "@/hooks/useConfirm";
 import { ACCOUNT_NOT_ACTIVE, PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
@@ -110,6 +117,11 @@ function AppLayout() {
   useActivityTracker(!!session);
   const location = useLocation();
   const { can, isAdmin, loading: permLoading } = usePermissions();
+  // Engineers are contained to the /eng portal (read assigned calls + upload
+  // notes/photos only). Bounce them out of the full ERP shell once identity
+  // is settled. Loop-safe: all three states are monotonic per mount, the
+  // bounce unmounts this layout, and /eng never navigates back into _app.
+  const { isEngineer, loading: engLoading } = useIsEngineer();
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [forceChange, setForceChange] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -211,9 +223,10 @@ function AppLayout() {
     }
   }, [gateBlocked]);
 
-  if (loading) return <PageLoader label="Loading your workspace…" />;
+  if (loading || engLoading) return <PageLoader label="Loading your workspace…" />;
   if (!session) return <Navigate to="/auth" />;
   if (gateBlocked) return <Navigate to="/auth" />;
+  if (isEngineer) return <Navigate to="/eng/queue" />;
 
   const navItems = permLoading
     ? NAV_ITEMS
@@ -265,7 +278,11 @@ function AppLayout() {
   const currentNav = [...navItems]
     .sort((a, b) => b.to.length - a.to.length)
     .find((n) => {
-      if (n.excludeActive?.some((p) => location.pathname === p || location.pathname.startsWith(p + "/")))
+      if (
+        n.excludeActive?.some(
+          (p) => location.pathname === p || location.pathname.startsWith(p + "/"),
+        )
+      )
         return false;
       if (n.to === "/masters" && location.pathname === "/masters") {
         return isMasterTabActive(n.to, n.matchSearchTab);
@@ -288,231 +305,245 @@ function AppLayout() {
   return (
     <ConfirmProvider>
       <div className="h-screen overflow-hidden bg-background flex">
-      {/* Skip to content — keyboard accessibility */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
-      >
-        Skip to content
-      </a>
-
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40 lg:hidden print:hidden"
-          onClick={() => setMobileOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Sidebar - icon-collapsible, not vanishing */}
-      <aside
-        className={`fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden transition-[width,transform] duration-200 print:hidden lg:h-screen lg:shrink-0 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        } ${sidebarHidden ? "lg:w-[68px]" : "lg:w-60"} w-60`}
-        data-print="hide"
-        data-collapsed={sidebarHidden ? "true" : "false"}
-      >
-        {/* Logo - bigger, collapses to icon */}
-        <div className={`h-[60px] shrink-0 border-b border-sidebar-border flex items-center ${sidebarHidden ? "justify-center px-2" : "justify-between px-3"}`}>
-          {sidebarHidden ? (
-            <Link to="/dashboard" className="h-9 w-9 bg-white rounded-lg grid place-items-center shadow-sm font-black text-[#0F2340] text-[18px] leading-none" title="Prokon — Expand sidebar">
-              P
-            </Link>
-          ) : (
-            <Link to="/dashboard" className="leading-none bg-white rounded-lg px-2.5 py-2 shadow-sm">
-              <img
-                src={prokonLogo.url}
-                alt="Prokon Hi-Tech Systems"
-                className="h-9 w-auto object-contain"
-              />
-            </Link>
-          )}
-          {!sidebarHidden && (
-            <button
-              type="button"
-              onClick={() => setSidebarHidden(true)}
-              className="hidden lg:inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-accent-foreground transition-colors"
-              aria-label="Collapse to icons"
-              title="Collapse to icons"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Navigation - icons stay visible when collapsed */}
-        <nav className={`flex-1 min-h-0 overflow-y-auto py-4 space-y-4 ${sidebarHidden ? "px-2" : "px-3"}`} aria-label="Primary">
-          {sidebarHidden ? (
-            /* COLLAPSED: flat icon rail with tooltips */
-            <div className="space-y-1">
-              {ungrouped.map((n) => (
-                <Link
-                  key={n.to}
-                  to={n.to}
-                  onClick={() => setMobileOpen(false)}
-                  title={n.label}
-                  className={navLinkCls(isActive(n.to), true)}
-                >
-                  <n.icon className="h-4 w-4 shrink-0" />
-                </Link>
-              ))}
-              <div className="mx-2 my-2 h-px bg-sidebar-border/60" />
-              {GROUP_ORDER.flatMap((g) => groupMap.get(g) ?? []).map((n) => (
-                <Link
-                  key={`${n.to}-${n.matchSearchTab ?? ""}-c`}
-                  to={n.to}
-                  search={n.search as any}
-                  onClick={() => setMobileOpen(false)}
-                  title={n.label}
-                  className={navLinkCls(
-                    n.group === "Masters"
-                      ? isMasterTabActive(n.to, n.matchSearchTab)
-                      : isActive(n.to, n.excludeActive),
-                    true
-                  )}
-                >
-                  <n.icon className="h-4 w-4 shrink-0" />
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <>
-              {/* Ungrouped items */}
-              {ungrouped.length > 0 && (
-                <div className="space-y-0.5">
-                  {ungrouped.map((n) => (
-                    <Link
-                      key={n.to}
-                      to={n.to}
-                      onClick={() => setMobileOpen(false)}
-                      className={navLinkCls(isActive(n.to), false)}
-                    >
-                      <n.icon className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{n.label}</span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-              {/* Grouped items */}
-              {GROUP_ORDER.map((g) => {
-                const items = groupMap.get(g);
-                if (!items || items.length === 0) return null;
-                const isOpen = openGroups[g] !== false;
-                return (
-                  <div key={g}>
-                    <button
-                      type="button"
-                      onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
-                      className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-sidebar-foreground/60 uppercase tracking-[0.08em] px-3 py-1.5 hover:text-sidebar-foreground"
-                    >
-                      {isOpen ? (
-                        <ChevronDown className="h-4 w-4 shrink-0" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 shrink-0" />
-                      )}
-                      <span>{g}</span>
-                    </button>
-                    {isOpen && (
-                      <div className="space-y-0.5">
-                        {items.map((n) => (
-                          <Link
-                            key={`${n.to}-${n.matchSearchTab ?? ""}`}
-                            to={n.to}
-                            search={n.search as any}
-                            onClick={() => setMobileOpen(false)}
-                            className={navLinkCls(
-                              n.group === "Masters"
-                                ? isMasterTabActive(n.to, n.matchSearchTab)
-                                : isActive(n.to, n.excludeActive),
-                              false
-                            )}
-                          >
-                            <n.icon className="h-4 w-4 shrink-0" />
-                            <span className="truncate">{n.label}</span>
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </nav>
-      </aside>
-
-      {/* Main area - independent scroll, header stays fixed */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Top bar */}
-        <header
-          className="h-14 shrink-0 border-b flex items-center gap-3 px-4 md:px-6 bg-background shadow-sm print:hidden"
+        {/* Skip to content — keyboard accessibility */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[9999] focus:rounded-md focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
         >
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Open menu"
+          Skip to content
+        </a>
+
+        {/* Mobile overlay */}
+        {mobileOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-40 lg:hidden print:hidden"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Sidebar - icon-collapsible, not vanishing */}
+        <aside
+          className={`fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50 bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden transition-[width,transform] duration-200 print:hidden lg:h-screen lg:shrink-0 ${
+            mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          } ${sidebarHidden ? "lg:w-[68px]" : "lg:w-60"} w-60`}
+          data-print="hide"
+          data-collapsed={sidebarHidden ? "true" : "false"}
+        >
+          {/* Logo - bigger, collapses to icon */}
+          <div
+            className={`h-[60px] shrink-0 border-b border-sidebar-border flex items-center ${sidebarHidden ? "justify-center px-2" : "justify-between px-3"}`}
           >
-            <Menu className="h-5 w-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden lg:inline-flex text-muted-foreground"
-            onClick={() => setSidebarHidden((v) => !v)}
-            aria-label={sidebarHidden ? "Expand sidebar" : "Collapse to icons"}
-            title={sidebarHidden ? "Expand sidebar" : "Collapse to icons"}
-          >
-            {sidebarHidden ? <ChevronRight className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="truncate text-[15px] font-semibold text-foreground leading-tight">
-              {pageTitle}
-            </h1>
-            {pageGroup && (
-              <p className="truncate text-[11px] text-muted-foreground leading-tight">
-                {pageGroup}
-              </p>
+            {sidebarHidden ? (
+              <Link
+                to="/dashboard"
+                className="h-9 w-9 bg-white rounded-lg grid place-items-center shadow-sm font-black text-[#0F2340] text-[18px] leading-none"
+                title="Prokon — Expand sidebar"
+              >
+                P
+              </Link>
+            ) : (
+              <Link
+                to="/dashboard"
+                className="leading-none bg-white rounded-lg px-2.5 py-2 shadow-sm"
+              >
+                <img
+                  src={prokonLogo.url}
+                  alt="Prokon Hi-Tech Systems"
+                  className="h-9 w-auto object-contain"
+                />
+              </Link>
+            )}
+            {!sidebarHidden && (
+              <button
+                type="button"
+                onClick={() => setSidebarHidden(true)}
+                className="hidden lg:inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-accent-foreground transition-colors"
+                aria-label="Collapse to icons"
+                title="Collapse to icons"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="hidden md:inline-flex gap-1.5 text-muted-foreground"
-            onClick={() => setPaletteOpen(true)}
-            aria-label="Open command palette (⌘K)"
+
+          {/* Navigation - icons stay visible when collapsed */}
+          <nav
+            className={`flex-1 min-h-0 overflow-y-auto py-4 space-y-4 ${sidebarHidden ? "px-2" : "px-3"}`}
+            aria-label="Primary"
           >
-            <CommandIcon className="h-3.5 w-3.5" />
-            <span className="text-xs">Search…</span>
-            <kbd className="ml-1 inline-flex h-5 items-center rounded border bg-muted px-1 font-mono text-[10px] font-medium text-muted-foreground">
-              ⌘K
-            </kbd>
-          </Button>
-          <UserProfileMenu profile={profile} onProfileChange={loadProfile} />
-        </header>
+            {sidebarHidden ? (
+              /* COLLAPSED: flat icon rail with tooltips */
+              <div className="space-y-1">
+                {ungrouped.map((n) => (
+                  <Link
+                    key={n.to}
+                    to={n.to}
+                    onClick={() => setMobileOpen(false)}
+                    title={n.label}
+                    className={navLinkCls(isActive(n.to), true)}
+                  >
+                    <n.icon className="h-4 w-4 shrink-0" />
+                  </Link>
+                ))}
+                <div className="mx-2 my-2 h-px bg-sidebar-border/60" />
+                {GROUP_ORDER.flatMap((g) => groupMap.get(g) ?? []).map((n) => (
+                  <Link
+                    key={`${n.to}-${n.matchSearchTab ?? ""}-c`}
+                    to={n.to}
+                    search={n.search as any}
+                    onClick={() => setMobileOpen(false)}
+                    title={n.label}
+                    className={navLinkCls(
+                      n.group === "Masters"
+                        ? isMasterTabActive(n.to, n.matchSearchTab)
+                        : isActive(n.to, n.excludeActive),
+                      true,
+                    )}
+                  >
+                    <n.icon className="h-4 w-4 shrink-0" />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <>
+                {/* Ungrouped items */}
+                {ungrouped.length > 0 && (
+                  <div className="space-y-0.5">
+                    {ungrouped.map((n) => (
+                      <Link
+                        key={n.to}
+                        to={n.to}
+                        onClick={() => setMobileOpen(false)}
+                        className={navLinkCls(isActive(n.to), false)}
+                      >
+                        <n.icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{n.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+                {/* Grouped items */}
+                {GROUP_ORDER.map((g) => {
+                  const items = groupMap.get(g);
+                  if (!items || items.length === 0) return null;
+                  const isOpen = openGroups[g] !== false;
+                  return (
+                    <div key={g}>
+                      <button
+                        type="button"
+                        onClick={() => setOpenGroups((s) => ({ ...s, [g]: !isOpen }))}
+                        className="w-full flex items-center gap-1.5 text-[11px] font-semibold text-sidebar-foreground/60 uppercase tracking-[0.08em] px-3 py-1.5 hover:text-sidebar-foreground"
+                      >
+                        {isOpen ? (
+                          <ChevronDown className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 shrink-0" />
+                        )}
+                        <span>{g}</span>
+                      </button>
+                      {isOpen && (
+                        <div className="space-y-0.5">
+                          {items.map((n) => (
+                            <Link
+                              key={`${n.to}-${n.matchSearchTab ?? ""}`}
+                              to={n.to}
+                              search={n.search as any}
+                              onClick={() => setMobileOpen(false)}
+                              className={navLinkCls(
+                                n.group === "Masters"
+                                  ? isMasterTabActive(n.to, n.matchSearchTab)
+                                  : isActive(n.to, n.excludeActive),
+                                false,
+                              )}
+                            >
+                              <n.icon className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{n.label}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </nav>
+        </aside>
 
-        {/* Content - THE ONLY scrollbar on the right side */}
-        <main id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth bg-background" tabIndex={-1}>
-          <div className="max-w-[1600px] w-full mx-auto p-4 md:p-6">
-            <ClaimAdminBanner />
-            <Outlet />
-          </div>
-        </main>
-      </div>
+        {/* Main area - independent scroll, header stays fixed */}
+        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+          {/* Top bar */}
+          <header className="h-14 shrink-0 border-b flex items-center gap-3 px-4 md:px-6 bg-background shadow-sm print:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden lg:inline-flex text-muted-foreground"
+              onClick={() => setSidebarHidden((v) => !v)}
+              aria-label={sidebarHidden ? "Expand sidebar" : "Collapse to icons"}
+              title={sidebarHidden ? "Expand sidebar" : "Collapse to icons"}
+            >
+              {sidebarHidden ? <ChevronRight className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+            <div className="flex-1 min-w-0">
+              <h1 className="truncate text-[15px] font-semibold text-foreground leading-tight">
+                {pageTitle}
+              </h1>
+              {pageGroup && (
+                <p className="truncate text-[11px] text-muted-foreground leading-tight">
+                  {pageGroup}
+                </p>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden md:inline-flex gap-1.5 text-muted-foreground"
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Open command palette (⌘K)"
+            >
+              <CommandIcon className="h-3.5 w-3.5" />
+              <span className="text-xs">Search…</span>
+              <kbd className="ml-1 inline-flex h-5 items-center rounded border bg-muted px-1 font-mono text-[10px] font-medium text-muted-foreground">
+                ⌘K
+              </kbd>
+            </Button>
+            <UserProfileMenu profile={profile} onProfileChange={loadProfile} />
+          </header>
 
-      <ChangePasswordDialog
-        open={forceChange}
-        onOpenChange={setForceChange}
-        forced
-        onChanged={() => {
-          setForceChange(false);
-          loadProfile();
-        }}
-      />
-      <IdleTimeout />
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+          {/* Content - THE ONLY scrollbar on the right side */}
+          <main
+            id="main-content"
+            className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth bg-background"
+            tabIndex={-1}
+          >
+            <div className="max-w-[1600px] w-full mx-auto p-4 md:p-6">
+              <ClaimAdminBanner />
+              <Outlet />
+            </div>
+          </main>
+        </div>
+
+        <ChangePasswordDialog
+          open={forceChange}
+          onOpenChange={setForceChange}
+          forced
+          onChanged={() => {
+            setForceChange(false);
+            loadProfile();
+          }}
+        />
+        <IdleTimeout />
+        <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       </div>
     </ConfirmProvider>
   );
