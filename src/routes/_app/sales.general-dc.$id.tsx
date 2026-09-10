@@ -34,6 +34,8 @@ import {
   type GeneralDcInvoicePrefill,
   type GeneralDcRow,
 } from "@/lib/generalDc";
+import { fetchSalesOrder, fetchSoFulfillmentSummary } from "@/lib/salesOrders";
+import type { SalesOrder, SoFulfillmentSummary } from "@/lib/salesOrders";
 
 export const Route = createFileRoute("/_app/sales/general-dc/$id")({
   component: GeneralDcDetail,
@@ -71,6 +73,8 @@ function GeneralDcDetail() {
   const [negOpen, setNegOpen] = useState(false);
   const [returned, setReturned] = useState(false);
   const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
+  const [salesOrder, setSalesOrder] = useState<SalesOrder | null>(null);
+  const [soFulfillments, setSoFulfillments] = useState<SoFulfillmentSummary[] | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -107,6 +111,18 @@ function GeneralDcDetail() {
     if (!dc?.returnable || !dc?.dc_no) return;
     isGdcReturned(dc.dc_no).then(setReturned).catch(() => {});
   }, [dc?.dc_no, dc?.returnable, dc?.status]);
+
+  // Fetch SO + fulfillments for annexure when GDC is SO-linked
+  useEffect(() => {
+    const soId = (dc as any)?.sales_order_id as string | null | undefined;
+    if (!soId) {
+      setSalesOrder(null);
+      setSoFulfillments(null);
+      return;
+    }
+    fetchSalesOrder(soId).then(setSalesOrder).catch(() => setSalesOrder(null));
+    fetchSoFulfillmentSummary(soId).then(setSoFulfillments).catch(() => setSoFulfillments(null));
+  }, [(dc as any)?.sales_order_id]);
 
   async function issue() {
     if (!dc) return;
@@ -386,7 +402,14 @@ function GeneralDcDetail() {
       {/* Print source (hidden on screen) */}
       <div className="hidden">
         <div ref={printRef}>
-          <GeneralDcPrintView dc={dc} company={company} warehouseNames={warehouseNames} authorised_signature_url={authorisedSignatureUrl} />
+          <GeneralDcPrintView
+            dc={dc}
+            company={company}
+            warehouseNames={warehouseNames}
+            authorised_signature_url={authorisedSignatureUrl}
+            salesOrder={salesOrder}
+            soFulfillments={soFulfillments}
+          />
         </div>
       </div>
     </div>

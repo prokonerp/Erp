@@ -1,5 +1,6 @@
 import type { CompanyProfile } from "@/lib/companyProfile";
 import type { GeneralDcRow } from "@/lib/generalDc";
+import type { SalesOrder, SoFulfillmentSummary } from "@/lib/salesOrders";
 import { gdcTotal } from "@/lib/generalDc";
 import { amountInWords } from "@/lib/crm";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
@@ -27,11 +28,21 @@ export function GeneralDcPrintView({
   company,
   warehouseNames = {},
   authorised_signature_url,
+  salesOrder,
+  soFulfillments,
+  soConversions,
+  annexure,
+  docId,
 }: {
   dc: GeneralDcRow;
   company: CompanyProfile;
   warehouseNames?: Record<string, string>;
   authorised_signature_url?: string | null;
+  salesOrder?: SalesOrder | null;
+  soFulfillments?: SoFulfillmentSummary[] | null;
+  soConversions?: any[] | null;
+  annexure?: boolean;
+  docId?: string | null;
 }) {
   const accent = (company.accent_color && company.accent_color.trim()) || "#14225C";
   const salesOffice = cleanAddress(company.sales_office_address);
@@ -42,7 +53,7 @@ export function GeneralDcPrintView({
     <div className="doc-print text-black">
       <style>{`
         @media print {
-          @page { size: A4; margin: 10mm; }
+          @page { size: A4; margin: 5mm; }
           .doc-print thead { display: table-header-group; }
           .doc-print tr { page-break-inside: avoid; }
         }
@@ -51,11 +62,11 @@ export function GeneralDcPrintView({
           color: #000;
           font-size: 10.5px;
           line-height: 1.35;
-          border: 2px solid ${accent};
-          padding: 14px 18px;
+          border: 1.5px solid ${accent};
+          padding: 8px 10px;
           display: flex;
           flex-direction: column;
-          min-height: 272mm;
+          min-height: 287mm;
           box-sizing: border-box;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
@@ -184,6 +195,74 @@ export function GeneralDcPrintView({
           ))}
         </tbody>
       </table>
+
+      {/* Annexure — Previously Satisfied Quantity (SO-linked GDC) */}
+      {(() => {
+        const showAnnexure = annexure ?? !!(salesOrder || (soConversions && soConversions.length > 0) || (soFulfillments && soFulfillments.length > 0) || (dc as any).sales_order_id);
+        if (!showAnnexure || !salesOrder) return null;
+        const currentQtyByIndex = new Map<number, number>();
+        if ((dc.items || []).length === salesOrder.items.length) {
+          (dc.items || []).forEach((it, i) => currentQtyByIndex.set(i, Number(it.qty) || 0));
+        } else {
+          (dc.items || []).forEach((it: any, idx: number) => {
+            let matchedIdx: number | null = null;
+            if (it.product_id) {
+              const found = salesOrder.items.findIndex((soIt) => (soIt.product_id || null) === it.product_id);
+              if (found >= 0) matchedIdx = found;
+            }
+            if (matchedIdx == null) {
+              const found = salesOrder.items.findIndex((soIt) => (soIt.description || "").trim().toLowerCase() === (it.part_name || it.model_no || "").trim().toLowerCase());
+              if (found >= 0) matchedIdx = found;
+            }
+            if (matchedIdx == null) matchedIdx = idx;
+            currentQtyByIndex.set(matchedIdx, (currentQtyByIndex.get(matchedIdx) || 0) + (Number(it.qty) || 0));
+          });
+        }
+        return (
+          <div className="mt-6 border-t pt-4">
+            <div className="text-xs font-semibold uppercase tracking-wider">
+              Against Sales Order <span className="font-mono">{salesOrder.so_no || salesOrder.id.slice(0, 8)}</span>
+              {salesOrder.po_number && <span className="font-normal normal-case"> (PO: {salesOrder.po_number}{salesOrder.po_date ? ` dtd ${salesOrder.po_date}` : ""})</span>}
+            </div>
+            <table className="w-full text-xs mt-2 border-collapse border" style={{ borderColor: "#d1d5db" }}>
+              <thead className="bg-slate-100">
+                <tr>
+                  <th className="border px-1.5 py-1 text-left" style={{ borderColor: "#d1d5db" }}>#</th>
+                  <th className="border px-1.5 py-1 text-left" style={{ borderColor: "#d1d5db" }}>Item</th>
+                  <th className="border px-1.5 py-1 text-right" style={{ borderColor: "#d1d5db" }}>Ordered</th>
+                  <th className="border px-1.5 py-1 text-right" style={{ borderColor: "#d1d5db" }}>Already Delivered</th>
+                  <th className="border px-1.5 py-1 text-right" style={{ borderColor: "#d1d5db" }}>This Document</th>
+                  <th className="border px-1.5 py-1 text-right" style={{ borderColor: "#d1d5db" }}>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {salesOrder.items.map((soIt: any, i: number) => {
+                  const sum = soFulfillments?.find((s) => Number(s.line_index) === i);
+                  const ordered = Number(soIt.qty) || 0;
+                  const fulfilled = sum ? Number(sum.fulfilled_stock) || 0 : 0;
+                  const currentQty = currentQtyByIndex.get(i) ?? 0;
+                  const effectiveDocId = docId ?? dc.id;
+                  const isThisDocInLedger = !!soConversions?.some((c: any) => c.target_id === effectiveDocId);
+                  const alreadyPrior = isThisDocInLedger && fulfilled >= currentQty && currentQty > 0 ? Math.max(0, fulfilled - currentQty) : fulfilled;
+                  const balanceAfter = sum ? Number(sum.balance) : Math.max(0, ordered - fulfilled);
+                  const balance = sum ? balanceAfter : Math.max(0, ordered - alreadyPrior - currentQty);
+                  return (
+                    <tr key={i}>
+                      <td className="border px-1.5 py-1 text-center" style={{ borderColor: "#d1d5db" }}>{i + 1}</td>
+                      <td className="border px-1.5 py-1" style={{ borderColor: "#d1d5db" }}>{soIt.description || "—"}</td>
+                      <td className="border px-1.5 py-1 text-right tabular-nums" style={{ borderColor: "#d1d5db" }}>{ordered}</td>
+                      <td className="border px-1.5 py-1 text-right tabular-nums" style={{ borderColor: "#d1d5db" }}>{alreadyPrior}</td>
+                      <td className="border px-1.5 py-1 text-right tabular-nums font-semibold" style={{ borderColor: "#d1d5db" }}>{currentQty}</td>
+                      <td className="border px-1.5 py-1 text-right tabular-nums" style={{ borderColor: "#d1d5db" }}>{balance}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="text-[11px] text-gray-600 mt-1">Previously satisfied qty includes all prior Tax Invoices, General DCs and Delivery Challans linked to this SO (Proforma excluded).</div>
+          </div>
+        );
+      })()}
 
       <div className="grid grid-cols-2 gap-4 mt-3">
         <div className="text-[10.5px]">

@@ -41,6 +41,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const savingRef = useRef(false);
+  const submitBusyRef = useRef(false); // FE-C3: separate lock for submit() — must not conflict with auto-save's savingRef
   const lastPayloadRef = useRef<string>("");
   const [form, setForm] = useState({
     status: "Challan Generated",
@@ -568,16 +569,25 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
 
   // "Done" button: flush any pending auto-save, then jump to the view page.
   const submit = async () => {
-    if (!validate()) return;
-    if (!recordId && !(await preflightStock())) return;
-    setBusy(true);
-    await persist();
-    setBusy(false);
-    setReviewOpen(false);
-    const idToOpen = recordId;
-    if (idToOpen) {
-      toast.success("Delivery Challan saved");
-      navigate({ to: "/challan/$id", params: { id: idToOpen } });
+    // FE-C3: Synchronous re-entry lock — separate ref from auto-save's savingRef
+    if (submitBusyRef.current) return;
+    submitBusyRef.current = true;
+    let didSetBusy = false;
+    try {
+      if (!validate()) return;
+      if (!recordId && !(await preflightStock())) return;
+      setBusy(true);
+      didSetBusy = true;
+      await persist();
+      setReviewOpen(false);
+      const idToOpen = recordId;
+      if (idToOpen) {
+        toast.success("Delivery Challan saved");
+        navigate({ to: "/challan/$id", params: { id: idToOpen } });
+      }
+    } finally {
+      if (didSetBusy) setBusy(false);
+      submitBusyRef.current = false;
     }
   };
 

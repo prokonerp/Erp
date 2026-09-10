@@ -93,9 +93,25 @@ export async function deleteGeneralDc(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** Cancel an issued challan — the DB reverses all posted stock. */
+/** Cancel an issued challan — the DB reverses all posted stock and SO fulfillment is excluded. */
 export async function cancelGeneralDc(id: string, reason: string): Promise<GeneralDcRow> {
-  return updateGeneralDc(id, { status: "Cancelled", cancelled_reason: reason });
+  const row = await updateGeneralDc(id, { status: "Cancelled", cancelled_reason: reason });
+  // Sync SO fulfillment view — it excludes so_conversions.status = 'cancelled'
+  try {
+    await supabase
+      .from("so_conversions" as never)
+      .update({ status: "cancelled" } as never)
+      .eq("target_table", "general_delivery_challans" as never)
+      .eq("target_id", id);
+    // Fallback via conversion_id FK if target link missing
+    const convId = (row as unknown as { conversion_id?: string | null }).conversion_id;
+    if (convId) {
+      await supabase.from("so_conversions" as never).update({ status: "cancelled" } as never).eq("id", convId);
+    }
+  } catch (e) {
+    console.warn("so_conversions sync on GDC cancel failed", e);
+  }
+  return row;
 }
 
 export const GDC_PREFILL_KEY = "invoice:prefill:from-general-dc";

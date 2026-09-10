@@ -30,8 +30,11 @@ export function DefaultErrorComponent({ error, reset }: { error: Error; reset: (
   );
 }
 
-export const getRouter = () => {
-  const queryClient = new QueryClient({
+// FE-C4: Singleton QueryClient on client — prevents cache loss on HMR/remount
+let _clientQueryClient: QueryClient | null = null;
+
+function makeQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 5 * 60 * 1000, // 5 minutes — data is fresh for 5 min
@@ -41,6 +44,11 @@ export const getRouter = () => {
       },
     },
   });
+}
+
+export const getRouter = () => {
+  // Server: new client per request (correct). Client: singleton (avoids HMR cache wipe).
+  const queryClient = typeof window === "undefined" ? makeQueryClient() : (_clientQueryClient ??= makeQueryClient());
 
   const router = createRouter({
     routeTree,

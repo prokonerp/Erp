@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -40,6 +40,8 @@ import { useIsAdmin } from "@/lib/useRole";
 import { findShortfalls, logNegativeOverrides, blockMessage, type Shortfall } from "@/lib/negativeStock";
 import { NegativeStockDialog } from "@/components/NegativeStockDialog";
 import { GDC_PREFILL_KEY, updateGeneralDc, type GeneralDcInvoicePrefill } from "@/lib/generalDc";
+import { SO_PREFILL_KEY, PROFORMA_PREFILL_KEY, type FulfillmentLine } from "@/lib/documentFlow";
+import { createTaxInvoiceFromSO, createInvoiceFromProforma } from "@/lib/documentFlow.writers";
 import { useUnsavedChanges, UnsavedChangesPrompt } from "@/hooks/useUnsavedChanges";
 import { SALES_TYPE_META, type SalesType, getSupplyClassForSalesType } from "@/lib/sales";
 import TransportDetailsModal from "@/components/TransportDetailsModal";
@@ -93,6 +95,39 @@ function NewInvoice() {
   // Prefill coming from an issued General Delivery Challan — stock was already
   // reduced on Issue, so the invoice must NOT deduct it a second time.
   const [fromGeneralDc, setFromGeneralDc] = useState<{ id: string; no: string | null } | null>(null);
+  // SO / Proforma prefill (split-delivery V2)
+  const [soPrefill, setSoPrefill] = useState<null | {
+    sales_order_id: string;
+    sales_order_no: string | null;
+    po_number: string | null;
+    po_date?: string | null;
+    branch_id?: string | null;
+    customer_id?: string | null;
+    billing_address?: string | null;
+    shipping_address?: string | null;
+    notes?: string | null;
+    terms?: string | null;
+    lines: FulfillmentLine[] & any[];
+    prior_fulfilled?: any[];
+    this_fulfilled?: any[];
+    header?: Record<string, any>;
+    orderedTotal?: number;
+    fulfilledTotal?: number;
+    balanceTotal?: number;
+    thisTotal?: number;
+  }>(null);
+  const [proformaPrefill, setProformaPrefill] = useState<null | {
+    proforma_id: string;
+    proforma_no: string | null;
+    branch_id?: string | null;
+    customer_id?: string | null;
+    billing_address?: string | null;
+    shipping_address?: string | null;
+    notes?: string | null;
+    terms?: string | null;
+    items?: any[];
+  }>(null);
+  const [linkedProformaId, setLinkedProformaId] = useState<string | null>(null);
   // ── P1 SalesType + Transport (staged) ──────────────────────────────────
   const [salesType, setSalesType] = useState<SalesType>("local_itemwise");
   const [lutNo, setLutNo] = useState("");
@@ -100,28 +135,169 @@ function NewInvoice() {
   const [transportOpen, setTransportOpen] = useState(false);
 
   useEffect(() => {
-    let raw: string | null = null;
-    try { raw = sessionStorage.getItem(GDC_PREFILL_KEY); } catch { /* noop */ }
-    if (!raw) return;
-    try { sessionStorage.removeItem(GDC_PREFILL_KEY); } catch { /* noop */ }
-    let p: GeneralDcInvoicePrefill;
-    try { p = JSON.parse(raw) as GeneralDcInvoicePrefill; } catch { return; }
-    setFromGeneralDc({ id: p.general_dc_id, no: p.general_dc_no });
-    if (p.branch_id) setBranchId(p.branch_id);
-    if (p.billing_address) setBilling(p.billing_address);
-    if (p.shipping_address) {
-      setShipping(p.shipping_address);
-      setSameAsBilling(p.shipping_address === p.billing_address);
-    }
-    if (p.notes) setNotes(p.notes);
-    if (p.terms) setTerms(p.terms);
-    if (Array.isArray(p.items) && p.items.length > 0) {
-      setItems(p.items.map((it) => ({ ...emptyItem(), ...it })));
-    }
-    if (p.customer_id) {
-      supabase.from("customers").select("*").eq("id", p.customer_id).maybeSingle()
-        .then(({ data }) => { if (data) setCustomer(data as unknown as Customer); });
-    }
+    // Order: SO → Proforma → GDC (existing). Each consumes and clears its key.
+    let handled = false;
+    // ── SO prefill ────────────────────────────────────────────────────────
+    try {
+      const raw = sessionStorage.getItem(SO_PREFILL_KEY);
+      if (raw) {
+        try { sessionStorage.removeItem(SO_PREFILL_KEY); } catch { /* noop */ }
+        const p: any = JSON.parse(raw);
+        const salesOrderId: string | null = p.sales_order_id || p.salesOrderId || p.so_id || p.id || null;
+        if (salesOrderId) {
+          handled = true;
+          const header = p.header || p;
+          const rawLines: any[] = Array.isArray(p.lines) ? p.lines : Array.isArray(p.items) ? p.items : Array.isArray(p.fulfillmentLines) ? p.fulfillmentLines : [];
+          // Normalize lines to enriched shape: keep ordered/fulfilled/balance/this_qty when present
+          const enriched = rawLines.map((l: any, idx: number) => {
+            const lineIndex = l.line_index != null ? Number(l.line_index) : idx;
+            const ordered = Number(l.ordered_qty ?? l.orderedQty ?? l.qty ?? l.this_qty ?? 0) || 0;
+            const fulfilledBefore = Number(l.fulfilled_before ?? l.fulfilledBefore ?? l.prior_fulfilled ?? 0) || 0;
+            const balance = l.balance != null ? Number(l.balance) : Math.max(0, ordered - fulfilledBefore);
+            const thisQty = Number(l.this_qty ?? l.thisQty ?? l.qty ?? balance) || 0;
+            return {
+              line_index: lineIndex,
+              product_id: l.product_id ?? l.productId ?? null,
+              description: l.description ?? l.part_name ?? l.partName ?? "",
+              hsn: l.hsn ?? "",
+              qty: thisQty,
+              unit: l.unit ?? l.uom ?? "Nos",
+              rate: Number(l.rate ?? l.unit_price ?? 0) || 0,
+              discount_pct: Number(l.discount_pct ?? l.discount ?? 0) || 0,
+              gst_rate: Number(l.gst_rate ?? l.gstRate ?? 18) || 0,
+              cess_rate: Number(l.cess_rate ?? 0) || 0,
+              warehouse_id: l.warehouse_id ?? l.warehouseId ?? null,
+              serial_numbers: Array.isArray(l.serial_numbers) ? l.serial_numbers : Array.isArray(l.serialNumbers) ? l.serialNumbers : [],
+              is_serialized: !!(l.is_serialized ?? l.isSerialized),
+              part_model_no: l.part_model_no ?? l.model_no ?? null,
+              part_name: l.part_name ?? l.partName ?? null,
+              ordered_qty: ordered,
+              fulfilled_before: fulfilledBefore,
+              balance,
+              this_qty: thisQty,
+            };
+          });
+          // Compute totals for info bar
+          const orderedTotal = enriched.reduce((s: number, l: any) => s + (Number(l.ordered_qty) || 0), 0);
+          const fulfilledTotal = enriched.reduce((s: number, l: any) => s + (Number(l.fulfilled_before) || 0), 0);
+          const balanceTotal = enriched.reduce((s: number, l: any) => s + (Number(l.balance) || 0), 0);
+          const thisTotal = enriched.reduce((s: number, l: any) => s + (Number(l.this_qty) || 0), 0);
+          const priorFulfilled = Array.isArray(p.prior_fulfilled) ? p.prior_fulfilled : enriched.map((l: any) => ({ line_index: l.line_index, fulfilled_before: l.fulfilled_before }));
+          // Apply to form
+          setSoPrefill({
+            sales_order_id: salesOrderId,
+            sales_order_no: p.sales_order_no ?? p.so_no ?? header.sales_order_no ?? header.so_no ?? null,
+            po_number: header.po_number ?? p.po_number ?? null,
+            po_date: header.po_date ?? p.po_date ?? null,
+            branch_id: header.branch_id ?? p.branch_id ?? null,
+            customer_id: header.customer_id ?? p.customer_id ?? null,
+            billing_address: header.billing_address ?? p.billing_address ?? null,
+            shipping_address: header.shipping_address ?? p.shipping_address ?? null,
+            notes: header.notes ?? p.notes ?? null,
+            terms: header.terms ?? p.terms ?? null,
+            lines: enriched,
+            prior_fulfilled: priorFulfilled,
+            this_fulfilled: p.this_fulfilled ?? enriched.filter((l: any) => Number(l.this_qty) > 0).map((l: any) => ({ line_index: l.line_index, this_qty: l.this_qty })),
+            header,
+            orderedTotal,
+            fulfilledTotal,
+            balanceTotal,
+            thisTotal,
+          });
+          if (header.branch_id || p.branch_id) setBranchId(header.branch_id ?? p.branch_id);
+          if (header.billing_address ?? p.billing_address) setBilling(header.billing_address ?? p.billing_address);
+          if (header.shipping_address ?? p.shipping_address) {
+            const ship = header.shipping_address ?? p.shipping_address;
+            setShipping(ship);
+            const bill = header.billing_address ?? p.billing_address ?? "";
+            setSameAsBilling(ship === bill);
+          }
+          if (header.po_number ?? p.po_number) setPoNumber(header.po_number ?? p.po_number);
+          if (header.po_date ?? p.po_date) setPoDate(header.po_date ?? p.po_date);
+          if (header.notes ?? p.notes) setNotes(header.notes ?? p.notes);
+          if (header.terms ?? p.terms) setTerms(header.terms ?? p.terms);
+          if (enriched.length > 0) {
+            setItems(enriched.map((l: any) => ({ ...emptyItem(), ...l, qty: l.this_qty })));
+          }
+          const cid = header.customer_id ?? p.customer_id ?? null;
+          if (cid) {
+            supabase.from("customers").select("*").eq("id", cid).maybeSingle()
+              .then(({ data }) => { if (data) setCustomer(data as unknown as Customer); });
+          }
+          // SO handled — do not fall through to Proforma/GDC
+        }
+      }
+    } catch { /* noop */ }
+    if (handled) return;
+    // ── Proforma prefill ────────────────────────────────────────────────
+    try {
+      const raw = sessionStorage.getItem(PROFORMA_PREFILL_KEY);
+      if (raw) {
+        try { sessionStorage.removeItem(PROFORMA_PREFILL_KEY); } catch { /* noop */ }
+        const p: any = JSON.parse(raw);
+        const proformaId: string | null = p.proforma_id || p.proformaId || p.id || null;
+        if (proformaId || Array.isArray(p.items)) {
+          handled = true;
+          const header = p.header || p;
+          setProformaPrefill({
+            proforma_id: proformaId || "",
+            proforma_no: p.proforma_no ?? p.proformaNo ?? header.proforma_no ?? null,
+            branch_id: header.branch_id ?? p.branch_id ?? null,
+            customer_id: header.customer_id ?? p.customer_id ?? null,
+            billing_address: header.billing_address ?? p.billing_address ?? null,
+            shipping_address: header.shipping_address ?? p.shipping_address ?? null,
+            notes: header.notes ?? p.notes ?? null,
+            terms: header.terms ?? p.terms ?? null,
+            items: p.items || header.items || [],
+          });
+          if (proformaId) setLinkedProformaId(proformaId);
+          if (header.branch_id ?? p.branch_id) setBranchId(header.branch_id ?? p.branch_id);
+          if (header.billing_address ?? p.billing_address) setBilling(header.billing_address ?? p.billing_address);
+          if (header.shipping_address ?? p.shipping_address) {
+            const ship = header.shipping_address ?? p.shipping_address;
+            setShipping(ship);
+            const bill = header.billing_address ?? p.billing_address ?? "";
+            setSameAsBilling(ship === bill);
+          }
+          if (header.notes ?? p.notes) setNotes(header.notes ?? p.notes);
+          if (header.terms ?? p.terms) setTerms(header.terms ?? p.terms);
+          if (Array.isArray(p.items) && p.items.length > 0) {
+            setItems(p.items.map((it: any) => ({ ...emptyItem(), ...it })));
+          } else if (Array.isArray(header.items) && header.items.length > 0) {
+            setItems(header.items.map((it: any) => ({ ...emptyItem(), ...it })));
+          }
+          const cid = header.customer_id ?? p.customer_id ?? null;
+          if (cid) {
+            supabase.from("customers").select("*").eq("id", cid).maybeSingle()
+              .then(({ data }) => { if (data) setCustomer(data as unknown as Customer); });
+          }
+        }
+      }
+    } catch { /* noop */ }
+    if (handled) return;
+    // ── GDC prefill (existing) ──────────────────────────────────────────
+    try {
+      const raw = sessionStorage.getItem(GDC_PREFILL_KEY);
+      if (!raw) return;
+      try { sessionStorage.removeItem(GDC_PREFILL_KEY); } catch { /* noop */ }
+      const p = JSON.parse(raw) as GeneralDcInvoicePrefill;
+      setFromGeneralDc({ id: p.general_dc_id, no: p.general_dc_no });
+      if (p.branch_id) setBranchId(p.branch_id);
+      if (p.billing_address) setBilling(p.billing_address);
+      if (p.shipping_address) {
+        setShipping(p.shipping_address);
+        setSameAsBilling(p.shipping_address === p.billing_address);
+      }
+      if (p.notes) setNotes(p.notes);
+      if (p.terms) setTerms(p.terms);
+      if (Array.isArray(p.items) && p.items.length > 0) {
+        setItems(p.items.map((it) => ({ ...emptyItem(), ...it })));
+      }
+      if (p.customer_id) {
+        supabase.from("customers").select("*").eq("id", p.customer_id).maybeSingle()
+          .then(({ data }) => { if (data) setCustomer(data as unknown as Customer); });
+      }
+    } catch { /* noop */ }
   }, []);
 
   useEffect(() => {
@@ -293,6 +469,20 @@ function NewInvoice() {
     if (salesType === "sez_zero_rated" && !lutNo.trim()) return toast.error("LUT No. is required for SEZ Zero Rated (SEZWOP)");
     if (items.length === 0 || items.some((it) => !it.description.trim())) return toast.error("Every line needs a description");
     if (items.some((it) => Number(it.gst_rate) > 0 && !it.hsn.trim())) return toast.error("HSN code is mandatory when GST > 0");
+    // SO prefill: enforce qty cap against balance
+    if (soPrefill) {
+      for (let i = 0; i < items.length; i++) {
+        const capLine = (soPrefill.lines as any[])[i];
+        const balance = capLine ? Number(capLine.balance) : Infinity;
+        const qtyNum = Number(items[i].qty);
+        if (Number.isFinite(balance) && qtyNum > balance) {
+          return toast.error(`Line ${i + 1}: quantity ${qtyNum} exceeds balance ${balance} (Against SO ${soPrefill.sales_order_no || soPrefill.sales_order_id})`);
+        }
+      }
+      // At least one line must have qty >0 and <= balance (already validated above) — keep existing has-positive check via writer but surface early
+      const hasPositive = items.some((it) => Number(it.qty) > 0);
+      if (!hasPositive) return toast.error("Select at least one line with quantity greater than 0");
+    }
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.warehouse_id) return toast.error(`Line ${i + 1}: select a warehouse`);
@@ -369,6 +559,103 @@ function NewInvoice() {
     if (!customer || !branch) return;
     setSaving(true);
     try {
+      // ── SO prefill V2: delegate to ledger-aware writer (creates ledger + post stock) ──
+      if (soPrefill) {
+        if (items.length !== soPrefill.lines.length) {
+          toast.error(`SO-linked invoice must keep ${soPrefill.lines.length} line(s) — found ${items.length}. Remove extra rows or recreate from SO.`);
+          setSaving(false);
+          return;
+        }
+        const linesForWriter: FulfillmentLine[] = (soPrefill.lines as any[]).map((l: any, i: number) => ({
+          line_index: Number(l.line_index ?? i),
+          product_id: (l.product_id as string | null) ?? null,
+          ordered_qty: Number(l.ordered_qty) || 0,
+          fulfilled_before: Number(l.fulfilled_before) || 0,
+          balance: Number(l.balance) || 0,
+          this_qty: Number(items[i]?.qty) || 0,
+          warehouse_id: (items[i]?.warehouse_id as string | null) ?? (l.warehouse_id as string | null) ?? null,
+          serial_numbers: Array.isArray(items[i]?.serial_numbers) ? items[i].serial_numbers : Array.isArray(l.serial_numbers) ? l.serial_numbers : [],
+          is_serialized: !!(items[i]?.is_serialized ?? l.is_serialized),
+        }));
+        // Final cap check (defensive — save() already checked)
+        for (let i = 0; i < linesForWriter.length; i++) {
+          if (Number(linesForWriter[i].this_qty) > Number(linesForWriter[i].balance)) {
+            throw new Error(`Line ${i + 1}: quantity ${linesForWriter[i].this_qty} exceeds balance ${linesForWriter[i].balance}`);
+          }
+        }
+        const r = await createTaxInvoiceFromSO(soPrefill.sales_order_id, linesForWriter as any, { allow_negative_stock: allowNegative });
+        // Patch header fields that user may have edited in the form (writer uses SO snapshot; apply edits)
+        try {
+          const headerPatch: Record<string, any> = {};
+          if ((poNumber || null) !== (soPrefill.po_number ?? null)) headerPatch.po_number = poNumber || null;
+          if ((poDate || null) !== (soPrefill.po_date ?? null)) headerPatch.po_date = poDate || null;
+          if ((notes || null) !== (soPrefill.notes ?? null)) headerPatch.notes = notes || null;
+          if ((terms || null) !== (soPrefill.terms ?? null)) headerPatch.terms = terms || null;
+          if ((billing || null) !== (soPrefill.billing_address ?? null)) headerPatch.billing_address = billing || null;
+          if ((shipping || null) !== (soPrefill.shipping_address ?? null)) headerPatch.shipping_address = shipping || null;
+          if (Object.keys(headerPatch).length > 0) {
+            await supabase.from("invoices" as never).update(headerPatch as never).eq("id", r.id);
+          }
+          // Patch line-level edits (rate/discount/gst/hsn/description) if any differ from SO
+          // Best-effort: update invoice_items rows that were just created
+          for (let i = 0; i < items.length; i++) {
+            const orig = (soPrefill.lines as any[])[i];
+            const cur = items[i];
+            const diff: Record<string, any> = {};
+            if (cur.description !== orig.description) diff.description = cur.description;
+            if (cur.hsn !== (orig.hsn || "")) diff.hsn = cur.hsn || null;
+            if (Number(cur.rate) !== Number(orig.rate)) diff.rate = Number(cur.rate) || 0;
+            if (Number(cur.discount_pct) !== Number(orig.discount_pct)) diff.discount_pct = Number(cur.discount_pct) || 0;
+            if (Number(cur.gst_rate) !== Number(orig.gst_rate)) diff.gst_rate = Number(cur.gst_rate) || 0;
+            if (Number(cur.cess_rate ?? 0) !== Number(orig.cess_rate ?? 0)) diff.cess = Number(cur.cess_rate) || 0; // cess column?
+            if (cur.unit !== (orig.unit || "Nos")) diff.unit = cur.unit || null;
+            if (Object.keys(diff).length > 0) {
+              // Need sr_no = i+1
+              try {
+                await supabase.from("invoice_items" as never).update(diff as never).eq("invoice_id", r.id).eq("sr_no", i + 1);
+              } catch (e) { console.warn("line patch failed", e); }
+            }
+          }
+        } catch (e) { console.warn("SO invoice header/line patch failed", e); }
+        // If user asked for Issued, flip status to issued (writer creates draft)
+        if (status === "issued") {
+          try { await supabase.from("invoices" as never).update({ status: "issued" } as never).eq("id", r.id); } catch (e) { console.warn("SO invoice status flip to issued failed", e); }
+        }
+        if (allowNegative && short.length > 0) {
+          try {
+            await logNegativeOverrides({
+              documentType: "invoice",
+              documentId: r.id,
+              documentNo: r.invoice_no,
+              shortfalls: short,
+              reason,
+            });
+          } catch (logErr) {
+            console.error("Negative-stock override logging failed:", logErr);
+            toast.error(`Invoice ${r.invoice_no || ""} was saved, but recording the negative-stock approval failed (${(logErr as Error).message}).`);
+          }
+        }
+        toast.success(`Invoice ${r.invoice_no || ""} ${status === "issued" ? "issued" : "saved"} (Against SO ${soPrefill.sales_order_no || soPrefill.sales_order_id})`);
+        markClean();
+        setDirty(false);
+        nav({ to: "/sales/invoices/$id", params: { id: r.id } });
+        return;
+      }
+      // ── Proforma prefill: delegate to proforma→invoice writer ──────────
+      if (proformaPrefill && linkedProformaId) {
+        // Derive lines from current items for the writer (if SO-linked proforma, pass lines so ledger is created)
+        const proformaLines: FulfillmentLine[] | undefined = soPrefill ? undefined : undefined;
+        // For standalone proforma, just call with id (writer will copy items)
+        const r = await createInvoiceFromProforma(linkedProformaId, proformaLines);
+        if (status === "issued") {
+          try { await supabase.from("invoices" as never).update({ status: "issued" } as never).eq("id", r.id); } catch {}
+        }
+        toast.success(`Invoice ${r.invoice_no || ""} ${status === "issued" ? "issued" : "saved"} (From Proforma ${proformaPrefill.proforma_no || linkedProformaId})`);
+        markClean();
+        setDirty(false);
+        nav({ to: "/sales/invoices/$id", params: { id: r.id } });
+        return;
+      }
       // B-01: retry-safety — if a previous attempt already invoiced this
       // General DC (e.g. the DC status flip failed), go to that invoice
       // instead of creating a duplicate.
@@ -528,6 +815,44 @@ function NewInvoice() {
           </Button>
         </div>
       </div>
+
+      {soPrefill && (
+        <Card className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/20">
+          <CardContent className="py-3 text-sm flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="font-medium">
+              Against Sales Order{" "}
+              <Link to="/sales/orders/$id" params={{ id: soPrefill.sales_order_id }} className="font-mono underline decoration-dotted underline-offset-2 hover:text-amber-800">
+                {soPrefill.sales_order_no || soPrefill.sales_order_id.slice(0, 8)}
+              </Link>
+              {soPrefill.po_number && <span className="font-mono text-xs ml-2">PO {soPrefill.po_number}</span>}
+            </span>
+            <span className="text-muted-foreground tabular-nums text-xs">
+              Ordered <span className="font-semibold text-foreground">{soPrefill.orderedTotal ?? "—"}</span>
+              {" · "}Already <span className="font-semibold text-foreground">{soPrefill.fulfilledTotal ?? "—"}</span>
+              {" · "}Balance <span className="font-semibold text-amber-700">{soPrefill.balanceTotal ?? "—"}</span>
+              {" · "}This shipment <span className="font-semibold text-emerald-700">{items.reduce((s, it) => s + (Number(it.qty) || 0), 0)}</span>
+            </span>
+            <Badge variant="outline" className="bg-white text-amber-800 border-amber-200 text-[11px] ml-auto">SO-linked — qty capped at balance</Badge>
+          </CardContent>
+        </Card>
+      )}
+      {proformaPrefill && (
+        <Card className="border-blue-200 bg-blue-50/60 dark:bg-blue-950/20">
+          <CardContent className="py-3 text-sm flex flex-wrap items-center gap-2">
+            <span className="font-medium">
+              From Proforma <span className="font-mono">{proformaPrefill.proforma_no || proformaPrefill.proforma_id.slice(0, 8)}</span>
+            </span>
+            <Badge variant="outline" className="bg-white text-blue-800 border-blue-200 text-[11px]">Linked — stock will post on issue</Badge>
+          </CardContent>
+        </Card>
+      )}
+      {fromGeneralDc && (
+        <Card className="border-slate-200 bg-slate-50">
+          <CardContent className="py-2 text-xs text-muted-foreground">
+            From General DC <span className="font-mono font-medium text-foreground">{fromGeneralDc.no || fromGeneralDc.id.slice(0, 8)}</span> — stock already posted; this invoice will use <span className="font-mono">skip_stock_posting</span>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
@@ -798,7 +1123,32 @@ function NewInvoice() {
                           ))}
                         </select>
                       </td>
-                      <td className="p-2"><Input type="number" step="0.001" className="h-8 text-xs text-right" value={it.qty} onChange={(e) => setItem(idx, { qty: Number(e.target.value) })} /></td>
+                      <td className="p-2">
+                        <Input
+                          type="number"
+                          step="0.001"
+                          className="h-8 text-xs text-right"
+                          value={it.qty}
+                          max={soPrefill ? ((soPrefill.lines as any[])[idx]?.balance ?? undefined) : undefined}
+                          onChange={(e) => {
+                            const raw = Number(e.target.value);
+                            if (soPrefill) {
+                              const bal = (soPrefill.lines as any[])[idx]?.balance;
+                              if (bal != null && Number.isFinite(bal) && raw > bal) {
+                                toast.error(`Line ${idx + 1}: quantity ${raw} exceeds balance ${bal}`);
+                                setItem(idx, { qty: bal });
+                                return;
+                              }
+                            }
+                            setItem(idx, { qty: raw });
+                          }}
+                        />
+                        {soPrefill && (soPrefill.lines as any[])[idx] && (
+                          <div className="text-[10px] text-muted-foreground tabular-nums mt-0.5 leading-none">
+                            Ordered {(soPrefill.lines as any[])[idx].ordered_qty} · Already {(soPrefill.lines as any[])[idx].fulfilled_before} · Balance {(soPrefill.lines as any[])[idx].balance}
+                          </div>
+                        )}
+                      </td>
                       <td className="p-2"><Input className="h-8 text-xs" value={it.unit} onChange={(e) => setItem(idx, { unit: e.target.value })} /></td>
                       <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.rate} onChange={(e) => setItem(idx, { rate: Number(e.target.value) })} /></td>
                       <td className="p-2"><Input type="number" step="0.01" className="h-8 text-xs text-right" value={it.discount_pct} onChange={(e) => setItem(idx, { discount_pct: Number(e.target.value) })} /></td>

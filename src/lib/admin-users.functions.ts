@@ -273,8 +273,8 @@ export const changeOwnPassword = createServerFn({ method: "POST" })
     if (!email) throw new Error("Account email not found");
     const { createClient } = await import("@supabase/supabase-js");
     const checker = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
+      process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "",
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
     // Verify the current password by signing in. Map the REAL failure reason —

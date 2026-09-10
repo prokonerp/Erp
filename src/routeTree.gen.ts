@@ -13,6 +13,7 @@ import { Route as RaiseTicketRouteImport } from './routes/raise-ticket'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InvoicePreviewRouteImport } from './routes/invoice.preview'
 import { Route as AppTicketsRouteImport } from './routes/_app/tickets'
 import { Route as AppSalesRouteImport } from './routes/_app/sales'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
@@ -60,6 +61,7 @@ import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
 import { Route as AppIndentIdRouteImport } from './routes/_app/indent.$id'
 import { Route as AppImsTransfersRouteImport } from './routes/_app/ims.transfers'
 import { Route as AppImsTransactionsRouteImport } from './routes/_app/ims.transactions'
+import { Route as AppImsStockManagementBetaRouteImport } from './routes/_app/ims.stock-management-beta'
 import { Route as AppImsStockManagementRouteImport } from './routes/_app/ims.stock-management'
 import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
 import { Route as AppImsSerialTrackRouteImport } from './routes/_app/ims.serial-track'
@@ -93,6 +95,7 @@ import { Route as AppAmcPmRouteImport } from './routes/_app/amc.pm'
 import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
 import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
 import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
+import { Route as AppSalesProformaIndexRouteImport } from './routes/_app/sales.proforma.index'
 import { Route as AppSalesPaymentsIndexRouteImport } from './routes/_app/sales.payments.index'
 import { Route as AppSalesOrdersIndexRouteImport } from './routes/_app/sales.orders.index'
 import { Route as AppSalesInvoicesIndexRouteImport } from './routes/_app/sales.invoices.index'
@@ -104,6 +107,9 @@ import { Route as AppGrnGeneralIndexRouteImport } from './routes/_app/grn.genera
 import { Route as AppGrnCustomerIndexRouteImport } from './routes/_app/grn.customer.index'
 import { Route as AppChallanOemIndexRouteImport } from './routes/_app/challan.oem.index'
 import { Route as AppChallanCustomerIndexRouteImport } from './routes/_app/challan.customer.index'
+import { Route as AppSalesProformaSettingsRouteImport } from './routes/_app/sales.proforma.settings'
+import { Route as AppSalesProformaNewRouteImport } from './routes/_app/sales.proforma.new'
+import { Route as AppSalesProformaIdRouteImport } from './routes/_app/sales.proforma.$id'
 import { Route as AppSalesPaymentsNewRouteImport } from './routes/_app/sales.payments.new'
 import { Route as AppSalesOrdersIdRouteImport } from './routes/_app/sales.orders.$id'
 import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.invoices.new'
@@ -123,6 +129,8 @@ import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
 import { Route as AppChallanOemNewRouteImport } from './routes/_app/challan.oem.new'
 import { Route as AppChallanCustomerNewRouteImport } from './routes/_app/challan.customer.new'
 import { Route as AppChallanIdEditRouteImport } from './routes/_app/challan.$id_.edit'
+import { Route as AppSalesProformaIdEditRouteImport } from './routes/_app/sales.proforma.$id_.edit'
+import { Route as AppSalesOrdersIdConvertRouteImport } from './routes/_app/sales.orders.$id_.convert'
 import { Route as AppSalesGeneralDcIdEditRouteImport } from './routes/_app/sales.general-dc.$id_.edit'
 import { Route as AppAmcOemSourceIdRouteImport } from './routes/_app/amc.oem.$source.$id'
 
@@ -143,6 +151,11 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicePreviewRoute = InvoicePreviewRouteImport.update({
+  id: '/invoice/preview',
+  path: '/invoice/preview',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppTicketsRoute = AppTicketsRouteImport.update({
@@ -380,6 +393,12 @@ const AppImsTransactionsRoute = AppImsTransactionsRouteImport.update({
   path: '/transactions',
   getParentRoute: () => AppImsRoute,
 } as any)
+const AppImsStockManagementBetaRoute =
+  AppImsStockManagementBetaRouteImport.update({
+    id: '/stock-management-beta',
+    path: '/stock-management-beta',
+    getParentRoute: () => AppImsRoute,
+  } as any)
 const AppImsStockManagementRoute = AppImsStockManagementRouteImport.update({
   id: '/stock-management',
   path: '/stock-management',
@@ -545,6 +564,11 @@ const AppAmcIdRoute = AppAmcIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppAmcRoute,
 } as any)
+const AppSalesProformaIndexRoute = AppSalesProformaIndexRouteImport.update({
+  id: '/proforma/',
+  path: '/proforma/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
 const AppSalesPaymentsIndexRoute = AppSalesPaymentsIndexRouteImport.update({
   id: '/payments/',
   path: '/payments/',
@@ -599,6 +623,22 @@ const AppChallanCustomerIndexRoute = AppChallanCustomerIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppChallanCustomerRoute,
+} as any)
+const AppSalesProformaSettingsRoute =
+  AppSalesProformaSettingsRouteImport.update({
+    id: '/proforma/settings',
+    path: '/proforma/settings',
+    getParentRoute: () => AppSalesRoute,
+  } as any)
+const AppSalesProformaNewRoute = AppSalesProformaNewRouteImport.update({
+  id: '/proforma/new',
+  path: '/proforma/new',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesProformaIdRoute = AppSalesProformaIdRouteImport.update({
+  id: '/proforma/$id',
+  path: '/proforma/$id',
+  getParentRoute: () => AppSalesRoute,
 } as any)
 const AppSalesPaymentsNewRoute = AppSalesPaymentsNewRouteImport.update({
   id: '/payments/new',
@@ -695,6 +735,16 @@ const AppChallanIdEditRoute = AppChallanIdEditRouteImport.update({
   path: '/$id/edit',
   getParentRoute: () => AppChallanRoute,
 } as any)
+const AppSalesProformaIdEditRoute = AppSalesProformaIdEditRouteImport.update({
+  id: '/proforma/$id_/edit',
+  path: '/proforma/$id/edit',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesOrdersIdConvertRoute = AppSalesOrdersIdConvertRouteImport.update({
+  id: '/$id_/convert',
+  path: '/$id/convert',
+  getParentRoute: () => AppSalesOrdersRoute,
+} as any)
 const AppSalesGeneralDcIdEditRoute = AppSalesGeneralDcIdEditRouteImport.update({
   id: '/general-dc/$id_/edit',
   path: '/general-dc/$id/edit',
@@ -729,6 +779,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof AppReportsRoute
   '/sales': typeof AppSalesRouteWithChildren
   '/tickets': typeof AppTicketsRouteWithChildren
+  '/invoice/preview': typeof InvoicePreviewRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
   '/amc/oem': typeof AppAmcOemRouteWithChildren
@@ -762,6 +813,7 @@ export interface FileRoutesByFullPath {
   '/ims/serial-track': typeof AppImsSerialTrackRoute
   '/ims/stock': typeof AppImsStockRoute
   '/ims/stock-management': typeof AppImsStockManagementRoute
+  '/ims/stock-management-beta': typeof AppImsStockManagementBetaRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
   '/ims/transfers': typeof AppImsTransfersRouteWithChildren
   '/indent/$id': typeof AppIndentIdRoute
@@ -809,6 +861,9 @@ export interface FileRoutesByFullPath {
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/sales/orders/$id': typeof AppSalesOrdersIdRoute
   '/sales/payments/new': typeof AppSalesPaymentsNewRoute
+  '/sales/proforma/$id': typeof AppSalesProformaIdRoute
+  '/sales/proforma/new': typeof AppSalesProformaNewRoute
+  '/sales/proforma/settings': typeof AppSalesProformaSettingsRoute
   '/challan/customer/': typeof AppChallanCustomerIndexRoute
   '/challan/oem/': typeof AppChallanOemIndexRoute
   '/grn/customer/': typeof AppGrnCustomerIndexRoute
@@ -820,8 +875,11 @@ export interface FileRoutesByFullPath {
   '/sales/invoices/': typeof AppSalesInvoicesIndexRoute
   '/sales/orders/': typeof AppSalesOrdersIndexRoute
   '/sales/payments/': typeof AppSalesPaymentsIndexRoute
+  '/sales/proforma/': typeof AppSalesProformaIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
   '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
+  '/sales/orders/$id/convert': typeof AppSalesOrdersIdConvertRoute
+  '/sales/proforma/$id/edit': typeof AppSalesProformaIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -837,6 +895,7 @@ export interface FileRoutesByTo {
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
+  '/invoice/preview': typeof InvoicePreviewRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
   '/amc/oem': typeof AppAmcOemRouteWithChildren
@@ -865,6 +924,7 @@ export interface FileRoutesByTo {
   '/ims/serial-track': typeof AppImsSerialTrackRoute
   '/ims/stock': typeof AppImsStockRoute
   '/ims/stock-management': typeof AppImsStockManagementRoute
+  '/ims/stock-management-beta': typeof AppImsStockManagementBetaRoute
   '/ims/transactions': typeof AppImsTransactionsRoute
   '/indent/$id': typeof AppIndentIdRoute
   '/indent/new': typeof AppIndentNewRoute
@@ -910,6 +970,9 @@ export interface FileRoutesByTo {
   '/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/sales/orders/$id': typeof AppSalesOrdersIdRoute
   '/sales/payments/new': typeof AppSalesPaymentsNewRoute
+  '/sales/proforma/$id': typeof AppSalesProformaIdRoute
+  '/sales/proforma/new': typeof AppSalesProformaNewRoute
+  '/sales/proforma/settings': typeof AppSalesProformaSettingsRoute
   '/challan/customer': typeof AppChallanCustomerIndexRoute
   '/challan/oem': typeof AppChallanOemIndexRoute
   '/grn/customer': typeof AppGrnCustomerIndexRoute
@@ -921,8 +984,11 @@ export interface FileRoutesByTo {
   '/sales/invoices': typeof AppSalesInvoicesIndexRoute
   '/sales/orders': typeof AppSalesOrdersIndexRoute
   '/sales/payments': typeof AppSalesPaymentsIndexRoute
+  '/sales/proforma': typeof AppSalesProformaIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
   '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
+  '/sales/orders/$id/convert': typeof AppSalesOrdersIdConvertRoute
+  '/sales/proforma/$id/edit': typeof AppSalesProformaIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -949,6 +1015,7 @@ export interface FileRoutesById {
   '/_app/reports': typeof AppReportsRoute
   '/_app/sales': typeof AppSalesRouteWithChildren
   '/_app/tickets': typeof AppTicketsRouteWithChildren
+  '/invoice/preview': typeof InvoicePreviewRoute
   '/_app/amc/$id': typeof AppAmcIdRoute
   '/_app/amc/new': typeof AppAmcNewRoute
   '/_app/amc/oem': typeof AppAmcOemRouteWithChildren
@@ -982,6 +1049,7 @@ export interface FileRoutesById {
   '/_app/ims/serial-track': typeof AppImsSerialTrackRoute
   '/_app/ims/stock': typeof AppImsStockRoute
   '/_app/ims/stock-management': typeof AppImsStockManagementRoute
+  '/_app/ims/stock-management-beta': typeof AppImsStockManagementBetaRoute
   '/_app/ims/transactions': typeof AppImsTransactionsRoute
   '/_app/ims/transfers': typeof AppImsTransfersRouteWithChildren
   '/_app/indent/$id': typeof AppIndentIdRoute
@@ -1029,6 +1097,9 @@ export interface FileRoutesById {
   '/_app/sales/invoices/new': typeof AppSalesInvoicesNewRoute
   '/_app/sales/orders/$id': typeof AppSalesOrdersIdRoute
   '/_app/sales/payments/new': typeof AppSalesPaymentsNewRoute
+  '/_app/sales/proforma/$id': typeof AppSalesProformaIdRoute
+  '/_app/sales/proforma/new': typeof AppSalesProformaNewRoute
+  '/_app/sales/proforma/settings': typeof AppSalesProformaSettingsRoute
   '/_app/challan/customer/': typeof AppChallanCustomerIndexRoute
   '/_app/challan/oem/': typeof AppChallanOemIndexRoute
   '/_app/grn/customer/': typeof AppGrnCustomerIndexRoute
@@ -1040,8 +1111,11 @@ export interface FileRoutesById {
   '/_app/sales/invoices/': typeof AppSalesInvoicesIndexRoute
   '/_app/sales/orders/': typeof AppSalesOrdersIndexRoute
   '/_app/sales/payments/': typeof AppSalesPaymentsIndexRoute
+  '/_app/sales/proforma/': typeof AppSalesProformaIndexRoute
   '/_app/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
   '/_app/sales/general-dc/$id_/edit': typeof AppSalesGeneralDcIdEditRoute
+  '/_app/sales/orders/$id_/convert': typeof AppSalesOrdersIdConvertRoute
+  '/_app/sales/proforma/$id_/edit': typeof AppSalesProformaIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1068,6 +1142,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales'
     | '/tickets'
+    | '/invoice/preview'
     | '/amc/$id'
     | '/amc/new'
     | '/amc/oem'
@@ -1101,6 +1176,7 @@ export interface FileRouteTypes {
     | '/ims/serial-track'
     | '/ims/stock'
     | '/ims/stock-management'
+    | '/ims/stock-management-beta'
     | '/ims/transactions'
     | '/ims/transfers'
     | '/indent/$id'
@@ -1148,6 +1224,9 @@ export interface FileRouteTypes {
     | '/sales/invoices/new'
     | '/sales/orders/$id'
     | '/sales/payments/new'
+    | '/sales/proforma/$id'
+    | '/sales/proforma/new'
+    | '/sales/proforma/settings'
     | '/challan/customer/'
     | '/challan/oem/'
     | '/grn/customer/'
@@ -1159,8 +1238,11 @@ export interface FileRouteTypes {
     | '/sales/invoices/'
     | '/sales/orders/'
     | '/sales/payments/'
+    | '/sales/proforma/'
     | '/amc/oem/$source/$id'
     | '/sales/general-dc/$id/edit'
+    | '/sales/orders/$id/convert'
+    | '/sales/proforma/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1176,6 +1258,7 @@ export interface FileRouteTypes {
     | '/products'
     | '/records'
     | '/reports'
+    | '/invoice/preview'
     | '/amc/$id'
     | '/amc/new'
     | '/amc/oem'
@@ -1204,6 +1287,7 @@ export interface FileRouteTypes {
     | '/ims/serial-track'
     | '/ims/stock'
     | '/ims/stock-management'
+    | '/ims/stock-management-beta'
     | '/ims/transactions'
     | '/indent/$id'
     | '/indent/new'
@@ -1249,6 +1333,9 @@ export interface FileRouteTypes {
     | '/sales/invoices/new'
     | '/sales/orders/$id'
     | '/sales/payments/new'
+    | '/sales/proforma/$id'
+    | '/sales/proforma/new'
+    | '/sales/proforma/settings'
     | '/challan/customer'
     | '/challan/oem'
     | '/grn/customer'
@@ -1260,8 +1347,11 @@ export interface FileRouteTypes {
     | '/sales/invoices'
     | '/sales/orders'
     | '/sales/payments'
+    | '/sales/proforma'
     | '/amc/oem/$source/$id'
     | '/sales/general-dc/$id/edit'
+    | '/sales/orders/$id/convert'
+    | '/sales/proforma/$id/edit'
   id:
     | '__root__'
     | '/'
@@ -1287,6 +1377,7 @@ export interface FileRouteTypes {
     | '/_app/reports'
     | '/_app/sales'
     | '/_app/tickets'
+    | '/invoice/preview'
     | '/_app/amc/$id'
     | '/_app/amc/new'
     | '/_app/amc/oem'
@@ -1320,6 +1411,7 @@ export interface FileRouteTypes {
     | '/_app/ims/serial-track'
     | '/_app/ims/stock'
     | '/_app/ims/stock-management'
+    | '/_app/ims/stock-management-beta'
     | '/_app/ims/transactions'
     | '/_app/ims/transfers'
     | '/_app/indent/$id'
@@ -1367,6 +1459,9 @@ export interface FileRouteTypes {
     | '/_app/sales/invoices/new'
     | '/_app/sales/orders/$id'
     | '/_app/sales/payments/new'
+    | '/_app/sales/proforma/$id'
+    | '/_app/sales/proforma/new'
+    | '/_app/sales/proforma/settings'
     | '/_app/challan/customer/'
     | '/_app/challan/oem/'
     | '/_app/grn/customer/'
@@ -1378,8 +1473,11 @@ export interface FileRouteTypes {
     | '/_app/sales/invoices/'
     | '/_app/sales/orders/'
     | '/_app/sales/payments/'
+    | '/_app/sales/proforma/'
     | '/_app/amc/oem/$source/$id'
     | '/_app/sales/general-dc/$id_/edit'
+    | '/_app/sales/orders/$id_/convert'
+    | '/_app/sales/proforma/$id_/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1387,6 +1485,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
   RaiseTicketRoute: typeof RaiseTicketRoute
+  InvoicePreviewRoute: typeof InvoicePreviewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1417,6 +1516,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoice/preview': {
+      id: '/invoice/preview'
+      path: '/invoice/preview'
+      fullPath: '/invoice/preview'
+      preLoaderRoute: typeof InvoicePreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/tickets': {
@@ -1748,6 +1854,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImsTransactionsRouteImport
       parentRoute: typeof AppImsRoute
     }
+    '/_app/ims/stock-management-beta': {
+      id: '/_app/ims/stock-management-beta'
+      path: '/stock-management-beta'
+      fullPath: '/ims/stock-management-beta'
+      preLoaderRoute: typeof AppImsStockManagementBetaRouteImport
+      parentRoute: typeof AppImsRoute
+    }
     '/_app/ims/stock-management': {
       id: '/_app/ims/stock-management'
       path: '/stock-management'
@@ -1979,6 +2092,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAmcIdRouteImport
       parentRoute: typeof AppAmcRoute
     }
+    '/_app/sales/proforma/': {
+      id: '/_app/sales/proforma/'
+      path: '/proforma'
+      fullPath: '/sales/proforma/'
+      preLoaderRoute: typeof AppSalesProformaIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
     '/_app/sales/payments/': {
       id: '/_app/sales/payments/'
       path: '/payments'
@@ -2055,6 +2175,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/challan/customer/'
       preLoaderRoute: typeof AppChallanCustomerIndexRouteImport
       parentRoute: typeof AppChallanCustomerRoute
+    }
+    '/_app/sales/proforma/settings': {
+      id: '/_app/sales/proforma/settings'
+      path: '/proforma/settings'
+      fullPath: '/sales/proforma/settings'
+      preLoaderRoute: typeof AppSalesProformaSettingsRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/proforma/new': {
+      id: '/_app/sales/proforma/new'
+      path: '/proforma/new'
+      fullPath: '/sales/proforma/new'
+      preLoaderRoute: typeof AppSalesProformaNewRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/proforma/$id': {
+      id: '/_app/sales/proforma/$id'
+      path: '/proforma/$id'
+      fullPath: '/sales/proforma/$id'
+      preLoaderRoute: typeof AppSalesProformaIdRouteImport
+      parentRoute: typeof AppSalesRoute
     }
     '/_app/sales/payments/new': {
       id: '/_app/sales/payments/new'
@@ -2188,6 +2329,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/challan/$id/edit'
       preLoaderRoute: typeof AppChallanIdEditRouteImport
       parentRoute: typeof AppChallanRoute
+    }
+    '/_app/sales/proforma/$id_/edit': {
+      id: '/_app/sales/proforma/$id_/edit'
+      path: '/proforma/$id/edit'
+      fullPath: '/sales/proforma/$id/edit'
+      preLoaderRoute: typeof AppSalesProformaIdEditRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/orders/$id_/convert': {
+      id: '/_app/sales/orders/$id_/convert'
+      path: '/$id/convert'
+      fullPath: '/sales/orders/$id/convert'
+      preLoaderRoute: typeof AppSalesOrdersIdConvertRouteImport
+      parentRoute: typeof AppSalesOrdersRoute
     }
     '/_app/sales/general-dc/$id_/edit': {
       id: '/_app/sales/general-dc/$id_/edit'
@@ -2430,6 +2585,7 @@ interface AppImsRouteChildren {
   AppImsSerialTrackRoute: typeof AppImsSerialTrackRoute
   AppImsStockRoute: typeof AppImsStockRoute
   AppImsStockManagementRoute: typeof AppImsStockManagementRoute
+  AppImsStockManagementBetaRoute: typeof AppImsStockManagementBetaRoute
   AppImsTransactionsRoute: typeof AppImsTransactionsRoute
   AppImsTransfersRoute: typeof AppImsTransfersRouteWithChildren
   AppImsIndexRoute: typeof AppImsIndexRoute
@@ -2446,6 +2602,7 @@ const AppImsRouteChildren: AppImsRouteChildren = {
   AppImsSerialTrackRoute: AppImsSerialTrackRoute,
   AppImsStockRoute: AppImsStockRoute,
   AppImsStockManagementRoute: AppImsStockManagementRoute,
+  AppImsStockManagementBetaRoute: AppImsStockManagementBetaRoute,
   AppImsTransactionsRoute: AppImsTransactionsRoute,
   AppImsTransfersRoute: AppImsTransfersRouteWithChildren,
   AppImsIndexRoute: AppImsIndexRoute,
@@ -2505,11 +2662,13 @@ const AppPoRouteWithChildren = AppPoRoute._addFileChildren(AppPoRouteChildren)
 interface AppSalesOrdersRouteChildren {
   AppSalesOrdersIdRoute: typeof AppSalesOrdersIdRoute
   AppSalesOrdersIndexRoute: typeof AppSalesOrdersIndexRoute
+  AppSalesOrdersIdConvertRoute: typeof AppSalesOrdersIdConvertRoute
 }
 
 const AppSalesOrdersRouteChildren: AppSalesOrdersRouteChildren = {
   AppSalesOrdersIdRoute: AppSalesOrdersIdRoute,
   AppSalesOrdersIndexRoute: AppSalesOrdersIndexRoute,
+  AppSalesOrdersIdConvertRoute: AppSalesOrdersIdConvertRoute,
 }
 
 const AppSalesOrdersRouteWithChildren = AppSalesOrdersRoute._addFileChildren(
@@ -2526,11 +2685,16 @@ interface AppSalesRouteChildren {
   AppSalesInvoicesIdRoute: typeof AppSalesInvoicesIdRoute
   AppSalesInvoicesNewRoute: typeof AppSalesInvoicesNewRoute
   AppSalesPaymentsNewRoute: typeof AppSalesPaymentsNewRoute
+  AppSalesProformaIdRoute: typeof AppSalesProformaIdRoute
+  AppSalesProformaNewRoute: typeof AppSalesProformaNewRoute
+  AppSalesProformaSettingsRoute: typeof AppSalesProformaSettingsRoute
   AppSalesEwayIndexRoute: typeof AppSalesEwayIndexRoute
   AppSalesGeneralDcIndexRoute: typeof AppSalesGeneralDcIndexRoute
   AppSalesInvoicesIndexRoute: typeof AppSalesInvoicesIndexRoute
   AppSalesPaymentsIndexRoute: typeof AppSalesPaymentsIndexRoute
+  AppSalesProformaIndexRoute: typeof AppSalesProformaIndexRoute
   AppSalesGeneralDcIdEditRoute: typeof AppSalesGeneralDcIdEditRoute
+  AppSalesProformaIdEditRoute: typeof AppSalesProformaIdEditRoute
 }
 
 const AppSalesRouteChildren: AppSalesRouteChildren = {
@@ -2543,11 +2707,16 @@ const AppSalesRouteChildren: AppSalesRouteChildren = {
   AppSalesInvoicesIdRoute: AppSalesInvoicesIdRoute,
   AppSalesInvoicesNewRoute: AppSalesInvoicesNewRoute,
   AppSalesPaymentsNewRoute: AppSalesPaymentsNewRoute,
+  AppSalesProformaIdRoute: AppSalesProformaIdRoute,
+  AppSalesProformaNewRoute: AppSalesProformaNewRoute,
+  AppSalesProformaSettingsRoute: AppSalesProformaSettingsRoute,
   AppSalesEwayIndexRoute: AppSalesEwayIndexRoute,
   AppSalesGeneralDcIndexRoute: AppSalesGeneralDcIndexRoute,
   AppSalesInvoicesIndexRoute: AppSalesInvoicesIndexRoute,
   AppSalesPaymentsIndexRoute: AppSalesPaymentsIndexRoute,
+  AppSalesProformaIndexRoute: AppSalesProformaIndexRoute,
   AppSalesGeneralDcIdEditRoute: AppSalesGeneralDcIdEditRoute,
+  AppSalesProformaIdEditRoute: AppSalesProformaIdEditRoute,
 }
 
 const AppSalesRouteWithChildren = AppSalesRoute._addFileChildren(
@@ -2635,6 +2804,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
   RaiseTicketRoute: RaiseTicketRoute,
+  InvoicePreviewRoute: InvoicePreviewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

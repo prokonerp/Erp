@@ -37,6 +37,9 @@ export const challanKeys = createKeyFactory(["challans"] as const);
 // Back-compat alias: some code historically used `challanKeys`, others `dcKeys` — both point to same domain.
 export const stockKeys = createKeyFactory(["ims_stock_items"] as const);
 export const txnKeys = createKeyFactory(["ims_transactions"] as const);
+export const soKeys = createKeyFactory(["sales_orders"] as const);
+export const proformaKeys = createKeyFactory(["proforma_invoices"] as const);
+export const conversionKeys = createKeyFactory(["so_conversions"] as const);
 
 // Aggregate export for convenience
 export const queryKeys = {
@@ -49,4 +52,7 @@ export const queryKeys = {
   challan: challanKeys,
   stock: stockKeys,
   txn: txnKeys,
+  so: soKeys,
+  proforma: proformaKeys,
+  conversion: conversionKeys,
 } as const;
