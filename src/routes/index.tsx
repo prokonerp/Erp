@@ -9,5 +9,5 @@ export const Route = createFileRoute("/")({
 function Index() {
   const { session, loading } = useAuth();
   if (loading) return <PageLoader />;
-  return <Navigate to={session ? "/dashboard" : "/auth"} />;
+  return <Navigate to={session ? "/dashboard" : "/auth"} replace />;
 }

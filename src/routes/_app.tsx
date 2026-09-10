@@ -224,9 +224,9 @@ function AppLayout() {
   }, [gateBlocked]);
 
   if (loading || engLoading) return <PageLoader label="Loading your workspace…" />;
-  if (!session) return <Navigate to="/auth" />;
-  if (gateBlocked) return <Navigate to="/auth" />;
-  if (isEngineer) return <Navigate to="/eng/queue" />;
+  if (!session) return <Navigate to="/auth" replace />;
+  if (gateBlocked) return <Navigate to="/auth" replace />;
+  if (isEngineer) return <Navigate to="/eng/queue" replace />;
 
   const navItems = permLoading
     ? NAV_ITEMS

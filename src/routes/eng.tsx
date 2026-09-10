@@ -32,7 +32,7 @@ function EngLayout() {
     return <PageLoader label="Loading engineer portal…" />;
   }
 
-  if (!session) return <Navigate to="/auth" />;
+  if (!session) return <Navigate to="/auth" replace />;
 
   const handleLogout = async () => {
     await recordLogout();
