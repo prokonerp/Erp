@@ -1,14 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 8 * 1024 * 1024;
 
 const uploadSchema = z.object({
+  ticket_id: z.string().uuid(),
   filename: z.string().min(1).max(200),
   content_type: z.string().min(1).max(100),
   kind: z.enum(["serial_photo", "issue_photo", "other"]),
-  data_base64: z.string().min(1).max(Math.ceil((MAX_BYTES * 4) / 3) + 1024),
+  data_base64: z
+    .string()
+    .min(1)
+    .max(Math.ceil((MAX_BYTES * 4) / 3) + 1024),
 });
 
 const deleteSchema = z.object({
@@ -41,6 +46,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
   .inputValidator((input) => uploadSchema.parse(input))
   .handler(async ({ data }) => {
     if (!ALLOWED_MIME.includes(data.content_type.toLowerCase())) {
@@ -50,12 +56,13 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
     if (buf.length === 0 || buf.length > MAX_BYTES) {
       throw new Error("Image must be between 1 byte and 8 MB");
     }
-    const safeExt = (data.filename.split(".").pop() || "jpg")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "")
-      .slice(0, 5) || "jpg";
+    const safeExt =
+      (data.filename.split(".").pop() || "jpg")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .slice(0, 5) || "jpg";
     const name = `${data.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
-    const path = `public/${new Date().toISOString().slice(0, 10)}/${name}`;
+    const path = `ticket/${data.ticket_id}/${new Date().toISOString().slice(0, 10)}/${name}`;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.storage
       .from("ticket-attachments")
@@ -66,14 +73,24 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
   });
 
 export const deletePublicTicketAttachment = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
   .inputValidator((input) => deleteSchema.parse(input))
-  .handler(async ({ data }) => {
-    if (!data.path.startsWith("public/")) throw new Error("Invalid path");
+  .handler(async ({ data, context }) => {
+    if (!data.path.startsWith("public/") && !data.path.startsWith("ticket/")) {
+      throw new Error("Invalid path");
+    }
     const expected = await signPath(data.path);
     if (!timingSafeEqual(expected, data.token)) {
       throw new Error("Invalid delete token");
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: isAdmin, error: roleErr } = await supabaseAdmin.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (roleErr || !isAdmin) {
+      throw new Error("Only admin accounts may delete attachments");
+    }
     await supabaseAdmin.storage.from("ticket-attachments").remove([data.path]);
     return { ok: true };
   });

@@ -3,8 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type ArchivableTable = "tickets" | "indents" | "amcs";
 
+/** Check whether the current user may edit (soft-delete / restore) the given table. */
+async function requireEditPermission(): Promise<void> {
+  const { data: u, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !u.user) throw new Error("Authentication required");
+  const { data: isAdmin, error: roleErr } = await supabase.rpc("has_role", {
+    _user_id: u.user.id,
+    _role: "admin",
+  });
+  if (roleErr || !isAdmin) throw new Error("Insufficient permissions to modify this record");
+}
+
 /** Mark a record as soft-deleted. Returns the supabase error if any. */
 export async function softDelete(table: ArchivableTable, id: string) {
+  await requireEditPermission();
   const { data: u } = await supabase.auth.getUser();
   const uid = u.user?.id ?? null;
   const patch = {
@@ -12,29 +24,42 @@ export async function softDelete(table: ArchivableTable, id: string) {
     deleted_at: new Date().toISOString(),
     deleted_by: uid,
   } as never;
-  return supabase.from(table as never).update(patch).eq("id", id);
+  return supabase
+    .from(table as never)
+    .update(patch)
+    .eq("id", id);
 }
 
 /** Restore a soft-deleted record. */
 export async function restoreRecord(table: ArchivableTable, id: string) {
+  await requireEditPermission();
   const patch = {
     is_deleted: false,
     deleted_at: null,
     deleted_by: null,
   } as never;
-  return supabase.from(table as never).update(patch).eq("id", id);
+  return supabase
+    .from(table as never)
+    .update(patch)
+    .eq("id", id);
 }
 
 /** Hard-delete a record (admin Archive only). */
 export async function purgeRecord(table: ArchivableTable, id: string) {
-  return supabase.from(table as never).delete().eq("id", id);
+  return supabase
+    .from(table as never)
+    .delete()
+    .eq("id", id);
 }
 
 /**
  * Subscribe to all changes on a table and call `refetch` (debounced) whenever
  * a row changes. Useful for keeping dashboard counts live.
  */
-export function useRealtimeRefetch(tables: ArchivableTable[] | ArchivableTable, refetch: () => void) {
+export function useRealtimeRefetch(
+  tables: ArchivableTable[] | ArchivableTable,
+  refetch: () => void,
+) {
   const list = Array.isArray(tables) ? tables : [tables];
   const cb = useRef(refetch);
   cb.current = refetch;
