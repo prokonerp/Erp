@@ -692,6 +692,15 @@ function EngineerPortalSection() {
     return m;
   }, [appUsers, engineerRoleId]);
 
+  const emailDupCount = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of employees) {
+      const k = (e.email ?? "").toLowerCase();
+      if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return counts;
+  }, [employees]);
+
   const employeeRows = useMemo(() => {
     return [...employees].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   }, [employees]);
@@ -750,13 +759,22 @@ function EngineerPortalSection() {
                       </TableCell>
                       <TableCell>
                         {linked ? (
-                          <Badge variant="outline" className="gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-                            Linked — Engineer
-                          </Badge>
+                          emp.active === false ? (
+                            <Badge variant="outline" className="gap-1.5 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                              Deactivated
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                              Linked — Engineer
+                            </Badge>
+                          )
                         ) : (
                           <Badge variant="outline" className="gap-1.5 border-zinc-500/40 bg-zinc-500/10 text-zinc-700 dark:text-zinc-300">
                             No login
                           </Badge>
+                        )}
+                        {linked && (emailDupCount.get((emp.email ?? "").toLowerCase()) ?? 0) > 1 && (
+                          <p className="text-[10px] text-amber-600 mt-0.5">Multiple employees share this email</p>
                         )}
                       </TableCell>
                       <TableCell>

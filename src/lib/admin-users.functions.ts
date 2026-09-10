@@ -254,6 +254,17 @@ export const deleteAppUser = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.auth.admin.deleteUser(data.user_id);
     if (error) throw new Error(error.message);
+
+    // Clear dangling employee link — generated types lack auth_user_id on
+    // employees, so we cast to `any`.  A failed unlink must never block the
+    // already-committed auth deletion, so we log and continue.
+    // auth_user_id not in generated employees types but exists in DB
+    const { error: unLinkErr } = await (
+      supabaseAdmin.from("employees").update({ auth_user_id: null } as any) as any
+    ).eq("auth_user_id", data.user_id);
+    if (unLinkErr)
+      console.error("[deleteAppUser] failed to clear employee link:", unLinkErr.message);
+
     return { ok: true };
   });
 
