@@ -1,10 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/useAuth";
 import { useIsEngineer } from "@/lib/useIsEngineer";
 import { useMyQueue } from "@/hooks/useMyQueue";
+import { supabase } from "@/integrations/supabase/client";
+import { recordLogout } from "@/lib/useActivityTracker";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageLoader } from "@/components/shared/skeletons";
-import { User } from "lucide-react";
+import { User, LogOut } from "lucide-react";
 
 export const Route = createFileRoute("/eng/profile")({
   component: EngProfile,
@@ -14,6 +16,7 @@ function EngProfile() {
   const { session } = useAuth();
   const { isEngineer, loading: roleLoading } = useIsEngineer();
   const { data: tickets = [], isLoading: queueLoading } = useMyQueue();
+  const navigate = useNavigate();
 
   if (roleLoading || queueLoading) {
     return <PageLoader label="Loading profile…" />;
@@ -21,6 +24,12 @@ function EngProfile() {
 
   const email = session?.user?.email ?? "—";
   const waiting = tickets.filter((t) => t.status === "Waiting for Parts").length;
+
+  const handleLogout = async () => {
+    await recordLogout();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth" });
+  };
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -55,6 +64,13 @@ function EngProfile() {
         Read-only portal. Status changes, reassignment and closures are handled by Services and
         Admin.
       </p>
+
+      <button
+        onClick={handleLogout}
+        className="w-full h-10 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors flex items-center justify-center gap-2"
+      >
+        <LogOut className="h-4 w-4" /> Log out
+      </button>
     </div>
   );
 }

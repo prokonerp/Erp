@@ -1,8 +1,17 @@
-import { createFileRoute, Outlet, Link, useLocation, Navigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  Link,
+  useLocation,
+  Navigate,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useAuth } from "@/lib/useAuth";
 import { useIsEngineer } from "@/lib/useIsEngineer";
+import { supabase } from "@/integrations/supabase/client";
+import { recordLogout } from "@/lib/useActivityTracker";
 import { PageLoader } from "@/components/shared/skeletons";
-import { Ticket, User } from "lucide-react";
+import { Ticket, User, LogOut } from "lucide-react";
 
 export const Route = createFileRoute("/eng")({
   component: EngLayout,
@@ -17,12 +26,19 @@ function EngLayout() {
   const { session, loading: authLoading } = useAuth();
   const { isEngineer, loading: roleLoading } = useIsEngineer();
   const location = useLocation();
+  const navigate = useNavigate();
 
   if (authLoading || roleLoading) {
     return <PageLoader label="Loading engineer portal…" />;
   }
 
   if (!session) return <Navigate to="/auth" />;
+
+  const handleLogout = async () => {
+    await recordLogout();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth" });
+  };
 
   if (!isEngineer) {
     return (
@@ -45,6 +61,14 @@ function EngLayout() {
     <div className="min-h-screen flex flex-col bg-background">
       <header className="h-14 shrink-0 border-b flex items-center px-4 bg-background shadow-sm">
         <h1 className="text-[15px] font-semibold text-foreground">Engineer Portal</h1>
+        <button
+          onClick={handleLogout}
+          aria-label="Log out"
+          title="Log out"
+          className="ml-auto p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <LogOut className="h-5 w-5" />
+        </button>
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
