@@ -1,4 +1,4 @@
--- Migration: 20260910000002_engineers_iter2_fix.sql
+-- Migration: 20260915000002_engineers_iter2_fix.sql
 -- Iteration-2 fixes for Engineers Module upload guards.
 -- SAFE: additive only, idempotent (DROP IF EXISTS + CREATE), zero destructive statements.
 

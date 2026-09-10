@@ -10,7 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { STATUS_COLOR, PRIORITY_COLOR } from "@/lib/tickets";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Loader2, MessageCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Upload,
+  Loader2,
+  MessageCircle,
+  AlertTriangle,
+  CheckCircle2,
+  ShieldAlert,
+} from "lucide-react";
 
 export const Route = createFileRoute("/eng/ticket/$id")({
   component: EngTicketDetail,
@@ -31,6 +39,7 @@ type Ticket = {
   complaint: string | null;
   status: string;
   priority: string | null;
+  assigned_employee_id: string | null;
   assigned_engineer_name: string | null;
   assigned_engineer_phone: string | null;
   special_instruction: string | null;
@@ -52,6 +61,9 @@ function EngTicketDetail() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [myId, setMyId] = useState<string | null>(null);
+  const [myName, setMyName] = useState<string | null>(null);
+  const [guardError, setGuardError] = useState<string | null>(null);
 
   // Note form
   const [noteText, setNoteText] = useState("");
@@ -63,6 +75,9 @@ function EngTicketDetail() {
   const [photoProgress, setPhotoProgress] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Special instruction ack
+  const [ackBusy, setAckBusy] = useState(false);
+
   useEffect(() => {
     let active = true;
     (async () => {
@@ -70,7 +85,7 @@ function EngTicketDetail() {
         supabase
           .from("tickets")
           .select(
-            "id,case_id,call_type,product,serial_no,customer_name,customer_phone,location,complaint,status,priority,special_instruction,special_instruction_acknowledged,created_at",
+            "id,case_id,call_type,product,serial_no,customer_name,customer_phone,location,complaint,status,priority,assigned_employee_id,assigned_engineer_name,special_instruction,special_instruction_acknowledged,created_at",
           )
           .eq("id", id)
           .single(),
@@ -81,7 +96,7 @@ function EngTicketDetail() {
           .order("created_at", { ascending: false }),
       ]);
       if (!active) return;
-      if (tkRes.data) setTicket(tkRes.data as Ticket);
+      if (tkRes.data) setTicket(tkRes.data as unknown as Ticket);
       setActivities((actRes.data || []) as Activity[]);
       setLoading(false);
     })();
@@ -89,6 +104,60 @@ function EngTicketDetail() {
       active = false;
     };
   }, [id]);
+
+  // Resolve current employee identity (same pattern as useMyQueue)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      const email = u.user?.email;
+      if (!email) return;
+      const { data: emps } = await supabase
+        .from("employees")
+        .select("id,name")
+        .eq("email", email)
+        .eq("active", true);
+      if (!active || !emps || emps.length === 0) return;
+      setMyId(emps[0].id as string);
+      setMyName(emps[0].name as string);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Ownership guard: fail-closed when ticket names a different engineer
+  const isOwner = (() => {
+    if (!ticket) return true; // loading state, no guard yet
+    const hasFk = !!ticket.assigned_employee_id;
+    const hasName = !!ticket.assigned_engineer_name;
+    // No assignee info at all → fail-open (RLS still governs)
+    if (!hasFk && !hasName) return true;
+    // FK match
+    if (hasFk && myId && ticket.assigned_employee_id === myId) return true;
+    // Name match (only when engineer has a resolved name)
+    if (hasName && myName && ticket.assigned_engineer_name === myName) return true;
+    // Assigned to someone else → blocked
+    return false;
+  })();
+
+  const isRestricted = !loading && ticket !== null && !isOwner;
+
+  // Check if special instruction has been acknowledged (by ticket flag or activity)
+  const isSpecialAcked = (() => {
+    if (!ticket) return false;
+    if (ticket.special_instruction_acknowledged) return true;
+    return activities.some((a) => a.kind === "acknowledge");
+  })();
+
+  const refreshActivities = async () => {
+    const { data: actRes } = await supabase
+      .from("ticket_activities")
+      .select("id,kind,notes,created_at,actor")
+      .eq("ticket_id", id)
+      .order("created_at", { ascending: false });
+    setActivities((actRes || []) as Activity[]);
+  };
 
   const addNote = async () => {
     const text = noteText.trim();
@@ -114,15 +183,31 @@ function EngTicketDetail() {
       }
       setNoteText("");
       toast.success("Note added");
-      // Refresh activities
-      const { data: actRes } = await supabase
-        .from("ticket_activities")
-        .select("id,kind,notes,created_at,actor")
-        .eq("ticket_id", id)
-        .order("created_at", { ascending: false });
-      setActivities((actRes || []) as Activity[]);
+      await refreshActivities();
     } finally {
       setNoteBusy(false);
+    }
+  };
+
+  const acknowledgeInstruction = async () => {
+    if (!ticket?.special_instruction || isSpecialAcked) return;
+    setAckBusy(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      const { error } = await supabase.from("ticket_activities").insert({
+        ticket_id: id,
+        kind: "acknowledge",
+        notes: "Acknowledged special instruction",
+        actor: u.user?.id ?? null,
+      } as never);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("Acknowledged");
+      await refreshActivities();
+    } finally {
+      setAckBusy(false);
     }
   };
 
@@ -185,13 +270,7 @@ function EngTicketDetail() {
       } as never);
 
       toast.success("Photo uploaded");
-      // Refresh activities
-      const { data: actRes } = await supabase
-        .from("ticket_activities")
-        .select("id,kind,notes,created_at,actor")
-        .eq("ticket_id", id)
-        .order("created_at", { ascending: false });
-      setActivities((actRes || []) as Activity[]);
+      await refreshActivities();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast.error(msg);
@@ -205,6 +284,31 @@ function EngTicketDetail() {
   if (loading) return <PageLoader label="Loading ticket…" />;
   if (!ticket)
     return <div className="text-center py-20 text-muted-foreground">Ticket not found.</div>;
+
+  if (isRestricted) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        <Link
+          to="/eng/queue"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to Queue
+        </Link>
+        <Card>
+          <CardContent className="py-10 text-center space-y-3">
+            <ShieldAlert className="h-10 w-10 mx-auto text-amber-500" />
+            <p className="font-semibold text-base">Not assigned to you</p>
+            <p className="text-sm text-muted-foreground">
+              This ticket is assigned to a different engineer. Contact Services for access.
+            </p>
+            <div className="mt-2">
+              <span className="font-mono text-sm text-muted-foreground">{ticket.case_id}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -281,9 +385,31 @@ function EngTicketDetail() {
 
           {ticket.special_instruction && ticket.special_instruction.trim() && (
             <div
-              className={`border rounded-md p-3 text-sm ${ticket.special_instruction_acknowledged ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}
+              className={`border rounded-md p-3 text-sm ${isSpecialAcked ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}
             >
-              <span className="font-medium text-xs">Special Instructions:</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-xs">Special Instructions:</span>
+                {isSpecialAcked ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-green-700 font-medium">
+                    <CheckCircle2 className="h-3 w-3" /> Acknowledged
+                  </span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-[11px] px-2"
+                    disabled={ackBusy}
+                    onClick={acknowledgeInstruction}
+                  >
+                    {ackBusy ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : (
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                    )}
+                    Acknowledge
+                  </Button>
+                )}
+              </div>
               <p className="mt-1 whitespace-pre-wrap">{ticket.special_instruction}</p>
             </div>
           )}
