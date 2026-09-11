@@ -477,6 +477,7 @@ function EngTicketDetail() {
       }
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast.error(msg);
+      setMismatchPhotoFile(null);
     } finally {
       setMismatchBusy(false);
     }
@@ -573,7 +574,7 @@ function EngTicketDetail() {
       await supabase.from("ticket_activities").insert({
         ticket_id: id,
         kind: "photo",
-        notes: `Photo uploaded: ${file.name}`,
+        notes: `Photo uploaded: ${compressed.name}`,
         actor: u.user?.id ?? null,
       } as never);
 

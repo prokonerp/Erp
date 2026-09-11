@@ -103,7 +103,9 @@ export async function compressImageToLimit(
           passthrough: true,
         };
       }
-      throw new Error("Photo could not be read. Try a JPEG photo under 8 MB.");
+      throw new Error(
+        "Photo could not be read. Try a JPEG photo under 8 MB. If this is an HEIC photo, convert it to JPEG first.",
+      );
     }
 
     const src = bitmap ?? imgEl;
@@ -151,10 +153,16 @@ export async function compressImageToLimit(
     }
 
     if (!outBlob || outBlob.size > maxBytes) {
-      throw new Error("Photo could not be compressed under 2 MB. Retake closer to the plate.");
+      throw new Error(
+        `Photo could not be compressed under ${Math.round(maxBytes / 1024 / 1024)} MB. Retake closer to the plate.`,
+      );
     }
 
     const baseName = inputName.replace(/\.[^.]+$/, "");
+    const outW = canvas.width;
+    const outH = canvas.height;
+    canvas.width = 0;
+    canvas.height = 0;
     return {
       blob: outBlob,
       name: `${baseName}.jpg`,
@@ -162,8 +170,8 @@ export async function compressImageToLimit(
       originalBytes,
       compressedBytes: outBlob.size,
       quality: Math.round(quality * 100) / 100,
-      width: canvas.width,
-      height: canvas.height,
+      width: outW,
+      height: outH,
       passthrough: false,
     };
   } finally {

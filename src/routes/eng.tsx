@@ -40,12 +40,16 @@ function EngLayout() {
     (async () => {
       try {
         const p = await fetchProfile();
-        if ((p as any)?.must_change_password) setForceChange(true);
-      } catch (err: any) {
-        if (err?.code === PASSWORD_CHANGE_REQUIRED) setForceChange(true);
+        if (p?.must_change_password) setForceChange(true);
+      } catch (err: unknown) {
+        const code =
+          typeof err === "object" && err !== null
+            ? (err as Record<string, unknown>).code
+            : undefined;
+        if (code === PASSWORD_CHANGE_REQUIRED) setForceChange(true);
       }
     })();
-  }, [session?.user?.id]);
+  }, [session, session?.user?.id, fetchProfile]);
 
   // Allow child routes to trigger the forced password-change dialog
   useEffect(() => {

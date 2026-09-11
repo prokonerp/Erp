@@ -129,6 +129,44 @@ describe("compressImageToLimit", () => {
     expect(result.height).toBeGreaterThan(0);
   });
 
+  it("ladder steps down through qualities until fitting (tautological guard)", async () => {
+    const bmp = fakeBitmap(4000, 3000);
+    const { docFake } = fakeDocAndCanvas((q) => {
+      const size = q >= 0.76 ? 3_000_000 : 1_000_000;
+      return new Blob([new ArrayBuffer(size)], { type: "image/jpeg" });
+    });
+
+    const result: CompressedImage = await compressImageToLimit(
+      new File([new Uint8Array(1)], "plate.png", { type: "image/png" }) as File,
+      { maxBytes: 2 * 1024 * 1024 },
+      { createImageBitmapFn: () => Promise.resolve(bmp), documentRef: docFake },
+    );
+
+    expect(result.passthrough).toBe(false);
+    expect(result.compressedBytes).toBeLessThanOrEqual(2 * 1024 * 1024);
+    expect(result.quality).toBe(0.68);
+  });
+
+  it("ladder steps down side when all qualities at a side fail", async () => {
+    const bmp = fakeBitmap(4000, 3000);
+    const { docFake, getCtx } = fakeDocAndCanvas((_q, w) => {
+      const size = w > 1800 ? 3_000_000 : 1_000_000;
+      return new Blob([new ArrayBuffer(size)], { type: "image/jpeg" });
+    });
+
+    const result: CompressedImage = await compressImageToLimit(
+      new File([new Uint8Array(1)], "plate.png", { type: "image/png" }) as File,
+      { maxBytes: 2 * 1024 * 1024 },
+      { createImageBitmapFn: () => Promise.resolve(bmp), documentRef: docFake },
+    );
+
+    expect(result.passthrough).toBe(false);
+    expect(result.compressedBytes).toBeLessThanOrEqual(2 * 1024 * 1024);
+    const ctx = getCtx();
+    expect(ctx.lastW).toBe(1600);
+    expect(ctx.lastH).toBe(1200);
+  });
+
   it("undecodable + small file → passthrough true, original returned", async () => {
     const small = new File([new Uint8Array(100)], "snap.heic", {
       type: "image/heic",
