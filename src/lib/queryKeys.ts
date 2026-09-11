@@ -29,6 +29,7 @@ function createKeyFactory<NS extends readonly string[]>(namespace: NS) {
 export const masterKeys = createKeyFactory(["masters"] as const);
 export const indentKeys = createKeyFactory(["indents"] as const);
 export const ticketKeys = createKeyFactory(["tickets"] as const);
+export const verificationKeys = createKeyFactory(["verifications"] as const);
 export const grnKeys = createKeyFactory(["grns"] as const);
 export const dcKeys = createKeyFactory(["delivery_challans"] as const);
 export const imsKeys = createKeyFactory(["ims"] as const);
@@ -46,6 +47,7 @@ export const queryKeys = {
   master: masterKeys,
   indent: indentKeys,
   ticket: ticketKeys,
+  verification: verificationKeys,
   grn: grnKeys,
   dc: dcKeys,
   ims: imsKeys,
