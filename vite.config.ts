@@ -9,6 +9,7 @@ import react from "@vitejs/plugin-react";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 
 export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
   // Expose VITE_* env vars to the client bundle (import.meta.env.VITE_*)
@@ -42,6 +43,13 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
     // NITRO_PRESET (e.g. "node-server" for a plain Node build).
     const { nitro } = await import("nitro/vite");
     plugins.push(nitro({ preset: process.env.NITRO_PRESET || "vercel" }));
+  }
+
+  if (command === "serve") {
+    // Dev-only HTTPS (self-signed) so phones on the LAN get a secure
+    // context: required for camera + geolocation permission testing.
+    // Phones will show a cert warning on first visit — accept and continue.
+    plugins.push(basicSsl());
   }
 
   plugins.push(react());
