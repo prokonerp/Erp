@@ -5,16 +5,42 @@ import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 8 * 1024 * 1024;
 
-const uploadSchema = z.object({
-  ticket_id: z.string().uuid(),
-  filename: z.string().min(1).max(200),
-  content_type: z.string().min(1).max(100),
-  kind: z.enum(["serial_photo", "issue_photo", "other"]),
-  data_base64: z
-    .string()
-    .min(1)
-    .max(Math.ceil((MAX_BYTES * 4) / 3) + 1024),
-});
+const uploadSchema = z
+  .object({
+    ticket_id: z.string().uuid(),
+    filename: z.string().min(1).max(200),
+    content_type: z.string().min(1).max(100),
+    kind: z.enum([
+      "serial_photo",
+      "issue_photo",
+      "other",
+      "equipment_correction",
+    ]),
+    data_base64: z
+      .string()
+      .min(1)
+      .max(Math.ceil((MAX_BYTES * 4) / 3) + 1024),
+    lat: z.number().min(-90).max(90).optional(),
+    long: z.number().min(-180).max(180).optional(),
+    accuracy: z.number().nullable().optional(),
+    captured_at: z.string().nullable().optional(),
+  })
+  .refine(
+    (parsed) => {
+      if (parsed.kind === "equipment_correction") {
+        return (
+          parsed.lat !== undefined &&
+          parsed.long !== undefined &&
+          !!parsed.captured_at
+        );
+      }
+      return true;
+    },
+    {
+      message:
+        "Geotagged photo with live location is mandatory for Model/Serial mismatch.",
+    },
+  );
 
 const deleteSchema = z.object({
   path: z.string().min(1).max(500),
