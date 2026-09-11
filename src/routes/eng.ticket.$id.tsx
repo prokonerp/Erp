@@ -275,7 +275,8 @@ function EngTicketDetail() {
           ticket_id: id,
           verdict: "verified",
           snapshot,
-          actor: actorName,
+          engineer_employee_id: myId,
+          engineer_name: actorName,
         },
         { onConflict: "ticket_id" },
       );
@@ -308,12 +309,15 @@ function EngTicketDetail() {
     try {
       const { data: u } = await supabase.auth.getUser();
       const actorName = myName ?? u.user?.email ?? "Engineer";
+      const snapshot = buildCustomerSnapshot(ticket!);
       const { error } = await supabase.from("ticket_customer_verifications").upsert(
         {
           ticket_id: id,
           verdict: "incorrect",
+          snapshot,
           corrected: data,
-          actor: actorName,
+          engineer_employee_id: myId,
+          engineer_name: actorName,
         },
         { onConflict: "ticket_id" },
       );
@@ -386,11 +390,12 @@ function EngTicketDetail() {
           corrected_model: data.corrected_model,
           corrected_serial: data.corrected_serial,
           photo_path: uploadResult.path,
-          geo_lat: geo!.lat,
-          geo_long: geo!.long,
-          geo_accuracy: geo!.accuracy,
-          captured_at: geo!.captured_at,
-          actor: actorName,
+          photo_lat: geo!.lat,
+          photo_long: geo!.long,
+          photo_accuracy: geo!.accuracy,
+          photo_captured_at: geo!.captured_at,
+          engineer_employee_id: myId,
+          engineer_name: actorName,
         },
         { onConflict: "ticket_id" },
       );
@@ -429,7 +434,8 @@ function EngTicketDetail() {
           original_serial: original.original_serial,
           corrected_model: ticket?.product ?? null,
           corrected_serial: ticket?.serial_no ?? null,
-          actor: actorName,
+          engineer_employee_id: myId,
+          engineer_name: actorName,
         },
         { onConflict: "ticket_id" },
       );
