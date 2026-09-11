@@ -37,6 +37,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { compressImageToLimit } from "@/lib/image-compress";
+import { PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
 
 export const Route = createFileRoute("/eng/ticket/$id")({
   component: EngTicketDetail,
@@ -84,6 +85,18 @@ function EngTicketDetail() {
   const [myId, setMyId] = useState<string | null>(null);
   const [myName, setMyName] = useState<string | null>(null);
   const [guardError, setGuardError] = useState<string | null>(null);
+
+  function isPasswordChangeRequired(err: unknown): boolean {
+    if (!err || typeof err !== "object") return false;
+    const e = err as Record<string, any>;
+    if (e.code === PASSWORD_CHANGE_REQUIRED) return true;
+    if (e.statusCode === 401 && /password change required/i.test(e.message ?? "")) return true;
+    return false;
+  }
+
+  function triggerPasswordChangeDialog() {
+    window.dispatchEvent(new CustomEvent("eng:password-change-required"));
+  }
 
   // Note form
   const [noteText, setNoteText] = useState("");
@@ -458,6 +471,10 @@ function EngTicketDetail() {
       await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
       await refreshActivities();
     } catch (err) {
+      if (isPasswordChangeRequired(err)) {
+        triggerPasswordChangeDialog();
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast.error(msg);
     } finally {
@@ -563,6 +580,10 @@ function EngTicketDetail() {
       toast.success("Photo uploaded");
       await refreshActivities();
     } catch (err) {
+      if (isPasswordChangeRequired(err)) {
+        triggerPasswordChangeDialog();
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast.error(msg);
     } finally {

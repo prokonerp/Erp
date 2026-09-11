@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   createFileRoute,
   Outlet,
@@ -6,12 +7,16 @@ import {
   Navigate,
   useNavigate,
 } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/useAuth";
 import { useIsEngineer } from "@/lib/useIsEngineer";
 import { supabase } from "@/integrations/supabase/client";
 import { recordLogout } from "@/lib/useActivityTracker";
 import { PageLoader } from "@/components/shared/skeletons";
 import { Ticket, User, LogOut } from "lucide-react";
+import { getMyProfile } from "@/lib/admin-users.functions";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
+import { PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
 
 export const Route = createFileRoute("/eng")({
   component: EngLayout,
@@ -27,6 +32,27 @@ function EngLayout() {
   const { isEngineer, loading: roleLoading } = useIsEngineer();
   const location = useLocation();
   const navigate = useNavigate();
+  const [forceChange, setForceChange] = useState(false);
+  const fetchProfile = useServerFn(getMyProfile);
+
+  useEffect(() => {
+    if (!session) return;
+    (async () => {
+      try {
+        const p = await fetchProfile();
+        if ((p as any)?.must_change_password) setForceChange(true);
+      } catch (err: any) {
+        if (err?.code === PASSWORD_CHANGE_REQUIRED) setForceChange(true);
+      }
+    })();
+  }, [session?.user?.id]);
+
+  // Allow child routes to trigger the forced password-change dialog
+  useEffect(() => {
+    const handler = () => setForceChange(true);
+    window.addEventListener("eng:password-change-required", handler);
+    return () => window.removeEventListener("eng:password-change-required", handler);
+  }, []);
 
   if (authLoading || roleLoading) {
     return <PageLoader label="Loading engineer portal…" />;
@@ -93,6 +119,16 @@ function EngLayout() {
           );
         })}
       </nav>
+
+      <ChangePasswordDialog
+        open={forceChange}
+        onOpenChange={setForceChange}
+        forced
+        onChanged={() => {
+          setForceChange(false);
+          window.location.reload();
+        }}
+      />
     </div>
   );
 }
