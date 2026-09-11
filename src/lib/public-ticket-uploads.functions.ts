@@ -119,11 +119,16 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
       if (!caller) {
         throw new Error("Employee account not linked. Contact admin.");
       }
-      const { data: ticketRow } = await supabaseAdmin
+      const { data: ticketRow } = (await supabaseAdmin
         .from("tickets")
         .select("assigned_employee_id, assigned_engineer_name")
         .eq("id", data.ticket_id)
-        .maybeSingle();
+        .maybeSingle()) as unknown as {
+        data: {
+          assigned_employee_id: string | null;
+          assigned_engineer_name: string | null;
+        } | null;
+      };
       if (!ticketRow?.assigned_employee_id && !ticketRow?.assigned_engineer_name) {
         throw new Error("Ticket has no assigned engineer. Contact Services.");
       }

@@ -5035,6 +5035,114 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_customer_verifications: {
+        Row: {
+          id: string
+          ticket_id: string
+          customer_id: string | null
+          verdict: string
+          snapshot: Json
+          corrected: Json
+          engineer_employee_id: string | null
+          engineer_name: string | null
+          engineer_phone: string | null
+          verified_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          ticket_id: string
+          customer_id?: string | null
+          verdict: string
+          snapshot?: Json
+          corrected?: Json
+          engineer_employee_id?: string | null
+          engineer_name?: string | null
+          engineer_phone?: string | null
+          verified_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          ticket_id?: string
+          customer_id?: string | null
+          verdict?: string
+          snapshot?: Json
+          corrected?: Json
+          engineer_employee_id?: string | null
+          engineer_name?: string | null
+          engineer_phone?: string | null
+          verified_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ticket_equipment_verifications: {
+        Row: {
+          id: string
+          ticket_id: string
+          verdict: string
+          original_model: string | null
+          original_serial: string | null
+          corrected_model: string | null
+          corrected_serial: string | null
+          photo_path: string | null
+          photo_lat: number | null
+          photo_long: number | null
+          photo_accuracy: number | null
+          photo_captured_at: string | null
+          engineer_employee_id: string | null
+          engineer_name: string | null
+          engineer_phone: string | null
+          verified_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          ticket_id: string
+          verdict: string
+          original_model?: string | null
+          original_serial?: string | null
+          corrected_model?: string | null
+          corrected_serial?: string | null
+          photo_path?: string | null
+          photo_lat?: number | null
+          photo_long?: number | null
+          photo_accuracy?: number | null
+          photo_captured_at?: string | null
+          engineer_employee_id?: string | null
+          engineer_name?: string | null
+          engineer_phone?: string | null
+          verified_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          ticket_id?: string
+          verdict?: string
+          original_model?: string | null
+          original_serial?: string | null
+          corrected_model?: string | null
+          corrected_serial?: string | null
+          photo_path?: string | null
+          photo_lat?: number | null
+          photo_long?: number | null
+          photo_accuracy?: number | null
+          photo_captured_at?: string | null
+          engineer_employee_id?: string | null
+          engineer_name?: string | null
+          engineer_phone?: string | null
+          verified_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ticket_sequence: {
         Row: {
           id: number
