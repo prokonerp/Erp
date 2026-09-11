@@ -105,8 +105,8 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
       _role: "admin",
     });
     if (!isAdmin) {
-      const { data: authUser } = await supabaseAdmin.auth.getUser(context.userId);
-      const callerEmail = authUser?.user?.email;
+      const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
+      const callerEmail = authData?.user?.email;
       if (!callerEmail) {
         throw new Error("Could not resolve your account email. Contact admin.");
       }
@@ -130,6 +130,7 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
       const fkMatch = ticketRow.assigned_employee_id === caller.id;
       const nameMatch =
         ticketRow.assigned_engineer_name &&
+        caller.name &&
         ticketRow.assigned_engineer_name.toLowerCase() === caller.name.toLowerCase();
       if (!fkMatch && !nameMatch) {
         throw new Error(
