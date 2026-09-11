@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { verificationKeys } from "@/lib/queryKeys";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +51,7 @@ type Ticket = {
   customer_address: string | null;
   customer_email: string | null;
   customer_phone: string | null;
+  customer_id: string | null;
   location: string | null;
   sector: string | null;
   complaint: string | null;
@@ -73,6 +76,7 @@ type Activity = {
 function EngTicketDetail() {
   const { id } = Route.useParams();
   const { session } = useAuth();
+  const queryClient = useQueryClient();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,8 +100,14 @@ function EngTicketDetail() {
   // Verification
   const { data: verifications } = useTicketVerifications(id);
   const [verdictBusy, setVerdictBusy] = useState(false);
+  const [verdictBusy2, setVerdictBusy2] = useState(false);
   const [mismatchPhotoFile, setMismatchPhotoFile] = useState<File | null>(null);
   const [mismatchBusy, setMismatchBusy] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsMismatchOpen, setDetailsMismatchOpen] = useState(false);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const detailsMismatchRef = useRef<HTMLDetailsElement>(null);
 
   // Step 1 forms
   const {
@@ -138,7 +148,7 @@ function EngTicketDetail() {
         supabase
           .from("tickets")
           .select(
-            "id,case_id,call_type,product,serial_no,customer_name,customer_phone,location,complaint,status,priority,assigned_employee_id,assigned_engineer_name,special_instruction,special_instruction_acknowledged,created_at",
+            "id,case_id,call_type,product,serial_no,customer_name,customer_phone,customer_id,customer_email,customer_address,sector,location,complaint,status,priority,assigned_employee_id,assigned_engineer_name,special_instruction,special_instruction_acknowledged,created_at",
           )
           .eq("id", id)
           .single(),
@@ -273,6 +283,7 @@ function EngTicketDetail() {
       const { error } = await supabase.from("ticket_customer_verifications").upsert(
         {
           ticket_id: id,
+          customer_id: ticket?.customer_id ?? null,
           verdict: "verified",
           snapshot,
           engineer_employee_id: myId,
@@ -284,14 +295,20 @@ function EngTicketDetail() {
         toast.error(error.message);
         return;
       }
-      await supabase.from("ticket_activities").insert({
-        ticket_id: id,
-        kind: "customer_verify",
-        notes: `Customer verified by ${actorName} at ${new Date().toISOString()}`,
-        actor: u.user?.id ?? null,
-      } as never);
+      try {
+        await supabase.from("ticket_activities").insert({
+          ticket_id: id,
+          kind: "customer_verify",
+          notes: `Customer verified by ${actorName} at ${new Date().toISOString()}`,
+          actor: u.user?.id ?? null,
+        } as never);
+      } catch (actErr) {
+        console.warn("Activity insert failed:", actErr);
+      }
       toast.success("Customer details verified");
       resetCorrected();
+      await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
+      await refreshActivities();
     } finally {
       setVerdictBusy(false);
     }
@@ -313,6 +330,7 @@ function EngTicketDetail() {
       const { error } = await supabase.from("ticket_customer_verifications").upsert(
         {
           ticket_id: id,
+          customer_id: ticket?.customer_id ?? null,
           verdict: "incorrect",
           snapshot,
           corrected: data,
@@ -325,13 +343,19 @@ function EngTicketDetail() {
         toast.error(error.message);
         return;
       }
-      await supabase.from("ticket_activities").insert({
-        ticket_id: id,
-        kind: "customer_verify",
-        notes: `Customer corrected by ${actorName} at ${new Date().toISOString()}`,
-        actor: u.user?.id ?? null,
-      } as never);
+      try {
+        await supabase.from("ticket_activities").insert({
+          ticket_id: id,
+          kind: "customer_verify",
+          notes: `Customer corrected by ${actorName} at ${new Date().toISOString()}`,
+          actor: u.user?.id ?? null,
+        } as never);
+      } catch (actErr) {
+        console.warn("Activity insert failed:", actErr);
+      }
       toast.success("Customer details corrected");
+      await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
+      await refreshActivities();
     } finally {
       setVerdictBusy(false);
     }
@@ -345,11 +369,22 @@ function EngTicketDetail() {
       toast.error("Photo is required for mismatch report");
       return;
     }
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+    if (!allowed.includes(mismatchPhotoFile.type)) {
+      toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
+      return;
+    }
+    if (mismatchPhotoFile.size > 2 * 1024 * 1024) {
+      toast.error("Photo must be ≤ 2 MB");
+      return;
+    }
     setMismatchBusy(true);
+    setGpsError(null);
     try {
       const geo = await getCurrentGeo();
       const geoErr = validateGeoForMismatch(geo);
       if (geoErr) {
+        setGpsError(geoErr);
         toast.error(geoErr);
         return;
       }
@@ -400,18 +435,29 @@ function EngTicketDetail() {
         { onConflict: "ticket_id" },
       );
       if (error) {
+        try {
+          await supabase.storage.from("ticket-attachments").remove([uploadResult.path]);
+        } catch (cleanupErr) {
+          console.warn("Photo cleanup failed:", cleanupErr);
+        }
         toast.error(error.message);
         return;
       }
-      await supabase.from("ticket_activities").insert({
-        ticket_id: id,
-        kind: "equipment_verify",
-        notes: `Equipment mismatch reported by ${actorName} at ${new Date().toISOString()}`,
-        actor: u.user?.id ?? null,
-      } as never);
+      try {
+        await supabase.from("ticket_activities").insert({
+          ticket_id: id,
+          kind: "equipment_verify",
+          notes: `Equipment mismatch reported by ${actorName} at ${new Date().toISOString()}`,
+          actor: u.user?.id ?? null,
+        } as never);
+      } catch (actErr) {
+        console.warn("Activity insert failed:", actErr);
+      }
       toast.success("Equipment mismatch recorded");
       setMismatchPhotoFile(null);
       resetMismatch();
+      await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
+      await refreshActivities();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast.error(msg);
@@ -421,7 +467,7 @@ function EngTicketDetail() {
   };
 
   const handleEquipmentMatched = async () => {
-    setVerdictBusy(true);
+    setVerdictBusy2(true);
     try {
       const { data: u } = await supabase.auth.getUser();
       const actorName = myName ?? u.user?.email ?? "Engineer";
@@ -443,15 +489,21 @@ function EngTicketDetail() {
         toast.error(error.message);
         return;
       }
-      await supabase.from("ticket_activities").insert({
-        ticket_id: id,
-        kind: "equipment_verify",
-        notes: `Equipment verified matched by ${actorName} at ${new Date().toISOString()}`,
-        actor: u.user?.id ?? null,
-      } as never);
+      try {
+        await supabase.from("ticket_activities").insert({
+          ticket_id: id,
+          kind: "equipment_verify",
+          notes: `Equipment verified matched by ${actorName} at ${new Date().toISOString()}`,
+          actor: u.user?.id ?? null,
+        } as never);
+      } catch (actErr) {
+        console.warn("Activity insert failed:", actErr);
+      }
       toast.success("Equipment verified as matched");
+      await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
+      await refreshActivities();
     } finally {
-      setVerdictBusy(false);
+      setVerdictBusy2(false);
     }
   };
 
@@ -797,12 +849,20 @@ function EngTicketDetail() {
                   size="sm"
                   variant="destructive"
                   disabled={verdictBusy}
-                  onClick={handleCorrectedSubmit(handleCustomerIncorrect)}
+                  onClick={() => {
+                    setDetailsOpen(true);
+                    setTimeout(() => detailsRef.current?.focus(), 0);
+                  }}
                 >
                   Details Incorrect
                 </Button>
               </div>
-              <details className="text-xs">
+              <details
+                ref={detailsRef}
+                className="text-xs"
+                open={detailsOpen}
+                onToggle={(e) => setDetailsOpen((e.target as HTMLDetailsElement).open)}
+              >
                 <summary className="cursor-pointer text-muted-foreground">Correct details…</summary>
                 <form
                   className="mt-2 space-y-2"
@@ -876,39 +936,56 @@ function EngTicketDetail() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={verdictBusy}
+                  disabled={verdictBusy2}
                   onClick={handleEquipmentMatched}
                 >
-                  {verdictBusy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                  {verdictBusy2 ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                   Matched
                 </Button>
                 <Button
                   size="sm"
                   variant="destructive"
                   disabled={mismatchBusy}
-                  onClick={handleMismatchSubmit(handleEquipmentMismatch)}
+                  onClick={() => {
+                    setDetailsMismatchOpen(true);
+                    setTimeout(() => detailsMismatchRef.current?.focus(), 0);
+                  }}
                 >
                   Mismatch
                 </Button>
               </div>
-              <details className="text-xs">
+              <details
+                ref={detailsMismatchRef}
+                className="text-xs"
+                open={detailsMismatchOpen}
+                onToggle={(e) => setDetailsMismatchOpen((e.target as HTMLDetailsElement).open)}
+              >
                 <summary className="cursor-pointer text-muted-foreground">Report mismatch…</summary>
                 <form
                   className="mt-2 space-y-2"
                   onSubmit={handleMismatchSubmit(handleEquipmentMismatch)}
                 >
-                  <Input placeholder="Correct model" {...regMismatch("corrected_model")} />
+                  <Input
+                    placeholder="Correct model"
+                    aria-label="Correct model"
+                    {...regMismatch("corrected_model")}
+                  />
                   {mismatchErrors.corrected_model && (
                     <p className="text-destructive text-xs">
                       {mismatchErrors.corrected_model.message}
                     </p>
                   )}
-                  <Input placeholder="Correct serial" {...regMismatch("corrected_serial")} />
+                  <Input
+                    placeholder="Correct serial"
+                    aria-label="Correct serial"
+                    {...regMismatch("corrected_serial")}
+                  />
                   {mismatchErrors.corrected_serial && (
                     <p className="text-destructive text-xs">
                       {mismatchErrors.corrected_serial.message}
                     </p>
                   )}
+                  {gpsError && <p className="text-destructive text-xs">{gpsError}</p>}
                   <div>
                     <Label className="text-xs">Photo + GPS required</Label>
                     <Input
@@ -1026,6 +1103,7 @@ const VERIFY_LABEL: Record<string, string> = {
   customer_verify: "Customer verification",
   equipment_verify: "Equipment verification",
   photo: "Photo",
+  note: "Note",
 };
 
 function formatTime(iso: string): string {

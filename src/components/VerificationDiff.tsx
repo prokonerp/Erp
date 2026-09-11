@@ -22,16 +22,22 @@ export function VerificationDiff({
   const photoUrl = photoPath
     ? supabase.storage.from("ticket-attachments").getPublicUrl(photoPath).data.publicUrl
     : null;
-  if (!changed) return <div className="text-xs text-emerald-700">✓ {label} matched</div>;
+  if (!changed)
+    return <div className="text-xs text-emerald-700 dark:text-emerald-300">✓ {label} matched</div>;
   return (
     <div className="rounded border p-2 space-y-1">
       <div className="text-xs text-muted-foreground">
         {label} — corrected by {engineer ?? "engineer"}{" "}
         {at ? `· ${new Date(at).toLocaleString()}` : ""}
       </div>
-      <div className="text-sm line-through decoration-red-400 text-red-600">{original || "—"}</div>
+      <div className="text-sm line-through decoration-red-400 text-red-600 dark:text-red-400">
+        {original || "—"}
+      </div>
       <div className="text-sm">
-        → <span className="bg-emerald-50 text-emerald-700 px-1 rounded">{corrected || "—"}</span>
+        →{" "}
+        <span className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 px-1 rounded">
+          {corrected || "—"}
+        </span>
       </div>
       {photoUrl ? (
         <a className="text-xs underline" href={photoUrl} target="_blank" rel="noreferrer">

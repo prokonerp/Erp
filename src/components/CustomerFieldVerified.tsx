@@ -9,17 +9,23 @@ export function formatFieldVerified(r: {
 }
 
 export function CustomerFieldVerified({ customerId }: { customerId: string }) {
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["customer-field-verified", customerId],
     queryFn: async () => {
       const { data } = await supabase
         .from("ticket_customer_verifications")
         .select("id,ticket_id,verdict,corrected,engineer_name,verified_at")
         .eq("customer_id", customerId)
-        .order("verified_at", { ascending: false });
+        .order("verified_at", { ascending: false })
+        .limit(10);
       return data ?? [];
     },
+    staleTime: 10_000,
   });
+
+  if (isLoading) {
+    return <div className="text-xs text-muted-foreground border rounded p-3">Loading…</div>;
+  }
 
   if (!data?.length) {
     return (
