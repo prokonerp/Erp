@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
 import { PageLoader } from "@/components/shared/skeletons";
@@ -8,6 +10,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { VerificationStepper } from "@/components/VerificationStepper";
+import { useTicketVerifications } from "@/hooks/useTicketVerifications";
+import {
+  buildCustomerSnapshot,
+  buildEquipmentOriginal,
+  customerCorrectedSchema,
+  equipmentMismatchSchema,
+  canProceedToStep2,
+  canProceedToWork,
+} from "@/lib/ticket-verifications";
+import { getCurrentGeo, validateGeoForMismatch } from "@/lib/verification-geo";
 import { STATUS_COLOR, PRIORITY_COLOR } from "@/lib/tickets";
 import { toast } from "sonner";
 import {
@@ -77,6 +91,44 @@ function EngTicketDetail() {
 
   // Special instruction ack
   const [ackBusy, setAckBusy] = useState(false);
+
+  // Verification
+  const { data: verifications } = useTicketVerifications(id);
+  const [verdictBusy, setVerdictBusy] = useState(false);
+  const [mismatchPhotoFile, setMismatchPhotoFile] = useState<File | null>(null);
+  const [mismatchBusy, setMismatchBusy] = useState(false);
+
+  // Step 1 forms
+  const {
+    register: regCorrected,
+    handleSubmit: handleCorrectedSubmit,
+    formState: { errors: correctedErrors },
+    reset: resetCorrected,
+  } = useForm({
+    resolver: zodResolver(customerCorrectedSchema),
+    defaultValues: {
+      customer_name: ticket?.customer_name ?? "",
+      customer_phone: ticket?.customer_phone ?? "",
+      customer_email: ticket?.customer_email ?? "",
+      customer_address: ticket?.customer_address ?? "",
+      sector: ticket?.sector ?? "",
+      location: ticket?.location ?? "",
+    },
+  });
+
+  // Step 2 form
+  const {
+    register: regMismatch,
+    handleSubmit: handleMismatchSubmit,
+    formState: { errors: mismatchErrors },
+    reset: resetMismatch,
+  } = useForm({
+    resolver: zodResolver(equipmentMismatchSchema),
+    defaultValues: {
+      corrected_model: ticket?.product ?? "",
+      corrected_serial: ticket?.serial_no ?? "",
+    },
+  });
 
   useEffect(() => {
     let active = true;
@@ -208,6 +260,191 @@ function EngTicketDetail() {
       await refreshActivities();
     } finally {
       setAckBusy(false);
+    }
+  };
+
+  const handleCustomerVerified = async () => {
+    setVerdictBusy(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      const actorName = myName ?? u.user?.email ?? "Engineer";
+      const snapshot = buildCustomerSnapshot(ticket!);
+      const { error } = await supabase.from("ticket_customer_verifications").upsert(
+        {
+          ticket_id: id,
+          verdict: "verified",
+          snapshot,
+          actor: actorName,
+        },
+        { onConflict: "ticket_id" },
+      );
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      await supabase.from("ticket_activities").insert({
+        ticket_id: id,
+        kind: "customer_verify",
+        notes: `Customer verified by ${actorName} at ${new Date().toISOString()}`,
+        actor: u.user?.id ?? null,
+      } as never);
+      toast.success("Customer details verified");
+      resetCorrected();
+    } finally {
+      setVerdictBusy(false);
+    }
+  };
+
+  const handleCustomerIncorrect = async (data: {
+    customer_name: string;
+    customer_phone: string;
+    customer_email?: string | null;
+    customer_address?: string | null;
+    sector?: string | null;
+    location?: string | null;
+  }) => {
+    setVerdictBusy(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      const actorName = myName ?? u.user?.email ?? "Engineer";
+      const { error } = await supabase.from("ticket_customer_verifications").upsert(
+        {
+          ticket_id: id,
+          verdict: "incorrect",
+          corrected: data,
+          actor: actorName,
+        },
+        { onConflict: "ticket_id" },
+      );
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      await supabase.from("ticket_activities").insert({
+        ticket_id: id,
+        kind: "customer_verify",
+        notes: `Customer corrected by ${actorName} at ${new Date().toISOString()}`,
+        actor: u.user?.id ?? null,
+      } as never);
+      toast.success("Customer details corrected");
+    } finally {
+      setVerdictBusy(false);
+    }
+  };
+
+  const handleEquipmentMismatch = async (data: {
+    corrected_model: string;
+    corrected_serial: string;
+  }) => {
+    if (!mismatchPhotoFile) {
+      toast.error("Photo is required for mismatch report");
+      return;
+    }
+    setMismatchBusy(true);
+    try {
+      const geo = await getCurrentGeo();
+      const geoErr = validateGeoForMismatch(geo);
+      if (geoErr) {
+        toast.error(geoErr);
+        return;
+      }
+
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(mismatchPhotoFile);
+      });
+      const base64 = dataUrl.split(",")[1];
+
+      const { uploadPublicTicketAttachment } =
+        await import("@/lib/public-ticket-uploads.functions");
+      await uploadPublicTicketAttachment({
+        data: {
+          ticket_id: id,
+          filename: mismatchPhotoFile.name,
+          content_type: mismatchPhotoFile.type,
+          kind: "equipment_correction",
+          data_base64: base64,
+          lat: geo!.lat,
+          long: geo!.long,
+          accuracy: geo!.accuracy,
+          captured_at: geo!.captured_at,
+        },
+      });
+
+      const { data: u } = await supabase.auth.getUser();
+      const actorName = myName ?? u.user?.email ?? "Engineer";
+      const original = buildEquipmentOriginal(ticket!);
+      const { error } = await supabase.from("ticket_equipment_verifications").upsert(
+        {
+          ticket_id: id,
+          verdict: "mismatch",
+          original_model: original.original_model,
+          original_serial: original.original_serial,
+          corrected_model: data.corrected_model,
+          corrected_serial: data.corrected_serial,
+          photo_path: `ticket/${id}/${new Date().toISOString().slice(0, 10)}/equipment_correction-*`,
+          geo_lat: geo!.lat,
+          geo_long: geo!.long,
+          geo_accuracy: geo!.accuracy,
+          captured_at: geo!.captured_at,
+          actor: actorName,
+        },
+        { onConflict: "ticket_id" },
+      );
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      await supabase.from("ticket_activities").insert({
+        ticket_id: id,
+        kind: "equipment_verify",
+        notes: `Equipment mismatch reported by ${actorName} at ${new Date().toISOString()}`,
+        actor: u.user?.id ?? null,
+      } as never);
+      toast.success("Equipment mismatch recorded");
+      setMismatchPhotoFile(null);
+      resetMismatch();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      toast.error(msg);
+    } finally {
+      setMismatchBusy(false);
+    }
+  };
+
+  const handleEquipmentMatched = async () => {
+    setVerdictBusy(true);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      const actorName = myName ?? u.user?.email ?? "Engineer";
+      const original = buildEquipmentOriginal(ticket!);
+      const { error } = await supabase.from("ticket_equipment_verifications").upsert(
+        {
+          ticket_id: id,
+          verdict: "matched",
+          original_model: original.original_model,
+          original_serial: original.original_serial,
+          corrected_model: ticket?.product ?? null,
+          corrected_serial: ticket?.serial_no ?? null,
+          actor: actorName,
+        },
+        { onConflict: "ticket_id" },
+      );
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      await supabase.from("ticket_activities").insert({
+        ticket_id: id,
+        kind: "equipment_verify",
+        notes: `Equipment verified matched by ${actorName} at ${new Date().toISOString()}`,
+        actor: u.user?.id ?? null,
+      } as never);
+      toast.success("Equipment verified as matched");
+    } finally {
+      setVerdictBusy(false);
     }
   };
 
@@ -416,55 +653,230 @@ function EngTicketDetail() {
         </CardContent>
       </Card>
 
-      {/* Add Note */}
+      {/* Verification Stepper */}
+      <VerificationStepper
+        step1Done={!!verifications?.customer}
+        step2Done={!!verifications?.equipment}
+      />
+
+      {/* Step 1: Customer Verification */}
+      <Card>
+        <CardContent className="py-4 space-y-3">
+          <h3 className="text-sm font-semibold">1 — Customer Details</h3>
+          {verifications?.customer ? (
+            <div className="text-xs text-muted-foreground">
+              {verifications.customer.verdict === "verified"
+                ? "✓ Customer details verified"
+                : "✓ Customer details corrected"}
+            </div>
+          ) : ticket ? (
+            <div className="space-y-3">
+              <div className="text-xs space-y-1 border rounded-md p-2">
+                {(() => {
+                  const snap = buildCustomerSnapshot(ticket);
+                  return (
+                    <>
+                      <p>
+                        <strong>{snap.customer_name}</strong>
+                      </p>
+                      {snap.customer_phone && <p>Phone: {snap.customer_phone}</p>}
+                      {snap.sector && <p>Sector: {snap.sector}</p>}
+                      {snap.location && <p>Location: {snap.location}</p>}
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={verdictBusy}
+                  onClick={handleCustomerVerified}
+                >
+                  {verdictBusy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                  Details Verified
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={verdictBusy}
+                  onClick={handleCorrectedSubmit(handleCustomerIncorrect)}
+                >
+                  Details Incorrect
+                </Button>
+              </div>
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground">Correct details…</summary>
+                <form
+                  className="mt-2 space-y-2"
+                  onSubmit={handleCorrectedSubmit(handleCustomerIncorrect)}
+                >
+                  <Input placeholder="Customer name" {...regCorrected("customer_name")} />
+                  {correctedErrors.customer_name && (
+                    <p className="text-destructive text-xs">
+                      {correctedErrors.customer_name.message}
+                    </p>
+                  )}
+                  <Input placeholder="10-digit phone" {...regCorrected("customer_phone")} />
+                  {correctedErrors.customer_phone && (
+                    <p className="text-destructive text-xs">
+                      {correctedErrors.customer_phone.message}
+                    </p>
+                  )}
+                  <Input placeholder="Email (optional)" {...regCorrected("customer_email")} />
+                  <Input placeholder="Address (optional)" {...regCorrected("customer_address")} />
+                  <Button type="submit" size="sm" variant="destructive" disabled={verdictBusy}>
+                    Save Corrections
+                  </Button>
+                </form>
+              </details>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      {/* Step 2: Equipment Verification */}
+      <Card>
+        <CardContent className="py-4 space-y-3">
+          <h3 className="text-sm font-semibold">2 — Model / Serial</h3>
+          {!canProceedToStep2(verifications?.customer ?? null) ? (
+            <p className="text-xs text-muted-foreground">Verify customer first.</p>
+          ) : verifications?.equipment ? (
+            <div className="text-xs text-muted-foreground">
+              {verifications.equipment.verdict === "matched"
+                ? "✓ Equipment matched"
+                : "✓ Equipment mismatch recorded"}
+            </div>
+          ) : ticket ? (
+            <div className="space-y-3">
+              <div className="text-xs space-y-1 border rounded-md p-2">
+                <p>Model: {ticket.product ?? "—"}</p>
+                <p>Serial: {ticket.serial_no ?? "—"}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={verdictBusy}
+                  onClick={handleEquipmentMatched}
+                >
+                  {verdictBusy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                  Matched
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={mismatchBusy}
+                  onClick={handleMismatchSubmit(handleEquipmentMismatch)}
+                >
+                  Mismatch
+                </Button>
+              </div>
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground">Report mismatch…</summary>
+                <form
+                  className="mt-2 space-y-2"
+                  onSubmit={handleMismatchSubmit(handleEquipmentMismatch)}
+                >
+                  <Input placeholder="Correct model" {...regMismatch("corrected_model")} />
+                  {mismatchErrors.corrected_model && (
+                    <p className="text-destructive text-xs">
+                      {mismatchErrors.corrected_model.message}
+                    </p>
+                  )}
+                  <Input placeholder="Correct serial" {...regMismatch("corrected_serial")} />
+                  {mismatchErrors.corrected_serial && (
+                    <p className="text-destructive text-xs">
+                      {mismatchErrors.corrected_serial.message}
+                    </p>
+                  )}
+                  <div>
+                    <Label className="text-xs">Photo + GPS required</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="mt-1"
+                      onChange={(e) => setMismatchPhotoFile(e.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="destructive"
+                    disabled={mismatchBusy || !mismatchPhotoFile}
+                  >
+                    {mismatchBusy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                    Upload & Record Mismatch
+                  </Button>
+                </form>
+              </details>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      {/* Add Note — gated */}
       <Card>
         <CardContent className="py-4 space-y-3">
           <h3 className="text-sm font-semibold flex items-center gap-1.5">
             <MessageCircle className="h-4 w-4" /> Add Note
           </h3>
-          <Textarea
-            placeholder="Type a note…"
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            rows={3}
-            disabled={noteBusy}
-          />
-          <Button size="sm" disabled={!noteText.trim() || noteBusy} onClick={addNote}>
-            {noteBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Add Note
-          </Button>
+          {!canProceedToWork(verifications?.customer ?? null, verifications?.equipment ?? null) ? (
+            <p className="text-xs text-muted-foreground">Complete verification first.</p>
+          ) : (
+            <>
+              <Textarea
+                placeholder="Type a note…"
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                rows={3}
+                disabled={noteBusy}
+              />
+              <Button size="sm" disabled={!noteText.trim() || noteBusy} onClick={addNote}>
+                {noteBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Add Note
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
 
-      {/* Photo Upload */}
+      {/* Photo Upload — gated */}
       <Card>
         <CardContent className="py-4 space-y-3">
           <h3 className="text-sm font-semibold flex items-center gap-1.5">
             <Upload className="h-4 w-4" /> Upload Photo
           </h3>
-          <p className="text-xs text-muted-foreground">Max 2 MB · JPEG, PNG, WebP, HEIC</p>
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhotoUpload}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={photoBusy}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {photoBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1" />
-              ) : (
-                <Upload className="h-4 w-4 mr-1" />
-              )}
-              {photoProgress || "Choose Photo"}
-            </Button>
-          </div>
+          {!canProceedToWork(verifications?.customer ?? null, verifications?.equipment ?? null) ? (
+            <p className="text-xs text-muted-foreground">Complete verification first.</p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">Max 2 MB · JPEG, PNG, WebP, HEIC</p>
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={photoBusy}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {photoBusy ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-1" />
+                  )}
+                  {photoProgress || "Choose Photo"}
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
