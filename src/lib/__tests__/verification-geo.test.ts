@@ -15,4 +15,11 @@ describe("geo gate", () => {
       }),
     ).toBeNull();
   });
+  it("blocks NaN and Infinity coordinates", () => {
+    expect(validateGeoForMismatch({ lat: NaN, long: 77, accuracy: 10, captured_at: "2026-01-01" })).toMatch(/location/i);
+    expect(validateGeoForMismatch({ lat: 28, long: Infinity, accuracy: null, captured_at: "2026-01-01" })).toMatch(/location/i);
+  });
+  it("blocks empty captured_at string", () => {
+    expect(validateGeoForMismatch({ lat: 28, long: 77, accuracy: 10, captured_at: "" })).toMatch(/capture time/i);
+  });
 });

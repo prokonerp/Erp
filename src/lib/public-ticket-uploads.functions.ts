@@ -5,7 +5,7 @@ import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 8 * 1024 * 1024;
 
-const uploadSchema = z
+export const uploadSchema = z
   .object({
     ticket_id: z.string().uuid(),
     filename: z.string().min(1).max(200),

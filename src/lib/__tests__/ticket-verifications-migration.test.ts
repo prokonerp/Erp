@@ -10,4 +10,11 @@ describe("verification migration exists", () => {
     expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
     expect(sql).toContain("photo_lat");
   });
+  it("creates RLS policies for both tables", () => {
+    const sql = readFileSync("supabase/migrations/20260912000001_ticket_verifications_policies.sql", "utf8");
+    expect(sql).toContain("CREATE POLICY");
+    expect(sql).toContain("ticket_customer_verifications");
+    expect(sql).toContain("ticket_equipment_verifications");
+    expect(sql).toContain("TO authenticated");
+  });
 });
