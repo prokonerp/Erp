@@ -36,6 +36,7 @@ import {
   CheckCircle2,
   ShieldAlert,
 } from "lucide-react";
+import { compressImageToLimit } from "@/lib/image-compress";
 
 export const Route = createFileRoute("/eng/ticket/$id")({
   component: EngTicketDetail,
@@ -374,10 +375,6 @@ function EngTicketDetail() {
       toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
       return;
     }
-    if (mismatchPhotoFile.size > 2 * 1024 * 1024) {
-      toast.error("Photo must be ≤ 2 MB");
-      return;
-    }
     setMismatchBusy(true);
     setGpsError(null);
     try {
@@ -389,11 +386,13 @@ function EngTicketDetail() {
         return;
       }
 
+      const compressed = await compressImageToLimit(mismatchPhotoFile);
+
       const reader = new FileReader();
       const dataUrl = await new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
-        reader.readAsDataURL(mismatchPhotoFile);
+        reader.readAsDataURL(compressed.blob);
       });
       const base64 = dataUrl.split(",")[1];
 
@@ -402,8 +401,8 @@ function EngTicketDetail() {
       const uploadResult = await uploadPublicTicketAttachment({
         data: {
           ticket_id: id,
-          filename: mismatchPhotoFile.name,
-          content_type: mismatchPhotoFile.type,
+          filename: compressed.name,
+          content_type: compressed.contentType,
           kind: "equipment_correction",
           data_base64: base64,
           lat: geo!.lat,
@@ -510,11 +509,6 @@ function EngTicketDetail() {
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("Photo must be ≤ 2 MB");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
     if (!allowed.includes(file.type)) {
       toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
@@ -525,16 +519,18 @@ function EngTicketDetail() {
     setPhotoBusy(true);
     setPhotoProgress("Reading file…");
     try {
+      const compressed = await compressImageToLimit(file);
+
       const reader = new FileReader();
       const dataUrl = await new Promise<string>((resolve, reject) => {
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(compressed.blob);
       });
 
       const base64 = dataUrl.split(",")[1];
       const ext =
-        (file.name.split(".").pop() || "jpg")
+        (compressed.name.split(".").pop() || "jpg")
           .toLowerCase()
           .replace(/[^a-z0-9]/g, "")
           .slice(0, 5) || "jpg";
@@ -543,14 +539,13 @@ function EngTicketDetail() {
 
       setPhotoProgress("Uploading…");
 
-      // Use the existing upload server function
       const { uploadPublicTicketAttachment } =
         await import("@/lib/public-ticket-uploads.functions");
       await uploadPublicTicketAttachment({
         data: {
           ticket_id: id,
-          filename: file.name,
-          content_type: file.type,
+          filename: compressed.name,
+          content_type: compressed.contentType,
           kind: "issue_photo",
           data_base64: base64,
         },
