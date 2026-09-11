@@ -20,6 +20,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { INDIAN_STATES, isValidGSTIN, stateFromGSTIN } from "@/lib/india";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { cn } from "@/lib/utils";
+import { CustomerFieldVerified } from "@/components/CustomerFieldVerified";
 
 export const GST_TREATMENTS = ["Regular", "Composition", "Unregistered", "Consumer"] as const;
 export type GstTreatment = typeof GST_TREATMENTS[number];
@@ -619,6 +620,7 @@ export function CustomerFormFields({ form, setForm, tab, setTab, customerId }: {
             </div>
           </div>
         ))}
+        {customerId ? <div className="pt-2"><CustomerFieldVerified customerId={customerId} /></div> : null}
       </TabsContent>
 
       {customerId && (
