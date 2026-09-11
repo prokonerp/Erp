@@ -360,7 +360,7 @@ function EngTicketDetail() {
 
       const { uploadPublicTicketAttachment } =
         await import("@/lib/public-ticket-uploads.functions");
-      await uploadPublicTicketAttachment({
+      const uploadResult = await uploadPublicTicketAttachment({
         data: {
           ticket_id: id,
           filename: mismatchPhotoFile.name,
@@ -385,7 +385,7 @@ function EngTicketDetail() {
           original_serial: original.original_serial,
           corrected_model: data.corrected_model,
           corrected_serial: data.corrected_serial,
-          photo_path: `ticket/${id}/${new Date().toISOString().slice(0, 10)}/equipment_correction-*`,
+          photo_path: uploadResult.path,
           geo_lat: geo!.lat,
           geo_long: geo!.long,
           geo_accuracy: geo!.accuracy,
@@ -1002,7 +1002,7 @@ function EngTicketDetail() {
               {activities.map((a) => (
                 <div key={a.id} className="border-l-2 border-muted pl-3 py-1">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-medium capitalize">{a.kind}</span>
+                    <span className="font-medium">{VERIFY_LABEL[a.kind] ?? a.kind}</span>
                     <span>{formatTime(a.created_at)}</span>
                   </div>
                   {a.notes && <p className="text-sm mt-1 whitespace-pre-wrap">{a.notes}</p>}
@@ -1015,6 +1015,12 @@ function EngTicketDetail() {
     </div>
   );
 }
+
+const VERIFY_LABEL: Record<string, string> = {
+  customer_verify: "Customer verification",
+  equipment_verify: "Equipment verification",
+  photo: "Photo",
+};
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
