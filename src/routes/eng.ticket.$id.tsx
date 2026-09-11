@@ -379,6 +379,10 @@ function EngTicketDetail() {
     corrected_model: string;
     corrected_serial: string;
   }) => {
+    if (!navigator.onLine) {
+      toast.error("No internet connection. Reconnect and retry — nothing was uploaded.");
+      return;
+    }
     if (!mismatchPhotoFile) {
       toast.error("Photo is required for mismatch report");
       return;
@@ -428,6 +432,14 @@ function EngTicketDetail() {
       const { data: u } = await supabase.auth.getUser();
       const actorName = myName ?? u.user?.email ?? "Engineer";
       const original = buildEquipmentOriginal(ticket!);
+
+      const { data: existingVer } = await supabase
+        .from("ticket_equipment_verifications")
+        .select("photo_path")
+        .eq("ticket_id", id)
+        .maybeSingle();
+      const oldPhotoPath = (existingVer?.photo_path as string | null) ?? null;
+
       const { error } = await supabase.from("ticket_equipment_verifications").upsert(
         {
           ticket_id: id,
@@ -454,6 +466,13 @@ function EngTicketDetail() {
         }
         toast.error(error.message);
         return;
+      }
+      if (oldPhotoPath && oldPhotoPath !== uploadResult.path) {
+        try {
+          await supabase.storage.from("ticket-attachments").remove([oldPhotoPath]);
+        } catch (cleanupErr) {
+          console.warn("Old photo cleanup failed:", cleanupErr);
+        }
       }
       try {
         await supabase.from("ticket_activities").insert({
@@ -527,6 +546,11 @@ function EngTicketDetail() {
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!navigator.onLine) {
+      toast.error("No internet connection. Reconnect and retry — nothing was uploaded.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
     if (!allowed.includes(file.type)) {
       toast.error("Only JPEG, PNG, WebP, HEIC images allowed");

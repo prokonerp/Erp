@@ -14,7 +14,20 @@ export function validateGeoForMismatch(geo: GeoFix | null): string | null {
   return null;
 }
 
-export function getCurrentGeo(timeoutMs = 15000): Promise<GeoFix> {
+export function geoErrorMessage(code: number): string {
+  switch (code) {
+    case 1:
+      return "Location permission denied. Enable location for this site in Settings and retry.";
+    case 2:
+      return "Phone could not get a fix. Move outdoors and retry.";
+    case 3:
+      return "Location timed out. Try again.";
+    default:
+      return "Location permission denied. Allow location and retry.";
+  }
+}
+
+export function getCurrentGeo(timeoutMs = 25000): Promise<GeoFix> {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator))
       return reject(new Error("Geolocation not supported on this device."));
@@ -29,7 +42,9 @@ export function getCurrentGeo(timeoutMs = 15000): Promise<GeoFix> {
       (e) =>
         reject(
           new Error(
-            e.message || "Location permission denied. Allow location and retry.",
+            typeof e.code === "number"
+              ? geoErrorMessage(e.code)
+              : e.message || "Location permission denied. Allow location and retry.",
           ),
         ),
       { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 },
