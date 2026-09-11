@@ -74,7 +74,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
   .middleware([requireActiveUser])
   .inputValidator((input) => uploadSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     if (!ALLOWED_MIME.includes(data.content_type.toLowerCase())) {
       throw new Error("Only image uploads are allowed");
     }
@@ -98,6 +98,46 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
     if (ticketErr || !ticket) {
       throw new Error("Ticket not found");
     }
+
+    // Ownership gate: only the assigned engineer (or admin) may upload.
+    const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (!isAdmin) {
+      const { data: authUser } = await supabaseAdmin.auth.getUser(context.userId);
+      const callerEmail = authUser?.user?.email;
+      if (!callerEmail) {
+        throw new Error("Could not resolve your account email. Contact admin.");
+      }
+      const { data: caller } = await supabaseAdmin
+        .from("employees")
+        .select("id, name")
+        .eq("email", callerEmail)
+        .eq("active", true)
+        .maybeSingle();
+      if (!caller) {
+        throw new Error("Employee account not linked. Contact admin.");
+      }
+      const { data: ticketRow } = await supabaseAdmin
+        .from("tickets")
+        .select("assigned_employee_id, assigned_engineer_name")
+        .eq("id", data.ticket_id)
+        .maybeSingle();
+      if (!ticketRow?.assigned_employee_id && !ticketRow?.assigned_engineer_name) {
+        throw new Error("Ticket has no assigned engineer. Contact Services.");
+      }
+      const fkMatch = ticketRow.assigned_employee_id === caller.id;
+      const nameMatch =
+        ticketRow.assigned_engineer_name &&
+        ticketRow.assigned_engineer_name.toLowerCase() === caller.name.toLowerCase();
+      if (!fkMatch && !nameMatch) {
+        throw new Error(
+          "You are not the assigned engineer for this ticket. Only the assigned engineer may upload attachments.",
+        );
+      }
+    }
+
     const { error } = await supabaseAdmin.storage
       .from("ticket-attachments")
       .upload(path, buf, { cacheControl: "3600", upsert: false, contentType: data.content_type });
