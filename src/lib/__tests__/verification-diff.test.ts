@@ -1,0 +1,8 @@
+import { describe, expect, it } from "vitest";
+import { diffLines } from "@/components/VerificationDiff";
+describe("diff helper", () => {
+  it("detects changed serial", () => {
+    expect(diffLines("ABC123", "ABC124")).toEqual({ changed: true });
+    expect(diffLines("ABC123", "ABC123")).toEqual({ changed: false });
+  });
+});

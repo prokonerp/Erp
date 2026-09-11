@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { VerificationStepper } from "@/components/VerificationStepper";
+import { VerificationDiff } from "@/components/VerificationDiff";
 import { useTicketVerifications } from "@/hooks/useTicketVerifications";
 import {
   buildCustomerSnapshot,
@@ -664,11 +665,101 @@ function EngTicketDetail() {
         <CardContent className="py-4 space-y-3">
           <h3 className="text-sm font-semibold">1 — Customer Details</h3>
           {verifications?.customer ? (
-            <div className="text-xs text-muted-foreground">
-              {verifications.customer.verdict === "verified"
-                ? "✓ Customer details verified"
-                : "✓ Customer details corrected"}
-            </div>
+            <>
+              <div className="text-xs text-muted-foreground">
+                {verifications.customer.verdict === "verified"
+                  ? "✓ Customer details verified"
+                  : "✓ Customer details corrected"}
+              </div>
+              {verifications.customer.verdict === "incorrect" &&
+                verifications.customer.snapshot &&
+                verifications.customer.corrected && (
+                  <div className="space-y-1 mt-2">
+                    <VerificationDiff
+                      label="Customer name"
+                      original={
+                        (verifications.customer.snapshot as Record<string, unknown>)
+                          .customer_name as string | null
+                      }
+                      corrected={
+                        (verifications.customer.corrected as Record<string, unknown>)
+                          .customer_name as string | null
+                      }
+                      engineer={verifications.customer.engineer_name}
+                      at={verifications.customer.verified_at}
+                    />
+                    <VerificationDiff
+                      label="Customer phone"
+                      original={
+                        (verifications.customer.snapshot as Record<string, unknown>)
+                          .customer_phone as string | null
+                      }
+                      corrected={
+                        (verifications.customer.corrected as Record<string, unknown>)
+                          .customer_phone as string | null
+                      }
+                      engineer={verifications.customer.engineer_name}
+                      at={verifications.customer.verified_at}
+                    />
+                    <VerificationDiff
+                      label="Email"
+                      original={
+                        (verifications.customer.snapshot as Record<string, unknown>)
+                          .customer_email as string | null
+                      }
+                      corrected={
+                        (verifications.customer.corrected as Record<string, unknown>)
+                          .customer_email as string | null
+                      }
+                      engineer={verifications.customer.engineer_name}
+                      at={verifications.customer.verified_at}
+                    />
+                    <VerificationDiff
+                      label="Address"
+                      original={
+                        (verifications.customer.snapshot as Record<string, unknown>)
+                          .customer_address as string | null
+                      }
+                      corrected={
+                        (verifications.customer.corrected as Record<string, unknown>)
+                          .customer_address as string | null
+                      }
+                      engineer={verifications.customer.engineer_name}
+                      at={verifications.customer.verified_at}
+                    />
+                    <VerificationDiff
+                      label="Sector"
+                      original={
+                        (verifications.customer.snapshot as Record<string, unknown>).sector as
+                          | string
+                          | null
+                      }
+                      corrected={
+                        (verifications.customer.corrected as Record<string, unknown>).sector as
+                          | string
+                          | null
+                      }
+                      engineer={verifications.customer.engineer_name}
+                      at={verifications.customer.verified_at}
+                    />
+                    <VerificationDiff
+                      label="Location"
+                      original={
+                        (verifications.customer.snapshot as Record<string, unknown>).location as
+                          | string
+                          | null
+                      }
+                      corrected={
+                        (verifications.customer.corrected as Record<string, unknown>).location as
+                          | string
+                          | null
+                      }
+                      engineer={verifications.customer.engineer_name}
+                      at={verifications.customer.verified_at}
+                    />
+                  </div>
+                )}
+            </>
           ) : ticket ? (
             <div className="space-y-3">
               <div className="text-xs space-y-1 border rounded-md p-2">
@@ -742,11 +833,33 @@ function EngTicketDetail() {
           {!canProceedToStep2(verifications?.customer ?? null) ? (
             <p className="text-xs text-muted-foreground">Verify customer first.</p>
           ) : verifications?.equipment ? (
-            <div className="text-xs text-muted-foreground">
-              {verifications.equipment.verdict === "matched"
-                ? "✓ Equipment matched"
-                : "✓ Equipment mismatch recorded"}
-            </div>
+            <>
+              <div className="text-xs text-muted-foreground">
+                {verifications.equipment.verdict === "matched"
+                  ? "✓ Equipment matched"
+                  : "✓ Equipment mismatch recorded"}
+              </div>
+              {verifications.equipment.verdict === "mismatch" && (
+                <div className="space-y-1 mt-2">
+                  <VerificationDiff
+                    label="Model"
+                    original={verifications.equipment.original_model}
+                    corrected={verifications.equipment.corrected_model}
+                    engineer={verifications.equipment.engineer_name}
+                    at={verifications.equipment.verified_at}
+                    photoPath={verifications.equipment.photo_path}
+                  />
+                  <VerificationDiff
+                    label="Serial No"
+                    original={verifications.equipment.original_serial}
+                    corrected={verifications.equipment.corrected_serial}
+                    engineer={verifications.equipment.engineer_name}
+                    at={verifications.equipment.verified_at}
+                    photoPath={verifications.equipment.photo_path}
+                  />
+                </div>
+              )}
+            </>
           ) : ticket ? (
             <div className="space-y-3">
               <div className="text-xs space-y-1 border rounded-md p-2">
