@@ -10,8 +10,7 @@ CREATE TABLE public.ticket_customer_verifications (
   engineer_phone text,
   verified_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (ticket_id)
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public.ticket_equipment_verifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

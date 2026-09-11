@@ -6,7 +6,7 @@ describe("verification migration exists", () => {
     const sql = readFileSync(SQL_PATH, "utf8");
     expect(sql).toContain("CREATE TABLE public.ticket_customer_verifications");
     expect(sql).toContain("CREATE TABLE public.ticket_equipment_verifications");
-    expect(sql).toContain("UNIQUE (ticket_id)");
+    expect(sql).toContain("ticket_id uuid NOT NULL UNIQUE");
     expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
     expect(sql).toContain("photo_lat");
   });

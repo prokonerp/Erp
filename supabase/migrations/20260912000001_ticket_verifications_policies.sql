@@ -1,5 +1,6 @@
--- Permissive RLS policies for ticket verification tables
--- Mirrors the pattern from setup_new_supabase.sql for tickets / ticket_activities
+-- Base RLS policies for ticket verification tables (permissive).
+-- NOTE: superseded by 20260916000003_harden_ticket_verifications_rls.sql,
+-- which replaces these with permission-gated policies. Apply in order.
 
 CREATE POLICY "auth view tcv" ON public.ticket_customer_verifications FOR SELECT TO authenticated USING (true);
 CREATE POLICY "auth insert tcv" ON public.ticket_customer_verifications FOR INSERT TO authenticated WITH CHECK (true);
