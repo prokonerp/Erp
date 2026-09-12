@@ -49,6 +49,92 @@ export const customerCorrectedSchema = z.object({
 
 export type CustomerCorrected = z.infer<typeof customerCorrectedSchema>;
 
+const nonEmpty = (v: unknown) =>
+  typeof v === "string" && v.trim().length > 0;
+
+const validEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
+export const customerPerFieldSchema = z
+  .object({
+    nameIncorrect: z.boolean(),
+    phoneIncorrect: z.boolean(),
+    nameInput: z.string().trim().optional(),
+    phoneInput: z.string().trim().optional(),
+    email: z.string().trim().nullable().optional(),
+    address: z.string().trim().nullable().optional(),
+    sector: z.string().trim().nullable().optional(),
+    location: z.string().trim().nullable().optional(),
+  })
+  .refine(
+    (d) =>
+      d.nameIncorrect ||
+      d.phoneIncorrect ||
+      nonEmpty(d.email) ||
+      nonEmpty(d.address) ||
+      nonEmpty(d.sector) ||
+      nonEmpty(d.location),
+    {
+      message: "Mark at least one field as incorrect",
+      path: ["nameIncorrect"],
+    },
+  )
+  .refine((d) => !d.nameIncorrect || (d.nameInput?.trim().length ?? 0) > 0, {
+    message: "Customer name required",
+    path: ["nameInput"],
+  })
+  .refine((d) => !d.phoneIncorrect || /^\d{10}$/.test((d.phoneInput ?? "").trim()), {
+    message: "Enter a valid 10-digit mobile number",
+    path: ["phoneInput"],
+  })
+  .refine((d) => d.email == null || d.email.trim().length === 0 || validEmail(d.email), {
+    message: "Enter a valid email address",
+    path: ["email"],
+  });
+
+export type CustomerPerField = z.infer<typeof customerPerFieldSchema>;
+
+export function resolveCustomerCorrection(
+  snapshot: CustomerSnapshot,
+  input: {
+    nameIncorrect: boolean;
+    phoneIncorrect: boolean;
+    nameInput?: string;
+    phoneInput?: string;
+    email?: string | null;
+    address?: string | null;
+    sector?: string | null;
+    location?: string | null;
+  },
+): { corrected: CustomerCorrected; verdict: CustomerVerdict } {
+  const parsed = customerPerFieldSchema.parse({
+    nameIncorrect: input.nameIncorrect,
+    phoneIncorrect: input.phoneIncorrect,
+    nameInput: input.nameInput,
+    phoneInput: input.phoneInput,
+    email: input.email,
+    address: input.address,
+    sector: input.sector,
+    location: input.location,
+  });
+  const pick = (v: string | null | undefined, fallback: string | null) =>
+    v != null && v.trim().length > 0 ? v.trim() : fallback;
+  return {
+    corrected: {
+      customer_name: parsed.nameIncorrect
+        ? parsed.nameInput!.trim()
+        : snapshot.customer_name,
+      customer_phone: parsed.phoneIncorrect
+        ? parsed.phoneInput!.trim()
+        : ((snapshot.customer_phone ?? "") as string),
+      customer_email: pick(parsed.email, snapshot.customer_email),
+      customer_address: pick(parsed.address, snapshot.customer_address),
+      sector: pick(parsed.sector, snapshot.sector),
+      location: pick(parsed.location, snapshot.location),
+    },
+    verdict: "incorrect",
+  };
+}
+
 export const equipmentMismatchSchema = z.object({
   corrected_model: z.string().trim().min(1, "Model No required"),
   corrected_serial: z.string().trim().min(1, "Serial No required"),

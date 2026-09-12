@@ -59,6 +59,14 @@ import { TicketPartPicker } from "@/components/TicketPartPicker";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { ComplaintPicker } from "@/components/ComplaintPicker";
 import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { listIndentMapForTicket } from "@/lib/indent.functions";
@@ -234,6 +242,15 @@ function TicketDetail() {
   const fetchIndentMap = useServerFn(listIndentMapForTicket);
   const callResetEngineerWork = useServerFn(resetTicketEngineerWork);
   const [resetBusy, setResetBusy] = useState(false);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetTyped, setResetTyped] = useState("");
+  const [resetReason, setResetReason] = useState("");
+  const [resetPreview, setResetPreview] = useState<{
+    customerRows: number;
+    equipmentRows: number;
+    activityRows: number;
+    photoCount: number;
+  } | null>(null);
   const indentMapQuery = useQuery({
     queryKey: ["indent-oracle-map", id],
     queryFn: () => fetchIndentMap({ data: { ticket_id: id } }),
@@ -787,24 +804,37 @@ function TicketDetail() {
     setResetBusy(true);
     try {
       const preview = await callResetEngineerWork({ data: { ticket_id: t.id, dryRun: true } });
-      const ok = await confirm({
-        title: `Reset engineer work — ${t.case_id}?`,
-        description: `Deletes customer verifications (${preview.customerRows}), equipment verifications (${preview.equipmentRows}), engineer activities (${preview.activityRows}), photos (${(preview.photoPaths ?? []).length}). Assignment and status are preserved. This cannot be undone.`,
-        confirmLabel: "Previewed — continue",
-        variant: "danger",
+      setResetPreview({
+        customerRows: preview.customerRows ?? 0,
+        equipmentRows: preview.equipmentRows ?? 0,
+        activityRows: preview.activityRows ?? 0,
+        photoCount: (preview.photoPaths ?? []).length,
       });
-      if (!ok) return;
-      // useConfirm has no text input — second gate via window.prompt for case_id.
-      const typed = window.prompt(`Type ${t.case_id} to confirm reset:`);
-      if (typed !== t.case_id) {
-        toast.error("Case ID did not match — reset cancelled.");
-        return;
-      }
-      const reason = window.prompt("Reason for reset (saved in audit log):") || undefined;
-      const res = await callResetEngineerWork({ data: { ticket_id: t.id, reason } });
+      setResetTyped("");
+      setResetReason("");
+      setResetDialogOpen(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Reset failed");
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
+  const confirmResetEngineerWork = async () => {
+    if (!t || resetBusy) return;
+    if (resetTyped !== t.case_id || !resetReason.trim()) return;
+    setResetBusy(true);
+    try {
+      const res = await callResetEngineerWork({
+        data: { ticket_id: t.id, reason: resetReason.trim() },
+      });
       toast.success(
         `Engineer work reset: ${res.deletedActivities} activities, ${(res.removedPhotos ?? []).length} photos removed.`,
       );
+      setResetDialogOpen(false);
+      setResetTyped("");
+      setResetReason("");
+      setResetPreview(null);
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Reset failed");
@@ -2045,6 +2075,64 @@ function TicketDetail() {
         .ticket-print { display: none; }
         @media print { .ticket-print { display: block !important; } }
       `}</style>
+      <Dialog
+        open={resetDialogOpen}
+        onOpenChange={(v) => {
+          if (!resetBusy) setResetDialogOpen(v);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset engineer work</DialogTitle>
+            <DialogDescription>
+              {t.case_id} — deletes customer verifications ({resetPreview?.customerRows ?? 0}),
+              equipment verifications ({resetPreview?.equipmentRows ?? 0}), engineer activities (
+              {resetPreview?.activityRows ?? 0}), photos ({resetPreview?.photoCount ?? 0}).
+              Assignment and status are preserved. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="reset-confirm-input">Type {t.case_id} to confirm</Label>
+              <Input
+                id="reset-confirm-input"
+                value={resetTyped}
+                onChange={(e) => setResetTyped(e.target.value)}
+                placeholder={t.case_id}
+                disabled={resetBusy}
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <Label htmlFor="reset-reason-input">Reason (saved in audit log)</Label>
+              <Textarea
+                id="reset-reason-input"
+                rows={4}
+                value={resetReason}
+                onChange={(e) => setResetReason(e.target.value)}
+                placeholder="Why is this reset needed?"
+                disabled={resetBusy}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setResetDialogOpen(false)}
+              disabled={resetBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmResetEngineerWork}
+              disabled={resetTyped !== t.case_id || !resetReason.trim() || resetBusy}
+            >
+              {resetBusy ? "Resetting..." : "Reset engineer work"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <ClosingRemarksDialog
         open={closingOpen}
         onOpenChange={setClosingOpen}

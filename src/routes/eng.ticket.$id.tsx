@@ -19,8 +19,9 @@ import { useTicketVerifications } from "@/hooks/useTicketVerifications";
 import {
   buildCustomerSnapshot,
   buildEquipmentOriginal,
-  customerCorrectedSchema,
+  customerPerFieldSchema,
   equipmentPerFieldSchema,
+  resolveCustomerCorrection,
   resolveEquipmentCorrection,
   canProceedToStep2,
   canProceedToWork,
@@ -124,23 +125,46 @@ function EngTicketDetail() {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const detailsMismatchRef = useRef<HTMLDetailsElement>(null);
 
-  // Step 1 forms
+  // Step 1 forms — per-field Name / Phone toggles (mirrors equipment pattern)
   const {
     register: regCorrected,
     handleSubmit: handleCorrectedSubmit,
     formState: { errors: correctedErrors },
     reset: resetCorrected,
+    watch: watchCorrected,
+    setValue: setCorrectedValue,
   } = useForm({
-    resolver: zodResolver(customerCorrectedSchema),
+    resolver: zodResolver(customerPerFieldSchema),
     defaultValues: {
-      customer_name: ticket?.customer_name ?? "",
-      customer_phone: ticket?.customer_phone ?? "",
-      customer_email: ticket?.customer_email ?? "",
-      customer_address: ticket?.customer_address ?? "",
-      sector: ticket?.sector ?? "",
-      location: ticket?.location ?? "",
+      nameIncorrect: false,
+      phoneIncorrect: false,
+      nameInput: ticket?.customer_name ?? "",
+      phoneInput: ticket?.customer_phone ?? "",
+      email: "",
+      address: "",
+      sector: "",
+      location: "",
     },
   });
+  const nameIncorrect = watchCorrected("nameIncorrect") ?? false;
+  const phoneIncorrect = watchCorrected("phoneIncorrect") ?? false;
+
+  // Prefill per-field customer inputs when async ticket arrives
+  useEffect(() => {
+    if (ticket) {
+      resetCorrected({
+        nameIncorrect: false,
+        phoneIncorrect: false,
+        nameInput: ticket.customer_name ?? "",
+        phoneInput: ticket.customer_phone ?? "",
+        email: "",
+        address: "",
+        sector: "",
+        location: "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticket?.customer_name, ticket?.customer_phone]);
 
   // Step 2 form — per-field Model / Serial toggles
   const {
@@ -393,6 +417,23 @@ function EngTicketDetail() {
     } finally {
       setVerdictBusy(false);
     }
+  };
+
+  const handlePerFieldCustomer = async (data: {
+    nameIncorrect: boolean;
+    phoneIncorrect: boolean;
+    nameInput?: string;
+    phoneInput?: string;
+    email?: string | null;
+    address?: string | null;
+    sector?: string | null;
+    location?: string | null;
+  }) => {
+    const resolved = resolveCustomerCorrection(
+      buildCustomerSnapshot(ticket!),
+      data,
+    );
+    await handleCustomerIncorrect(resolved.corrected);
   };
 
   const handleEquipmentMismatch = async (data: {
@@ -947,23 +988,89 @@ function EngTicketDetail() {
               >
                 <summary className="cursor-pointer text-muted-foreground">Correct details…</summary>
                 <form
-                  className="mt-2 space-y-2"
-                  onSubmit={handleCorrectedSubmit(handleCustomerIncorrect)}
+                  className="mt-2 space-y-3"
+                  onSubmit={handleCorrectedSubmit(handlePerFieldCustomer)}
                 >
-                  <Input placeholder="Customer name" {...regCorrected("customer_name")} />
-                  {correctedErrors.customer_name && (
+                  <div className="space-y-1 border rounded-md p-2">
+                    <p className="font-medium">Name</p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={!nameIncorrect ? "default" : "outline"}
+                        onClick={() => setCorrectedValue("nameIncorrect", false)}
+                      >
+                        Correct
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={nameIncorrect ? "destructive" : "outline"}
+                        onClick={() => setCorrectedValue("nameIncorrect", true)}
+                      >
+                        Incorrect
+                      </Button>
+                    </div>
+                    {nameIncorrect && (
+                      <Input
+                        placeholder="Correct name"
+                        aria-label="Correct name"
+                        {...regCorrected("nameInput")}
+                      />
+                    )}
+                    {correctedErrors.nameInput && (
+                      <p className="text-destructive text-xs">
+                        {correctedErrors.nameInput.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1 border rounded-md p-2">
+                    <p className="font-medium">Phone</p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={!phoneIncorrect ? "default" : "outline"}
+                        onClick={() => setCorrectedValue("phoneIncorrect", false)}
+                      >
+                        Correct
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={phoneIncorrect ? "destructive" : "outline"}
+                        onClick={() => setCorrectedValue("phoneIncorrect", true)}
+                      >
+                        Incorrect
+                      </Button>
+                    </div>
+                    {phoneIncorrect && (
+                      <Input
+                        placeholder="Correct 10-digit phone"
+                        aria-label="Correct phone"
+                        {...regCorrected("phoneInput")}
+                      />
+                    )}
+                    {correctedErrors.phoneInput && (
+                      <p className="text-destructive text-xs">
+                        {correctedErrors.phoneInput.message}
+                      </p>
+                    )}
+                  </div>
+                  {correctedErrors.nameIncorrect && (
                     <p className="text-destructive text-xs">
-                      {correctedErrors.customer_name.message}
+                      {correctedErrors.nameIncorrect.message}
                     </p>
                   )}
-                  <Input placeholder="10-digit phone" {...regCorrected("customer_phone")} />
-                  {correctedErrors.customer_phone && (
+                  <Input placeholder="Email (optional)" {...regCorrected("email")} />
+                  {correctedErrors.email && (
                     <p className="text-destructive text-xs">
-                      {correctedErrors.customer_phone.message}
+                      {correctedErrors.email.message}
                     </p>
                   )}
-                  <Input placeholder="Email (optional)" {...regCorrected("customer_email")} />
-                  <Input placeholder="Address (optional)" {...regCorrected("customer_address")} />
+                  <Input placeholder="Address (optional)" {...regCorrected("address")} />
+                  <Input placeholder="Sector (optional)" {...regCorrected("sector")} />
+                  <Input placeholder="Location (optional)" {...regCorrected("location")} />
                   <Button type="submit" size="sm" variant="destructive" disabled={verdictBusy}>
                     Save Corrections
                   </Button>
