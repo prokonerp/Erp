@@ -7,6 +7,10 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Input } from "@/components/ui/input";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { fetchCustodianNameMap } from "@/lib/ims";
+import { custodianBadgeLabel, filterByCustodian, type CustodianFilterMode } from "@/lib/custody-utils";
 
 export type SerialItem = {
   id: string;
@@ -16,6 +20,8 @@ export type SerialItem = {
   warehouse_id: string | null;
   stock_type: "good" | "defective";
   stock_status: string;
+  custodian_employee_id?: string | null;
+  custodian_name?: string | null;
 };
 
 type Props = {
@@ -46,10 +52,11 @@ export function ImsSerialPicker({
   const [manual, setManual] = useState(false);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
+  const [custodyOnly, setCustodyOnly] = useState(false);
   useEffect(() => { const t = setTimeout(() => setDebounced(search), 150); return () => clearTimeout(t); }, [search]);
 
-  // Bounded picker window: 25 on empty, 30 on search with server-side ilike — 6 cols, shouldFilter=false
-  const COLS = "id,part_serial_no,part_model_no,part_name,warehouse_id,stock_type,stock_status";
+  // Bounded picker window: 25 on empty, 30 on search with server-side ilike — 7 cols, shouldFilter=false
+  const COLS = "id,part_serial_no,part_model_no,part_name,warehouse_id,stock_type,stock_status,custodian_employee_id";
   const enabled = !!partModelNo || !!partName;
   const { data: rowsData, isLoading: loading } = useQuery({
     queryKey: ["ims-serials", partModelNo, partName, stockType, warehouseId, debounced] as const,
@@ -80,6 +87,25 @@ export function ImsSerialPicker({
     placeholderData: keepPreviousData,
   });
   const rows = useMemo(() => (rowsData as SerialItem[] | undefined) ?? [], [rowsData]);
+
+  // Read-only custodian resolve on the bounded window only — never blocks the picker.
+  const [custodianNames, setCustodianNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    const ids = rows.map((r) => r.custodian_employee_id).filter(Boolean) as string[];
+    if (ids.length === 0) { setCustodianNames(new Map()); return; }
+    fetchCustodianNameMap(ids).then((m) => { if (alive) setCustodianNames(m); }).catch(() => {});
+    return () => { alive = false; };
+  }, [rows]);
+
+  const custodyMode: CustodianFilterMode = custodyOnly ? "in-custody" : "all";
+  const visibleRows = useMemo(() => {
+    const withNames = rows.map((r) => ({
+      ...r,
+      custodian_name: r.custodian_employee_id ? (custodianNames.get(r.custodian_employee_id) ?? null) : null,
+    }));
+    return filterByCustodian(withNames, custodyMode);
+  }, [rows, custodianNames, custodyMode]);
 
   const handleSelect = useCallback((r: SerialItem) => {
     onSelect(r, r.part_serial_no);
@@ -118,14 +144,20 @@ export function ImsSerialPicker({
         <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[280px]" align="start">
           <Command shouldFilter={false}>
             <CommandInput placeholder="Search serial…" value={search} onValueChange={setSearch} />
+            <div className="flex items-center gap-2 px-3 py-2 border-b">
+              <Checkbox id="isp-custody-only" checked={custodyOnly} onCheckedChange={(v) => setCustodyOnly(v === true)} />
+              <label htmlFor="isp-custody-only" className="text-xs text-muted-foreground cursor-pointer">
+                In custody only (default off)
+              </label>
+            </div>
             <CommandList>
               <CommandEmpty>
                 <div className="py-4 px-3 text-sm text-muted-foreground">
                   No available inventory serial for this Model / Part.
                 </div>
               </CommandEmpty>
-              <CommandGroup heading={`${rows.length} available`}>
-                {rows.map((r) => (
+              <CommandGroup heading={`${visibleRows.length} available`}>
+                {visibleRows.map((r) => (
                   <CommandItem key={r.id} value={r.part_serial_no}
                     onSelect={() => handleSelect(r)}
                   >
@@ -135,6 +167,11 @@ export function ImsSerialPicker({
                       <div className="text-[10px] text-muted-foreground truncate">
                         {r.stock_type} · {r.part_model_no || r.part_name}
                       </div>
+                      {r.custodian_employee_id ? (
+                        <Badge variant="secondary" className="mt-1 text-[10px]" aria-label={custodianBadgeLabel(r) ?? "In custody"}>
+                          {custodianBadgeLabel(r)}
+                        </Badge>
+                      ) : null}
                     </div>
                   </CommandItem>
                 ))}

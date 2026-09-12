@@ -56,6 +56,54 @@ export const equipmentMismatchSchema = z.object({
 
 export type EquipmentMismatch = z.infer<typeof equipmentMismatchSchema>;
 
+export const equipmentPerFieldSchema = z
+  .object({
+    modelIncorrect: z.boolean(),
+    serialIncorrect: z.boolean(),
+    modelInput: z.string().trim().optional(),
+    serialInput: z.string().trim().optional(),
+  })
+  .refine((d) => d.modelIncorrect || d.serialIncorrect, {
+    message: "Mark at least one field as incorrect",
+    path: ["modelIncorrect"],
+  })
+  .refine((d) => !d.modelIncorrect || (d.modelInput?.length ?? 0) > 0, {
+    message: "Model No required",
+    path: ["modelInput"],
+  })
+  .refine((d) => !d.serialIncorrect || (d.serialInput?.length ?? 0) > 0, {
+    message: "Serial No required",
+    path: ["serialInput"],
+  });
+
+export type EquipmentPerField = z.infer<typeof equipmentPerFieldSchema>;
+
+export function resolveEquipmentCorrection(
+  original: { model: string | null | undefined; serial: string | null | undefined },
+  input: {
+    modelIncorrect: boolean;
+    serialIncorrect: boolean;
+    modelInput?: string;
+    serialInput?: string;
+  },
+): { corrected_model: string | null; corrected_serial: string | null; verdict: EquipmentVerdict } {
+  const parsed = equipmentPerFieldSchema.parse({
+    modelIncorrect: input.modelIncorrect,
+    serialIncorrect: input.serialIncorrect,
+    modelInput: input.modelInput,
+    serialInput: input.serialInput,
+  });
+  return {
+    corrected_model: parsed.modelIncorrect
+      ? (parsed.modelInput!.trim() as string)
+      : ((original.model ?? null) as string | null),
+    corrected_serial: parsed.serialIncorrect
+      ? (parsed.serialInput!.trim() as string)
+      : ((original.serial ?? null) as string | null),
+    verdict: parsed.modelIncorrect || parsed.serialIncorrect ? "mismatch" : "matched",
+  };
+}
+
 export function canProceedToStep2(
   customerRow: { id: string } | null,
 ): boolean {

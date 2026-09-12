@@ -31,6 +31,7 @@ export type GeneralDcRow = {
   shipping_address: string | null;
   purpose: string | null;
   branch_id: string | null;
+  carrier_employee_id: string | null;
   items: GeneralDcItem[];
   status: GeneralDcStatus;
   converted_invoice_id: string | null;

@@ -9,8 +9,10 @@ import { exportCSV } from "@/lib/exports";
 import { findEquipmentBySerial, warrantyEnd, coverStatus, amcStatusOf, statusClass, statusLabel, type InstalledEquipment } from "@/lib/installedEquipment";
 import {
   listWarehouses,
+  fetchCustodianNameMap,
   type StockItem, type Transaction, type WarehouseLite,
 } from "@/lib/ims";
+import { custodianBadgeLabel } from "@/lib/custody-utils";
 import { resolveTxnType } from "@/components/serial/TransactionTypeBadge";
 import { MovementTimeline, getMovementLabel } from "@/components/serial/MovementTimeline";
 import { SerialSearchHero, SerialHeaderCard, SectionHeader } from "@/components/serial/SerialTrackShell";
@@ -116,6 +118,16 @@ function SerialTrack() {
   const wMap = useMemo(() => Object.fromEntries(warehouses.map((w) => [w.id, w])), [warehouses]);
   /** Plain warehouse name only — no ASP/Godown suffix (same style as Reports). */
   const plainWhName = (id: string | null | undefined) => (id ? (wMap[id]?.name || "—") : "—");
+
+  // Read-only custody resolve — detail only (bounded ≤25 rows), never blocks the detail.
+  const [custodianNames, setCustodianNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    const ids = stock.map((r) => r.custodian_employee_id).filter(Boolean) as string[];
+    if (ids.length === 0) { setCustodianNames(new Map()); return; }
+    fetchCustodianNameMap(ids).then((m) => { if (alive) setCustodianNames(m); }).catch(() => {});
+    return () => { alive = false; };
+  }, [stock]);
 
   const term = q.trim().toLowerCase();
 
@@ -248,6 +260,12 @@ function SerialTrack() {
               warehouseLabel={plainWhName(row.warehouse_id)}
               qty={row.qty}
               issuedTo={issuedTo ? { party: issuedTo.to_party || row.customer_name || "—", reference: getTxnDocMeta(issuedTo as unknown as any).display } : null}
+              custody={custodianBadgeLabel({
+                custodian_employee_id: row.custodian_employee_id,
+                custodian_name: row.custodian_employee_id
+                  ? (custodianNames.get(row.custodian_employee_id) ?? null)
+                  : null,
+              })}
             />
 
             <Card className="rounded-xl border-border/60 bg-card shadow-sm overflow-hidden">

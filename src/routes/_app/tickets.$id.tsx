@@ -62,7 +62,9 @@ import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { listIndentMapForTicket } from "@/lib/indent.functions";
+import { resetTicketEngineerWork } from "@/lib/reset-ticket-engineer.functions";
 import { Eye } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
@@ -148,6 +150,15 @@ type Activity = {
   special_instruction?: boolean | null;
 };
 
+const VERIFY_LABEL: Record<string, string> = {
+  customer_verify: "Customer verification",
+  equipment_verify: "Equipment verification",
+  photo: "Photo",
+  note: "Note",
+  acknowledge: "Acknowledge",
+  verification_reset: "Verification reset",
+};
+
 function toDatetimeLocal(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -221,6 +232,8 @@ function TicketDetail() {
   const dirtyRef = useRef(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchIndentMap = useServerFn(listIndentMapForTicket);
+  const callResetEngineerWork = useServerFn(resetTicketEngineerWork);
+  const [resetBusy, setResetBusy] = useState(false);
   const indentMapQuery = useQuery({
     queryKey: ["indent-oracle-map", id],
     queryFn: () => fetchIndentMap({ data: { ticket_id: id } }),
@@ -767,6 +780,37 @@ function TicketDetail() {
     if (error) return toast.error(error.message);
     toast.success("Moved to Archive");
     navigate({ to: "/tickets" });
+  };
+
+  const handleResetEngineerWork = async () => {
+    if (!t || !isAdmin || resetBusy) return;
+    setResetBusy(true);
+    try {
+      const preview = await callResetEngineerWork({ data: { ticket_id: t.id, dryRun: true } });
+      const ok = await confirm({
+        title: `Reset engineer work — ${t.case_id}?`,
+        description: `Deletes customer verifications (${preview.customerRows}), equipment verifications (${preview.equipmentRows}), engineer activities (${preview.activityRows}), photos (${(preview.photoPaths ?? []).length}). Assignment and status are preserved. This cannot be undone.`,
+        confirmLabel: "Previewed — continue",
+        variant: "danger",
+      });
+      if (!ok) return;
+      // useConfirm has no text input — second gate via window.prompt for case_id.
+      const typed = window.prompt(`Type ${t.case_id} to confirm reset:`);
+      if (typed !== t.case_id) {
+        toast.error("Case ID did not match — reset cancelled.");
+        return;
+      }
+      const reason = window.prompt("Reason for reset (saved in audit log):") || undefined;
+      const res = await callResetEngineerWork({ data: { ticket_id: t.id, reason } });
+      toast.success(
+        `Engineer work reset: ${res.deletedActivities} activities, ${(res.removedPhotos ?? []).length} photos removed.`,
+      );
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Reset failed");
+    } finally {
+      setResetBusy(false);
+    }
   };
 
   const hasSpecialActivity = activities.some((a) => a.special_instruction);
@@ -1583,7 +1627,7 @@ function TicketDetail() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium capitalize flex items-center gap-2">
-                        {a.kind}
+                        {VERIFY_LABEL[a.kind] ?? a.kind}
                         {a.special_instruction && (
                           <span className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
                             <AlertTriangle className="h-3 w-3" />
@@ -1767,6 +1811,29 @@ function TicketDetail() {
                     )}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {isAdmin && (
+            <Card className="border-destructive/40">
+              <CardHeader>
+                <CardTitle>Admin — Engineer Work</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Clears engineer verification data so Step 2 can be redone. Assignment and
+                  status are preserved.
+                </p>
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  disabled={resetBusy}
+                  onClick={handleResetEngineerWork}
+                >
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  {resetBusy ? "Resetting…" : "Reset engineer work"}
+                </Button>
               </CardContent>
             </Card>
           )}

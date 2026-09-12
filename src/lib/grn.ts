@@ -65,6 +65,10 @@ export type Grn = {
   vehicle_number: string | null;
   driver_name: string | null;
   driver_mobile: string | null;
+  /** FK to employees(id) — driver/carrier identity. NULL = text fallback. */
+  carrier_employee_id?: string | null;
+  /** Joined carrier name (populated by detail views, not stored). */
+  carrier_employee_name?: string | null;
   lr_number: string | null;
   mode_of_transport: string | null;
   num_packages: string | null;

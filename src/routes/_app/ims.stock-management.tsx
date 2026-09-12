@@ -46,6 +46,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   fetchStockPage,
   fetchTransactionsPage,
+  fetchCustodianNameMap,
   listWarehouses,
   STOCK_STATUS_LABEL,
   TXN_TYPE_LABEL,
@@ -53,6 +54,7 @@ import {
   type Transaction,
   type WarehouseLite,
 } from "@/lib/ims";
+import { custodianBadgeLabel, filterByCustodian, type CustodianFilterMode } from "@/lib/custody-utils";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { stockKeys, txnKeys } from "@/lib/queryKeys";
 import { TableSkeleton } from "@/components/shared/skeletons";
@@ -883,6 +885,17 @@ function ProductDetailSheet({
   const [serialWh, setSerialWh] = useState<string>("all");
   const [serialCond, setSerialCond] = useState<string>("all");
   const [serialStatus, setSerialStatus] = useState<string>("all");
+  const [serialCustody, setSerialCustody] = useState<CustodianFilterMode>("all");
+
+  // Read-only custody names — resolved on detail open only, never on the list.
+  const [custodianNames, setCustodianNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    const ids = (product?.items || []).map((s) => s.custodian_employee_id).filter(Boolean) as string[];
+    if (ids.length === 0) { setCustodianNames(new Map()); return; }
+    fetchCustodianNameMap(ids).then((m) => { if (alive) setCustodianNames(m); }).catch(() => {});
+    return () => { alive = false; };
+  }, [product]);
 
   useEffect(() => {
     if (!product) {
@@ -893,6 +906,7 @@ function ProductDetailSheet({
     setSerialWh("all");
     setSerialCond("all");
     setSerialStatus("all");
+    setSerialCustody("all");
     setLoadingTxns(true);
     fetchTransactionsPage({ page: 0, pageSize: 500 })
       .then((res) => {
@@ -993,16 +1007,19 @@ function ProductDetailSheet({
     })
     .reverse();
 
-  const serialFiltered = product.items.filter((s) => {
-    if (serialWh !== "all" && (s.warehouse_id || "") !== serialWh) return false;
-    if (serialCond !== "all" && s.stock_type !== serialCond) return false;
-    if (serialStatus !== "all" && s.stock_status !== serialStatus) return false;
+  const serialFiltered = filterByCustodian(
+    product.items.filter((s) => {
+      if (serialWh !== "all" && (s.warehouse_id || "") !== serialWh) return false;
+      if (serialCond !== "all" && s.stock_type !== serialCond) return false;
+      if (serialStatus !== "all" && s.stock_status !== serialStatus) return false;
     if (!serialQ) return true;
     const q = serialQ.toLowerCase();
     return [s.part_serial_no, s.part_model_no, s.transaction_ref, s.customer_name]
       .filter(Boolean)
       .some((v) => String(v).toLowerCase().includes(q));
-  });
+    }),
+    serialCustody,
+  );
 
   function exportSerials() {
     exportCSV(
@@ -1378,7 +1395,7 @@ function ProductDetailSheet({
                   </SelectContent>
                 </Select>
                 <Select value={serialStatus} onValueChange={setSerialStatus}>
-                  <SelectTrigger className="h-8 w-[140px] text-xs">
+                  <SelectTrigger className="h-8 w-[140px] text-xs" aria-label="Serial status filter">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1388,6 +1405,16 @@ function ProductDetailSheet({
                         {l}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+                <Select value={serialCustody} onValueChange={(v) => setSerialCustody(v as CustodianFilterMode)}>
+                  <SelectTrigger className="h-8 w-[140px] text-xs" aria-label="Custodian filter">
+                    <SelectValue placeholder="Custodian" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All custodians</SelectItem>
+                    <SelectItem value="in-custody">In custody</SelectItem>
+                    <SelectItem value="no-custodian">No custodian</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button
@@ -1407,6 +1434,7 @@ function ProductDetailSheet({
                       <th className="p-2">Warehouse</th>
                       <th className="p-2">Condition</th>
                       <th className="p-2">Status</th>
+                      <th className="p-2">Custody</th>
                       <th className="p-2">Ref Doc</th>
                       <th className="p-2">Owner</th>
                       <th className="p-2">Received</th>
@@ -1416,7 +1444,7 @@ function ProductDetailSheet({
                   <tbody>
                     {serialFiltered.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="p-3 text-muted-foreground text-center">
+                        <td colSpan={9} className="p-3 text-muted-foreground text-center">
                           No serials match these filters.
                         </td>
                       </tr>
@@ -1439,6 +1467,15 @@ function ProductDetailSheet({
                           </td>
                           <td className="p-2">
                             <StockStatusBadge status={s.stock_status} type={s.stock_type} />
+                          </td>
+                          <td className="p-2">
+                            {s.custodian_employee_id ? (
+                              <Badge variant="secondary" className="text-[10px]" aria-label={custodianBadgeLabel({ custodian_employee_id: s.custodian_employee_id, custodian_name: custodianNames.get(s.custodian_employee_id) ?? null }) ?? "In custody"}>
+                                {custodianBadgeLabel({ custodian_employee_id: s.custodian_employee_id, custodian_name: custodianNames.get(s.custodian_employee_id) ?? null })}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </td>
                           <td className="p-2 font-mono">{s.transaction_ref || "—"}</td>
                           <td className="p-2">

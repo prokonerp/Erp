@@ -146,6 +146,8 @@ export type SerialHeaderCardProps = {
   qty: number;
   /** Issued destination resolved from latest good_out / defective_out */
   issuedTo?: { party: string; reference?: string | null } | null;
+  /** Read-only custody badge text e.g. "In custody: Asha". Null = no custodian. */
+  custody?: string | null;
   className?: string;
 };
 
@@ -296,6 +298,7 @@ export function SerialHeaderCard({
   warehouseLabel,
   qty,
   issuedTo,
+  custody,
   className,
 }: SerialHeaderCardProps) {
   const hasIssued = Boolean(issuedTo && (stockStatus === "issued" || stockStatus === "returned_to_oem"));
@@ -311,6 +314,11 @@ export function SerialHeaderCard({
         <span className="inline-flex items-center gap-1.5 flex-wrap">
           <StockStatusBadge status={stockStatus} type={stockType} />
           <StockTypeBadge type={stockType} />
+          {custody ? (
+            <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-xs" aria-label={custody}>
+              {custody}
+            </Badge>
+          ) : null}
         </span>
       </div>
 

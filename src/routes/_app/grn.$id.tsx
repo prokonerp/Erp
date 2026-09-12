@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Printer, Download, CheckCircle2, Ban, Pencil, Wrench } from "lucide-react";
 import { fetchGrn, CATEGORY_LABEL, type Grn } from "@/lib/grn";
+import { resolveCarrierDisplay } from "@/lib/carrierEmployee";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
@@ -41,6 +42,7 @@ function GrnView() {
   const [indentStatus, setIndentStatus] = useState<string | null>(null);
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
   const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
+  const [carrierName, setCarrierName] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCompanyProfile()
@@ -73,6 +75,27 @@ function GrnView() {
       .then(setG)
       .catch((e) => toast.error(e.message));
   }, [id]);
+
+  // Linked carrier name for FK-first display (falls back to driver text).
+  useEffect(() => {
+    const fk = (g as { carrier_employee_id?: string | null } | null)?.carrier_employee_id;
+    if (!fk) {
+      setCarrierName(null);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      const { data } = await supabase
+        .from("assignable_engineers")
+        .select("name")
+        .eq("id", fk)
+        .maybeSingle();
+      if (alive) setCarrierName((data as { name?: string } | null)?.name ?? null);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [g]);
 
   const refreshGrn = () =>
     fetchGrn(id)
@@ -608,11 +631,22 @@ function GrnView() {
                       <b>LR No:</b> {g.lr_number}
                     </div>
                   )}
-                  {(g.driver_name || g.driver_mobile) && (
-                    <div>
-                      <b>Driver:</b> {g.driver_name} {g.driver_mobile ? `(${g.driver_mobile})` : ""}
-                    </div>
-                  )}
+                  {(() => {
+                    const d = resolveCarrierDisplay({
+                      carrier_employee_id:
+                        (g as { carrier_employee_id?: string | null }).carrier_employee_id ??
+                        null,
+                      carrier_employee_name: carrierName,
+                      driver_name: g.driver_name,
+                      driver_mobile: g.driver_mobile,
+                    });
+                    return d.name || d.mobile ? (
+                      <div>
+                        <b>Driver{d.linked ? " (linked)" : ""}:</b> {d.name}{" "}
+                        {d.mobile ? `(${d.mobile})` : ""}
+                      </div>
+                    ) : null;
+                  })()}
                   {(g.num_packages || g.total_weight) && (
                     <div>
                       <b>Pkgs/Weight:</b> {g.num_packages || "-"} / {g.total_weight || "-"}

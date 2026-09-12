@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Printer, Download, Ban, Pencil } from "lucide-react";
 import { fetchChallan, type DeliveryChallan } from "@/lib/challan";
+import { resolveCarrierDisplay } from "@/lib/carrierEmployee";
 import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { downloadElementAsPdf } from "@/lib/docPdf";
@@ -31,6 +32,7 @@ function ChallanView() {
   const navigate = useNavigate();
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [authorisedSignatureUrl, setAuthorisedSignatureUrl] = useState<string | null>(null);
+  const [carrierName, setCarrierName] = useState<string | null>(null);
 
   useEffect(() => { getDocumentHeader().then(setCompany).catch(() => {}); }, []);
 
@@ -57,6 +59,27 @@ function ChallanView() {
   useEffect(() => {
     fetchChallan(id).then(setC).catch((e) => toast.error(e.message));
   }, [id]);
+
+  // Linked carrier name for FK-first display (falls back to driver text).
+  useEffect(() => {
+    const fk = (c as { carrier_employee_id?: string | null } | null)?.carrier_employee_id;
+    if (!fk) {
+      setCarrierName(null);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      const { data } = await supabase
+        .from("assignable_engineers")
+        .select("name")
+        .eq("id", fk)
+        .maybeSingle();
+      if (alive) setCarrierName((data as { name?: string } | null)?.name ?? null);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [c]);
 
   // Auto-start the PDF download when opened with ?download=1 (from the
   // Indent Oracle pipeline "Download PDF" button).
@@ -268,7 +291,22 @@ function ChallanView() {
                   {c.lr_number && <div><b>LR No:</b> {c.lr_number}</div>}
                   {c.gate_pass_no && <div><b>Gate Pass No:</b> {c.gate_pass_no}</div>}
                   {c.mode_of_transport && <div><b>Mode:</b> {c.mode_of_transport}</div>}
-                  {(c.driver_name || c.driver_mobile) && <div><b>Driver:</b> {c.driver_name} {c.driver_mobile ? `(${c.driver_mobile})` : ""}</div>}
+                  {(() => {
+                    const d = resolveCarrierDisplay({
+                      carrier_employee_id:
+                        (c as { carrier_employee_id?: string | null }).carrier_employee_id ??
+                        null,
+                      carrier_employee_name: carrierName,
+                      driver_name: c.driver_name,
+                      driver_mobile: c.driver_mobile,
+                    });
+                    return d.name || d.mobile ? (
+                      <div>
+                        <b>Driver{d.linked ? " (linked)" : ""}:</b> {d.name}{" "}
+                        {d.mobile ? `(${d.mobile})` : ""}
+                      </div>
+                    ) : null;
+                  })()}
                   {(c.num_packages || c.total_weight) && <div><b>Pkgs/Weight:</b> {c.num_packages || "-"} / {c.total_weight || "-"}</div>}
                   {(c.sales_order_no || c.customer_po_no || c.invoice_no || c.reference_no) && (
                     <div style={{ marginTop: 2, fontSize: 10 }}>

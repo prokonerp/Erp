@@ -468,6 +468,7 @@ export type Indent = {
   material_rec_serial_no: string | null;
   material_rec_date: string | null;
   engineer_name: string | null;
+  engineer_employee_id: string | null;
   remarks: string | null;
   product_model: string | null;
   product_serial: string | null;

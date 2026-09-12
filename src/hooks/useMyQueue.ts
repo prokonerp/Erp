@@ -25,7 +25,7 @@ const QUEUE_COLS =
 // FK matching uses .filter("assigned_employee_id",...) which takes a plain
 // string. Add the column here after types are regenerated.
 
-type QueueTicket = {
+export type QueueTicket = {
   id: string;
   case_id: string;
   status: string;
@@ -42,6 +42,48 @@ type QueueTicket = {
   call_type: string;
   assigned_at: string | null;
 };
+
+/**
+ * Read-only opt-in carried-parts count for the current engineer.
+ * Disabled by default (enabled=false) so the queue list issues no new
+ * queries. When enabled, resolves the employee id by email (same as
+ * useMyQueue) then counts ims_stock_items by custodian_employee_id.
+ * Never throws to the UI: lookup failure → count 0 ("Unknown" fallback
+ * handled by callers via custodianBadgeLabel).
+ */
+export function useMyCarriedPartsCount(enabled = false) {
+  const { session } = useAuth();
+  const uid = session?.user?.id ?? null;
+  const email = session?.user?.email ?? null;
+
+  return useQuery({
+    queryKey: ["eng", "carried-count", uid] as const,
+    enabled: !!uid && !!email && enabled,
+    staleTime: 30_000,
+    refetchInterval: false,
+    queryFn: async (): Promise<{ count: number; employeeId: string | null }> => {
+      try {
+        if (!email) return { count: 0, employeeId: null };
+        const { data: emps, error: empErr } = await supabase
+          .from("employees")
+          .select("id")
+          .eq("email", email)
+          .eq("active", true)
+          .limit(1);
+        if (empErr || !emps || emps.length === 0) return { count: 0, employeeId: null };
+        const empId = (emps[0] as { id: string }).id;
+        const { count, error } = await supabase
+          .from("ims_stock_items")
+          .select("id", { count: "exact", head: true })
+          .filter("custodian_employee_id", "eq", empId);
+        if (error) return { count: 0, employeeId: empId };
+        return { count: count ?? 0, employeeId: empId };
+      } catch {
+        return { count: 0, employeeId: null };
+      }
+    },
+  });
+}
 
 export function useMyQueue() {
   const { session } = useAuth();

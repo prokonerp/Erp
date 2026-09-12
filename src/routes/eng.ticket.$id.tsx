@@ -20,7 +20,8 @@ import {
   buildCustomerSnapshot,
   buildEquipmentOriginal,
   customerCorrectedSchema,
-  equipmentMismatchSchema,
+  equipmentPerFieldSchema,
+  resolveEquipmentCorrection,
   canProceedToStep2,
   canProceedToWork,
 } from "@/lib/ticket-verifications";
@@ -141,19 +142,38 @@ function EngTicketDetail() {
     },
   });
 
-  // Step 2 form
+  // Step 2 form — per-field Model / Serial toggles
   const {
     register: regMismatch,
     handleSubmit: handleMismatchSubmit,
     formState: { errors: mismatchErrors },
     reset: resetMismatch,
+    watch: watchMismatch,
+    setValue: setMismatchValue,
   } = useForm({
-    resolver: zodResolver(equipmentMismatchSchema),
+    resolver: zodResolver(equipmentPerFieldSchema),
     defaultValues: {
-      corrected_model: ticket?.product ?? "",
-      corrected_serial: ticket?.serial_no ?? "",
+      modelIncorrect: false,
+      serialIncorrect: false,
+      modelInput: ticket?.product ?? "",
+      serialInput: ticket?.serial_no ?? "",
     },
   });
+  const modelIncorrect = watchMismatch("modelIncorrect") ?? false;
+  const serialIncorrect = watchMismatch("serialIncorrect") ?? false;
+
+  // Prefill per-field inputs when async ticket arrives
+  useEffect(() => {
+    if (ticket) {
+      resetMismatch({
+        modelIncorrect: false,
+        serialIncorrect: false,
+        modelInput: ticket.product ?? "",
+        serialInput: ticket.serial_no ?? "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticket?.product, ticket?.serial_no]);
 
   useEffect(() => {
     let active = true;
@@ -376,8 +396,8 @@ function EngTicketDetail() {
   };
 
   const handleEquipmentMismatch = async (data: {
-    corrected_model: string;
-    corrected_serial: string;
+    corrected_model: string | null;
+    corrected_serial: string | null;
   }) => {
     if (!navigator.onLine) {
       toast.error("No internet connection. Reconnect and retry — nothing was uploaded.");
@@ -486,7 +506,12 @@ function EngTicketDetail() {
       }
       toast.success("Equipment mismatch recorded");
       setMismatchPhotoFile(null);
-      resetMismatch();
+      resetMismatch({
+        modelIncorrect: false,
+        serialIncorrect: false,
+        modelInput: ticket?.product ?? "",
+        serialInput: ticket?.serial_no ?? "",
+      });
       await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
       await refreshActivities();
     } catch (err) {
@@ -500,6 +525,22 @@ function EngTicketDetail() {
     } finally {
       setMismatchBusy(false);
     }
+  };
+
+  const handlePerFieldMismatch = async (data: {
+    modelIncorrect: boolean;
+    serialIncorrect: boolean;
+    modelInput?: string;
+    serialInput?: string;
+  }) => {
+    const resolved = resolveEquipmentCorrection(
+      { model: ticket?.product ?? null, serial: ticket?.serial_no ?? null },
+      data,
+    );
+    await handleEquipmentMismatch({
+      corrected_model: resolved.corrected_model,
+      corrected_serial: resolved.corrected_serial,
+    });
   };
 
   const handleEquipmentMatched = async () => {
@@ -1003,27 +1044,78 @@ function EngTicketDetail() {
               >
                 <summary className="cursor-pointer text-muted-foreground">Report mismatch…</summary>
                 <form
-                  className="mt-2 space-y-2"
-                  onSubmit={handleMismatchSubmit(handleEquipmentMismatch)}
+                  className="mt-2 space-y-3"
+                  onSubmit={handleMismatchSubmit(handlePerFieldMismatch)}
                 >
-                  <Input
-                    placeholder="Correct model"
-                    aria-label="Correct model"
-                    {...regMismatch("corrected_model")}
-                  />
-                  {mismatchErrors.corrected_model && (
+                  <div className="space-y-1 border rounded-md p-2">
+                    <p className="font-medium">Model</p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={!modelIncorrect ? "default" : "outline"}
+                        onClick={() => setMismatchValue("modelIncorrect", false)}
+                      >
+                        Correct
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={modelIncorrect ? "destructive" : "outline"}
+                        onClick={() => setMismatchValue("modelIncorrect", true)}
+                      >
+                        Incorrect
+                      </Button>
+                    </div>
+                    {modelIncorrect && (
+                      <Input
+                        placeholder="Correct model"
+                        aria-label="Correct model"
+                        {...regMismatch("modelInput")}
+                      />
+                    )}
+                    {mismatchErrors.modelInput && (
+                      <p className="text-destructive text-xs">
+                        {mismatchErrors.modelInput.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1 border rounded-md p-2">
+                    <p className="font-medium">Serial</p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={!serialIncorrect ? "default" : "outline"}
+                        onClick={() => setMismatchValue("serialIncorrect", false)}
+                      >
+                        Correct
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={serialIncorrect ? "destructive" : "outline"}
+                        onClick={() => setMismatchValue("serialIncorrect", true)}
+                      >
+                        Incorrect
+                      </Button>
+                    </div>
+                    {serialIncorrect && (
+                      <Input
+                        placeholder="Correct serial"
+                        aria-label="Correct serial"
+                        {...regMismatch("serialInput")}
+                      />
+                    )}
+                    {mismatchErrors.serialInput && (
+                      <p className="text-destructive text-xs">
+                        {mismatchErrors.serialInput.message}
+                      </p>
+                    )}
+                  </div>
+                  {mismatchErrors.modelIncorrect && (
                     <p className="text-destructive text-xs">
-                      {mismatchErrors.corrected_model.message}
-                    </p>
-                  )}
-                  <Input
-                    placeholder="Correct serial"
-                    aria-label="Correct serial"
-                    {...regMismatch("corrected_serial")}
-                  />
-                  {mismatchErrors.corrected_serial && (
-                    <p className="text-destructive text-xs">
-                      {mismatchErrors.corrected_serial.message}
+                      {mismatchErrors.modelIncorrect.message}
                     </p>
                   )}
                   {gpsError && <p className="text-destructive text-xs">{gpsError}</p>}
@@ -1041,7 +1133,9 @@ function EngTicketDetail() {
                     type="submit"
                     size="sm"
                     variant="destructive"
-                    disabled={mismatchBusy || !mismatchPhotoFile}
+                    disabled={
+                      mismatchBusy || !mismatchPhotoFile || (!modelIncorrect && !serialIncorrect)
+                    }
                   >
                     {mismatchBusy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                     Upload & Record Mismatch

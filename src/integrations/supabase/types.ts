@@ -1300,6 +1300,7 @@ export type Database = {
           allow_negative_stock: boolean
           approved_by: string | null
           branch_id: string | null
+          carrier_employee_id: string | null
           challan_date: string
           challan_no: string
           checked_by: string | null
@@ -1351,6 +1352,7 @@ export type Database = {
           allow_negative_stock?: boolean
           approved_by?: string | null
           branch_id?: string | null
+          carrier_employee_id?: string | null
           challan_date?: string
           challan_no: string
           checked_by?: string | null
@@ -1402,6 +1404,7 @@ export type Database = {
           allow_negative_stock?: boolean
           approved_by?: string | null
           branch_id?: string | null
+          carrier_employee_id?: string | null
           challan_date?: string
           challan_no?: string
           checked_by?: string | null
@@ -1794,6 +1797,7 @@ export type Database = {
           allow_negative_stock: boolean
           billing_address: string | null
           branch_id: string | null
+          carrier_employee_id: string | null
           cancelled_at: string | null
           cancelled_by: string | null
           cancelled_reason: string | null
@@ -1821,6 +1825,7 @@ export type Database = {
           allow_negative_stock?: boolean
           billing_address?: string | null
           branch_id?: string | null
+          carrier_employee_id?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           cancelled_reason?: string | null
@@ -1848,6 +1853,7 @@ export type Database = {
           allow_negative_stock?: boolean
           billing_address?: string | null
           branch_id?: string | null
+          carrier_employee_id?: string | null
           cancelled_at?: string | null
           cancelled_by?: string | null
           cancelled_reason?: string | null
@@ -1902,6 +1908,7 @@ export type Database = {
           attachments: Json | null
           bin_no: string | null
           branch_id: string | null
+          carrier_employee_id: string | null
           category: string
           checked_by: string | null
           created_at: string
@@ -1962,6 +1969,7 @@ export type Database = {
           attachments?: Json | null
           bin_no?: string | null
           branch_id?: string | null
+          carrier_employee_id?: string | null
           category: string
           checked_by?: string | null
           created_at?: string
@@ -2022,6 +2030,7 @@ export type Database = {
           attachments?: Json | null
           bin_no?: string | null
           branch_id?: string | null
+          carrier_employee_id?: string | null
           category?: string
           checked_by?: string | null
           created_at?: string
@@ -2207,6 +2216,7 @@ export type Database = {
           created_by: string | null
           customer_id: string | null
           customer_name: string | null
+          custodian_employee_id: string | null
           id: string
           indent_id: string | null
           modified_by: string | null
@@ -2232,6 +2242,7 @@ export type Database = {
           created_by?: string | null
           customer_id?: string | null
           customer_name?: string | null
+          custodian_employee_id?: string | null
           id?: string
           indent_id?: string | null
           modified_by?: string | null
@@ -2257,6 +2268,7 @@ export type Database = {
           created_by?: string | null
           customer_id?: string | null
           customer_name?: string | null
+          custodian_employee_id?: string | null
           id?: string
           indent_id?: string | null
           modified_by?: string | null
@@ -2701,6 +2713,7 @@ export type Database = {
           def_serial_no: string | null
           deleted_at: string | null
           deleted_by: string | null
+          engineer_employee_id: string | null
           engineer_name: string | null
           id: string
           indent_city: string | null
@@ -2734,6 +2747,7 @@ export type Database = {
           def_serial_no?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          engineer_employee_id?: string | null
           engineer_name?: string | null
           id?: string
           indent_city?: string | null
@@ -2767,6 +2781,7 @@ export type Database = {
           def_serial_no?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          engineer_employee_id?: string | null
           engineer_name?: string | null
           id?: string
           indent_city?: string | null

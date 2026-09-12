@@ -13,6 +13,8 @@ import type { ChallanItem, DocType } from "@/lib/challan";
 import { emptyItem, isChallanEditable } from "@/lib/challan";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
+import { CarrierEmployeePicker } from "@/components/CarrierEmployeePicker";
+import { applyCarrierSelection, clearCarrierSelection } from "@/lib/carrierEmployee";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer, CustomerBranch } from "@/lib/crm";
@@ -36,6 +38,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const [items, setItems] = useState<ChallanItem[]>([emptyItem()]);
   const [partyId, setPartyId] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
+  // FK-first carrier link (employees id). NULL = text fallback; the server
+  // trigger resolves the FK from driver text and overwrites text from the FK.
+  const [carrierEmployeeId, setCarrierEmployeeId] = useState<string | null>(null);
   // Persistent id for auto-save. Starts from editId; upgraded after first insert.
   const [recordId, setRecordId] = useState<string | null>(editId ?? null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -268,6 +273,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         indent_id: (r.indent_id as string) || "",
       }));
       setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
+      setCarrierEmployeeId(((r as { carrier_employee_id?: string | null }).carrier_employee_id) ?? null);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId]);
@@ -290,6 +296,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       dispatch_date: form.dispatch_date || null,
       items: cleanItems,
       branch_id: branchId,
+      carrier_employee_id: carrierEmployeeId,
       indent_id: form.indent_id || null,
       allow_negative_stock: dcType === "customer" ? allowNegativeRef.current : false,
     };
@@ -386,7 +393,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     const t = setTimeout(() => { void persist(); }, 2500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, items, dcType, branchId, negOpen, recordId]);
+  }, [form, items, dcType, branchId, carrierEmployeeId, negOpen, recordId]);
 
   // Flush on tab close if there are pending changes.
   useEffect(() => {
@@ -399,7 +406,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, items, dcType, branchId, recordId, saveState]);
+  }, [form, items, dcType, branchId, carrierEmployeeId, recordId, saveState]);
 
   const updateItem = (i: number, patch: Partial<ChallanItem>) =>
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -798,6 +805,25 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
           </FormField>
           <FormField size="sm" label="Vehicle Number">
             <Input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} />
+          </FormField>
+          <FormField size="md" label="Carrier (employee link)">
+            <CarrierEmployeePicker
+              value={carrierEmployeeId}
+              onSelect={(emp) => {
+                const next = applyCarrierSelection(
+                  { driver_name: form.driver_name, driver_mobile: form.driver_mobile, carrier_employee_id: carrierEmployeeId },
+                  emp,
+                );
+                setCarrierEmployeeId(next.carrier_employee_id);
+                setForm({ ...form, driver_name: next.driver_name, driver_mobile: next.driver_mobile });
+              }}
+              onClear={() => {
+                const next = clearCarrierSelection(
+                  { driver_name: form.driver_name, driver_mobile: form.driver_mobile, carrier_employee_id: carrierEmployeeId },
+                );
+                setCarrierEmployeeId(next.carrier_employee_id);
+              }}
+            />
           </FormField>
           <FormField size="md" label={isOem ? "Driver Name" : "Engineer Name"}>
             <Input value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} />

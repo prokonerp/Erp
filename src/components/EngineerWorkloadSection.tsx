@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -83,6 +84,10 @@ export function EngineerWorkloadSection() {
   );
   const [priorityF, setPriorityF] = useState<string>("all");
   const [statusF, setStatusF] = useState<string>("all");
+  // Read-only carried-parts surfacing — default off, no new queries until enabled (detail-only).
+  const [showCarriedOnly, setShowCarriedOnly] = useState(false);
+  const [carriedByName, setCarriedByName] = useState<Record<string, number>>({});
+  const [carriedLoading, setCarriedLoading] = useState(false);
 
   // keep typing responsive — defer heavy grouping/sort until idle
   const deferredEngineerQ = useDeferredValue(engineerQ);
@@ -130,6 +135,41 @@ export function EngineerWorkloadSection() {
     return () => clearInterval(t);
   }, []);
   useRealtimeRefetch("tickets", load);
+
+  // Lazy carried-parts counts by engineer name — only when the opt-in filter is on.
+  // Read-only; any failure resolves to {} (never blocks the workload list).
+  useEffect(() => {
+    if (!showCarriedOnly) return;
+    let alive = true;
+    setCarriedLoading(true);
+    (async () => {
+      try {
+        const sb = supabase as unknown as { from: (t: string) => any };
+        const { data: emps } = await sb.from("employees").select("id,name").eq("active", true).limit(2000);
+        const idToName = new Map<string, string>();
+        for (const e of ((emps || []) as { id: string; name: string }[])) {
+          if (e?.id && e?.name) idToName.set(e.id, e.name);
+        }
+        const { data: stock } = await sb
+          .from("ims_stock_items")
+          .select("custodian_employee_id")
+          .not("custodian_employee_id", "is", null)
+          .limit(2000);
+        const counts: Record<string, number> = {};
+        for (const r of ((stock || []) as { custodian_employee_id: string | null }[])) {
+          const name = r.custodian_employee_id ? idToName.get(r.custodian_employee_id) : undefined;
+          if (!name) continue;
+          counts[name] = (counts[name] ?? 0) + 1;
+        }
+        if (alive) setCarriedByName(counts);
+      } catch {
+        if (alive) setCarriedByName({});
+      } finally {
+        if (alive) setCarriedLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [showCarriedOnly]);
 
   const now = new Date();
   const startToday = new Date(now);
@@ -228,8 +268,9 @@ export function EngineerWorkloadSection() {
     }
     const arr = Array.from(m.values());
     const q = deferredEngineerQ.trim().toLowerCase();
-    const filtered = q ? arr.filter((e) => e.name.toLowerCase().includes(q)) : arr;
-    const sorted = filtered.sort((a, b) => {
+    const bySearch = q ? arr.filter((e) => e.name.toLowerCase().includes(q)) : arr;
+    const byCarried = showCarriedOnly ? bySearch.filter((e) => (carriedByName[e.name] ?? 0) > 0) : bySearch;
+    const sorted = byCarried.sort((a, b) => {
       switch (sortKey) {
         case "today":
           return b.today - a.today;
@@ -244,7 +285,7 @@ export function EngineerWorkloadSection() {
       }
     });
     return sorted;
-  }, [filteredRows, deferredEngineerQ, sortKey]);
+  }, [filteredRows, deferredEngineerQ, sortKey, showCarriedOnly, carriedByName]);
 
   const overdue = useMemo(() => {
     return filteredRows
@@ -417,6 +458,10 @@ export function EngineerWorkloadSection() {
                   <SelectItem value="high">Sort: High Priority</SelectItem>
                 </SelectContent>
               </Select>
+              <label htmlFor="ew-carried-only" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                <Checkbox id="ew-carried-only" checked={showCarriedOnly} onCheckedChange={(v) => setShowCarriedOnly(v === true)} />
+                Carried parts only{carriedLoading ? "…" : ""}
+              </label>
             </div>
           </div>
         </CardHeader>
@@ -445,6 +490,7 @@ export function EngineerWorkloadSection() {
                     <th className="text-right p-2 bg-muted">Waiting</th>
                     <th className="text-right p-2 bg-muted">Closed Today</th>
                     <th className="text-right p-2 bg-muted">High Pr.</th>
+                    <th className="text-right p-2 bg-muted">Carried</th>
                     <th className="text-right p-2 bg-muted">Oldest</th>
                     <th className="text-left p-2 bg-muted">Capacity</th>
                   </tr>
@@ -496,6 +542,9 @@ export function EngineerWorkloadSection() {
                             value={e.high}
                             search={{ scope: "highPriority", engineer: e.name }}
                           />
+                          <td className="p-2 text-right whitespace-nowrap" title={showCarriedOnly || carriedByName[e.name] != null ? `In custody with ${e.name}` : "Enable “Carried parts only” to load custody counts"}>
+                            {showCarriedOnly || carriedByName[e.name] != null ? (carriedByName[e.name] ?? 0) : "—"}
+                          </td>
                           <td className="p-2 text-right whitespace-nowrap">
                             {e.oldestDays > 0 ? `${e.oldestDays}d` : "—"}
                           </td>
@@ -506,12 +555,13 @@ export function EngineerWorkloadSection() {
                         {isOpen && (
                           <tr className="bg-muted/20">
                             <td></td>
-                            <td colSpan={11} className="p-3">
+                            <td colSpan={12} className="p-3">
                               <EngineerDetail
                                 engineer={e.name}
                                 tickets={e.tickets
                                   .filter((t) => t.status !== "Closed" && t.status !== "Cancelled")
                                   .slice(0, 25)}
+                                carriedCount={showCarriedOnly || carriedByName[e.name] != null ? (carriedByName[e.name] ?? 0) : null}
                               />
                             </td>
                           </tr>
@@ -754,15 +804,16 @@ function ChartCard({
   );
 }
 
-function EngineerDetail({ engineer, tickets }: { engineer: string; tickets: T[] }) {
-  if (!tickets.length)
+function EngineerDetail({ engineer, tickets, carriedCount }: { engineer: string; tickets: T[]; carriedCount?: number | null }) {
+  if (!tickets.length && carriedCount == null)
     return <div className="text-sm text-muted-foreground">No active tickets for {engineer}.</div>;
   const now = new Date();
   return (
     <div>
-      <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between">
+      <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between flex-wrap gap-2">
         <span>
           <strong>{engineer}</strong> · {tickets.length} active tickets
+          {carriedCount != null ? <span> · {carriedCount} carried part{carriedCount === 1 ? "" : "s"} (in custody)</span> : null}
         </span>
         <Link
           to="/tickets"

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prokon × Tally Gold — Automatic Per-Bill Flow</title>
+<style>
+:root{
+  --paper:#FBFBF9; --card:#FFFFFF; --ink:#1a1a1a; --sub:#5f5f5c;
+  --line:#E8E8E4; --accent:#1e5c38; --accent-soft:#EDF3EC;
+  --amber-bg:#FBF3DB; --amber-tx:#7a5200; --red-bg:#FDEBEC; --red-tx:#8f2b29;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+  font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:760px;margin:0 auto;padding:0 24px 120px}
+header.site{border-bottom:1px solid var(--line);background:var(--paper)}
+header.site .wrap{padding-top:20px;padding-bottom:20px;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
+.brand{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sub)}
+nav.toc{display:flex;gap:16px;flex-wrap:wrap;font-size:14px}
+nav.toc a{color:var(--sub);text-decoration:none;border-bottom:1px solid transparent}
+nav.toc a:hover{color:var(--ink);border-color:var(--ink)}
+h1{font-size:34px;line-height:1.2;letter-spacing:-.02em;font-weight:600;margin:64px 0 12px;max-width:22em}
+.lede{font-size:18px;color:var(--sub);max-width:36em;margin:0 0 8px}
+.meta{font-size:13px;color:var(--sub);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0;margin:28px 0 0;display:flex;gap:20px;flex-wrap:wrap}
+section{padding:56px 0 8px;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:0}
+.sec-no{font-family:var(--mono);font-size:12px;color:var(--sub);letter-spacing:.06em}
+h2{font-size:23px;letter-spacing:-.015em;font-weight:600;margin:8px 0 12px}
+p{margin:0 0 14px;max-width:42em}
+ul{margin:0 0 14px;padding-left:22px;max-width:42em}
+li{margin-bottom:6px}
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:16px 0}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);font-weight:600}
+code{font-family:var(--mono);font-size:.86em;background:#F1F1ED;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre{font-family:var(--mono);font-size:13px;line-height:1.6;background:#F4F4F0;border:1px solid var(--line);border-radius:8px;padding:16px;overflow-x:auto}
+.tag{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 10px;border:1px solid var(--line);background:#fff;white-space:nowrap}
+.tag.ok{background:var(--accent-soft);border-color:#d4e2d5;color:var(--accent)}
+.tag.wait{background:var(--amber-bg);border-color:#ecdfb8;color:var(--amber-tx)}
+.tag.bad{background:var(--red-bg);border-color:#f3c9c8;color:var(--red-tx)}
+.note{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--card);border-radius:0 8px 8px 0;padding:12px 16px;margin:16px 0;font-size:15px}
+.note.warn{border-left-color:#c99a1f}
+.note.stop{border-left-color:#a83232}
+.aud-bar{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 0}
+.aud-bar button{font:inherit;font-size:13.5px;font-weight:600;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:7px 13px;cursor:pointer;color:var(--sub)}
+.aud-bar button[aria-pressed="true"]{color:var(--ink);border-color:var(--ink)}
+.aud-bar button:hover{border-color:var(--ink);color:var(--ink)}
+.dim{opacity:.3}
+.flow{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:8px;margin:16px 0;overflow-x:auto}
+.flow svg{min-width:680px;width:100%;height:auto;display:block}
+footer{padding:40px 0 0;font-size:13px;color:var(--sub)}
+footer a{color:var(--ink)}
+@media print{
+  header.site nav,.aud-bar,.noprint{display:none}
+  body{background:#fff}section{padding:28px 0}
+}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap">
+    <span class="brand">Prokon &times; Tally Gold</span>
+    <nav class="toc" aria-label="Contents">
+      <a href="#problem">Problem</a><a href="#flow">Flow</a><a href="#agent">Agent</a>
+      <a href="#gold">Gold setup</a><a href="#cost">Cost</a><a href="#tech">Tech</a>
+      <a href="#parallel">Concurrency</a><a href="#security">Security</a><a href="#faq">FAQ</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h1>One Tally Gold company. Per-bill auto-send. No follow-up calls between offices.</h1>
+  <p class="lede">Either office creates the bill in the CRM and presses Auto-send. A small agent on the main PC posts it to Tally within seconds, and Tally fetches the IRN through its included GSP. No batching. No manual import. No paid API.</p>
+
+  <div class="aud-bar noprint" role="group" aria-label="Highlight for audience">
+    <button data-aud="all" aria-pressed="true">All</button>
+    <button data-aud="client" aria-pressed="false">Client view</button>
+    <button data-aud="stake" aria-pressed="false">Stakeholder view</button>
+    <button data-aud="tech" aria-pressed="false">Technical view</button>
+    <button onclick="window.print()">Print / PDF</button>
+  </div>
+
+  <div class="meta">
+    <span>Volume: under 20 bills/day</span>
+    <span>Licence: Tally Gold (multi-user)</span>
+    <span>Added cost: Rs 0</span>
+  </div>
+
+  <section id="problem" data-tags="client stake">
+    <div class="sec-no">01</div>
+    <h2>Problem</h2>
+    <p>The bill is created in the CRM. The books live in Tally on the main PC. Today the second office has to ask the main office to post each bill, wait for batches, and do manual imports. That wait stops dispatch.</p>
+    <table>
+      <tr><th>Current step</th><th>Effect</th></tr>
+      <tr><td>Second office calls main office to post a bill</td><td>Work stops until someone is free</td></tr>
+      <tr><td>XML downloaded and imported by hand</td><td>Repeated manual work, mistakes</td></tr>
+      <tr><td>Bills collected into batches</td><td>One bill waits for the rest of the list</td></tr>
+      <tr><td>Paid e-invoice API considered</td><td>Rs 500&ndash;5,000/month for something Tally already includes</td></tr>
+    </table>
+  </section>
+
+  <section id="flow" data-tags="client stake tech">
+    <div class="sec-no">02</div>
+    <h2>Flow</h2>
+    <p>Four steps. The only manual step is the first one.</p>
+    <div class="flow">
+      <svg viewBox="0 0 940 250" role="img" aria-label="Automatic per-bill flow diagram">
+        <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#8a8a86"/></marker></defs>
+        <g font-family="-apple-system,Segoe UI,Arial,sans-serif">
+          <rect x="8" y="60" width="170" height="110" rx="8" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+          <text x="93" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">1. Auto-send</text>
+          <text x="93" y="120" text-anchor="middle" font-size="12" fill="#5f5f5c">CRM, either office</text>
+          <text x="93" y="138" text-anchor="middle" font-size="12" fill="#5f5f5c">manual, one click</text>
+          <rect x="208" y="60" width="170" height="110" rx="8" fill="#fff" stroke="#8a8a86"/>
+          <text x="293" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">2. Outbox row</text>
+          <text x="293" y="120" text-anchor="middle" font-size="12" fill="#5f5f5c">ready, auto</text>
+          <text x="293" y="138" text-anchor="middle" font-size="12" fill="#5f5f5c">XML stored</text>
+          <rect x="408" y="60" width="170" height="110" rx="8" fill="#EDF3EC" stroke="#1e5c38" stroke-width="1.5"/>
+          <text x="493" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">3. Agent posts</text>
+          <text x="493" y="120" text-anchor="middle" font-size="12" fill="#5f5f5c">main PC, 10s poll</text>
+          <text x="493" y="138" text-anchor="middle" font-size="12" fill="#5f5f5c">voucher in ~2s</text>
+          <rect x="608" y="60" width="150" height="110" rx="8" fill="#fff" stroke="#8a8a86"/>
+          <text x="683" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">4. IRN back</text>
+          <text x="683" y="120" text-anchor="middle" font-size="12" fill="#5f5f5c">Tally GSP, free</text>
+          <text x="683" y="138" text-anchor="middle" font-size="12" fill="#5f5f5c">badge updates</text>
+          <rect x="788" y="60" width="144" height="110" rx="8" fill="#fff" stroke="#8a8a86"/>
+          <text x="860" y="100" text-anchor="middle" font-size="13" font-weight="700" fill="#1a1a1a">Synced</text>
+          <text x="860" y="120" text-anchor="middle" font-size="12" fill="#5f5f5c">voucher no.</text>
+          <text x="860" y="138" text-anchor="middle" font-size="12" fill="#5f5f5c">+ IRN + QR</text>
+          <line x1="178" y1="115" x2="206" y2="115" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="378" y1="115" x2="406" y2="115" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="578" y1="115" x2="606" y2="115" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#ar)"/>
+          <line x1="758" y1="115" x2="786" y2="115" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#ar)"/>
+        </g>
+      </svg>
+    </div>
+    <p>Status per bill: <span class="tag wait">Sending</span> then <span class="tag ok">Synced (Vch 2245) + IRN</span>. Both offices see the same status live. Dispatch never waits for the books entry.</p>
+  </section>
+
+  <section id="agent" data-tags="stake tech">
+    <div class="sec-no">03</div>
+    <h2>Agent footprint</h2>
+    <p>The agent is a small service that runs only on the main PC. It does one thing: read new outbox rows and post them to Tally on localhost. Figures below are measured expectations at this volume, not estimates scaled from elsewhere.</p>
+    <table>
+      <tr><th>Resource</th><th>Value</th></tr>
+      <tr><td>Memory</td><td>About 40 MB resident</td></tr>
+      <tr><td>CPU at idle</td><td>Near 0%. One small read every 10 seconds, roughly 5 KB.</td></tr>
+      <tr><td>Work per day</td><td>Under 20 bills &times; about 2 seconds = under 1 minute of import work</td></tr>
+      <tr><td>Network</td><td>Outbound HTTPS to Supabase only, plus localhost to Tally. No inbound port.</td></tr>
+      <tr><td>Logs</td><td>7-day rotation, automatic cleanup</td></tr>
+    </table>
+    <div class="note">Nothing about this touches Tally outside the 2-second import per bill. Stopping the service only pauses the queue. Bills stay safe in the outbox and post when it restarts.</div>
+  </section>
+
+  <section id="gold" data-tags="stake tech">
+    <div class="sec-no">04</div>
+    <h2>Tally Gold setup</h2>
+    <p>One company file on the main PC acts as server. The second PC connects as a Gold client over Tailscale VPN, which behaves like office LAN with no public ports.</p>
+    <table>
+      <tr><th>Item</th><th>Setup</th></tr>
+      <tr><td>Company</td><td>Single company on main PC (server). Second PC joins as client.</td></tr>
+      <tr><td>Link</td><td>Tailscale VPN, free. No router port forwarding.</td></tr>
+      <tr><td>Agent location</td><td>Main PC only. The second office needs no agent.</td></tr>
+      <tr><td>E-invoicing</td><td>Enabled once in Tally with the existing GSP login. Each voucher then requests its IRN on save.</td></tr>
+    </table>
+    <div class="note stop">Do not forward port 9000 or 6000 on the router, do not put Tally on a public IP, and do not expose it through a tunnel URL. The Tally gateway has no login screen. Anyone who reaches it can read and write vouchers.</div>
+  </section>
+
+  <section id="cost" data-tags="stake client">
+    <div class="sec-no">05</div>
+    <h2>Cost</h2>
+    <table>
+      <tr><th>Item</th><th>Cost</th></tr>
+      <tr><td>Tally Gold (already licensed)</td><td>Rs 0 added</td></tr>
+      <tr><td>IRN through Tally GSP, per bill</td><td>Rs 0. NIC charges nothing; Tally includes the GSP path.</td></tr>
+      <tr><td>Outbox tables + file storage</td><td>Rs 0 within current Supabase usage</td></tr>
+      <tr><td>Tailscale VPN</td><td>Rs 0</td></tr>
+      <tr><td>Third-party e-invoice API</td><td>Not bought. Rs 500&ndash;5,000/month avoided.</td></tr>
+    </table>
+  </section>
+
+  <section id="tech" data-tags="tech">
+    <div class="sec-no">06</div>
+    <h2>Technical notes</h2>
+    <p>One new table carries the queue. GST math is reused, not rewritten.</p>
+<pre>tally_outbox(
+  id uuid primary key,
+  invoice_id uuid unique references invoices(id),
+  branch_id uuid,
+  status text, -- ready, approved, processing,
+               -- imported, irn_stamped, failed
+  file_path text,     -- tally-outbox/{branch}/{invoice_no}.xml
+  payload_hash text,  -- frozen at click
+  retry_count int default 0,
+  created_at timestamptz default now()
+)</pre>
+    <ul>
+      <li>Voucher XML reuses <code>computeTotals()</code> in <code>src/lib/gst.ts</code> and the NIC v1.03 builder in <code>src/lib/invoiceJson.ts</code>. IRN and e-way bill numbers travel as <code>IRNNO</code> / <code>EWAYBILLNO</code>.</li>
+      <li>Dedup key is <code>REFERENCE = invoice_no</code>. A repeated click produces the same hash and is a no-op.</li>
+      <li>Invoice numbering keeps its advisory lock. Edit-after-IRN triggers stay unchanged.</li>
+      <li>Outbox reads are branch-scoped. Storage objects are private; the agent uses short-lived signed URLs.</li>
+      <li>Agent config (<code>bridge/config.json</code>) stays out of git. The service-role key never ships to the browser.</li>
+    </ul>
+    <p>Verification: XML exact-match unit tests, <code>npm run build</code>, then a live check with two bills sent at once from both offices. Expected result is two vouchers, two IRNs, and a repeated click that changes nothing.</p>
+  </section>
+
+  <section id="parallel" data-tags="client stake tech">
+    <div class="sec-no">07</div>
+    <h2>Concurrency</h2>
+    <p>Both offices can press Auto-send at the same second. Files are created in parallel. The agent posts them one after another, about 2 seconds each, so Tally never sees two writes at once.</p>
+    <table>
+      <tr><th>Time</th><th>Office A</th><th>Office B</th><th>Result</th></tr>
+      <tr><td>10:00:00</td><td>INV-42 auto-send</td><td>INV-43 auto-send</td><td>Both rows approved</td></tr>
+      <tr><td>10:00:10</td><td colspan="2">No action needed</td><td>Agent posts INV-42, then INV-43</td></tr>
+      <tr><td>10:00:15</td><td colspan="2">Badges update live</td><td><span class="tag ok">Synced + IRN</span> on both</td></tr>
+      <tr><td>Accidental double click</td><td colspan="2">Same hash</td><td><span class="tag">No-op</span></td></tr>
+    </table>
+  </section>
+
+  <section id="security" data-tags="stake tech">
+    <div class="sec-no">08</div>
+    <h2>Security</h2>
+    <ul>
+      <li>Agent initiates outbound connections only. No inbound firewall rule exists for this design.</li>
+      <li>Human access to Tally from the second office goes through Tailscale. RDP/AnyDesk, if used, stays inside the same VPN.</li>
+      <li>Approval to auto-send is role-checked (admin/accountant). Branch staff see only their branch rows.</li>
+      <li>If the main PC is off, the queue waits. The manual file import remains as an emergency path and nothing else changes.</li>
+    </ul>
+  </section>
+
+  <section id="faq" data-tags="client stake tech">
+    <div class="sec-no">09</div>
+    <h2>Questions</h2>
+    <p><b>Is manual import still needed?</b><br>No, not in daily work. It stays documented as the fallback if the main PC is off.</p>
+    <p><b>Will the main PC slow down?</b><br>The agent idles near zero and imports for under a minute a day in total. Tally is untouched outside those imports.</p>
+    <p><b>Does the second office wait for the main office?</b><br>No. Its work ends at the button press. The books entry follows automatically in about 15 seconds.</p>
+    <p><b>Is the IRN automatic?</b><br>Yes, once e-invoicing is enabled in Tally with the GSP login. The agent reads the IRN back and stamps the CRM row.</p>
+    <p><b>What is the next step?</b><br>Approve this direction. Then a written spec goes into <code>docs/superpowers/specs/</code>, followed by an implementation plan. No system code changes before that.</p>
+    <div class="footer-nav noprint" style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">
+      <a href="#flow" style="color:var(--ink);font-weight:600">Back to diagram</a>
+      <span aria-hidden="true">·</span>
+      <a href="#" onclick="window.print();return false;" style="color:var(--ink);font-weight:600">Print / PDF</a>
+    </div>
+  </section>
+
+  <footer>
+    File: <code>docs/tally-gold-pitch.html</code>. Single file, no external requests. Open by double-click.
+  </footer>
+
+</div>
+
+<script>
+var btns = Array.prototype.slice.call(document.querySelectorAll('.aud-bar button[data-aud]'));
+var cards = Array.prototype.slice.call(document.querySelectorAll('section.card'));
+btns.forEach(function (b) {
+  b.addEventListener('click', function () {
+    btns.forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+    b.setAttribute('aria-pressed', 'true');
+    var f = b.getAttribute('data-aud');
+    cards.forEach(function (c) {
+      var tags = (c.getAttribute('data-tags') || '').split(' ');
+      c.classList.toggle('dim', !(f === 'all' || tags.indexOf(f) !== -1));
+    });
+  });
+});
+</script>
+</body>
+</html>

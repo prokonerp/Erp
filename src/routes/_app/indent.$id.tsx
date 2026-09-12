@@ -64,7 +64,7 @@ function IndentDetail() {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from("indents" as never).select("id,indent_no,indent_date,ticket_id,indent_city,case_id,oem_case_id,oracle_number,company,problem_reported,indent_type,oracles_data,product_model,product_serial,engineer_name,remarks,created_at,updated_at").eq("id", id).maybeSingle();
+      const { data, error } = await supabase.from("indents" as never).select("id,indent_no,indent_date,ticket_id,indent_city,case_id,oem_case_id,oracle_number,company,problem_reported,indent_type,oracles_data,product_model,product_serial,engineer_name,engineer_employee_id,remarks,created_at,updated_at").eq("id", id).maybeSingle();
       if (error) { toast.error(error.message); return; }
       const ind = (data || null) as unknown as Indent | null;
       if (ind) {

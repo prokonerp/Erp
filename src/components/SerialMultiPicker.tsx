@@ -4,8 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { fetchCustodianNameMap } from "@/lib/ims";
+import { custodianBadgeLabel, filterByCustodian, type CustodianFilterMode } from "@/lib/custody-utils";
 
 type SerialRow = {
   id: string;
@@ -14,6 +17,8 @@ type SerialRow = {
   part_name: string;
   warehouse_id: string | null;
   stock_status: string;
+  custodian_employee_id?: string | null;
+  custodian_name?: string | null;
 };
 
 type Props = {
@@ -35,11 +40,12 @@ export function SerialMultiPicker({
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [picked, setPicked] = useState<string[]>(value);
+  const [custodyFilter, setCustodyFilter] = useState<CustodianFilterMode>("all");
 
   useEffect(() => { setPicked(value); }, [value, open]);
   useEffect(() => { const t = setTimeout(() => setDebounced(q), 150); return () => clearTimeout(t); }, [q]);
 
-  const COLS = "id,part_serial_no,part_model_no,part_name,warehouse_id,stock_status";
+  const COLS = "id,part_serial_no,part_model_no,part_name,warehouse_id,stock_status,custodian_employee_id";
   const { data: rowsData, isLoading: loading } = useQuery({
     queryKey: ["ims-serials-multi", warehouseId, partModelNo, partName, open, debounced] as const,
     queryFn: async () => {
@@ -67,8 +73,30 @@ export function SerialMultiPicker({
   });
   const rows = useMemo(() => (rowsData as SerialRow[] | undefined) ?? [], [rowsData]);
 
-  // Server already filters by debounced term (25/30 window); filtered mirrors rows for instant render
-  const filtered = rows;
+  // Read-only custodian name resolve (bounded 25/30-row window only).
+  // Never blocks the list: on lookup failure names stay unresolved → "Unknown custodian".
+  const [custodianNames, setCustodianNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    const ids = rows.map((r) => r.custodian_employee_id).filter(Boolean) as string[];
+    if (ids.length === 0) { setCustodianNames(new Map()); return; }
+    fetchCustodianNameMap(ids).then((m) => { if (alive) setCustodianNames(m); }).catch(() => {});
+    return () => { alive = false; };
+  }, [rows]);
+
+  const rowsWithCustody = useMemo(
+    () => rows.map((r) => ({
+      ...r,
+      custodian_name: r.custodian_employee_id ? (custodianNames.get(r.custodian_employee_id) ?? null) : null,
+    })),
+    [rows, custodianNames],
+  );
+
+  // Server already filters by debounced term (25/30 window); custody filter is client-side, default off.
+  const filtered = useMemo(
+    () => filterByCustodian(rowsWithCustody, custodyFilter),
+    [rowsWithCustody, custodyFilter],
+  );
 
   const toggle = useCallback((sn: string) => {
     setPicked((p) => {
@@ -97,6 +125,19 @@ export function SerialMultiPicker({
           </p>
         )}
         <Input placeholder="Search serial…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="flex items-center gap-2">
+          <label htmlFor="smp-custody" className="text-xs text-muted-foreground">Custodian</label>
+          <Select value={custodyFilter} onValueChange={(v) => setCustodyFilter(v as CustodianFilterMode)}>
+            <SelectTrigger id="smp-custody" className="h-8 w-40 text-xs" aria-label="Custodian filter">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All (default)</SelectItem>
+              <SelectItem value="in-custody">In custody</SelectItem>
+              <SelectItem value="no-custodian">No custodian</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="max-h-72 overflow-y-auto border rounded-md divide-y">
           {loading ? (
             <div className="p-4 text-sm text-muted-foreground">Loading…</div>
@@ -114,6 +155,11 @@ export function SerialMultiPicker({
                   <div className="min-w-0 flex-1">
                     <div className="font-mono text-xs">{r.part_serial_no}</div>
                     <div className="text-[10px] text-muted-foreground truncate">{r.part_model_no || r.part_name}</div>
+                    {r.custodian_employee_id ? (
+                      <Badge variant="secondary" className="mt-1 text-[10px]" aria-label={custodianBadgeLabel(r) ?? "In custody"}>
+                        {custodianBadgeLabel(r)}
+                      </Badge>
+                    ) : null}
                   </div>
                 </label>
               );

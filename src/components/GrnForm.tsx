@@ -14,6 +14,8 @@ import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { GrnSerialInputs } from "@/components/GrnSerialInputs";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
+import { CarrierEmployeePicker } from "@/components/CarrierEmployeePicker";
+import { applyCarrierSelection, clearCarrierSelection } from "@/lib/carrierEmployee";
 import type { Customer, CustomerBranch } from "@/lib/crm";
 import { branchToDocumentFields } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
@@ -44,6 +46,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   const [branchId, setBranchId] = useState<string | null>(null);
   const [warehouses, setWarehouses] = useState<WarehouseLite[]>([]);
   const [warehouseId, setWarehouseId] = useState<string | null>(null);
+  // FK-first carrier link (employees id). NULL = text fallback; the server
+  // trigger resolves the FK from driver text and overwrites text from the FK.
+  const [carrierEmployeeId, setCarrierEmployeeId] = useState<string | null>(null);
   const [form, setForm] = useState({
     status: "Draft",
     grn_date: istTodayIso(),
@@ -253,6 +258,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         return next;
       });
       setBranchId(((r as { branch_id?: string | null }).branch_id) ?? null);
+      setCarrierEmployeeId(((r as { carrier_employee_id?: string | null }).carrier_employee_id) ?? null);
       const wid = (r as { warehouse_id?: string | null }).warehouse_id ?? null;
       setWarehouseId(wid);
     })();
@@ -416,6 +422,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         ...form,
         warehouse_name: warehouseName,
         category,
+        carrier_employee_id: carrierEmployeeId,
         receipt_date: form.receipt_date || null,
         source_doc_date: form.source_doc_date || null,
         invoice_date: form.invoice_date || null,
@@ -453,6 +460,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       warehouse_name: warehouseName,
       category,
       grn_no: "",
+      carrier_employee_id: carrierEmployeeId,
       receipt_date: form.receipt_date || null,
       source_doc_date: form.source_doc_date || null,
       invoice_date: form.invoice_date || null,
@@ -704,6 +712,25 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 {["Road","Rail","Air","Sea","Hand Delivery","Courier"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
+          </FormField>
+          <FormField size="md" label="Carrier (employee link)">
+            <CarrierEmployeePicker
+              value={carrierEmployeeId}
+              onSelect={(emp) => {
+                const next = applyCarrierSelection(
+                  { driver_name: form.driver_name, driver_mobile: form.driver_mobile, carrier_employee_id: carrierEmployeeId },
+                  emp,
+                );
+                setCarrierEmployeeId(next.carrier_employee_id);
+                setForm({ ...form, driver_name: next.driver_name, driver_mobile: next.driver_mobile });
+              }}
+              onClear={() => {
+                const next = clearCarrierSelection(
+                  { driver_name: form.driver_name, driver_mobile: form.driver_mobile, carrier_employee_id: carrierEmployeeId },
+                );
+                setCarrierEmployeeId(next.carrier_employee_id);
+              }}
+            />
           </FormField>
           <FormField size="md" label="Driver Name">
             <Input value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} />

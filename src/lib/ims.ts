@@ -59,6 +59,10 @@ export type StockItem = {
   modified_by: string | null;
   created_at: string;
   updated_at: string;
+  /** Read-only custody surfacing (Phase-2). Raw FK, same-table — safe on lists (no join). */
+  custodian_employee_id?: string | null;
+  /** Resolved via employees.name on detail only — never on list queries. */
+  custodian_name?: string | null;
 };
 
 export type Transaction = {
@@ -206,9 +210,35 @@ export type StockPaginatedParams = {
 };
 
 export const STOCK_SELECT =
-  "id,oem,category,part_name,part_model_no,part_serial_no,warehouse_id,stock_type,stock_status,ticket_id,indent_id,oem_case_id,customer_name,transaction_ref,notes,qty,opening_stock,created_at,updated_at";
+  "id,oem,category,part_name,part_model_no,part_serial_no,warehouse_id,stock_type,stock_status,ticket_id,indent_id,oem_case_id,customer_name,transaction_ref,notes,qty,opening_stock,created_at,updated_at,custodian_employee_id";
 
 export const STOCK_SELECT_AGG = STOCK_SELECT;
+
+/**
+ * Read-only batch resolve: custodian_employee_id → employees.name.
+ * Detail-only helper — never called from list queries. Never throws:
+ * on any lookup failure returns an empty map so dispatch/receipt UI
+ * falls back to "Unknown custodian" instead of blocking.
+ */
+export async function fetchCustodianNameMap(ids: (string | null | undefined)[]): Promise<Map<string, string>> {
+  const empty = new Map<string, string>();
+  try {
+    const uniq = Array.from(new Set((ids || []).filter((v): v is string => !!v && String(v).trim() !== "")));
+    if (uniq.length === 0) return empty;
+    const { data, error } = await (supabase as unknown as { from: (t: string) => any })
+      .from("employees")
+      .select("id,name")
+      .in("id", uniq);
+    if (error) return empty;
+    const map = new Map<string, string>();
+    for (const r of (data || []) as { id: string; name: string }[]) {
+      if (r?.id && r?.name) map.set(r.id, r.name);
+    }
+    return map;
+  } catch {
+    return empty;
+  }
+}
 
 /**
  * Server-paginated fetch for stock items. Uses `count: exact` + `.range()` so
