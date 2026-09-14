@@ -255,6 +255,150 @@ describe("fieldServiceReportSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('parses blank batteryBankMake "" as undefined (fixed: emptyToUndefined)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankMake: "",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.batteryBankMake).toBeUndefined();
+  });
+
+  it('parses blank batteryBankAh "" as undefined (fixed: emptyToUndefined)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankAh: "",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.batteryBankAh).toBeUndefined();
+  });
+
+  it('parses blank frontIndication opMode "" as undefined (fixed: emptyToUndefined)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      frontIndication: { opMode: "" },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.frontIndication.opMode).toBeUndefined();
+  });
+
+  it('parses blank frontIndication bypassState "" as undefined (fixed: emptyToUndefined)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      frontIndication: { bypassState: "" },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.frontIndication.bypassState).toBeUndefined();
+  });
+
+  it('parses blank frontIndication remarksTarget "" as undefined (fixed: emptyToUndefined)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      frontIndication: { remarksTarget: "" },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.frontIndication.remarksTarget).toBeUndefined();
+  });
+
+  it("parses all blank optional enums together as undefined (fixed: emptyToUndefined)", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankMake: "",
+      batteryBankAh: "",
+      frontIndication: { opMode: "", bypassState: "", remarksTarget: "" },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.batteryBankMake).toBeUndefined();
+    expect(result.data.batteryBankAh).toBeUndefined();
+    expect(result.data.frontIndication.opMode).toBeUndefined();
+    expect(result.data.frontIndication.bypassState).toBeUndefined();
+    expect(result.data.frontIndication.remarksTarget).toBeUndefined();
+  });
+
+  it('coerces blank volts "" to undefined (empty section stays valid)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      chargingReadings: [{ volts: "" }],
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.chargingReadings).toEqual([{ volts: undefined }]);
+  });
+
+  it('coerces blank batteryBankQty "" to undefined', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankQty: "",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.batteryBankQty).toBeUndefined();
+  });
+
+  it('coerces blank frontIndication leadFound "" to undefined', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      frontIndication: { leadFound: "" },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.frontIndication.leadFound).toBeUndefined();
+  });
+
+  it("stays valid when pc/printer/scanner sections are omitted (fixed: .default([]))", () => {
+    const input = minimalInput() as Record<string, unknown>;
+    delete input.pcDetails;
+    delete input.printerDetails;
+    delete input.scannerDetails;
+    const result = fieldServiceReportSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.pcDetails).toEqual([]);
+    expect(result.data.printerDetails).toEqual([]);
+    expect(result.data.scannerDetails).toEqual([]);
+  });
+
+  it('does not coerce whitespace-only volts " " to 0 (fixed: trim to undefined)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      chargingReadings: [{ volts: " " }],
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.chargingReadings[0].volts).not.toBe(0);
+    expect(result.data.chargingReadings[0].volts).toBeUndefined();
+  });
+
+  it("fails when pcDetails exceeds 20 rows", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      pcDetails: Array.from({ length: 21 }, () => ({ monitorSizeIn: "21.5", qty: "1" })),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("fails when printerDetails exceeds 20 rows", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      printerDetails: Array.from({ length: 21 }, () => ({ ratingW: "60", qty: "1" })),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("fails when scannerDetails exceeds 20 rows", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      scannerDetails: Array.from({ length: 21 }, () => ({ ratingW: "60", qty: "1" })),
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("buildFsrPayload", () => {
@@ -330,6 +474,30 @@ describe("buildFsrPayload", () => {
     // No id / submitted_at keys
     expect(payload).not.toHaveProperty("id");
     expect(payload).not.toHaveProperty("submitted_at");
+  });
+
+  it("maps minimal frontIndication to 12 null keys", () => {
+    const parsed = fieldServiceReportSchema.parse(minimalInput());
+    const payload = buildFsrPayload(parsed, "ticket-123", {
+      employeeId: "EMP-1",
+      name: "Jane Engineer",
+      phone: "9999999999",
+    }) as Record<string, unknown>;
+
+    expect(payload.front_indication).toEqual({
+      op_mode: null,
+      bypass_state: null,
+      lead_found: null,
+      lead_corrected: null,
+      charge_found: null,
+      charge_corrected: null,
+      fault_0_found: null,
+      fault_0_corrected: null,
+      fault_ge_found: null,
+      fault_ge_corrected: null,
+      remarks: null,
+      remarks_target: null,
+    });
   });
 
   it("sets engineer fields and ticket_id with null employeeId/phone, omits id/submitted_at", () => {

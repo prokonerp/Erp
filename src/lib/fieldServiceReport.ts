@@ -5,7 +5,7 @@ export const UPS_LOCATIONS = ["Computer Room", "Electrical Room", "Network Room"
 export type FsrEngineer = { employeeId: string | null; name: string; phone?: string | null };
 
 const emptyToUndefined = (v: unknown) =>
-  v === "" || v === undefined || v === null ? undefined : v;
+  v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? undefined : v;
 
 const optionalNonNegativeNumber = z.preprocess(
   emptyToUndefined,
@@ -27,8 +27,8 @@ const optionalPositiveInt = z.preprocess(
   z.coerce.number().int().positive().optional(),
 );
 export const batteryBankSchema = z.object({
-  batteryBankMake: z.enum(BATTERY_MAKES).optional(),
-  batteryBankAh: z.enum(BATTERY_AH).optional(),
+  batteryBankMake: z.preprocess(emptyToUndefined, z.enum(BATTERY_MAKES).optional()),
+  batteryBankAh: z.preprocess(emptyToUndefined, z.enum(BATTERY_AH).optional()),
   batteryBankQty: optionalPositiveInt,
 });
 const voltsReadingSchema = z.object({ volts: optionalNonNegativeNumber });
@@ -46,9 +46,9 @@ export const scannerPairSchema = z.object({
   ratingW: optionalNonNegativeInt,
   qty: optionalNonNegativeInt,
 });
-const pcDetailsSchema = z.array(pcPairSchema).max(20);
-const printerDetailsSchema = z.array(printerPairSchema).max(20);
-const scannerDetailsSchema = z.array(scannerPairSchema).max(20);
+const pcDetailsSchema = z.array(pcPairSchema).max(20).default([]);
+const printerDetailsSchema = z.array(printerPairSchema).max(20).default([]);
+const scannerDetailsSchema = z.array(scannerPairSchema).max(20).default([]);
 
 export const readingsSchema = z
   .object({
@@ -87,8 +87,8 @@ export const powerConditionSchema = z.object({
 });
 
 export const frontIndicationSchema = z.object({
-  opMode: z.enum(["on_mains", "on_battery"]).optional(),
-  bypassState: z.enum(["on_bypass", "dead"]).optional(),
+  opMode: z.preprocess(emptyToUndefined, z.enum(["on_mains", "on_battery"]).optional()),
+  bypassState: z.preprocess(emptyToUndefined, z.enum(["on_bypass", "dead"]).optional()),
   leadFound: optionalNonNegativeNumber,
   leadCorrected: optionalNonNegativeNumber,
   chargeFound: optionalNonNegativeNumber,
@@ -98,7 +98,7 @@ export const frontIndicationSchema = z.object({
   faultGeFound: optionalNonNegativeNumber,
   faultGeCorrected: optionalNonNegativeNumber,
   remarks: z.preprocess(emptyToUndefined, z.string().max(500).optional()),
-  remarksTarget: z.enum(["UPS", "PCB", "Transformer"]).optional(),
+  remarksTarget: z.preprocess(emptyToUndefined, z.enum(["UPS", "PCB", "Transformer"]).optional()),
 });
 
 export const fieldServiceReportSchema = readingsSchema

@@ -316,7 +316,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       scannerDetails: f.scannerDetails.map((r, j) => (j === i ? { ...r, [k]: v } : r)),
     }));
 
-  const emptyStr = (v: string) => (v === "" ? undefined : v);
+  const emptyStr = (v: string) => (v.trim() === "" ? undefined : v);
 
   const readingsValid = readingsSchema.safeParse({
     mainsVoltageLn: form.mainsVoltageLn,
@@ -354,8 +354,8 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   }).success;
 
   const handleSubmit = async (e: React.FormEvent) => {
-    if (busy) return;
     e.preventDefault();
+    if (busy) return;
     const parsed = fieldServiceReportSchema.safeParse({
       ...form,
       batteryBankMake: emptyStr(form.batteryBankMake),
@@ -1020,6 +1020,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         <div className="flex items-center gap-3 pb-2">
           <div className="flex items-center gap-1.5" aria-hidden="true">
             <PhaseDot num="1" valid={readingsValid} />
+            <PhaseDot num="1A" valid={frontValid} />
             <PhaseDot num="2" valid={loadValid} />
             <PhaseDot num="3" valid={powerValid} />
           </div>

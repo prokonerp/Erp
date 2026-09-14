@@ -133,6 +133,11 @@ export type InvoiceRow = {
   pdf_url: string | null;
   payment_terms: string | null;
 
+  print_count?: number | null;
+  first_printed_at?: string | null;
+  last_printed_at?: string | null;
+  last_printed_by?: string | null;
+
   created_by: string | null;
   created_at: string;
   updated_at: string;

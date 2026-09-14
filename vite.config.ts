@@ -4,7 +4,7 @@
 //
 // Plugin order matters — it mirrors what the Lovable wrapper used to inject:
 //   tailwindcss -> tsConfigPaths -> tanstackStart -> nitro (build-only) -> react
-import { defineConfig, loadEnv, type UserConfig } from "vite";
+import { defineConfig, loadEnv, type PluginOption, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import tailwindcss from "@tailwindcss/vite";
@@ -21,7 +21,7 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
     ]),
   );
 
-  const plugins = [
+  const plugins: PluginOption[] = [
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
     tanstackStart({
