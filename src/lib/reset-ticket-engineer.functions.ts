@@ -9,6 +9,9 @@ export const RESET_ACTIVITY_KINDS = [
   "photo",
   "note",
   "acknowledge",
+  "arrival",
+  "departure",
+  "signature",
 ] as const;
 export type ResetActivityKind = (typeof RESET_ACTIVITY_KINDS)[number];
 
@@ -23,20 +26,26 @@ export const RESET_FORBIDDEN_TABLES = [
 ] as const;
 
 /** Storage filename prefixes the reset is allowed to remove. */
-export const RESET_STORAGE_KIND_ALLOWLIST = ["equipment_correction", "issue_photo"] as const;
+export const RESET_STORAGE_KIND_ALLOWLIST = [
+  "equipment_correction",
+  "issue_photo",
+  "customer_signature",
+] as const;
 
 /**
  * Allow-listed tables touched by this module. Exported so pure scoping tests
  * can assert forbidden tables are never referenced (contains no forbidden names).
  */
 export const RESET_MODULE_SOURCE =
-  "ticket_customer_verifications|ticket_equipment_verifications|ticket_activities|ticket-attachments";
+  "ticket_customer_verifications|ticket_equipment_verifications|ticket_activities|ticket_visits|field_service_reports|ticket-attachments";
 
 export type ResetScope = {
   ticketId: string;
   customerFilter: { ticket_id: string };
   equipmentFilter: { ticket_id: string };
   activityFilter: { ticket_id: string; kindIn: string[] };
+  visitFilter: { ticket_id: string };
+  fsrFilter: { ticket_id: string };
   storagePrefix: string;
   storageKindAllowlist: string[];
 };
@@ -48,6 +57,8 @@ export function buildResetScope(ticket_id: string): ResetScope {
     customerFilter: { ticket_id },
     equipmentFilter: { ticket_id },
     activityFilter: { ticket_id, kindIn: [...RESET_ACTIVITY_KINDS] },
+    visitFilter: { ticket_id },
+    fsrFilter: { ticket_id },
     storagePrefix: `ticket/${ticket_id}/`,
     storageKindAllowlist: [...RESET_STORAGE_KIND_ALLOWLIST],
   };
@@ -55,8 +66,8 @@ export function buildResetScope(ticket_id: string): ResetScope {
 
 /**
  * Pure helper: true only for exact file paths under ticket/{id}/ whose
- * filename starts with equipment_correction- or issue_photo-. Never true for
- * a bare prefix (prefix wipe guard).
+ * filename starts with equipment_correction-, issue_photo-, or
+ * customer_signature-. Never true for a bare prefix (prefix wipe guard).
  */
 export function isResetStoragePathAllowed(path: string, ticket_id: string): boolean {
   const prefix = `ticket/${ticket_id}/`;
@@ -92,34 +103,65 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
     const scope = buildResetScope(data.ticket_id);
 
     // (a) Select verification rows for ticket_id (collect photo_path).
-    const [{ data: customerRow }, { data: equipmentRow }, { data: activityRows }] =
-      await Promise.all([
-        supabaseAdmin
-          .from("ticket_customer_verifications")
-          .select("ticket_id")
-          .eq("ticket_id", scope.ticketId)
-          .maybeSingle(),
-        supabaseAdmin
-          .from("ticket_equipment_verifications")
-          .select("ticket_id, photo_path")
-          .eq("ticket_id", scope.ticketId)
-          .maybeSingle(),
-        supabaseAdmin
-          .from("ticket_activities")
-          .select("id")
-          .eq("ticket_id", scope.ticketId)
-          .in("kind", [...RESET_ACTIVITY_KINDS]),
-      ]);
+    const [
+      { data: customerRow },
+      { data: equipmentRow },
+      { data: activityRows },
+      { data: visitRow },
+      { data: fsrRows },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("ticket_customer_verifications")
+        .select("ticket_id")
+        .eq("ticket_id", scope.ticketId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("ticket_equipment_verifications")
+        .select("ticket_id, photo_path")
+        .eq("ticket_id", scope.ticketId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("ticket_activities")
+        .select("id")
+        .eq("ticket_id", scope.ticketId)
+        .in("kind", [...RESET_ACTIVITY_KINDS]),
+      supabaseAdmin
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ticket_visits pending generated types (migration 20260917000003)
+        .from("ticket_visits" as any)
+        .select("ticket_id")
+        .eq("ticket_id", scope.ticketId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("field_service_reports")
+        .select("id, customer_signature_path")
+        .eq("ticket_id", scope.ticketId),
+    ]);
     const customerRows = customerRow ? 1 : 0;
     const equipmentRows = equipmentRow ? 1 : 0;
     const activityCount = (activityRows || []).length;
+    const visitRows = visitRow ? 1 : 0;
+    const fsrRowsCount = (fsrRows || []).length;
     const dbPhotoPath = (equipmentRow as { photo_path?: string | null } | null)?.photo_path ?? null;
-    const photoPaths =
-      dbPhotoPath && isResetStoragePathAllowed(dbPhotoPath, scope.ticketId) ? [dbPhotoPath] : [];
+    const fsrSignaturePaths = ((fsrRows || []) as { customer_signature_path?: string | null }[])
+      .map((r) => r.customer_signature_path)
+      .filter((p): p is string => !!p && isResetStoragePathAllowed(p, scope.ticketId));
+    const photoPaths = [
+      ...(dbPhotoPath && isResetStoragePathAllowed(dbPhotoPath, scope.ticketId)
+        ? [dbPhotoPath]
+        : []),
+      ...fsrSignaturePaths.filter((p) => p !== dbPhotoPath),
+    ];
 
     // Dry-run: counts only, no deletes.
     if (data.dryRun) {
-      return { customerRows, equipmentRows, activityRows: activityCount, photoPaths };
+      return {
+        customerRows,
+        equipmentRows,
+        activityRows: activityCount,
+        visitRows,
+        fsrRows: fsrRowsCount,
+        photoPaths,
+      };
     }
 
     // (b) Delete customer verifications for this ticket only.
@@ -145,7 +187,25 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       .select("id");
     if (delActErr) throw new Error(delActErr.message);
 
-    // (e) Remove exact photo files only (allow-listed names under ticket/{id}/).
+    // (e) Delete the site-visit row for this ticket only.
+    const { error: delVisitErr } = await supabaseAdmin
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ticket_visits pending generated types (migration 20260917000003)
+      .from("ticket_visits" as any)
+      .delete()
+      .eq("ticket_id", scope.ticketId);
+    if (delVisitErr) throw new Error(delVisitErr.message);
+
+    // (f) Delete field service reports for this ticket only. They belong to
+    // the invalidated work run; the kind=verification_reset audit row below
+    // is the preserved record.
+    const { data: deletedFsr, error: delFsrErr } = await supabaseAdmin
+      .from("field_service_reports")
+      .delete()
+      .eq("ticket_id", scope.ticketId)
+      .select("id");
+    if (delFsrErr) throw new Error(delFsrErr.message);
+
+    // (g) Remove exact photo files only (allow-listed names under ticket/{id}/).
     const removedPhotos: string[] = [];
     try {
       const toRemove = [...photoPaths];
@@ -179,10 +239,11 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       console.warn("[resetTicketEngineerWork] storage cleanup skipped:", e);
     }
 
-    // (f) Audit trail: assignment and status are preserved (no ticket row touched).
+    // (h) Audit trail: assignment and status are preserved (no ticket row touched).
     const notes =
       `Engineer work reset by admin ${context.userId}: ` +
       `customer=${customerRows} equipment=${equipmentRows} activities=${(deletedActivities || []).length} ` +
+      `visits=${visitRows} fsr=${(deletedFsr || []).length} (customer signature cleared) ` +
       `photos=${removedPhotos.length}. Reason: ${data.reason?.trim() || "—"}. ` +
       `Assignment and status preserved.`;
     const { data: resetRow, error: resetErr } = await supabaseAdmin
@@ -201,6 +262,8 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       deletedCustomer: customerRows,
       deletedEquipment: equipmentRows,
       deletedActivities: (deletedActivities || []).length,
+      deletedVisits: visitRows,
+      deletedFsr: (deletedFsr || []).length,
       removedPhotos,
       resetActivityId: (resetRow as { id: string }).id,
     };

@@ -14,7 +14,16 @@ const TICKET_ID = "123e4567-e89b-12d3-a456-426614174000";
 describe("reset-ticket-engineer scoping (pure)", () => {
   it("allowlist is exactly the approved engineer-work kinds", () => {
     expect([...RESET_ACTIVITY_KINDS].sort()).toEqual(
-      ["acknowledge", "customer_verify", "equipment_verify", "note", "photo"].sort(),
+      [
+        "acknowledge",
+        "arrival",
+        "customer_verify",
+        "departure",
+        "equipment_verify",
+        "note",
+        "photo",
+        "signature",
+      ].sort(),
     );
   });
 
@@ -43,12 +52,25 @@ describe("reset-ticket-engineer scoping (pure)", () => {
     expect(scope.equipmentFilter).toEqual({ ticket_id: TICKET_ID });
     expect(scope.activityFilter.ticket_id).toBe(TICKET_ID);
     expect(scope.activityFilter.kindIn).toEqual([...RESET_ACTIVITY_KINDS]);
+    expect(scope.visitFilter).toEqual({ ticket_id: TICKET_ID });
+    expect(scope.fsrFilter).toEqual({ ticket_id: TICKET_ID });
     expect(scope.ticketId).toBe(TICKET_ID);
   });
 
-  it("storage filter only allows equipment_correction / issue_photo filenames", () => {
+  it("reset scope covers makeover data (visits + FSR) without touching forbidden tables", () => {
+    const scope = buildResetScope(TICKET_ID);
+    expect(scope.activityFilter.kindIn).toContain("arrival");
+    expect(scope.activityFilter.kindIn).toContain("departure");
+    expect(scope.activityFilter.kindIn).toContain("signature");
+    // Forbidden kinds stay out even as makeover coverage grows.
+    for (const k of RESET_FORBIDDEN_KINDS) {
+      expect(scope.activityFilter.kindIn).not.toContain(k);
+    }
+  });
+
+  it("storage filter allows equipment_correction / issue_photo / customer_signature filenames", () => {
     expect([...RESET_STORAGE_KIND_ALLOWLIST].sort()).toEqual(
-      ["equipment_correction", "issue_photo"].sort(),
+      ["customer_signature", "equipment_correction", "issue_photo"].sort(),
     );
     const scope = buildResetScope(TICKET_ID);
     expect(scope.storagePrefix).toBe(`ticket/${TICKET_ID}/`);
@@ -59,10 +81,19 @@ describe("reset-ticket-engineer scoping (pure)", () => {
     expect(
       isResetStoragePathAllowed(`ticket/${TICKET_ID}/2026-09-12/issue_photo-xyz.jpg`, TICKET_ID),
     ).toBe(true);
+    expect(
+      isResetStoragePathAllowed(
+        `ticket/${TICKET_ID}/2026-09-12/customer_signature-1758028800000-a1b2c3d4.png`,
+        TICKET_ID,
+      ),
+    ).toBe(true);
     // rejected: wrong prefix, serial_photo, other, prefix wipe
     expect(isResetStoragePathAllowed(`ticket/other-id/2026-09-12/issue_photo-x.jpg`, TICKET_ID)).toBe(
       false,
     );
+    expect(
+      isResetStoragePathAllowed(`ticket/other-id/2026-09-12/customer_signature-x.png`, TICKET_ID),
+    ).toBe(false);
     expect(
       isResetStoragePathAllowed(`ticket/${TICKET_ID}/2026-09-12/serial_photo-a.jpg`, TICKET_ID),
     ).toBe(false);

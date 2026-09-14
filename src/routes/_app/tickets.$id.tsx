@@ -252,7 +252,7 @@ function TicketDetail() {
 
   const { isAdmin } = useIsAdmin();
   const { data: verifications } = useTicketVerifications(id);
-  const { data: fsrRows } = useFieldServiceReport(id);
+  const { data: fsrRows, refetch: refetchFsr } = useFieldServiceReport(id);
   const fsrLatest = fsrRows?.[0] ?? null;
   const [selectedDefRows, setSelectedDefRows] = useState<Record<number, boolean>>({});
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -269,8 +269,11 @@ function TicketDetail() {
     customerRows: number;
     equipmentRows: number;
     activityRows: number;
+    visitRows: number;
+    fsrRows: number;
     photoCount: number;
   } | null>(null);
+  const [reopenFsrBusy, setReopenFsrBusy] = useState(false);
   const indentMapQuery = useQuery({
     queryKey: ["indent-oracle-map", id],
     queryFn: () => fetchIndentMap({ data: { ticket_id: id } }),
@@ -828,6 +831,8 @@ function TicketDetail() {
         customerRows: preview.customerRows ?? 0,
         equipmentRows: preview.equipmentRows ?? 0,
         activityRows: preview.activityRows ?? 0,
+        visitRows: preview.visitRows ?? 0,
+        fsrRows: preview.fsrRows ?? 0,
         photoCount: (preview.photoPaths ?? []).length,
       });
       setResetTyped("");
@@ -849,7 +854,7 @@ function TicketDetail() {
         data: { ticket_id: t.id, reason: resetReason.trim() },
       });
       toast.success(
-        `Engineer work reset: ${res.deletedActivities} activities, ${(res.removedPhotos ?? []).length} photos removed.`,
+        `Engineer work reset: ${res.deletedActivities ?? 0} activities, ${res.deletedVisits ?? 0} visits, ${res.deletedFsr ?? 0} service reports, ${(res.removedPhotos ?? []).length} photos removed.`,
       );
       setResetDialogOpen(false);
       setResetTyped("");
@@ -860,6 +865,32 @@ function TicketDetail() {
       toast.error(e instanceof Error ? e.message : "Reset failed");
     } finally {
       setResetBusy(false);
+    }
+  };
+
+  const reopenFsr = async () => {
+    if (!t || !isAdmin || reopenFsrBusy) return;
+    const ok = await confirm({
+      title: `Reopen field service report for ${t.case_id}?`,
+      description:
+        "This deletes the submitted report(s) so the engineer can resubmit. The reset audit row and activity log remain the trail.",
+      confirmLabel: "Reopen",
+      variant: "danger",
+    });
+    if (!ok) return;
+    setReopenFsrBusy(true);
+    try {
+      const { error } = await supabase.from("field_service_reports").delete().eq("ticket_id", t.id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("Report reopened — engineer can resubmit");
+      await Promise.all([load(), refetchFsr()]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Reopen failed");
+    } finally {
+      setReopenFsrBusy(false);
     }
   };
 
@@ -2246,26 +2277,75 @@ function TicketDetail() {
           </Card>
 
           {isAdmin && (
-            <Card className="border-destructive/40">
-              <CardHeader>
-                <CardTitle>Admin — Engineer Work</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Clears engineer verification data so Step 2 can be redone. Assignment and status
-                  are preserved.
-                </p>
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  disabled={resetBusy}
-                  onClick={handleResetEngineerWork}
-                >
-                  <RotateCcw className="h-4 w-4 mr-1" />
-                  {resetBusy ? "Resetting…" : "Reset engineer work"}
-                </Button>
-              </CardContent>
-            </Card>
+            <>
+              <Card className="border-destructive/40">
+                <CardHeader>
+                  <CardTitle>Admin — Engineer Work</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Clears engineer verification data so Step 2 can be redone. Assignment and status
+                    are preserved.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    disabled={resetBusy}
+                    onClick={handleResetEngineerWork}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-1" />
+                    {resetBusy ? "Resetting…" : "Reset engineer work"}
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card className="border-destructive/40">
+                <CardHeader>
+                  <CardTitle>Admin — Field Service Reports</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {(fsrRows ?? []).length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No submissions yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(fsrRows ?? []).map((r) => (
+                        <div key={r.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="text-muted-foreground">
+                            {r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "—"}
+                          </span>
+                          <span className="font-medium">{r.engineer_name ?? "—"}</span>
+                          {r.customer_signature_path ? (
+                            <button
+                              type="button"
+                              className="underline underline-offset-2"
+                              onClick={async () => {
+                                const { data, error } = await supabase.storage
+                                  .from("ticket-attachments")
+                                  .createSignedUrl(r.customer_signature_path, 3600);
+                                if (error || !data?.signedUrl) {
+                                  toast.error(error?.message ?? "Could not open signature");
+                                  return;
+                                }
+                                window.open(data.signedUrl, "_blank", "noopener");
+                              }}
+                            >
+                              View signature
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    disabled={reopenFsrBusy || (fsrRows ?? []).length === 0}
+                    onClick={reopenFsr}
+                  >
+                    {reopenFsrBusy ? "Reopening…" : "Reopen for engineer"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
           )}
 
           <Card>
@@ -2487,8 +2567,10 @@ function TicketDetail() {
             <DialogDescription>
               {t.case_id} — deletes customer verifications ({resetPreview?.customerRows ?? 0}),
               equipment verifications ({resetPreview?.equipmentRows ?? 0}), engineer activities (
-              {resetPreview?.activityRows ?? 0}), photos ({resetPreview?.photoCount ?? 0}).
-              Assignment and status are preserved. This cannot be undone.
+              {resetPreview?.activityRows ?? 0}), site visits (arrival/departure) (
+              {resetPreview?.visitRows ?? 0}), field service reports incl. customer signature (
+              {resetPreview?.fsrRows ?? 0}), and signature photos ({resetPreview?.photoCount ?? 0}
+              ). Assignment and status are preserved. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

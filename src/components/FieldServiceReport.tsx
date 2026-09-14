@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Check, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -265,10 +266,12 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [submittedOk, setSubmittedOk] = useState(false);
+  const [justSubmitted, setJustSubmitted] = useState(false);
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const {
     data: rows,
     isLoading: latestLoading,
@@ -520,6 +523,11 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       await queryClient.invalidateQueries({
         queryKey: fieldServiceReportKeys.list({ ticket: ticketId }),
       });
+      // Prevent the view-only gate from flashing during the transition out.
+      // NOTE: the submittedOk banner below stays in code but is superseded by
+      // this immediate navigation (Sonner toasts persist across routes).
+      setJustSubmitted(true);
+      navigate({ to: "/eng/queue" });
       setForm({
         ...initialForm,
         chargingReadings: [],
@@ -544,6 +552,55 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         engineer_name: string | null;
       }
     | undefined;
+
+  // View-only gate: engineers have no update/delete on FSR (RLS), so a ticket
+  // with submissions renders read-only — no inputs, no submit bar. Loading
+  // never renders view-only (avoids flash-before-fetch). After an admin reopen
+  // deletes the rows, submissions go empty and the form returns automatically.
+  const hasSubmission = (rows?.length ?? 0) > 0;
+  const readOnly = !latestLoading && hasSubmission && !justSubmitted;
+
+  if (readOnly && latest) {
+    return (
+      <div className="space-y-3">
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-xl border border-border bg-card p-4"
+        >
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <Check className="size-4" />
+          </span>
+          <div className="space-y-0.5">
+            <p className="text-sm font-semibold text-card-foreground">
+              Submitted — view only. Only an admin can reopen this report for editing.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border p-4 space-y-2 text-sm">
+          <p className="text-[13px] font-medium">
+            Latest submission — {new Date(latest.submitted_at).toLocaleString()}
+          </p>
+          <p className="text-[13px]">
+            Voltage L-N: {latest.mains_voltage_ln ?? "—"} VAC · Voltage N-E:{" "}
+            {latest.mains_voltage_ne ?? "—"} VAC
+          </p>
+          <p className="text-[13px]">
+            UPS location: {latest.ups_location} · Power failures/day:{" "}
+            {latest.power_failures_count ?? "—"}
+          </p>
+          <p className="text-[13px]">Submitted by: {latest.engineer_name ?? "—"}</p>
+        </div>
+
+        {latestError && (
+          <p className="text-sm text-destructive">
+            Could not load previous report:{" "}
+            {latestError instanceof Error ? latestError.message : String(latestError)}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
