@@ -5162,8 +5162,8 @@ export type Database = {
         Row: {
           id: string
           ticket_id: string
-          mains_voltage_ln: number | null
-          mains_voltage_ne: number | null
+          mains_voltage_ln: number
+          mains_voltage_ne: number
           batt1_charge_vdc: number | null
           batt2_charge_vdc: number | null
           batt1_discharge_vdc: number | null
@@ -5202,8 +5202,8 @@ export type Database = {
         Insert: {
           id?: string
           ticket_id: string
-          mains_voltage_ln?: number | null
-          mains_voltage_ne?: number | null
+          mains_voltage_ln: number
+          mains_voltage_ne: number
           batt1_charge_vdc?: number | null
           batt2_charge_vdc?: number | null
           batt1_discharge_vdc?: number | null

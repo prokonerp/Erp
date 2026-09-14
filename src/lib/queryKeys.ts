@@ -17,10 +17,14 @@ function createKeyFactory<NS extends readonly string[]>(namespace: NS) {
   return {
     all,
     list: (filters?: Filters) =>
-      (filters !== undefined ? [...(all as unknown as readonly string[]), "list", filters] : [...(all as unknown as readonly string[]), "list"]) as readonly unknown[],
+      (filters !== undefined
+        ? [...(all as unknown as readonly string[]), "list", filters]
+        : [...(all as unknown as readonly string[]), "list"]) as readonly unknown[],
     detail: (id: string) => [...(all as unknown as readonly string[]), "detail", id] as const,
-    paginated: (params: PaginationParams) => paginationKey(all as unknown as readonly string[], params),
-    pagination: (params: PaginationParams) => paginationKey(all as unknown as readonly string[], params),
+    paginated: (params: PaginationParams) =>
+      paginationKey(all as unknown as readonly string[], params),
+    pagination: (params: PaginationParams) =>
+      paginationKey(all as unknown as readonly string[], params),
   } as const;
 }
 

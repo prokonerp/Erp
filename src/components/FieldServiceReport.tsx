@@ -303,7 +303,10 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               </FieldRow>
               <FieldRow label="Location where UPS Installed" required>
                 <div>
-                  <Select value={form.upsLocation} onValueChange={(v) => set("upsLocation", v)}>
+                  <Select
+                    value={form.upsLocation || undefined}
+                    onValueChange={(v) => set("upsLocation", v)}
+                  >
                     <SelectTrigger
                       className={`w-full ${errors.upsLocation ? "border-destructive" : ""}`}
                     >
