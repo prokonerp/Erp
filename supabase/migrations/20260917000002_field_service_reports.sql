@@ -1,6 +1,8 @@
 -- Migration: 20260917000002_field_service_reports.sql
 -- Field Service Reports: APPEND-ONLY per-ticket reports. Multiple rows per ticket
 -- allowed — each submit = new row, history preserved, never overwritten.
+-- Site-observation flow: Mains → Battery Bank Description → Charging list →
+-- Discharging list, plus Front Indication section.
 -- SAFE: additive-only, idempotent (IF NOT EXISTS / DROP IF EXISTS + CREATE),
 -- zero destructive statements. No backfill UPDATEs, no ALTER of existing tables.
 
@@ -13,8 +15,18 @@ CREATE TABLE IF NOT EXISTS public.field_service_reports (
   -- Phase 1 readings (app enforces required; mains voltages NOT NULL):
   mains_voltage_ln numeric NOT NULL,
   mains_voltage_ne numeric NOT NULL,
-  -- Dynamic battery records: [{charge_vdc, discharge_vdc}, ...] (count = array length, 0 = none)
-  battery_readings jsonb NOT NULL DEFAULT '[]'::jsonb,
+  -- Battery Bank Description (dropdowns + qty; nullable = not recorded)
+  battery_bank_make text,
+  battery_bank_ah text,
+  battery_bank_qty integer,
+  -- Reading During Charging: [{volts}, ...] (Add-button list, 0..20)
+  charging_readings jsonb NOT NULL DEFAULT '[]'::jsonb,
+  -- Reading During Discharging: [{volts}, ...] (Add-button list, 0..20)
+  discharging_readings jsonb NOT NULL DEFAULT '[]'::jsonb,
+  -- Front Indication / Calibration: {op_mode, bypass_state, lead_found, lead_corrected,
+  --   charge_found, charge_corrected, fault_0_found, fault_0_corrected,
+  --   fault_ge_found, fault_ge_corrected, remarks, remarks_target}
+  front_indication jsonb NOT NULL DEFAULT '{}'::jsonb,
   -- Phase 2 load record:
   ac_provided boolean NOT NULL DEFAULT false,
   dg_provided boolean NOT NULL DEFAULT false,

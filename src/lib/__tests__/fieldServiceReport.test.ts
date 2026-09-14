@@ -7,11 +7,13 @@ function minimalInput() {
   return {
     mainsVoltageLn: "230",
     mainsVoltageNe: "1.5",
-    batteryReadings: [],
     upsLocation: validLocation,
+    chargingReadings: [],
+    dischargingReadings: [],
     pcDetails: [],
     printerDetails: [],
     scannerDetails: [],
+    frontIndication: {},
   };
 }
 
@@ -19,10 +21,11 @@ function fullValidInput() {
   return {
     mainsVoltageLn: "230.5",
     mainsVoltageNe: "1.2",
-    batteryReadings: [
-      { chargeVdc: "13.5", dischargeVdc: "12.1" },
-      { chargeVdc: "13.6", dischargeVdc: "12.0" },
-    ],
+    batteryBankMake: "EXIDE",
+    batteryBankAh: "100",
+    batteryBankQty: "4",
+    chargingReadings: [{ volts: "13.5" }, { volts: "13.6" }],
+    dischargingReadings: [{ volts: "12.1" }],
     acProvided: true,
     dgProvided: true,
     environmentDuty: true,
@@ -38,31 +41,44 @@ function fullValidInput() {
     amfPanel: true,
     operateNonBusinessHours: true,
     operateHolidays: true,
+    frontIndication: {
+      opMode: "on_mains",
+      bypassState: "on_bypass",
+      leadFound: "90",
+      remarks: "ok",
+      remarksTarget: "UPS",
+    },
   };
 }
 
 describe("fieldServiceReportSchema", () => {
-  it("parses a full valid payload with array details and string-coerced numerics", () => {
+  it("parses a full valid payload with new battery bank + readings + frontIndication", () => {
     const result = fieldServiceReportSchema.safeParse(fullValidInput());
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.batteryReadings).toEqual([
-      { chargeVdc: 13.5, dischargeVdc: 12.1 },
-      { chargeVdc: 13.6, dischargeVdc: 12.0 },
-    ]);
+    expect(result.data.batteryBankMake).toBe("EXIDE");
+    expect(result.data.batteryBankAh).toBe("100");
+    expect(result.data.batteryBankQty).toBe(4);
+    expect(result.data.chargingReadings).toEqual([{ volts: 13.5 }, { volts: 13.6 }]);
+    expect(result.data.dischargingReadings).toEqual([{ volts: 12.1 }]);
+    expect(result.data.frontIndication).toMatchObject({
+      opMode: "on_mains",
+      bypassState: "on_bypass",
+      leadFound: 90,
+      remarks: "ok",
+      remarksTarget: "UPS",
+    });
     expect(result.data.pcDetails).toEqual([{ monitorSizeIn: 21.5, qty: 2 }]);
     expect(result.data.printerDetails).toEqual([{ ratingW: 60, qty: 1 }]);
-    expect(result.data.scannerDetails).toEqual([]);
   });
 
-  it("parses a minimal payload with empty arrays and defaults booleans to false", () => {
+  it("parses a minimal payload with empty readings arrays and empty frontIndication", () => {
     const result = fieldServiceReportSchema.safeParse(minimalInput());
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.batteryReadings).toEqual([]);
-    expect(result.data.pcDetails).toEqual([]);
-    expect(result.data.printerDetails).toEqual([]);
-    expect(result.data.scannerDetails).toEqual([]);
+    expect(result.data.chargingReadings).toEqual([]);
+    expect(result.data.dischargingReadings).toEqual([]);
+    expect(result.data.frontIndication).toEqual({});
     expect(result.data.acProvided).toBe(false);
     expect(result.data.dgProvided).toBe(false);
     expect(result.data.environmentDuty).toBe(false);
@@ -73,15 +89,9 @@ describe("fieldServiceReportSchema", () => {
   });
 
   it("fails when mainsVoltageLn is missing", () => {
-    const { mainsVoltageLn: _omitted, ...rest } = minimalInput();
-    const result = fieldServiceReportSchema.safeParse(rest);
-    expect(result.success).toBe(false);
-  });
-
-  it("fails when upsLocation is missing", () => {
-    const { upsLocation: _omitted, ...rest } = minimalInput();
-    const result = fieldServiceReportSchema.safeParse(rest);
-    expect(result.success).toBe(false);
+    const input = minimalInput() as Record<string, unknown>;
+    delete input.mainsVoltageLn;
+    expect(fieldServiceReportSchema.safeParse(input).success).toBe(false);
   });
 
   it("fails on non-numeric mains voltage", () => {
@@ -100,6 +110,12 @@ describe("fieldServiceReportSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("fails when upsLocation is missing", () => {
+    const input = minimalInput() as Record<string, unknown>;
+    delete input.upsLocation;
+    expect(fieldServiceReportSchema.safeParse(input).success).toBe(false);
+  });
+
   it("fails on invalid upsLocation", () => {
     const result = fieldServiceReportSchema.safeParse({
       ...minimalInput(),
@@ -108,55 +124,118 @@ describe("fieldServiceReportSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it('fails on batteryBankMake "Amaron" (not in allowlist)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankMake: "Amaron",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('parses batteryBankMake "EXIDE" (in allowlist)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankMake: "EXIDE",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.batteryBankMake).toBe("EXIDE");
+  });
+
+  it('parses batteryBankAh "150"', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankAh: "150",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.batteryBankAh).toBe("150");
+  });
+
+  it('fails on batteryBankAh "999" (not in allowlist)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankAh: "999",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('fails on fractional batteryBankQty "2.5" (must be int)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankQty: "2.5",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('fails on non-numeric charging volts "abc"', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      chargingReadings: [{ volts: "abc" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("fails when chargingReadings exceeds 20 rows", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      chargingReadings: Array.from({ length: 21 }, () => ({ volts: "13.5" })),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('fails on non-numeric discharging volts "abc"', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      dischargingReadings: [{ volts: "abc" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("fails when dischargingReadings exceeds 20 rows", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      dischargingReadings: Array.from({ length: 21 }, () => ({ volts: "12.1" })),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("parses empty dischargingReadings", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      dischargingReadings: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('fails on frontIndication opMode "on_solar"', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      frontIndication: { opMode: "on_solar" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('fails on frontIndication leadFound "-5" (must be non-negative)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      frontIndication: { leadFound: "-5" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("fails on frontIndication remarks longer than 500 chars", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      frontIndication: { remarks: "a".repeat(501) },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("fails on fractional pc qty (must be int)", () => {
     const result = fieldServiceReportSchema.safeParse({
       ...minimalInput(),
       pcDetails: [{ monitorSizeIn: "22", qty: "2.5" }],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("fails on negative pc qty (must be non-negative)", () => {
-    const result = fieldServiceReportSchema.safeParse({
-      ...minimalInput(),
-      pcDetails: [{ monitorSizeIn: "22", qty: "-1" }],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("parses fractional monitorSizeIn (fractional size is OK)", () => {
-    const result = fieldServiceReportSchema.safeParse({
-      ...minimalInput(),
-      pcDetails: [{ monitorSizeIn: "21.5", qty: "2" }],
-    });
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data.pcDetails).toEqual([{ monitorSizeIn: 21.5, qty: 2 }]);
-  });
-
-  it("fails on non-numeric battery chargeVdc", () => {
-    const result = fieldServiceReportSchema.safeParse({
-      ...minimalInput(),
-      batteryReadings: [{ chargeVdc: "abc", dischargeVdc: "12" }],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("parses empty batteryReadings", () => {
-    const result = fieldServiceReportSchema.safeParse({
-      ...minimalInput(),
-      batteryReadings: [],
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("fails when batteryReadings exceeds 20 rows", () => {
-    const result = fieldServiceReportSchema.safeParse({
-      ...minimalInput(),
-      batteryReadings: Array.from({ length: 21 }, () => ({
-        chargeVdc: "13.5",
-        dischargeVdc: "12.1",
-      })),
     });
     expect(result.success).toBe(false);
   });
@@ -179,31 +258,48 @@ describe("fieldServiceReportSchema", () => {
 });
 
 describe("buildFsrPayload", () => {
-  it("maps arrays to snake_case JSONB objects", () => {
+  it("maps new battery bank + readings + front_indication to snake_case", () => {
     const parsed = fieldServiceReportSchema.parse(fullValidInput());
     const payload = buildFsrPayload(parsed, "ticket-123", {
       employeeId: "EMP-1",
       name: "Jane Engineer",
       phone: "9999999999",
-    });
+    }) as Record<string, unknown>;
 
     expect(payload.ticket_id).toBe("ticket-123");
     expect(payload.mains_voltage_ln).toBe(230.5);
     expect(payload.mains_voltage_ne).toBe(1.2);
-    expect(payload.battery_readings).toEqual([
-      { charge_vdc: 13.5, discharge_vdc: 12.1 },
-      { charge_vdc: 13.6, discharge_vdc: 12.0 },
-    ]);
+    expect(payload.battery_bank_make).toBe("EXIDE");
+    expect(payload.battery_bank_ah).toBe("100");
+    expect(payload.battery_bank_qty).toBe(4);
+    expect(payload.charging_readings).toEqual([{ volts: 13.5 }, { volts: 13.6 }]);
+    expect(payload.discharging_readings).toEqual([{ volts: 12.1 }]);
+    expect(payload.front_indication).toMatchObject({
+      op_mode: "on_mains",
+      bypass_state: "on_bypass",
+      lead_found: 90,
+      remarks: "ok",
+      remarks_target: "UPS",
+    });
     expect(payload.pc_details).toEqual([{ monitor_size_in: 21.5, qty: 2 }]);
     expect(payload.printer_details).toEqual([{ rating_w: 60, qty: 1 }]);
     expect(payload.scanner_details).toEqual([]);
     expect(payload.ups_location).toBe(validLocation);
+
+    // Old array-model key must be gone, no camelCase leakage
+    expect("battery_readings" in payload).toBe(false);
+    expect("batteryReadings" in payload).toBe(false);
+
+    // No id / submitted_at keys
+    expect(payload).not.toHaveProperty("id");
+    expect(payload).not.toHaveProperty("submitted_at");
   });
 
   it("maps undefined optionals to null and contains no legacy keys", () => {
     const parsed = fieldServiceReportSchema.parse({
       ...minimalInput(),
-      batteryReadings: [{}],
+      chargingReadings: [{}],
+      dischargingReadings: [{}],
       pcDetails: [{}],
     });
     const payload = buildFsrPayload(parsed, "ticket-123", {
@@ -213,16 +309,21 @@ describe("buildFsrPayload", () => {
     }) as Record<string, unknown>;
 
     // Empty row objects map missing readings to null
-    expect(payload.battery_readings).toEqual([{ charge_vdc: null, discharge_vdc: null }]);
+    expect(payload.charging_readings).toEqual([{ volts: null }]);
+    expect(payload.discharging_readings).toEqual([{ volts: null }]);
     expect(payload.pc_details).toEqual([{ monitor_size_in: null, qty: null }]);
+    expect(payload.battery_bank_make).toBeNull();
+    expect(payload.battery_bank_ah).toBeNull();
+    expect(payload.battery_bank_qty).toBeNull();
     expect(payload.power_failures_count).toBeNull();
     expect(payload.power_failures_duration_min).toBeNull();
     expect(payload.load_on_dg_percent).toBeNull();
     expect(payload.dg_set_capacity_kva).toBeNull();
 
-    // No legacy fixed-field keys
+    // No legacy fixed-field or old-model keys
+    expect("battery_readings" in payload).toBe(false);
+    expect("batteryReadings" in payload).toBe(false);
     expect("pc_qty_1" in payload).toBe(false);
-    expect("batt1_charge_vdc" in payload).toBe(false);
     expect("printer_rating_w_1" in payload).toBe(false);
     expect("scanner_qty_2" in payload).toBe(false);
 

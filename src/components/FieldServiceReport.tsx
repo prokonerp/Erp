@@ -4,9 +4,12 @@ import { toast } from "sonner";
 import { Check, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  BATTERY_AH,
+  BATTERY_MAKES,
   UPS_LOCATIONS,
   buildFsrPayload,
   fieldServiceReportSchema,
+  frontIndicationSchema,
   loadRecordSchema,
   powerConditionSchema,
   readingsSchema,
@@ -14,6 +17,7 @@ import {
 import { fieldServiceReportKeys } from "@/lib/queryKeys";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -28,7 +32,21 @@ import { FieldRow } from "./CustomerForm";
 
 let rowSeq = 0;
 const nextRowId = () => `row-${++rowSeq}`;
-type BatteryReading = { id: string; chargeVdc: string; dischargeVdc: string };
+type VoltReading = { id: string; volts: string };
+type FrontIndicationState = {
+  opMode: string;
+  bypassState: string;
+  leadFound: string;
+  leadCorrected: string;
+  chargeFound: string;
+  chargeCorrected: string;
+  fault0Found: string;
+  fault0Corrected: string;
+  faultGeFound: string;
+  faultGeCorrected: string;
+  remarks: string;
+  remarksTarget: string;
+};
 type PcDetail = { id: string; monitorSizeIn: string; qty: string };
 type PrinterDetail = { id: string; ratingW: string; qty: string };
 type ScannerDetail = { id: string; ratingW: string; qty: string };
@@ -36,7 +54,12 @@ type ScannerDetail = { id: string; ratingW: string; qty: string };
 type FormState = {
   mainsVoltageLn: string;
   mainsVoltageNe: string;
-  batteryReadings: BatteryReading[];
+  batteryBankMake: string;
+  batteryBankAh: string;
+  batteryBankQty: string;
+  chargingReadings: VoltReading[];
+  dischargingReadings: VoltReading[];
+  frontIndication: FrontIndicationState;
   acProvided: boolean;
   dgProvided: boolean;
   environmentDuty: boolean;
@@ -54,10 +77,30 @@ type FormState = {
   operateHolidays: boolean;
 };
 
+const initialFrontIndication: FrontIndicationState = {
+  opMode: "",
+  bypassState: "",
+  leadFound: "",
+  leadCorrected: "",
+  chargeFound: "",
+  chargeCorrected: "",
+  fault0Found: "",
+  fault0Corrected: "",
+  faultGeFound: "",
+  faultGeCorrected: "",
+  remarks: "",
+  remarksTarget: "",
+};
+
 const initialForm: FormState = {
   mainsVoltageLn: "",
   mainsVoltageNe: "",
-  batteryReadings: [],
+  batteryBankMake: "",
+  batteryBankAh: "",
+  batteryBankQty: "",
+  chargingReadings: [],
+  dischargingReadings: [],
+  frontIndication: initialFrontIndication,
   acProvided: false,
   dgProvided: false,
   environmentDuty: false,
@@ -185,28 +228,41 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
 
   const set = (k: keyof FormState, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
-  const setBatteryCount = (v: string) => {
-    if (v === "") {
-      setForm((f) => ({ ...f, batteryReadings: [] }));
-      return;
-    }
-    if (!/^\d+$/.test(v)) return;
-    const n = parseInt(v, 10);
-    if (n > 20) {
-      toast.error("Maximum 20 batteries");
-      return;
-    }
-    setForm((f) => {
-      const next = [...f.batteryReadings];
-      while (next.length < n) next.push({ id: nextRowId(), chargeVdc: "", dischargeVdc: "" });
-      return { ...f, batteryReadings: next.slice(0, n) };
-    });
-  };
+  const setFront = (k: keyof FrontIndicationState, v: string) =>
+    setForm((f) => ({ ...f, frontIndication: { ...f.frontIndication, [k]: v } }));
 
-  const setReading = (i: number, k: keyof BatteryReading, v: string) =>
+  const addCharging = () =>
+    setForm((f) =>
+      f.chargingReadings.length >= 20
+        ? f
+        : { ...f, chargingReadings: [...f.chargingReadings, { id: nextRowId(), volts: "" }] },
+    );
+  const removeCharging = (i: number) =>
+    setForm((f) => ({ ...f, chargingReadings: f.chargingReadings.filter((_, j) => j !== i) }));
+  const setCharging = (i: number, v: string) =>
     setForm((f) => ({
       ...f,
-      batteryReadings: f.batteryReadings.map((r, j) => (j === i ? { ...r, [k]: v } : r)),
+      chargingReadings: f.chargingReadings.map((r, j) => (j === i ? { ...r, volts: v } : r)),
+    }));
+
+  const addDischarging = () =>
+    setForm((f) =>
+      f.dischargingReadings.length >= 20
+        ? f
+        : {
+            ...f,
+            dischargingReadings: [...f.dischargingReadings, { id: nextRowId(), volts: "" }],
+          },
+    );
+  const removeDischarging = (i: number) =>
+    setForm((f) => ({
+      ...f,
+      dischargingReadings: f.dischargingReadings.filter((_, j) => j !== i),
+    }));
+  const setDischarging = (i: number, v: string) =>
+    setForm((f) => ({
+      ...f,
+      dischargingReadings: f.dischargingReadings.map((r, j) => (j === i ? { ...r, volts: v } : r)),
     }));
 
   const addPc = () =>
@@ -260,10 +316,22 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       scannerDetails: f.scannerDetails.map((r, j) => (j === i ? { ...r, [k]: v } : r)),
     }));
 
+  const emptyStr = (v: string) => (v === "" ? undefined : v);
+
   const readingsValid = readingsSchema.safeParse({
     mainsVoltageLn: form.mainsVoltageLn,
     mainsVoltageNe: form.mainsVoltageNe,
-    batteryReadings: form.batteryReadings,
+    batteryBankMake: emptyStr(form.batteryBankMake),
+    batteryBankAh: emptyStr(form.batteryBankAh),
+    batteryBankQty: form.batteryBankQty,
+    chargingReadings: form.chargingReadings,
+    dischargingReadings: form.dischargingReadings,
+  }).success;
+  const frontValid = frontIndicationSchema.safeParse({
+    ...form.frontIndication,
+    opMode: emptyStr(form.frontIndication.opMode),
+    bypassState: emptyStr(form.frontIndication.bypassState),
+    remarksTarget: emptyStr(form.frontIndication.remarksTarget),
   }).success;
   const loadValid = loadRecordSchema.safeParse({
     acProvided: form.acProvided,
@@ -288,7 +356,17 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   const handleSubmit = async (e: React.FormEvent) => {
     if (busy) return;
     e.preventDefault();
-    const parsed = fieldServiceReportSchema.safeParse(form);
+    const parsed = fieldServiceReportSchema.safeParse({
+      ...form,
+      batteryBankMake: emptyStr(form.batteryBankMake),
+      batteryBankAh: emptyStr(form.batteryBankAh),
+      frontIndication: {
+        ...form.frontIndication,
+        opMode: emptyStr(form.frontIndication.opMode),
+        bypassState: emptyStr(form.frontIndication.bypassState),
+        remarksTarget: emptyStr(form.frontIndication.remarksTarget),
+      },
+    });
     if (!parsed.success) {
       const errs: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
@@ -340,7 +418,12 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       await queryClient.invalidateQueries({
         queryKey: fieldServiceReportKeys.list({ ticket: ticketId }),
       });
-      setForm(initialForm);
+      setForm({
+        ...initialForm,
+        chargingReadings: [],
+        dischargingReadings: [],
+        frontIndication: { ...initialFrontIndication },
+      });
     } finally {
       setBusy(false);
     }
@@ -383,41 +466,304 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 error={errors.mainsVoltageNe}
               />
             </FieldRow>
-            <FieldRow label="No. of Batteries">
-              <NumInput
-                value={String(form.batteryReadings.length)}
-                onChange={setBatteryCount}
-                placeholder="0"
-                error={errors.batteryReadings}
-              />
-            </FieldRow>
-            {form.batteryReadings.length === 0 ? (
-              <p className="text-[13px] text-muted-foreground">
-                No batteries recorded — enter a count above.
-              </p>
+            <div className="space-y-3">
+              <SubHead>Battery Bank</SubHead>
+              <FieldRow label="Make">
+                <div>
+                  <Select
+                    value={form.batteryBankMake || undefined}
+                    onValueChange={(v) => set("batteryBankMake", v)}
+                  >
+                    <SelectTrigger
+                      className={`h-11 min-h-[44px] w-full ${errors.batteryBankMake ? "border-destructive" : ""}`}
+                    >
+                      <SelectValue placeholder="Select make" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BATTERY_MAKES.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={errors.batteryBankMake} />
+                </div>
+              </FieldRow>
+              <FieldRow label="Ah">
+                <div>
+                  <Select
+                    value={form.batteryBankAh || undefined}
+                    onValueChange={(v) => set("batteryBankAh", v)}
+                  >
+                    <SelectTrigger
+                      className={`h-11 min-h-[44px] w-full ${errors.batteryBankAh ? "border-destructive" : ""}`}
+                    >
+                      <SelectValue placeholder="Select Ah" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BATTERY_AH.map((a) => (
+                        <SelectItem key={a} value={a}>
+                          {a}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FieldError message={errors.batteryBankAh} />
+                </div>
+              </FieldRow>
+              <FieldRow label="Qty">
+                <NumInput
+                  value={form.batteryBankQty}
+                  onChange={(v) => set("batteryBankQty", v)}
+                  placeholder="Qty"
+                  error={errors.batteryBankQty}
+                />
+              </FieldRow>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <SubHead>Reading During Charging</SubHead>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addCharging}
+                disabled={busy || form.chargingReadings.length >= 20}
+                className="min-h-[44px]"
+              >
+                <Plus className="size-4" /> Add
+              </Button>
+            </div>
+            {form.chargingReadings.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">No charging readings — add.</p>
             ) : (
-              form.batteryReadings.map((reading, i) => (
-                <FieldRow
-                  key={reading.id}
-                  label={`Battery ${i + 1} — Charging / Discharging (Vdc)`}
-                >
-                  <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
+              form.chargingReadings.map((reading, i) => (
+                <FieldRow key={reading.id} label={`Battery ${i + 1} — Volts`}>
+                  <div className="grid grid-cols-[1fr_auto] gap-3 max-[380px]:grid-cols-1">
                     <NumInput
-                      value={reading.chargeVdc}
-                      onChange={(v) => setReading(i, "chargeVdc", v)}
-                      placeholder="Charging (Vdc)"
-                      error={errors[`batteryReadings.${i}.chargeVdc`]}
+                      value={reading.volts}
+                      onChange={(v) => setCharging(i, v)}
+                      placeholder="Volts (Vdc)"
+                      error={errors[`chargingReadings.${i}.volts`]}
                     />
-                    <NumInput
-                      value={reading.dischargeVdc}
-                      onChange={(v) => setReading(i, "dischargeVdc", v)}
-                      placeholder="Discharging (Vdc)"
-                      error={errors[`batteryReadings.${i}.dischargeVdc`]}
-                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => removeCharging(i)}
+                      disabled={busy}
+                      aria-label={`Remove charging battery ${i + 1}`}
+                      className="size-11 min-h-[44px] min-w-[44px] p-0"
+                    >
+                      <X className="size-4" />
+                    </Button>
                   </div>
                 </FieldRow>
               ))
             )}
+            <div className="flex items-center justify-between gap-3">
+              <SubHead>Reading During Discharging</SubHead>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addDischarging}
+                disabled={busy || form.dischargingReadings.length >= 20}
+                className="min-h-[44px]"
+              >
+                <Plus className="size-4" /> Add
+              </Button>
+            </div>
+            {form.dischargingReadings.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">No discharging readings — add.</p>
+            ) : (
+              form.dischargingReadings.map((reading, i) => (
+                <FieldRow key={reading.id} label={`Battery ${i + 1} — Volts`}>
+                  <div className="grid grid-cols-[1fr_auto] gap-3 max-[380px]:grid-cols-1">
+                    <NumInput
+                      value={reading.volts}
+                      onChange={(v) => setDischarging(i, v)}
+                      placeholder="Volts (Vdc)"
+                      error={errors[`dischargingReadings.${i}.volts`]}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => removeDischarging(i)}
+                      disabled={busy}
+                      aria-label={`Remove discharging battery ${i + 1}`}
+                      className="size-11 min-h-[44px] min-w-[44px] p-0"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                </FieldRow>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="space-y-3 rounded-xl border p-4">
+          <SectionHeader num="1A" title="Front Indication" valid={frontValid} />
+          <div className="space-y-3">
+            <div className="rounded border p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">Operating Mode</span>
+                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  Normal: On Mains
+                </span>
+              </div>
+              <RadioGroup
+                value={form.frontIndication.opMode || undefined}
+                onValueChange={(v) => setFront("opMode", v)}
+                aria-label="Operating mode"
+                className="flex gap-6"
+              >
+                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
+                  <RadioGroupItem value="on_mains" className="size-5" /> On Mains
+                </label>
+                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
+                  <RadioGroupItem value="on_battery" className="size-5" /> On Battery
+                </label>
+              </RadioGroup>
+              <FieldError message={errors["frontIndication.opMode"]} />
+            </div>
+            <div className="rounded border p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">Bypass State</span>
+                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  Normal: No Bypass
+                </span>
+              </div>
+              <RadioGroup
+                value={form.frontIndication.bypassState || undefined}
+                onValueChange={(v) => setFront("bypassState", v)}
+                aria-label="Bypass state"
+                className="flex gap-6"
+              >
+                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
+                  <RadioGroupItem value="on_bypass" className="size-5" /> On Bypass
+                </label>
+                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
+                  <RadioGroupItem value="dead" className="size-5" /> Dead
+                </label>
+              </RadioGroup>
+              <FieldError message={errors["frontIndication.bypassState"]} />
+            </div>
+            <div className="rounded border p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">Lead</span>
+                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  Normal: Off
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-[390px]:grid-cols-1">
+                <NumInput
+                  value={form.frontIndication.leadFound}
+                  onChange={(v) => setFront("leadFound", v)}
+                  placeholder="Found"
+                  error={errors["frontIndication.leadFound"]}
+                />
+                <NumInput
+                  value={form.frontIndication.leadCorrected}
+                  onChange={(v) => setFront("leadCorrected", v)}
+                  placeholder="Corrected"
+                  error={errors["frontIndication.leadCorrected"]}
+                />
+              </div>
+            </div>
+            <div className="rounded border p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">Charge</span>
+                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  Normal: On
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-[390px]:grid-cols-1">
+                <NumInput
+                  value={form.frontIndication.chargeFound}
+                  onChange={(v) => setFront("chargeFound", v)}
+                  placeholder="Found"
+                  error={errors["frontIndication.chargeFound"]}
+                />
+                <NumInput
+                  value={form.frontIndication.chargeCorrected}
+                  onChange={(v) => setFront("chargeCorrected", v)}
+                  placeholder="Corrected"
+                  error={errors["frontIndication.chargeCorrected"]}
+                />
+              </div>
+            </div>
+            <div className="rounded border p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">Fault 0</span>
+                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  Normal: Off
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-[390px]:grid-cols-1">
+                <NumInput
+                  value={form.frontIndication.fault0Found}
+                  onChange={(v) => setFront("fault0Found", v)}
+                  placeholder="Found"
+                  error={errors["frontIndication.fault0Found"]}
+                />
+                <NumInput
+                  value={form.frontIndication.fault0Corrected}
+                  onChange={(v) => setFront("fault0Corrected", v)}
+                  placeholder="Corrected"
+                  error={errors["frontIndication.fault0Corrected"]}
+                />
+              </div>
+            </div>
+            <div className="rounded border p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">Fault GE</span>
+                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  Normal: Off
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 max-[390px]:grid-cols-1">
+                <NumInput
+                  value={form.frontIndication.faultGeFound}
+                  onChange={(v) => setFront("faultGeFound", v)}
+                  placeholder="Found"
+                  error={errors["frontIndication.faultGeFound"]}
+                />
+                <NumInput
+                  value={form.frontIndication.faultGeCorrected}
+                  onChange={(v) => setFront("faultGeCorrected", v)}
+                  placeholder="Corrected"
+                  error={errors["frontIndication.faultGeCorrected"]}
+                />
+              </div>
+            </div>
+            <div className="rounded border p-3 space-y-2">
+              <span className="text-sm font-medium">Remarks</span>
+              <RadioGroup
+                value={form.frontIndication.remarksTarget || undefined}
+                onValueChange={(v) => setFront("remarksTarget", v)}
+                aria-label="Remarks target"
+                className="flex flex-wrap gap-6"
+              >
+                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
+                  <RadioGroupItem value="UPS" className="size-5" /> UPS
+                </label>
+                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
+                  <RadioGroupItem value="PCB" className="size-5" /> PCB
+                </label>
+                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
+                  <RadioGroupItem value="Transformer" className="size-5" /> Transformer
+                </label>
+              </RadioGroup>
+              <FieldError message={errors["frontIndication.remarksTarget"]} />
+              <Textarea
+                value={form.frontIndication.remarks}
+                onChange={(e) => setFront("remarks", e.target.value)}
+                placeholder="Remarks"
+                rows={3}
+                aria-invalid={!!errors["frontIndication.remarks"]}
+                className={errors["frontIndication.remarks"] ? "border-destructive" : ""}
+              />
+              <FieldError message={errors["frontIndication.remarks"]} />
+            </div>
           </div>
         </section>
 

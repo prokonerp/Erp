@@ -5164,7 +5164,12 @@ export type Database = {
           ticket_id: string
           mains_voltage_ln: number
           mains_voltage_ne: number
-          battery_readings: Json
+          battery_bank_make: string | null
+          battery_bank_ah: string | null
+          battery_bank_qty: number | null
+          charging_readings: Json
+          discharging_readings: Json
+          front_indication: Json
           ac_provided: boolean
           dg_provided: boolean
           environment_duty: boolean
@@ -5192,7 +5197,12 @@ export type Database = {
           ticket_id: string
           mains_voltage_ln: number
           mains_voltage_ne: number
-          battery_readings?: Json
+          battery_bank_make?: string | null
+          battery_bank_ah?: string | null
+          battery_bank_qty?: number | null
+          charging_readings?: Json
+          discharging_readings?: Json
+          front_indication?: Json
           ac_provided?: boolean
           dg_provided?: boolean
           environment_duty?: boolean
@@ -5220,7 +5230,12 @@ export type Database = {
           ticket_id?: string
           mains_voltage_ln?: number | null
           mains_voltage_ne?: number | null
-          battery_readings?: Json
+          battery_bank_make?: string | null
+          battery_bank_ah?: string | null
+          battery_bank_qty?: number | null
+          charging_readings?: Json
+          discharging_readings?: Json
+          front_indication?: Json
           ac_provided?: boolean
           dg_provided?: boolean
           environment_duty?: boolean

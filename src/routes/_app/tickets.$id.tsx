@@ -75,7 +75,7 @@ import { resetTicketEngineerWork } from "@/lib/reset-ticket-engineer.functions";
 import { Eye } from "lucide-react";
 import { RotateCcw } from "lucide-react";
 
-type FsrBattery = { charge_vdc: number | null; discharge_vdc: number | null };
+type FsrVolts = { volts: number | null };
 type FsrPc = { monitor_size_in: number | null; qty: number | null };
 type FsrWattQty = { rating_w: number | null; qty: number | null };
 
@@ -1893,25 +1893,58 @@ function TicketDetail() {
                       <span className="text-muted-foreground">Mains voltage N-E (VAC)</span>
                       <span className="font-medium">{fsrLatest.mains_voltage_ne ?? "—"}</span>
                     </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Battery bank make</span>
+                      <span className="font-medium">{fsrLatest.battery_bank_make ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Battery bank Ah</span>
+                      <span className="font-medium">{fsrLatest.battery_bank_ah ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Battery bank qty</span>
+                      <span className="font-medium">{fsrLatest.battery_bank_qty ?? "—"}</span>
+                    </div>
                     {(() => {
-                      const batteries = asFsrArray<FsrBattery>(fsrLatest.battery_readings);
-                      if (batteries.length === 0) {
+                      const charging = asFsrArray<FsrVolts>(fsrLatest.charging_readings);
+                      if (charging.length === 0) {
                         return (
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Batteries</span>
-                            <span className="font-medium">—</span>
+                            <span className="text-muted-foreground">Charging</span>
+                            <span className="font-medium">None</span>
                           </div>
                         );
                       }
-                      return batteries.map((b, i) => (
+                      return charging.map((r, i) => (
                         <div
-                          key={`batt-${i}`}
+                          key={`charging-${i}`}
                           className="flex items-center justify-between gap-2 text-xs"
                         >
-                          <span className="text-muted-foreground">Battery {i + 1}</span>
+                          <span className="text-muted-foreground">Charging</span>
                           <span className="font-medium">
-                            Charging: {b?.charge_vdc ?? "—"} Vdc / Discharging:{" "}
-                            {b?.discharge_vdc ?? "—"} Vdc
+                            Battery {i + 1}: {r?.volts ?? "—"} Vdc
+                          </span>
+                        </div>
+                      ));
+                    })()}
+                    {(() => {
+                      const discharging = asFsrArray<FsrVolts>(fsrLatest.discharging_readings);
+                      if (discharging.length === 0) {
+                        return (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Discharging</span>
+                            <span className="font-medium">None</span>
+                          </div>
+                        );
+                      }
+                      return discharging.map((r, i) => (
+                        <div
+                          key={`discharging-${i}`}
+                          className="flex items-center justify-between gap-2 text-xs"
+                        >
+                          <span className="text-muted-foreground">Discharging</span>
+                          <span className="font-medium">
+                            Battery {i + 1}: {r?.volts ?? "—"} Vdc
                           </span>
                         </div>
                       ));
@@ -2084,6 +2117,73 @@ function TicketDetail() {
                       </Badge>
                     </div>
                   </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Front Indication
+                    </p>
+                    {(() => {
+                      const fi = (fsrLatest.front_indication ?? {}) as {
+                        op_mode?: string | null;
+                        bypass_state?: string | null;
+                        lead_found?: number | null;
+                        lead_corrected?: number | null;
+                        charge_found?: number | null;
+                        charge_corrected?: number | null;
+                        fault_0_found?: number | null;
+                        fault_0_corrected?: number | null;
+                        fault_ge_found?: number | null;
+                        fault_ge_corrected?: number | null;
+                        remarks?: string | null;
+                        remarks_target?: string | null;
+                      };
+                      return (
+                        <>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">OP mode</span>
+                            <span className="font-medium">{fi.op_mode ?? "—"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Bypass</span>
+                            <span className="font-medium">{fi.bypass_state ?? "—"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Lead</span>
+                            <span className="font-medium">
+                              Found: {fi.lead_found ?? "—"} / Corrected: {fi.lead_corrected ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Charge</span>
+                            <span className="font-medium">
+                              Found: {fi.charge_found ?? "—"} / Corrected:{" "}
+                              {fi.charge_corrected ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Fault 0</span>
+                            <span className="font-medium">
+                              Found: {fi.fault_0_found ?? "—"} / Corrected:{" "}
+                              {fi.fault_0_corrected ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Fault GE</span>
+                            <span className="font-medium">
+                              Found: {fi.fault_ge_found ?? "—"} / Corrected:{" "}
+                              {fi.fault_ge_corrected ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Remarks</span>
+                            <span className="font-medium">
+                              {fi.remarks ?? "—"}
+                              {fi.remarks_target ? ` (${fi.remarks_target})` : ""}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -2096,8 +2196,8 @@ function TicketDetail() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Clears engineer verification data so Step 2 can be redone. Assignment and
-                  status are preserved.
+                  Clears engineer verification data so Step 2 can be redone. Assignment and status
+                  are preserved.
                 </p>
                 <Button
                   variant="destructive"
