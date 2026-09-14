@@ -5158,6 +5158,129 @@ export type Database = {
         }
         Relationships: []
       }
+      field_service_reports: {
+        Row: {
+          id: string
+          ticket_id: string
+          mains_voltage_ln: number | null
+          mains_voltage_ne: number | null
+          batt1_charge_vdc: number | null
+          batt2_charge_vdc: number | null
+          batt1_discharge_vdc: number | null
+          batt2_discharge_vdc: number | null
+          ac_provided: boolean
+          dg_provided: boolean
+          environment_duty: boolean
+          ups_location: string
+          pc_monitor_size_in_1: number | null
+          pc_qty_1: number | null
+          pc_monitor_size_in_2: number | null
+          pc_qty_2: number | null
+          printer_rating_w_1: number | null
+          printer_qty_1: number | null
+          printer_rating_w_2: number | null
+          printer_qty_2: number | null
+          scanner_rating_w_1: number | null
+          scanner_qty_1: number | null
+          scanner_rating_w_2: number | null
+          scanner_qty_2: number | null
+          power_failures_count: number | null
+          power_failures_duration_min: number | null
+          load_on_dg_percent: number | null
+          dg_set: boolean
+          dg_set_capacity_kva: number | null
+          amf_panel: boolean
+          operate_non_business_hours: boolean
+          operate_holidays: boolean
+          engineer_employee_id: string | null
+          engineer_name: string | null
+          engineer_phone: string | null
+          submitted_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          ticket_id: string
+          mains_voltage_ln?: number | null
+          mains_voltage_ne?: number | null
+          batt1_charge_vdc?: number | null
+          batt2_charge_vdc?: number | null
+          batt1_discharge_vdc?: number | null
+          batt2_discharge_vdc?: number | null
+          ac_provided?: boolean
+          dg_provided?: boolean
+          environment_duty?: boolean
+          ups_location: string
+          pc_monitor_size_in_1?: number | null
+          pc_qty_1?: number | null
+          pc_monitor_size_in_2?: number | null
+          pc_qty_2?: number | null
+          printer_rating_w_1?: number | null
+          printer_qty_1?: number | null
+          printer_rating_w_2?: number | null
+          printer_qty_2?: number | null
+          scanner_rating_w_1?: number | null
+          scanner_qty_1?: number | null
+          scanner_rating_w_2?: number | null
+          scanner_qty_2?: number | null
+          power_failures_count?: number | null
+          power_failures_duration_min?: number | null
+          load_on_dg_percent?: number | null
+          dg_set?: boolean
+          dg_set_capacity_kva?: number | null
+          amf_panel?: boolean
+          operate_non_business_hours?: boolean
+          operate_holidays?: boolean
+          engineer_employee_id?: string | null
+          engineer_name?: string | null
+          engineer_phone?: string | null
+          submitted_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          ticket_id?: string
+          mains_voltage_ln?: number | null
+          mains_voltage_ne?: number | null
+          batt1_charge_vdc?: number | null
+          batt2_charge_vdc?: number | null
+          batt1_discharge_vdc?: number | null
+          batt2_discharge_vdc?: number | null
+          ac_provided?: boolean
+          dg_provided?: boolean
+          environment_duty?: boolean
+          ups_location?: string
+          pc_monitor_size_in_1?: number | null
+          pc_qty_1?: number | null
+          pc_monitor_size_in_2?: number | null
+          pc_qty_2?: number | null
+          printer_rating_w_1?: number | null
+          printer_qty_1?: number | null
+          printer_rating_w_2?: number | null
+          printer_qty_2?: number | null
+          scanner_rating_w_1?: number | null
+          scanner_qty_1?: number | null
+          scanner_rating_w_2?: number | null
+          scanner_qty_2?: number | null
+          power_failures_count?: number | null
+          power_failures_duration_min?: number | null
+          load_on_dg_percent?: number | null
+          dg_set?: boolean
+          dg_set_capacity_kva?: number | null
+          amf_panel?: boolean
+          operate_non_business_hours?: boolean
+          operate_holidays?: boolean
+          engineer_employee_id?: string | null
+          engineer_name?: string | null
+          engineer_phone?: string | null
+          submitted_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ticket_sequence: {
         Row: {
           id: number

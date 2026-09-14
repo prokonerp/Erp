@@ -52,6 +52,7 @@ import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
 import { useTicketVerifications } from "@/hooks/useTicketVerifications";
+import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import { VerificationDiff } from "@/components/VerificationDiff";
 import { fetchEngineerLoginIds } from "@/hooks/useTicketsTable";
 import { attachLoginFlags, sortEngineersLoginFirst } from "@/lib/eng-queue-utils";
@@ -234,6 +235,8 @@ function TicketDetail() {
 
   const { isAdmin } = useIsAdmin();
   const { data: verifications } = useTicketVerifications(id);
+  const { data: fsrRows } = useFieldServiceReport(id);
+  const fsrLatest = fsrRows?.[0] ?? null;
   const [selectedDefRows, setSelectedDefRows] = useState<Record<number, boolean>>({});
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string>("");
@@ -1844,6 +1847,204 @@ function TicketDetail() {
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Field Service Report</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {!fsrLatest ? (
+                <p className="text-xs text-muted-foreground">
+                  No field service report submitted yet.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Submitted</span>
+                      <span className="font-medium">
+                        {fsrLatest.submitted_at
+                          ? new Date(fsrLatest.submitted_at).toLocaleString()
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Engineer</span>
+                      <span className="font-medium">{fsrLatest.engineer_name ?? "—"}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Readings
+                    </p>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Mains voltage L-N (VAC)</span>
+                      <span className="font-medium">{fsrLatest.mains_voltage_ln ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Mains voltage N-E (VAC)</span>
+                      <span className="font-medium">{fsrLatest.mains_voltage_ne ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Battery 1 charging (Vdc)</span>
+                      <span className="font-medium">{fsrLatest.batt1_charge_vdc ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Battery 2 charging (Vdc)</span>
+                      <span className="font-medium">{fsrLatest.batt2_charge_vdc ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Battery 1 discharging (Vdc)</span>
+                      <span className="font-medium">{fsrLatest.batt1_discharge_vdc ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Battery 2 discharging (Vdc)</span>
+                      <span className="font-medium">{fsrLatest.batt2_discharge_vdc ?? "—"}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Load Record
+                    </p>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">AC provided</span>
+                      <Badge
+                        variant={fsrLatest.ac_provided ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {fsrLatest.ac_provided ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">DG provided</span>
+                      <Badge
+                        variant={fsrLatest.dg_provided ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {fsrLatest.dg_provided ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Environment duty</span>
+                      <Badge
+                        variant={fsrLatest.environment_duty ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {fsrLatest.environment_duty ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">UPS location</span>
+                      <span className="font-medium">{fsrLatest.ups_location ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">PC row 1 — monitor (in) / qty</span>
+                      <span className="font-medium">
+                        {fsrLatest.pc_monitor_size_in_1 ?? "—"} / {fsrLatest.pc_qty_1 ?? "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">PC row 2 — monitor (in) / qty</span>
+                      <span className="font-medium">
+                        {fsrLatest.pc_monitor_size_in_2 ?? "—"} / {fsrLatest.pc_qty_2 ?? "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">
+                        Printer row 1 — rating (W) / qty
+                      </span>
+                      <span className="font-medium">
+                        {fsrLatest.printer_rating_w_1 ?? "—"} / {fsrLatest.printer_qty_1 ?? "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">
+                        Printer row 2 — rating (W) / qty
+                      </span>
+                      <span className="font-medium">
+                        {fsrLatest.printer_rating_w_2 ?? "—"} / {fsrLatest.printer_qty_2 ?? "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">
+                        Scanner row 1 — rating (W) / qty
+                      </span>
+                      <span className="font-medium">
+                        {fsrLatest.scanner_rating_w_1 ?? "—"} / {fsrLatest.scanner_qty_1 ?? "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">
+                        Scanner row 2 — rating (W) / qty
+                      </span>
+                      <span className="font-medium">
+                        {fsrLatest.scanner_rating_w_2 ?? "—"} / {fsrLatest.scanner_qty_2 ?? "—"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Power Condition
+                    </p>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Power failures / day</span>
+                      <span className="font-medium">{fsrLatest.power_failures_count ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Failure duration (min / day)</span>
+                      <span className="font-medium">
+                        {fsrLatest.power_failures_duration_min ?? "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Load on DG (%)</span>
+                      <span className="font-medium">{fsrLatest.load_on_dg_percent ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">DG set</span>
+                      <Badge
+                        variant={fsrLatest.dg_set ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {fsrLatest.dg_set ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">DG set capacity (kVA)</span>
+                      <span className="font-medium">{fsrLatest.dg_set_capacity_kva ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">AMF panel</span>
+                      <Badge
+                        variant={fsrLatest.amf_panel ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {fsrLatest.amf_panel ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Operates non-business hours</span>
+                      <Badge
+                        variant={fsrLatest.operate_non_business_hours ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {fsrLatest.operate_non_business_hours ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Operates on holidays</span>
+                      <Badge
+                        variant={fsrLatest.operate_holidays ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {fsrLatest.operate_holidays ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {isAdmin && (
             <Card className="border-destructive/40">

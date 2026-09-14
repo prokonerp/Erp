@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { FieldServiceReport } from "@/components/FieldServiceReport";
 import { VerificationStepper } from "@/components/VerificationStepper";
 import { VerificationDiff } from "@/components/VerificationDiff";
 import { useTicketVerifications } from "@/hooks/useTicketVerifications";
@@ -1251,6 +1252,18 @@ function EngTicketDetail() {
               </details>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      {/* Step 3: Field Service Report */}
+      <Card>
+        <CardContent className="py-4 space-y-3">
+          <h3 className="text-sm font-semibold">3 — Field Service Report</h3>
+          {!canProceedToWork(verifications?.customer ?? null, verifications?.equipment ?? null) ? (
+            <p className="text-xs text-muted-foreground">Complete verification first.</p>
+          ) : (
+            <FieldServiceReport ticketId={id} />
+          )}
         </CardContent>
       </Card>
 
