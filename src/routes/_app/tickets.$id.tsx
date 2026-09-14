@@ -72,6 +72,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { listIndentMapForTicket } from "@/lib/indent.functions";
 import { resetTicketEngineerWork } from "@/lib/reset-ticket-engineer.functions";
+import { syncFsrPartsToTicket } from "@/lib/sync-fsr-parts.functions";
 import { Eye } from "lucide-react";
 import { RotateCcw } from "lucide-react";
 
@@ -261,6 +262,8 @@ function TicketDetail() {
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchIndentMap = useServerFn(listIndentMapForTicket);
   const callResetEngineerWork = useServerFn(resetTicketEngineerWork);
+  const callSyncFsrParts = useServerFn(syncFsrPartsToTicket);
+  const [syncPartsBusy, setSyncPartsBusy] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetTyped, setResetTyped] = useState("");
@@ -865,6 +868,22 @@ function TicketDetail() {
       toast.error(e instanceof Error ? e.message : "Reset failed");
     } finally {
       setResetBusy(false);
+    }
+  };
+
+  const handleSyncFsrParts = async () => {
+    if (!t || !isAdmin || syncPartsBusy) return;
+    setSyncPartsBusy(true);
+    try {
+      const res = await callSyncFsrParts({ data: { ticketId: t.id } });
+      toast.success(
+        `Parts synced: ${res.defectiveAdded ?? 0} defective received, ${res.goodAdded ?? 0} good used (${res.defectiveTotal ?? 0} total, ${res.goodTotal ?? 0} total)`,
+      );
+      await Promise.all([load(), refetchFsr()]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setSyncPartsBusy(false);
     }
   };
 
@@ -2342,6 +2361,15 @@ function TicketDetail() {
                     onClick={reopenFsr}
                   >
                     {reopenFsrBusy ? "Reopening…" : "Reopen for engineer"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full min-h-[44px]"
+                    disabled={syncPartsBusy || (fsrRows ?? []).length === 0}
+                    onClick={handleSyncFsrParts}
+                    title="Additive-only and idempotent — backfills ticket parts from submitted reports and retries missed syncs without duplicating rows."
+                  >
+                    {syncPartsBusy ? "Syncing…" : "Sync FSR parts"}
                   </Button>
                 </CardContent>
               </Card>

@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Check, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +18,7 @@ import {
   readingsSchema,
 } from "@/lib/fieldServiceReport";
 import { fieldServiceReportKeys } from "@/lib/queryKeys";
+import { syncFsrPartsToTicket } from "@/lib/sync-fsr-parts.functions";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -272,6 +274,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   );
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const callSyncFsrParts = useServerFn(syncFsrPartsToTicket);
   const {
     data: rows,
     isLoading: latestLoading,
@@ -523,6 +526,18 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       await queryClient.invalidateQueries({
         queryKey: fieldServiceReportKeys.list({ ticket: ticketId }),
       });
+      try {
+        const staged = await callSyncFsrParts({ data: { ticketId } });
+        const defectiveAdded = staged?.defectiveAdded ?? 0;
+        const goodAdded = staged?.goodAdded ?? 0;
+        if (defectiveAdded > 0 || goodAdded > 0) {
+          toast.success(
+            `Parts staged: ${defectiveAdded} defective received, ${goodAdded} good used`,
+          );
+        }
+      } catch {
+        toast.warning("Report saved; parts staging pending — admin can Sync FSR parts.");
+      }
       // Prevent the view-only gate from flashing during the transition out.
       // NOTE: the submittedOk banner below stays in code but is superseded by
       // this immediate navigation (Sonner toasts persist across routes).
