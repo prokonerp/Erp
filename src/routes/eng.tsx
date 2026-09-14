@@ -89,13 +89,19 @@ function EngLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <header className="h-14 shrink-0 border-b flex items-center px-4 bg-background shadow-sm">
-        <h1 className="text-[15px] font-semibold text-foreground">Engineer Portal</h1>
+      <header className="sticky top-0 z-30 h-14 shrink-0 border-b bg-white/95 backdrop-blur flex items-center gap-2.5 px-4">
+        <span
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary text-sm font-bold text-primary-foreground"
+          aria-hidden="true"
+        >
+          P
+        </span>
+        <h1 className="text-sm font-semibold text-foreground">Engineer Portal</h1>
         <button
           onClick={handleLogout}
           aria-label="Log out"
           title="Log out"
-          className="ml-auto p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="ml-auto grid min-h-[44px] min-w-[44px] place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <LogOut className="h-5 w-5" />
         </button>
@@ -105,7 +111,7 @@ function EngLayout() {
         <Outlet />
       </main>
 
-      <nav className="sticky bottom-0 border-t bg-background flex items-center justify-around h-14 shrink-0 print:hidden">
+      <nav className="sticky bottom-0 border-t bg-background flex items-center justify-around min-h-14 shrink-0 pb-safe print:hidden">
         {TABS.map((tab) => {
           const active = isActive(tab.to);
           return (
@@ -113,11 +119,11 @@ function EngLayout() {
               key={tab.to}
               to={tab.to}
               aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center gap-0.5 text-[11px] px-4 py-1.5 rounded-md transition-colors ${
-                active ? "text-primary font-medium" : "text-muted-foreground hover:text-foreground"
+              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 text-xs font-medium px-4 py-1.5 rounded-md transition-colors ${
+                active ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <tab.icon className="h-5 w-5" />
+              <tab.icon className="h-5 w-5" fill={active ? "currentColor" : "none"} />
               <span>{tab.label}</span>
             </Link>
           );

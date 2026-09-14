@@ -6,17 +6,28 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
-import { PageLoader } from "@/components/shared/skeletons";
+import { PageLoader, CardSkeleton } from "@/components/shared/skeletons";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FieldServiceReport } from "@/components/FieldServiceReport";
 import { VerificationStepper } from "@/components/VerificationStepper";
 import { VerificationDiff } from "@/components/VerificationDiff";
 import { useTicketVerifications } from "@/hooks/useTicketVerifications";
+import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import {
   buildCustomerSnapshot,
   buildEquipmentOriginal,
@@ -28,16 +39,20 @@ import {
   canProceedToWork,
 } from "@/lib/ticket-verifications";
 import { getCurrentGeo, validateGeoForMismatch } from "@/lib/verification-geo";
-import { STATUS_COLOR, PRIORITY_COLOR } from "@/lib/tickets";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   Upload,
   Loader2,
   MessageCircle,
+  Camera,
+  ShieldCheck,
+  RotateCcw,
   AlertTriangle,
+  Check,
   CheckCircle2,
   ShieldAlert,
+  Phone,
 } from "lucide-react";
 import { compressImageToLimit } from "@/lib/image-compress";
 import { PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
@@ -85,6 +100,7 @@ function EngTicketDetail() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [myId, setMyId] = useState<string | null>(null);
   const [myName, setMyName] = useState<string | null>(null);
   const [guardError, setGuardError] = useState<string | null>(null);
@@ -115,7 +131,8 @@ function EngTicketDetail() {
   const [ackBusy, setAckBusy] = useState(false);
 
   // Verification
-  const { data: verifications } = useTicketVerifications(id);
+  const { data: verifications, isLoading: verifLoading } = useTicketVerifications(id);
+  const { data: fsrRows } = useFieldServiceReport(id);
   const [verdictBusy, setVerdictBusy] = useState(false);
   const [verdictBusy2, setVerdictBusy2] = useState(false);
   const [mismatchPhotoFile, setMismatchPhotoFile] = useState<File | null>(null);
@@ -123,8 +140,7 @@ function EngTicketDetail() {
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsMismatchOpen, setDetailsMismatchOpen] = useState(false);
-  const detailsRef = useRef<HTMLDetailsElement>(null);
-  const detailsMismatchRef = useRef<HTMLDetailsElement>(null);
+  const mismatchFileInputRef = useRef<HTMLInputElement>(null);
 
   // Step 1 forms — per-field Name / Phone toggles (mirrors equipment pattern)
   const {
@@ -219,6 +235,14 @@ function EngTicketDetail() {
       ]);
       if (!active) return;
       if (tkRes.data) setTicket(tkRes.data as unknown as Ticket);
+      // PGRST116 = genuine no-row (.single() found nothing) → "not found" path.
+      // Any other fetch error → real error card with Retry.
+      const tkErr = tkRes.error as { code?: string; message?: string } | null;
+      if (tkErr && tkErr.code !== "PGRST116") {
+        setLoadError(tkErr.message ?? "Failed to load ticket.");
+      } else {
+        setLoadError(null);
+      }
       setActivities((actRes.data || []) as Activity[]);
       setLoading(false);
     })();
@@ -282,11 +306,18 @@ function EngTicketDetail() {
   };
 
   const addNote = async () => {
+    if (!navigator.onLine) {
+      toast.error("You're offline — note will not be saved");
+      return;
+    }
     const text = noteText.trim();
     if (!text) return;
 
     const bucket = `${id}:${Math.floor(Date.now() / 60_000)}`;
-    if (noteIdempotencyRef.current === bucket) return;
+    if (noteIdempotencyRef.current === bucket) {
+      toast.info("Note already recorded");
+      return;
+    }
     noteIdempotencyRef.current = bucket;
 
     setNoteBusy(true);
@@ -430,10 +461,7 @@ function EngTicketDetail() {
     sector?: string | null;
     location?: string | null;
   }) => {
-    const resolved = resolveCustomerCorrection(
-      buildCustomerSnapshot(ticket!),
-      data,
-    );
+    const resolved = resolveCustomerCorrection(buildCustomerSnapshot(ticket!), data);
     await handleCustomerIncorrect(resolved.corrected);
   };
 
@@ -702,6 +730,21 @@ function EngTicketDetail() {
   };
 
   if (loading) return <PageLoader label="Loading ticket…" />;
+  if (!ticket && loadError)
+    return (
+      <div className="max-w-2xl mx-auto">
+        <Card>
+          <CardContent className="py-10 text-center space-y-3">
+            <AlertTriangle className="h-10 w-10 mx-auto text-amber-700 dark:text-amber-300" />
+            <p className="font-semibold text-base">Couldn't load this ticket</p>
+            <p className="text-[13px] text-muted-foreground">{loadError}</p>
+            <Button className="min-h-11" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   if (!ticket)
     return <div className="text-center py-20 text-muted-foreground">Ticket not found.</div>;
 
@@ -716,7 +759,7 @@ function EngTicketDetail() {
         </Link>
         <Card>
           <CardContent className="py-10 text-center space-y-3">
-            <ShieldAlert className="h-10 w-10 mx-auto text-amber-500" />
+            <ShieldAlert className="h-10 w-10 mx-auto text-amber-700 dark:text-amber-300" />
             <p className="font-semibold text-base">Not assigned to you</p>
             <p className="text-sm text-muted-foreground">
               This ticket is assigned to a different engineer. Contact Services for access.
@@ -734,7 +777,7 @@ function EngTicketDetail() {
     <div className="max-w-2xl mx-auto space-y-4">
       <Link
         to="/eng/queue"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground min-h-[44px] py-3 -my-1"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Queue
       </Link>
@@ -743,21 +786,37 @@ function EngTicketDetail() {
       <Card>
         <CardContent className="py-4 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono font-semibold text-base">{ticket.case_id}</span>
+            <span className="font-mono font-semibold text-lg">{ticket.case_id}</span>
             {ticket.priority && (
-              <Badge
-                variant="outline"
-                className={`text-[10px] px-1.5 py-0 ${PRIORITY_COLOR[ticket.priority] || ""}`}
+              <StatusBadge
+                tone={
+                  ticket.priority === "P1"
+                    ? "danger"
+                    : ticket.priority === "P2"
+                      ? "warning"
+                      : ticket.priority === "P3" || ticket.priority === "P4"
+                        ? "info"
+                        : "neutral"
+                }
               >
                 {ticket.priority}
-              </Badge>
+              </StatusBadge>
             )}
-            <Badge
-              variant="outline"
-              className={`text-[10px] px-1.5 py-0 ${STATUS_COLOR[ticket.status] || ""}`}
+            <StatusBadge
+              tone={
+                ticket.status === "Closed"
+                  ? "success"
+                  : ticket.status === "Cancelled"
+                    ? "danger"
+                    : ticket.status === "In Progress"
+                      ? "info"
+                      : ticket.status === "New" || ticket.status === "Call Log"
+                        ? "neutral"
+                        : "warning"
+              }
             >
               {ticket.status}
-            </Badge>
+            </StatusBadge>
             <span className="text-xs text-muted-foreground">{ticket.call_type}</span>
           </div>
 
@@ -766,12 +825,11 @@ function EngTicketDetail() {
               <span className="text-muted-foreground text-xs">Customer</span>
               <p className="font-medium">{ticket.customer_name}</p>
               {ticket.customer_phone && (
-                <a
-                  href={`tel:${ticket.customer_phone}`}
-                  className="text-primary text-xs hover:underline"
-                >
-                  {ticket.customer_phone}
-                </a>
+                <Button asChild className="min-h-[44px] w-full sm:w-auto mt-2">
+                  <a href={`tel:${ticket.customer_phone}`}>
+                    <Phone className="h-4 w-4" /> Call {ticket.customer_phone}
+                  </a>
+                </Button>
               )}
             </div>
             {ticket.location && (
@@ -805,12 +863,12 @@ function EngTicketDetail() {
 
           {ticket.special_instruction && ticket.special_instruction.trim() && (
             <div
-              className={`border rounded-md p-3 text-sm ${isSpecialAcked ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}
+              className={`rounded-md border border-transparent p-4 text-sm ${isSpecialAcked ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-xs">Special Instructions:</span>
                 {isSpecialAcked ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-green-700 font-medium">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
                     <CheckCircle2 className="h-3 w-3" /> Acknowledged
                   </span>
                 ) : (
@@ -837,26 +895,32 @@ function EngTicketDetail() {
       </Card>
 
       {/* Verification Stepper */}
-      <VerificationStepper
-        step1Done={!!verifications?.customer}
-        step2Done={!!verifications?.equipment}
-      />
+      <div className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <VerificationStepper
+          step1Done={!!verifications?.customer}
+          step2Done={!!verifications?.equipment}
+          step3Done={(fsrRows?.length ?? 0) > 0}
+        />
+      </div>
 
       {/* Step 1: Customer Verification */}
       <Card>
         <CardContent className="py-4 space-y-3">
           <h3 className="text-sm font-semibold">1 — Customer Details</h3>
-          {verifications?.customer ? (
+          {verifLoading ? (
+            <CardSkeleton />
+          ) : verifications?.customer ? (
             <>
-              <div className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Check className="h-4 w-4" aria-hidden />
                 {verifications.customer.verdict === "verified"
-                  ? "✓ Customer details verified"
-                  : "✓ Customer details corrected"}
+                  ? "Customer details verified"
+                  : "Customer details corrected"}
               </div>
               {verifications.customer.verdict === "incorrect" &&
                 verifications.customer.snapshot &&
                 verifications.customer.corrected && (
-                  <div className="space-y-1 mt-2">
+                  <div className="space-y-3 mt-2">
                     <VerificationDiff
                       label="Customer name"
                       original={
@@ -961,7 +1025,7 @@ function EngTicketDetail() {
               </div>
               <div className="flex gap-2">
                 <Button
-                  size="sm"
+                  className="min-h-[44px] flex-1"
                   variant="outline"
                   disabled={verdictBusy}
                   onClick={handleCustomerVerified}
@@ -970,113 +1034,154 @@ function EngTicketDetail() {
                   Details Verified
                 </Button>
                 <Button
-                  size="sm"
-                  variant="destructive"
+                  className="min-h-[44px] flex-1"
+                  variant="secondary"
                   disabled={verdictBusy}
                   onClick={() => {
                     setDetailsOpen(true);
-                    setTimeout(() => detailsRef.current?.focus(), 0);
                   }}
                 >
                   Details Incorrect
                 </Button>
               </div>
-              <details
-                ref={detailsRef}
-                className="text-xs"
-                open={detailsOpen}
-                onToggle={(e) => setDetailsOpen((e.target as HTMLDetailsElement).open)}
-              >
-                <summary className="cursor-pointer text-muted-foreground">Correct details…</summary>
-                <form
-                  className="mt-2 space-y-3"
-                  onSubmit={handleCorrectedSubmit(handlePerFieldCustomer)}
-                >
-                  <div className="space-y-1 border rounded-md p-2">
-                    <p className="font-medium">Name</p>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={!nameIncorrect ? "default" : "outline"}
-                        onClick={() => setCorrectedValue("nameIncorrect", false)}
+              <Drawer open={detailsOpen} onOpenChange={setDetailsOpen}>
+                <DrawerContent className="max-h-[90vh] overflow-y-auto pb-safe">
+                  <DrawerHeader>
+                    <DrawerTitle>Correct customer details</DrawerTitle>
+                    <DrawerDescription>
+                      Mark each field correct or enter the corrected value.
+                    </DrawerDescription>
+                  </DrawerHeader>
+                  <form
+                    className="space-y-3 px-4"
+                    onSubmit={handleCorrectedSubmit(handlePerFieldCustomer)}
+                  >
+                    <div className="space-y-1 border rounded-md p-2">
+                      <p className="font-medium">Name</p>
+                      <RadioGroup
+                        role="radiogroup"
+                        aria-label="Name accuracy"
+                        value={nameIncorrect ? "needs-correction" : "correct"}
+                        onValueChange={(v) =>
+                          setCorrectedValue("nameIncorrect", v === "needs-correction")
+                        }
+                        className="flex gap-2"
                       >
-                        Correct
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={nameIncorrect ? "destructive" : "outline"}
-                        onClick={() => setCorrectedValue("nameIncorrect", true)}
-                      >
-                        Incorrect
-                      </Button>
+                        <Label
+                          className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
+                          onClick={() => setCorrectedValue("nameIncorrect", false)}
+                        >
+                          <RadioGroupItem value="correct" />
+                          Correct
+                        </Label>
+                        <Label
+                          className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
+                          onClick={() => setCorrectedValue("nameIncorrect", true)}
+                        >
+                          <RadioGroupItem value="needs-correction" />
+                          Needs correction
+                        </Label>
+                      </RadioGroup>
+                      {nameIncorrect && (
+                        <Input
+                          className="h-11"
+                          placeholder="Correct name"
+                          aria-label="Correct name"
+                          {...regCorrected("nameInput")}
+                        />
+                      )}
+                      {correctedErrors.nameInput && (
+                        <p className="text-destructive text-xs">
+                          {correctedErrors.nameInput.message}
+                        </p>
+                      )}
                     </div>
-                    {nameIncorrect && (
-                      <Input
-                        placeholder="Correct name"
-                        aria-label="Correct name"
-                        {...regCorrected("nameInput")}
-                      />
-                    )}
-                    {correctedErrors.nameInput && (
+                    <div className="space-y-1 border rounded-md p-2">
+                      <p className="font-medium">Phone</p>
+                      <RadioGroup
+                        role="radiogroup"
+                        aria-label="Phone accuracy"
+                        value={phoneIncorrect ? "needs-correction" : "correct"}
+                        onValueChange={(v) =>
+                          setCorrectedValue("phoneIncorrect", v === "needs-correction")
+                        }
+                        className="flex gap-2"
+                      >
+                        <Label
+                          className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
+                          onClick={() => setCorrectedValue("phoneIncorrect", false)}
+                        >
+                          <RadioGroupItem value="correct" />
+                          Correct
+                        </Label>
+                        <Label
+                          className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
+                          onClick={() => setCorrectedValue("phoneIncorrect", true)}
+                        >
+                          <RadioGroupItem value="needs-correction" />
+                          Needs correction
+                        </Label>
+                      </RadioGroup>
+                      {phoneIncorrect && (
+                        <Input
+                          className="h-11"
+                          placeholder="Correct 10-digit phone"
+                          aria-label="Correct phone"
+                          {...regCorrected("phoneInput")}
+                        />
+                      )}
+                      {correctedErrors.phoneInput && (
+                        <p className="text-destructive text-xs">
+                          {correctedErrors.phoneInput.message}
+                        </p>
+                      )}
+                    </div>
+                    {correctedErrors.nameIncorrect && (
                       <p className="text-destructive text-xs">
-                        {correctedErrors.nameInput.message}
+                        {correctedErrors.nameIncorrect.message}
                       </p>
                     )}
-                  </div>
-                  <div className="space-y-1 border rounded-md p-2">
-                    <p className="font-medium">Phone</p>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={!phoneIncorrect ? "default" : "outline"}
-                        onClick={() => setCorrectedValue("phoneIncorrect", false)}
-                      >
-                        Correct
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={phoneIncorrect ? "destructive" : "outline"}
-                        onClick={() => setCorrectedValue("phoneIncorrect", true)}
-                      >
-                        Incorrect
-                      </Button>
-                    </div>
-                    {phoneIncorrect && (
-                      <Input
-                        placeholder="Correct 10-digit phone"
-                        aria-label="Correct phone"
-                        {...regCorrected("phoneInput")}
-                      />
+                    <Input
+                      className="h-11"
+                      placeholder="Email (optional)"
+                      {...regCorrected("email")}
+                    />
+                    {correctedErrors.email && (
+                      <p className="text-destructive text-xs">{correctedErrors.email.message}</p>
                     )}
-                    {correctedErrors.phoneInput && (
-                      <p className="text-destructive text-xs">
-                        {correctedErrors.phoneInput.message}
-                      </p>
-                    )}
-                  </div>
-                  {correctedErrors.nameIncorrect && (
-                    <p className="text-destructive text-xs">
-                      {correctedErrors.nameIncorrect.message}
-                    </p>
-                  )}
-                  <Input placeholder="Email (optional)" {...regCorrected("email")} />
-                  {correctedErrors.email && (
-                    <p className="text-destructive text-xs">
-                      {correctedErrors.email.message}
-                    </p>
-                  )}
-                  <Input placeholder="Address (optional)" {...regCorrected("address")} />
-                  <Input placeholder="Sector (optional)" {...regCorrected("sector")} />
-                  <Input placeholder="Location (optional)" {...regCorrected("location")} />
-                  <Button type="submit" size="sm" variant="destructive" disabled={verdictBusy}>
-                    Save Corrections
-                  </Button>
-                </form>
-              </details>
+                    <Input
+                      className="h-11"
+                      placeholder="Address (optional)"
+                      {...regCorrected("address")}
+                    />
+                    <Input
+                      className="h-11"
+                      placeholder="Sector (optional)"
+                      {...regCorrected("sector")}
+                    />
+                    <Input
+                      className="h-11"
+                      placeholder="Location (optional)"
+                      {...regCorrected("location")}
+                    />
+                    <DrawerFooter className="px-0">
+                      <Button
+                        type="submit"
+                        className="min-h-[44px]"
+                        variant="secondary"
+                        disabled={verdictBusy}
+                      >
+                        Save Corrections
+                      </Button>
+                      <DrawerClose asChild>
+                        <Button type="button" variant="outline" className="min-h-[44px]">
+                          Cancel
+                        </Button>
+                      </DrawerClose>
+                    </DrawerFooter>
+                  </form>
+                </DrawerContent>
+              </Drawer>
             </div>
           ) : null}
         </CardContent>
@@ -1086,17 +1191,20 @@ function EngTicketDetail() {
       <Card>
         <CardContent className="py-4 space-y-3">
           <h3 className="text-sm font-semibold">2 — Model / Serial</h3>
-          {!canProceedToStep2(verifications?.customer ?? null) ? (
+          {verifLoading ? (
+            <CardSkeleton />
+          ) : !canProceedToStep2(verifications?.customer ?? null) ? (
             <p className="text-xs text-muted-foreground">Verify customer first.</p>
           ) : verifications?.equipment ? (
             <>
-              <div className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Check className="h-4 w-4" aria-hidden />
                 {verifications.equipment.verdict === "matched"
-                  ? "✓ Equipment matched"
-                  : "✓ Equipment mismatch recorded"}
+                  ? "Equipment matched"
+                  : "Equipment mismatch recorded"}
               </div>
               {verifications.equipment.verdict === "mismatch" && (
-                <div className="space-y-1 mt-2">
+                <div className="space-y-3 mt-2">
                   <VerificationDiff
                     label="Model"
                     original={verifications.equipment.original_model}
@@ -1124,7 +1232,7 @@ function EngTicketDetail() {
               </div>
               <div className="flex gap-2">
                 <Button
-                  size="sm"
+                  className="min-h-[44px] flex-1"
                   variant="outline"
                   disabled={verdictBusy2}
                   onClick={handleEquipmentMatched}
@@ -1133,123 +1241,162 @@ function EngTicketDetail() {
                   Matched
                 </Button>
                 <Button
-                  size="sm"
-                  variant="destructive"
+                  className="min-h-[44px] flex-1"
+                  variant="secondary"
                   disabled={mismatchBusy}
                   onClick={() => {
                     setDetailsMismatchOpen(true);
-                    setTimeout(() => detailsMismatchRef.current?.focus(), 0);
                   }}
                 >
                   Mismatch
                 </Button>
               </div>
-              <details
-                ref={detailsMismatchRef}
-                className="text-xs"
-                open={detailsMismatchOpen}
-                onToggle={(e) => setDetailsMismatchOpen((e.target as HTMLDetailsElement).open)}
-              >
-                <summary className="cursor-pointer text-muted-foreground">Report mismatch…</summary>
-                <form
-                  className="mt-2 space-y-3"
-                  onSubmit={handleMismatchSubmit(handlePerFieldMismatch)}
-                >
-                  <div className="space-y-1 border rounded-md p-2">
-                    <p className="font-medium">Model</p>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={!modelIncorrect ? "default" : "outline"}
-                        onClick={() => setMismatchValue("modelIncorrect", false)}
-                      >
-                        Correct
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={modelIncorrect ? "destructive" : "outline"}
-                        onClick={() => setMismatchValue("modelIncorrect", true)}
-                      >
-                        Incorrect
-                      </Button>
-                    </div>
-                    {modelIncorrect && (
-                      <Input
-                        placeholder="Correct model"
-                        aria-label="Correct model"
-                        {...regMismatch("modelInput")}
-                      />
-                    )}
-                    {mismatchErrors.modelInput && (
-                      <p className="text-destructive text-xs">
-                        {mismatchErrors.modelInput.message}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-1 border rounded-md p-2">
-                    <p className="font-medium">Serial</p>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={!serialIncorrect ? "default" : "outline"}
-                        onClick={() => setMismatchValue("serialIncorrect", false)}
-                      >
-                        Correct
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={serialIncorrect ? "destructive" : "outline"}
-                        onClick={() => setMismatchValue("serialIncorrect", true)}
-                      >
-                        Incorrect
-                      </Button>
-                    </div>
-                    {serialIncorrect && (
-                      <Input
-                        placeholder="Correct serial"
-                        aria-label="Correct serial"
-                        {...regMismatch("serialInput")}
-                      />
-                    )}
-                    {mismatchErrors.serialInput && (
-                      <p className="text-destructive text-xs">
-                        {mismatchErrors.serialInput.message}
-                      </p>
-                    )}
-                  </div>
-                  {mismatchErrors.modelIncorrect && (
-                    <p className="text-destructive text-xs">
-                      {mismatchErrors.modelIncorrect.message}
-                    </p>
-                  )}
-                  {gpsError && <p className="text-destructive text-xs">{gpsError}</p>}
-                  <div>
-                    <Label className="text-xs">Photo + GPS required</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="mt-1"
-                      onChange={(e) => setMismatchPhotoFile(e.target.files?.[0] ?? null)}
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    variant="destructive"
-                    disabled={
-                      mismatchBusy || !mismatchPhotoFile || (!modelIncorrect && !serialIncorrect)
-                    }
+              <Drawer open={detailsMismatchOpen} onOpenChange={setDetailsMismatchOpen}>
+                <DrawerContent className="max-h-[90vh] overflow-y-auto pb-safe">
+                  <DrawerHeader>
+                    <DrawerTitle>Report equipment mismatch</DrawerTitle>
+                    <DrawerDescription>
+                      Mark each field correct or enter the corrected value, then add a photo.
+                    </DrawerDescription>
+                  </DrawerHeader>
+                  <form
+                    className="space-y-3 px-4"
+                    onSubmit={handleMismatchSubmit(handlePerFieldMismatch)}
                   >
-                    {mismatchBusy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                    Upload & Record Mismatch
-                  </Button>
-                </form>
-              </details>
+                    <div className="space-y-1 border rounded-md p-2">
+                      <p className="font-medium">Model</p>
+                      <RadioGroup
+                        role="radiogroup"
+                        aria-label="Model accuracy"
+                        value={modelIncorrect ? "needs-correction" : "correct"}
+                        onValueChange={(v) =>
+                          setMismatchValue("modelIncorrect", v === "needs-correction")
+                        }
+                        className="flex gap-2"
+                      >
+                        <Label
+                          className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
+                          onClick={() => setMismatchValue("modelIncorrect", false)}
+                        >
+                          <RadioGroupItem value="correct" />
+                          Correct
+                        </Label>
+                        <Label
+                          className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
+                          onClick={() => setMismatchValue("modelIncorrect", true)}
+                        >
+                          <RadioGroupItem value="needs-correction" />
+                          Needs correction
+                        </Label>
+                      </RadioGroup>
+                      {modelIncorrect && (
+                        <Input
+                          className="h-11"
+                          placeholder="Correct model"
+                          aria-label="Correct model"
+                          {...regMismatch("modelInput")}
+                        />
+                      )}
+                      {mismatchErrors.modelInput && (
+                        <p className="text-destructive text-xs">
+                          {mismatchErrors.modelInput.message}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1 border rounded-md p-2">
+                      <p className="font-medium">Serial</p>
+                      <RadioGroup
+                        role="radiogroup"
+                        aria-label="Serial accuracy"
+                        value={serialIncorrect ? "needs-correction" : "correct"}
+                        onValueChange={(v) =>
+                          setMismatchValue("serialIncorrect", v === "needs-correction")
+                        }
+                        className="flex gap-2"
+                      >
+                        <Label
+                          className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
+                          onClick={() => setMismatchValue("serialIncorrect", false)}
+                        >
+                          <RadioGroupItem value="correct" />
+                          Correct
+                        </Label>
+                        <Label
+                          className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
+                          onClick={() => setMismatchValue("serialIncorrect", true)}
+                        >
+                          <RadioGroupItem value="needs-correction" />
+                          Needs correction
+                        </Label>
+                      </RadioGroup>
+                      {serialIncorrect && (
+                        <Input
+                          className="h-11"
+                          placeholder="Correct serial"
+                          aria-label="Correct serial"
+                          {...regMismatch("serialInput")}
+                        />
+                      )}
+                      {mismatchErrors.serialInput && (
+                        <p className="text-destructive text-xs">
+                          {mismatchErrors.serialInput.message}
+                        </p>
+                      )}
+                    </div>
+                    {mismatchErrors.modelIncorrect && (
+                      <p className="text-destructive text-xs">
+                        {mismatchErrors.modelIncorrect.message}
+                      </p>
+                    )}
+                    {gpsError && <p className="text-destructive text-xs">{gpsError}</p>}
+                    <div>
+                      <Label className="text-xs">Photo + GPS required</Label>
+                      <input
+                        ref={mismatchFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => setMismatchPhotoFile(e.target.files?.[0] ?? null)}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-1 min-h-[44px] w-full"
+                        onClick={() => mismatchFileInputRef.current?.click()}
+                      >
+                        <Upload className="h-4 w-4 mr-1" />
+                        {mismatchPhotoFile ? mismatchPhotoFile.name : "Choose Photo"}
+                      </Button>
+                    </div>
+                    <DrawerFooter className="px-0">
+                      <Button
+                        type="submit"
+                        className="min-h-[44px]"
+                        variant="secondary"
+                        disabled={
+                          mismatchBusy ||
+                          !mismatchPhotoFile ||
+                          (!modelIncorrect && !serialIncorrect)
+                        }
+                      >
+                        {mismatchBusy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                        Upload & Record Mismatch
+                      </Button>
+                      {(!mismatchPhotoFile || (!modelIncorrect && !serialIncorrect)) && (
+                        <p className="text-xs text-muted-foreground">
+                          Photo + at least one corrected field are required
+                        </p>
+                      )}
+                      <DrawerClose asChild>
+                        <Button type="button" variant="outline" className="min-h-[44px]">
+                          Cancel
+                        </Button>
+                      </DrawerClose>
+                    </DrawerFooter>
+                  </form>
+                </DrawerContent>
+              </Drawer>
             </div>
           ) : null}
         </CardContent>
@@ -1259,7 +1406,12 @@ function EngTicketDetail() {
       <Card>
         <CardContent className="py-4 space-y-3">
           <h3 className="text-sm font-semibold">3 — Field Service Report</h3>
-          {!canProceedToWork(verifications?.customer ?? null, verifications?.equipment ?? null) ? (
+          {verifLoading ? (
+            <CardSkeleton />
+          ) : !canProceedToWork(
+              verifications?.customer ?? null,
+              verifications?.equipment ?? null,
+            ) ? (
             <p className="text-xs text-muted-foreground">Complete verification first.</p>
           ) : (
             <FieldServiceReport ticketId={id} />
@@ -1269,11 +1421,16 @@ function EngTicketDetail() {
 
       {/* Add Note — gated */}
       <Card>
-        <CardContent className="py-4 space-y-3">
+        <CardContent className="p-4 space-y-3">
           <h3 className="text-sm font-semibold flex items-center gap-1.5">
             <MessageCircle className="h-4 w-4" /> Add Note
           </h3>
-          {!canProceedToWork(verifications?.customer ?? null, verifications?.equipment ?? null) ? (
+          {verifLoading ? (
+            <CardSkeleton />
+          ) : !canProceedToWork(
+              verifications?.customer ?? null,
+              verifications?.equipment ?? null,
+            ) ? (
             <p className="text-xs text-muted-foreground">Complete verification first.</p>
           ) : (
             <>
@@ -1284,7 +1441,12 @@ function EngTicketDetail() {
                 rows={3}
                 disabled={noteBusy}
               />
-              <Button size="sm" disabled={!noteText.trim() || noteBusy} onClick={addNote}>
+              <Button
+                size="sm"
+                className="min-h-[44px]"
+                disabled={!noteText.trim() || noteBusy}
+                onClick={addNote}
+              >
                 {noteBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                 Add Note
               </Button>
@@ -1295,11 +1457,16 @@ function EngTicketDetail() {
 
       {/* Photo Upload — gated */}
       <Card>
-        <CardContent className="py-4 space-y-3">
+        <CardContent className="p-4 space-y-3">
           <h3 className="text-sm font-semibold flex items-center gap-1.5">
             <Upload className="h-4 w-4" /> Upload Photo
           </h3>
-          {!canProceedToWork(verifications?.customer ?? null, verifications?.equipment ?? null) ? (
+          {verifLoading ? (
+            <CardSkeleton />
+          ) : !canProceedToWork(
+              verifications?.customer ?? null,
+              verifications?.equipment ?? null,
+            ) ? (
             <p className="text-xs text-muted-foreground">Complete verification first.</p>
           ) : (
             <>
@@ -1315,6 +1482,7 @@ function EngTicketDetail() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="min-h-[44px] min-w-[160px]"
                   disabled={photoBusy}
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -1323,8 +1491,9 @@ function EngTicketDetail() {
                   ) : (
                     <Upload className="h-4 w-4 mr-1" />
                   )}
-                  {photoProgress || "Choose Photo"}
+                  Choose Photo
                 </Button>
+                {photoProgress && <p className="text-xs text-muted-foreground">{photoProgress}</p>}
               </div>
             </>
           )}
@@ -1334,19 +1503,20 @@ function EngTicketDetail() {
       {/* Activity Timeline */}
       {activities.length > 0 && (
         <Card>
-          <CardContent className="py-4">
-            <h3 className="text-sm font-semibold mb-3">Activity</h3>
-            <div className="space-y-3">
-              {activities.map((a) => (
-                <div key={a.id} className="border-l-2 border-muted pl-3 py-1">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-medium">{VERIFY_LABEL[a.kind] ?? a.kind}</span>
-                    <span>{formatTime(a.created_at)}</span>
-                  </div>
-                  {a.notes && <p className="text-sm mt-1 whitespace-pre-wrap">{a.notes}</p>}
+          <CardContent className="p-4 space-y-3">
+            <h3 className="text-sm font-semibold">Activity</h3>
+            {activities.map((a) => (
+              <div key={a.id} className="border-l-2 border-muted pl-3 py-1">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {activityIcon(a.kind)}
+                  <span className="font-medium">{VERIFY_LABEL[a.kind] ?? a.kind}</span>
+                  <span>{formatTime(a.created_at)}</span>
                 </div>
-              ))}
-            </div>
+                {a.notes && (
+                  <p className="text-sm mt-1 whitespace-pre-wrap">{formatNoteBody(a.notes)}</p>
+                )}
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}
@@ -1359,7 +1529,33 @@ const VERIFY_LABEL: Record<string, string> = {
   equipment_verify: "Equipment verification",
   photo: "Photo",
   note: "Note",
+  acknowledge: "Instruction acknowledged",
 };
+
+function activityIcon(kind: string) {
+  switch (kind) {
+    case "note":
+      return <MessageCircle className="h-3 w-3" />;
+    case "photo":
+      return <Camera className="h-3 w-3" />;
+    case "customer_verify":
+    case "equipment_verify":
+      return <ShieldCheck className="h-3 w-3" />;
+    case "acknowledge":
+      return <CheckCircle2 className="h-3 w-3" />;
+    case "reset":
+      return <RotateCcw className="h-3 w-3" />;
+    default:
+      return <MessageCircle className="h-3 w-3" />;
+  }
+}
+
+function formatNoteBody(body: string): string {
+  return body.replace(
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/g,
+    (m) => formatTime(m) || m,
+  );
+}
 
 function formatTime(iso: string): string {
   const d = new Date(iso);

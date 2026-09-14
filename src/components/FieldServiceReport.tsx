@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { UPS_LOCATIONS, buildFsrPayload, fieldServiceReportSchema } from "@/lib/fieldServiceReport";
+import {
+  UPS_LOCATIONS,
+  buildFsrPayload,
+  fieldServiceReportSchema,
+  loadRecordSchema,
+  powerConditionSchema,
+  readingsSchema,
+} from "@/lib/fieldServiceReport";
 import { fieldServiceReportKeys } from "@/lib/queryKeys";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -16,7 +23,6 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FieldRow } from "./CustomerForm";
 
@@ -86,9 +92,13 @@ const initialForm: FormState = {
   operateHolidays: false,
 };
 
-function FieldError({ message }: { message?: string }) {
+function FieldError({ message, id }: { message?: string; id?: string }) {
   if (!message) return null;
-  return <p className="text-[0.8rem] font-medium text-destructive mt-1">{message}</p>;
+  return (
+    <p id={id} className="text-[0.8rem] font-medium text-destructive mt-1">
+      {message}
+    </p>
+  );
 }
 
 function NumInput({
@@ -102,6 +112,7 @@ function NumInput({
   placeholder?: string;
   error?: string;
 }) {
+  const fieldId = useId();
   return (
     <div>
       <Input
@@ -110,27 +121,71 @@ function NumInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={error ? "border-destructive" : ""}
+        id={fieldId}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${fieldId}-error` : undefined}
+        className={`h-11 min-h-[44px] ${error ? "border-destructive" : ""}`}
       />
-      <FieldError message={error} />
+      <FieldError message={error} id={`${fieldId}-error`} />
     </div>
   );
 }
 
-function YesNo({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+function YesNo({
+  value,
+  onChange,
+  label,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
   return (
     <RadioGroup
       value={value ? "yes" : "no"}
       onValueChange={(v) => onChange(v === "yes")}
+      aria-label={label}
       className="flex gap-6"
     >
-      <label className="flex items-center gap-2 cursor-pointer text-sm">
-        <RadioGroupItem value="yes" /> Yes
+      <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
+        <RadioGroupItem value="yes" className="size-5" /> Yes
       </label>
-      <label className="flex items-center gap-2 cursor-pointer text-sm">
-        <RadioGroupItem value="no" /> No
+      <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
+        <RadioGroupItem value="no" className="size-5" /> No
       </label>
     </RadioGroup>
+  );
+}
+
+function SectionHeader({ num, title, valid }: { num: string; title: string; valid: boolean }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+        {num}
+      </span>
+      <h2 className="text-[15px] font-semibold">{title}</h2>
+      {valid && <Check className="size-4 text-primary" aria-label={`${title} complete`} />}
+    </div>
+  );
+}
+
+function SubHead({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      {children}
+    </h3>
+  );
+}
+
+function PhaseDot({ num, valid }: { num: string; valid: boolean }) {
+  return (
+    <span
+      className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+        valid ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground"
+      }`}
+    >
+      {valid ? <Check className="size-3.5" /> : num}
+    </span>
   );
 }
 
@@ -146,6 +201,43 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   } = useFieldServiceReport(ticketId);
 
   const set = (k: keyof FormState, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+
+  const readingsValid = readingsSchema.safeParse({
+    mainsVoltageLn: form.mainsVoltageLn,
+    mainsVoltageNe: form.mainsVoltageNe,
+    batt1ChargeVdc: form.batt1ChargeVdc,
+    batt2ChargeVdc: form.batt2ChargeVdc,
+    batt1DischargeVdc: form.batt1DischargeVdc,
+    batt2DischargeVdc: form.batt2DischargeVdc,
+  }).success;
+  const loadValid = loadRecordSchema.safeParse({
+    acProvided: form.acProvided,
+    dgProvided: form.dgProvided,
+    environmentDuty: form.environmentDuty,
+    upsLocation: form.upsLocation,
+    pcMonitorSizeIn1: form.pcMonitorSizeIn1,
+    pcQty1: form.pcQty1,
+    pcMonitorSizeIn2: form.pcMonitorSizeIn2,
+    pcQty2: form.pcQty2,
+    printerRatingW1: form.printerRatingW1,
+    printerQty1: form.printerQty1,
+    printerRatingW2: form.printerRatingW2,
+    printerQty2: form.printerQty2,
+    scannerRatingW1: form.scannerRatingW1,
+    scannerQty1: form.scannerQty1,
+    scannerRatingW2: form.scannerRatingW2,
+    scannerQty2: form.scannerQty2,
+  }).success;
+  const powerValid = powerConditionSchema.safeParse({
+    powerFailuresCount: form.powerFailuresCount,
+    powerFailuresDurationMin: form.powerFailuresDurationMin,
+    loadOnDgPercent: form.loadOnDgPercent,
+    dgSetCapacityKva: form.dgSetCapacityKva,
+    dgSet: form.dgSet,
+    amfPanel: form.amfPanel,
+    operateNonBusinessHours: form.operateNonBusinessHours,
+    operateHolidays: form.operateHolidays,
+  }).success;
 
   const handleSubmit = async (e: React.FormEvent) => {
     if (busy) return;
@@ -218,299 +310,319 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     | undefined;
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Field Service Report</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit}>
-          <Tabs defaultValue="readings" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="readings">Phase 1: Readings</TabsTrigger>
-              <TabsTrigger value="load">Phase 2: Load Record</TabsTrigger>
-              <TabsTrigger value="power">Phase 3: Power Condition</TabsTrigger>
-            </TabsList>
+    <div className="space-y-3">
+      <form
+        id="fsr-form"
+        onSubmit={handleSubmit}
+        className="space-y-3 pb-[calc(8rem+env(safe-area-inset-bottom,0px))]"
+      >
+        <section className="space-y-3">
+          <SectionHeader num="1" title="Phase 1 — Readings" valid={readingsValid} />
+          <div className="space-y-3">
+            <FieldRow label="Voltage L-N (VAC)" required>
+              <NumInput
+                value={form.mainsVoltageLn}
+                onChange={(v) => set("mainsVoltageLn", v)}
+                placeholder="Voltage reading"
+                error={errors.mainsVoltageLn}
+              />
+            </FieldRow>
+            <FieldRow label="Voltage N-E (VAC)" required>
+              <NumInput
+                value={form.mainsVoltageNe}
+                onChange={(v) => set("mainsVoltageNe", v)}
+                placeholder="Voltage reading"
+                error={errors.mainsVoltageNe}
+              />
+            </FieldRow>
+            <FieldRow label="Battery One Voltage during Charging (Vdc)">
+              <NumInput
+                value={form.batt1ChargeVdc}
+                onChange={(v) => set("batt1ChargeVdc", v)}
+                placeholder="Voltage reading"
+                error={errors.batt1ChargeVdc}
+              />
+            </FieldRow>
+            <FieldRow label="Battery Two Voltage during Charging (Vdc)">
+              <NumInput
+                value={form.batt2ChargeVdc}
+                onChange={(v) => set("batt2ChargeVdc", v)}
+                placeholder="Voltage reading"
+                error={errors.batt2ChargeVdc}
+              />
+            </FieldRow>
+            <FieldRow label="Battery One Voltage during Discharging (Vdc)">
+              <NumInput
+                value={form.batt1DischargeVdc}
+                onChange={(v) => set("batt1DischargeVdc", v)}
+                placeholder="Voltage reading"
+                error={errors.batt1DischargeVdc}
+              />
+            </FieldRow>
+            <FieldRow label="Battery Two Voltage during Discharging (Vdc)">
+              <NumInput
+                value={form.batt2DischargeVdc}
+                onChange={(v) => set("batt2DischargeVdc", v)}
+                placeholder="Voltage reading"
+                error={errors.batt2DischargeVdc}
+              />
+            </FieldRow>
+          </div>
+        </section>
 
-            <TabsContent value="readings" className="space-y-4">
-              <FieldRow label="Voltage L-N (VAC)" required>
-                <NumInput
-                  value={form.mainsVoltageLn}
-                  onChange={(v) => set("mainsVoltageLn", v)}
-                  placeholder="Voltage reading"
-                  error={errors.mainsVoltageLn}
-                />
-              </FieldRow>
-              <FieldRow label="Voltage N-E (VAC)" required>
-                <NumInput
-                  value={form.mainsVoltageNe}
-                  onChange={(v) => set("mainsVoltageNe", v)}
-                  placeholder="Voltage reading"
-                  error={errors.mainsVoltageNe}
-                />
-              </FieldRow>
-              <FieldRow label="Battery One Voltage during Charging (Vdc)">
-                <NumInput
-                  value={form.batt1ChargeVdc}
-                  onChange={(v) => set("batt1ChargeVdc", v)}
-                  placeholder="Voltage reading"
-                  error={errors.batt1ChargeVdc}
-                />
-              </FieldRow>
-              <FieldRow label="Battery Two Voltage during Charging (Vdc)">
-                <NumInput
-                  value={form.batt2ChargeVdc}
-                  onChange={(v) => set("batt2ChargeVdc", v)}
-                  placeholder="Voltage reading"
-                  error={errors.batt2ChargeVdc}
-                />
-              </FieldRow>
-              <FieldRow label="Battery One Voltage during Discharging (Vdc)">
-                <NumInput
-                  value={form.batt1DischargeVdc}
-                  onChange={(v) => set("batt1DischargeVdc", v)}
-                  placeholder="Voltage reading"
-                  error={errors.batt1DischargeVdc}
-                />
-              </FieldRow>
-              <FieldRow label="Battery Two Voltage during Discharging (Vdc)">
-                <NumInput
-                  value={form.batt2DischargeVdc}
-                  onChange={(v) => set("batt2DischargeVdc", v)}
-                  placeholder="Voltage reading"
-                  error={errors.batt2DischargeVdc}
-                />
-              </FieldRow>
-            </TabsContent>
-
-            <TabsContent value="load" className="space-y-4">
-              <FieldRow label="AC Provided">
+        <section className="space-y-3">
+          <SectionHeader num="2" title="Phase 2 — Load Record" valid={loadValid} />
+          <div className="space-y-3">
+            <FieldRow label="AC Provided">
+              <label className="flex min-h-[44px] cursor-pointer items-center">
                 <Checkbox
                   checked={form.acProvided}
                   onCheckedChange={(c) => set("acProvided", c === true)}
+                  className="size-5"
                 />
-              </FieldRow>
-              <FieldRow label="DG Provided">
+              </label>
+            </FieldRow>
+            <FieldRow label="DG Provided">
+              <label className="flex min-h-[44px] cursor-pointer items-center">
                 <Checkbox
                   checked={form.dgProvided}
                   onCheckedChange={(c) => set("dgProvided", c === true)}
+                  className="size-5"
                 />
-              </FieldRow>
-              <FieldRow label="Is Environment Duty">
+              </label>
+            </FieldRow>
+            <FieldRow label="Is Environment Duty">
+              <label className="flex min-h-[44px] cursor-pointer items-center">
                 <Checkbox
                   checked={form.environmentDuty}
                   onCheckedChange={(c) => set("environmentDuty", c === true)}
+                  className="size-5"
                 />
-              </FieldRow>
-              <FieldRow label="Location where UPS Installed" required>
-                <div>
-                  <Select
-                    value={form.upsLocation || undefined}
-                    onValueChange={(v) => set("upsLocation", v)}
+              </label>
+            </FieldRow>
+            <FieldRow label="Location where UPS Installed" required>
+              <div>
+                <Select
+                  value={form.upsLocation || undefined}
+                  onValueChange={(v) => set("upsLocation", v)}
+                >
+                  <SelectTrigger
+                    className={`h-11 min-h-[44px] w-full ${errors.upsLocation ? "border-destructive" : ""}`}
                   >
-                    <SelectTrigger
-                      className={`w-full ${errors.upsLocation ? "border-destructive" : ""}`}
-                    >
-                      <SelectValue placeholder="Select location" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {UPS_LOCATIONS.map((loc) => (
-                        <SelectItem key={loc} value={loc}>
-                          {loc}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FieldError message={errors.upsLocation} />
-                </div>
-              </FieldRow>
+                    <SelectValue placeholder="Select location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UPS_LOCATIONS.map((loc) => (
+                      <SelectItem key={loc} value={loc}>
+                        {loc}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldError message={errors.upsLocation} />
+              </div>
+            </FieldRow>
 
-              <h3 className="font-medium text-sm text-gray-500">PC Details</h3>
-              <FieldRow label="PC Row 1 — Monitor Size (Inch) / Qty">
-                <div className="grid grid-cols-2 gap-2">
-                  <NumInput
-                    value={form.pcMonitorSizeIn1}
-                    onChange={(v) => set("pcMonitorSizeIn1", v)}
-                    placeholder="Monitor size"
-                    error={errors.pcMonitorSizeIn1}
-                  />
-                  <NumInput
-                    value={form.pcQty1}
-                    onChange={(v) => set("pcQty1", v)}
-                    placeholder="Qty"
-                    error={errors.pcQty1}
-                  />
-                </div>
-              </FieldRow>
-              <FieldRow label="PC Row 2 — Monitor Size (Inch) / Qty">
-                <div className="grid grid-cols-2 gap-2">
-                  <NumInput
-                    value={form.pcMonitorSizeIn2}
-                    onChange={(v) => set("pcMonitorSizeIn2", v)}
-                    placeholder="Monitor size"
-                    error={errors.pcMonitorSizeIn2}
-                  />
-                  <NumInput
-                    value={form.pcQty2}
-                    onChange={(v) => set("pcQty2", v)}
-                    placeholder="Qty"
-                    error={errors.pcQty2}
-                  />
-                </div>
-              </FieldRow>
+            <SubHead>PC Details</SubHead>
+            <FieldRow label="PC Row 1 — Monitor Size (Inch) / Qty">
+              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
+                <NumInput
+                  value={form.pcMonitorSizeIn1}
+                  onChange={(v) => set("pcMonitorSizeIn1", v)}
+                  placeholder="Monitor size"
+                  error={errors.pcMonitorSizeIn1}
+                />
+                <NumInput
+                  value={form.pcQty1}
+                  onChange={(v) => set("pcQty1", v)}
+                  placeholder="Qty"
+                  error={errors.pcQty1}
+                />
+              </div>
+            </FieldRow>
+            <FieldRow label="PC Row 2 — Monitor Size (Inch) / Qty">
+              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
+                <NumInput
+                  value={form.pcMonitorSizeIn2}
+                  onChange={(v) => set("pcMonitorSizeIn2", v)}
+                  placeholder="Monitor size"
+                  error={errors.pcMonitorSizeIn2}
+                />
+                <NumInput
+                  value={form.pcQty2}
+                  onChange={(v) => set("pcQty2", v)}
+                  placeholder="Qty"
+                  error={errors.pcQty2}
+                />
+              </div>
+            </FieldRow>
 
-              <h3 className="font-medium text-sm text-gray-500">Printer Details</h3>
-              <FieldRow label="Printer Row 1 — Rating (W) / Qty">
-                <div className="grid grid-cols-2 gap-2">
-                  <NumInput
-                    value={form.printerRatingW1}
-                    onChange={(v) => set("printerRatingW1", v)}
-                    placeholder="Rating (W)"
-                    error={errors.printerRatingW1}
-                  />
-                  <NumInput
-                    value={form.printerQty1}
-                    onChange={(v) => set("printerQty1", v)}
-                    placeholder="Qty"
-                    error={errors.printerQty1}
-                  />
-                </div>
-              </FieldRow>
-              <FieldRow label="Printer Row 2 — Rating (W) / Qty">
-                <div className="grid grid-cols-2 gap-2">
-                  <NumInput
-                    value={form.printerRatingW2}
-                    onChange={(v) => set("printerRatingW2", v)}
-                    placeholder="Rating (W)"
-                    error={errors.printerRatingW2}
-                  />
-                  <NumInput
-                    value={form.printerQty2}
-                    onChange={(v) => set("printerQty2", v)}
-                    placeholder="Qty"
-                    error={errors.printerQty2}
-                  />
-                </div>
-              </FieldRow>
+            <SubHead>Printer Details</SubHead>
+            <FieldRow label="Printer Row 1 — Rating (W) / Qty">
+              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
+                <NumInput
+                  value={form.printerRatingW1}
+                  onChange={(v) => set("printerRatingW1", v)}
+                  placeholder="Rating (W)"
+                  error={errors.printerRatingW1}
+                />
+                <NumInput
+                  value={form.printerQty1}
+                  onChange={(v) => set("printerQty1", v)}
+                  placeholder="Qty"
+                  error={errors.printerQty1}
+                />
+              </div>
+            </FieldRow>
+            <FieldRow label="Printer Row 2 — Rating (W) / Qty">
+              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
+                <NumInput
+                  value={form.printerRatingW2}
+                  onChange={(v) => set("printerRatingW2", v)}
+                  placeholder="Rating (W)"
+                  error={errors.printerRatingW2}
+                />
+                <NumInput
+                  value={form.printerQty2}
+                  onChange={(v) => set("printerQty2", v)}
+                  placeholder="Qty"
+                  error={errors.printerQty2}
+                />
+              </div>
+            </FieldRow>
 
-              <h3 className="font-medium text-sm text-gray-500">Scanner Details</h3>
-              <FieldRow label="Scanner Row 1 — Rating (W) / Qty">
-                <div className="grid grid-cols-2 gap-2">
-                  <NumInput
-                    value={form.scannerRatingW1}
-                    onChange={(v) => set("scannerRatingW1", v)}
-                    placeholder="Rating (W)"
-                    error={errors.scannerRatingW1}
-                  />
-                  <NumInput
-                    value={form.scannerQty1}
-                    onChange={(v) => set("scannerQty1", v)}
-                    placeholder="Qty"
-                    error={errors.scannerQty1}
-                  />
-                </div>
-              </FieldRow>
-              <FieldRow label="Scanner Row 2 — Rating (W) / Qty">
-                <div className="grid grid-cols-2 gap-2">
-                  <NumInput
-                    value={form.scannerRatingW2}
-                    onChange={(v) => set("scannerRatingW2", v)}
-                    placeholder="Rating (W)"
-                    error={errors.scannerRatingW2}
-                  />
-                  <NumInput
-                    value={form.scannerQty2}
-                    onChange={(v) => set("scannerQty2", v)}
-                    placeholder="Qty"
-                    error={errors.scannerQty2}
-                  />
-                </div>
-              </FieldRow>
-            </TabsContent>
-
-            <TabsContent value="power" className="space-y-4">
-              <FieldRow label="No. of Power Failures in a Day">
+            <SubHead>Scanner Details</SubHead>
+            <FieldRow label="Scanner Row 1 — Rating (W) / Qty">
+              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
                 <NumInput
-                  value={form.powerFailuresCount}
-                  onChange={(v) => set("powerFailuresCount", v)}
-                  placeholder="Number"
-                  error={errors.powerFailuresCount}
+                  value={form.scannerRatingW1}
+                  onChange={(v) => set("scannerRatingW1", v)}
+                  placeholder="Rating (W)"
+                  error={errors.scannerRatingW1}
                 />
-              </FieldRow>
-              <FieldRow label="Duration of Power Failures in a Day (minutes)">
                 <NumInput
-                  value={form.powerFailuresDurationMin}
-                  onChange={(v) => set("powerFailuresDurationMin", v)}
-                  placeholder="Duration"
-                  error={errors.powerFailuresDurationMin}
+                  value={form.scannerQty1}
+                  onChange={(v) => set("scannerQty1", v)}
+                  placeholder="Qty"
+                  error={errors.scannerQty1}
                 />
-              </FieldRow>
-              <FieldRow label="Load ON DG (%)">
+              </div>
+            </FieldRow>
+            <FieldRow label="Scanner Row 2 — Rating (W) / Qty">
+              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
                 <NumInput
-                  value={form.loadOnDgPercent}
-                  onChange={(v) => set("loadOnDgPercent", v)}
-                  placeholder="Percentage"
-                  error={errors.loadOnDgPercent}
+                  value={form.scannerRatingW2}
+                  onChange={(v) => set("scannerRatingW2", v)}
+                  placeholder="Rating (W)"
+                  error={errors.scannerRatingW2}
                 />
-              </FieldRow>
-              <FieldRow label="DG Set">
-                <YesNo value={form.dgSet} onChange={(v) => set("dgSet", v)} />
-              </FieldRow>
-              <FieldRow label="AMF Panel">
-                <YesNo value={form.amfPanel} onChange={(v) => set("amfPanel", v)} />
-              </FieldRow>
-              <FieldRow label="Operation during non-business hours">
-                <YesNo
-                  value={form.operateNonBusinessHours}
-                  onChange={(v) => set("operateNonBusinessHours", v)}
-                />
-              </FieldRow>
-              <FieldRow label="Operation on holidays">
-                <YesNo value={form.operateHolidays} onChange={(v) => set("operateHolidays", v)} />
-              </FieldRow>
-              <FieldRow label="DG Set Capacity (kVA)">
                 <NumInput
-                  value={form.dgSetCapacityKva}
-                  onChange={(v) => set("dgSetCapacityKva", v)}
-                  placeholder="Capacity"
-                  error={errors.dgSetCapacityKva}
+                  value={form.scannerQty2}
+                  onChange={(v) => set("scannerQty2", v)}
+                  placeholder="Qty"
+                  error={errors.scannerQty2}
                 />
-              </FieldRow>
-            </TabsContent>
-          </Tabs>
-          <div className="flex justify-end pt-4">
-            <Button type="submit" disabled={busy}>
-              {busy ? "Submitting…" : "Submit Report"}
-            </Button>
+              </div>
+            </FieldRow>
           </div>
-        </form>
+        </section>
 
-        {latestLoading && (
-          <p className="mt-6 text-sm text-muted-foreground">Loading previous report…</p>
-        )}
-        {latestError && (
-          <p className="mt-6 text-sm text-destructive">
-            Could not load previous report:{" "}
-            {latestError instanceof Error ? latestError.message : String(latestError)}
+        <section className="space-y-3">
+          <SectionHeader num="3" title="Phase 3 — Power Condition" valid={powerValid} />
+          <div className="space-y-3">
+            <FieldRow label="No. of Power Failures in a Day">
+              <NumInput
+                value={form.powerFailuresCount}
+                onChange={(v) => set("powerFailuresCount", v)}
+                placeholder="Number"
+                error={errors.powerFailuresCount}
+              />
+            </FieldRow>
+            <FieldRow label="Duration of Power Failures in a Day (minutes)">
+              <NumInput
+                value={form.powerFailuresDurationMin}
+                onChange={(v) => set("powerFailuresDurationMin", v)}
+                placeholder="Duration"
+                error={errors.powerFailuresDurationMin}
+              />
+            </FieldRow>
+            <FieldRow label="Load ON DG (%)">
+              <NumInput
+                value={form.loadOnDgPercent}
+                onChange={(v) => set("loadOnDgPercent", v)}
+                placeholder="Percentage"
+                error={errors.loadOnDgPercent}
+              />
+            </FieldRow>
+            <FieldRow label="DG Set">
+              <YesNo value={form.dgSet} onChange={(v) => set("dgSet", v)} label="DG Set" />
+            </FieldRow>
+            <FieldRow label="AMF Panel">
+              <YesNo value={form.amfPanel} onChange={(v) => set("amfPanel", v)} label="AMF Panel" />
+            </FieldRow>
+            <FieldRow label="Operation during non-business hours">
+              <YesNo
+                value={form.operateNonBusinessHours}
+                onChange={(v) => set("operateNonBusinessHours", v)}
+                label="Operation during non-business hours"
+              />
+            </FieldRow>
+            <FieldRow label="Operation on holidays">
+              <YesNo
+                value={form.operateHolidays}
+                onChange={(v) => set("operateHolidays", v)}
+                label="Operation on holidays"
+              />
+            </FieldRow>
+            <FieldRow label="DG Set Capacity (kVA)">
+              <NumInput
+                value={form.dgSetCapacityKva}
+                onChange={(v) => set("dgSetCapacityKva", v)}
+                placeholder="Capacity"
+                error={errors.dgSetCapacityKva}
+              />
+            </FieldRow>
+          </div>
+        </section>
+      </form>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur px-4 pt-2 pb-safe">
+        <div className="flex items-center gap-3 pb-2">
+          <div className="flex items-center gap-1.5" aria-hidden="true">
+            <PhaseDot num="1" valid={readingsValid} />
+            <PhaseDot num="2" valid={loadValid} />
+            <PhaseDot num="3" valid={powerValid} />
+          </div>
+          <Button type="submit" form="fsr-form" disabled={busy} className="h-11 flex-1">
+            {busy ? "Submitting…" : "Submit Report"}
+          </Button>
+        </div>
+      </div>
+
+      {latestLoading && <p className="text-sm text-muted-foreground">Loading previous report…</p>}
+      {latestError && (
+        <p className="text-sm text-destructive">
+          Could not load previous report:{" "}
+          {latestError instanceof Error ? latestError.message : String(latestError)}
+        </p>
+      )}
+
+      {latest && (
+        <div className="rounded-xl border p-4 space-y-2 text-sm">
+          <p className="text-[13px] font-medium">
+            Latest submission — {new Date(latest.submitted_at).toLocaleString()}
           </p>
-        )}
-
-        {latest && (
-          <div className="mt-6 rounded-md border p-3 text-sm space-y-1">
-            <p className="font-medium">
-              Latest submission — {new Date(latest.submitted_at).toLocaleString()}
-            </p>
-            <p>
-              Voltage L-N: {latest.mains_voltage_ln ?? "—"} VAC · Voltage N-E:{" "}
-              {latest.mains_voltage_ne ?? "—"} VAC
-            </p>
-            <p>
-              UPS location: {latest.ups_location} · Power failures/day:{" "}
-              {latest.power_failures_count ?? "—"}
-            </p>
-            <p>Submitted by: {latest.engineer_name ?? "—"}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          <p className="text-[13px]">
+            Voltage L-N: {latest.mains_voltage_ln ?? "—"} VAC · Voltage N-E:{" "}
+            {latest.mains_voltage_ne ?? "—"} VAC
+          </p>
+          <p className="text-[13px]">
+            UPS location: {latest.ups_location} · Power failures/day:{" "}
+            {latest.power_failures_count ?? "—"}
+          </p>
+          <p className="text-[13px]">Submitted by: {latest.engineer_name ?? "—"}</p>
+        </div>
+      )}
+    </div>
   );
 }
