@@ -15,6 +15,7 @@ export const uploadSchema = z
       "issue_photo",
       "other",
       "equipment_correction",
+      "customer_signature",
     ]),
     data_base64: z
       .string()
@@ -28,17 +29,12 @@ export const uploadSchema = z
   .refine(
     (parsed) => {
       if (parsed.kind === "equipment_correction") {
-        return (
-          parsed.lat !== undefined &&
-          parsed.long !== undefined &&
-          !!parsed.captured_at
-        );
+        return parsed.lat !== undefined && parsed.long !== undefined && !!parsed.captured_at;
       }
       return true;
     },
     {
-      message:
-        "Geotagged photo with live location is mandatory for Model/Serial mismatch.",
+      message: "Geotagged photo with live location is mandatory for Model/Serial mismatch.",
     },
   );
 

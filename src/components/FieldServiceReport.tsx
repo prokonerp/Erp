@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, Plus, X } from "lucide-react";
@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { FieldRow } from "./CustomerForm";
+import { SignaturePad } from "./eng/SignaturePad";
 
 let rowSeq = 0;
 const nextRowId = () => `row-${++rowSeq}`;
@@ -87,6 +87,8 @@ type FormState = {
   operateNonBusinessHours: boolean;
   operateHolidays: boolean;
   partReplacements: PartReplacement[];
+  customerSignaturePath: string;
+  signatureCapturedAt: string;
 };
 
 const initialFrontIndication: FrontIndicationState = {
@@ -129,6 +131,8 @@ const initialForm: FormState = {
   operateNonBusinessHours: false,
   operateHolidays: false,
   partReplacements: [],
+  customerSignaturePath: "",
+  signatureCapturedAt: "",
 };
 
 function FieldError({ message, id }: { message?: string; id?: string }) {
@@ -170,6 +174,26 @@ function NumInput({
   );
 }
 
+function FsrField({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <span className="block text-[13px] font-medium text-card-foreground">
+        {label}
+        {required && <span aria-hidden="true"> *</span>}
+      </span>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
 function YesNo({
   value,
   onChange,
@@ -179,18 +203,26 @@ function YesNo({
   onChange: (v: boolean) => void;
   label: string;
 }) {
+  const base =
+    "flex min-h-[44px] flex-1 cursor-pointer items-center justify-center rounded-lg text-sm font-medium";
   return (
     <RadioGroup
       value={value ? "yes" : "no"}
       onValueChange={(v) => onChange(v === "yes")}
       aria-label={label}
-      className="flex gap-6"
+      className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted p-1"
     >
-      <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
-        <RadioGroupItem value="yes" className="size-5" /> Yes
+      <label
+        className={`${base} ${value ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+      >
+        <RadioGroupItem value="yes" className="sr-only" />
+        Yes
       </label>
-      <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
-        <RadioGroupItem value="no" className="size-5" /> No
+      <label
+        className={`${base} ${!value ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+      >
+        <RadioGroupItem value="no" className="sr-only" />
+        No
       </label>
     </RadioGroup>
   );
@@ -232,12 +264,27 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [submittedOk, setSubmittedOk] = useState(false);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
   const queryClient = useQueryClient();
   const {
     data: rows,
     isLoading: latestLoading,
     error: latestError,
   } = useFieldServiceReport(ticketId);
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   const set = (k: keyof FormState, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -395,14 +442,24 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     operateHolidays: form.operateHolidays,
   }).success;
   const partValid = partReplacementsSchema.safeParse(form.partReplacements).success;
+  const signatureValid = form.customerSignaturePath.trim() !== "";
+
+  const offline = !isOnline;
+  const offlineReason = "No internet connection. Reconnect and retry — nothing was uploaded.";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
+    if (!navigator.onLine) {
+      toast.error(offlineReason);
+      return;
+    }
     const parsed = fieldServiceReportSchema.safeParse({
       ...form,
       batteryBankMake: emptyStr(form.batteryBankMake),
       batteryBankAh: emptyStr(form.batteryBankAh),
+      customerSignaturePath: form.customerSignaturePath,
+      signatureCapturedAt: emptyStr(form.signatureCapturedAt),
       frontIndication: {
         ...form.frontIndication,
         opMode: emptyStr(form.frontIndication.opMode),
@@ -446,18 +503,20 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
           engineerPhone = (emps[0].phone as string | null) ?? null;
         }
       }
-      const { error } = await supabase.from("field_service_reports").insert(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
+      const { error } = await (supabase as any).from("field_service_reports").insert(
         buildFsrPayload(parsed.data, ticketId, {
           employeeId,
           name: engineerName,
           phone: engineerPhone,
-        }),
+        }) as never,
       );
       if (error) {
         toast.error(error.message);
         return;
       }
       toast.success("Field Service Report submitted");
+      setSubmittedOk(true);
       await queryClient.invalidateQueries({
         queryKey: fieldServiceReportKeys.list({ ticket: ticketId }),
       });
@@ -467,6 +526,8 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         dischargingReadings: [],
         frontIndication: { ...initialFrontIndication },
         partReplacements: [],
+        customerSignaturePath: "",
+        signatureCapturedAt: "",
       });
     } finally {
       setBusy(false);
@@ -486,33 +547,69 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
 
   return (
     <div className="space-y-3">
+      <div
+        className="sticky top-0 z-10 flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5"
+        aria-label="Form progress"
+      >
+        <div className="flex items-center gap-1.5" aria-hidden="true">
+          <PhaseDot num="1" valid={readingsValid} />
+          <PhaseDot num="1A" valid={frontValid} />
+          <PhaseDot num="2" valid={loadValid} />
+          <PhaseDot num="3" valid={powerValid} />
+          <PhaseDot num="4" valid={signatureValid} />
+        </div>
+        <p className="text-xs text-muted-foreground">Phases 1 · 1A · 2 · 3 · 4</p>
+      </div>
+
+      {submittedOk && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-xl border border-border bg-card p-4"
+        >
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <Check className="size-4" />
+          </span>
+          <div className="space-y-0.5">
+            <p className="text-sm font-semibold text-card-foreground">
+              Field Service Report submitted
+            </p>
+            <p className="text-[13px] text-muted-foreground">
+              The latest submission summary below reflects the saved report.
+            </p>
+          </div>
+        </div>
+      )}
+
       <form
         id="fsr-form"
         onSubmit={handleSubmit}
         className="space-y-3 pb-[calc(8rem+env(safe-area-inset-bottom,0px))]"
       >
-        <section className="space-y-3">
+        <section
+          aria-label="Phase 1 readings"
+          className="space-y-3 rounded-xl border border-border bg-card p-4"
+        >
           <SectionHeader num="1" title="Phase 1 — Readings" valid={readingsValid} />
-          <div className="space-y-3">
-            <FieldRow label="Voltage L-N (VAC)" required>
+          <div className="space-y-4">
+            <FsrField label="Voltage L-N (VAC)" required>
               <NumInput
                 value={form.mainsVoltageLn}
                 onChange={(v) => set("mainsVoltageLn", v)}
                 placeholder="Voltage reading"
                 error={errors.mainsVoltageLn}
               />
-            </FieldRow>
-            <FieldRow label="Voltage N-E (VAC)" required>
+            </FsrField>
+            <FsrField label="Voltage N-E (VAC)" required>
               <NumInput
                 value={form.mainsVoltageNe}
                 onChange={(v) => set("mainsVoltageNe", v)}
                 placeholder="Voltage reading"
                 error={errors.mainsVoltageNe}
               />
-            </FieldRow>
-            <div className="space-y-3">
+            </FsrField>
+            <div className="space-y-4">
               <SubHead>Battery Bank</SubHead>
-              <FieldRow label="Make">
+              <FsrField label="Make">
                 <div>
                   <Select
                     value={form.batteryBankMake || undefined}
@@ -533,8 +630,8 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                   </Select>
                   <FieldError message={errors.batteryBankMake} />
                 </div>
-              </FieldRow>
-              <FieldRow label="Ah">
+              </FsrField>
+              <FsrField label="Ah">
                 <div>
                   <Select
                     value={form.batteryBankAh || undefined}
@@ -555,15 +652,15 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                   </Select>
                   <FieldError message={errors.batteryBankAh} />
                 </div>
-              </FieldRow>
-              <FieldRow label="Qty">
+              </FsrField>
+              <FsrField label="Qty">
                 <NumInput
                   value={form.batteryBankQty}
                   onChange={(v) => set("batteryBankQty", v)}
                   placeholder="Qty"
                   error={errors.batteryBankQty}
                 />
-              </FieldRow>
+              </FsrField>
             </div>
             <div className="flex items-center justify-between gap-3">
               <SubHead>Reading During Charging</SubHead>
@@ -581,14 +678,12 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               <p className="text-[13px] text-muted-foreground">No charging readings — add.</p>
             ) : (
               form.chargingReadings.map((reading, i) => (
-                <FieldRow key={reading.id} label={`Battery ${i + 1} — Volts`}>
-                  <div className="grid grid-cols-[1fr_auto] gap-3 max-[380px]:grid-cols-1">
-                    <NumInput
-                      value={reading.volts}
-                      onChange={(v) => setCharging(i, v)}
-                      placeholder="Volts (Vdc)"
-                      error={errors[`chargingReadings.${i}.volts`]}
-                    />
+                <div
+                  key={reading.id}
+                  className="space-y-2 rounded-xl border border-border bg-card p-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[13px] font-medium text-card-foreground">Battery {i + 1}</p>
                     <Button
                       type="button"
                       variant="outline"
@@ -600,7 +695,15 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       <X className="size-4" />
                     </Button>
                   </div>
-                </FieldRow>
+                  <FsrField label="Volts (Vdc)">
+                    <NumInput
+                      value={reading.volts}
+                      onChange={(v) => setCharging(i, v)}
+                      placeholder="Volts (Vdc)"
+                      error={errors[`chargingReadings.${i}.volts`]}
+                    />
+                  </FsrField>
+                </div>
               ))
             )}
             <div className="flex items-center justify-between gap-3">
@@ -619,14 +722,12 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               <p className="text-[13px] text-muted-foreground">No discharging readings — add.</p>
             ) : (
               form.dischargingReadings.map((reading, i) => (
-                <FieldRow key={reading.id} label={`Battery ${i + 1} — Volts`}>
-                  <div className="grid grid-cols-[1fr_auto] gap-3 max-[380px]:grid-cols-1">
-                    <NumInput
-                      value={reading.volts}
-                      onChange={(v) => setDischarging(i, v)}
-                      placeholder="Volts (Vdc)"
-                      error={errors[`dischargingReadings.${i}.volts`]}
-                    />
+                <div
+                  key={reading.id}
+                  className="space-y-2 rounded-xl border border-border bg-card p-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[13px] font-medium text-card-foreground">Battery {i + 1}</p>
                     <Button
                       type="button"
                       variant="outline"
@@ -638,16 +739,27 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       <X className="size-4" />
                     </Button>
                   </div>
-                </FieldRow>
+                  <FsrField label="Volts (Vdc)">
+                    <NumInput
+                      value={reading.volts}
+                      onChange={(v) => setDischarging(i, v)}
+                      placeholder="Volts (Vdc)"
+                      error={errors[`dischargingReadings.${i}.volts`]}
+                    />
+                  </FsrField>
+                </div>
               ))
             )}
           </div>
         </section>
 
-        <section className="space-y-3 rounded-xl border p-4">
-          <SectionHeader num="1A" title="Front Indication" valid={frontValid} />
+        <section
+          aria-label="Phase 1A front indication"
+          className="space-y-3 rounded-xl border border-border bg-card p-4"
+        >
+          <SectionHeader num="1A" title="Phase 1A — Front Indication" valid={frontValid} />
           <div className="space-y-3">
-            <div className="rounded border p-3 space-y-2">
+            <div className="space-y-2 rounded-xl border border-border p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">Operating Mode</span>
                 <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -669,7 +781,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               </RadioGroup>
               <FieldError message={errors["frontIndication.opMode"]} />
             </div>
-            <div className="rounded border p-3 space-y-2">
+            <div className="space-y-2 rounded-xl border border-border p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">Bypass State</span>
                 <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -691,7 +803,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               </RadioGroup>
               <FieldError message={errors["frontIndication.bypassState"]} />
             </div>
-            <div className="rounded border p-3 space-y-2">
+            <div className="space-y-2 rounded-xl border border-border p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">Lead</span>
                 <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -713,7 +825,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 />
               </div>
             </div>
-            <div className="rounded border p-3 space-y-2">
+            <div className="space-y-2 rounded-xl border border-border p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">Charge</span>
                 <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -735,7 +847,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 />
               </div>
             </div>
-            <div className="rounded border p-3 space-y-2">
+            <div className="space-y-2 rounded-xl border border-border p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">Fault 0</span>
                 <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -757,7 +869,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 />
               </div>
             </div>
-            <div className="rounded border p-3 space-y-2">
+            <div className="space-y-2 rounded-xl border border-border p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">Fault GE</span>
                 <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -779,7 +891,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 />
               </div>
             </div>
-            <div className="rounded border p-3 space-y-2">
+            <div className="space-y-2 rounded-xl border border-border p-3">
               <span className="text-sm font-medium">Remarks</span>
               <RadioGroup
                 value={form.frontIndication.remarksTarget || undefined}
@@ -804,17 +916,20 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 placeholder="Remarks"
                 rows={3}
                 aria-invalid={!!errors["frontIndication.remarks"]}
-                className={errors["frontIndication.remarks"] ? "border-destructive" : ""}
+                className={`min-h-[44px] ${errors["frontIndication.remarks"] ? "border-destructive" : ""}`}
               />
               <FieldError message={errors["frontIndication.remarks"]} />
             </div>
           </div>
         </section>
 
-        <section className="space-y-3">
+        <section
+          aria-label="Phase 2 load record"
+          className="space-y-3 rounded-xl border border-border bg-card p-4"
+        >
           <SectionHeader num="2" title="Phase 2 — Load Record" valid={loadValid} />
-          <div className="space-y-3">
-            <FieldRow label="AC Provided">
+          <div className="space-y-4">
+            <FsrField label="AC Provided">
               <label className="flex min-h-[44px] cursor-pointer items-center">
                 <Checkbox
                   checked={form.acProvided}
@@ -822,8 +937,8 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                   className="size-5"
                 />
               </label>
-            </FieldRow>
-            <FieldRow label="DG Provided">
+            </FsrField>
+            <FsrField label="DG Provided">
               <label className="flex min-h-[44px] cursor-pointer items-center">
                 <Checkbox
                   checked={form.dgProvided}
@@ -831,8 +946,8 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                   className="size-5"
                 />
               </label>
-            </FieldRow>
-            <FieldRow label="Is Environment Duty">
+            </FsrField>
+            <FsrField label="Is Environment Duty">
               <label className="flex min-h-[44px] cursor-pointer items-center">
                 <Checkbox
                   checked={form.environmentDuty}
@@ -840,8 +955,8 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                   className="size-5"
                 />
               </label>
-            </FieldRow>
-            <FieldRow label="Location where UPS Installed" required>
+            </FsrField>
+            <FsrField label="Location where UPS Installed" required>
               <div>
                 <Select
                   value={form.upsLocation || undefined}
@@ -862,7 +977,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 </Select>
                 <FieldError message={errors.upsLocation} />
               </div>
-            </FieldRow>
+            </FsrField>
 
             <div className="flex items-center justify-between gap-3">
               <SubHead>PC Details</SubHead>
@@ -880,20 +995,9 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               <p className="text-[13px] text-muted-foreground">No PCs at site.</p>
             ) : (
               form.pcDetails.map((pc, i) => (
-                <FieldRow key={pc.id} label={`PC ${i + 1} — Monitor Size (Inch) / Qty`}>
-                  <div className="grid grid-cols-[1fr_1fr_auto] gap-3 max-[380px]:grid-cols-1">
-                    <NumInput
-                      value={pc.monitorSizeIn}
-                      onChange={(v) => setPc(i, "monitorSizeIn", v)}
-                      placeholder="Monitor size"
-                      error={errors[`pcDetails.${i}.monitorSizeIn`]}
-                    />
-                    <NumInput
-                      value={pc.qty}
-                      onChange={(v) => setPc(i, "qty", v)}
-                      placeholder="Qty"
-                      error={errors[`pcDetails.${i}.qty`]}
-                    />
+                <div key={pc.id} className="space-y-3 rounded-xl border border-border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[13px] font-medium text-card-foreground">PC {i + 1}</p>
                     <Button
                       type="button"
                       variant="outline"
@@ -905,7 +1009,23 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       <X className="size-4" />
                     </Button>
                   </div>
-                </FieldRow>
+                  <FsrField label="Monitor size (Inch)">
+                    <NumInput
+                      value={pc.monitorSizeIn}
+                      onChange={(v) => setPc(i, "monitorSizeIn", v)}
+                      placeholder="Monitor size"
+                      error={errors[`pcDetails.${i}.monitorSizeIn`]}
+                    />
+                  </FsrField>
+                  <FsrField label="Qty">
+                    <NumInput
+                      value={pc.qty}
+                      onChange={(v) => setPc(i, "qty", v)}
+                      placeholder="Qty"
+                      error={errors[`pcDetails.${i}.qty`]}
+                    />
+                  </FsrField>
+                </div>
               ))
             )}
 
@@ -925,20 +1045,9 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               <p className="text-[13px] text-muted-foreground">No printers at site.</p>
             ) : (
               form.printerDetails.map((printer, i) => (
-                <FieldRow key={printer.id} label={`Printer ${i + 1} — Rating (W) / Qty`}>
-                  <div className="grid grid-cols-[1fr_1fr_auto] gap-3 max-[380px]:grid-cols-1">
-                    <NumInput
-                      value={printer.ratingW}
-                      onChange={(v) => setPrinter(i, "ratingW", v)}
-                      placeholder="Rating (W)"
-                      error={errors[`printerDetails.${i}.ratingW`]}
-                    />
-                    <NumInput
-                      value={printer.qty}
-                      onChange={(v) => setPrinter(i, "qty", v)}
-                      placeholder="Qty"
-                      error={errors[`printerDetails.${i}.qty`]}
-                    />
+                <div key={printer.id} className="space-y-3 rounded-xl border border-border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[13px] font-medium text-card-foreground">Printer {i + 1}</p>
                     <Button
                       type="button"
                       variant="outline"
@@ -950,7 +1059,23 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       <X className="size-4" />
                     </Button>
                   </div>
-                </FieldRow>
+                  <FsrField label="Rating (W)">
+                    <NumInput
+                      value={printer.ratingW}
+                      onChange={(v) => setPrinter(i, "ratingW", v)}
+                      placeholder="Rating (W)"
+                      error={errors[`printerDetails.${i}.ratingW`]}
+                    />
+                  </FsrField>
+                  <FsrField label="Qty">
+                    <NumInput
+                      value={printer.qty}
+                      onChange={(v) => setPrinter(i, "qty", v)}
+                      placeholder="Qty"
+                      error={errors[`printerDetails.${i}.qty`]}
+                    />
+                  </FsrField>
+                </div>
               ))
             )}
 
@@ -970,20 +1095,9 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               <p className="text-[13px] text-muted-foreground">No scanners at site.</p>
             ) : (
               form.scannerDetails.map((scanner, i) => (
-                <FieldRow key={scanner.id} label={`Scanner ${i + 1} — Rating (W) / Qty`}>
-                  <div className="grid grid-cols-[1fr_1fr_auto] gap-3 max-[380px]:grid-cols-1">
-                    <NumInput
-                      value={scanner.ratingW}
-                      onChange={(v) => setScanner(i, "ratingW", v)}
-                      placeholder="Rating (W)"
-                      error={errors[`scannerDetails.${i}.ratingW`]}
-                    />
-                    <NumInput
-                      value={scanner.qty}
-                      onChange={(v) => setScanner(i, "qty", v)}
-                      placeholder="Qty"
-                      error={errors[`scannerDetails.${i}.qty`]}
-                    />
+                <div key={scanner.id} className="space-y-3 rounded-xl border border-border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[13px] font-medium text-card-foreground">Scanner {i + 1}</p>
                     <Button
                       type="button"
                       variant="outline"
@@ -995,71 +1109,93 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       <X className="size-4" />
                     </Button>
                   </div>
-                </FieldRow>
+                  <FsrField label="Rating (W)">
+                    <NumInput
+                      value={scanner.ratingW}
+                      onChange={(v) => setScanner(i, "ratingW", v)}
+                      placeholder="Rating (W)"
+                      error={errors[`scannerDetails.${i}.ratingW`]}
+                    />
+                  </FsrField>
+                  <FsrField label="Qty">
+                    <NumInput
+                      value={scanner.qty}
+                      onChange={(v) => setScanner(i, "qty", v)}
+                      placeholder="Qty"
+                      error={errors[`scannerDetails.${i}.qty`]}
+                    />
+                  </FsrField>
+                </div>
               ))
             )}
           </div>
         </section>
 
-        <section className="space-y-3">
+        <section
+          aria-label="Phase 3 power condition"
+          className="space-y-3 rounded-xl border border-border bg-card p-4"
+        >
           <SectionHeader num="3" title="Phase 3 — Power Condition" valid={powerValid} />
-          <div className="space-y-3">
-            <FieldRow label="No. of Power Failures in a Day">
+          <div className="space-y-4">
+            <FsrField label="No. of Power Failures in a Day">
               <NumInput
                 value={form.powerFailuresCount}
                 onChange={(v) => set("powerFailuresCount", v)}
                 placeholder="Number"
                 error={errors.powerFailuresCount}
               />
-            </FieldRow>
-            <FieldRow label="Duration of Power Failures in a Day (minutes)">
+            </FsrField>
+            <FsrField label="Duration of Power Failures in a Day (minutes)">
               <NumInput
                 value={form.powerFailuresDurationMin}
                 onChange={(v) => set("powerFailuresDurationMin", v)}
                 placeholder="Duration"
                 error={errors.powerFailuresDurationMin}
               />
-            </FieldRow>
-            <FieldRow label="Load ON DG (%)">
+            </FsrField>
+            <FsrField label="Load ON DG (%)">
               <NumInput
                 value={form.loadOnDgPercent}
                 onChange={(v) => set("loadOnDgPercent", v)}
                 placeholder="Percentage"
                 error={errors.loadOnDgPercent}
               />
-            </FieldRow>
-            <FieldRow label="DG Set">
+            </FsrField>
+            <FsrField label="DG Set">
               <YesNo value={form.dgSet} onChange={(v) => set("dgSet", v)} label="DG Set" />
-            </FieldRow>
-            <FieldRow label="AMF Panel">
+            </FsrField>
+            <FsrField label="AMF Panel">
               <YesNo value={form.amfPanel} onChange={(v) => set("amfPanel", v)} label="AMF Panel" />
-            </FieldRow>
-            <FieldRow label="Operation during non-business hours">
+            </FsrField>
+            <FsrField label="Operation during non-business hours">
               <YesNo
                 value={form.operateNonBusinessHours}
                 onChange={(v) => set("operateNonBusinessHours", v)}
                 label="Operation during non-business hours"
               />
-            </FieldRow>
-            <FieldRow label="Operation on holidays">
+            </FsrField>
+            <FsrField label="Operation on holidays">
               <YesNo
                 value={form.operateHolidays}
                 onChange={(v) => set("operateHolidays", v)}
                 label="Operation on holidays"
               />
-            </FieldRow>
-            <FieldRow label="DG Set Capacity (kVA)">
+            </FsrField>
+            <FsrField label="DG Set Capacity (kVA)">
               <NumInput
                 value={form.dgSetCapacityKva}
                 onChange={(v) => set("dgSetCapacityKva", v)}
                 placeholder="Capacity"
                 error={errors.dgSetCapacityKva}
               />
-            </FieldRow>
+            </FsrField>
           </div>
         </section>
 
-        <section className="space-y-3 rounded-xl border p-4">
+        <section
+          aria-label="Part replacement details"
+          className="space-y-3 rounded-xl border border-border bg-card p-4"
+        >
           <SectionHeader num="4" title="Part Replacement Details" valid={partValid} />
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -1078,75 +1214,9 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               <p className="text-[13px] text-muted-foreground">No part replacements — add.</p>
             ) : (
               form.partReplacements.map((part, i) => (
-                <FieldRow key={part.id} label={`Part ${i + 1}`}>
-                  <div className="space-y-3">
-                    <div>
-                      <Input
-                        type="text"
-                        value={part.item}
-                        onChange={(e) => setPart(i, "item", e.target.value)}
-                        placeholder="Item / part description"
-                        aria-invalid={!!errors[`partReplacements.${i}.item`]}
-                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.item`] ? "border-destructive" : ""}`}
-                      />
-                      <FieldError message={errors[`partReplacements.${i}.item`]} />
-                    </div>
-                    <div>
-                      <Input
-                        type="text"
-                        value={part.oldSrNo}
-                        onChange={(e) => setPart(i, "oldSrNo", e.target.value)}
-                        placeholder="Old Sr. No"
-                        aria-invalid={!!errors[`partReplacements.${i}.oldSrNo`]}
-                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.oldSrNo`] ? "border-destructive" : ""}`}
-                      />
-                      <FieldError message={errors[`partReplacements.${i}.oldSrNo`]} />
-                    </div>
-                    <div>
-                      <Input
-                        type="text"
-                        value={part.newSrNo}
-                        onChange={(e) => setPart(i, "newSrNo", e.target.value)}
-                        placeholder="New Sr. No"
-                        aria-invalid={!!errors[`partReplacements.${i}.newSrNo`]}
-                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.newSrNo`] ? "border-destructive" : ""}`}
-                      />
-                      <FieldError message={errors[`partReplacements.${i}.newSrNo`]} />
-                    </div>
-                    <NumInput
-                      value={part.charges}
-                      onChange={(v) => setPart(i, "charges", v)}
-                      placeholder="Charges (₹)"
-                      error={errors[`partReplacements.${i}.charges`]}
-                    />
-                    <NumInput
-                      value={part.qty}
-                      onChange={(v) => setPart(i, "qty", v)}
-                      placeholder="Qty"
-                      error={errors[`partReplacements.${i}.qty`]}
-                    />
-                    <div>
-                      <Input
-                        type="text"
-                        value={part.oldBarcode}
-                        onChange={(e) => setPart(i, "oldBarcode", e.target.value)}
-                        placeholder="Old defective barcode"
-                        aria-invalid={!!errors[`partReplacements.${i}.oldBarcode`]}
-                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.oldBarcode`] ? "border-destructive" : ""}`}
-                      />
-                      <FieldError message={errors[`partReplacements.${i}.oldBarcode`]} />
-                    </div>
-                    <div>
-                      <Input
-                        type="text"
-                        value={part.newChallan}
-                        onChange={(e) => setPart(i, "newChallan", e.target.value)}
-                        placeholder="New challan no."
-                        aria-invalid={!!errors[`partReplacements.${i}.newChallan`]}
-                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.newChallan`] ? "border-destructive" : ""}`}
-                      />
-                      <FieldError message={errors[`partReplacements.${i}.newChallan`]} />
-                    </div>
+                <div key={part.id} className="space-y-3 rounded-xl border border-border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[13px] font-medium text-card-foreground">Part {i + 1}</p>
                     <Button
                       type="button"
                       variant="outline"
@@ -1158,23 +1228,137 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       <X className="size-4" />
                     </Button>
                   </div>
-                </FieldRow>
+                  <FsrField label="Item / part description">
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.item}
+                        onChange={(e) => setPart(i, "item", e.target.value)}
+                        placeholder="Item / part description"
+                        aria-invalid={!!errors[`partReplacements.${i}.item`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.item`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.item`]} />
+                    </div>
+                  </FsrField>
+                  <FsrField label="Old Sr. No">
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.oldSrNo}
+                        onChange={(e) => setPart(i, "oldSrNo", e.target.value)}
+                        placeholder="Old Sr. No"
+                        aria-invalid={!!errors[`partReplacements.${i}.oldSrNo`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.oldSrNo`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.oldSrNo`]} />
+                    </div>
+                  </FsrField>
+                  <FsrField label="New Sr. No">
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.newSrNo}
+                        onChange={(e) => setPart(i, "newSrNo", e.target.value)}
+                        placeholder="New Sr. No"
+                        aria-invalid={!!errors[`partReplacements.${i}.newSrNo`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.newSrNo`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.newSrNo`]} />
+                    </div>
+                  </FsrField>
+                  <FsrField label="Charges (₹)">
+                    <NumInput
+                      value={part.charges}
+                      onChange={(v) => setPart(i, "charges", v)}
+                      placeholder="Charges (₹)"
+                      error={errors[`partReplacements.${i}.charges`]}
+                    />
+                  </FsrField>
+                  <FsrField label="Qty">
+                    <NumInput
+                      value={part.qty}
+                      onChange={(v) => setPart(i, "qty", v)}
+                      placeholder="Qty"
+                      error={errors[`partReplacements.${i}.qty`]}
+                    />
+                  </FsrField>
+                  <FsrField label="Old defective barcode">
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.oldBarcode}
+                        onChange={(e) => setPart(i, "oldBarcode", e.target.value)}
+                        placeholder="Old defective barcode"
+                        aria-invalid={!!errors[`partReplacements.${i}.oldBarcode`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.oldBarcode`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.oldBarcode`]} />
+                    </div>
+                  </FsrField>
+                  <FsrField label="New challan no.">
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.newChallan}
+                        onChange={(e) => setPart(i, "newChallan", e.target.value)}
+                        placeholder="New challan no."
+                        aria-invalid={!!errors[`partReplacements.${i}.newChallan`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.newChallan`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.newChallan`]} />
+                    </div>
+                  </FsrField>
+                </div>
               ))
             )}
           </div>
         </section>
+
+        <section
+          aria-label="Phase 4 customer signature"
+          className="space-y-3 rounded-xl border border-border bg-card p-4"
+        >
+          <SectionHeader num="4" title="Phase 4 — Customer Signature" valid={signatureValid} />
+          <FsrField label="Customer signature" required>
+            <div>
+              <SignaturePad
+                ticketId={ticketId}
+                value={form.customerSignaturePath || null}
+                onChange={(path) =>
+                  setForm((f) => ({
+                    ...f,
+                    customerSignaturePath: path,
+                    signatureCapturedAt: new Date().toISOString(),
+                  }))
+                }
+              />
+              <FieldError message={errors.customerSignaturePath} />
+            </div>
+          </FsrField>
+        </section>
       </form>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur px-4 pt-2 pb-safe">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur px-4 pt-2 pb-[env(safe-area-inset-bottom,0px)]">
+        {offline && (
+          <p role="status" className="pb-1 text-[13px] font-medium text-destructive">
+            {offlineReason}
+          </p>
+        )}
         <div className="flex items-center gap-3 pb-2">
           <div className="flex items-center gap-1.5" aria-hidden="true">
             <PhaseDot num="1" valid={readingsValid} />
             <PhaseDot num="1A" valid={frontValid} />
             <PhaseDot num="2" valid={loadValid} />
             <PhaseDot num="3" valid={powerValid} />
-            <PhaseDot num="4" valid={partValid} />
+            <PhaseDot num="4" valid={signatureValid} />
           </div>
-          <Button type="submit" form="fsr-form" disabled={busy} className="h-11 flex-1">
+          <Button
+            type="submit"
+            form="fsr-form"
+            disabled={busy || offline}
+            className="h-11 min-h-[44px] flex-1"
+          >
             {busy ? "Submitting…" : "Submit Report"}
           </Button>
         </div>
@@ -1189,7 +1373,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       )}
 
       {latest && (
-        <div className="rounded-xl border p-4 space-y-2 text-sm">
+        <div className="rounded-xl border p-4 space-y-2 text-sm mb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
           <p className="text-[13px] font-medium">
             Latest submission — {new Date(latest.submitted_at).toLocaleString()}
           </p>

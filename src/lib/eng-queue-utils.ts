@@ -9,12 +9,18 @@ export function priorityWeight(p: string | null | undefined): number {
   return map[(p || "").toUpperCase()] ?? 99;
 }
 
-/** True when `created_at` or `assigned_at` falls on today (IST-insensitive string comparison). */
+/** True when `created_at` or `assigned_at` falls on today (Asia/Kolkata calendar date). */
 export function isToday(iso: string | null | undefined, assignedAt?: string | null): boolean {
   if (!iso) return false;
-  const today = new Date().toDateString();
-  if (new Date(iso).toDateString() === today) return true;
-  if (assignedAt && new Date(assignedAt).toDateString() === today) return true;
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const today = fmt.format(new Date());
+  if (fmt.format(new Date(iso)) === today) return true;
+  if (assignedAt && fmt.format(new Date(assignedAt)) === today) return true;
   return false;
 }
 
@@ -37,6 +43,7 @@ export function matchesSearch(term: string, fields: (string | null | undefined)[
 /** Elapsed time human-readable string. */
 export function formatAge(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return "Just now";
   const hrs = ms / 3_600_000;
   if (hrs < 1) return `${Math.max(1, Math.round(ms / 60_000))}m`;
   if (hrs < 24) return `${Math.round(hrs)}h`;

@@ -14,6 +14,7 @@ function minimalInput() {
     printerDetails: [],
     scannerDetails: [],
     frontIndication: {},
+    customerSignaturePath: "signatures/ticket-123.png",
   };
 }
 
@@ -48,6 +49,8 @@ function fullValidInput() {
       remarks: "ok",
       remarksTarget: "UPS",
     },
+    customerSignaturePath: "signatures/ticket-123.png",
+    signatureCapturedAt: "2026-09-14T10:00:00.000Z",
   };
 }
 
@@ -500,6 +503,30 @@ describe("fieldServiceReportSchema", () => {
       },
     ]);
   });
+
+  it("fails when customerSignaturePath is missing", () => {
+    const input = minimalInput() as Record<string, unknown>;
+    delete input.customerSignaturePath;
+    expect(fieldServiceReportSchema.safeParse(input).success).toBe(false);
+  });
+
+  it('fails on empty customerSignaturePath "" (signature required)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      customerSignaturePath: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("parses optional signatureCapturedAt ISO string", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      signatureCapturedAt: "2026-09-14T10:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.signatureCapturedAt).toBe("2026-09-14T10:00:00.000Z");
+  });
 });
 
 describe("buildFsrPayload", () => {
@@ -659,5 +686,25 @@ describe("buildFsrPayload", () => {
         new_challan: "CH5",
       },
     ]);
+  });
+
+  it("maps customer signature fields to snake_case with null fallback", () => {
+    const withSignature = fieldServiceReportSchema.parse(fullValidInput());
+    const withPayload = buildFsrPayload(withSignature, "ticket-123", {
+      employeeId: "EMP-1",
+      name: "Jane Engineer",
+      phone: "9999999999",
+    }) as Record<string, unknown>;
+    expect(withPayload.customer_signature_path).toBe("signatures/ticket-123.png");
+    expect(withPayload.signature_captured_at).toBe("2026-09-14T10:00:00.000Z");
+
+    const minimal = fieldServiceReportSchema.parse(minimalInput());
+    const minimalPayload = buildFsrPayload(minimal, "ticket-123", {
+      employeeId: "EMP-1",
+      name: "Jane Engineer",
+      phone: "9999999999",
+    }) as Record<string, unknown>;
+    expect(minimalPayload.customer_signature_path).toBe("signatures/ticket-123.png");
+    expect(minimalPayload.signature_captured_at).toBeNull();
   });
 });

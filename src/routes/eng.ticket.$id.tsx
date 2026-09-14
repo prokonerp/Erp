@@ -26,6 +26,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FieldServiceReport } from "@/components/FieldServiceReport";
 import { VerificationStepper } from "@/components/VerificationStepper";
 import { VerificationDiff } from "@/components/VerificationDiff";
+import { VisitTimesBar } from "@/components/eng/VisitTimesBar";
+import { TicketTimeline } from "@/components/eng/TicketTimeline";
 import { useTicketVerifications } from "@/hooks/useTicketVerifications";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import {
@@ -45,9 +47,6 @@ import {
   Upload,
   Loader2,
   MessageCircle,
-  Camera,
-  ShieldCheck,
-  RotateCcw,
   AlertTriangle,
   Check,
   CheckCircle2,
@@ -735,7 +734,7 @@ function EngTicketDetail() {
       <div className="max-w-2xl mx-auto">
         <Card>
           <CardContent className="py-10 text-center space-y-3">
-            <AlertTriangle className="h-10 w-10 mx-auto text-amber-700 dark:text-amber-300" />
+            <AlertTriangle className="h-10 w-10 mx-auto text-amber-700" />
             <p className="font-semibold text-base">Couldn't load this ticket</p>
             <p className="text-[13px] text-muted-foreground">{loadError}</p>
             <Button className="min-h-11" onClick={() => window.location.reload()}>
@@ -759,7 +758,7 @@ function EngTicketDetail() {
         </Link>
         <Card>
           <CardContent className="py-10 text-center space-y-3">
-            <ShieldAlert className="h-10 w-10 mx-auto text-amber-700 dark:text-amber-300" />
+            <ShieldAlert className="h-10 w-10 mx-auto text-amber-700" />
             <p className="font-semibold text-base">Not assigned to you</p>
             <p className="text-sm text-muted-foreground">
               This ticket is assigned to a different engineer. Contact Services for access.
@@ -782,9 +781,12 @@ function EngTicketDetail() {
         <ArrowLeft className="h-4 w-4" /> Back to Queue
       </Link>
 
-      {/* Header */}
-      <Card>
-        <CardContent className="py-4 space-y-3">
+      {/* Header — case id, status/priority, customer + tap-to-call, location, complaint, ack */}
+      <Card className="rounded-xl">
+        <CardContent className="space-y-3 p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Ticket workspace
+          </p>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono font-semibold text-lg">{ticket.case_id}</span>
             {ticket.priority && (
@@ -863,12 +865,12 @@ function EngTicketDetail() {
 
           {ticket.special_instruction && ticket.special_instruction.trim() && (
             <div
-              className={`rounded-md border border-transparent p-4 text-sm ${isSpecialAcked ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}
+              className={`rounded-xl border p-4 text-sm ${isSpecialAcked ? "border-emerald-700/20 bg-emerald-500/10 text-emerald-700" : "border-amber-700/20 bg-amber-500/10 text-amber-700"}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-xs">Special Instructions:</span>
                 {isSpecialAcked ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+                  <span className="inline-flex min-h-[44px] items-center gap-1 text-xs text-emerald-700 font-medium">
                     <CheckCircle2 className="h-4 w-4" /> Acknowledged
                   </span>
                 ) : (
@@ -894,24 +896,28 @@ function EngTicketDetail() {
         </CardContent>
       </Card>
 
-      {/* Verification Stepper */}
-      <div className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      {/* Sticky stepper + visit times */}
+      <div className="sticky top-0 z-20 -mx-4 space-y-3 px-4 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <VerificationStepper
           step1Done={!!verifications?.customer}
           step2Done={!!verifications?.equipment}
           step3Done={(fsrRows?.length ?? 0) > 0}
         />
+        <VisitTimesBar ticketId={id} />
       </div>
 
-      {/* Step 1: Customer Verification */}
-      <Card>
-        <CardContent className="py-4 space-y-3">
-          <h3 className="text-sm font-semibold">1 — Customer Details</h3>
+      {/* Step 1: Customer — numbered section with done state */}
+      <Card className="rounded-xl">
+        <CardContent className="space-y-3 p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Step 1 of 3
+          </p>
+          <h3 className="text-[15px] font-semibold">Customer details</h3>
           {verifLoading ? (
             <CardSkeleton />
           ) : verifications?.customer ? (
             <>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <div className="flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-emerald-700">
                 <Check className="h-4 w-4" aria-hidden />
                 {verifications.customer.verdict === "verified"
                   ? "Customer details verified"
@@ -1187,17 +1193,20 @@ function EngTicketDetail() {
         </CardContent>
       </Card>
 
-      {/* Step 2: Equipment Verification */}
-      <Card>
-        <CardContent className="py-4 space-y-3">
-          <h3 className="text-sm font-semibold">2 — Model / Serial</h3>
+      {/* Step 2: Model / Serial — numbered section with done state */}
+      <Card className="rounded-xl">
+        <CardContent className="space-y-3 p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Step 2 of 3
+          </p>
+          <h3 className="text-[15px] font-semibold">Model / Serial</h3>
           {verifLoading ? (
             <CardSkeleton />
           ) : !canProceedToStep2(verifications?.customer ?? null) ? (
             <p className="text-xs text-muted-foreground">Verify customer first.</p>
           ) : verifications?.equipment ? (
             <>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <div className="flex min-h-[44px] items-center gap-1.5 text-sm font-medium text-emerald-700">
                 <Check className="h-4 w-4" aria-hidden />
                 {verifications.equipment.verdict === "matched"
                   ? "Equipment matched"
@@ -1402,10 +1411,13 @@ function EngTicketDetail() {
         </CardContent>
       </Card>
 
-      {/* Step 3: Field Service Report */}
-      <Card>
-        <CardContent className="py-4 space-y-3">
-          <h3 className="text-sm font-semibold">3 — Field Service Report</h3>
+      {/* Step 3: Work — numbered section */}
+      <Card className="rounded-xl">
+        <CardContent className="space-y-3 p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Step 3 of 3
+          </p>
+          <h3 className="text-[15px] font-semibold">Field Service Report</h3>
           {verifLoading ? (
             <CardSkeleton />
           ) : !canProceedToWork(
@@ -1419,11 +1431,14 @@ function EngTicketDetail() {
         </CardContent>
       </Card>
 
-      {/* Add Note — gated */}
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <h3 className="text-sm font-semibold flex items-center gap-1.5">
-            <MessageCircle className="h-4 w-4" /> Add Note
+      {/* Activity composer — notes + photo merged, gated */}
+      <Card className="rounded-xl">
+        <CardContent className="space-y-3 p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Field update
+          </p>
+          <h3 className="text-[15px] font-semibold flex items-center gap-1.5">
+            <MessageCircle className="h-4 w-4" /> Activity composer
           </h3>
           {verifLoading ? (
             <CardSkeleton />
@@ -1434,132 +1449,71 @@ function EngTicketDetail() {
             <p className="text-xs text-muted-foreground">Complete verification first.</p>
           ) : (
             <>
-              <Textarea
-                placeholder="Type a note…"
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                rows={3}
-                disabled={noteBusy}
-              />
-              <Button
-                size="sm"
-                className="min-h-[44px]"
-                disabled={!noteText.trim() || noteBusy}
-                onClick={addNote}
-              >
-                {noteBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                Add Note
-              </Button>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Photo Upload — gated */}
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <h3 className="text-sm font-semibold flex items-center gap-1.5">
-            <Upload className="h-4 w-4" /> Upload Photo
-          </h3>
-          {verifLoading ? (
-            <CardSkeleton />
-          ) : !canProceedToWork(
-              verifications?.customer ?? null,
-              verifications?.equipment ?? null,
-            ) ? (
-            <p className="text-xs text-muted-foreground">Complete verification first.</p>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground">Max 2 MB · JPEG, PNG, WebP, HEIC</p>
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handlePhotoUpload}
+              <div className="space-y-3">
+                <Textarea
+                  placeholder="Type a note…"
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  rows={3}
+                  disabled={noteBusy}
                 />
                 <Button
-                  variant="outline"
                   size="sm"
-                  className="min-h-[44px] min-w-[160px]"
-                  disabled={photoBusy}
-                  onClick={() => fileInputRef.current?.click()}
+                  className="min-h-[44px]"
+                  disabled={!noteText.trim() || noteBusy}
+                  onClick={addNote}
                 >
-                  {photoBusy ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                  ) : (
-                    <Upload className="h-4 w-4 mr-1" />
-                  )}
-                  Choose Photo
+                  {noteBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Add Note
                 </Button>
-                {photoProgress && <p className="text-xs text-muted-foreground">{photoProgress}</p>}
+              </div>
+              <div className="border-t border-border pt-3 space-y-3">
+                <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                  <Upload className="h-4 w-4" /> Upload Photo
+                </h4>
+                <p className="text-xs text-muted-foreground">Max 2 MB · JPEG, PNG, WebP, HEIC</p>
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="min-h-[44px] min-w-[160px]"
+                    disabled={photoBusy}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {photoBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-1" />
+                    )}
+                    Choose Photo
+                  </Button>
+                  {photoProgress && (
+                    <p className="text-xs text-muted-foreground">{photoProgress}</p>
+                  )}
+                </div>
               </div>
             </>
           )}
         </CardContent>
       </Card>
 
-      {/* Activity Timeline */}
-      {activities.length > 0 && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <h3 className="text-sm font-semibold">Activity</h3>
-            {activities.map((a) => (
-              <div key={a.id} className="border-l-2 border-muted pl-3 py-1">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  {activityIcon(a.kind)}
-                  <span className="font-medium">{VERIFY_LABEL[a.kind] ?? a.kind}</span>
-                  <span>{formatTime(a.created_at)}</span>
-                </div>
-                {a.notes && (
-                  <p className="text-sm mt-1 whitespace-pre-wrap">{formatNoteBody(a.notes)}</p>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      {/* Activity timeline via shared component (arrival/departure/signature icons + labels built in) */}
+      <TicketTimeline
+        activities={activities.map((a) => ({
+          id: a.id,
+          kind: a.kind,
+          createdAt: a.created_at,
+          message: a.notes,
+          actor: a.actor,
+        }))}
+      />
     </div>
   );
-}
-
-const VERIFY_LABEL: Record<string, string> = {
-  customer_verify: "Customer verification",
-  equipment_verify: "Equipment verification",
-  photo: "Photo",
-  note: "Note",
-  acknowledge: "Instruction acknowledged",
-};
-
-function activityIcon(kind: string) {
-  switch (kind) {
-    case "note":
-      return <MessageCircle className="h-3 w-3" />;
-    case "photo":
-      return <Camera className="h-3 w-3" />;
-    case "customer_verify":
-    case "equipment_verify":
-      return <ShieldCheck className="h-3 w-3" />;
-    case "acknowledge":
-      return <CheckCircle2 className="h-3 w-3" />;
-    case "reset":
-      return <RotateCcw className="h-3 w-3" />;
-    default:
-      return <MessageCircle className="h-3 w-3" />;
-  }
-}
-
-function formatNoteBody(body: string): string {
-  return body.replace(
-    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/g,
-    (m) => formatTime(m) || m,
-  );
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

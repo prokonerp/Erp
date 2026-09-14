@@ -117,7 +117,13 @@ export const fieldServiceReportSchema = readingsSchema
   .merge(loadRecordSchema)
   .merge(powerConditionSchema)
   .merge(z.object({ frontIndication: frontIndicationSchema }))
-  .merge(z.object({ partReplacements: partReplacementsSchema }));
+  .merge(z.object({ partReplacements: partReplacementsSchema }))
+  .merge(
+    z.object({
+      customerSignaturePath: z.string().min(1, "Customer signature is required"),
+      signatureCapturedAt: z.preprocess(emptyToUndefined, z.string().datetime().optional()),
+    }),
+  );
 
 export type FieldServiceReportInput = z.infer<typeof fieldServiceReportSchema>;
 
@@ -162,6 +168,8 @@ export type FieldServiceReportPayload = {
   engineer_employee_id: string | null;
   engineer_name: string;
   engineer_phone: string | null;
+  customer_signature_path: string;
+  signature_captured_at: string | null;
   part_replacements: {
     item: string | null;
     old_sr_no: string | null;
@@ -232,6 +240,8 @@ export function buildFsrPayload(
     engineer_employee_id: engineer.employeeId ?? null,
     engineer_name: engineer.name,
     engineer_phone: engineer.phone ?? null,
+    customer_signature_path: input.customerSignaturePath,
+    signature_captured_at: input.signatureCapturedAt ?? null,
     part_replacements: input.partReplacements.map((p) => ({
       item: p.item ?? null,
       old_sr_no: p.oldSrNo ?? null,

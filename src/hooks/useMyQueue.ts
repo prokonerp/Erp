@@ -94,7 +94,7 @@ export function useMyQueue() {
     queryKey: ["eng", "queue", uid] as const,
     enabled: !!uid,
     staleTime: 30_000,
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     queryFn: async (): Promise<QueueTicket[]> => {
       if (!uid) return [];

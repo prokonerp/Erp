@@ -17,6 +17,7 @@ import { Ticket, User, LogOut } from "lucide-react";
 import { getMyProfile } from "@/lib/admin-users.functions";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
+import { useMyEmployee } from "@/hooks/useMyEmployee";
 
 export const Route = createFileRoute("/eng")({
   component: EngLayout,
@@ -58,6 +59,9 @@ function EngLayout() {
     return () => window.removeEventListener("eng:password-change-required", handler);
   }, []);
 
+  // Identity for header (unconditional — hooks rule; safe while loading, fail-soft null)
+  const { employee, initials } = useMyEmployee();
+
   if (authLoading || roleLoading) {
     return <PageLoader label="Loading engineer portal…" />;
   }
@@ -87,21 +91,28 @@ function EngLayout() {
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + "/");
 
+  const displayName = employee?.name?.trim() || session.user?.email?.split("@")[0] || "Engineer";
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <header className="sticky top-0 z-30 h-14 shrink-0 border-b bg-white/95 backdrop-blur flex items-center gap-2.5 px-4">
+      <header className="sticky top-0 z-30 min-h-[44px] shrink-0 border-b border-border bg-card/95 backdrop-blur flex items-center gap-2.5 px-4 py-2">
         <span
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary text-sm font-bold text-primary-foreground"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground"
           aria-hidden="true"
         >
-          P
+          {initials || "E"}
         </span>
-        <h1 className="text-sm font-semibold text-foreground">Engineer Portal</h1>
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Engineer Portal
+          </p>
+          <p className="truncate text-sm font-semibold text-foreground">{displayName}</p>
+        </div>
         <button
           onClick={handleLogout}
           aria-label="Log out"
           title="Log out"
-          className="ml-auto grid min-h-[44px] min-w-[44px] place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="ml-auto grid min-h-[44px] min-w-[44px] place-items-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <LogOut className="h-5 w-5" />
         </button>
@@ -111,7 +122,10 @@ function EngLayout() {
         <Outlet />
       </main>
 
-      <nav className="sticky bottom-0 border-t bg-background flex items-center justify-around min-h-14 shrink-0 pb-safe print:hidden">
+      <nav
+        className="sticky bottom-0 border-t border-border bg-card flex items-center justify-around min-h-[44px] shrink-0 pb-safe print:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         {TABS.map((tab) => {
           const active = isActive(tab.to);
           return (
@@ -119,7 +133,7 @@ function EngLayout() {
               key={tab.to}
               to={tab.to}
               aria-current={active ? "page" : undefined}
-              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 text-xs font-medium px-4 py-1.5 rounded-md transition-colors ${
+              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 text-xs font-medium px-4 py-1.5 rounded-xl transition-colors ${
                 active ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >

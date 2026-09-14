@@ -9,6 +9,10 @@ import {
   sortEngineersLoginFirst,
 } from "@/lib/eng-queue-utils";
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("priorityWeight", () => {
   it("returns 1 for P1", () => expect(priorityWeight("P1")).toBe(1));
   it("returns 5 for P5", () => expect(priorityWeight("P5")).toBe(5));
@@ -34,6 +38,23 @@ describe("isToday", () => {
     const yesterday = new Date(Date.now() - 86_400_000).toISOString();
     const today = new Date().toISOString();
     expect(isToday(yesterday, today)).toBe(true);
+  });
+  it("treats 00:30 IST as today IST (not carry-forward)", () => {
+    // 08:30 IST on 2026-09-14; 00:30 IST same calendar day must be today.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-14T03:00:00Z"));
+    expect(isToday("2026-09-14T00:30:00+05:30")).toBe(true);
+  });
+  it("treats 2026-09-13T23:30:00Z as today IST (05:00 IST Sep 14)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-14T03:00:00Z"));
+    expect(isToday("2026-09-13T23:30:00Z")).toBe(true);
+  });
+  it("treats late-night Sep 13 IST as not today IST", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-14T03:00:00Z"));
+    // 2026-09-13T18:00:00Z = 23:30 IST Sep 13 → yesterday IST.
+    expect(isToday("2026-09-13T18:00:00Z")).toBe(false);
   });
 });
 
@@ -71,6 +92,10 @@ describe("matchesSearch", () => {
 });
 
 describe("formatAge", () => {
+  it('returns "Just now" for < 60s', () => {
+    const thirtySecAgo = new Date(Date.now() - 30_000).toISOString();
+    expect(formatAge(thirtySecAgo)).toBe("Just now");
+  });
   it("shows minutes for < 1 hour", () => {
     const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
     const result = formatAge(thirtyMinAgo);
