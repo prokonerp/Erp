@@ -5164,26 +5164,14 @@ export type Database = {
           ticket_id: string
           mains_voltage_ln: number
           mains_voltage_ne: number
-          batt1_charge_vdc: number | null
-          batt2_charge_vdc: number | null
-          batt1_discharge_vdc: number | null
-          batt2_discharge_vdc: number | null
+          battery_readings: Json
           ac_provided: boolean
           dg_provided: boolean
           environment_duty: boolean
           ups_location: string
-          pc_monitor_size_in_1: number | null
-          pc_qty_1: number | null
-          pc_monitor_size_in_2: number | null
-          pc_qty_2: number | null
-          printer_rating_w_1: number | null
-          printer_qty_1: number | null
-          printer_rating_w_2: number | null
-          printer_qty_2: number | null
-          scanner_rating_w_1: number | null
-          scanner_qty_1: number | null
-          scanner_rating_w_2: number | null
-          scanner_qty_2: number | null
+          pc_details: Json
+          printer_details: Json
+          scanner_details: Json
           power_failures_count: number | null
           power_failures_duration_min: number | null
           load_on_dg_percent: number | null
@@ -5204,26 +5192,14 @@ export type Database = {
           ticket_id: string
           mains_voltage_ln: number
           mains_voltage_ne: number
-          batt1_charge_vdc?: number | null
-          batt2_charge_vdc?: number | null
-          batt1_discharge_vdc?: number | null
-          batt2_discharge_vdc?: number | null
+          battery_readings?: Json
           ac_provided?: boolean
           dg_provided?: boolean
           environment_duty?: boolean
           ups_location: string
-          pc_monitor_size_in_1?: number | null
-          pc_qty_1?: number | null
-          pc_monitor_size_in_2?: number | null
-          pc_qty_2?: number | null
-          printer_rating_w_1?: number | null
-          printer_qty_1?: number | null
-          printer_rating_w_2?: number | null
-          printer_qty_2?: number | null
-          scanner_rating_w_1?: number | null
-          scanner_qty_1?: number | null
-          scanner_rating_w_2?: number | null
-          scanner_qty_2?: number | null
+          pc_details?: Json
+          printer_details?: Json
+          scanner_details?: Json
           power_failures_count?: number | null
           power_failures_duration_min?: number | null
           load_on_dg_percent?: number | null
@@ -5244,26 +5220,14 @@ export type Database = {
           ticket_id?: string
           mains_voltage_ln?: number | null
           mains_voltage_ne?: number | null
-          batt1_charge_vdc?: number | null
-          batt2_charge_vdc?: number | null
-          batt1_discharge_vdc?: number | null
-          batt2_discharge_vdc?: number | null
+          battery_readings?: Json
           ac_provided?: boolean
           dg_provided?: boolean
           environment_duty?: boolean
           ups_location?: string
-          pc_monitor_size_in_1?: number | null
-          pc_qty_1?: number | null
-          pc_monitor_size_in_2?: number | null
-          pc_qty_2?: number | null
-          printer_rating_w_1?: number | null
-          printer_qty_1?: number | null
-          printer_rating_w_2?: number | null
-          printer_qty_2?: number | null
-          scanner_rating_w_1?: number | null
-          scanner_qty_1?: number | null
-          scanner_rating_w_2?: number | null
-          scanner_qty_2?: number | null
+          pc_details?: Json
+          printer_details?: Json
+          scanner_details?: Json
           power_failures_count?: number | null
           power_failures_duration_min?: number | null
           load_on_dg_percent?: number | null

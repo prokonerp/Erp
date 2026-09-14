@@ -75,6 +75,14 @@ import { resetTicketEngineerWork } from "@/lib/reset-ticket-engineer.functions";
 import { Eye } from "lucide-react";
 import { RotateCcw } from "lucide-react";
 
+type FsrBattery = { charge_vdc: number | null; discharge_vdc: number | null };
+type FsrPc = { monitor_size_in: number | null; qty: number | null };
+type FsrWattQty = { rating_w: number | null; qty: number | null };
+
+function asFsrArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 export const Route = createFileRoute("/_app/tickets/$id")({
   component: TicketDetail,
 });
@@ -1885,22 +1893,29 @@ function TicketDetail() {
                       <span className="text-muted-foreground">Mains voltage N-E (VAC)</span>
                       <span className="font-medium">{fsrLatest.mains_voltage_ne ?? "—"}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Battery 1 charging (Vdc)</span>
-                      <span className="font-medium">{fsrLatest.batt1_charge_vdc ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Battery 2 charging (Vdc)</span>
-                      <span className="font-medium">{fsrLatest.batt2_charge_vdc ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Battery 1 discharging (Vdc)</span>
-                      <span className="font-medium">{fsrLatest.batt1_discharge_vdc ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Battery 2 discharging (Vdc)</span>
-                      <span className="font-medium">{fsrLatest.batt2_discharge_vdc ?? "—"}</span>
-                    </div>
+                    {(() => {
+                      const batteries = asFsrArray<FsrBattery>(fsrLatest.battery_readings);
+                      if (batteries.length === 0) {
+                        return (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Batteries</span>
+                            <span className="font-medium">—</span>
+                          </div>
+                        );
+                      }
+                      return batteries.map((b, i) => (
+                        <div
+                          key={`batt-${i}`}
+                          className="flex items-center justify-between gap-2 text-xs"
+                        >
+                          <span className="text-muted-foreground">Battery {i + 1}</span>
+                          <span className="font-medium">
+                            Charging: {b?.charge_vdc ?? "—"} Vdc / Discharging:{" "}
+                            {b?.discharge_vdc ?? "—"} Vdc
+                          </span>
+                        </div>
+                      ));
+                    })()}
                   </div>
                   <div className="space-y-1">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1937,50 +1952,78 @@ function TicketDetail() {
                       <span className="text-muted-foreground">UPS location</span>
                       <span className="font-medium">{fsrLatest.ups_location ?? "—"}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">PC row 1 — monitor (in) / qty</span>
-                      <span className="font-medium">
-                        {fsrLatest.pc_monitor_size_in_1 ?? "—"} / {fsrLatest.pc_qty_1 ?? "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">PC row 2 — monitor (in) / qty</span>
-                      <span className="font-medium">
-                        {fsrLatest.pc_monitor_size_in_2 ?? "—"} / {fsrLatest.pc_qty_2 ?? "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">
-                        Printer row 1 — rating (W) / qty
-                      </span>
-                      <span className="font-medium">
-                        {fsrLatest.printer_rating_w_1 ?? "—"} / {fsrLatest.printer_qty_1 ?? "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">
-                        Printer row 2 — rating (W) / qty
-                      </span>
-                      <span className="font-medium">
-                        {fsrLatest.printer_rating_w_2 ?? "—"} / {fsrLatest.printer_qty_2 ?? "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">
-                        Scanner row 1 — rating (W) / qty
-                      </span>
-                      <span className="font-medium">
-                        {fsrLatest.scanner_rating_w_1 ?? "—"} / {fsrLatest.scanner_qty_1 ?? "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">
-                        Scanner row 2 — rating (W) / qty
-                      </span>
-                      <span className="font-medium">
-                        {fsrLatest.scanner_rating_w_2 ?? "—"} / {fsrLatest.scanner_qty_2 ?? "—"}
-                      </span>
-                    </div>
+                    {(() => {
+                      const pcs = asFsrArray<FsrPc>(fsrLatest.pc_details);
+                      if (pcs.length === 0) {
+                        return (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">PCs</span>
+                            <span className="font-medium">None</span>
+                          </div>
+                        );
+                      }
+                      return pcs.map((p, i) => (
+                        <div
+                          key={`pc-${i}`}
+                          className="flex items-center justify-between gap-2 text-xs"
+                        >
+                          <span className="text-muted-foreground">
+                            {i === 0 ? `PCs (${pcs.length})` : `PC ${i + 1}`}
+                          </span>
+                          <span className="font-medium">
+                            {p?.monitor_size_in ?? "—"}″ × {p?.qty ?? "—"}
+                          </span>
+                        </div>
+                      ));
+                    })()}
+                    {(() => {
+                      const printers = asFsrArray<FsrWattQty>(fsrLatest.printer_details);
+                      if (printers.length === 0) {
+                        return (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Printers</span>
+                            <span className="font-medium">None</span>
+                          </div>
+                        );
+                      }
+                      return printers.map((p, i) => (
+                        <div
+                          key={`printer-${i}`}
+                          className="flex items-center justify-between gap-2 text-xs"
+                        >
+                          <span className="text-muted-foreground">
+                            {i === 0 ? `Printers (${printers.length})` : `Printer ${i + 1}`}
+                          </span>
+                          <span className="font-medium">
+                            {p?.rating_w ?? "—"} W × {p?.qty ?? "—"}
+                          </span>
+                        </div>
+                      ));
+                    })()}
+                    {(() => {
+                      const scanners = asFsrArray<FsrWattQty>(fsrLatest.scanner_details);
+                      if (scanners.length === 0) {
+                        return (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Scanners</span>
+                            <span className="font-medium">None</span>
+                          </div>
+                        );
+                      }
+                      return scanners.map((s, i) => (
+                        <div
+                          key={`scanner-${i}`}
+                          className="flex items-center justify-between gap-2 text-xs"
+                        >
+                          <span className="text-muted-foreground">
+                            {i === 0 ? `Scanners (${scanners.length})` : `Scanner ${i + 1}`}
+                          </span>
+                          <span className="font-medium">
+                            {s?.rating_w ?? "—"} W × {s?.qty ?? "—"}
+                          </span>
+                        </div>
+                      ));
+                    })()}
                   </div>
                   <div className="space-y-1">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

@@ -13,27 +13,20 @@ CREATE TABLE IF NOT EXISTS public.field_service_reports (
   -- Phase 1 readings (app enforces required; mains voltages NOT NULL):
   mains_voltage_ln numeric NOT NULL,
   mains_voltage_ne numeric NOT NULL,
-  batt1_charge_vdc numeric,
-  batt2_charge_vdc numeric,
-  batt1_discharge_vdc numeric,
-  batt2_discharge_vdc numeric,
+  -- Dynamic battery records: [{charge_vdc, discharge_vdc}, ...] (count = array length, 0 = none)
+  battery_readings jsonb NOT NULL DEFAULT '[]'::jsonb,
   -- Phase 2 load record:
   ac_provided boolean NOT NULL DEFAULT false,
   dg_provided boolean NOT NULL DEFAULT false,
   environment_duty boolean NOT NULL DEFAULT false,
   ups_location text NOT NULL CHECK (ups_location IN ('Computer Room', 'Electrical Room', 'Network Room', 'Other')),
-  pc_monitor_size_in_1 numeric,
-  pc_qty_1 integer,
-  pc_monitor_size_in_2 numeric,
-  pc_qty_2 integer,
-  printer_rating_w_1 integer,
-  printer_qty_1 integer,
-  printer_rating_w_2 integer,
-  printer_qty_2 integer,
-  scanner_rating_w_1 integer,
-  scanner_qty_1 integer,
-  scanner_rating_w_2 integer,
-  scanner_qty_2 integer,
+  -- Dynamic device records (0..N rows; empty array = none at site):
+  -- pc_details: [{monitor_size_in, qty}, ...]
+  pc_details jsonb NOT NULL DEFAULT '[]'::jsonb,
+  -- printer_details: [{rating_w, qty}, ...]
+  printer_details jsonb NOT NULL DEFAULT '[]'::jsonb,
+  -- scanner_details: [{rating_w, qty}, ...]
+  scanner_details jsonb NOT NULL DEFAULT '[]'::jsonb,
   -- Phase 3 power condition:
   power_failures_count integer,
   power_failures_duration_min numeric,

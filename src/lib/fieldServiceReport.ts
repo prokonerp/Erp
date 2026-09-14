@@ -20,13 +20,31 @@ const optionalNonNegativeInt = z.preprocess(
 const requiredPositiveNumber = (message: string) =>
   z.preprocess(emptyToUndefined, z.coerce.number({ error: message }).positive(message));
 
+export const batteryReadingSchema = z.object({
+  chargeVdc: optionalNonNegativeNumber,
+  dischargeVdc: optionalNonNegativeNumber,
+});
+export const pcPairSchema = z.object({
+  monitorSizeIn: optionalNonNegativeNumber,
+  qty: optionalNonNegativeInt,
+});
+export const printerPairSchema = z.object({
+  ratingW: optionalNonNegativeInt,
+  qty: optionalNonNegativeInt,
+});
+export const scannerPairSchema = z.object({
+  ratingW: optionalNonNegativeInt,
+  qty: optionalNonNegativeInt,
+});
+const batteryReadingsSchema = z.array(batteryReadingSchema).max(20);
+const pcDetailsSchema = z.array(pcPairSchema).max(20);
+const printerDetailsSchema = z.array(printerPairSchema).max(20);
+const scannerDetailsSchema = z.array(scannerPairSchema).max(20);
+
 export const readingsSchema = z.object({
   mainsVoltageLn: requiredPositiveNumber("Voltage L-N must be a number greater than 0"),
   mainsVoltageNe: requiredPositiveNumber("Voltage N-E must be a number greater than 0"),
-  batt1ChargeVdc: optionalNonNegativeNumber,
-  batt2ChargeVdc: optionalNonNegativeNumber,
-  batt1DischargeVdc: optionalNonNegativeNumber,
-  batt2DischargeVdc: optionalNonNegativeNumber,
+  batteryReadings: batteryReadingsSchema,
 });
 
 export const loadRecordSchema = z.object({
@@ -34,18 +52,9 @@ export const loadRecordSchema = z.object({
   dgProvided: z.boolean().default(false),
   environmentDuty: z.boolean().default(false),
   upsLocation: z.enum(UPS_LOCATIONS),
-  pcMonitorSizeIn1: optionalNonNegativeNumber,
-  pcQty1: optionalNonNegativeInt,
-  pcMonitorSizeIn2: optionalNonNegativeNumber,
-  pcQty2: optionalNonNegativeInt,
-  printerRatingW1: optionalNonNegativeInt,
-  printerQty1: optionalNonNegativeInt,
-  printerRatingW2: optionalNonNegativeInt,
-  printerQty2: optionalNonNegativeInt,
-  scannerRatingW1: optionalNonNegativeInt,
-  scannerQty1: optionalNonNegativeInt,
-  scannerRatingW2: optionalNonNegativeInt,
-  scannerQty2: optionalNonNegativeInt,
+  pcDetails: pcDetailsSchema,
+  printerDetails: printerDetailsSchema,
+  scannerDetails: scannerDetailsSchema,
 });
 
 export const powerConditionSchema = z.object({
@@ -75,26 +84,14 @@ export type FieldServiceReportPayload = {
   ticket_id: string;
   mains_voltage_ln: number;
   mains_voltage_ne: number;
-  batt1_charge_vdc: number | null;
-  batt2_charge_vdc: number | null;
-  batt1_discharge_vdc: number | null;
-  batt2_discharge_vdc: number | null;
+  battery_readings: { charge_vdc: number | null; discharge_vdc: number | null }[];
   ac_provided: boolean;
   dg_provided: boolean;
   environment_duty: boolean;
   ups_location: (typeof UPS_LOCATIONS)[number];
-  pc_monitor_size_in_1: number | null;
-  pc_qty_1: number | null;
-  pc_monitor_size_in_2: number | null;
-  pc_qty_2: number | null;
-  printer_rating_w_1: number | null;
-  printer_qty_1: number | null;
-  printer_rating_w_2: number | null;
-  printer_qty_2: number | null;
-  scanner_rating_w_1: number | null;
-  scanner_qty_1: number | null;
-  scanner_rating_w_2: number | null;
-  scanner_qty_2: number | null;
+  pc_details: { monitor_size_in: number | null; qty: number | null }[];
+  printer_details: { rating_w: number | null; qty: number | null }[];
+  scanner_details: { rating_w: number | null; qty: number | null }[];
   power_failures_count: number | null;
   power_failures_duration_min: number | null;
   load_on_dg_percent: number | null;
@@ -117,26 +114,26 @@ export function buildFsrPayload(
     ticket_id: ticketId,
     mains_voltage_ln: input.mainsVoltageLn,
     mains_voltage_ne: input.mainsVoltageNe,
-    batt1_charge_vdc: input.batt1ChargeVdc ?? null,
-    batt2_charge_vdc: input.batt2ChargeVdc ?? null,
-    batt1_discharge_vdc: input.batt1DischargeVdc ?? null,
-    batt2_discharge_vdc: input.batt2DischargeVdc ?? null,
+    battery_readings: input.batteryReadings.map((b) => ({
+      charge_vdc: b.chargeVdc ?? null,
+      discharge_vdc: b.dischargeVdc ?? null,
+    })),
     ac_provided: input.acProvided ?? false,
     dg_provided: input.dgProvided ?? false,
     environment_duty: input.environmentDuty ?? false,
     ups_location: input.upsLocation,
-    pc_monitor_size_in_1: input.pcMonitorSizeIn1 ?? null,
-    pc_qty_1: input.pcQty1 ?? null,
-    pc_monitor_size_in_2: input.pcMonitorSizeIn2 ?? null,
-    pc_qty_2: input.pcQty2 ?? null,
-    printer_rating_w_1: input.printerRatingW1 ?? null,
-    printer_qty_1: input.printerQty1 ?? null,
-    printer_rating_w_2: input.printerRatingW2 ?? null,
-    printer_qty_2: input.printerQty2 ?? null,
-    scanner_rating_w_1: input.scannerRatingW1 ?? null,
-    scanner_qty_1: input.scannerQty1 ?? null,
-    scanner_rating_w_2: input.scannerRatingW2 ?? null,
-    scanner_qty_2: input.scannerQty2 ?? null,
+    pc_details: input.pcDetails.map((p) => ({
+      monitor_size_in: p.monitorSizeIn ?? null,
+      qty: p.qty ?? null,
+    })),
+    printer_details: input.printerDetails.map((p) => ({
+      rating_w: p.ratingW ?? null,
+      qty: p.qty ?? null,
+    })),
+    scanner_details: input.scannerDetails.map((s) => ({
+      rating_w: s.ratingW ?? null,
+      qty: s.qty ?? null,
+    })),
     power_failures_count: input.powerFailuresCount ?? null,
     power_failures_duration_min: input.powerFailuresDurationMin ?? null,
     load_on_dg_percent: input.loadOnDgPercent ?? null,

@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   UPS_LOCATIONS,
@@ -26,29 +26,22 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FieldRow } from "./CustomerForm";
 
+type BatteryReading = { chargeVdc: string; dischargeVdc: string };
+type PcDetail = { monitorSizeIn: string; qty: string };
+type PrinterDetail = { ratingW: string; qty: string };
+type ScannerDetail = { ratingW: string; qty: string };
+
 type FormState = {
   mainsVoltageLn: string;
   mainsVoltageNe: string;
-  batt1ChargeVdc: string;
-  batt2ChargeVdc: string;
-  batt1DischargeVdc: string;
-  batt2DischargeVdc: string;
+  batteryReadings: BatteryReading[];
   acProvided: boolean;
   dgProvided: boolean;
   environmentDuty: boolean;
   upsLocation: string;
-  pcMonitorSizeIn1: string;
-  pcQty1: string;
-  pcMonitorSizeIn2: string;
-  pcQty2: string;
-  printerRatingW1: string;
-  printerQty1: string;
-  printerRatingW2: string;
-  printerQty2: string;
-  scannerRatingW1: string;
-  scannerQty1: string;
-  scannerRatingW2: string;
-  scannerQty2: string;
+  pcDetails: PcDetail[];
+  printerDetails: PrinterDetail[];
+  scannerDetails: ScannerDetail[];
   powerFailuresCount: string;
   powerFailuresDurationMin: string;
   loadOnDgPercent: string;
@@ -62,26 +55,14 @@ type FormState = {
 const initialForm: FormState = {
   mainsVoltageLn: "",
   mainsVoltageNe: "",
-  batt1ChargeVdc: "",
-  batt2ChargeVdc: "",
-  batt1DischargeVdc: "",
-  batt2DischargeVdc: "",
+  batteryReadings: [],
   acProvided: false,
   dgProvided: false,
   environmentDuty: false,
   upsLocation: "",
-  pcMonitorSizeIn1: "",
-  pcQty1: "",
-  pcMonitorSizeIn2: "",
-  pcQty2: "",
-  printerRatingW1: "",
-  printerQty1: "",
-  printerRatingW2: "",
-  printerQty2: "",
-  scannerRatingW1: "",
-  scannerQty1: "",
-  scannerRatingW2: "",
-  scannerQty2: "",
+  pcDetails: [],
+  printerDetails: [],
+  scannerDetails: [],
   powerFailuresCount: "",
   powerFailuresDurationMin: "",
   loadOnDgPercent: "",
@@ -202,31 +183,70 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
 
   const set = (k: keyof FormState, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
+  const setBatteryCount = (v: string) => {
+    if (v === "") {
+      setForm((f) => ({ ...f, batteryReadings: [] }));
+      return;
+    }
+    if (!/^\d+$/.test(v)) return;
+    const n = parseInt(v, 10);
+    if (n < 0 || n > 20) return;
+    setForm((f) => {
+      const next = [...f.batteryReadings];
+      while (next.length < n) next.push({ chargeVdc: "", dischargeVdc: "" });
+      return { ...f, batteryReadings: next.slice(0, n) };
+    });
+  };
+
+  const setReading = (i: number, k: keyof BatteryReading, v: string) =>
+    setForm((f) => ({
+      ...f,
+      batteryReadings: f.batteryReadings.map((r, j) => (j === i ? { ...r, [k]: v } : r)),
+    }));
+
+  const addPc = () =>
+    setForm((f) => ({ ...f, pcDetails: [...f.pcDetails, { monitorSizeIn: "", qty: "" }] }));
+  const removePc = (i: number) =>
+    setForm((f) => ({ ...f, pcDetails: f.pcDetails.filter((_, j) => j !== i) }));
+  const setPc = (i: number, k: keyof PcDetail, v: string) =>
+    setForm((f) => ({
+      ...f,
+      pcDetails: f.pcDetails.map((r, j) => (j === i ? { ...r, [k]: v } : r)),
+    }));
+
+  const addPrinter = () =>
+    setForm((f) => ({ ...f, printerDetails: [...f.printerDetails, { ratingW: "", qty: "" }] }));
+  const removePrinter = (i: number) =>
+    setForm((f) => ({ ...f, printerDetails: f.printerDetails.filter((_, j) => j !== i) }));
+  const setPrinter = (i: number, k: keyof PrinterDetail, v: string) =>
+    setForm((f) => ({
+      ...f,
+      printerDetails: f.printerDetails.map((r, j) => (j === i ? { ...r, [k]: v } : r)),
+    }));
+
+  const addScanner = () =>
+    setForm((f) => ({ ...f, scannerDetails: [...f.scannerDetails, { ratingW: "", qty: "" }] }));
+  const removeScanner = (i: number) =>
+    setForm((f) => ({ ...f, scannerDetails: f.scannerDetails.filter((_, j) => j !== i) }));
+  const setScanner = (i: number, k: keyof ScannerDetail, v: string) =>
+    setForm((f) => ({
+      ...f,
+      scannerDetails: f.scannerDetails.map((r, j) => (j === i ? { ...r, [k]: v } : r)),
+    }));
+
   const readingsValid = readingsSchema.safeParse({
     mainsVoltageLn: form.mainsVoltageLn,
     mainsVoltageNe: form.mainsVoltageNe,
-    batt1ChargeVdc: form.batt1ChargeVdc,
-    batt2ChargeVdc: form.batt2ChargeVdc,
-    batt1DischargeVdc: form.batt1DischargeVdc,
-    batt2DischargeVdc: form.batt2DischargeVdc,
+    batteryReadings: form.batteryReadings,
   }).success;
   const loadValid = loadRecordSchema.safeParse({
     acProvided: form.acProvided,
     dgProvided: form.dgProvided,
     environmentDuty: form.environmentDuty,
     upsLocation: form.upsLocation,
-    pcMonitorSizeIn1: form.pcMonitorSizeIn1,
-    pcQty1: form.pcQty1,
-    pcMonitorSizeIn2: form.pcMonitorSizeIn2,
-    pcQty2: form.pcQty2,
-    printerRatingW1: form.printerRatingW1,
-    printerQty1: form.printerQty1,
-    printerRatingW2: form.printerRatingW2,
-    printerQty2: form.printerQty2,
-    scannerRatingW1: form.scannerRatingW1,
-    scannerQty1: form.scannerQty1,
-    scannerRatingW2: form.scannerRatingW2,
-    scannerQty2: form.scannerQty2,
+    pcDetails: form.pcDetails,
+    printerDetails: form.printerDetails,
+    scannerDetails: form.scannerDetails,
   }).success;
   const powerValid = powerConditionSchema.safeParse({
     powerFailuresCount: form.powerFailuresCount,
@@ -246,7 +266,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     if (!parsed.success) {
       const errs: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
-        const key = String(issue.path[0] ?? "");
+        const key = issue.path.join(".");
         if (key && !errs[key]) errs[key] = issue.message;
       }
       setErrors(errs);
@@ -335,38 +355,37 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 error={errors.mainsVoltageNe}
               />
             </FieldRow>
-            <FieldRow label="Battery One Voltage during Charging (Vdc)">
+            <FieldRow label="No. of Batteries">
               <NumInput
-                value={form.batt1ChargeVdc}
-                onChange={(v) => set("batt1ChargeVdc", v)}
-                placeholder="Voltage reading"
-                error={errors.batt1ChargeVdc}
+                value={String(form.batteryReadings.length)}
+                onChange={setBatteryCount}
+                placeholder="0"
               />
             </FieldRow>
-            <FieldRow label="Battery Two Voltage during Charging (Vdc)">
-              <NumInput
-                value={form.batt2ChargeVdc}
-                onChange={(v) => set("batt2ChargeVdc", v)}
-                placeholder="Voltage reading"
-                error={errors.batt2ChargeVdc}
-              />
-            </FieldRow>
-            <FieldRow label="Battery One Voltage during Discharging (Vdc)">
-              <NumInput
-                value={form.batt1DischargeVdc}
-                onChange={(v) => set("batt1DischargeVdc", v)}
-                placeholder="Voltage reading"
-                error={errors.batt1DischargeVdc}
-              />
-            </FieldRow>
-            <FieldRow label="Battery Two Voltage during Discharging (Vdc)">
-              <NumInput
-                value={form.batt2DischargeVdc}
-                onChange={(v) => set("batt2DischargeVdc", v)}
-                placeholder="Voltage reading"
-                error={errors.batt2DischargeVdc}
-              />
-            </FieldRow>
+            {form.batteryReadings.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">
+                No batteries recorded — enter a count above.
+              </p>
+            ) : (
+              form.batteryReadings.map((reading, i) => (
+                <FieldRow key={i} label={`Battery ${i + 1} — Charging / Discharging (Vdc)`}>
+                  <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
+                    <NumInput
+                      value={reading.chargeVdc}
+                      onChange={(v) => setReading(i, "chargeVdc", v)}
+                      placeholder="Charging (Vdc)"
+                      error={errors[`batteryReadings.${i}.chargeVdc`]}
+                    />
+                    <NumInput
+                      value={reading.dischargeVdc}
+                      onChange={(v) => setReading(i, "dischargeVdc", v)}
+                      placeholder="Discharging (Vdc)"
+                      error={errors[`batteryReadings.${i}.dischargeVdc`]}
+                    />
+                  </div>
+                </FieldRow>
+              ))
+            )}
           </div>
         </section>
 
@@ -423,107 +442,119 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               </div>
             </FieldRow>
 
-            <SubHead>PC Details</SubHead>
-            <FieldRow label="PC Row 1 — Monitor Size (Inch) / Qty">
-              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
-                <NumInput
-                  value={form.pcMonitorSizeIn1}
-                  onChange={(v) => set("pcMonitorSizeIn1", v)}
-                  placeholder="Monitor size"
-                  error={errors.pcMonitorSizeIn1}
-                />
-                <NumInput
-                  value={form.pcQty1}
-                  onChange={(v) => set("pcQty1", v)}
-                  placeholder="Qty"
-                  error={errors.pcQty1}
-                />
-              </div>
-            </FieldRow>
-            <FieldRow label="PC Row 2 — Monitor Size (Inch) / Qty">
-              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
-                <NumInput
-                  value={form.pcMonitorSizeIn2}
-                  onChange={(v) => set("pcMonitorSizeIn2", v)}
-                  placeholder="Monitor size"
-                  error={errors.pcMonitorSizeIn2}
-                />
-                <NumInput
-                  value={form.pcQty2}
-                  onChange={(v) => set("pcQty2", v)}
-                  placeholder="Qty"
-                  error={errors.pcQty2}
-                />
-              </div>
-            </FieldRow>
+            <div className="flex items-center justify-between gap-3">
+              <SubHead>PC Details</SubHead>
+              <Button type="button" variant="outline" onClick={addPc} className="min-h-[44px]">
+                <Plus className="size-4" /> Add PC
+              </Button>
+            </div>
+            {form.pcDetails.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">No PCs at site.</p>
+            ) : (
+              form.pcDetails.map((pc, i) => (
+                <FieldRow key={i} label={`PC ${i + 1} — Monitor Size (Inch) / Qty`}>
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-3 max-[380px]:grid-cols-1">
+                    <NumInput
+                      value={pc.monitorSizeIn}
+                      onChange={(v) => setPc(i, "monitorSizeIn", v)}
+                      placeholder="Monitor size"
+                      error={errors[`pcDetails.${i}.monitorSizeIn`]}
+                    />
+                    <NumInput
+                      value={pc.qty}
+                      onChange={(v) => setPc(i, "qty", v)}
+                      placeholder="Qty"
+                      error={errors[`pcDetails.${i}.qty`]}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => removePc(i)}
+                      aria-label={`Remove PC ${i + 1}`}
+                      className="size-11 min-h-[44px] min-w-[44px] p-0"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                </FieldRow>
+              ))
+            )}
 
-            <SubHead>Printer Details</SubHead>
-            <FieldRow label="Printer Row 1 — Rating (W) / Qty">
-              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
-                <NumInput
-                  value={form.printerRatingW1}
-                  onChange={(v) => set("printerRatingW1", v)}
-                  placeholder="Rating (W)"
-                  error={errors.printerRatingW1}
-                />
-                <NumInput
-                  value={form.printerQty1}
-                  onChange={(v) => set("printerQty1", v)}
-                  placeholder="Qty"
-                  error={errors.printerQty1}
-                />
-              </div>
-            </FieldRow>
-            <FieldRow label="Printer Row 2 — Rating (W) / Qty">
-              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
-                <NumInput
-                  value={form.printerRatingW2}
-                  onChange={(v) => set("printerRatingW2", v)}
-                  placeholder="Rating (W)"
-                  error={errors.printerRatingW2}
-                />
-                <NumInput
-                  value={form.printerQty2}
-                  onChange={(v) => set("printerQty2", v)}
-                  placeholder="Qty"
-                  error={errors.printerQty2}
-                />
-              </div>
-            </FieldRow>
+            <div className="flex items-center justify-between gap-3">
+              <SubHead>Printer Details</SubHead>
+              <Button type="button" variant="outline" onClick={addPrinter} className="min-h-[44px]">
+                <Plus className="size-4" /> Add Printer
+              </Button>
+            </div>
+            {form.printerDetails.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">No printers at site.</p>
+            ) : (
+              form.printerDetails.map((printer, i) => (
+                <FieldRow key={i} label={`Printer ${i + 1} — Rating (W) / Qty`}>
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-3 max-[380px]:grid-cols-1">
+                    <NumInput
+                      value={printer.ratingW}
+                      onChange={(v) => setPrinter(i, "ratingW", v)}
+                      placeholder="Rating (W)"
+                      error={errors[`printerDetails.${i}.ratingW`]}
+                    />
+                    <NumInput
+                      value={printer.qty}
+                      onChange={(v) => setPrinter(i, "qty", v)}
+                      placeholder="Qty"
+                      error={errors[`printerDetails.${i}.qty`]}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => removePrinter(i)}
+                      aria-label={`Remove Printer ${i + 1}`}
+                      className="size-11 min-h-[44px] min-w-[44px] p-0"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                </FieldRow>
+              ))
+            )}
 
-            <SubHead>Scanner Details</SubHead>
-            <FieldRow label="Scanner Row 1 — Rating (W) / Qty">
-              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
-                <NumInput
-                  value={form.scannerRatingW1}
-                  onChange={(v) => set("scannerRatingW1", v)}
-                  placeholder="Rating (W)"
-                  error={errors.scannerRatingW1}
-                />
-                <NumInput
-                  value={form.scannerQty1}
-                  onChange={(v) => set("scannerQty1", v)}
-                  placeholder="Qty"
-                  error={errors.scannerQty1}
-                />
-              </div>
-            </FieldRow>
-            <FieldRow label="Scanner Row 2 — Rating (W) / Qty">
-              <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
-                <NumInput
-                  value={form.scannerRatingW2}
-                  onChange={(v) => set("scannerRatingW2", v)}
-                  placeholder="Rating (W)"
-                  error={errors.scannerRatingW2}
-                />
-                <NumInput
-                  value={form.scannerQty2}
-                  onChange={(v) => set("scannerQty2", v)}
-                  placeholder="Qty"
-                  error={errors.scannerQty2}
-                />
-              </div>
-            </FieldRow>
+            <div className="flex items-center justify-between gap-3">
+              <SubHead>Scanner Details</SubHead>
+              <Button type="button" variant="outline" onClick={addScanner} className="min-h-[44px]">
+                <Plus className="size-4" /> Add Scanner
+              </Button>
+            </div>
+            {form.scannerDetails.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">No scanners at site.</p>
+            ) : (
+              form.scannerDetails.map((scanner, i) => (
+                <FieldRow key={i} label={`Scanner ${i + 1} — Rating (W) / Qty`}>
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-3 max-[380px]:grid-cols-1">
+                    <NumInput
+                      value={scanner.ratingW}
+                      onChange={(v) => setScanner(i, "ratingW", v)}
+                      placeholder="Rating (W)"
+                      error={errors[`scannerDetails.${i}.ratingW`]}
+                    />
+                    <NumInput
+                      value={scanner.qty}
+                      onChange={(v) => setScanner(i, "qty", v)}
+                      placeholder="Qty"
+                      error={errors[`scannerDetails.${i}.qty`]}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => removeScanner(i)}
+                      aria-label={`Remove Scanner ${i + 1}`}
+                      className="size-11 min-h-[44px] min-w-[44px] p-0"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                </FieldRow>
+              ))
+            )}
           </div>
         </section>
 
