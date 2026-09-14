@@ -11,6 +11,7 @@ import {
   fieldServiceReportSchema,
   frontIndicationSchema,
   loadRecordSchema,
+  partReplacementsSchema,
   powerConditionSchema,
   readingsSchema,
 } from "@/lib/fieldServiceReport";
@@ -50,6 +51,16 @@ type FrontIndicationState = {
 type PcDetail = { id: string; monitorSizeIn: string; qty: string };
 type PrinterDetail = { id: string; ratingW: string; qty: string };
 type ScannerDetail = { id: string; ratingW: string; qty: string };
+type PartReplacement = {
+  id: string;
+  item: string;
+  oldSrNo: string;
+  newSrNo: string;
+  charges: string;
+  qty: string;
+  oldBarcode: string;
+  newChallan: string;
+};
 
 type FormState = {
   mainsVoltageLn: string;
@@ -75,6 +86,7 @@ type FormState = {
   amfPanel: boolean;
   operateNonBusinessHours: boolean;
   operateHolidays: boolean;
+  partReplacements: PartReplacement[];
 };
 
 const initialFrontIndication: FrontIndicationState = {
@@ -116,6 +128,7 @@ const initialForm: FormState = {
   amfPanel: false,
   operateNonBusinessHours: false,
   operateHolidays: false,
+  partReplacements: [],
 };
 
 function FieldError({ message, id }: { message?: string; id?: string }) {
@@ -316,6 +329,35 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       scannerDetails: f.scannerDetails.map((r, j) => (j === i ? { ...r, [k]: v } : r)),
     }));
 
+  const addPart = () =>
+    setForm((f) =>
+      f.partReplacements.length >= 5
+        ? f
+        : {
+            ...f,
+            partReplacements: [
+              ...f.partReplacements,
+              {
+                id: nextRowId(),
+                item: "",
+                oldSrNo: "",
+                newSrNo: "",
+                charges: "",
+                qty: "",
+                oldBarcode: "",
+                newChallan: "",
+              },
+            ],
+          },
+    );
+  const removePart = (i: number) =>
+    setForm((f) => ({ ...f, partReplacements: f.partReplacements.filter((_, j) => j !== i) }));
+  const setPart = (i: number, k: keyof Omit<PartReplacement, "id">, v: string) =>
+    setForm((f) => ({
+      ...f,
+      partReplacements: f.partReplacements.map((r, j) => (j === i ? { ...r, [k]: v } : r)),
+    }));
+
   const emptyStr = (v: string) => (v.trim() === "" ? undefined : v);
 
   const readingsValid = readingsSchema.safeParse({
@@ -352,6 +394,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     operateNonBusinessHours: form.operateNonBusinessHours,
     operateHolidays: form.operateHolidays,
   }).success;
+  const partValid = partReplacementsSchema.safeParse(form.partReplacements).success;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -423,6 +466,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         chargingReadings: [],
         dischargingReadings: [],
         frontIndication: { ...initialFrontIndication },
+        partReplacements: [],
       });
     } finally {
       setBusy(false);
@@ -1014,6 +1058,111 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
             </FieldRow>
           </div>
         </section>
+
+        <section className="space-y-3 rounded-xl border p-4">
+          <SectionHeader num="4" title="Part Replacement Details" valid={partValid} />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <SubHead>Parts</SubHead>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addPart}
+                disabled={busy || form.partReplacements.length >= 5}
+                className="min-h-[44px]"
+              >
+                <Plus className="size-4" /> Add
+              </Button>
+            </div>
+            {form.partReplacements.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">No part replacements — add.</p>
+            ) : (
+              form.partReplacements.map((part, i) => (
+                <FieldRow key={part.id} label={`Part ${i + 1}`}>
+                  <div className="space-y-3">
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.item}
+                        onChange={(e) => setPart(i, "item", e.target.value)}
+                        placeholder="Item / part description"
+                        aria-invalid={!!errors[`partReplacements.${i}.item`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.item`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.item`]} />
+                    </div>
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.oldSrNo}
+                        onChange={(e) => setPart(i, "oldSrNo", e.target.value)}
+                        placeholder="Old Sr. No"
+                        aria-invalid={!!errors[`partReplacements.${i}.oldSrNo`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.oldSrNo`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.oldSrNo`]} />
+                    </div>
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.newSrNo}
+                        onChange={(e) => setPart(i, "newSrNo", e.target.value)}
+                        placeholder="New Sr. No"
+                        aria-invalid={!!errors[`partReplacements.${i}.newSrNo`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.newSrNo`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.newSrNo`]} />
+                    </div>
+                    <NumInput
+                      value={part.charges}
+                      onChange={(v) => setPart(i, "charges", v)}
+                      placeholder="Charges (₹)"
+                      error={errors[`partReplacements.${i}.charges`]}
+                    />
+                    <NumInput
+                      value={part.qty}
+                      onChange={(v) => setPart(i, "qty", v)}
+                      placeholder="Qty"
+                      error={errors[`partReplacements.${i}.qty`]}
+                    />
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.oldBarcode}
+                        onChange={(e) => setPart(i, "oldBarcode", e.target.value)}
+                        placeholder="Old defective barcode"
+                        aria-invalid={!!errors[`partReplacements.${i}.oldBarcode`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.oldBarcode`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.oldBarcode`]} />
+                    </div>
+                    <div>
+                      <Input
+                        type="text"
+                        value={part.newChallan}
+                        onChange={(e) => setPart(i, "newChallan", e.target.value)}
+                        placeholder="New challan no."
+                        aria-invalid={!!errors[`partReplacements.${i}.newChallan`]}
+                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.newChallan`] ? "border-destructive" : ""}`}
+                      />
+                      <FieldError message={errors[`partReplacements.${i}.newChallan`]} />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => removePart(i)}
+                      disabled={busy}
+                      aria-label={`Remove part ${i + 1}`}
+                      className="size-11 min-h-[44px] min-w-[44px] p-0"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                </FieldRow>
+              ))
+            )}
+          </div>
+        </section>
       </form>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur px-4 pt-2 pb-safe">
@@ -1023,6 +1172,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
             <PhaseDot num="1A" valid={frontValid} />
             <PhaseDot num="2" valid={loadValid} />
             <PhaseDot num="3" valid={powerValid} />
+            <PhaseDot num="4" valid={partValid} />
           </div>
           <Button type="submit" form="fsr-form" disabled={busy} className="h-11 flex-1">
             {busy ? "Submitting…" : "Submit Report"}

@@ -399,6 +399,107 @@ describe("fieldServiceReportSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("defaults partReplacements to [] when key is omitted", () => {
+    const result = fieldServiceReportSchema.safeParse(minimalInput());
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.partReplacements).toEqual([]);
+  });
+
+  it("parses explicit empty partReplacements", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      partReplacements: [],
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.partReplacements).toEqual([]);
+  });
+
+  it("parses a full valid part replacement record", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      partReplacements: [
+        {
+          item: "Battery",
+          oldSrNo: "OLD1",
+          newSrNo: "NEW1",
+          charges: "1500",
+          qty: "2",
+          oldBarcode: "BC1",
+          newChallan: "CH5",
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.partReplacements).toEqual([
+      {
+        item: "Battery",
+        oldSrNo: "OLD1",
+        newSrNo: "NEW1",
+        charges: 1500,
+        qty: 2,
+        oldBarcode: "BC1",
+        newChallan: "CH5",
+      },
+    ]);
+  });
+
+  it("fails when partReplacements exceeds 5 records", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      partReplacements: Array.from({ length: 6 }, () => ({ item: "Battery" })),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('fails on non-numeric part charges "abc"', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      partReplacements: [{ item: "Battery", charges: "abc" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('fails on negative part qty "-1" (must be non-negative)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      partReplacements: [{ item: "Battery", qty: "-1" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("parses all blank part replacement strings as undefined (fixed: emptyToUndefined)", () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      partReplacements: [
+        {
+          item: "",
+          oldSrNo: "",
+          newSrNo: "",
+          charges: "",
+          qty: "",
+          oldBarcode: "",
+          newChallan: "",
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.partReplacements).toEqual([
+      {
+        item: undefined,
+        oldSrNo: undefined,
+        newSrNo: undefined,
+        charges: undefined,
+        qty: undefined,
+        oldBarcode: undefined,
+        newChallan: undefined,
+      },
+    ]);
+  });
 });
 
 describe("buildFsrPayload", () => {
@@ -513,5 +614,50 @@ describe("buildFsrPayload", () => {
     expect(payload.engineer_phone).toBeNull();
     expect(payload).not.toHaveProperty("id");
     expect(payload).not.toHaveProperty("submitted_at");
+  });
+
+  it("maps minimal input partReplacements to []", () => {
+    const parsed = fieldServiceReportSchema.parse(minimalInput());
+    const payload = buildFsrPayload(parsed, "ticket-123", {
+      employeeId: "EMP-1",
+      name: "Jane Engineer",
+      phone: "9999999999",
+    }) as Record<string, unknown>;
+
+    expect(payload.part_replacements).toEqual([]);
+  });
+
+  it("maps a full part replacement record to snake_case keys", () => {
+    const parsed = fieldServiceReportSchema.parse({
+      ...minimalInput(),
+      partReplacements: [
+        {
+          item: "Battery",
+          oldSrNo: "OLD1",
+          newSrNo: "NEW1",
+          charges: "1500",
+          qty: "2",
+          oldBarcode: "BC1",
+          newChallan: "CH5",
+        },
+      ],
+    });
+    const payload = buildFsrPayload(parsed, "ticket-123", {
+      employeeId: "EMP-1",
+      name: "Jane Engineer",
+      phone: "9999999999",
+    }) as Record<string, unknown>;
+
+    expect(payload.part_replacements).toEqual([
+      {
+        item: "Battery",
+        old_sr_no: "OLD1",
+        new_sr_no: "NEW1",
+        charges: 1500,
+        qty: 2,
+        old_barcode: "BC1",
+        new_challan: "CH5",
+      },
+    ]);
   });
 });

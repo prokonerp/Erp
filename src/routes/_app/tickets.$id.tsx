@@ -78,6 +78,15 @@ import { RotateCcw } from "lucide-react";
 type FsrVolts = { volts: number | null };
 type FsrPc = { monitor_size_in: number | null; qty: number | null };
 type FsrWattQty = { rating_w: number | null; qty: number | null };
+type FsrPart = {
+  item: string | null;
+  old_sr_no: string | null;
+  new_sr_no: string | null;
+  charges: number | null;
+  qty: number | null;
+  old_barcode: string | null;
+  new_challan: string | null;
+};
 
 function asFsrArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -2182,6 +2191,53 @@ function TicketDetail() {
                           </div>
                         </>
                       );
+                    })()}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Part Replacements
+                    </p>
+                    {(() => {
+                      const parts = asFsrArray<FsrPart>(fsrLatest.part_replacements);
+                      if (parts.length === 0) {
+                        return <p className="text-xs text-muted-foreground">None</p>;
+                      }
+                      return parts.map((p, i) => (
+                        <div key={`part-${i}`} className="space-y-1">
+                          <p className="text-xs font-medium">
+                            Part {i + 1}
+                            {p.item ? ` — ${p.item}` : ""}
+                          </p>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Item</span>
+                            <span className="font-medium">{p.item ?? "—"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Old Sr. No</span>
+                            <span className="font-medium">{p.old_sr_no ?? "—"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">New Sr. No</span>
+                            <span className="font-medium">{p.new_sr_no ?? "—"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Charges</span>
+                            <span className="font-medium">{p.charges ?? "—"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Qty</span>
+                            <span className="font-medium">{p.qty ?? "—"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Old Barcode</span>
+                            <span className="font-medium">{p.old_barcode ?? "—"}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">New Challan</span>
+                            <span className="font-medium">{p.new_challan ?? "—"}</span>
+                          </div>
+                        </div>
+                      ));
                     })()}
                   </div>
                 </div>

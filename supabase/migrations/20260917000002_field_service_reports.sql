@@ -2,7 +2,7 @@
 -- Field Service Reports: APPEND-ONLY per-ticket reports. Multiple rows per ticket
 -- allowed — each submit = new row, history preserved, never overwritten.
 -- Site-observation flow: Mains → Battery Bank Description → Charging list →
--- Discharging list, plus Front Indication section.
+-- Discharging list, plus Front Indication section, plus Phase 4 (Part Replacement Details).
 -- SAFE: additive-only, idempotent (IF NOT EXISTS / DROP IF EXISTS + CREATE),
 -- zero destructive statements. No backfill UPDATEs, no ALTER of existing tables.
 
@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS public.field_service_reports (
   --   charge_found, charge_corrected, fault_0_found, fault_0_corrected,
   --   fault_ge_found, fault_ge_corrected, remarks, remarks_target}
   front_indication jsonb NOT NULL DEFAULT '{}'::jsonb,
+  -- Part Replacement Details (Phase 4): [{item, old_sr_no, new_sr_no, charges, qty, old_barcode, new_challan}, ...] (Add-button list, 0..5)
+  part_replacements jsonb NOT NULL DEFAULT '[]'::jsonb,
   -- Phase 2 load record:
   ac_provided boolean NOT NULL DEFAULT false,
   dg_provided boolean NOT NULL DEFAULT false,

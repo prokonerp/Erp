@@ -101,10 +101,23 @@ export const frontIndicationSchema = z.object({
   remarksTarget: z.preprocess(emptyToUndefined, z.enum(["UPS", "PCB", "Transformer"]).optional()),
 });
 
+export const partReplacementSchema = z.object({
+  item: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
+  oldSrNo: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
+  newSrNo: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
+  charges: optionalNonNegativeNumber,
+  qty: optionalNonNegativeInt,
+  oldBarcode: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
+  newChallan: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
+});
+
+export const partReplacementsSchema = z.array(partReplacementSchema).max(5).default([]);
+
 export const fieldServiceReportSchema = readingsSchema
   .merge(loadRecordSchema)
   .merge(powerConditionSchema)
-  .merge(z.object({ frontIndication: frontIndicationSchema }));
+  .merge(z.object({ frontIndication: frontIndicationSchema }))
+  .merge(z.object({ partReplacements: partReplacementsSchema }));
 
 export type FieldServiceReportInput = z.infer<typeof fieldServiceReportSchema>;
 
@@ -149,6 +162,15 @@ export type FieldServiceReportPayload = {
   engineer_employee_id: string | null;
   engineer_name: string;
   engineer_phone: string | null;
+  part_replacements: {
+    item: string | null;
+    old_sr_no: string | null;
+    new_sr_no: string | null;
+    charges: number | null;
+    qty: number | null;
+    old_barcode: string | null;
+    new_challan: string | null;
+  }[];
 };
 
 export function buildFsrPayload(
@@ -210,5 +232,14 @@ export function buildFsrPayload(
     engineer_employee_id: engineer.employeeId ?? null,
     engineer_name: engineer.name,
     engineer_phone: engineer.phone ?? null,
+    part_replacements: input.partReplacements.map((p) => ({
+      item: p.item ?? null,
+      old_sr_no: p.oldSrNo ?? null,
+      new_sr_no: p.newSrNo ?? null,
+      charges: p.charges ?? null,
+      qty: p.qty ?? null,
+      old_barcode: p.oldBarcode ?? null,
+      new_challan: p.newChallan ?? null,
+    })),
   };
 }

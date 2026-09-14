@@ -5170,6 +5170,7 @@ export type Database = {
           charging_readings: Json
           discharging_readings: Json
           front_indication: Json
+          part_replacements: Json
           ac_provided: boolean
           dg_provided: boolean
           environment_duty: boolean
@@ -5203,6 +5204,7 @@ export type Database = {
           charging_readings?: Json
           discharging_readings?: Json
           front_indication?: Json
+          part_replacements?: Json
           ac_provided?: boolean
           dg_provided?: boolean
           environment_duty?: boolean
@@ -5236,6 +5238,7 @@ export type Database = {
           charging_readings?: Json
           discharging_readings?: Json
           front_indication?: Json
+          part_replacements?: Json
           ac_provided?: boolean
           dg_provided?: boolean
           environment_duty?: boolean
