@@ -868,21 +868,21 @@ function EngTicketDetail() {
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-xs">Special Instructions:</span>
                 {isSpecialAcked ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
-                    <CheckCircle2 className="h-3 w-3" /> Acknowledged
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+                    <CheckCircle2 className="h-4 w-4" /> Acknowledged
                   </span>
                 ) : (
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-6 text-[11px] px-2"
+                    className="min-h-[44px] px-4 text-sm"
                     disabled={ackBusy}
                     onClick={acknowledgeInstruction}
                   >
                     {ackBusy ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
                     ) : (
-                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      <AlertTriangle className="h-4 w-4 mr-1" />
                     )}
                     Acknowledge
                   </Button>
