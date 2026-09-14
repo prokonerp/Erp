@@ -26,10 +26,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FieldRow } from "./CustomerForm";
 
-type BatteryReading = { chargeVdc: string; dischargeVdc: string };
-type PcDetail = { monitorSizeIn: string; qty: string };
-type PrinterDetail = { ratingW: string; qty: string };
-type ScannerDetail = { ratingW: string; qty: string };
+let rowSeq = 0;
+const nextRowId = () => `row-${++rowSeq}`;
+type BatteryReading = { id: string; chargeVdc: string; dischargeVdc: string };
+type PcDetail = { id: string; monitorSizeIn: string; qty: string };
+type PrinterDetail = { id: string; ratingW: string; qty: string };
+type ScannerDetail = { id: string; ratingW: string; qty: string };
 
 type FormState = {
   mainsVoltageLn: string;
@@ -190,10 +192,13 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     }
     if (!/^\d+$/.test(v)) return;
     const n = parseInt(v, 10);
-    if (n < 0 || n > 20) return;
+    if (n > 20) {
+      toast.error("Maximum 20 batteries");
+      return;
+    }
     setForm((f) => {
       const next = [...f.batteryReadings];
-      while (next.length < n) next.push({ chargeVdc: "", dischargeVdc: "" });
+      while (next.length < n) next.push({ id: nextRowId(), chargeVdc: "", dischargeVdc: "" });
       return { ...f, batteryReadings: next.slice(0, n) };
     });
   };
@@ -205,7 +210,14 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     }));
 
   const addPc = () =>
-    setForm((f) => ({ ...f, pcDetails: [...f.pcDetails, { monitorSizeIn: "", qty: "" }] }));
+    setForm((f) =>
+      f.pcDetails.length >= 20
+        ? f
+        : {
+            ...f,
+            pcDetails: [...f.pcDetails, { id: nextRowId(), monitorSizeIn: "", qty: "" }],
+          },
+    );
   const removePc = (i: number) =>
     setForm((f) => ({ ...f, pcDetails: f.pcDetails.filter((_, j) => j !== i) }));
   const setPc = (i: number, k: keyof PcDetail, v: string) =>
@@ -215,7 +227,14 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     }));
 
   const addPrinter = () =>
-    setForm((f) => ({ ...f, printerDetails: [...f.printerDetails, { ratingW: "", qty: "" }] }));
+    setForm((f) =>
+      f.printerDetails.length >= 20
+        ? f
+        : {
+            ...f,
+            printerDetails: [...f.printerDetails, { id: nextRowId(), ratingW: "", qty: "" }],
+          },
+    );
   const removePrinter = (i: number) =>
     setForm((f) => ({ ...f, printerDetails: f.printerDetails.filter((_, j) => j !== i) }));
   const setPrinter = (i: number, k: keyof PrinterDetail, v: string) =>
@@ -225,7 +244,14 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     }));
 
   const addScanner = () =>
-    setForm((f) => ({ ...f, scannerDetails: [...f.scannerDetails, { ratingW: "", qty: "" }] }));
+    setForm((f) =>
+      f.scannerDetails.length >= 20
+        ? f
+        : {
+            ...f,
+            scannerDetails: [...f.scannerDetails, { id: nextRowId(), ratingW: "", qty: "" }],
+          },
+    );
   const removeScanner = (i: number) =>
     setForm((f) => ({ ...f, scannerDetails: f.scannerDetails.filter((_, j) => j !== i) }));
   const setScanner = (i: number, k: keyof ScannerDetail, v: string) =>
@@ -270,6 +296,8 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         if (key && !errs[key]) errs[key] = issue.message;
       }
       setErrors(errs);
+      const topLevel = Object.entries(errs).find(([k]) => !k.includes("."));
+      if (topLevel) toast.error(topLevel[1]);
       return;
     }
     setErrors({});
@@ -360,6 +388,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 value={String(form.batteryReadings.length)}
                 onChange={setBatteryCount}
                 placeholder="0"
+                error={errors.batteryReadings}
               />
             </FieldRow>
             {form.batteryReadings.length === 0 ? (
@@ -368,7 +397,10 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               </p>
             ) : (
               form.batteryReadings.map((reading, i) => (
-                <FieldRow key={i} label={`Battery ${i + 1} — Charging / Discharging (Vdc)`}>
+                <FieldRow
+                  key={reading.id}
+                  label={`Battery ${i + 1} — Charging / Discharging (Vdc)`}
+                >
                   <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
                     <NumInput
                       value={reading.chargeVdc}
@@ -444,7 +476,13 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
 
             <div className="flex items-center justify-between gap-3">
               <SubHead>PC Details</SubHead>
-              <Button type="button" variant="outline" onClick={addPc} className="min-h-[44px]">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addPc}
+                disabled={busy || form.pcDetails.length >= 20}
+                className="min-h-[44px]"
+              >
                 <Plus className="size-4" /> Add PC
               </Button>
             </div>
@@ -452,7 +490,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               <p className="text-[13px] text-muted-foreground">No PCs at site.</p>
             ) : (
               form.pcDetails.map((pc, i) => (
-                <FieldRow key={i} label={`PC ${i + 1} — Monitor Size (Inch) / Qty`}>
+                <FieldRow key={pc.id} label={`PC ${i + 1} — Monitor Size (Inch) / Qty`}>
                   <div className="grid grid-cols-[1fr_1fr_auto] gap-3 max-[380px]:grid-cols-1">
                     <NumInput
                       value={pc.monitorSizeIn}
@@ -470,6 +508,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       type="button"
                       variant="outline"
                       onClick={() => removePc(i)}
+                      disabled={busy}
                       aria-label={`Remove PC ${i + 1}`}
                       className="size-11 min-h-[44px] min-w-[44px] p-0"
                     >
@@ -482,7 +521,13 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
 
             <div className="flex items-center justify-between gap-3">
               <SubHead>Printer Details</SubHead>
-              <Button type="button" variant="outline" onClick={addPrinter} className="min-h-[44px]">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addPrinter}
+                disabled={busy || form.printerDetails.length >= 20}
+                className="min-h-[44px]"
+              >
                 <Plus className="size-4" /> Add Printer
               </Button>
             </div>
@@ -490,7 +535,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               <p className="text-[13px] text-muted-foreground">No printers at site.</p>
             ) : (
               form.printerDetails.map((printer, i) => (
-                <FieldRow key={i} label={`Printer ${i + 1} — Rating (W) / Qty`}>
+                <FieldRow key={printer.id} label={`Printer ${i + 1} — Rating (W) / Qty`}>
                   <div className="grid grid-cols-[1fr_1fr_auto] gap-3 max-[380px]:grid-cols-1">
                     <NumInput
                       value={printer.ratingW}
@@ -508,6 +553,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       type="button"
                       variant="outline"
                       onClick={() => removePrinter(i)}
+                      disabled={busy}
                       aria-label={`Remove Printer ${i + 1}`}
                       className="size-11 min-h-[44px] min-w-[44px] p-0"
                     >
@@ -520,7 +566,13 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
 
             <div className="flex items-center justify-between gap-3">
               <SubHead>Scanner Details</SubHead>
-              <Button type="button" variant="outline" onClick={addScanner} className="min-h-[44px]">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addScanner}
+                disabled={busy || form.scannerDetails.length >= 20}
+                className="min-h-[44px]"
+              >
                 <Plus className="size-4" /> Add Scanner
               </Button>
             </div>
@@ -528,7 +580,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
               <p className="text-[13px] text-muted-foreground">No scanners at site.</p>
             ) : (
               form.scannerDetails.map((scanner, i) => (
-                <FieldRow key={i} label={`Scanner ${i + 1} — Rating (W) / Qty`}>
+                <FieldRow key={scanner.id} label={`Scanner ${i + 1} — Rating (W) / Qty`}>
                   <div className="grid grid-cols-[1fr_1fr_auto] gap-3 max-[380px]:grid-cols-1">
                     <NumInput
                       value={scanner.ratingW}
@@ -546,6 +598,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       type="button"
                       variant="outline"
                       onClick={() => removeScanner(i)}
+                      disabled={busy}
                       aria-label={`Remove Scanner ${i + 1}`}
                       className="size-11 min-h-[44px] min-w-[44px] p-0"
                     >
