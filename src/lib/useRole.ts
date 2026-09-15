@@ -1,54 +1,59 @@
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/useAuth";
+
+type AdminVerdict = { isAdmin: boolean; hasAnyAdmin: boolean; isOwner: boolean };
+
+async function resolveAdmin(): Promise<AdminVerdict> {
+  const { data: u } = await supabase.auth.getUser();
+  const uid = u.user?.id ?? null;
+  if (!uid) return { isAdmin: false, hasAnyAdmin: true, isOwner: false };
+  const { data: roles } = await supabase
+    .from("user_roles")
+    .select("role,user_id")
+    .eq("role", "admin");
+  const list = roles ?? [];
+  const mine = list.some((r) => r.user_id === uid);
+  if (list.length > 0) return { isAdmin: mine, hasAnyAdmin: true, isOwner: false };
+  const { data: owner } = await (supabase as any).rpc("is_designated_owner");
+  return { isAdmin: false, hasAnyAdmin: false, isOwner: owner === true };
+}
 
 export function useIsAdmin() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [hasAnyAdmin, setHasAnyAdmin] = useState(true);
-  const [isOwner, setIsOwner] = useState(false);
+  // uid-scoped key: a global/per-mount fetch leaked the prior user's admin
+  // flag across same-shell user switches.
+  const { session } = useAuth();
+  const uid = session?.user?.id ?? null;
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      const uid = u.user?.id ?? null;
-      if (!active) return;
-      setUserId(uid);
-      if (!uid) {
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role,user_id")
-        .eq("role", "admin");
-      if (!active) return;
-      const list = roles ?? [];
-      setHasAnyAdmin(list.length > 0);
-      setIsAdmin(list.some((r) => r.user_id === uid));
-      if (list.length === 0) {
-        const { data: owner } = await (supabase as any).rpc("is_designated_owner");
-        if (!active) return;
-        setIsOwner(owner === true);
-      }
-      setLoading(false);
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+  const query = useQuery({
+    queryKey: ["auth", "is-admin", uid] as const,
+    enabled: !!uid,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: resolveAdmin,
+  });
 
   async function claimAdmin() {
-    if (!userId) return { error: "Not signed in" };
+    if (!uid) return { error: "Not signed in" };
     const { error } = await (supabase as any).rpc("claim_admin");
     if (!error) {
-      setIsAdmin(true);
-      setHasAnyAdmin(true);
+      await queryClient.invalidateQueries({ queryKey: ["auth", "is-admin", uid] });
     }
     return { error: error?.message };
   }
 
-  return { isAdmin, loading, userId, hasAnyAdmin, isOwner, claimAdmin };
+  const verdict = query.data;
+  return {
+    isAdmin: verdict?.isAdmin ?? false,
+    // No uid (logged out) → not loading, so guards fall through to /auth.
+    loading: !!uid && query.isLoading,
+    // Derived live from the session — never a stale prior user's id, since
+    // queryFn no longer caches it in component state.
+    userId: uid,
+    hasAnyAdmin: verdict?.hasAnyAdmin ?? true,
+    isOwner: verdict?.isOwner ?? false,
+    claimAdmin,
+  };
 }

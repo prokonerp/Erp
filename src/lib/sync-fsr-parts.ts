@@ -23,8 +23,11 @@ function clean(v: string | null | undefined): string {
   return (v ?? "").trim();
 }
 
-function normalizeQty(qty: number | null | undefined): number {
-  return typeof qty === "number" && Number.isFinite(qty) && qty > 0 ? Math.floor(qty) : 1;
+function normalizeQty(qty: number | null | undefined): number | null {
+  if (qty === null || qty === undefined) return 1;
+  return typeof qty === "number" && Number.isFinite(qty) && Number.isInteger(qty) && qty > 0
+    ? qty
+    : null;
 }
 
 /**
@@ -36,13 +39,21 @@ function normalizeQty(qty: number | null | undefined): number {
 export function stageFsrParts(parts: FsrPartInput[]): {
   defective: StagedPartLine[];
   good: StagedPartLine[];
+  skipped: number;
 } {
   const defective: StagedPartLine[] = [];
   const good: StagedPartLine[] = [];
+  let skipped = 0;
   for (const p of parts ?? []) {
     const name = clean(p?.item);
     if (!name) continue;
-    const qty = normalizeQty(p?.qty);
+    const qtyRaw = p?.qty;
+    const qty = normalizeQty(qtyRaw);
+    if (qty === null) {
+      skipped++;
+      console.warn("[sync-fsr-parts] skipped entry with invalid qty:", qtyRaw, "for item:", name);
+      continue;
+    }
     const oldSrNo = clean(p?.oldSrNo);
     const newSrNo = clean(p?.newSrNo);
 
@@ -58,12 +69,13 @@ export function stageFsrParts(parts: FsrPartInput[]): {
       });
     }
   }
-  return { defective, good };
+  return { defective, good, skipped };
 }
 
-/** Dedupe key: lower(trim(serial ?? name)). */
-function partKey(serial: string | null | undefined, name: string): string {
-  return (serial ?? name ?? "").trim().toLowerCase();
+/** Dedupe key: serial when present, else lower(trim(name)) + qty. */
+function partKey(serial: string | null | undefined, name: string, qty: number | string): string {
+  const base = (serial ?? name ?? "").trim().toLowerCase();
+  return serial ? base : `${base}:q${qty}`;
 }
 
 /**
@@ -85,11 +97,11 @@ export function mergePartLines(
   const seen = new Set(
     merged
       .filter((l) => (l.source as string | undefined) === PART_SOURCE_FSR)
-      .map((l) => partKey(l.serial, l.name)),
+      .map((l) => partKey(l.serial, l.name, String(l.qty))),
   );
   let added = 0;
   for (const s of staged ?? []) {
-    const key = partKey(s.serial, s.name);
+    const key = partKey(s.serial, s.name, s.qty);
     if (seen.has(key)) continue;
     seen.add(key);
     merged.push({

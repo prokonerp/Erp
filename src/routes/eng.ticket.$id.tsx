@@ -174,6 +174,14 @@ function EngTicketDetail() {
   const [mismatchPhotoFile, setMismatchPhotoFile] = useState<File | null>(null);
   const [matchedPhotoFile, setMatchedPhotoFile] = useState<File | null>(null);
   const [mismatchBusy, setMismatchBusy] = useState(false);
+  // Ref-based re-entry locks (same pattern as conveyance/FSR): busy state
+  // commits on re-render, so two taps in the same tick would both fire
+  // (duplicate activity rows, double photo uploads). Refs flip synchronously.
+  const ackRef = useRef(false);
+  const verdictRef = useRef(false);
+  const mismatchRef = useRef(false);
+  const matchedRef = useRef(false);
+  const photoRef = useRef(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsMismatchOpen, setDetailsMismatchOpen] = useState(false);
@@ -286,7 +294,25 @@ function EngTicketDetail() {
     let active = true;
     (async () => {
       const { data: u } = await supabase.auth.getUser();
+      const authUid = u.user?.id;
       const email = u.user?.email;
+      if (!authUid && !email) return;
+      // Identity by auth_user_id first (exact); email fallback for legacy rows.
+      if (authUid) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- auth_user_id pending generated types
+        const { data: empByAuth } = await (supabase as any)
+          .from("employees")
+          .select("id,name")
+          .eq("auth_user_id", authUid)
+          .eq("active", true)
+          .maybeSingle();
+        if (empByAuth) {
+          if (!active) return;
+          setMyId(empByAuth.id as string);
+          setMyName(empByAuth.name as string);
+          return;
+        }
+      }
       if (!email) return;
       const { data: emps } = await supabase
         .from("employees")
@@ -343,7 +369,12 @@ function EngTicketDetail() {
     const text = noteText.trim();
     if (!text) return;
 
-    const bucket = `${id}:${Math.floor(Date.now() / 60_000)}`;
+    // Idempotency bucket covers the ticket + minute + content: same-tick
+    // double-taps of the SAME text are deduped, but a second DISTINCT note
+    // within the minute must not be falsely rejected.
+    let h = 5381;
+    for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+    const bucket = `${id}:${Math.floor(Date.now() / 60_000)}:${(h >>> 0).toString(36)}`;
     if (noteIdempotencyRef.current === bucket) {
       toast.info("Note already recorded");
       return;
@@ -374,6 +405,8 @@ function EngTicketDetail() {
 
   const acknowledgeInstruction = async () => {
     if (!ticket?.special_instruction || isSpecialAcked) return;
+    if (ackRef.current) return;
+    ackRef.current = true;
     setAckBusy(true);
     try {
       const { data: u } = await supabase.auth.getUser();
@@ -390,11 +423,14 @@ function EngTicketDetail() {
       toast.success("Acknowledged");
       await refreshActivities();
     } finally {
+      ackRef.current = false;
       setAckBusy(false);
     }
   };
 
   const handleCustomerVerified = async () => {
+    if (verdictRef.current) return;
+    verdictRef.current = true;
     setVerdictBusy(true);
     try {
       const { data: u } = await supabase.auth.getUser();
@@ -430,6 +466,7 @@ function EngTicketDetail() {
       await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
       await refreshActivities();
     } finally {
+      verdictRef.current = false;
       setVerdictBusy(false);
     }
   };
@@ -439,6 +476,8 @@ function EngTicketDetail() {
     customer_phone: string;
     customer_email?: string | null;
   }) => {
+    if (verdictRef.current) return;
+    verdictRef.current = true;
     setVerdictBusy(true);
     try {
       const { data: u } = await supabase.auth.getUser();
@@ -474,6 +513,7 @@ function EngTicketDetail() {
       await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
       await refreshActivities();
     } finally {
+      verdictRef.current = false;
       setVerdictBusy(false);
     }
   };
@@ -505,6 +545,8 @@ function EngTicketDetail() {
       toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
       return;
     }
+    if (mismatchRef.current) return;
+    mismatchRef.current = true;
     setMismatchBusy(true);
     setGpsError(null);
     try {
@@ -616,6 +658,7 @@ function EngTicketDetail() {
       toast.error(msg);
       setMismatchPhotoFile(null);
     } finally {
+      mismatchRef.current = false;
       setMismatchBusy(false);
     }
   };
@@ -651,6 +694,8 @@ function EngTicketDetail() {
       toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
       return;
     }
+    if (matchedRef.current) return;
+    matchedRef.current = true;
     setVerdictBusy2(true);
     try {
       const compressed = await compressImageToLimit(matchedPhotoFile);
@@ -739,6 +784,7 @@ function EngTicketDetail() {
       toast.error(msg);
       setMatchedPhotoFile(null);
     } finally {
+      matchedRef.current = false;
       setVerdictBusy2(false);
     }
   };
@@ -758,6 +804,8 @@ function EngTicketDetail() {
       return;
     }
 
+    if (photoRef.current) return;
+    photoRef.current = true;
     setPhotoBusy(true);
     setPhotoProgress("Reading file…");
     try {
@@ -812,6 +860,7 @@ function EngTicketDetail() {
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast.error(msg);
     } finally {
+      photoRef.current = false;
       setPhotoBusy(false);
       setPhotoProgress("");
       if (fileInputRef.current) fileInputRef.current.value = "";

@@ -39,7 +39,33 @@ describe("stageFsrParts mapping", () => {
   });
 
   it("empty parts stage to nothing", () => {
-    expect(stageFsrParts([])).toEqual({ defective: [], good: [] });
+    expect(stageFsrParts([])).toEqual({ defective: [], good: [], skipped: 0 });
+  });
+
+  it("skips non-integer qty 2.5 (skipped === 1, nothing staged)", () => {
+    const { defective, good, skipped } = stageFsrParts([{ item: "PCB", qty: 2.5 }]);
+    expect(skipped).toBe(1);
+    expect(defective).toEqual([]);
+    expect(good).toEqual([]);
+  });
+
+  it("skips qty 0 and qty -3 (skipped === 2)", () => {
+    const { defective, good, skipped } = stageFsrParts([
+      { item: "PCB", qty: 0 },
+      { item: "Fan", qty: -3 },
+    ]);
+    expect(skipped).toBe(2);
+    expect(defective).toEqual([]);
+    expect(good).toEqual([]);
+  });
+
+  it("stages qty null/undefined with legacy default qty 1", () => {
+    const { defective, skipped } = stageFsrParts([{ item: "PCB", qty: null }, { item: "Fan" }]);
+    expect(skipped).toBe(0);
+    expect(defective).toEqual([
+      { name: "PCB", qty: 1, serial: null, remarks: null },
+      { name: "Fan", qty: 1, serial: null, remarks: null },
+    ]);
   });
 });
 
@@ -140,5 +166,30 @@ describe("mergePartLines", () => {
     const { merged, added } = mergePartLines(existing, []);
     expect(added).toBe(0);
     expect(merged).toEqual(existing);
+  });
+
+  it("keeps blank-serial same-name lines with different qty as separate lines", () => {
+    const { merged, added } = mergePartLines(
+      [],
+      [
+        { name: "PCB", qty: 2, serial: null, remarks: null },
+        { name: "PCB", qty: 3, serial: null, remarks: null },
+      ],
+    );
+    expect(added).toBe(2);
+    expect(merged).toHaveLength(2);
+  });
+
+  it("is idempotent with qty keys, deduping same-name same-qty on second pass", () => {
+    const staged = [
+      { name: "PCB", qty: 2, serial: null, remarks: null },
+      { name: "PCB", qty: 2, serial: null, remarks: null },
+      { name: "PCB", qty: 3, serial: null, remarks: null },
+    ];
+    const first = mergePartLines([], staged);
+    expect(first.merged).toHaveLength(2);
+    const second = mergePartLines(first.merged, staged);
+    expect(second.added).toBe(0);
+    expect(second.merged).toEqual(first.merged);
   });
 });

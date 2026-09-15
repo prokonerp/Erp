@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useAuth } from "@/lib/useAuth";
+import { useAuth, purgeAuthCaches } from "@/lib/useAuth";
 import { useIsEngineer } from "@/lib/useIsEngineer";
 import { useMyQueue } from "@/hooks/useMyQueue";
 import { useMyEmployee } from "@/hooks/useMyEmployee";
@@ -114,6 +114,7 @@ function EngProfile() {
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
+      purgeAuthCaches();
       await recordLogout();
       await supabase.auth.signOut();
       navigate({ to: "/auth" });

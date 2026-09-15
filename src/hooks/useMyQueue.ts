@@ -100,20 +100,41 @@ export function useMyQueue() {
       if (!uid) return [];
       if (!email) throw new Error("ACCOUNT_NOT_LINKED");
 
-      // Resolve employee (id + name) from auth user email
-      const { data: emps, error: empErr } = await supabase
-        .from("employees")
-        .select("id,name")
-        .eq("email", email)
-        .eq("active", true);
-      if (empErr) {
-        console.error("[useMyQueue]", empErr.message);
-        throw empErr;
+      // Identity by auth_user_id first (exact); email fallback for legacy rows.
+      let empId: string | null = null;
+      let engineerName: string | null = null;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- auth_user_id pending generated types
+        const { data: byAuth, error: byAuthErr } = await (supabase as any)
+          .from("employees")
+          .select("id,name")
+          .eq("auth_user_id", uid)
+          .eq("active", true)
+          .maybeSingle();
+        if (byAuthErr) {
+          console.error("[useMyQueue]", byAuthErr.message);
+        } else if (byAuth) {
+          empId = byAuth.id as string;
+          engineerName = byAuth.name as string;
+        }
+      } catch (e) {
+        console.error("[useMyQueue]", (e as Error)?.message ?? e);
       }
-      if (!emps || emps.length === 0) throw new Error("ACCOUNT_NOT_LINKED");
-      if (emps.length > 1) throw new Error("AMBIGUOUS_EMPLOYEE_MATCH");
-      const empId = emps[0].id as string;
-      const engineerName = emps[0].name as string;
+      if (!empId || !engineerName) {
+        const { data: emps, error: empErr } = await supabase
+          .from("employees")
+          .select("id,name")
+          .eq("email", email)
+          .eq("active", true);
+        if (empErr) {
+          console.error("[useMyQueue]", empErr.message);
+          throw empErr;
+        }
+        if (!emps || emps.length === 0) throw new Error("ACCOUNT_NOT_LINKED");
+        if (emps.length > 1) throw new Error("AMBIGUOUS_EMPLOYEE_MATCH");
+        empId = emps[0].id as string;
+        engineerName = emps[0].name as string;
+      }
 
       const baseSelect = QUEUE_COLS;
 

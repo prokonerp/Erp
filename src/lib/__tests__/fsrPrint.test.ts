@@ -111,12 +111,13 @@ describe("displayOrDash", () => {
 });
 
 describe("boolYesNo", () => {
-  it('renders booleans as "Yes"/"No"', () => {
+  it('renders booleans as "Yes"/"No" and unknown as a dash', () => {
     // Catches: raw true/false leaking into the printed Yes/No boxes.
+    // Unknown must NEVER pose as "No" on a customer-facing report.
     expect(boolYesNo(true)).toBe("Yes");
     expect(boolYesNo(false)).toBe("No");
-    expect(boolYesNo(null)).toBe("No");
-    expect(boolYesNo(undefined)).toBe("No");
+    expect(boolYesNo(null)).toBe("—");
+    expect(boolYesNo(undefined)).toBe("—");
   });
 });
 

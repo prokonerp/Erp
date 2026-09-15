@@ -9,6 +9,10 @@ export function useFieldServiceReport(ticketId: string | null) {
       : ["field_service_reports", "list", "none"],
     enabled: !!ticketId,
     staleTime: 30_000,
+    // Admin reopen deletes FSR rows elsewhere — refetch on focus/interval so
+    // the engineer drops out of view-only without a manual refresh.
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("field_service_reports")

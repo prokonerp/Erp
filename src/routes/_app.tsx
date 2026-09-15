@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useAuth } from "@/lib/useAuth";
+import { useAuth, purgeAuthCaches } from "@/lib/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { resetPermissionsCache } from "@/lib/usePermissions";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,7 @@ function isAccountGateError(err: unknown): { code: string } | null {
 function AccountBlockedSignOut() {
   useEffect(() => {
     resetPermissionsCache();
+    purgeAuthCaches();
     void supabase.auth.signOut();
   }, []);
   return <Navigate to="/auth" />;
@@ -219,6 +220,7 @@ function AppLayout() {
   useEffect(() => {
     if (gateBlocked) {
       resetPermissionsCache();
+      purgeAuthCaches();
       void supabase.auth.signOut();
     }
   }, [gateBlocked]);

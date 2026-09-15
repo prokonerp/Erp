@@ -42,20 +42,36 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
     });
     if (roleErr) throw new Error(roleErr.message);
     if (!isAdmin) {
+      // Identity by auth_user_id first (exact); email fallback for legacy rows.
       // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
       const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
       let callerEmail = typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null;
-      if (!callerEmail) {
-        const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
-        callerEmail = authData?.user?.email ?? null;
-      }
-      if (!callerEmail) throw new Error("Forbidden: could not resolve your account email");
-      const { data: caller } = await supabaseAdmin
+      let caller: { id: string; name: string | null } | null = null;
+      const { data: empByAuth } = await supabaseAdmin
         .from("employees")
         .select("id, name")
-        .eq("email", callerEmail)
+        .eq("auth_user_id", context.userId)
         .eq("active", true)
         .maybeSingle();
+      if (empByAuth) {
+        caller = empByAuth as { id: string; name: string | null };
+      } else {
+        if (!callerEmail) {
+          const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
+          callerEmail = authData?.user?.email ?? null;
+        }
+        if (!callerEmail) throw new Error("Forbidden: could not resolve your account email");
+        const { data: empByEmail } = await supabaseAdmin
+          .from("employees")
+          .select("id, name")
+          .eq("email", callerEmail)
+          .eq("active", true)
+          .maybeSingle();
+        if (!empByEmail) {
+          throw new Error("Forbidden: only an admin or the assigned engineer may finalize");
+        }
+        caller = empByEmail as { id: string; name: string | null };
+      }
       const row = ticket as unknown as {
         assigned_employee_id: string | null;
         assigned_engineer_name: string | null;
@@ -98,28 +114,42 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
 
     // 1) Auto-depart: only when the engineer arrived and has not departed yet.
     //    No arrival row → nothing to depart (prevents phantom departures).
-    const { data: visit, error: visitErr } = await visits
+    //    The update is conditional on departure_at IS NULL: concurrent double
+    //    calls race, exactly one wins (row-count check), the other skips —
+    //    so no duplicate departure activities. limit(1): multi-visit tickets
+    //    must not crash finalize (maybeSingle throws on >1 row).
+    const { data: visitRows, error: visitErr } = await visits
       .select("arrival_at, departure_at")
       .eq("ticket_id", data.ticketId)
-      .maybeSingle();
+      .order("arrival_at", { ascending: false, nullsFirst: false })
+      .limit(1);
     if (visitErr) throw new Error(visitErr.message);
-    const v = visit as unknown as { arrival_at: string | null; departure_at: string | null } | null;
+    const v = (Array.isArray(visitRows) && visitRows.length > 0
+      ? visitRows[0]
+      : null) as unknown as { arrival_at: string | null; departure_at: string | null } | null;
     if (v?.arrival_at && !v.departure_at) {
-      const { error: departErr } = await visits
+      const { data: departRows, error: departErr } = await visits
         .update({ departure_at: now } as never)
-        .eq("ticket_id", data.ticketId);
+        .eq("ticket_id", data.ticketId)
+        .is("departure_at", null)
+        .select("ticket_id");
       if (departErr) throw new Error(departErr.message);
-      try {
-        await supabaseAdmin.from("ticket_activities").insert({
-          ticket_id: data.ticketId,
-          kind: "departure",
-          notes: `Departed site at ${now} (auto-recorded on report submit)`,
-          actor: context.userId,
-        } as never);
-      } catch (actErr) {
-        console.warn("Departure activity insert failed:", actErr);
+      if (!departRows || (departRows as unknown[]).length === 0) {
+        // Lost the race (already departed elsewhere) — skip the activity insert; report truthfully that this call departed nothing.
+        departed = false;
+      } else {
+        try {
+          await supabaseAdmin.from("ticket_activities").insert({
+            ticket_id: data.ticketId,
+            kind: "departure",
+            notes: `Departed site at ${now} (auto-recorded on report submit)`,
+            actor: context.userId,
+          } as never);
+        } catch (actErr) {
+          console.warn("Departure activity insert failed:", actErr);
+        }
+        departed = true;
       }
-      departed = true;
     }
 
     // 2) Auto-close: skip terminal states (Cancelled/Closed stay untouched).

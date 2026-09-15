@@ -52,6 +52,11 @@ export function ChangePasswordDialog({
       // cleanly right away instead.
       try {
         const { supabase } = await import("@/integrations/supabase/client");
+        const { purgeAuthCaches } = await import("@/lib/useAuth");
+        // Purge before signOut: password-status caches (must_change_password,
+        // expiry) must not survive into the next login and re-trigger this
+        // forced dialog on stale data.
+        purgeAuthCaches();
         await supabase.auth.signOut();
         sessionStorage.setItem("password-changed", "1");
         window.location.href = "/auth";

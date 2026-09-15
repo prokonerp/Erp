@@ -101,22 +101,38 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
       _role: "admin",
     });
     if (!isAdmin) {
+      // Identity by auth_user_id first (exact); email fallback for legacy rows.
       // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
       const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
       let callerEmail = typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null;
-      if (!callerEmail) {
-        const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
-        callerEmail = authData?.user?.email ?? null;
-      }
-      if (!callerEmail) {
-        throw new Error("Could not resolve your account email. Contact admin.");
-      }
-      const { data: caller } = await supabaseAdmin
+      let caller: { id: string; name: string | null } | null = null;
+      const { data: empByAuth } = await supabaseAdmin
         .from("employees")
         .select("id, name")
-        .eq("email", callerEmail)
+        .eq("auth_user_id", context.userId)
         .eq("active", true)
         .maybeSingle();
+      if (empByAuth) {
+        caller = empByAuth as { id: string; name: string | null };
+      } else {
+        if (!callerEmail) {
+          const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
+          callerEmail = authData?.user?.email ?? null;
+        }
+        if (!callerEmail) {
+          throw new Error("Could not resolve your account email. Contact admin.");
+        }
+        const { data: empByEmail } = await supabaseAdmin
+          .from("employees")
+          .select("id, name")
+          .eq("email", callerEmail)
+          .eq("active", true)
+          .maybeSingle();
+        if (!empByEmail) {
+          throw new Error("Employee account not linked. Contact admin.");
+        }
+        caller = empByEmail as { id: string; name: string | null };
+      }
       if (!caller) {
         throw new Error("Employee account not linked. Contact admin.");
       }

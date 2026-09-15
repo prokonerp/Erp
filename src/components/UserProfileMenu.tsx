@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { KeyRound, LogOut, ShieldCheck, Sun, Moon, Monitor } from "lucide-react";
 import { ChangePasswordDialog } from "./ChangePasswordDialog";
 import { recordLogout } from "@/lib/useActivityTracker";
+import { purgeAuthCaches } from "@/lib/useAuth";
 import { useTheme, type Theme as ThemeMode } from "@/lib/theme";
 
 export type ProfileInfo = {
@@ -44,6 +45,7 @@ export function UserProfileMenu({
   const [pwdOpen, setPwdOpen] = useState(false);
 
   async function signOut() {
+    purgeAuthCaches();
     await recordLogout();
     await supabase.auth.signOut();
     navigate({ to: "/auth" });
@@ -61,11 +63,7 @@ export function UserProfileMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="shrink-0 gap-2 px-2"
-          >
+          <Button variant="ghost" size="sm" className="shrink-0 gap-2 px-2">
             <Avatar className="h-7 w-7">
               <AvatarFallback className="text-xs bg-primary/10 text-primary">
                 {initials(profile?.name ?? null, profile?.email ?? null)}
@@ -79,7 +77,9 @@ export function UserProfileMenu({
         <DropdownMenuContent align="end" className="w-72">
           <div className="flex items-start gap-3 p-3">
             <Avatar className="h-10 w-10">
-              <AvatarFallback>{initials(profile?.name ?? null, profile?.email ?? null)}</AvatarFallback>
+              <AvatarFallback>
+                {initials(profile?.name ?? null, profile?.email ?? null)}
+              </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">{profile?.name ?? "—"}</div>
@@ -122,11 +122,7 @@ export function UserProfileMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <ChangePasswordDialog
-        open={pwdOpen}
-        onOpenChange={setPwdOpen}
-        onChanged={onProfileChange}
-      />
+      <ChangePasswordDialog open={pwdOpen} onOpenChange={setPwdOpen} onChanged={onProfileChange} />
     </>
   );
 }

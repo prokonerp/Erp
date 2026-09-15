@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, LogOut, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +40,11 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
   const [loading, setLoading] = useState(true);
   const [arriveBusy, setArriveBusy] = useState(false);
   const [departBusy, setDepartBusy] = useState(false);
+  // Ref-based re-entry locks: busy state commits on re-render, so two taps in
+  // the same tick would both fire (duplicate arrival/departure activities).
+  // Refs flip synchronously — the second call bails.
+  const arriveRef = useRef(false);
+  const departRef = useRef(false);
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
@@ -88,6 +93,8 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
       toast.error(OFFLINE_REASON);
       return;
     }
+    if (arriveRef.current) return;
+    arriveRef.current = true;
     setArriveBusy(true);
     try {
       const at = new Date().toISOString();
@@ -115,6 +122,7 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
       setVisit((v) => ({ arrival_at: at, departure_at: v?.departure_at ?? null }));
       toast.success("Arrival recorded");
     } finally {
+      arriveRef.current = false;
       setArriveBusy(false);
     }
   };
@@ -125,16 +133,38 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
       toast.error(OFFLINE_REASON);
       return;
     }
+    if (departRef.current) return;
+    departRef.current = true;
     setDepartBusy(true);
     try {
       const at = new Date().toISOString();
+      // Conditional on departure_at IS NULL with a row-count check: the FSR
+      // auto-depart (or another device) may have departed already, and an
+      // admin reset may have removed the row. A 0-row match must NOT insert
+      // a departure activity — there is no visit to depart.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
-      const { error } = await (supabase as any)
+      const { data: departRows, error } = await (supabase as any)
         .from("ticket_visits")
         .update({ departure_at: at } as never)
-        .eq("ticket_id", ticketId);
+        .eq("ticket_id", ticketId)
+        .is("departure_at", null)
+        .select("ticket_id");
       if (error) {
         toast.error(error.message);
+        return;
+      }
+      if (!departRows || departRows.length === 0) {
+        // Already departed elsewhere, or the visit row is gone (reset).
+        // Re-read so the bar shows the true state instead of a stale one.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
+        const { data: fresh } = await (supabase as any)
+          .from("ticket_visits")
+          .select("arrival_at,departure_at")
+          .eq("ticket_id", ticketId)
+          .maybeSingle();
+        const row = fresh as unknown as VisitRow | null;
+        setVisit(row ? { arrival_at: row.arrival_at, departure_at: row.departure_at } : null);
+        toast.info("Visit state refreshed — already departed or reset by admin");
         return;
       }
       try {
@@ -151,6 +181,7 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
       setVisit((v) => ({ arrival_at: v?.arrival_at ?? null, departure_at: at }));
       toast.success("Departure recorded");
     } finally {
+      departRef.current = false;
       setDepartBusy(false);
     }
   };

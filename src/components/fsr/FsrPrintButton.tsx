@@ -31,6 +31,19 @@ import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import apcLogo from "@/assets/oem-apc.png.asset.json";
 import { FsrPrintView, type FsrOemLogo } from "./FsrPrintView";
 
+/** Wait (up to ~1.5s) for the hidden print host to render after setJob. */
+async function waitForPrintHost(
+  ref: { current: HTMLDivElement | null },
+  timeoutMs = 1500,
+): Promise<HTMLDivElement | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (ref.current) return ref.current;
+    await new Promise<void>((r) => setTimeout(r, 20));
+  }
+  return null;
+}
+
 /** DB row shape: the print-model FSR fields plus the unsigned signature path
  *  (stale generated types — cast where the ticket page already does). */
 export type FsrDbRow = FsrPrintFsr & {
@@ -83,11 +96,14 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
   const printRef = useRef<HTMLDivElement>(null);
   const [job, setJob] = useState<PrintJob | null>(null);
   const [busy, setBusy] = useState<"print" | "download" | null>(null);
+  // Ref-based pipeline lock: `busy` state commits on re-render, so a same-tick
+  // double-click (or Print+Download together) would run two pipelines.
+  const busyRef = useRef(false);
 
   // Newest-first (submitted_at desc) — [0] is the latest submission.
   const { data: rows } = useFieldServiceReport(fsrRow ? null : ticketId);
   const effectiveRow: FsrDbRow | null =
-    fsrRow ?? ((rows?.[0] as unknown as FsrDbRow | undefined) ?? null);
+    fsrRow ?? (rows?.[0] as unknown as FsrDbRow | undefined) ?? null;
   if (!effectiveRow) return null;
 
   async function ensureJob(): Promise<PrintJob | null> {
@@ -177,8 +193,10 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
       }
     }
 
-    const oem: FsrOemLogo =
-      getOemLogo(ticket.oem_brand ?? ticket.product) ?? { url: apcLogo.url, alt: "APC" };
+    const oem: FsrOemLogo = getOemLogo(ticket.oem_brand ?? ticket.product) ?? {
+      url: apcLogo.url,
+      alt: "APC",
+    };
     const next: PrintJob = {
       model: buildFsrPrintModel({ fsr: row, ticket, customer, visits }),
       company,
@@ -197,40 +215,41 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
   }
 
   async function handlePrint() {
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy("print");
     try {
       const current = await ensureJob();
       if (!current) return;
-      // Wait for the hidden DOM to render the print job.
-      await new Promise<void>((r) => setTimeout(r, 80));
-      const el = printRef.current;
+      const el = await waitForPrintHost(printRef);
       if (!el) throw new Error("Print not ready");
       const { printMultiPageElement } = await import("@/lib/docPdf");
-      await printMultiPageElement(el, filenameFor(current));
+      await printMultiPageElement(el, filenameFor(current), { landscape: true });
       toast.success("Field Service Report sent to print");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Print failed");
     } finally {
+      busyRef.current = false;
       setBusy(null);
     }
   }
 
   async function handleDownload() {
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy("download");
     try {
       const current = await ensureJob();
       if (!current) return;
-      await new Promise<void>((r) => setTimeout(r, 80));
-      const el = printRef.current;
+      const el = await waitForPrintHost(printRef);
       if (!el) throw new Error("Print not ready");
       const { saveMultiPageElementAsPdf } = await import("@/lib/docPdf");
-      await saveMultiPageElementAsPdf(el, filenameFor(current));
+      await saveMultiPageElementAsPdf(el, filenameFor(current), { landscape: true });
       toast.success("Field Service Report downloaded");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Download failed");
     } finally {
+      busyRef.current = false;
       setBusy(null);
     }
   }
@@ -262,7 +281,12 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
         </span>
       ) : (
         <span className="inline-flex gap-2">
-          <button type="button" className={btn} disabled={busy !== null} onClick={() => void handlePrint()}>
+          <button
+            type="button"
+            className={btn}
+            disabled={busy !== null}
+            onClick={() => void handlePrint()}
+          >
             <Printer size={14} />
             {busy === "print" ? "Preparing…" : "Print FSR"}
           </button>

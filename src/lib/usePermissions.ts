@@ -1,21 +1,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Action,
-  EMPTY_PERM,
-  FULL_PERM,
-  ModuleKey,
-  ModulePerm,
-  actionCol,
-} from "./permissions";
+import { Action, EMPTY_PERM, FULL_PERM, ModuleKey, ModulePerm, actionCol } from "./permissions";
 
 type PermMap = Partial<Record<ModuleKey, ModulePerm>>;
 type PermSnapshot = { isAdmin: boolean; perms: PermMap };
 
 // Module-level cache so N mounted pages don't each refetch the same rows.
-// Bust on sign-out via `resetPermissionsCache()` (called from auth listeners).
-let cache: PermSnapshot | null = null;
-let inflight: Promise<PermSnapshot> | null = null;
+// Tagged by uid: a global snapshot leaked one user's permissions into the
+// next login. Bust on sign-out via `purgeAuthCaches()` (useAuth) + the
+// synchronous `resetPermissionsCache()` in sign-out handlers.
+let cache: { uid: string; snap: PermSnapshot } | null = null;
+let inflight: { uid: string; promise: Promise<PermSnapshot> } | null = null;
 
 export function resetPermissionsCache() {
   cache = null;
@@ -41,7 +36,9 @@ async function loadPermissions(): Promise<PermSnapshot> {
     if (au.role_id) {
       const { data: rp } = await supabase
         .from("role_module_permissions")
-        .select("module,enable_access,can_read,can_create,can_edit,can_delete,can_export,can_import")
+        .select(
+          "module,enable_access,can_read,can_create,can_edit,can_delete,can_export,can_import",
+        )
         .eq("role_id", au.role_id);
       (rp ?? []).forEach((row) => {
         const k = row.module as ModuleKey;
@@ -63,26 +60,51 @@ async function loadPermissions(): Promise<PermSnapshot> {
 }
 
 export function usePermissions() {
-  const [loading, setLoading] = useState(!cache);
-  const [isAdmin, setIsAdmin] = useState(cache?.isAdmin ?? false);
-  const [perms, setPerms] = useState<PermMap>(cache?.perms ?? {});
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [perms, setPerms] = useState<PermMap>({});
 
   useEffect(() => {
     let active = true;
-    if (cache) {
-      setIsAdmin(cache.isAdmin);
-      setPerms(cache.perms);
-      setLoading(false);
-      return () => { active = false; };
-    }
-    if (!inflight) inflight = loadPermissions().then((snap) => { cache = snap; return snap; });
-    inflight.then((snap) => {
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id ?? null;
       if (!active) return;
-      setIsAdmin(snap.isAdmin);
-      setPerms(snap.perms);
-      setLoading(false);
-    }).catch(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      if (!uid) {
+        setIsAdmin(false);
+        setPerms({});
+        setLoading(false);
+        return;
+      }
+      if (cache && cache.uid === uid) {
+        setIsAdmin(cache.snap.isAdmin);
+        setPerms(cache.snap.perms);
+        setLoading(false);
+        return;
+      }
+      if (!inflight || inflight.uid !== uid) {
+        inflight = {
+          uid,
+          promise: loadPermissions().then((snap) => {
+            cache = { uid, snap };
+            return snap;
+          }),
+        };
+      }
+      try {
+        const snap = await inflight.promise;
+        if (!active) return;
+        setIsAdmin(snap.isAdmin);
+        setPerms(snap.perms);
+      } catch {
+        // fail-closed already (isAdmin false, empty perms)
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
 
   function can(mod: ModuleKey, action: Action = "read"): boolean {

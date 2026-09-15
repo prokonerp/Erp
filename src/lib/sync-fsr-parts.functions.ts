@@ -59,20 +59,36 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
     });
     if (roleErr) throw new Error(roleErr.message);
     if (!isAdmin) {
+      // Identity by auth_user_id first (exact); email fallback for legacy rows.
       // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
       const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
       let callerEmail = typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null;
-      if (!callerEmail) {
-        const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
-        callerEmail = authData?.user?.email ?? null;
-      }
-      if (!callerEmail) throw new Error("Forbidden: could not resolve your account email");
-      const { data: caller } = await supabaseAdmin
+      let caller: { id: string; name: string | null } | null = null;
+      const { data: empByAuth } = await supabaseAdmin
         .from("employees")
         .select("id, name")
-        .eq("email", callerEmail)
+        .eq("auth_user_id", context.userId)
         .eq("active", true)
         .maybeSingle();
+      if (empByAuth) {
+        caller = empByAuth as { id: string; name: string | null };
+      } else {
+        if (!callerEmail) {
+          const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
+          callerEmail = authData?.user?.email ?? null;
+        }
+        if (!callerEmail) throw new Error("Forbidden: could not resolve your account email");
+        const { data: empByEmail } = await supabaseAdmin
+          .from("employees")
+          .select("id, name")
+          .eq("email", callerEmail)
+          .eq("active", true)
+          .maybeSingle();
+        if (!empByEmail) {
+          throw new Error("Forbidden: only an admin or the assigned engineer may sync");
+        }
+        caller = empByEmail as { id: string; name: string | null };
+      }
       const row = ticket as unknown as {
         assigned_employee_id: string | null;
         assigned_engineer_name: string | null;
@@ -122,7 +138,7 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
         if (e && typeof e === "object") entries.push(toStageInput(e as Record<string, unknown>));
       }
     }
-    const { defective, good } = stageFsrParts(entries);
+    const { defective, good, skipped } = stageFsrParts(entries);
 
     // Additive-only merge into the ticket's part lists.
     const t = ticket as unknown as {
@@ -154,7 +170,50 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
       .select("id");
     if (updErr) throw new Error(updErr.message);
     if (!updRows || updRows.length === 0) {
-      throw new Error("Ticket changed while syncing — please retry (Sync FSR parts)");
+      // Optimistic-concurrency miss (an admin auto-save bumped updated_at
+      // mid-sync). Re-read once and retry — merge is additive/idempotent,
+      // so the retry converges instead of failing to a warning toast.
+      const { data: fresh, error: freshErr } = await supabaseAdmin
+        .from("tickets")
+        .select("defective_parts_details, good_parts_details, updated_at")
+        .eq("id", data.ticketId)
+        .maybeSingle();
+      if (freshErr) throw new Error(freshErr.message);
+      if (!fresh) throw new Error(`NotFound: ticket ${data.ticketId} not found`);
+      const f = fresh as unknown as {
+        defective_parts_details: unknown;
+        good_parts_details: unknown;
+        updated_at: string;
+      };
+      const defRetry = mergePartLines(asPartLines(f.defective_parts_details), defective);
+      const goodRetry = mergePartLines(asPartLines(f.good_parts_details), good);
+      const retryUpdate: Record<string, unknown> = {
+        defective_parts_details: defRetry.merged,
+        good_parts_details: goodRetry.merged,
+      };
+      if (defRetry.merged.length > 0) retryUpdate.defective_parts_received = true;
+      if (goodRetry.merged.length > 0) {
+        retryUpdate.good_parts_used = true;
+        retryUpdate.parts_used = true;
+      }
+      const { data: retryRows, error: retryErr } = await supabaseAdmin
+        .from("tickets")
+        .update(retryUpdate as never)
+        .eq("id", data.ticketId)
+        .eq("updated_at", f.updated_at)
+        .select("id");
+      if (retryErr) throw new Error(retryErr.message);
+      if (!retryRows || retryRows.length === 0) {
+        throw new Error("Ticket changed while syncing — please retry (Sync FSR parts)");
+      }
+      return {
+        ticketId: data.ticketId,
+        defectiveAdded: defRetry.added,
+        goodAdded: goodRetry.added,
+        defectiveTotal: defRetry.merged.length,
+        goodTotal: goodRetry.merged.length,
+        skipped,
+      };
     }
 
     return {
@@ -163,5 +222,6 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
       goodAdded: goodRes.added,
       defectiveTotal: defRes.merged.length,
       goodTotal: goodRes.merged.length,
+      skipped,
     };
   });

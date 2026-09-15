@@ -42,6 +42,16 @@ function claimsEmail(context: unknown): string | null {
 
 /** Resolve the caller to their active employee row. Throws fail-loud errors. */
 async function resolveCaller(admin: AdminClient, userId: string, emailHint: string | null) {
+  // Exact link first — never ambiguous, no email needed.
+  const { data: byAuth, error: authErr } = await admin
+    .from("employees")
+    .select("id, name, auth_user_id")
+    .eq("auth_user_id", userId)
+    .eq("active", true)
+    .maybeSingle();
+  if (authErr) throw new Error(authErr.message);
+  if (byAuth) return byAuth as { id: string; name: string | null; auth_user_id: string | null };
+  // Legacy fallback: email link (rows predating auth_user_id backfill).
   let callerEmail = emailHint;
   if (!callerEmail) {
     // Fallback: slow admin lookup (only when the JWT carries no email claim).

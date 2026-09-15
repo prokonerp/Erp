@@ -132,8 +132,8 @@ export function asEmployeeDocuments(value: unknown): EmployeeDocument[] {
 
 // ---- Dashboard assembler (pure; the page stays thin) ----
 
-/** Ticket statuses that leave the pending-calls count (mirrors the queue filter). */
-export const TERMINAL_TICKET_STATUSES = new Set(["Closed", "Cancelled"]);
+/** Ticket statuses that leave the pending-calls count (exact match, mirrors the queue filter). */
+export const TERMINAL_TICKET_STATUSES: ReadonlySet<string> = new Set(["Closed", "Cancelled"]);
 
 export type DashboardTicket = { id: string; status: string | null };
 
@@ -177,8 +177,7 @@ export function assembleDashboardStats(input: {
   const tickets = input.tickets ?? [];
   return {
     employeeName: input.employeeName ?? "",
-    pendingCalls: tickets.filter((t) => !TERMINAL_TICKET_STATUSES.has((t.status ?? "").trim()))
-      .length,
+    pendingCalls: tickets.filter((t) => !TERMINAL_TICKET_STATUSES.has(t.status ?? "")).length,
     completedVisits: typeof input.completedVisits === "number" ? input.completedVisits : 0,
     materialHolding: typeof input.materialHolding === "number" ? input.materialHolding : 0,
     materialPending: input.materialPending ?? [],

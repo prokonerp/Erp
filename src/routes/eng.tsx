@@ -8,7 +8,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useAuth } from "@/lib/useAuth";
+import { useAuth, purgeAuthCaches } from "@/lib/useAuth";
 import { useIsEngineer } from "@/lib/useIsEngineer";
 import { supabase } from "@/integrations/supabase/client";
 import { recordLogout } from "@/lib/useActivityTracker";
@@ -71,23 +71,16 @@ function EngLayout() {
   if (!session) return <Navigate to="/auth" replace />;
 
   const handleLogout = async () => {
+    purgeAuthCaches();
     await recordLogout();
     await supabase.auth.signOut();
     navigate({ to: "/auth" });
   };
 
+  // Non-engineers (e.g. an admin landing here) go back to the admin
+  // shell instead of a dead-end screen.
   if (!isEngineer) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="text-center max-w-sm">
-          <h1 className="text-lg font-semibold text-foreground">Access Restricted</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This portal is for field engineers only. Please contact your administrator if you
-            believe this is an error.
-          </p>
-        </div>
-      </div>
-    );
+    return <Navigate to="/dashboard" replace />;
   }
 
   const isActive = (path: string) =>

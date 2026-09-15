@@ -11,12 +11,12 @@ import { useAuth } from "@/lib/useAuth";
  * Navy `#1E3A5F` / glacier canvas tokens, skeleton on load.
  *
  * Resolution strategy (no writes), mirroring useMyCarriedPartsCount:
- *  1. Resolve auth user → employee record by email (active only, limit 1).
+ *  1. Resolve auth user → employee by auth_user_id (exact), email fallback.
  *  2. Miss / error / no session → employee null (fail-soft, never throws).
  *     Callers render skeleton while loading, identity card when found,
  *     and a neutral fallback (initials avatar + email) when null.
  *
- * No realtime subscription. staleTime 30s, no polling (identity rarely changes).
+ * No realtime subscription. staleTime 5min, no polling (identity rarely changes).
  */
 
 export type MyEmployee = {
@@ -87,15 +87,35 @@ export function useMyEmployee() {
     queryFn: async (): Promise<MyEmployee | null> => {
       try {
         if (!email) return null;
+        // Identity by auth_user_id first (exact, never ambiguous); legacy
+        // email fallback only when the link column is empty. Duplicate
+        // active emails throw like useMyQueue instead of picking row[0].
+        if (uid) {
+          const { data: byAuth, error: authErr } = await supabase
+            .from("employees")
+            .select("id,name,phone,email,photo_path,documents")
+            .eq("auth_user_id", uid)
+            .eq("active", true)
+            .maybeSingle();
+          if (authErr) {
+            console.error("[useMyEmployee]", authErr.message);
+            return null;
+          }
+          if (byAuth) return pickEmployeeRow([byAuth]);
+        }
         const { data: emps, error: empErr } = await supabase
           .from("employees")
           .select("id,name,phone,email,photo_path,documents")
           .eq("email", email)
-          .eq("active", true)
-          .limit(1);
+          .eq("active", true);
         if (empErr) {
           console.error("[useMyEmployee]", empErr.message);
           return null;
+        }
+        if ((emps ?? []).length > 1) {
+          throw new Error(
+            `AMBIGUOUS_EMPLOYEE_MATCH: ${emps!.length} active employees share ${email}`,
+          );
         }
         return pickEmployeeRow(emps);
       } catch (err) {

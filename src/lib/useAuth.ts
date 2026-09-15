@@ -2,7 +2,32 @@ import { useSyncExternalStore } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 import { resetPermissionsCache } from "@/lib/usePermissions";
+import { resetCurrentUserCache } from "@/lib/currentUser";
+import { clearClientQueryCache } from "@/router";
 import { recordLogin, recordLogout } from "@/lib/useActivityTracker";
+
+/**
+ * Purge every user-scoped cache synchronously (call BEFORE signOut so the
+ * next login — even on a remount that beats the auth event — starts clean).
+ * Never throws; never blocks sign-out.
+ */
+export function purgeAuthCaches() {
+  try {
+    resetPermissionsCache();
+  } catch {
+    // never block sign-out on cache cleanup
+  }
+  try {
+    resetCurrentUserCache();
+  } catch {
+    // never block sign-out on cache cleanup
+  }
+  try {
+    clearClientQueryCache();
+  } catch {
+    // never block sign-out on cache cleanup
+  }
+}
 
 /** Server-side markers that a refresh token is permanently dead (retrying is futile). */
 const PERMANENT_REFRESH_DEATH =
@@ -55,12 +80,15 @@ let deadRefreshStrikes = 0;
 function killZombieSession(why: string) {
   console.warn(`[auth] signing out (${why})`);
   deadRefreshStrikes = 0;
-  resetPermissionsCache();
+  purgeAuthCaches();
   // Clear local state even if the server call itself fails — the redirect
   // to /auth must happen regardless so the user can sign in fresh.
-  void supabase.auth.signOut().catch(() => {}).finally(() => {
-    setState({ session: null, loading: false });
-  });
+  void supabase.auth
+    .signOut()
+    .catch(() => {})
+    .finally(() => {
+      setState({ session: null, loading: false });
+    });
 }
 
 function ensureStarted() {
@@ -98,7 +126,9 @@ function ensureStarted() {
         }
         deadRefreshStrikes += 1;
         if (deadRefreshStrikes >= 2) {
-          killZombieSession(`session unusable after ${deadRefreshStrikes} verified failures: ${msg.trim()}`);
+          killZombieSession(
+            `session unusable after ${deadRefreshStrikes} verified failures: ${msg.trim()}`,
+          );
         } else {
           console.warn("[auth] token refresh failed, will re-verify on next failure:", msg.trim());
         }
@@ -110,6 +140,7 @@ function ensureStarted() {
     if (e === "SIGNED_IN" || e === "SIGNED_OUT" || e === "USER_UPDATED") {
       resetPermissionsCache();
     }
+    if (e === "SIGNED_OUT") purgeAuthCaches();
     if (e === "SIGNED_IN") void recordLogin();
     if (e === "SIGNED_OUT") void recordLogout();
   });
@@ -132,6 +163,9 @@ function ensureStarted() {
         if (isInvalidRefresh && !transient) {
           // Stale/invalid refresh token (e.g. after DB restore or manual deletion).
           // Clear local session and force sign-out to avoid infinite 400 loop.
+          // Purge first: the SIGNED_OUT event may arrive late (or never, if
+          // signOut itself fails) — never leave user-scoped caches behind.
+          purgeAuthCaches();
           void supabase.auth.signOut().finally(() => {
             setState({ session: null, loading: false });
           });
@@ -145,6 +179,7 @@ function ensureStarted() {
         }
         // Legacy broad check — keep for safety but only if it mentions refresh
         if (/refresh.*token/i.test(msg) && (error as any)?.status === 400) {
+          purgeAuthCaches();
           void supabase.auth.signOut().finally(() => {
             setState({ session: null, loading: false });
           });
@@ -170,6 +205,7 @@ function ensureStarted() {
           `${msg} ${code}`,
         );
       if (isInvalidRefresh) {
+        purgeAuthCaches();
         void supabase.auth.signOut().finally(() => {
           setState({ session: null, loading: false });
         });
@@ -177,6 +213,7 @@ function ensureStarted() {
       }
       // Fallback: only sign out if it explicitly mentions refresh token
       if (/refresh.*token/i.test(msg) && /not found|invalid|expired/i.test(msg)) {
+        purgeAuthCaches();
         void supabase.auth.signOut().finally(() => {
           setState({ session: null, loading: false });
         });

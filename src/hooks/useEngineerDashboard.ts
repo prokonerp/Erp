@@ -125,7 +125,9 @@ export function useEngineerDashboard() {
 
   return {
     stats,
-    isLoading: queue.isLoading || rest.isLoading,
+    // A disabled query reports isLoading while idle — gate on employeeId so a
+    // never-linked login can't spin skeletons forever (queue error surfaces).
+    isLoading: queue.isLoading || (!!employeeId && rest.isLoading),
     isError: queue.isError || (!rest.isLoading && !!employeeId && rest.isError),
     error: queue.error ?? rest.error,
     refetch: () => {

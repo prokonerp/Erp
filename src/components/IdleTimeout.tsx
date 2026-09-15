@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { recordLogout } from "@/lib/useActivityTracker";
+import { purgeAuthCaches } from "@/lib/useAuth";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -103,6 +104,7 @@ export function IdleTimeout() {
         sessionStorage.setItem(EXPIRED_KEY, "1");
       }
       await recordLogout();
+      purgeAuthCaches();
       await supabase.auth.signOut();
       // signOut triggers auth state change → useAuth updates →
       // _app.tsx renders <Navigate to="/auth" replace />.
@@ -266,7 +268,8 @@ export function IdleTimeout() {
     window.addEventListener("scroll", onScroll, { passive: true, capture: true } as any);
     document.addEventListener("scroll", onScroll, { passive: true, capture: true } as any);
     const mainEl = document.getElementById("main-content");
-    if (mainEl) mainEl.addEventListener("scroll", onScroll, { passive: true, capture: true } as any);
+    if (mainEl)
+      mainEl.addEventListener("scroll", onScroll, { passive: true, capture: true } as any);
 
     // Also watch for future main-content re-mounts (SPA navigation may replace it)
     let observer: MutationObserver | null = null;

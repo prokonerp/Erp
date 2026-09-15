@@ -38,6 +38,18 @@ export function DefaultErrorComponent({ error, reset }: { error: Error; reset: (
 // FE-C4: Singleton QueryClient on client — prevents cache loss on HMR/remount
 let _clientQueryClient: QueryClient | null = null;
 
+/**
+ * Purge every cached query (call on sign-out so the next login on the same
+ * device can never see the previous user's data). Safe to call anytime.
+ */
+export function clearClientQueryCache() {
+  try {
+    _clientQueryClient?.clear();
+  } catch {
+    // never block sign-out on cache cleanup
+  }
+}
+
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {

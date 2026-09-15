@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -187,8 +187,10 @@ function YesNoRequired({
   return (
     <div>
       <RadioGroup
-        value={value === null ? undefined : value ? "yes" : "no"}
-        onValueChange={(v) => onChange(v === "yes")}
+        value={value === null ? "unset" : value ? "yes" : "no"}
+        onValueChange={(v) => {
+          if (v !== "unset") onChange(v === "yes");
+        }}
         aria-label={label}
         aria-invalid={!!error}
         className={`grid grid-cols-2 gap-1 rounded-xl border bg-muted p-1 ${error ? "border-destructive" : "border-border"}`}
@@ -284,7 +286,7 @@ function RatingScale({
   return (
     <div>
       <RadioGroup
-        value={value || undefined}
+        value={value}
         onValueChange={onChange}
         aria-label="Overall rating from 1 to 10"
         aria-invalid={!!error}
@@ -345,6 +347,10 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  // Ref-based in-flight guard: `busy` state commits on re-render, so a rapid
+  // double-Enter from the same render closure would start two submissions
+  // (duplicate FSR rows). The ref flips synchronously — second call bails.
+  const submittingRef = useRef(false);
   const [submittedOk, setSubmittedOk] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [isOnline, setIsOnline] = useState(() =>
@@ -528,9 +534,11 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || submittingRef.current) return;
+    submittingRef.current = true;
     if (!navigator.onLine) {
       toast.error(offlineReason);
+      submittingRef.current = false;
       return;
     }
     const parsed = fieldServiceReportSchema.safeParse({
@@ -549,6 +557,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       setErrors(errs);
       const topLevel = Object.entries(errs).find(([k]) => !k.includes("."));
       if (topLevel) toast.error(topLevel[1]);
+      submittingRef.current = false;
       return;
     }
     setErrors({});
@@ -560,10 +569,22 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         return;
       }
       const email = u.user.email;
+      const authUid = u.user.id;
       let employeeId: string | null = null;
       let engineerName = email ?? "Engineer";
       let engineerPhone: string | null = null;
-      if (email) {
+      // Identity by auth_user_id first (exact); email fallback for legacy rows.
+      const { data: empByAuth } = await supabase
+        .from("employees")
+        .select("id,name,phone")
+        .eq("auth_user_id", authUid)
+        .eq("active", true)
+        .maybeSingle();
+      if (empByAuth) {
+        employeeId = empByAuth.id as string;
+        engineerName = (empByAuth.name as string) ?? email ?? "Engineer";
+        engineerPhone = (empByAuth.phone as string | null) ?? null;
+      } else if (email) {
         const { data: emps } = await supabase
           .from("employees")
           .select("id,name,phone")
@@ -613,6 +634,9 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       } catch {
         toast.warning("Report saved; auto-depart/close pending — an admin can close the ticket.");
       }
+      // The queue still shows this ticket open (depart/close landed above) —
+      // bust it so /eng/queue drops the closed ticket without a manual refresh.
+      await queryClient.invalidateQueries({ queryKey: ["eng", "queue"] });
       // Prevent the view-only gate from flashing during the transition out.
       // NOTE: the submittedOk banner below stays in code but is superseded by
       // this immediate navigation (Sonner toasts persist across routes).
@@ -621,6 +645,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       setForm({ ...initialForm });
     } finally {
       setBusy(false);
+      submittingRef.current = false;
     }
   };
 
@@ -795,7 +820,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                   <FieldError message={errors.batteryBankAh} />
                 </div>
               </FsrField>
-              <FsrField label="Qty" required>
+              <FsrField label="Qty (drives the reading cells below)">
                 <NumInput
                   value={form.batteryBankQty}
                   onChange={(v) => set("batteryBankQty", v)}

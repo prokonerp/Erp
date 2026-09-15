@@ -1599,6 +1599,7 @@ export type Database = {
       employees: {
         Row: {
           active: boolean
+          auth_user_id: string | null
           created_at: string
           department: string | null
           email: string | null
@@ -1618,6 +1619,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          auth_user_id?: string | null
           created_at?: string
           department?: string | null
           email?: string | null
@@ -1637,6 +1639,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          auth_user_id?: string | null
           created_at?: string
           department?: string | null
           email?: string | null

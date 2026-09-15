@@ -212,6 +212,25 @@ export const updateAppUser = createServerFn({ method: "POST" })
         .eq("user_id", data.user_id)
         .eq("role", "admin");
     }
+    // One-directional sync: assigning an admin-ish app role also grants the
+    // user_roles admin row that usePermissions/has_role actually enforce.
+    // Never removes (explicit is_admin:false owns removal) — prevents the
+    // split state where the UI shows "Admin" but nothing permits it.
+    if (data.role_id) {
+      const { data: roleRow } = await supabaseAdmin
+        .from("app_roles")
+        .select("name")
+        .eq("id", data.role_id)
+        .maybeSingle();
+      const rname = (
+        ((roleRow as { name?: string | null } | null)?.name ?? "") as string
+      ).toLowerCase();
+      if (["admin", "administrator", "superadmin", "owner"].some((a) => rname.includes(a))) {
+        await supabaseAdmin
+          .from("user_roles")
+          .upsert({ user_id: data.user_id, role: "admin" }, { onConflict: "user_id,role" });
+      }
+    }
     return { ok: true };
   });
 

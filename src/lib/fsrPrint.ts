@@ -2,7 +2,7 @@
 // No supabase, no DOM, no sessionStorage. All functions are total over
 // sparse DB rows: nulls/empties degrade to dashes, never throw.
 
-export type YesNo = "Yes" | "No";
+export type YesNo = "Yes" | "No" | "—";
 export type FeedbackStatus = "Complete" | "Incomplete" | "Under Observation";
 export type StatusLabel = "Warranty" | "Contract" | "Billable";
 export type CallKind = "PM" | "Installation" | "";
@@ -18,8 +18,10 @@ export function displayOrDash(v: unknown): string {
   return "—";
 }
 
-/** Nullable DB boolean -> printed "Yes"/"No". */
+/** Nullable DB boolean -> printed "Yes"/"No"; unknown stays "—" (never "No" —
+ *  a missing reading on a customer-facing report must not pose as negative). */
 export function boolYesNo(v: boolean | null | undefined): YesNo {
+  if (v == null) return "—";
   return v ? "Yes" : "No";
 }
 

@@ -13,7 +13,6 @@ import {
   saveEngineerDailyLog,
   uploadEngineerAttachment,
 } from "@/lib/engineer-conveyance.functions";
-import { verificationKeys } from "@/lib/queryKeys";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -174,6 +173,10 @@ function EngConveyance() {
   const [morningFile, setMorningFile] = useState<File | null>(null);
   const [eveningFile, setEveningFile] = useState<File | null>(null);
   const [saving, setSaving] = useState<"morning" | "evening" | null>(null);
+  // Ref-based re-entry locks: `saving`/`expenseBusy`/`removingId` state commits
+  // on re-render, so two taps in the same tick would both fire (double upload,
+  // duplicate expense rows). Refs flip synchronously — second call bails.
+  const savingRef = useRef<"morning" | "evening" | null>(null);
 
   useEffect(() => {
     setMorningOdo(log?.morning_odometer != null ? String(log.morning_odometer) : "");
@@ -188,6 +191,7 @@ function EngConveyance() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [notes, setNotes] = useState("");
   const [expenseBusy, setExpenseBusy] = useState(false);
+  const expenseBusyRef = useRef(false);
 
   async function uploadPhoto(
     file: File,
@@ -214,6 +218,7 @@ function EngConveyance() {
       toast.error("No internet connection. Reconnect and retry.");
       return;
     }
+    if (savingRef.current) return;
     const odoText = which === "morning" ? morningOdo : eveningOdo;
     const file = which === "morning" ? morningFile : eveningFile;
     const existingOdo = which === "morning" ? log?.morning_odometer : log?.evening_odometer;
@@ -229,6 +234,7 @@ function EngConveyance() {
       return;
     }
     setSaving(which);
+    savingRef.current = which;
     try {
       let photoPath: string | null = existingPhoto ?? null;
       if (file) photoPath = await uploadPhoto(file, `${which}_reading`);
@@ -252,11 +258,13 @@ function EngConveyance() {
         else setEveningFile(null);
       }
       await queryClient.invalidateQueries({ queryKey: logKey });
-      await queryClient.invalidateQueries({ queryKey: verificationKeys.detail("eng-dashboard") });
+      // Dashboard shows today's km — refresh its direct-query cache too.
+      await queryClient.invalidateQueries({ queryKey: ["eng", "dashboard-direct"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(null);
+      savingRef.current = null;
     }
   }
 
@@ -265,6 +273,7 @@ function EngConveyance() {
       toast.error("No internet connection. Reconnect and retry.");
       return;
     }
+    if (expenseBusyRef.current) return;
     if (!chargeType) {
       toast.error("Select the charge type");
       return;
@@ -274,6 +283,7 @@ function EngConveyance() {
       return;
     }
     setExpenseBusy(true);
+    expenseBusyRef.current = true;
     try {
       let receiptPath: string | null = null;
       if (receiptFile) receiptPath = await uploadPhoto(receiptFile, "receipt");
@@ -296,16 +306,26 @@ function EngConveyance() {
       toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
       setExpenseBusy(false);
+      expenseBusyRef.current = false;
     }
   }
 
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const removingRef = useRef<string | null>(null);
+
   async function removeExpense(id: string) {
+    if (removingRef.current) return;
+    removingRef.current = id;
+    setRemovingId(id);
     try {
       await callDeleteExpense({ data: { id } });
       toast.success("Expense removed");
       await queryClient.invalidateQueries({ queryKey: expKey });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      removingRef.current = null;
+      setRemovingId(null);
     }
   }
 
@@ -561,6 +581,7 @@ function EngConveyance() {
                           size="sm"
                           className="min-h-[44px] min-w-[44px] shrink-0"
                           aria-label={`Remove ${e.charge_type} expense`}
+                          disabled={removingId !== null}
                           onClick={() => removeExpense(e.id)}
                         >
                           <Trash2 className="h-4 w-4" aria-hidden />
