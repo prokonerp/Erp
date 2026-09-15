@@ -22,10 +22,10 @@ const requiredPositiveNumber = (message: string) =>
 
 export const BATTERY_MAKES = ["EXIDE", "QUANTA"] as const;
 export const BATTERY_AH = ["7", "12", "18", "26", "42", "65", "100", "120", "150", "200"] as const;
-/** Battery bank qty: optional, integer, hard cap 32 (matches the QTY-driven grid). */
+/** Battery bank qty: optional, integer, hard cap 16 (matches the QTY-driven grid). */
 const optionalBatteryQty = z.preprocess(
   emptyToUndefined,
-  z.coerce.number().int().positive().max(32, "Battery qty cannot exceed 32").optional(),
+  z.coerce.number().int().positive().max(16, "Battery qty cannot exceed 16").optional(),
 );
 export const batteryBankSchema = z.object({
   batteryBankMake: z.preprocess(emptyToUndefined, z.enum(BATTERY_MAKES).optional()),
@@ -33,7 +33,7 @@ export const batteryBankSchema = z.object({
   batteryBankQty: optionalBatteryQty,
 });
 const voltsReadingSchema = z.object({ volts: optionalNonNegativeNumber });
-export const MAX_BATTERY_READINGS = 32;
+export const MAX_BATTERY_READINGS = 16;
 export const chargingReadingsSchema = z
   .array(voltsReadingSchema)
   .max(MAX_BATTERY_READINGS)

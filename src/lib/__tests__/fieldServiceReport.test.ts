@@ -149,10 +149,10 @@ describe("fieldServiceReportSchema", () => {
     expect(result.data.rating).toBe(10);
   });
 
-  it('fails on batteryBankQty "33" (cap is 32)', () => {
+  it('fails on batteryBankQty "17" (cap is 16)', () => {
     const result = fieldServiceReportSchema.safeParse({
       ...minimalInput(),
-      batteryBankQty: "33",
+      batteryBankQty: "17",
     });
     expect(result.success).toBe(false);
   });
@@ -245,10 +245,10 @@ describe("fieldServiceReportSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("fails when chargingReadings exceeds 32 rows", () => {
+  it("fails when chargingReadings exceeds 16 rows", () => {
     const result = fieldServiceReportSchema.safeParse({
       ...minimalInput(),
-      chargingReadings: Array.from({ length: 33 }, () => ({ volts: "13.5" })),
+      chargingReadings: Array.from({ length: 17 }, () => ({ volts: "13.5" })),
     });
     expect(result.success).toBe(false);
   });
@@ -261,22 +261,22 @@ describe("fieldServiceReportSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("fails when dischargingReadings exceeds 32 rows", () => {
+  it("fails when dischargingReadings exceeds 16 rows", () => {
     const result = fieldServiceReportSchema.safeParse({
       ...minimalInput(),
-      dischargingReadings: Array.from({ length: 33 }, () => ({ volts: "12.1" })),
+      dischargingReadings: Array.from({ length: 17 }, () => ({ volts: "12.1" })),
     });
     expect(result.success).toBe(false);
   });
 
-  it("parses 32 charging readings (full bank)", () => {
+  it("parses 16 charging readings (full bank)", () => {
     const result = fieldServiceReportSchema.safeParse({
       ...minimalInput(),
-      chargingReadings: Array.from({ length: 32 }, () => ({ volts: "13.5" })),
+      chargingReadings: Array.from({ length: 16 }, () => ({ volts: "13.5" })),
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.chargingReadings).toHaveLength(32);
+    expect(result.data.chargingReadings).toHaveLength(16);
   });
 
   it("parses empty dischargingReadings", () => {

@@ -824,7 +824,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 <NumInput
                   value={form.batteryBankQty}
                   onChange={(v) => set("batteryBankQty", v)}
-                  placeholder="Qty (1–32)"
+                  placeholder="Qty (1–16)"
                   error={errors.batteryBankQty}
                 />
               </FsrField>

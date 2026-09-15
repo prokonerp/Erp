@@ -8,18 +8,16 @@ export const Route = createFileRoute("/fsr/preview")({
   component: FsrPreviewPage,
 });
 
-/* ── Rich showroom sample: 32+32 battery cells, 5 parts, long texts ── */
+/* ── Rich showroom sample: 16+16 battery cells, 5 parts, long texts ── */
 
 const chargingValues = [
   13.8, 13.7, 13.8, 13.6, 13.7, 13.8, 13.7, 13.6, 13.8, 13.7, 13.5, 13.8, 13.7, 13.6,
-  13.8, 13.7, 13.8, 13.6, 13.7, 13.8, 13.7, 13.6, 13.5, 13.8, 13.7, 13.8, 13.6, 13.7,
-  13.8, 13.7, 13.6, 13.8,
+  13.8, 13.7,
 ];
 
 const dischargingValues = [
   12.9, 12.8, 12.9, 12.7, 12.8, 12.9, 12.8, 12.7, 12.9, 12.8, 12.6, 12.9, 12.8, 12.7,
-  12.9, 12.8, 12.9, 12.7, 12.8, 12.9, 12.8, 12.7, 12.6, 12.9, 12.8, 12.9, 12.7, 12.8,
-  12.9, 12.8, 12.7, 12.9,
+  12.9, 12.8,
 ];
 
 const sampleInput: FsrPrintInput = {
@@ -30,7 +28,7 @@ const sampleInput: FsrPrintInput = {
     mains_voltage_ne: 4,
     battery_bank_make: "Exide",
     battery_bank_ah: "12V 100Ah",
-    battery_bank_qty: 32,
+    battery_bank_qty: 16,
     charging_readings: chargingValues.map((volts) => ({ volts })),
     discharging_readings: dischargingValues.map((volts) => ({ volts })),
     rating: 9,
