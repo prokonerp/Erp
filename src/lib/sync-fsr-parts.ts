@@ -16,9 +16,7 @@ export interface FsrPartInput {
   item?: string | null;
   qty?: number | null;
   oldSrNo?: string | null;
-  oldBarcode?: string | null;
   newSrNo?: string | null;
-  newChallan?: string | null;
 }
 
 function clean(v: string | null | undefined): string {
@@ -32,10 +30,8 @@ function normalizeQty(qty: number | null | undefined): number {
 /**
  * Split FSR part_replacements entries into defective (removed) and good (fitted) lines.
  * - Entries with a blank item are skipped (empties).
- * - Defective serial = oldSrNo ?? oldBarcode; staged whenever the item is present.
- * - Good lines require newSrNo.
- * - Remarks note the barcode (defective, when it differs from the staged serial)
- *   or the challan (good).
+ * - Defective serial = oldSrNo; staged whenever the item is present.
+ * - Good lines require newSrNo, staged with remarks: null.
  */
 export function stageFsrParts(parts: FsrPartInput[]): {
   defective: StagedPartLine[];
@@ -48,24 +44,17 @@ export function stageFsrParts(parts: FsrPartInput[]): {
     if (!name) continue;
     const qty = normalizeQty(p?.qty);
     const oldSrNo = clean(p?.oldSrNo);
-    const oldBarcode = clean(p?.oldBarcode);
     const newSrNo = clean(p?.newSrNo);
-    const newChallan = clean(p?.newChallan);
 
-    const defSerial = oldSrNo || oldBarcode || null;
-    defective.push({
-      name,
-      qty,
-      serial: defSerial,
-      remarks: oldBarcode && oldBarcode !== defSerial ? `Barcode: ${oldBarcode}` : null,
-    });
+    const defSerial = oldSrNo || null;
+    defective.push({ name, qty, serial: defSerial, remarks: null });
 
     if (newSrNo) {
       good.push({
         name,
         qty,
         serial: newSrNo,
-        remarks: newChallan ? `Challan: ${newChallan}` : null,
+        remarks: null,
       });
     }
   }

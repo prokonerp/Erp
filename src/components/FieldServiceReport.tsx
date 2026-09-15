@@ -8,20 +8,21 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   BATTERY_AH,
   BATTERY_MAKES,
+  MAX_BATTERY_READINGS,
   UPS_LOCATIONS,
   buildFsrPayload,
   fieldServiceReportSchema,
-  frontIndicationSchema,
   loadRecordSchema,
   partReplacementsSchema,
   powerConditionSchema,
+  ratingSchema,
   readingsSchema,
 } from "@/lib/fieldServiceReport";
 import { fieldServiceReportKeys } from "@/lib/queryKeys";
 import { syncFsrPartsToTicket } from "@/lib/sync-fsr-parts.functions";
+import { finalizeFsrSubmission } from "@/lib/finalize-fsr.functions";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -30,27 +31,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SignaturePad } from "./eng/SignaturePad";
+import { FsrPrintButton, type FsrDbRow } from "./fsr/FsrPrintButton";
 
 let rowSeq = 0;
 const nextRowId = () => `row-${++rowSeq}`;
 type VoltReading = { id: string; volts: string };
-type FrontIndicationState = {
-  opMode: string;
-  bypassState: string;
-  leadFound: string;
-  leadCorrected: string;
-  chargeFound: string;
-  chargeCorrected: string;
-  fault0Found: string;
-  fault0Corrected: string;
-  faultGeFound: string;
-  faultGeCorrected: string;
-  remarks: string;
-  remarksTarget: string;
-};
 type PcDetail = { id: string; monitorSizeIn: string; qty: string };
 type PrinterDetail = { id: string; ratingW: string; qty: string };
 type ScannerDetail = { id: string; ratingW: string; qty: string };
@@ -61,8 +48,6 @@ type PartReplacement = {
   newSrNo: string;
   charges: string;
   qty: string;
-  oldBarcode: string;
-  newChallan: string;
 };
 
 type FormState = {
@@ -73,10 +58,9 @@ type FormState = {
   batteryBankQty: string;
   chargingReadings: VoltReading[];
   dischargingReadings: VoltReading[];
-  frontIndication: FrontIndicationState;
-  acProvided: boolean;
-  dgProvided: boolean;
-  environmentDuty: boolean;
+  acProvided: boolean | null;
+  dgProvided: boolean | null;
+  environmentDuty: boolean | null;
   upsLocation: string;
   pcDetails: PcDetail[];
   printerDetails: PrinterDetail[];
@@ -85,28 +69,14 @@ type FormState = {
   powerFailuresDurationMin: string;
   loadOnDgPercent: string;
   dgSetCapacityKva: string;
-  dgSet: boolean;
-  amfPanel: boolean;
-  operateNonBusinessHours: boolean;
-  operateHolidays: boolean;
+  dgSet: boolean | null;
+  amfPanel: boolean | null;
+  operateNonBusinessHours: boolean | null;
+  operateHolidays: boolean | null;
   partReplacements: PartReplacement[];
+  rating: string;
   customerSignaturePath: string;
   signatureCapturedAt: string;
-};
-
-const initialFrontIndication: FrontIndicationState = {
-  opMode: "",
-  bypassState: "",
-  leadFound: "",
-  leadCorrected: "",
-  chargeFound: "",
-  chargeCorrected: "",
-  fault0Found: "",
-  fault0Corrected: "",
-  faultGeFound: "",
-  faultGeCorrected: "",
-  remarks: "",
-  remarksTarget: "",
 };
 
 const initialForm: FormState = {
@@ -117,10 +87,9 @@ const initialForm: FormState = {
   batteryBankQty: "",
   chargingReadings: [],
   dischargingReadings: [],
-  frontIndication: initialFrontIndication,
-  acProvided: false,
-  dgProvided: false,
-  environmentDuty: false,
+  acProvided: null,
+  dgProvided: null,
+  environmentDuty: null,
   upsLocation: "",
   pcDetails: [],
   printerDetails: [],
@@ -129,11 +98,12 @@ const initialForm: FormState = {
   powerFailuresDurationMin: "",
   loadOnDgPercent: "",
   dgSetCapacityKva: "",
-  dgSet: false,
-  amfPanel: false,
-  operateNonBusinessHours: false,
-  operateHolidays: false,
+  dgSet: null,
+  amfPanel: null,
+  operateNonBusinessHours: null,
+  operateHolidays: null,
   partReplacements: [],
+  rating: "",
   customerSignaturePath: "",
   signatureCapturedAt: "",
 };
@@ -197,37 +167,145 @@ function FsrField({
   );
 }
 
-function YesNo({
+/**
+ * YesNoRequired — compulsory tri-state Yes/No. Starts with neither selected;
+ * the section is only valid once the engineer picks one.
+ */
+function YesNoRequired({
   value,
   onChange,
   label,
+  error,
 }: {
-  value: boolean;
+  value: boolean | null;
   onChange: (v: boolean) => void;
   label: string;
+  error?: string;
 }) {
   const base =
     "flex min-h-[44px] flex-1 cursor-pointer items-center justify-center rounded-lg text-sm font-medium";
   return (
-    <RadioGroup
-      value={value ? "yes" : "no"}
-      onValueChange={(v) => onChange(v === "yes")}
-      aria-label={label}
-      className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted p-1"
-    >
-      <label
-        className={`${base} ${value ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+    <div>
+      <RadioGroup
+        value={value === null ? undefined : value ? "yes" : "no"}
+        onValueChange={(v) => onChange(v === "yes")}
+        aria-label={label}
+        aria-invalid={!!error}
+        className={`grid grid-cols-2 gap-1 rounded-xl border bg-muted p-1 ${error ? "border-destructive" : "border-border"}`}
       >
-        <RadioGroupItem value="yes" className="sr-only" />
-        Yes
-      </label>
-      <label
-        className={`${base} ${!value ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+        <label
+          className={`${base} ${value === true ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+        >
+          <RadioGroupItem value="yes" className="sr-only" />
+          Yes
+        </label>
+        <label
+          className={`${base} ${value === false ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+        >
+          <RadioGroupItem value="no" className="sr-only" />
+          No
+        </label>
+      </RadioGroup>
+      <FieldError message={error} />
+    </div>
+  );
+}
+
+/**
+ * BatteryGrid — compact QTY-driven cell grid (max 4 columns per row).
+ * Each cell carries a small centered "Bat N" label on its top border.
+ */
+function BatteryGrid({
+  title,
+  readings,
+  onChange,
+  errors,
+  errorPrefix,
+}: {
+  title: string;
+  readings: VoltReading[];
+  onChange: (i: number, v: string) => void;
+  errors: Record<string, string>;
+  errorPrefix: "chargingReadings" | "dischargingReadings";
+}) {
+  if (readings.length === 0) {
+    return (
+      <p className="text-[13px] text-muted-foreground">
+        Enter the battery Qty above — the cells generate automatically.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <SubHead>
+        {title} ({readings.length})
+      </SubHead>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {readings.map((reading, i) => {
+          const err = errors[`${errorPrefix}.${i}.volts`];
+          return (
+            <div key={reading.id} className="rounded-lg border border-border bg-card">
+              <p className="border-b border-border py-1 text-center text-[11px] font-medium text-muted-foreground">
+                Bat {i + 1}
+              </p>
+              <div className="p-1.5">
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={reading.volts}
+                  onChange={(e) => onChange(i, e.target.value)}
+                  placeholder="Vdc"
+                  aria-label={`${title} battery ${i + 1} volts`}
+                  aria-invalid={!!err}
+                  className={`h-11 min-h-[44px] text-center ${err ? "border-destructive" : ""}`}
+                />
+                <FieldError message={err} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * RatingScale — linear 1-to-10 scale. Required; nothing pre-selected.
+ */
+function RatingScale({
+  value,
+  onChange,
+  error,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+}) {
+  return (
+    <div>
+      <RadioGroup
+        value={value || undefined}
+        onValueChange={onChange}
+        aria-label="Overall rating from 1 to 10"
+        aria-invalid={!!error}
+        className={`grid grid-cols-5 gap-1.5 sm:grid-cols-10 ${error ? "rounded-xl border border-destructive p-1" : ""}`}
       >
-        <RadioGroupItem value="no" className="sr-only" />
-        No
-      </label>
-    </RadioGroup>
+        {Array.from({ length: 10 }, (_, i) => String(i + 1)).map((n) => (
+          <label
+            key={n}
+            className={`flex min-h-[44px] cursor-pointer items-center justify-center rounded-lg border text-sm font-semibold ${
+              value === n
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border text-muted-foreground"
+            }`}
+          >
+            <RadioGroupItem value={n} className="sr-only" />
+            {n}
+          </label>
+        ))}
+      </RadioGroup>
+      <FieldError message={error} />
+    </div>
   );
 }
 
@@ -275,6 +353,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const callSyncFsrParts = useServerFn(syncFsrPartsToTicket);
+  const callFinalizeFsr = useServerFn(finalizeFsrSubmission);
   const {
     data: rows,
     isLoading: latestLoading,
@@ -292,39 +371,40 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     };
   }, []);
 
-  const set = (k: keyof FormState, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: keyof FormState, v: string | boolean | null) =>
+    setForm((f) => ({ ...f, [k]: v }));
 
-  const setFront = (k: keyof FrontIndicationState, v: string) =>
-    setForm((f) => ({ ...f, frontIndication: { ...f.frontIndication, [k]: v } }));
+  // QTY-driven battery cells: charging + discharging grids always mirror the
+  // battery bank qty (preserving entered volts by index on grow/shrink).
+  // Blank/invalid qty clears both grids.
+  useEffect(() => {
+    const qty = Number(form.batteryBankQty);
+    const validQty =
+      form.batteryBankQty.trim() !== "" &&
+      Number.isInteger(qty) &&
+      qty >= 1 &&
+      qty <= MAX_BATTERY_READINGS
+        ? qty
+        : 0;
+    setForm((f) => {
+      if (f.chargingReadings.length === validQty && f.dischargingReadings.length === validQty)
+        return f;
+      const resize = (rows: VoltReading[]) =>
+        Array.from({ length: validQty }, (_, i) => rows[i] ?? { id: nextRowId(), volts: "" });
+      return {
+        ...f,
+        chargingReadings: resize(f.chargingReadings),
+        dischargingReadings: resize(f.dischargingReadings),
+      };
+    });
+  }, [form.batteryBankQty]);
 
-  const addCharging = () =>
-    setForm((f) =>
-      f.chargingReadings.length >= 20
-        ? f
-        : { ...f, chargingReadings: [...f.chargingReadings, { id: nextRowId(), volts: "" }] },
-    );
-  const removeCharging = (i: number) =>
-    setForm((f) => ({ ...f, chargingReadings: f.chargingReadings.filter((_, j) => j !== i) }));
   const setCharging = (i: number, v: string) =>
     setForm((f) => ({
       ...f,
       chargingReadings: f.chargingReadings.map((r, j) => (j === i ? { ...r, volts: v } : r)),
     }));
 
-  const addDischarging = () =>
-    setForm((f) =>
-      f.dischargingReadings.length >= 20
-        ? f
-        : {
-            ...f,
-            dischargingReadings: [...f.dischargingReadings, { id: nextRowId(), volts: "" }],
-          },
-    );
-  const removeDischarging = (i: number) =>
-    setForm((f) => ({
-      ...f,
-      dischargingReadings: f.dischargingReadings.filter((_, j) => j !== i),
-    }));
   const setDischarging = (i: number, v: string) =>
     setForm((f) => ({
       ...f,
@@ -397,8 +477,6 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 newSrNo: "",
                 charges: "",
                 qty: "",
-                oldBarcode: "",
-                newChallan: "",
               },
             ],
           },
@@ -422,12 +500,9 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     chargingReadings: form.chargingReadings,
     dischargingReadings: form.dischargingReadings,
   }).success;
-  const frontValid = frontIndicationSchema.safeParse({
-    ...form.frontIndication,
-    opMode: emptyStr(form.frontIndication.opMode),
-    bypassState: emptyStr(form.frontIndication.bypassState),
-    remarksTarget: emptyStr(form.frontIndication.remarksTarget),
-  }).success;
+  const partValid = partReplacementsSchema.safeParse(form.partReplacements).success;
+  const ratingValid = ratingSchema.safeParse(form.rating).success;
+  const signatureValid = form.customerSignaturePath.trim() !== "";
   const loadValid = loadRecordSchema.safeParse({
     acProvided: form.acProvided,
     dgProvided: form.dgProvided,
@@ -447,8 +522,6 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
     operateNonBusinessHours: form.operateNonBusinessHours,
     operateHolidays: form.operateHolidays,
   }).success;
-  const partValid = partReplacementsSchema.safeParse(form.partReplacements).success;
-  const signatureValid = form.customerSignaturePath.trim() !== "";
 
   const offline = !isOnline;
   const offlineReason = "No internet connection. Reconnect and retry — nothing was uploaded.";
@@ -466,12 +539,6 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       batteryBankAh: emptyStr(form.batteryBankAh),
       customerSignaturePath: form.customerSignaturePath,
       signatureCapturedAt: emptyStr(form.signatureCapturedAt),
-      frontIndication: {
-        ...form.frontIndication,
-        opMode: emptyStr(form.frontIndication.opMode),
-        bypassState: emptyStr(form.frontIndication.bypassState),
-        remarksTarget: emptyStr(form.frontIndication.remarksTarget),
-      },
     });
     if (!parsed.success) {
       const errs: Record<string, string> = {};
@@ -538,20 +605,20 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       } catch {
         toast.warning("Report saved; parts staging pending — admin can Sync FSR parts.");
       }
+      // Auto-depart + auto-close: the report submit ends the site visit.
+      // Failure only warns (FSR is already saved; admin can close manually).
+      try {
+        const done = await callFinalizeFsr({ data: { ticketId } });
+        if (done?.closed) toast.success("Ticket closed");
+      } catch {
+        toast.warning("Report saved; auto-depart/close pending — an admin can close the ticket.");
+      }
       // Prevent the view-only gate from flashing during the transition out.
       // NOTE: the submittedOk banner below stays in code but is superseded by
       // this immediate navigation (Sonner toasts persist across routes).
       setJustSubmitted(true);
       navigate({ to: "/eng/queue" });
-      setForm({
-        ...initialForm,
-        chargingReadings: [],
-        dischargingReadings: [],
-        frontIndication: { ...initialFrontIndication },
-        partReplacements: [],
-        customerSignaturePath: "",
-        signatureCapturedAt: "",
-      });
+      setForm({ ...initialForm });
     } finally {
       setBusy(false);
     }
@@ -605,6 +672,9 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
             {latest.power_failures_count ?? "—"}
           </p>
           <p className="text-[13px]">Submitted by: {latest.engineer_name ?? "—"}</p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <FsrPrintButton ticketId={ticketId} fsrRow={latest as unknown as FsrDbRow} />
+          </div>
         </div>
 
         {latestError && (
@@ -625,12 +695,12 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       >
         <div className="flex items-center gap-1.5" aria-hidden="true">
           <PhaseDot num="1" valid={readingsValid} />
-          <PhaseDot num="1A" valid={frontValid} />
           <PhaseDot num="2" valid={loadValid} />
           <PhaseDot num="3" valid={powerValid} />
           <PhaseDot num="4" valid={signatureValid} />
+          <PhaseDot num="5" valid={ratingValid} />
         </div>
-        <p className="text-xs text-muted-foreground">Phases 1 · 1A · 2 · 3 · 4</p>
+        <p className="text-xs text-muted-foreground">Phases 1 · 2 · 3 · 4 · 5</p>
       </div>
 
       {submittedOk && (
@@ -725,273 +795,32 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                   <FieldError message={errors.batteryBankAh} />
                 </div>
               </FsrField>
-              <FsrField label="Qty">
+              <FsrField label="Qty" required>
                 <NumInput
                   value={form.batteryBankQty}
                   onChange={(v) => set("batteryBankQty", v)}
-                  placeholder="Qty"
+                  placeholder="Qty (1–32)"
                   error={errors.batteryBankQty}
                 />
               </FsrField>
+              <p className="-mt-2 text-[12px] text-muted-foreground">
+                Entering the qty auto-generates the charging + discharging cells below.
+              </p>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <SubHead>Reading During Charging</SubHead>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addCharging}
-                disabled={busy || form.chargingReadings.length >= 20}
-                className="min-h-[44px]"
-              >
-                <Plus className="size-4" /> Add
-              </Button>
-            </div>
-            {form.chargingReadings.length === 0 ? (
-              <p className="text-[13px] text-muted-foreground">No charging readings — add.</p>
-            ) : (
-              form.chargingReadings.map((reading, i) => (
-                <div
-                  key={reading.id}
-                  className="space-y-2 rounded-xl border border-border bg-card p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[13px] font-medium text-card-foreground">Battery {i + 1}</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => removeCharging(i)}
-                      disabled={busy}
-                      aria-label={`Remove charging battery ${i + 1}`}
-                      className="size-11 min-h-[44px] min-w-[44px] p-0"
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </div>
-                  <FsrField label="Volts (Vdc)">
-                    <NumInput
-                      value={reading.volts}
-                      onChange={(v) => setCharging(i, v)}
-                      placeholder="Volts (Vdc)"
-                      error={errors[`chargingReadings.${i}.volts`]}
-                    />
-                  </FsrField>
-                </div>
-              ))
-            )}
-            <div className="flex items-center justify-between gap-3">
-              <SubHead>Reading During Discharging</SubHead>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addDischarging}
-                disabled={busy || form.dischargingReadings.length >= 20}
-                className="min-h-[44px]"
-              >
-                <Plus className="size-4" /> Add
-              </Button>
-            </div>
-            {form.dischargingReadings.length === 0 ? (
-              <p className="text-[13px] text-muted-foreground">No discharging readings — add.</p>
-            ) : (
-              form.dischargingReadings.map((reading, i) => (
-                <div
-                  key={reading.id}
-                  className="space-y-2 rounded-xl border border-border bg-card p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[13px] font-medium text-card-foreground">Battery {i + 1}</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => removeDischarging(i)}
-                      disabled={busy}
-                      aria-label={`Remove discharging battery ${i + 1}`}
-                      className="size-11 min-h-[44px] min-w-[44px] p-0"
-                    >
-                      <X className="size-4" />
-                    </Button>
-                  </div>
-                  <FsrField label="Volts (Vdc)">
-                    <NumInput
-                      value={reading.volts}
-                      onChange={(v) => setDischarging(i, v)}
-                      placeholder="Volts (Vdc)"
-                      error={errors[`dischargingReadings.${i}.volts`]}
-                    />
-                  </FsrField>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-
-        <section
-          aria-label="Phase 1A front indication"
-          className="space-y-3 rounded-xl border border-border bg-card p-4"
-        >
-          <SectionHeader num="1A" title="Phase 1A — Front Indication" valid={frontValid} />
-          <div className="space-y-3">
-            <div className="space-y-2 rounded-xl border border-border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">Operating Mode</span>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  Normal: On Mains
-                </span>
-              </div>
-              <RadioGroup
-                value={form.frontIndication.opMode || undefined}
-                onValueChange={(v) => setFront("opMode", v)}
-                aria-label="Operating mode"
-                className="flex gap-6"
-              >
-                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
-                  <RadioGroupItem value="on_mains" className="size-5" /> On Mains
-                </label>
-                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
-                  <RadioGroupItem value="on_battery" className="size-5" /> On Battery
-                </label>
-              </RadioGroup>
-              <FieldError message={errors["frontIndication.opMode"]} />
-            </div>
-            <div className="space-y-2 rounded-xl border border-border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">Bypass State</span>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  Normal: No Bypass
-                </span>
-              </div>
-              <RadioGroup
-                value={form.frontIndication.bypassState || undefined}
-                onValueChange={(v) => setFront("bypassState", v)}
-                aria-label="Bypass state"
-                className="flex gap-6"
-              >
-                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
-                  <RadioGroupItem value="on_bypass" className="size-5" /> On Bypass
-                </label>
-                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
-                  <RadioGroupItem value="dead" className="size-5" /> Dead
-                </label>
-              </RadioGroup>
-              <FieldError message={errors["frontIndication.bypassState"]} />
-            </div>
-            <div className="space-y-2 rounded-xl border border-border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">Lead</span>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  Normal: Off
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 max-[390px]:grid-cols-1">
-                <NumInput
-                  value={form.frontIndication.leadFound}
-                  onChange={(v) => setFront("leadFound", v)}
-                  placeholder="Found"
-                  error={errors["frontIndication.leadFound"]}
-                />
-                <NumInput
-                  value={form.frontIndication.leadCorrected}
-                  onChange={(v) => setFront("leadCorrected", v)}
-                  placeholder="Corrected"
-                  error={errors["frontIndication.leadCorrected"]}
-                />
-              </div>
-            </div>
-            <div className="space-y-2 rounded-xl border border-border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">Charge</span>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  Normal: On
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 max-[390px]:grid-cols-1">
-                <NumInput
-                  value={form.frontIndication.chargeFound}
-                  onChange={(v) => setFront("chargeFound", v)}
-                  placeholder="Found"
-                  error={errors["frontIndication.chargeFound"]}
-                />
-                <NumInput
-                  value={form.frontIndication.chargeCorrected}
-                  onChange={(v) => setFront("chargeCorrected", v)}
-                  placeholder="Corrected"
-                  error={errors["frontIndication.chargeCorrected"]}
-                />
-              </div>
-            </div>
-            <div className="space-y-2 rounded-xl border border-border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">Fault 0</span>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  Normal: Off
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 max-[390px]:grid-cols-1">
-                <NumInput
-                  value={form.frontIndication.fault0Found}
-                  onChange={(v) => setFront("fault0Found", v)}
-                  placeholder="Found"
-                  error={errors["frontIndication.fault0Found"]}
-                />
-                <NumInput
-                  value={form.frontIndication.fault0Corrected}
-                  onChange={(v) => setFront("fault0Corrected", v)}
-                  placeholder="Corrected"
-                  error={errors["frontIndication.fault0Corrected"]}
-                />
-              </div>
-            </div>
-            <div className="space-y-2 rounded-xl border border-border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium">Fault GE</span>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  Normal: Off
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-3 max-[390px]:grid-cols-1">
-                <NumInput
-                  value={form.frontIndication.faultGeFound}
-                  onChange={(v) => setFront("faultGeFound", v)}
-                  placeholder="Found"
-                  error={errors["frontIndication.faultGeFound"]}
-                />
-                <NumInput
-                  value={form.frontIndication.faultGeCorrected}
-                  onChange={(v) => setFront("faultGeCorrected", v)}
-                  placeholder="Corrected"
-                  error={errors["frontIndication.faultGeCorrected"]}
-                />
-              </div>
-            </div>
-            <div className="space-y-2 rounded-xl border border-border p-3">
-              <span className="text-sm font-medium">Remarks</span>
-              <RadioGroup
-                value={form.frontIndication.remarksTarget || undefined}
-                onValueChange={(v) => setFront("remarksTarget", v)}
-                aria-label="Remarks target"
-                className="flex flex-wrap gap-6"
-              >
-                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
-                  <RadioGroupItem value="UPS" className="size-5" /> UPS
-                </label>
-                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
-                  <RadioGroupItem value="PCB" className="size-5" /> PCB
-                </label>
-                <label className="flex min-h-[44px] items-center gap-3 cursor-pointer text-sm">
-                  <RadioGroupItem value="Transformer" className="size-5" /> Transformer
-                </label>
-              </RadioGroup>
-              <FieldError message={errors["frontIndication.remarksTarget"]} />
-              <Textarea
-                value={form.frontIndication.remarks}
-                onChange={(e) => setFront("remarks", e.target.value)}
-                placeholder="Remarks"
-                rows={3}
-                aria-invalid={!!errors["frontIndication.remarks"]}
-                className={`min-h-[44px] ${errors["frontIndication.remarks"] ? "border-destructive" : ""}`}
-              />
-              <FieldError message={errors["frontIndication.remarks"]} />
-            </div>
+            <BatteryGrid
+              title="Reading During Charging"
+              readings={form.chargingReadings}
+              onChange={setCharging}
+              errors={errors}
+              errorPrefix="chargingReadings"
+            />
+            <BatteryGrid
+              title="Reading During Discharging"
+              readings={form.dischargingReadings}
+              onChange={setDischarging}
+              errors={errors}
+              errorPrefix="dischargingReadings"
+            />
           </div>
         </section>
 
@@ -1001,32 +830,29 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         >
           <SectionHeader num="2" title="Phase 2 — Load Record" valid={loadValid} />
           <div className="space-y-4">
-            <FsrField label="AC Provided">
-              <label className="flex min-h-[44px] cursor-pointer items-center">
-                <Checkbox
-                  checked={form.acProvided}
-                  onCheckedChange={(c) => set("acProvided", c === true)}
-                  className="size-5"
-                />
-              </label>
+            <FsrField label="AC Provided" required>
+              <YesNoRequired
+                value={form.acProvided}
+                onChange={(v) => set("acProvided", v)}
+                label="AC Provided"
+                error={errors.acProvided}
+              />
             </FsrField>
-            <FsrField label="DG Provided">
-              <label className="flex min-h-[44px] cursor-pointer items-center">
-                <Checkbox
-                  checked={form.dgProvided}
-                  onCheckedChange={(c) => set("dgProvided", c === true)}
-                  className="size-5"
-                />
-              </label>
+            <FsrField label="DG Provided" required>
+              <YesNoRequired
+                value={form.dgProvided}
+                onChange={(v) => set("dgProvided", v)}
+                label="DG Provided"
+                error={errors.dgProvided}
+              />
             </FsrField>
-            <FsrField label="Is Environment Duty">
-              <label className="flex min-h-[44px] cursor-pointer items-center">
-                <Checkbox
-                  checked={form.environmentDuty}
-                  onCheckedChange={(c) => set("environmentDuty", c === true)}
-                  className="size-5"
-                />
-              </label>
+            <FsrField label="Is Environment Duty" required>
+              <YesNoRequired
+                value={form.environmentDuty}
+                onChange={(v) => set("environmentDuty", v)}
+                label="Is Environment Duty"
+                error={errors.environmentDuty}
+              />
             </FsrField>
             <FsrField label="Location where UPS Installed" required>
               <div>
@@ -1233,24 +1059,36 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 error={errors.loadOnDgPercent}
               />
             </FsrField>
-            <FsrField label="DG Set">
-              <YesNo value={form.dgSet} onChange={(v) => set("dgSet", v)} label="DG Set" />
+            <FsrField label="DG Set" required>
+              <YesNoRequired
+                value={form.dgSet}
+                onChange={(v) => set("dgSet", v)}
+                label="DG Set"
+                error={errors.dgSet}
+              />
             </FsrField>
-            <FsrField label="AMF Panel">
-              <YesNo value={form.amfPanel} onChange={(v) => set("amfPanel", v)} label="AMF Panel" />
+            <FsrField label="AMF Panel" required>
+              <YesNoRequired
+                value={form.amfPanel}
+                onChange={(v) => set("amfPanel", v)}
+                label="AMF Panel"
+                error={errors.amfPanel}
+              />
             </FsrField>
-            <FsrField label="Operation during non-business hours">
-              <YesNo
+            <FsrField label="Operation during non-business hours" required>
+              <YesNoRequired
                 value={form.operateNonBusinessHours}
                 onChange={(v) => set("operateNonBusinessHours", v)}
                 label="Operation during non-business hours"
+                error={errors.operateNonBusinessHours}
               />
             </FsrField>
-            <FsrField label="Operation on holidays">
-              <YesNo
+            <FsrField label="Operation on holidays" required>
+              <YesNoRequired
                 value={form.operateHolidays}
                 onChange={(v) => set("operateHolidays", v)}
                 label="Operation on holidays"
+                error={errors.operateHolidays}
               />
             </FsrField>
             <FsrField label="DG Set Capacity (kVA)">
@@ -1355,32 +1193,6 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       error={errors[`partReplacements.${i}.qty`]}
                     />
                   </FsrField>
-                  <FsrField label="Old defective barcode">
-                    <div>
-                      <Input
-                        type="text"
-                        value={part.oldBarcode}
-                        onChange={(e) => setPart(i, "oldBarcode", e.target.value)}
-                        placeholder="Old defective barcode"
-                        aria-invalid={!!errors[`partReplacements.${i}.oldBarcode`]}
-                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.oldBarcode`] ? "border-destructive" : ""}`}
-                      />
-                      <FieldError message={errors[`partReplacements.${i}.oldBarcode`]} />
-                    </div>
-                  </FsrField>
-                  <FsrField label="New challan no.">
-                    <div>
-                      <Input
-                        type="text"
-                        value={part.newChallan}
-                        onChange={(e) => setPart(i, "newChallan", e.target.value)}
-                        placeholder="New challan no."
-                        aria-invalid={!!errors[`partReplacements.${i}.newChallan`]}
-                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.newChallan`] ? "border-destructive" : ""}`}
-                      />
-                      <FieldError message={errors[`partReplacements.${i}.newChallan`]} />
-                    </div>
-                  </FsrField>
                 </div>
               ))
             )}
@@ -1409,6 +1221,23 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
             </div>
           </FsrField>
         </section>
+
+        <section
+          aria-label="Phase 5 overall rating"
+          className="space-y-3 rounded-xl border border-border bg-card p-4"
+        >
+          <SectionHeader num="5" title="Phase 5 — Overall Rating" valid={ratingValid} />
+          <FsrField
+            label="How would you rate this service visit? (1 = poor, 10 = excellent)"
+            required
+          >
+            <RatingScale
+              value={form.rating}
+              onChange={(v) => set("rating", v)}
+              error={errors.rating}
+            />
+          </FsrField>
+        </section>
       </form>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 backdrop-blur px-4 pt-2 pb-[env(safe-area-inset-bottom,0px)]">
@@ -1420,10 +1249,10 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         <div className="flex items-center gap-3 pb-2">
           <div className="flex items-center gap-1.5" aria-hidden="true">
             <PhaseDot num="1" valid={readingsValid} />
-            <PhaseDot num="1A" valid={frontValid} />
             <PhaseDot num="2" valid={loadValid} />
             <PhaseDot num="3" valid={powerValid} />
             <PhaseDot num="4" valid={signatureValid} />
+            <PhaseDot num="5" valid={ratingValid} />
           </div>
           <Button
             type="submit"

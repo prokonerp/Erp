@@ -9,7 +9,7 @@ const syncInput = z.object({
 });
 
 /** FSR part_replacements rows are stored snake_case; tolerate camelCase too. */
-function toStageInput(e: Record<string, unknown>): FsrPartInput {
+export function toStageInput(e: Record<string, unknown>): FsrPartInput {
   const pick = (...keys: string[]): string | null => {
     for (const k of keys) {
       const v = e[k];
@@ -20,11 +20,14 @@ function toStageInput(e: Record<string, unknown>): FsrPartInput {
   const qtyRaw = e.qty;
   return {
     item: pick("item"),
-    qty: typeof qtyRaw === "number" ? qtyRaw : null,
+    qty:
+      typeof qtyRaw === "number"
+        ? qtyRaw
+        : typeof qtyRaw === "string" && qtyRaw.trim() !== "" && Number.isFinite(Number(qtyRaw))
+          ? Number(qtyRaw)
+          : null,
     oldSrNo: pick("oldSrNo", "old_sr_no"),
-    oldBarcode: pick("oldBarcode", "old_barcode"),
     newSrNo: pick("newSrNo", "new_sr_no"),
-    newChallan: pick("newChallan", "new_challan"),
   };
 }
 
@@ -41,7 +44,7 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
     const { data: ticket, error: ticketErr } = await supabaseAdmin
       .from("tickets")
       .select(
-        "id, defective_parts_details, good_parts_details, assigned_employee_id, assigned_engineer_name",
+        "id, updated_at, defective_parts_details, good_parts_details, assigned_employee_id, assigned_engineer_name",
       )
       .eq("id", data.ticketId)
       .maybeSingle();
@@ -56,8 +59,13 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
     });
     if (roleErr) throw new Error(roleErr.message);
     if (!isAdmin) {
-      const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
-      const callerEmail = authData?.user?.email;
+      // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
+      const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
+      let callerEmail = typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null;
+      if (!callerEmail) {
+        const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
+        callerEmail = authData?.user?.email ?? null;
+      }
       if (!callerEmail) throw new Error("Forbidden: could not resolve your account email");
       const { data: caller } = await supabaseAdmin
         .from("employees")
@@ -71,12 +79,30 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
       };
       const fkMatch =
         !!caller && !!row.assigned_employee_id && row.assigned_employee_id === caller.id;
-      const nameMatch =
-        !!caller &&
-        !!row.assigned_engineer_name &&
-        !!(caller as { name?: string | null }).name &&
-        row.assigned_engineer_name.trim().toLowerCase() ===
-          ((caller as { name: string }).name ?? "").trim().toLowerCase();
+      // Name fallback: the display name may be shared by several employees, so it
+      // only counts when exactly one active employee matches lower(trim(name)).
+      let nameMatch = false;
+      if (!fkMatch) {
+        const callerName = ((caller as { name?: string | null } | null)?.name ?? "").trim();
+        if (
+          !!caller &&
+          !!row.assigned_engineer_name &&
+          callerName !== "" &&
+          row.assigned_engineer_name.trim().toLowerCase() === callerName.toLowerCase()
+        ) {
+          const { data: sameNamed, error: sameNamedErr } = await supabaseAdmin
+            .from("employees")
+            .select("id, name")
+            .eq("active", true);
+          if (sameNamedErr) throw new Error(sameNamedErr.message);
+          const dupes = (sameNamed ?? []).filter(
+            (r) =>
+              ((r as unknown as { name?: string | null }).name ?? "").trim().toLowerCase() ===
+              callerName.toLowerCase(),
+          );
+          nameMatch = dupes.length === 1;
+        }
+      }
       if (!fkMatch && !nameMatch) {
         throw new Error("Forbidden: only an admin or the assigned engineer may sync FSR parts");
       }
@@ -116,11 +142,20 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
       update.good_parts_used = true;
       update.parts_used = true;
     }
-    const { error: updErr } = await supabaseAdmin
+    // Optimistic concurrency: tickets_touch auto-bumps updated_at on every
+    // UPDATE, so a zero-row match means an admin auto-save touched the ticket
+    // mid-sync. Re-sync is idempotent, so the caller can safely retry.
+    const readUpdatedAt = (ticket as unknown as { updated_at: string }).updated_at;
+    const { data: updRows, error: updErr } = await supabaseAdmin
       .from("tickets")
       .update(update as never)
-      .eq("id", data.ticketId);
+      .eq("id", data.ticketId)
+      .eq("updated_at", readUpdatedAt)
+      .select("id");
     if (updErr) throw new Error(updErr.message);
+    if (!updRows || updRows.length === 0) {
+      throw new Error("Ticket changed while syncing — please retry (Sync FSR parts)");
+    }
 
     return {
       ticketId: data.ticketId,

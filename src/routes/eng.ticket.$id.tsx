@@ -92,6 +92,43 @@ type Activity = {
   actor: string | null;
 };
 
+/** Signed-URL viewer for the compulsory serial photo (matched flow). */
+function SerialPhotoLink({ photoPath }: { photoPath: string | null | undefined }) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!photoPath) return;
+    supabase.storage
+      .from("ticket-attachments")
+      .createSignedUrl(photoPath, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) setFailed(true);
+        else setSignedUrl(data?.signedUrl ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [photoPath]);
+  if (!photoPath) return null;
+  if (signedUrl) {
+    return (
+      <a className="text-xs underline" href={signedUrl} target="_blank" rel="noreferrer">
+        View serial photo
+      </a>
+    );
+  }
+  return (
+    <p className="text-xs text-muted-foreground">
+      {failed ? "Serial photo unavailable" : "Loading serial photo…"}
+    </p>
+  );
+}
+
 function EngTicketDetail() {
   const { id } = Route.useParams();
   const { session } = useAuth();
@@ -135,13 +172,15 @@ function EngTicketDetail() {
   const [verdictBusy, setVerdictBusy] = useState(false);
   const [verdictBusy2, setVerdictBusy2] = useState(false);
   const [mismatchPhotoFile, setMismatchPhotoFile] = useState<File | null>(null);
+  const [matchedPhotoFile, setMatchedPhotoFile] = useState<File | null>(null);
   const [mismatchBusy, setMismatchBusy] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsMismatchOpen, setDetailsMismatchOpen] = useState(false);
   const mismatchFileInputRef = useRef<HTMLInputElement>(null);
+  const matchedFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Step 1 forms — per-field Name / Phone toggles (mirrors equipment pattern)
+  // Step 1 forms — per-field Email / Mobile toggles (only these two are verifiable)
   const {
     register: regCorrected,
     handleSubmit: handleCorrectedSubmit,
@@ -152,35 +191,27 @@ function EngTicketDetail() {
   } = useForm({
     resolver: zodResolver(customerPerFieldSchema),
     defaultValues: {
-      nameIncorrect: false,
+      emailIncorrect: false,
       phoneIncorrect: false,
-      nameInput: ticket?.customer_name ?? "",
+      emailInput: ticket?.customer_email ?? "",
       phoneInput: ticket?.customer_phone ?? "",
-      email: "",
-      address: "",
-      sector: "",
-      location: "",
     },
   });
-  const nameIncorrect = watchCorrected("nameIncorrect") ?? false;
+  const emailIncorrect = watchCorrected("emailIncorrect") ?? false;
   const phoneIncorrect = watchCorrected("phoneIncorrect") ?? false;
 
   // Prefill per-field customer inputs when async ticket arrives
   useEffect(() => {
     if (ticket) {
       resetCorrected({
-        nameIncorrect: false,
+        emailIncorrect: false,
         phoneIncorrect: false,
-        nameInput: ticket.customer_name ?? "",
+        emailInput: ticket.customer_email ?? "",
         phoneInput: ticket.customer_phone ?? "",
-        email: "",
-        address: "",
-        sector: "",
-        location: "",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticket?.customer_name, ticket?.customer_phone]);
+  }, [ticket?.customer_email, ticket?.customer_phone]);
 
   // Step 2 form — per-field Model / Serial toggles
   const {
@@ -407,9 +438,6 @@ function EngTicketDetail() {
     customer_name: string;
     customer_phone: string;
     customer_email?: string | null;
-    customer_address?: string | null;
-    sector?: string | null;
-    location?: string | null;
   }) => {
     setVerdictBusy(true);
     try {
@@ -451,14 +479,10 @@ function EngTicketDetail() {
   };
 
   const handlePerFieldCustomer = async (data: {
-    nameIncorrect: boolean;
+    emailIncorrect: boolean;
     phoneIncorrect: boolean;
-    nameInput?: string;
+    emailInput?: string;
     phoneInput?: string;
-    email?: string | null;
-    address?: string | null;
-    sector?: string | null;
-    location?: string | null;
   }) => {
     const resolved = resolveCustomerCorrection(buildCustomerSnapshot(ticket!), data);
     await handleCustomerIncorrect(resolved.corrected);
@@ -613,11 +637,55 @@ function EngTicketDetail() {
   };
 
   const handleEquipmentMatched = async () => {
+    if (!navigator.onLine) {
+      toast.error("No internet connection. Reconnect and retry — nothing was uploaded.");
+      return;
+    }
+    // Serial-number photo is compulsory even when the details match.
+    if (!matchedPhotoFile) {
+      toast.error("Photo of the serial number is required");
+      return;
+    }
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+    if (!allowed.includes(matchedPhotoFile.type)) {
+      toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
+      return;
+    }
     setVerdictBusy2(true);
     try {
+      const compressed = await compressImageToLimit(matchedPhotoFile);
+
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(compressed.blob);
+      });
+      const base64 = dataUrl.split(",")[1];
+
+      const { uploadPublicTicketAttachment } =
+        await import("@/lib/public-ticket-uploads.functions");
+      const uploadResult = await uploadPublicTicketAttachment({
+        data: {
+          ticket_id: id,
+          filename: compressed.name,
+          content_type: compressed.contentType,
+          kind: "serial_photo",
+          data_base64: base64,
+        },
+      });
+
       const { data: u } = await supabase.auth.getUser();
       const actorName = myName ?? u.user?.email ?? "Engineer";
       const original = buildEquipmentOriginal(ticket!);
+
+      const { data: existingVer } = await supabase
+        .from("ticket_equipment_verifications")
+        .select("photo_path")
+        .eq("ticket_id", id)
+        .maybeSingle();
+      const oldPhotoPath = (existingVer?.photo_path as string | null) ?? null;
+
       const { error } = await supabase.from("ticket_equipment_verifications").upsert(
         {
           ticket_id: id,
@@ -626,14 +694,27 @@ function EngTicketDetail() {
           original_serial: original.original_serial,
           corrected_model: ticket?.product ?? null,
           corrected_serial: ticket?.serial_no ?? null,
+          photo_path: uploadResult.path,
           engineer_employee_id: myId,
           engineer_name: actorName,
         },
         { onConflict: "ticket_id" },
       );
       if (error) {
+        try {
+          await supabase.storage.from("ticket-attachments").remove([uploadResult.path]);
+        } catch (cleanupErr) {
+          console.warn("Photo cleanup failed:", cleanupErr);
+        }
         toast.error(error.message);
         return;
+      }
+      if (oldPhotoPath && oldPhotoPath !== uploadResult.path) {
+        try {
+          await supabase.storage.from("ticket-attachments").remove([oldPhotoPath]);
+        } catch (cleanupErr) {
+          console.warn("Old photo cleanup failed:", cleanupErr);
+        }
       }
       try {
         await supabase.from("ticket_activities").insert({
@@ -646,8 +727,17 @@ function EngTicketDetail() {
         console.warn("Activity insert failed:", actErr);
       }
       toast.success("Equipment verified as matched");
+      setMatchedPhotoFile(null);
       await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
       await refreshActivities();
+    } catch (err) {
+      if (isPasswordChangeRequired(err)) {
+        triggerPasswordChangeDialog();
+        return;
+      }
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      toast.error(msg);
+      setMatchedPhotoFile(null);
     } finally {
       setVerdictBusy2(false);
     }
@@ -928,20 +1018,7 @@ function EngTicketDetail() {
                 verifications.customer.corrected && (
                   <div className="space-y-3 mt-2">
                     <VerificationDiff
-                      label="Customer name"
-                      original={
-                        (verifications.customer.snapshot as Record<string, unknown>)
-                          .customer_name as string | null
-                      }
-                      corrected={
-                        (verifications.customer.corrected as Record<string, unknown>)
-                          .customer_name as string | null
-                      }
-                      engineer={verifications.customer.engineer_name}
-                      at={verifications.customer.verified_at}
-                    />
-                    <VerificationDiff
-                      label="Customer phone"
+                      label="Customer mobile"
                       original={
                         (verifications.customer.snapshot as Record<string, unknown>)
                           .customer_phone as string | null
@@ -966,49 +1043,6 @@ function EngTicketDetail() {
                       engineer={verifications.customer.engineer_name}
                       at={verifications.customer.verified_at}
                     />
-                    <VerificationDiff
-                      label="Address"
-                      original={
-                        (verifications.customer.snapshot as Record<string, unknown>)
-                          .customer_address as string | null
-                      }
-                      corrected={
-                        (verifications.customer.corrected as Record<string, unknown>)
-                          .customer_address as string | null
-                      }
-                      engineer={verifications.customer.engineer_name}
-                      at={verifications.customer.verified_at}
-                    />
-                    <VerificationDiff
-                      label="Sector"
-                      original={
-                        (verifications.customer.snapshot as Record<string, unknown>).sector as
-                          | string
-                          | null
-                      }
-                      corrected={
-                        (verifications.customer.corrected as Record<string, unknown>).sector as
-                          | string
-                          | null
-                      }
-                      engineer={verifications.customer.engineer_name}
-                      at={verifications.customer.verified_at}
-                    />
-                    <VerificationDiff
-                      label="Location"
-                      original={
-                        (verifications.customer.snapshot as Record<string, unknown>).location as
-                          | string
-                          | null
-                      }
-                      corrected={
-                        (verifications.customer.corrected as Record<string, unknown>).location as
-                          | string
-                          | null
-                      }
-                      engineer={verifications.customer.engineer_name}
-                      at={verifications.customer.verified_at}
-                    />
                   </div>
                 )}
             </>
@@ -1022,9 +1056,8 @@ function EngTicketDetail() {
                       <p>
                         <strong>{snap.customer_name}</strong>
                       </p>
-                      {snap.customer_phone && <p>Phone: {snap.customer_phone}</p>}
-                      {snap.sector && <p>Sector: {snap.sector}</p>}
-                      {snap.location && <p>Location: {snap.location}</p>}
+                      {snap.customer_phone && <p>Mobile: {snap.customer_phone}</p>}
+                      {snap.customer_email && <p>Email: {snap.customer_email}</p>}
                     </>
                   );
                 })()}
@@ -1063,47 +1096,48 @@ function EngTicketDetail() {
                     onSubmit={handleCorrectedSubmit(handlePerFieldCustomer)}
                   >
                     <div className="space-y-1 border rounded-md p-2">
-                      <p className="font-medium">Name</p>
+                      <p className="font-medium">Email</p>
                       <RadioGroup
                         role="radiogroup"
-                        aria-label="Name accuracy"
-                        value={nameIncorrect ? "needs-correction" : "correct"}
+                        aria-label="Email accuracy"
+                        value={emailIncorrect ? "needs-correction" : "correct"}
                         onValueChange={(v) =>
-                          setCorrectedValue("nameIncorrect", v === "needs-correction")
+                          setCorrectedValue("emailIncorrect", v === "needs-correction")
                         }
                         className="flex gap-2"
                       >
                         <Label
                           className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
-                          onClick={() => setCorrectedValue("nameIncorrect", false)}
+                          onClick={() => setCorrectedValue("emailIncorrect", false)}
                         >
                           <RadioGroupItem value="correct" />
                           Correct
                         </Label>
                         <Label
                           className="flex min-h-[44px] flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 text-xs focus-within:ring-2 focus-within:ring-ring/30"
-                          onClick={() => setCorrectedValue("nameIncorrect", true)}
+                          onClick={() => setCorrectedValue("emailIncorrect", true)}
                         >
                           <RadioGroupItem value="needs-correction" />
                           Needs correction
                         </Label>
                       </RadioGroup>
-                      {nameIncorrect && (
+                      {emailIncorrect && (
                         <Input
                           className="h-11"
-                          placeholder="Correct name"
-                          aria-label="Correct name"
-                          {...regCorrected("nameInput")}
+                          placeholder="Correct email"
+                          aria-label="Correct email"
+                          inputMode="email"
+                          {...regCorrected("emailInput")}
                         />
                       )}
-                      {correctedErrors.nameInput && (
+                      {correctedErrors.emailInput && (
                         <p className="text-destructive text-xs">
-                          {correctedErrors.nameInput.message}
+                          {correctedErrors.emailInput.message}
                         </p>
                       )}
                     </div>
                     <div className="space-y-1 border rounded-md p-2">
-                      <p className="font-medium">Phone</p>
+                      <p className="font-medium">Mobile</p>
                       <RadioGroup
                         role="radiogroup"
                         aria-label="Phone accuracy"
@@ -1131,8 +1165,9 @@ function EngTicketDetail() {
                       {phoneIncorrect && (
                         <Input
                           className="h-11"
-                          placeholder="Correct 10-digit phone"
+                          placeholder="Correct 10-digit mobile"
                           aria-label="Correct phone"
+                          inputMode="tel"
                           {...regCorrected("phoneInput")}
                         />
                       )}
@@ -1142,34 +1177,11 @@ function EngTicketDetail() {
                         </p>
                       )}
                     </div>
-                    {correctedErrors.nameIncorrect && (
+                    {correctedErrors.emailIncorrect && (
                       <p className="text-destructive text-xs">
-                        {correctedErrors.nameIncorrect.message}
+                        {correctedErrors.emailIncorrect.message}
                       </p>
                     )}
-                    <Input
-                      className="h-11"
-                      placeholder="Email (optional)"
-                      {...regCorrected("email")}
-                    />
-                    {correctedErrors.email && (
-                      <p className="text-destructive text-xs">{correctedErrors.email.message}</p>
-                    )}
-                    <Input
-                      className="h-11"
-                      placeholder="Address (optional)"
-                      {...regCorrected("address")}
-                    />
-                    <Input
-                      className="h-11"
-                      placeholder="Sector (optional)"
-                      {...regCorrected("sector")}
-                    />
-                    <Input
-                      className="h-11"
-                      placeholder="Location (optional)"
-                      {...regCorrected("location")}
-                    />
                     <DrawerFooter className="px-0">
                       <Button
                         type="submit"
@@ -1212,6 +1224,11 @@ function EngTicketDetail() {
                   ? "Equipment matched"
                   : "Equipment mismatch recorded"}
               </div>
+              {verifications.equipment.verdict === "matched" ? (
+                <div className="mt-1">
+                  <SerialPhotoLink photoPath={verifications.equipment.photo_path} />
+                </div>
+              ) : null}
               {verifications.equipment.verdict === "mismatch" && (
                 <div className="space-y-3 mt-2">
                   <VerificationDiff
@@ -1239,11 +1256,36 @@ function EngTicketDetail() {
                 <p>Model: {ticket.product ?? "—"}</p>
                 <p>Serial: {ticket.serial_no ?? "—"}</p>
               </div>
+              <div>
+                <Label className="text-xs">Serial number photo (compulsory)</Label>
+                <input
+                  ref={matchedFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => setMatchedPhotoFile(e.target.files?.[0] ?? null)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-1 min-h-[44px] w-full"
+                  onClick={() => matchedFileInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4 mr-1" />
+                  {matchedPhotoFile ? matchedPhotoFile.name : "Choose Serial Photo"}
+                </Button>
+                {!matchedPhotoFile && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Photo of the serial number is compulsory for Matched and Mismatch.
+                  </p>
+                )}
+              </div>
               <div className="flex gap-2">
                 <Button
                   className="min-h-[44px] flex-1"
                   variant="outline"
-                  disabled={verdictBusy2}
+                  disabled={verdictBusy2 || !matchedPhotoFile}
                   onClick={handleEquipmentMatched}
                 >
                   {verdictBusy2 ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}

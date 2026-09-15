@@ -22,18 +22,26 @@ const requiredPositiveNumber = (message: string) =>
 
 export const BATTERY_MAKES = ["EXIDE", "QUANTA"] as const;
 export const BATTERY_AH = ["7", "12", "18", "26", "42", "65", "100", "120", "150", "200"] as const;
-const optionalPositiveInt = z.preprocess(
+/** Battery bank qty: optional, integer, hard cap 32 (matches the QTY-driven grid). */
+const optionalBatteryQty = z.preprocess(
   emptyToUndefined,
-  z.coerce.number().int().positive().optional(),
+  z.coerce.number().int().positive().max(32, "Battery qty cannot exceed 32").optional(),
 );
 export const batteryBankSchema = z.object({
   batteryBankMake: z.preprocess(emptyToUndefined, z.enum(BATTERY_MAKES).optional()),
   batteryBankAh: z.preprocess(emptyToUndefined, z.enum(BATTERY_AH).optional()),
-  batteryBankQty: optionalPositiveInt,
+  batteryBankQty: optionalBatteryQty,
 });
 const voltsReadingSchema = z.object({ volts: optionalNonNegativeNumber });
-export const chargingReadingsSchema = z.array(voltsReadingSchema).max(20).default([]);
-export const dischargingReadingsSchema = z.array(voltsReadingSchema).max(20).default([]);
+export const MAX_BATTERY_READINGS = 32;
+export const chargingReadingsSchema = z
+  .array(voltsReadingSchema)
+  .max(MAX_BATTERY_READINGS)
+  .default([]);
+export const dischargingReadingsSchema = z
+  .array(voltsReadingSchema)
+  .max(MAX_BATTERY_READINGS)
+  .default([]);
 export const pcPairSchema = z.object({
   monitorSizeIn: optionalNonNegativeNumber,
   qty: optionalNonNegativeInt,
@@ -60,9 +68,9 @@ export const readingsSchema = z
   .merge(batteryBankSchema);
 
 export const loadRecordSchema = z.object({
-  acProvided: z.boolean().default(false),
-  dgProvided: z.boolean().default(false),
-  environmentDuty: z.boolean().default(false),
+  acProvided: z.boolean({ error: "AC Provided is required" }),
+  dgProvided: z.boolean({ error: "DG Provided is required" }),
+  environmentDuty: z.boolean({ error: "Environment Duty is required" }),
   upsLocation: z.enum(UPS_LOCATIONS),
   pcDetails: pcDetailsSchema,
   printerDetails: printerDetailsSchema,
@@ -80,25 +88,10 @@ export const powerConditionSchema = z.object({
     z.coerce.number().nonnegative().max(100).optional(),
   ),
   dgSetCapacityKva: optionalNonNegativeNumber,
-  dgSet: z.boolean().default(false),
-  amfPanel: z.boolean().default(false),
-  operateNonBusinessHours: z.boolean().default(false),
-  operateHolidays: z.boolean().default(false),
-});
-
-export const frontIndicationSchema = z.object({
-  opMode: z.preprocess(emptyToUndefined, z.enum(["on_mains", "on_battery"]).optional()),
-  bypassState: z.preprocess(emptyToUndefined, z.enum(["on_bypass", "dead"]).optional()),
-  leadFound: optionalNonNegativeNumber,
-  leadCorrected: optionalNonNegativeNumber,
-  chargeFound: optionalNonNegativeNumber,
-  chargeCorrected: optionalNonNegativeNumber,
-  fault0Found: optionalNonNegativeNumber,
-  fault0Corrected: optionalNonNegativeNumber,
-  faultGeFound: optionalNonNegativeNumber,
-  faultGeCorrected: optionalNonNegativeNumber,
-  remarks: z.preprocess(emptyToUndefined, z.string().max(500).optional()),
-  remarksTarget: z.preprocess(emptyToUndefined, z.enum(["UPS", "PCB", "Transformer"]).optional()),
+  dgSet: z.boolean({ error: "DG Set is required" }),
+  amfPanel: z.boolean({ error: "AMF Panel is required" }),
+  operateNonBusinessHours: z.boolean({ error: "Operation during non-business hours is required" }),
+  operateHolidays: z.boolean({ error: "Operation on holidays is required" }),
 });
 
 export const partReplacementSchema = z.object({
@@ -107,17 +100,24 @@ export const partReplacementSchema = z.object({
   newSrNo: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
   charges: optionalNonNegativeNumber,
   qty: optionalNonNegativeInt,
-  oldBarcode: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
-  newChallan: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
 });
 
 export const partReplacementsSchema = z.array(partReplacementSchema).max(5).default([]);
 
+export const ratingSchema = z.preprocess(
+  emptyToUndefined,
+  z.coerce
+    .number({ error: "Overall rating is required" })
+    .int()
+    .min(1, "Rating must be between 1 and 10")
+    .max(10, "Rating must be between 1 and 10"),
+);
+
 export const fieldServiceReportSchema = readingsSchema
   .merge(loadRecordSchema)
   .merge(powerConditionSchema)
-  .merge(z.object({ frontIndication: frontIndicationSchema }))
   .merge(z.object({ partReplacements: partReplacementsSchema }))
+  .merge(z.object({ rating: ratingSchema }))
   .merge(
     z.object({
       customerSignaturePath: z.string().min(1, "Customer signature is required"),
@@ -151,20 +151,7 @@ export type FieldServiceReportPayload = {
   amf_panel: boolean;
   operate_non_business_hours: boolean;
   operate_holidays: boolean;
-  front_indication: {
-    op_mode: string | null;
-    bypass_state: string | null;
-    lead_found: number | null;
-    lead_corrected: number | null;
-    charge_found: number | null;
-    charge_corrected: number | null;
-    fault_0_found: number | null;
-    fault_0_corrected: number | null;
-    fault_ge_found: number | null;
-    fault_ge_corrected: number | null;
-    remarks: string | null;
-    remarks_target: string | null;
-  };
+  rating: number;
   engineer_employee_id: string | null;
   engineer_name: string;
   engineer_phone: string | null;
@@ -176,8 +163,6 @@ export type FieldServiceReportPayload = {
     new_sr_no: string | null;
     charges: number | null;
     qty: number | null;
-    old_barcode: string | null;
-    new_challan: string | null;
   }[];
 };
 
@@ -199,9 +184,9 @@ export function buildFsrPayload(
     discharging_readings: input.dischargingReadings.map((r) => ({
       volts: r.volts ?? null,
     })),
-    ac_provided: input.acProvided ?? false,
-    dg_provided: input.dgProvided ?? false,
-    environment_duty: input.environmentDuty ?? false,
+    ac_provided: input.acProvided,
+    dg_provided: input.dgProvided,
+    environment_duty: input.environmentDuty,
     ups_location: input.upsLocation,
     pc_details: input.pcDetails.map((p) => ({
       monitor_size_in: p.monitorSizeIn ?? null,
@@ -218,25 +203,12 @@ export function buildFsrPayload(
     power_failures_count: input.powerFailuresCount ?? null,
     power_failures_duration_min: input.powerFailuresDurationMin ?? null,
     load_on_dg_percent: input.loadOnDgPercent ?? null,
-    dg_set: input.dgSet ?? false,
+    dg_set: input.dgSet,
     dg_set_capacity_kva: input.dgSetCapacityKva ?? null,
-    amf_panel: input.amfPanel ?? false,
-    operate_non_business_hours: input.operateNonBusinessHours ?? false,
-    operate_holidays: input.operateHolidays ?? false,
-    front_indication: {
-      op_mode: input.frontIndication.opMode ?? null,
-      bypass_state: input.frontIndication.bypassState ?? null,
-      lead_found: input.frontIndication.leadFound ?? null,
-      lead_corrected: input.frontIndication.leadCorrected ?? null,
-      charge_found: input.frontIndication.chargeFound ?? null,
-      charge_corrected: input.frontIndication.chargeCorrected ?? null,
-      fault_0_found: input.frontIndication.fault0Found ?? null,
-      fault_0_corrected: input.frontIndication.fault0Corrected ?? null,
-      fault_ge_found: input.frontIndication.faultGeFound ?? null,
-      fault_ge_corrected: input.frontIndication.faultGeCorrected ?? null,
-      remarks: input.frontIndication.remarks ?? null,
-      remarks_target: input.frontIndication.remarksTarget ?? null,
-    },
+    amf_panel: input.amfPanel,
+    operate_non_business_hours: input.operateNonBusinessHours,
+    operate_holidays: input.operateHolidays,
+    rating: input.rating,
     engineer_employee_id: engineer.employeeId ?? null,
     engineer_name: engineer.name,
     engineer_phone: engineer.phone ?? null,
@@ -248,8 +220,6 @@ export function buildFsrPayload(
       new_sr_no: p.newSrNo ?? null,
       charges: p.charges ?? null,
       qty: p.qty ?? null,
-      old_barcode: p.oldBarcode ?? null,
-      new_challan: p.newChallan ?? null,
     })),
   };
 }

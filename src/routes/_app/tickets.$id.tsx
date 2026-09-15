@@ -27,6 +27,7 @@ import {
   engineerAssignMsg,
   customerClosedMsg,
   renderTemplate,
+  isTerminalStatus,
   type PartLine,
 } from "@/lib/tickets";
 import {
@@ -54,9 +55,16 @@ import { useIsAdmin } from "@/lib/useRole";
 import { useTicketVerifications } from "@/hooks/useTicketVerifications";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import { VerificationDiff } from "@/components/VerificationDiff";
+import { FsrPrintButton, type FsrDbRow } from "@/components/fsr/FsrPrintButton";
 import { fetchEngineerLoginIds } from "@/hooks/useTicketsTable";
 import { attachLoginFlags, sortEngineersLoginFirst } from "@/lib/eng-queue-utils";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
+import {
+  stageableTicketLines,
+  stageTicketDcPrefill,
+  stageTicketGrnPrefill,
+  type TicketDocInput,
+} from "@/lib/ticketDocs";
 import { DateTimePicker } from "@/components/DateTimePicker";
 import { ComplaintPicker } from "@/components/ComplaintPicker";
 import { ClosingRemarksDialog } from "@/components/ClosingRemarksDialog";
@@ -85,8 +93,6 @@ type FsrPart = {
   new_sr_no: string | null;
   charges: number | null;
   qty: number | null;
-  old_barcode: string | null;
-  new_challan: string | null;
 };
 
 function asFsrArray<T>(value: unknown): T[] {
@@ -127,6 +133,8 @@ type Ticket = {
   remarks: string | null;
   created_at: string;
   customer_id: string | null;
+  grn_no?: string | null;
+  dc_no?: string | null;
   oem_call: boolean;
   oem_brand: string | null;
   oem_ref_id: string | null;
@@ -260,6 +268,7 @@ function TicketDetail() {
   const [saveError, setSaveError] = useState<string>("");
   const dirtyRef = useRef(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const confirmBusyRef = useRef<boolean>(false);
   const fetchIndentMap = useServerFn(listIndentMapForTicket);
   const callResetEngineerWork = useServerFn(resetTicketEngineerWork);
   const callSyncFsrParts = useServerFn(syncFsrPartsToTicket);
@@ -385,9 +394,13 @@ function TicketDetail() {
   useEffect(() => {
     if (!t) return;
     if (!dirtyRef.current) return;
+    // Terminal records are never auto-overwritten — reopen via status change.
+    if (isTerminalStatus(t.status)) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     setSaveStatus("saving");
     autoSaveTimerRef.current = setTimeout(async () => {
+      // Re-check: the record may have reached a terminal status during debounce.
+      if (isTerminalStatus(t.status)) return;
       // Soft validation: if payload violates a hard rule, pause auto-save
       // and surface it so the user knows why nothing is being persisted.
       if (t.oem_call && (!t.oem_brand || !t.oem_ref_id || !t.oem_purchase_date)) {
@@ -469,7 +482,7 @@ function TicketDetail() {
 
   const update = (patch: Partial<Ticket>) => {
     dirtyRef.current = true;
-    setT({ ...t, ...patch });
+    setT((s) => (s ? { ...s, ...patch } : s));
   };
 
   const tplVars = (extra: Record<string, string> = {}) => ({
@@ -763,6 +776,104 @@ function TicketDetail() {
     });
   const delGood = (i: number) =>
     update({ good_parts_details: (t.good_parts_details || []).filter((_, idx) => idx !== i) });
+
+  // FSR-line review (admin-only UI below). Actor name reuses the page's
+  // existing user_metadata pattern (see confirmClose/confirmCancel).
+  const getActorName = async (): Promise<string | null> => {
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return null;
+    const md = u.user?.user_metadata as { full_name?: string; name?: string } | null;
+    return md?.full_name || md?.name || u.user?.email || "User";
+  };
+  const confirmDef = async (indexes: number[]) => {
+    if (confirmBusyRef.current) return;
+    confirmBusyRef.current = true;
+    try {
+      const by = await getActorName();
+      if (!by) {
+        toast.error("Session expired — please re-login");
+        return;
+      }
+      const at = new Date().toISOString();
+      const patch: Partial<Ticket> = {
+        defective_parts_details: (t.defective_parts_details || []).map((x, idx) =>
+          indexes.includes(idx) ? { ...x, confirmed: true, confirmed_by: by, confirmed_at: at } : x,
+        ),
+      };
+      update(patch);
+      const ok = await save(patch);
+      if (!ok) await load();
+    } finally {
+      confirmBusyRef.current = false;
+    }
+  };
+  const confirmGood = async (indexes: number[]) => {
+    if (confirmBusyRef.current) return;
+    confirmBusyRef.current = true;
+    try {
+      const by = await getActorName();
+      if (!by) {
+        toast.error("Session expired — please re-login");
+        return;
+      }
+      const at = new Date().toISOString();
+      const patch: Partial<Ticket> = {
+        good_parts_details: (t.good_parts_details || []).map((x, idx) =>
+          indexes.includes(idx) ? { ...x, confirmed: true, confirmed_by: by, confirmed_at: at } : x,
+        ),
+      };
+      update(patch);
+      const ok = await save(patch);
+      if (!ok) await load();
+    } finally {
+      confirmBusyRef.current = false;
+    }
+  };
+  const ticketDocInput = (): TicketDocInput => ({
+    ticketId: t.id,
+    caseId: t.case_id,
+    customerId: t.customer_id,
+  });
+  const handleGenerateGrn = () => {
+    stageTicketGrnPrefill(
+      ticketDocInput(),
+      stageableTicketLines(t.defective_parts_details || []).included,
+    );
+    navigate({ to: "/grn/new" });
+  };
+  const handleGenerateDc = () => {
+    stageTicketDcPrefill(
+      ticketDocInput(),
+      stageableTicketLines(t.good_parts_details || []).included,
+    );
+    navigate({ to: "/challan/customer/new" });
+  };
+  // Nulls the doc-number stamp (covers abandoned drafts). If the grn_no/dc_no
+  // columns are missing (migration not yet applied), the update errors and we
+  // surface it without touching local state.
+  const clearStamp = async (col: "grn_no" | "dc_no") => {
+    const { error } = await supabase
+      .from("tickets")
+      .update({ [col]: null } as never)
+      .eq("id", t.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    update({ [col]: null } as Partial<Ticket>);
+    toast.success("Link cleared");
+  };
+
+  const unconfirmedDef = (t.defective_parts_details || []).flatMap((p, i) =>
+    p.source === "fsr" && !p.confirmed ? [i] : [],
+  );
+  const unconfirmedGood = (t.good_parts_details || []).flatMap((p, i) =>
+    p.source === "fsr" && !p.confirmed ? [i] : [],
+  );
+  const stagedDef = stageableTicketLines(t.defective_parts_details || []);
+  const stagedGood = stageableTicketLines(t.good_parts_details || []);
+  const hasNamedDef = (t.defective_parts_details || []).some((p) => (p.name || "").trim());
+  const hasNamedGood = (t.good_parts_details || []).some((p) => (p.name || "").trim());
 
   const addNote = async () => {
     if (!noteText.trim()) return;
@@ -1407,6 +1518,53 @@ function TicketDetail() {
                   {(t.defective_parts_details || []).length === 0 && (
                     <p className="text-sm text-muted-foreground">No defective parts added yet.</p>
                   )}
+                  {isAdmin && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed p-2 bg-muted/30">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!hasNamedDef || !!t.grn_no}
+                        onClick={handleGenerateGrn}
+                        title={
+                          t.grn_no
+                            ? `Linked GRN ${t.grn_no}`
+                            : "Stage defective lines to a Customer GRN"
+                        }
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        Generate GRN (Customer)
+                      </Button>
+                      {unconfirmedDef.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => confirmDef(unconfirmedDef)}
+                        >
+                          <Check className="h-4 w-4 mr-1" />
+                          Confirm all FSR ({unconfirmedDef.length})
+                        </Button>
+                      )}
+                      {stagedDef.excludedUnconfirmed > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {stagedDef.excludedUnconfirmed} unconfirmed FSR line(s) excluded — confirm
+                          to include
+                        </span>
+                      )}
+                      {t.grn_no && (
+                        <span className="text-xs text-muted-foreground">
+                          GRN{" "}
+                          <span className="font-mono font-medium text-foreground">{t.grn_no}</span>
+                          <button
+                            type="button"
+                            className="ml-1 underline underline-offset-2"
+                            onClick={() => clearStamp("grn_no")}
+                          >
+                            clear link
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {t.oem_call &&
                     (t.defective_parts_details || []).length > 0 &&
                     (() => {
@@ -1448,6 +1606,24 @@ function TicketDetail() {
                     })()}
                   {(t.defective_parts_details || []).map((p, i) => (
                     <div key={i} className="rounded-md border p-2">
+                      {p.source === "fsr" && (
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="secondary" className="text-[10px]">
+                            FSR · {p.confirmed ? "confirmed" : "unconfirmed"}
+                          </Badge>
+                          {!p.confirmed && isAdmin && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={() => confirmDef([i])}
+                            >
+                              <Check className="h-3.5 w-3.5 mr-1" />
+                              Confirm
+                            </Button>
+                          )}
+                        </div>
+                      )}
                       <div className="grid grid-cols-12 gap-2 items-end">
                         <div className="col-span-12 md:col-span-1 flex items-center pb-1">
                           <Checkbox
@@ -1598,6 +1774,51 @@ function TicketDetail() {
                   {(t.good_parts_details || []).length === 0 && (
                     <p className="text-sm text-muted-foreground">No good parts added yet.</p>
                   )}
+                  {isAdmin && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed p-2 bg-muted/30">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!hasNamedGood || !!t.dc_no}
+                        onClick={handleGenerateDc}
+                        title={
+                          t.dc_no ? `Linked DC ${t.dc_no}` : "Stage good lines to a Customer DC"
+                        }
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        Generate DC (Customer)
+                      </Button>
+                      {unconfirmedGood.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => confirmGood(unconfirmedGood)}
+                        >
+                          <Check className="h-4 w-4 mr-1" />
+                          Confirm all FSR ({unconfirmedGood.length})
+                        </Button>
+                      )}
+                      {stagedGood.excludedUnconfirmed > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {stagedGood.excludedUnconfirmed} unconfirmed FSR line(s) excluded —
+                          confirm to include
+                        </span>
+                      )}
+                      {t.dc_no && (
+                        <span className="text-xs text-muted-foreground">
+                          DC{" "}
+                          <span className="font-mono font-medium text-foreground">{t.dc_no}</span>
+                          <button
+                            type="button"
+                            className="ml-1 underline underline-offset-2"
+                            onClick={() => clearStamp("dc_no")}
+                          >
+                            clear link
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {(t.good_parts_details || []).map((p, i) => {
                     const fromOracle = p.source === "oracle_exchange";
                     const ro = fromOracle && !isAdmin;
@@ -1617,6 +1838,29 @@ function TicketDetail() {
                                 Auto-synced (read-only)
                               </span>
                             )}
+                          </div>
+                        )}
+                        {p.source === "fsr" && (
+                          <div className="flex items-center justify-between mb-1">
+                            <Badge variant="secondary" className="text-[10px]">
+                              FSR · {p.confirmed ? "confirmed" : "unconfirmed"}
+                            </Badge>
+                            {!p.confirmed &&
+                              (isAdmin ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => confirmGood([i])}
+                                >
+                                  <Check className="h-3.5 w-3.5 mr-1" />
+                                  Confirm
+                                </Button>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">
+                                  Pending admin review
+                                </span>
+                              ))}
                           </div>
                         )}
                         <div className="grid grid-cols-12 gap-2 items-end">
@@ -1823,20 +2067,7 @@ function TicketDetail() {
                       verifications.customer.corrected && (
                         <div className="space-y-1 mt-1">
                           <VerificationDiff
-                            label="Customer name"
-                            original={
-                              (verifications.customer.snapshot as Record<string, unknown>)
-                                .customer_name as string | null
-                            }
-                            corrected={
-                              (verifications.customer.corrected as Record<string, unknown>)
-                                .customer_name as string | null
-                            }
-                            engineer={verifications.customer.engineer_name}
-                            at={verifications.customer.verified_at}
-                          />
-                          <VerificationDiff
-                            label="Customer phone"
+                            label="Customer mobile"
                             original={
                               (verifications.customer.snapshot as Record<string, unknown>)
                                 .customer_phone as string | null
@@ -1857,19 +2088,6 @@ function TicketDetail() {
                             corrected={
                               (verifications.customer.corrected as Record<string, unknown>)
                                 .customer_email as string | null
-                            }
-                            engineer={verifications.customer.engineer_name}
-                            at={verifications.customer.verified_at}
-                          />
-                          <VerificationDiff
-                            label="Address"
-                            original={
-                              (verifications.customer.snapshot as Record<string, unknown>)
-                                .customer_address as string | null
-                            }
-                            corrected={
-                              (verifications.customer.corrected as Record<string, unknown>)
-                                .customer_address as string | null
                             }
                             engineer={verifications.customer.engineer_name}
                             at={verifications.customer.verified_at}
@@ -1916,8 +2134,9 @@ function TicketDetail() {
           )}
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
               <CardTitle>Field Service Report</CardTitle>
+              <FsrPrintButton ticketId={id} fsrRow={fsrLatest as unknown as FsrDbRow | null} />
             </CardHeader>
             <CardContent className="space-y-2">
               {!fsrLatest ? (
@@ -1938,6 +2157,12 @@ function TicketDetail() {
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className="text-muted-foreground">Engineer</span>
                       <span className="font-medium">{fsrLatest.engineer_name ?? "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-muted-foreground">Overall rating (1–10)</span>
+                      <Badge variant="default" className="text-[10px]">
+                        {fsrLatest.rating ?? "—"}
+                      </Badge>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -2178,73 +2403,6 @@ function TicketDetail() {
                   </div>
                   <div className="space-y-1">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Front Indication
-                    </p>
-                    {(() => {
-                      const fi = (fsrLatest.front_indication ?? {}) as {
-                        op_mode?: string | null;
-                        bypass_state?: string | null;
-                        lead_found?: number | null;
-                        lead_corrected?: number | null;
-                        charge_found?: number | null;
-                        charge_corrected?: number | null;
-                        fault_0_found?: number | null;
-                        fault_0_corrected?: number | null;
-                        fault_ge_found?: number | null;
-                        fault_ge_corrected?: number | null;
-                        remarks?: string | null;
-                        remarks_target?: string | null;
-                      };
-                      return (
-                        <>
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">OP mode</span>
-                            <span className="font-medium">{fi.op_mode ?? "—"}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Bypass</span>
-                            <span className="font-medium">{fi.bypass_state ?? "—"}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Lead</span>
-                            <span className="font-medium">
-                              Found: {fi.lead_found ?? "—"} / Corrected: {fi.lead_corrected ?? "—"}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Charge</span>
-                            <span className="font-medium">
-                              Found: {fi.charge_found ?? "—"} / Corrected:{" "}
-                              {fi.charge_corrected ?? "—"}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Fault 0</span>
-                            <span className="font-medium">
-                              Found: {fi.fault_0_found ?? "—"} / Corrected:{" "}
-                              {fi.fault_0_corrected ?? "—"}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Fault GE</span>
-                            <span className="font-medium">
-                              Found: {fi.fault_ge_found ?? "—"} / Corrected:{" "}
-                              {fi.fault_ge_corrected ?? "—"}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Remarks</span>
-                            <span className="font-medium">
-                              {fi.remarks ?? "—"}
-                              {fi.remarks_target ? ` (${fi.remarks_target})` : ""}
-                            </span>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Part Replacements
                     </p>
                     {(() => {
@@ -2277,14 +2435,6 @@ function TicketDetail() {
                           <div className="flex items-center justify-between gap-2 text-xs">
                             <span className="text-muted-foreground">Qty</span>
                             <span className="font-medium">{p.qty ?? "—"}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Old Barcode</span>
-                            <span className="font-medium">{p.old_barcode ?? "—"}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">New Challan</span>
-                            <span className="font-medium">{p.new_challan ?? "—"}</span>
                           </div>
                         </div>
                       ));
@@ -2327,19 +2477,25 @@ function TicketDetail() {
                   ) : (
                     <div className="space-y-2">
                       {(fsrRows ?? []).map((r) => (
-                        <div key={r.id} className="flex items-center justify-between gap-2 text-xs">
+                        <div
+                          key={r.id}
+                          className="flex items-center justify-between gap-2 flex-wrap text-xs"
+                        >
                           <span className="text-muted-foreground">
                             {r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "—"}
                           </span>
                           <span className="font-medium">{r.engineer_name ?? "—"}</span>
+                          <span className="font-medium">Rating: {r.rating ?? "—"}/10</span>
                           {r.customer_signature_path ? (
                             <button
                               type="button"
                               className="underline underline-offset-2"
                               onClick={async () => {
+                                const sigPath = r.customer_signature_path;
+                                if (!sigPath) return;
                                 const { data, error } = await supabase.storage
                                   .from("ticket-attachments")
-                                  .createSignedUrl(r.customer_signature_path, 3600);
+                                  .createSignedUrl(sigPath, 3600);
                                 if (error || !data?.signedUrl) {
                                   toast.error(error?.message ?? "Could not open signature");
                                   return;
@@ -2350,6 +2506,11 @@ function TicketDetail() {
                               View signature
                             </button>
                           ) : null}
+                          <FsrPrintButton
+                            ticketId={id}
+                            fsrRow={r as unknown as FsrDbRow | null}
+                            compact
+                          />
                         </div>
                       ))}
                     </div>

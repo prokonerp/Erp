@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PART_SOURCE_FSR, stageFsrParts, mergePartLines } from "@/lib/sync-fsr-parts";
+import { toStageInput } from "@/lib/sync-fsr-parts.functions";
 import type { PartLine } from "@/lib/tickets";
 
 const adminLine = (over: Partial<PartLine> = {}): PartLine => ({
@@ -11,25 +12,21 @@ const adminLine = (over: Partial<PartLine> = {}): PartLine => ({
 });
 
 describe("stageFsrParts mapping", () => {
-  it("stages the defective direction with serial = oldSrNo ?? oldBarcode", () => {
-    const { defective } = stageFsrParts([
-      { item: "PCB", qty: 2, oldSrNo: "OLD1", oldBarcode: "BAR1" },
-    ]);
-    expect(defective).toEqual([{ name: "PCB", qty: 2, serial: "OLD1", remarks: "Barcode: BAR1" }]);
+  it("stages the defective direction with serial = oldSrNo and no remarks", () => {
+    const { defective } = stageFsrParts([{ item: "PCB", qty: 2, oldSrNo: "OLD1" }]);
+    expect(defective).toEqual([{ name: "PCB", qty: 2, serial: "OLD1", remarks: null }]);
   });
 
-  it("falls back to oldBarcode when oldSrNo is missing", () => {
-    const { defective } = stageFsrParts([{ item: "PCB", oldBarcode: "BAR9" }]);
-    expect(defective[0].serial).toBe("BAR9");
+  it("stages defective with null serial when oldSrNo is missing (no barcode fallback)", () => {
+    const { defective } = stageFsrParts([{ item: "PCB" }]);
+    expect(defective[0].serial).toBeNull();
     expect(defective[0].remarks).toBeNull();
   });
 
-  it("stages the good direction only when newSrNo is present, noting the challan", () => {
-    const withNew = stageFsrParts([{ item: "PCB", newSrNo: "NEW1", newChallan: "CH5" }]);
-    expect(withNew.good).toEqual([
-      { name: "PCB", qty: 1, serial: "NEW1", remarks: "Challan: CH5" },
-    ]);
-    const withoutNew = stageFsrParts([{ item: "PCB", newChallan: "CH5" }]);
+  it("stages the good direction only when newSrNo is present, with no challan remark", () => {
+    const withNew = stageFsrParts([{ item: "PCB", newSrNo: "NEW1" }]);
+    expect(withNew.good).toEqual([{ name: "PCB", qty: 1, serial: "NEW1", remarks: null }]);
+    const withoutNew = stageFsrParts([{ item: "PCB" }]);
     expect(withoutNew.good).toEqual([]);
     // defective side still stages for the same entry
     expect(withoutNew.defective).toHaveLength(1);
@@ -43,6 +40,37 @@ describe("stageFsrParts mapping", () => {
 
   it("empty parts stage to nothing", () => {
     expect(stageFsrParts([])).toEqual({ defective: [], good: [] });
+  });
+});
+
+describe("toStageInput qty coercion", () => {
+  it('coerces numeric string "2" to qty 2 (stages qty 2)', () => {
+    const input = toStageInput({ item: "PCB", qty: "2" });
+    expect(input.qty).toBe(2);
+    const { defective } = stageFsrParts([input]);
+    expect(defective[0].qty).toBe(2);
+  });
+
+  it('falls back to qty 1 for non-numeric "abc"', () => {
+    const input = toStageInput({ item: "PCB", qty: "abc" });
+    expect(input.qty).toBeNull();
+    const { defective } = stageFsrParts([input]);
+    expect(defective[0].qty).toBe(1);
+  });
+
+  it('falls back to qty 1 for empty string ""', () => {
+    const input = toStageInput({ item: "PCB", qty: "" });
+    expect(input.qty).toBeNull();
+    const { defective } = stageFsrParts([input]);
+    expect(defective[0].qty).toBe(1);
+  });
+
+  it("ignores legacy old_barcode keys (field removed)", () => {
+    const input = toStageInput({ item: "PCB", old_sr_no: "OLD1", old_barcode: "BAR9" });
+    expect("oldBarcode" in input).toBe(false);
+    const { defective } = stageFsrParts([input]);
+    expect(defective[0].serial).toBe("OLD1");
+    expect(defective[0].remarks).toBeNull();
   });
 });
 

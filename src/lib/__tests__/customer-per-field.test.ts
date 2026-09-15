@@ -10,51 +10,62 @@ const SNAP = {
   location: "Gurgaon",
 };
 
-describe("customer per-field correction (RED)", () => {
+describe("customer per-field correction — email + mobile only", () => {
   it("phone-only fix resolves name==snapshot + verdict incorrect", () => {
     const out = resolveCustomerCorrection(SNAP, {
-      nameIncorrect: false,
+      emailIncorrect: false,
       phoneIncorrect: true,
       phoneInput: "8888888888",
     });
     expect(out.corrected.customer_name).toBe("Acme");
     expect(out.corrected.customer_phone).toBe("8888888888");
+    expect(out.corrected.customer_email).toBe("a@b.com");
     expect(out.verdict).toBe("incorrect");
   });
 
-  it("name-only fix symmetric", () => {
+  it("email-only fix symmetric", () => {
     const out = resolveCustomerCorrection(SNAP, {
-      nameIncorrect: true,
-      nameInput: "Acme New",
+      emailIncorrect: true,
+      emailInput: "new@acme.in",
       phoneIncorrect: false,
     });
-    expect(out.corrected.customer_name).toBe("Acme New");
+    expect(out.corrected.customer_email).toBe("new@acme.in");
     expect(out.corrected.customer_phone).toBe("9999999999");
     expect(out.verdict).toBe("incorrect");
   });
 
   it("both-correct throws", () => {
     expect(() =>
-      customerPerFieldSchema.parse({ nameIncorrect: false, phoneIncorrect: false }),
+      customerPerFieldSchema.parse({ emailIncorrect: false, phoneIncorrect: false }),
     ).toThrow();
     expect(() =>
-      resolveCustomerCorrection(SNAP, { nameIncorrect: false, phoneIncorrect: false }),
+      resolveCustomerCorrection(SNAP, { emailIncorrect: false, phoneIncorrect: false }),
     ).toThrow();
   });
 
   it("bad phone throws", () => {
     expect(() =>
       customerPerFieldSchema.parse({
-        nameIncorrect: false,
+        emailIncorrect: false,
         phoneIncorrect: true,
         phoneInput: "123",
       }),
     ).toThrow();
     expect(() =>
       resolveCustomerCorrection(SNAP, {
-        nameIncorrect: false,
+        emailIncorrect: false,
         phoneIncorrect: true,
         phoneInput: "123",
+      }),
+    ).toThrow();
+  });
+
+  it("bad email throws", () => {
+    expect(() =>
+      customerPerFieldSchema.parse({
+        emailIncorrect: true,
+        emailInput: "not-an-email",
+        phoneIncorrect: false,
       }),
     ).toThrow();
   });
