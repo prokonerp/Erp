@@ -5,12 +5,8 @@ let lastCapturedError: { error: unknown; at: number } | undefined;
 const TTL_MS = 5_000;
 
 function isPerfNoiseError(err: unknown): boolean {
-  const msg = String((err as any)?.message || err || "").toLowerCase();
   const stack = String((err as any)?.stack || "").toLowerCase();
-  return (
-    (msg.includes("starttime") && msg.includes("undefined")) ||
-    stack.includes("reportallchanges")
-  );
+  return stack.includes("reportallchanges");
 }
 
 function record(error: unknown) {
@@ -18,19 +14,39 @@ function record(error: unknown) {
   lastCapturedError = { error, at: Date.now() };
 }
 
-if (typeof globalThis.addEventListener === "function") {
-  globalThis.addEventListener("error", (event) => {
-    const err: any = (event as ErrorEvent).error ?? event;
+// Prefer window (browser) with a globalThis fallback (workers / SSR).
+type NoiseListenerTarget = {
+  addEventListener(type: "error", listener: (event: ErrorEvent) => void): void;
+  addEventListener(type: "unhandledrejection", listener: (event: PromiseRejectionEvent) => void): void;
+};
+
+function resolveListenerTarget(): NoiseListenerTarget | null {
+  const w = typeof window !== "undefined"
+    ? (window as unknown as { addEventListener?: unknown }).addEventListener
+    : undefined;
+  if (typeof w === "function") return window as unknown as NoiseListenerTarget;
+  const g = (globalThis as unknown as { addEventListener?: unknown }).addEventListener;
+  if (typeof g === "function") return globalThis as unknown as NoiseListenerTarget;
+  return null;
+}
+
+const listenerTarget = resolveListenerTarget();
+
+if (listenerTarget) {
+  listenerTarget.addEventListener("error", (event) => {
+    const err: unknown = event.error ?? event;
     if (isPerfNoiseError(err)) {
-      try { (event as ErrorEvent).preventDefault?.(); } catch {}
+      try { event.preventDefault(); } catch { /* noop */ }
+      try { console.debug("[error-capture] swallowed perf-noise error", err); } catch { /* noop */ }
       return;
     }
     record(err);
   });
-  globalThis.addEventListener("unhandledrejection", (event) => {
-    const reason: any = (event as PromiseRejectionEvent).reason;
+  listenerTarget.addEventListener("unhandledrejection", (event) => {
+    const reason: unknown = event.reason;
     if (isPerfNoiseError(reason)) {
-      try { (event as PromiseRejectionEvent).preventDefault?.(); } catch {}
+      try { event.preventDefault(); } catch { /* noop */ }
+      try { console.debug("[error-capture] swallowed perf-noise rejection", reason); } catch { /* noop */ }
       return;
     }
     record(reason);

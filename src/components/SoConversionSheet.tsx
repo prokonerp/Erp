@@ -234,10 +234,10 @@ export function SoConversionForm({ salesOrder, defaultType, onSuccess, onCancel,
   };
 
   const handleQtyChange = (idx: number, raw: string) => {
-    const n = raw === "" ? 0 : Math.round(Number(raw));
+    const n = r3(Number(raw) || 0);
     if (Number.isNaN(n)) return;
     const line = lines[idx];
-    const capped = Math.max(0, Math.min(n, Math.floor(Number(line.balance) || 0)));
+    const capped = r3(Math.max(0, Math.min(n, Number(line.balance) || 0)));
     // serialized: qty locked to serials length — ignore manual edit if serialized
     if (line.is_serialized) return;
     updateLine(idx, { this_qty: capped });

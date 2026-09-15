@@ -183,7 +183,7 @@ export type PartLine = {
   // one Oracle block when an Indent is created from the ticket.
   oracle_no?: string;
   // Auto-populated rows from Indent Oracle Material Exchange (Oracle = Closed)
-  source?: "manual" | "oracle_exchange";
+  source?: "manual" | "oracle_exchange" | "fsr";
   indent_id?: string | null;
   indent_no?: string | null;
 };

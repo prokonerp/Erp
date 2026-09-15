@@ -167,7 +167,7 @@ export function getInvoiceCompletionStatus(
   if (transport && (transport.e_invoice_reqd === "Y" || transport.e_invoice_reqd === "N")) {
     e_invoice_required = transport.e_invoice_reqd === "Y";
   } else {
-    const sellerGstin = invoice.seller_gstin ?? (transport as any)?.einvoice_irn ?? (transport as any)?.seller_gstin ?? null;
+    const sellerGstin = invoice.seller_gstin ?? (transport as any)?.seller_gstin ?? null;
     const buyerGstin = (invoice.buyer_gstin as string | null | undefined) ?? null;
     e_invoice_required = computeEInvoiceRequired(sellerGstin ?? null, buyerGstin ?? null) === "Y";
   }

@@ -501,7 +501,7 @@ function NewInvoice() {
       }
     }
     // Prevent duplicate serials across lines
-    const allSerials = items.flatMap((it) => it.serial_numbers);
+    const allSerials = items.flatMap((it) => it.serial_numbers.map((s) => String(s).trim().toUpperCase()));
     if (new Set(allSerials).size !== allSerials.length) return toast.error("Duplicate serial numbers across lines");
     if (gstinError) {
       if (status === "issued") return toast.error(gstinError);

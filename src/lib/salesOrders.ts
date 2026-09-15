@@ -187,7 +187,8 @@ export async function fetchSalesOrdersPage(
     const safe = search
       .trim()
       .replace(/[%_\\]/g, "\\$&")
-      .replace(/[,()]/g, "\\$&");
+      .replace(/[,()]/g, "\\$&")
+      .replace(/[:\"*]/g, "");
     q = q.or(`so_no.ilike.%${safe}%,buyer_name.ilike.%${safe}%`);
   }
 

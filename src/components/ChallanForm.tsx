@@ -93,6 +93,10 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   const allowNegativeRef = useRef(false);
   const overrideReasonRef = useRef<string | null>(null);
   const negBlockedRef = useRef(false);
+  // Ticket link retained from the prefill payload (mount effect parses then
+  // discards it) so the save path can stamp tickets.dc_no back. Null unless
+  // this DC was staged from a service ticket.
+  const ticketLinkRef = useRef<string | null>(null);
   const itemsSectionRef = useRef<HTMLDivElement | null>(null);
   // Non-blocking warnings when the physical location of a serial does not
   // match the "Supply From Warehouse" (branch) chosen on the document.
@@ -164,6 +168,9 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     try { sessionStorage.removeItem("challan:prefill:new-customer"); } catch { /* noop */ }
     let payload: Record<string, unknown>;
     try { payload = JSON.parse(raw); } catch { return; }
+    if (payload.source === "ticket" && typeof payload.ticket_id === "string" && payload.ticket_id) {
+      ticketLinkRef.current = payload.ticket_id;
+    }
     const customerId = (payload.customer_id as string | undefined) || null;
     const prefillItems = Array.isArray(payload.items) ? (payload.items as Array<Partial<ChallanItem>>) : [];
     if (prefillItems.length > 0) {
@@ -320,7 +327,10 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         qty: parseFloat(it.qty) || 0,
       }));
     let short: Shortfall[] = [];
-    try { short = await findShortfalls(lines); } catch { return true; }
+    try { short = await findShortfalls(lines); } catch {
+      toast.warning("Stock check unavailable — proceeding without verification");
+      return true;
+    }
     if (short.length === 0) { setShortfalls([]); return true; }
     if (!isAdmin) {
       negBlockedRef.current = true;
@@ -332,13 +342,74 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     return false;
   };
 
-  const persist = async () => {
-    if (!canAutosave() || savingRef.current) return;
+  /**
+   * Serial pre-flight for a DC to Customer. Mirrors the serial branch of
+   * public.dc_post_inventory exactly: part_serial_no = serial AND
+   * stock_type = 'good' AND stock_status = 'available' (no model or
+   * warehouse predicates — the trigger ignores them for serials).
+   * Hard blocks for everyone: a missing serial can never go negative, so the
+   * allow-negative override does NOT apply here. Fail-open on query error.
+   */
+  const preflightSerials = async (): Promise<boolean> => {
+    if (dcType !== "customer") return true;
+    const serials = Array.from(
+      new Set(items.map((it) => (it.serial_no || "").trim()).filter(Boolean)),
+    );
+    if (serials.length === 0) return true;
+    try {
+      const { data, error } = await supabase
+        .from("ims_stock_items")
+        .select("part_serial_no")
+        .in("part_serial_no", serials)
+        .eq("stock_type", "good")
+        .eq("stock_status", "available");
+      if (error) throw error;
+      const found = new Set(
+        ((data as Array<{ part_serial_no: string | null }> | null) ?? []).map((r) => r.part_serial_no),
+      );
+      const missing = serials.filter((s) => !found.has(s));
+      if (missing.length > 0) {
+        toast.error(`Serials not in available good stock: ${missing.join(", ")}`);
+        return false;
+      }
+      return true;
+    } catch {
+      toast.warning("Stock check unavailable — proceeding without verification");
+      return true;
+    }
+  };
+
+  // Ticket stamp-back: when this DC was staged from a ticket, write the
+  // saved challan number back to tickets.dc_no. Best-effort — a missing
+  // column (migration not yet applied) or any error never blocks save.
+  const stampTicketDcNo = async (challanId: string) => {
+    const ticketId = ticketLinkRef.current;
+    if (!ticketId) return;
+    try {
+      const { data: saved } = await supabase
+        .from("delivery_challans" as never)
+        .select("challan_no")
+        .eq("id", challanId)
+        .maybeSingle();
+      const no = (saved as { challan_no?: unknown } | null)?.challan_no;
+      if (typeof no === "string" && no) {
+        const { error: stampError } = await supabase.from("tickets").update({ dc_no: no } as never).eq("id", ticketId);
+        if (stampError) toast.warning("Ticket link not stamped — re-generate or clear the link from the ticket");
+      }
+    } catch {
+      /* best-effort stamp-back — never blocks save */
+      toast.warning("Ticket link not stamped — re-generate or clear the link from the ticket");
+    }
+  };
+
+  const persist = async (): Promise<string | null> => {
+    if (!canAutosave() || savingRef.current) return recordId;
     // Only the first write posts inventory — gate that write on availability.
-    if (!recordId && !(await preflightStock())) return;
+    if (!recordId && !(await preflightStock())) return null;
+    if (!recordId && !(await preflightSerials())) return null;
     const payload = buildPayload();
     const signature = JSON.stringify({ ...payload, recordId });
-    if (signature === lastPayloadRef.current) return;
+    if (signature === lastPayloadRef.current) return recordId;
     savingRef.current = true;
     setSaveState("saving");
     try {
@@ -370,14 +441,20 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         }
         // Swap URL so refresh/back keeps the same record — no new insert on next save.
         navigate({ to: "/challan/$id/edit", params: { id: newId }, replace: true });
+        lastPayloadRef.current = signature;
+        setLastSavedAt(new Date());
+        setSaveState("saved");
+        return newId;
       }
       lastPayloadRef.current = signature;
       setLastSavedAt(new Date());
       setSaveState("saved");
+      return recordId;
     } catch (e: any) {
       setSaveState("error");
       const msg = e?.message || "Auto-save failed";
       toast.error(msg);
+      return null;
     } finally {
       savingRef.current = false;
     }
@@ -583,12 +660,15 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
     try {
       if (!validate()) return;
       if (!recordId && !(await preflightStock())) return;
+      if (!recordId && !(await preflightSerials())) return;
       setBusy(true);
       didSetBusy = true;
-      await persist();
+      const savedId = await persist();
+      if (savedId == null && recordId == null) return;
       setReviewOpen(false);
-      const idToOpen = recordId;
+      const idToOpen = savedId ?? recordId;
       if (idToOpen) {
+        await stampTicketDcNo(idToOpen);
         toast.success("Delivery Challan saved");
         navigate({ to: "/challan/$id", params: { id: idToOpen } });
       }
@@ -919,7 +999,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                       />
                     </td>
                     <td className="px-3 py-2 border-t border-border/60 align-top">
-                      <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
+                      <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value.toUpperCase() })} />
                     </td>
                     <td className="px-3 py-2 border-t border-border/60 align-top">
                       <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
@@ -1056,7 +1136,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[180px]">
-                          <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value })} />
+                          <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value.toUpperCase() })} />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
                           <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
@@ -1077,7 +1157,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           <Input value={it.defective_model || ""} onChange={(e) => updateItem(i, { defective_model: e.target.value })} />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                          <Input value={it.defective_serial || ""} onChange={(e) => updateItem(i, { defective_serial: e.target.value })} />
+                          <Input value={it.defective_serial || ""} onChange={(e) => updateItem(i, { defective_serial: e.target.value.toUpperCase() })} />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
                           <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
@@ -1090,7 +1170,7 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                          <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value })} />
+                          <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value.toUpperCase() })} />
                         </td>
                       </>
                     )}

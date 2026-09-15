@@ -27,7 +27,7 @@ export function GrnSerialInputs({
 
   const set = (i: number, v: string) => {
     const next = [...list];
-    next[i] = v;
+    next[i] = v.toUpperCase();
     onChange({ serials: next, serial_no: next.map((s) => s.trim()).filter(Boolean).join(", ") });
   };
 

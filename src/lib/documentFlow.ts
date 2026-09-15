@@ -563,7 +563,7 @@ export function buildFulfillmentPreview(
     const productId = (it as any).product_id != null ? String((it as any).product_id) : null;
     // If product_id is empty string, treat as null
     const normalizedProductId = productId && productId.trim() !== "" ? productId : null;
-    const s = map.get(origIdx) ?? map.get(validIdx);
+    const s = map.get(origIdx);
     // fulfilledBefore: clamp >=0, handle string/null
     const fulfilledRaw = s ? Number((s as any).fulfilled_stock) : 0;
     const fulfilledBefore = r3(Math.max(0, Number.isFinite(fulfilledRaw) ? fulfilledRaw : 0));

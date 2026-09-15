@@ -38,9 +38,10 @@ export const fieldServiceReportKeys = createKeyFactory(["field_service_reports"]
 export const grnKeys = createKeyFactory(["grns"] as const);
 export const dcKeys = createKeyFactory(["delivery_challans"] as const);
 export const imsKeys = createKeyFactory(["ims"] as const);
-export const challanKeys = createKeyFactory(["challans"] as const);
 
-// Back-compat alias: some code historically used `challanKeys`, others `dcKeys` — both point to same domain.
+// Back-compat alias: some code historically used `challanKeys`, others `dcKeys` —
+// both point to the same delivery_challans domain/table.
+export const challanKeys = dcKeys;
 export const stockKeys = createKeyFactory(["ims_stock_items"] as const);
 export const txnKeys = createKeyFactory(["ims_transactions"] as const);
 export const soKeys = createKeyFactory(["sales_orders"] as const);

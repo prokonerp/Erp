@@ -6,6 +6,19 @@ import { grnKeys } from "@/lib/queryKeys";
 export type GrnCategory = "customer" | "oem" | "general";
 export type GrnStatus = "Draft" | "Submitted" | "Cancelled";
 
+/** Statuses whose GRNs have already posted (or reversed) stock and must not
+ *  be edited from the form. Submitted GRNs post inventory; Cancelled GRNs are
+ *  reversed/terminal. Corrections go through the admin reverse flow instead. */
+const GRN_SETTLED: ReadonlySet<string> = new Set([
+  "submitted",
+  "cancelled",
+]);
+
+/** True only when a GRN with this status may still be edited. */
+export function isGrnEditable(status: string | null | undefined): boolean {
+  return !GRN_SETTLED.has((status || "").trim().toLowerCase());
+}
+
 export type GrnItem = {
   product_id?: string;
   part_no: string;

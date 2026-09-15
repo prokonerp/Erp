@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Trash2, Eye, Save, ArrowLeft, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { emptyGrnItem, CATEGORY_LABEL, type GrnCategory, type GrnItem } from "@/lib/grn";
+import { emptyGrnItem, CATEGORY_LABEL, isGrnEditable, type GrnCategory, type GrnItem } from "@/lib/grn";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
@@ -101,7 +101,11 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   // When GRN is auto-populated from a source document (Indent Section C/D),
   // material identification fields become read-only to preserve traceability.
   const [sourceLocked, setSourceLocked] = useState(false);
-  const [sourceKind, setSourceKind] = useState<"oem-section-c" | "customer-section-d" | "customer-gdc" | null>(null);
+  const [sourceKind, setSourceKind] = useState<"oem-section-c" | "customer-section-d" | "customer-gdc" | "ticket" | null>(null);
+  // Ticket link retained from the prefill payload (mount effect parses then
+  // discards it) so the save path can stamp tickets.grn_no back. Null unless
+  // this GRN was staged from a service ticket.
+  const ticketLinkRef = useRef<string | null>(null);
 
   // Auto-populate Received By with the current logged-in user's name (new records only).
   useEffect(() => {
@@ -186,8 +190,13 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
           ? "oem-section-c"
           : payload.source === "general_dc"
             ? "customer-gdc"
-            : "customer-section-d",
+            : payload.source === "ticket"
+              ? "ticket"
+              : "customer-section-d",
       );
+      if (payload.source === "ticket" && typeof payload.ticket_id === "string" && payload.ticket_id) {
+        ticketLinkRef.current = payload.ticket_id;
+      }
     }
     setForm((f) => ({
       ...f,
@@ -232,10 +241,11 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       }
       const r = data as Record<string, unknown>;
       // B-08: only Draft GRNs are editable. A Submitted GRN has already been
-      // posted to inventory — editing it here would double-post stock and
-      // serials. Corrections go through the admin reverse flow instead.
-      if ((r.status as string | undefined)?.toLowerCase() === "submitted") {
-        toast.error("This GRN has already been submitted — stock has been posted. Use Admin → Reverse if a correction is needed.");
+      // posted to inventory, and a Cancelled GRN is reversed/terminal —
+      // editing either here would double-post stock and serials. Corrections
+      // go through the admin reverse flow instead.
+      if (!isGrnEditable(r.status as string | undefined)) {
+        toast.error("This GRN is already submitted or cancelled — stock has been posted. Use Admin → Reverse if a correction is needed.");
         navigate({ to: "/grn/$id", params: { id: editId } });
         return;
       }
@@ -412,9 +422,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         setBusy(false);
         return toast.error(statusCheckErr.message);
       }
-      if ((currentRow as { status?: string } | null)?.status?.toLowerCase() === "submitted") {
+      if (!isGrnEditable((currentRow as { status?: string } | null)?.status)) {
         setBusy(false);
-        toast.error("This GRN was just submitted by someone else — stock is already posted. Edit blocked.");
+        toast.error("This GRN was just submitted or cancelled by someone else — stock is already posted. Edit blocked.");
         navigate({ to: "/grn/$id", params: { id: editId } });
         return;
       }
@@ -488,6 +498,27 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       .from("grns" as never)
       .insert(payload as never).select("id").single();
     if (error) { setBusy(false); return toast.error(error.message); }
+    // Ticket stamp-back: this GRN was staged from a ticket — write the saved
+    // grn_no back to tickets.grn_no. Best-effort: a missing column (migration
+    // not yet applied) or any error never blocks the success toast/navigation.
+    if (ticketLinkRef.current) {
+      try {
+        const newId = (data as { id: string }).id;
+        const { data: saved } = await supabase
+          .from("grns" as never)
+          .select("grn_no")
+          .eq("id", newId)
+          .maybeSingle();
+        const grnNo = (saved as { grn_no?: unknown } | null)?.grn_no;
+        if (typeof grnNo === "string" && grnNo) {
+          const { error: stampError } = await supabase.from("tickets").update({ grn_no: grnNo } as never).eq("id", ticketLinkRef.current);
+          if (stampError) toast.warning("Ticket link not stamped — re-generate or clear the link from the ticket");
+        }
+      } catch {
+        /* best-effort stamp-back — never blocks save */
+        toast.warning("Ticket link not stamped — re-generate or clear the link from the ticket");
+      }
+    }
     setBusy(false);
     setReviewOpen(false);
     toast.success(approve ? "GRN Approved & Stock Updated Successfully" : "GRN created");
@@ -528,7 +559,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                   ? "Indent Section C — Material Received (from OEM)"
                   : sourceKind === "customer-gdc"
                     ? "General Delivery Challan — Return Receipt (from Customer)"
-                    : "Indent Section D — Material Received (from Customer)"}
+                    : sourceKind === "ticket"
+                      ? "Service Ticket — Defective Parts (from Customer)"
+                      : "Indent Section D — Material Received (from Customer)"}
               </div>
               <div className="text-muted-foreground">
                 Material identification fields are read-only to preserve source traceability.
@@ -536,7 +569,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 {" "}
                 {sourceKind === "customer-gdc"
                   ? "Set the received condition per row — Good, Defective or Scrap."
-                  : "Edit at the source Indent if corrections are needed."}
+                  : sourceKind === "ticket"
+                    ? "Edit on the ticket if corrections are needed."
+                    : "Edit at the source Indent if corrections are needed."}
               </div>
             </div>
           </div>
@@ -815,7 +850,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                         <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="number" min="0" value={it.qty_received} readOnly className="bg-muted/40" onChange={(e) => updateItem(i, { qty_received: e.target.value })} /></td>
                         <td className="px-2 py-1.5 border-t-0 border-border/60"><Input type="date" value={it.received_date || ""} readOnly className="bg-muted/40" /></td>
                         <td className="px-2 py-1.5 border-t-0 border-border/60">
-                          <Select value={normCondition(it.condition)} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceKind === "customer-section-d"}>
+                          <Select value={normCondition(it.condition)} onValueChange={(v) => updateItem(i, { condition: v })} disabled={sourceKind === "customer-section-d" || sourceKind === "ticket"}>
                             <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Good">Good</SelectItem>
