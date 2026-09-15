@@ -14,9 +14,11 @@ import { Route as EngRouteImport } from './routes/eng'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EngIndexRouteImport } from './routes/eng.index'
 import { Route as InvoicePreviewRouteImport } from './routes/invoice.preview'
 import { Route as EngQueueRouteImport } from './routes/eng.queue'
 import { Route as EngProfileRouteImport } from './routes/eng.profile'
+import { Route as EngConveyanceRouteImport } from './routes/eng.conveyance'
 import { Route as AppTicketsRouteImport } from './routes/_app/tickets'
 import { Route as AppSalesRouteImport } from './routes/_app/sales'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
@@ -162,6 +164,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EngIndexRoute = EngIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => EngRoute,
+} as any)
 const InvoicePreviewRoute = InvoicePreviewRouteImport.update({
   id: '/invoice/preview',
   path: '/invoice/preview',
@@ -175,6 +182,11 @@ const EngQueueRoute = EngQueueRouteImport.update({
 const EngProfileRoute = EngProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => EngRoute,
+} as any)
+const EngConveyanceRoute = EngConveyanceRouteImport.update({
+  id: '/conveyance',
+  path: '/conveyance',
   getParentRoute: () => EngRoute,
 } as any)
 const AppTicketsRoute = AppTicketsRouteImport.update({
@@ -804,9 +816,11 @@ export interface FileRoutesByFullPath {
   '/reports': typeof AppReportsRoute
   '/sales': typeof AppSalesRouteWithChildren
   '/tickets': typeof AppTicketsRouteWithChildren
+  '/eng/conveyance': typeof EngConveyanceRoute
   '/eng/profile': typeof EngProfileRoute
   '/eng/queue': typeof EngQueueRoute
   '/invoice/preview': typeof InvoicePreviewRoute
+  '/eng/': typeof EngIndexRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
   '/amc/oem': typeof AppAmcOemRouteWithChildren
@@ -912,7 +926,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/eng': typeof EngRouteWithChildren
   '/raise-ticket': typeof RaiseTicketRoute
   '/archive': typeof AppArchiveRoute
   '/dashboard': typeof AppDashboardRoute
@@ -924,9 +937,11 @@ export interface FileRoutesByTo {
   '/products': typeof AppProductsRoute
   '/records': typeof AppRecordsRoute
   '/reports': typeof AppReportsRoute
+  '/eng/conveyance': typeof EngConveyanceRoute
   '/eng/profile': typeof EngProfileRoute
   '/eng/queue': typeof EngQueueRoute
   '/invoice/preview': typeof InvoicePreviewRoute
+  '/eng': typeof EngIndexRoute
   '/amc/$id': typeof AppAmcIdRoute
   '/amc/new': typeof AppAmcNewRoute
   '/amc/oem': typeof AppAmcOemRouteWithChildren
@@ -1048,9 +1063,11 @@ export interface FileRoutesById {
   '/_app/reports': typeof AppReportsRoute
   '/_app/sales': typeof AppSalesRouteWithChildren
   '/_app/tickets': typeof AppTicketsRouteWithChildren
+  '/eng/conveyance': typeof EngConveyanceRoute
   '/eng/profile': typeof EngProfileRoute
   '/eng/queue': typeof EngQueueRoute
   '/invoice/preview': typeof InvoicePreviewRoute
+  '/eng/': typeof EngIndexRoute
   '/_app/amc/$id': typeof AppAmcIdRoute
   '/_app/amc/new': typeof AppAmcNewRoute
   '/_app/amc/oem': typeof AppAmcOemRouteWithChildren
@@ -1179,9 +1196,11 @@ export interface FileRouteTypes {
     | '/reports'
     | '/sales'
     | '/tickets'
+    | '/eng/conveyance'
     | '/eng/profile'
     | '/eng/queue'
     | '/invoice/preview'
+    | '/eng/'
     | '/amc/$id'
     | '/amc/new'
     | '/amc/oem'
@@ -1287,7 +1306,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
-    | '/eng'
     | '/raise-ticket'
     | '/archive'
     | '/dashboard'
@@ -1299,9 +1317,11 @@ export interface FileRouteTypes {
     | '/products'
     | '/records'
     | '/reports'
+    | '/eng/conveyance'
     | '/eng/profile'
     | '/eng/queue'
     | '/invoice/preview'
+    | '/eng'
     | '/amc/$id'
     | '/amc/new'
     | '/amc/oem'
@@ -1422,9 +1442,11 @@ export interface FileRouteTypes {
     | '/_app/reports'
     | '/_app/sales'
     | '/_app/tickets'
+    | '/eng/conveyance'
     | '/eng/profile'
     | '/eng/queue'
     | '/invoice/preview'
+    | '/eng/'
     | '/_app/amc/$id'
     | '/_app/amc/new'
     | '/_app/amc/oem'
@@ -1574,6 +1596,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/eng/': {
+      id: '/eng/'
+      path: '/'
+      fullPath: '/eng/'
+      preLoaderRoute: typeof EngIndexRouteImport
+      parentRoute: typeof EngRoute
+    }
     '/invoice/preview': {
       id: '/invoice/preview'
       path: '/invoice/preview'
@@ -1593,6 +1622,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/eng/profile'
       preLoaderRoute: typeof EngProfileRouteImport
+      parentRoute: typeof EngRoute
+    }
+    '/eng/conveyance': {
+      id: '/eng/conveyance'
+      path: '/conveyance'
+      fullPath: '/eng/conveyance'
+      preLoaderRoute: typeof EngConveyanceRouteImport
       parentRoute: typeof EngRoute
     }
     '/_app/tickets': {
@@ -2877,14 +2913,18 @@ const AppRouteChildren: AppRouteChildren = {
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface EngRouteChildren {
+  EngConveyanceRoute: typeof EngConveyanceRoute
   EngProfileRoute: typeof EngProfileRoute
   EngQueueRoute: typeof EngQueueRoute
+  EngIndexRoute: typeof EngIndexRoute
   EngTicketIdRoute: typeof EngTicketIdRoute
 }
 
 const EngRouteChildren: EngRouteChildren = {
+  EngConveyanceRoute: EngConveyanceRoute,
   EngProfileRoute: EngProfileRoute,
   EngQueueRoute: EngQueueRoute,
+  EngIndexRoute: EngIndexRoute,
   EngTicketIdRoute: EngTicketIdRoute,
 }
 

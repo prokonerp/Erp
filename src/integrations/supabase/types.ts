@@ -1611,6 +1611,8 @@ export type Database = {
           name: string
           notes: string | null
           phone: string | null
+          photo_path: string | null
+          documents: Json
           role: string | null
           updated_at: string
         }
@@ -1628,6 +1630,8 @@ export type Database = {
           name: string
           notes?: string | null
           phone?: string | null
+          photo_path?: string | null
+          documents?: Json
           role?: string | null
           updated_at?: string
         }
@@ -1645,6 +1649,8 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          photo_path?: string | null
+          documents?: Json
           role?: string | null
           updated_at?: string
         }
@@ -5050,6 +5056,87 @@ export type Database = {
         }
         Relationships: []
       }
+      engineer_conveyance_expenses: {
+        Row: {
+          id: string
+          employee_id: string
+          expense_date: string
+          charge_type: string
+          amount: number
+          receipt_path: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          expense_date?: string
+          charge_type: string
+          amount: number
+          receipt_path?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          expense_date?: string
+          charge_type?: string
+          amount?: number
+          receipt_path?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      engineer_daily_logs: {
+        Row: {
+          id: string
+          employee_id: string
+          log_date: string
+          morning_odometer: number | null
+          morning_photo_path: string | null
+          morning_captured_at: string | null
+          evening_odometer: number | null
+          evening_photo_path: string | null
+          evening_captured_at: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          log_date: string
+          morning_odometer?: number | null
+          morning_photo_path?: string | null
+          morning_captured_at?: string | null
+          evening_odometer?: number | null
+          evening_photo_path?: string | null
+          evening_captured_at?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          log_date?: string
+          morning_odometer?: number | null
+          morning_photo_path?: string | null
+          morning_captured_at?: string | null
+          evening_odometer?: number | null
+          evening_photo_path?: string | null
+          evening_captured_at?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       ticket_customer_verifications: {
         Row: {
           id: string
@@ -5169,7 +5256,6 @@ export type Database = {
           battery_bank_qty: number | null
           charging_readings: Json
           discharging_readings: Json
-          front_indication: Json
           part_replacements: Json
           ac_provided: boolean
           dg_provided: boolean
@@ -5186,6 +5272,9 @@ export type Database = {
           amf_panel: boolean
           operate_non_business_hours: boolean
           operate_holidays: boolean
+          rating: number | null
+          customer_signature_path: string | null
+          signature_captured_at: string | null
           engineer_employee_id: string | null
           engineer_name: string | null
           engineer_phone: string | null
@@ -5203,7 +5292,6 @@ export type Database = {
           battery_bank_qty?: number | null
           charging_readings?: Json
           discharging_readings?: Json
-          front_indication?: Json
           part_replacements?: Json
           ac_provided?: boolean
           dg_provided?: boolean
@@ -5220,6 +5308,9 @@ export type Database = {
           amf_panel?: boolean
           operate_non_business_hours?: boolean
           operate_holidays?: boolean
+          rating?: number | null
+          customer_signature_path?: string | null
+          signature_captured_at?: string | null
           engineer_employee_id?: string | null
           engineer_name?: string | null
           engineer_phone?: string | null
@@ -5237,7 +5328,6 @@ export type Database = {
           battery_bank_qty?: number | null
           charging_readings?: Json
           discharging_readings?: Json
-          front_indication?: Json
           part_replacements?: Json
           ac_provided?: boolean
           dg_provided?: boolean
@@ -5254,6 +5344,9 @@ export type Database = {
           amf_panel?: boolean
           operate_non_business_hours?: boolean
           operate_holidays?: boolean
+          rating?: number | null
+          customer_signature_path?: string | null
+          signature_captured_at?: string | null
           engineer_employee_id?: string | null
           engineer_name?: string | null
           engineer_phone?: string | null

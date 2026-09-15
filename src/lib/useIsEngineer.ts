@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 const ENGINEER_ROLE_NAMES = ["engineer", "field_engineer", "field engineer"];
@@ -25,40 +25,34 @@ export function resolveEngineerStatus(
 }
 
 export function useIsEngineer() {
-  const [isEngineer, setIsEngineer] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
+  // Cached across layout mounts (_app bounce -> /eng): the second mount
+  // reuses this instead of re-running the 3-query waterfall. Identity
+  // changes (role grant/revoke) propagate on next reload after 5 min stale.
+  const query = useQuery({
+    queryKey: ["auth", "is-engineer"] as const,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: async (): Promise<boolean> => {
       const { data: u } = await supabase.auth.getUser();
       const uid = u.user?.id ?? null;
-      if (!active || !uid) {
-        if (active) {
-          setIsEngineer(false);
-          setLoading(false);
-        }
-        return;
-      }
+      if (!uid) return false;
 
+      // Single roundtrip: app_users row + role name via embedded relation
+      // (was: app_users query, then app_roles query — 2 serial RTTs).
       const { data: au } = await supabase
         .from("app_users")
-        .select("role_id")
+        .select("role_id, app_roles(name)")
         .eq("user_id", uid)
         .maybeSingle();
-
-      if (!active) return;
 
       const hasAppUserRow = !!au;
       let roleName: string | null = null;
       if (au?.role_id) {
-        const { data: role } = await supabase
-          .from("app_roles")
-          .select("name")
-          .eq("id", au.role_id)
-          .maybeSingle();
-        if (!active) return;
-        roleName = role?.name ?? null;
+        const nested = au as unknown as {
+          app_roles: { name: string | null } | null;
+        };
+        roleName = nested.app_roles?.name ?? null;
       }
 
       let hasEmployeeMatch = false;
@@ -70,17 +64,12 @@ export function useIsEngineer() {
           .eq("email", u.user?.email || "__none__")
           .eq("active", true)
           .maybeSingle();
-        if (!active) return;
         hasEmployeeMatch = !!emp;
       }
 
-      setIsEngineer(resolveEngineerStatus(roleName, hasAppUserRow, hasEmployeeMatch));
-      setLoading(false);
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+      return resolveEngineerStatus(roleName, hasAppUserRow, hasEmployeeMatch);
+    },
+  });
 
-  return { isEngineer, loading };
+  return { isEngineer: query.data ?? false, loading: query.isLoading };
 }

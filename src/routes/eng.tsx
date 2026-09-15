@@ -13,7 +13,7 @@ import { useIsEngineer } from "@/lib/useIsEngineer";
 import { supabase } from "@/integrations/supabase/client";
 import { recordLogout } from "@/lib/useActivityTracker";
 import { PageLoader } from "@/components/shared/skeletons";
-import { Ticket, User, LogOut } from "lucide-react";
+import { ClipboardList, LayoutDashboard, Ticket, User, LogOut } from "lucide-react";
 import { getMyProfile } from "@/lib/admin-users.functions";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
@@ -24,8 +24,10 @@ export const Route = createFileRoute("/eng")({
 });
 
 const TABS = [
-  { to: "/eng/queue", label: "Queue", icon: Ticket },
-  { to: "/eng/profile", label: "Profile", icon: User },
+  { to: "/eng", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/eng/queue", label: "Queue", icon: Ticket, exact: false },
+  { to: "/eng/conveyance", label: "Conveyance", icon: ClipboardList, exact: false },
+  { to: "/eng/profile", label: "Profile", icon: User, exact: false },
 ] as const;
 
 function EngLayout() {
@@ -127,7 +129,7 @@ function EngLayout() {
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {TABS.map((tab) => {
-          const active = isActive(tab.to);
+          const active = tab.exact ? location.pathname === tab.to : isActive(tab.to);
           return (
             <Link
               key={tab.to}

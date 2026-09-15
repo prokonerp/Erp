@@ -39,14 +39,30 @@ describe("pickEmployeeRow (fail-soft)", () => {
   it("picks the first row and normalizes nullable fields", () => {
     expect(
       pickEmployeeRow([
-        { id: "e1", name: "Aarav Sharma", phone: "98XXXXXX01", email: "a@x.com" },
+        {
+          id: "e1",
+          name: "Aarav Sharma",
+          phone: "98XXXXXX01",
+          email: "a@x.com",
+          photo_path: "engineer/e1/profile_photo/2026-09-16/p.jpg",
+          documents: [{ name: "Aadhaar", path: "engineer/e1/document/2026-09-16/a.jpg" }],
+        },
       ]),
-    ).toEqual({ id: "e1", name: "Aarav Sharma", phone: "98XXXXXX01", email: "a@x.com" });
+    ).toEqual({
+      id: "e1",
+      name: "Aarav Sharma",
+      phone: "98XXXXXX01",
+      email: "a@x.com",
+      photo_path: "engineer/e1/profile_photo/2026-09-16/p.jpg",
+      documents: [{ name: "Aadhaar", path: "engineer/e1/document/2026-09-16/a.jpg" }],
+    });
     expect(pickEmployeeRow([{ id: "e2" }])).toEqual({
       id: "e2",
       name: "",
       phone: null,
       email: null,
+      photo_path: null,
+      documents: [],
     });
   });
 });

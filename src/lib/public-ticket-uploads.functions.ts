@@ -101,8 +101,13 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
       _role: "admin",
     });
     if (!isAdmin) {
-      const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
-      const callerEmail = authData?.user?.email;
+      // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
+      const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
+      let callerEmail = typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null;
+      if (!callerEmail) {
+        const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
+        callerEmail = authData?.user?.email ?? null;
+      }
       if (!callerEmail) {
         throw new Error("Could not resolve your account email. Contact admin.");
       }

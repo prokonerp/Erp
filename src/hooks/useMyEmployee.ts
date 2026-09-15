@@ -24,6 +24,8 @@ export type MyEmployee = {
   name: string;
   phone: string | null;
   email: string | null;
+  photo_path: string | null;
+  documents: unknown;
 };
 
 /**
@@ -61,6 +63,8 @@ export function pickEmployeeRow(rows: unknown): MyEmployee | null {
       name: typeof row.name === "string" ? row.name : "",
       phone: typeof row.phone === "string" ? row.phone : null,
       email: typeof row.email === "string" ? row.email : null,
+      photo_path: typeof row.photo_path === "string" ? row.photo_path : null,
+      documents: (row as { documents?: unknown }).documents ?? [],
     };
   } catch {
     return null;
@@ -75,14 +79,17 @@ export function useMyEmployee() {
   const query = useQuery({
     queryKey: ["eng", "employee", uid] as const,
     enabled: !!uid && !!email,
-    staleTime: 30_000,
+    // Identity rarely changes — share cache across eng layouts/pages.
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
     refetchInterval: false,
     queryFn: async (): Promise<MyEmployee | null> => {
       try {
         if (!email) return null;
         const { data: emps, error: empErr } = await supabase
           .from("employees")
-          .select("id,name,phone,email")
+          .select("id,name,phone,email,photo_path,documents")
           .eq("email", email)
           .eq("active", true)
           .limit(1);

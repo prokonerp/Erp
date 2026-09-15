@@ -9,7 +9,9 @@ export function DefaultErrorComponent({ error, reset }: { error: Error; reset: (
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">This page didn't load</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          This page didn't load
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">Please try again or go back home.</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -21,7 +23,10 @@ export function DefaultErrorComponent({ error, reset }: { error: Error; reset: (
           >
             Try again
           </button>
-          <a className="inline-flex items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium" href="/">
+          <a
+            className="inline-flex items-center justify-center rounded-md border border-input px-4 py-2 text-sm font-medium"
+            href="/"
+          >
             Go home
           </a>
         </div>
@@ -48,13 +53,17 @@ function makeQueryClient() {
 
 export const getRouter = () => {
   // Server: new client per request (correct). Client: singleton (avoids HMR cache wipe).
-  const queryClient = typeof window === "undefined" ? makeQueryClient() : (_clientQueryClient ??= makeQueryClient());
+  const queryClient =
+    typeof window === "undefined" ? makeQueryClient() : (_clientQueryClient ??= makeQueryClient());
 
   const router = createRouter({
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
-    defaultPreloadStaleTime: 0,
+    // Prefetch route chunks on hover / touch-start so tap-navigation feels
+    // instant (engineer queue -> ticket is the hot path).
+    defaultPreload: "intent",
+    defaultPreloadStaleTime: 30_000,
     defaultErrorComponent: DefaultErrorComponent,
   });
 
