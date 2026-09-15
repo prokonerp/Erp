@@ -1,11 +1,15 @@
 // Pure print-model layer for the Field Service Report printout.
 // No supabase, no DOM, no sessionStorage. All functions are total over
 // sparse DB rows: nulls/empties degrade to dashes, never throw.
+import { r2 } from "./money";
 
 export type YesNo = "Yes" | "No" | "—";
 export type FeedbackStatus = "Complete" | "Incomplete" | "Under Observation";
 export type StatusLabel = "Warranty" | "Contract" | "Billable";
 export type CallKind = "PM" | "Installation" | "";
+/** Architecture hook for a future battery-threshold engine: per-cell status
+ *  parallel to the voltage grids. The view renders neutral until then. */
+export type BatteryReadingStatus = "normal" | "warning" | "critical";
 
 /** Null/undefined/blank -> "—"; numbers (incl. 0) -> String(v). */
 export function displayOrDash(v: unknown): string {
@@ -64,6 +68,12 @@ export function formatDurationMin(
   return rem === 0 ? `${h}h` : `${h}h ${rem}m`;
 }
 
+/** INR for the parts table: 12500 -> "₹ 12,500". Null/undefined/NaN -> "—". */
+export function formatINR(n: number | null | undefined): string {
+  if (n == null || typeof n !== "number" || !Number.isFinite(n)) return "—";
+  return "₹ " + r2(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
 export interface VoltsReading {
   volts?: number | null;
 }
@@ -119,6 +129,11 @@ export interface FsrPrintFsr {
     | null;
   engineer_name?: string | null;
   engineer_phone?: string | null;
+  fse_feedback?: string | null;
+  customer_feedback?: string | null;
+  engineer_signature_path?: string | null;
+  formal_report_no?: string | null;
+  verdict?: string | null;
 }
 
 export interface FsrPrintTicket {
@@ -194,6 +209,8 @@ export interface FsrPrintModel {
   header: {
     caseId: string;
     reportNo: string;
+    /** Future formal numbering ("FSR-2026-000042"); falls back to reportNo. */
+    formalReportNo: string;
     submittedAt: string;
     engineerName: string;
     engineerPhone: string;
@@ -203,13 +220,14 @@ export interface FsrPrintModel {
     addressLines: string[];
     phones: string[];
     email: string;
+    gstin: string;
   };
   product: {
     model: string;
     upsSerial: string;
-    batteryPack: string;
     statusLabel: StatusLabel;
     typeOfCall: CallKind;
+    oemCall: YesNo;
   };
   problem: {
     reported: string;
@@ -220,8 +238,14 @@ export interface FsrPrintModel {
     arrivalTime: string;
     departureDate: string;
     departureTime: string;
+    preferredVisit: string;
     onSite: string;
     blanks: true;
+  };
+  lifecycle: {
+    createdAt: string;
+    preferredVisit: string;
+    closedAt: string;
   };
   observation: {
     mainsLn: string;
@@ -248,20 +272,29 @@ export interface FsrPrintModel {
   };
   battery: {
     make: string;
+    voltage: string;
     ah: string;
     qty: string;
     chargingGrid: string[][];
     dischargingGrid: string[][];
+    /** Reserved for the future threshold engine — intentionally unpopulated. */
+    chargingStatus?: BatteryReadingStatus[][];
+    dischargingStatus?: BatteryReadingStatus[][];
   };
   parts: PartPrintRow[];
   feedback: {
     status: FeedbackStatus;
     rating: string;
+    fseFeedback: string;
+    customerFeedback: string;
+    verdict: string;
   };
   signatures: {
     customerName: string;
     fseName: string;
     fsePhone: string;
+    /** Reserved storage path — no source yet; the view renders a blank zone. */
+    engineerSignaturePath: string | null;
   };
 }
 
@@ -323,11 +356,27 @@ export function buildFsrPrintModel(input: FsrPrintInput): FsrPrintModel {
 
   const arrival = splitDateTime(visits?.arrival_at);
   const departure = splitDateTime(visits?.departure_at);
+  /** ISO -> "DD/MM/YYYY HH:mm"; "—" when the timestamp is missing/invalid. */
+  const dateTime = (iso: string | null | undefined): string => {
+    const { date, time } = splitDateTime(iso);
+    return date === "—" ? "—" : `${date} ${time}`;
+  };
+
+  // TODO(boundary): formalReportNo is the future "FSR-2026-000042" numbering.
+  // Until a DB column/sequence backs it, fall back to the id-derived reportNo.
+  const formalNo = clean(fsr.formal_report_no);
+  const reportNo = rawId ? rawId.slice(0, 8).toUpperCase() : "—";
+
+  // Battery bank text like "12V 100Ah" splits into voltage + capacity.
+  // Anything else (e.g. legacy "42") keeps the raw text as ah, voltage "—".
+  const rawAh = typeof fsr.battery_bank_ah === "string" ? fsr.battery_bank_ah.trim() : "";
+  const ahMatch = /^(\d+(?:\.\d+)?)V\s*(.+)$/.exec(rawAh);
 
   return {
     header: {
       caseId: displayOrDash(ticket.case_id),
-      reportNo: rawId ? rawId.slice(0, 8).toUpperCase() : "—",
+      reportNo,
+      formalReportNo: formalNo || reportNo,
       submittedAt: displayOrDash(fsr.submitted_at ?? fsr.created_at),
       engineerName: firstPresent(fsr.engineer_name, ticket.assigned_engineer_name),
       engineerPhone: firstPresent(fsr.engineer_phone, ticket.assigned_engineer_phone),
@@ -337,13 +386,14 @@ export function buildFsrPrintModel(input: FsrPrintInput): FsrPrintModel {
       addressLines,
       phones: uniquePhones,
       email: firstPresent(customer?.email, ticket.customer_email),
+      gstin: displayOrDash(customer?.gst),
     },
     product: {
       model: displayOrDash(ticket.product),
       upsSerial: displayOrDash(ticket.serial_no),
-      batteryPack: "—",
       statusLabel: statusLabel(callType || null),
       typeOfCall: typeOfCall(callType || null),
+      oemCall: boolYesNo(ticket.oem_call),
     },
     problem: {
       reported: displayOrDash(ticket.complaint),
@@ -354,8 +404,14 @@ export function buildFsrPrintModel(input: FsrPrintInput): FsrPrintModel {
       arrivalTime: arrival.time,
       departureDate: departure.date,
       departureTime: departure.time,
+      preferredVisit: dateTime(ticket.preferred_visit_datetime),
       onSite: formatDurationMin(visits?.arrival_at, visits?.departure_at),
       blanks: true,
+    },
+    lifecycle: {
+      createdAt: dateTime(ticket.created_at),
+      preferredVisit: dateTime(ticket.preferred_visit_datetime),
+      closedAt: dateTime(ticket.closed_at),
     },
     observation: {
       mainsLn: displayOrDash(fsr.mains_voltage_ln),
@@ -391,27 +447,36 @@ export function buildFsrPrintModel(input: FsrPrintInput): FsrPrintModel {
     },
     battery: {
       make: displayOrDash(fsr.battery_bank_make),
-      ah: displayOrDash(fsr.battery_bank_ah),
+      voltage: ahMatch ? `${ahMatch[1]}V` : "—",
+      ah: ahMatch ? ahMatch[2].trim() || "—" : displayOrDash(fsr.battery_bank_ah),
       qty: displayOrDash(fsr.battery_bank_qty),
       chargingGrid: readingsGrid(fsr.charging_readings),
       dischargingGrid: readingsGrid(fsr.discharging_readings),
+      // chargingStatus / dischargingStatus stay undefined: the future
+      // threshold engine fills them; the view renders neutral until then.
     },
     parts: (fsr.part_replacements ?? []).slice(0, 5).map((p, i) => ({
       n: i + 1,
       item: displayOrDash(p?.item),
       oldSr: displayOrDash(p?.old_sr_no),
       newSr: displayOrDash(p?.new_sr_no),
-      charges: displayOrDash(p?.charges),
+      charges: formatINR(p?.charges),
       qty: displayOrDash(p?.qty),
     })),
     feedback: {
       status: mapCallStatus(clean(ticket.status) || null),
       rating: displayOrDash(fsr.rating),
+      fseFeedback: displayOrDash(fsr.fse_feedback),
+      customerFeedback: displayOrDash(fsr.customer_feedback),
+      // IMPORTANT: verdict must NEVER be derived from ticket.status — it has
+      // no source yet, so it stays "—" until a real verdict feed exists.
+      verdict: displayOrDash(fsr.verdict),
     },
     signatures: {
       customerName: firstPresent(customer?.contact_name, customer?.company, ticket.customer_name),
       fseName: firstPresent(fsr.engineer_name, ticket.assigned_engineer_name),
       fsePhone: firstPresent(fsr.engineer_phone, ticket.assigned_engineer_phone),
+      engineerSignaturePath: fsr.engineer_signature_path ?? null,
     },
   };
 }

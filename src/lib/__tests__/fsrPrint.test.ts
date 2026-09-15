@@ -4,6 +4,7 @@ import {
   buildFsrPrintModel,
   displayOrDash,
   formatDurationMin,
+  formatINR,
   mapCallStatus,
   readingsGrid,
   statusLabel,
@@ -144,6 +145,22 @@ describe("readingsGrid", () => {
   });
 });
 
+describe("formatINR", () => {
+  it('formats 12500 as "₹ 12,500" (en-IN grouping)', () => {
+    // Catches: parts charges printing raw (12500) instead of grouped INR.
+    expect(formatINR(12500)).toBe("₹ 12,500");
+    expect(formatINR(1500)).toBe("₹ 1,500");
+    expect(formatINR(0)).toBe("₹ 0");
+  });
+
+  it('renders null/undefined/non-finite as "—"', () => {
+    // Catches: missing charges printing "₹ 0" or "NaN" instead of a dash.
+    expect(formatINR(null)).toBe("—");
+    expect(formatINR(undefined)).toBe("—");
+    expect(formatINR(NaN)).toBe("—");
+  });
+});
+
 describe("rating", () => {
   it("prints the numeric rating, dashes when missing", () => {
     // Catches: the 1-10 rating going missing from the printed feedback section.
@@ -211,6 +228,10 @@ const fullInput: FsrPrintInput = {
     remarks: "Routine PM done",
     assigned_engineer_name: "Ravi Kumar",
     assigned_engineer_phone: "9876543210",
+    created_at: "2026-09-13T10:00:00Z",
+    preferred_visit_datetime: "2026-09-14T16:30:00Z",
+    closed_at: "2026-09-15T12:00:00Z",
+    oem_call: true,
   },
   customer: {
     company: "Acme Ltd",
@@ -236,17 +257,26 @@ describe("buildFsrPrintModel", () => {
     const m = buildFsrPrintModel(fullInput);
     expect(m.header.caseId).toBe("CASE-001");
     expect(m.header.reportNo).toBe("ABCDEFGH");
+    expect(m.header.formalReportNo).toBe("ABCDEFGH");
     expect(m.header.engineerName).toBe("Ravi Kumar");
     expect(m.customer.name).toBe("Acme Ltd");
     expect(m.customer.addressLines).toEqual(["Tower B, Sector 62", "Gurugram, Haryana, India"]);
+    expect(m.customer.gstin).toBe("06ABCDE1234F1Z5");
     expect(m.product.model).toBe("3KVA UPS");
     expect(m.product.upsSerial).toBe("SN123");
-    expect(m.product.batteryPack).toBe("—");
+    expect(Object.keys(m.product)).not.toContain("batteryPack");
+    expect(m.product.oemCall).toBe("Yes");
     expect(m.product.statusLabel).toBe("Billable");
     expect(m.product.typeOfCall).toBe("PM");
     expect(m.problem.reported).toBe("UPS beeping");
     expect(m.problem.reason).toBe("PM Call — Routine PM done");
     expect(m.timing.onSite).toBe("1h 30m");
+    expect(m.timing.preferredVisit).toBe("14/09/2026 16:30");
+    expect(m.lifecycle).toEqual({
+      createdAt: "13/09/2026 10:00",
+      preferredVisit: "14/09/2026 16:30",
+      closedAt: "15/09/2026 12:00",
+    });
     expect(m.observation.mainsLn).toBe("230");
     expect(m.observation.mainsNe).toBe("2.1");
     expect(m.load.ac).toBe("Yes");
@@ -256,14 +286,22 @@ describe("buildFsrPrintModel", () => {
     expect(m.power.failures).toBe("3");
     expect(m.power.dgSet).toBe("Yes");
     expect(m.battery.make).toBe("EXIDE");
+    expect(m.battery.voltage).toBe("—");
+    expect(m.battery.ah).toBe("42");
+    expect(m.battery.chargingStatus).toBeUndefined();
+    expect(m.battery.dischargingStatus).toBeUndefined();
     expect(m.battery.chargingGrid).toEqual([["12.6", "12.5", "—", "12.7"], ["12.4"]]);
     expect(m.parts).toEqual([
-      { n: 1, item: "PCB", oldSr: "OLD1", newSr: "NEW1", charges: "1500", qty: "1" },
+      { n: 1, item: "PCB", oldSr: "OLD1", newSr: "NEW1", charges: "₹ 1,500", qty: "1" },
     ]);
     expect(m.feedback.status).toBe("Complete");
     expect(m.feedback.rating).toBe("8");
+    expect(m.feedback.fseFeedback).toBe("—");
+    expect(m.feedback.customerFeedback).toBe("—");
+    expect(m.feedback.verdict).toBe("—");
     expect(m.signatures.fseName).toBe("Ravi Kumar");
     expect(m.signatures.fsePhone).toBe("9876543210");
+    expect(m.signatures.engineerSignaturePath).toBeNull();
   });
 
   it("never throws on sparse input and falls back to dashes/empties", () => {
@@ -271,17 +309,149 @@ describe("buildFsrPrintModel", () => {
     const m = buildFsrPrintModel({ fsr: {}, ticket: {}, customer: null, visits: null });
     expect(m.header.caseId).toBe("—");
     expect(m.header.reportNo).toBe("—");
+    expect(m.header.formalReportNo).toBe("—");
     expect(m.customer.addressLines).toEqual([]);
     expect(m.customer.phones).toEqual([]);
-    expect(m.product.batteryPack).toBe("—");
+    expect(m.customer.gstin).toBe("—");
     expect(m.product.typeOfCall).toBe("");
+    expect(m.product.oemCall).toBe("—");
     expect(m.timing.onSite).toBe("—");
+    expect(m.timing.preferredVisit).toBe("—");
     expect(m.timing.blanks).toBe(true);
+    expect(m.lifecycle).toEqual({ createdAt: "—", preferredVisit: "—", closedAt: "—" });
     expect(m.observation.mainsLn).toBe("—");
+    expect(m.battery.voltage).toBe("—");
+    expect(m.battery.ah).toBe("—");
     expect(m.battery.chargingGrid).toEqual([]);
     expect(m.battery.dischargingGrid).toEqual([]);
+    expect(m.battery.chargingStatus).toBeUndefined();
+    expect(m.battery.dischargingStatus).toBeUndefined();
     expect(m.parts).toEqual([]);
     expect(m.feedback.status).toBe("Incomplete");
     expect(m.feedback.rating).toBe("—");
+    expect(m.feedback.fseFeedback).toBe("—");
+    expect(m.feedback.customerFeedback).toBe("—");
+    expect(m.feedback.verdict).toBe("—");
+    expect(m.signatures.engineerSignaturePath).toBeNull();
+  });
+
+  it("ignores frontIndication keys — the removed Front Indication grid never prints", () => {
+    // Catches: the deleted Front Indication grid leaking back into the model.
+    const withFront = {
+      fsr: {
+        frontIndication: [{ led: "MAINS", status: "ON" }],
+        front_indication: "Mains ON, UPS ON",
+      },
+      ticket: {},
+      customer: null,
+      visits: null,
+    } as unknown as FsrPrintInput;
+    const m = buildFsrPrintModel(withFront);
+    expect(JSON.stringify(m)).not.toContain("front");
+    expect(JSON.stringify(m)).not.toContain("Front Indication");
+  });
+
+  it("never emits front/frontIndication/batteryPack keys anywhere in the model", () => {
+    // Catches: removed dead fields resurfacing under any key or nesting.
+    const m = buildFsrPrintModel(fullInput);
+    const json = JSON.stringify(m);
+    expect(json).not.toContain("frontIndication");
+    expect(json).not.toContain("batteryPack");
+    expect(json).not.toContain("front");
+  });
+
+  it("passes customer gst through as gstin, dashes when missing", () => {
+    // Catches: GSTIN row going blank instead of showing the "—" placeholder.
+    expect(buildFsrPrintModel(fullInput).customer.gstin).toBe("06ABCDE1234F1Z5");
+    const noGst = buildFsrPrintModel({
+      fsr: {},
+      ticket: {},
+      customer: { company: "Acme Ltd" },
+      visits: null,
+    });
+    expect(noGst.customer.gstin).toBe("—");
+  });
+
+  it("maps oem_call to Yes/No/— (unknown never poses as No)", () => {
+    // Catches: a missing oem_call printing "No" on a customer-facing report.
+    expect(buildFsrPrintModel(fullInput).product.oemCall).toBe("Yes");
+    const no = buildFsrPrintModel({ fsr: {}, ticket: { oem_call: false }, customer: null, visits: null });
+    expect(no.product.oemCall).toBe("No");
+    const missing = buildFsrPrintModel({ fsr: {}, ticket: {}, customer: null, visits: null });
+    expect(missing.product.oemCall).toBe("—");
+  });
+
+  it("formats timing.preferredVisit as DD/MM/YYYY HH:mm, dashes when missing", () => {
+    // Catches: the Preferred Visit row rendering raw ISO or crashing.
+    expect(buildFsrPrintModel(fullInput).timing.preferredVisit).toBe("14/09/2026 16:30");
+    const missing = buildFsrPrintModel({ fsr: {}, ticket: {}, customer: null, visits: null });
+    expect(missing.timing.preferredVisit).toBe("—");
+  });
+
+  it("builds lifecycle dates from the ticket, dashes per missing timestamp", () => {
+    // Catches: lifecycle row mixing up created/preferred/closed sources.
+    const m = buildFsrPrintModel(fullInput);
+    expect(m.lifecycle.createdAt).toBe("13/09/2026 10:00");
+    expect(m.lifecycle.preferredVisit).toBe("14/09/2026 16:30");
+    expect(m.lifecycle.closedAt).toBe("15/09/2026 12:00");
+    const partial = buildFsrPrintModel({
+      fsr: {},
+      ticket: { closed_at: "2026-09-15T12:00:00Z" },
+      customer: null,
+      visits: null,
+    });
+    expect(partial.lifecycle.createdAt).toBe("—");
+    expect(partial.lifecycle.preferredVisit).toBe("—");
+    expect(partial.lifecycle.closedAt).toBe("15/09/2026 12:00");
+  });
+
+  it("uses formal_report_no when present, else falls back to the id slice", () => {
+    // Catches: future formal numbering being ignored once the column exists.
+    const explicit = buildFsrPrintModel({
+      fsr: { id: "abcdefgh-1234-5678-90ab-cdef12345678", formal_report_no: "FSR-2026-000042" },
+      ticket: {},
+      customer: null,
+      visits: null,
+    });
+    expect(explicit.header.formalReportNo).toBe("FSR-2026-000042");
+    expect(explicit.header.reportNo).toBe("ABCDEFGH");
+    expect(buildFsrPrintModel(fullInput).header.formalReportNo).toBe("ABCDEFGH");
+  });
+
+  it("defaults verdict and feedback texts to dashes (verdict never derives from status)", () => {
+    // Catches: a fabricated verdict leaking in from ticket.status or blanks.
+    const m = buildFsrPrintModel(fullInput);
+    expect(m.feedback.verdict).toBe("—");
+    expect(m.feedback.fseFeedback).toBe("—");
+    expect(m.feedback.customerFeedback).toBe("—");
+    const withText = buildFsrPrintModel({
+      fsr: { fse_feedback: "Bank healthy", customer_feedback: "Satisfied", verdict: "Healthy" },
+      ticket: { status: "Closed" },
+      customer: null,
+      visits: null,
+    });
+    expect(withText.feedback.fseFeedback).toBe("Bank healthy");
+    expect(withText.feedback.customerFeedback).toBe("Satisfied");
+    expect(withText.feedback.verdict).toBe("Healthy");
+  });
+
+  it("parses battery voltage from bank text, dashes when unparseable", () => {
+    // Catches: "12V 100Ah" printing as a single blob instead of split fields.
+    const parsed = buildFsrPrintModel({
+      fsr: { battery_bank_ah: "12V 100Ah" },
+      ticket: {},
+      customer: null,
+      visits: null,
+    });
+    expect(parsed.battery.voltage).toBe("12V");
+    expect(parsed.battery.ah).toBe("100Ah");
+    const legacy = buildFsrPrintModel({
+      fsr: { battery_bank_ah: "42" },
+      ticket: {},
+      customer: null,
+      visits: null,
+    });
+    expect(legacy.battery.voltage).toBe("—");
+    expect(legacy.battery.ah).toBe("42");
   });
 });

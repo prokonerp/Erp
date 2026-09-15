@@ -16,6 +16,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EngIndexRouteImport } from './routes/eng.index'
 import { Route as InvoicePreviewRouteImport } from './routes/invoice.preview'
+import { Route as FsrPreviewRouteImport } from './routes/fsr.preview'
 import { Route as EngQueueRouteImport } from './routes/eng.queue'
 import { Route as EngProfileRouteImport } from './routes/eng.profile'
 import { Route as EngConveyanceRouteImport } from './routes/eng.conveyance'
@@ -172,6 +173,11 @@ const EngIndexRoute = EngIndexRouteImport.update({
 const InvoicePreviewRoute = InvoicePreviewRouteImport.update({
   id: '/invoice/preview',
   path: '/invoice/preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FsrPreviewRoute = FsrPreviewRouteImport.update({
+  id: '/fsr/preview',
+  path: '/fsr/preview',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EngQueueRoute = EngQueueRouteImport.update({
@@ -819,6 +825,7 @@ export interface FileRoutesByFullPath {
   '/eng/conveyance': typeof EngConveyanceRoute
   '/eng/profile': typeof EngProfileRoute
   '/eng/queue': typeof EngQueueRoute
+  '/fsr/preview': typeof FsrPreviewRoute
   '/invoice/preview': typeof InvoicePreviewRoute
   '/eng/': typeof EngIndexRoute
   '/amc/$id': typeof AppAmcIdRoute
@@ -940,6 +947,7 @@ export interface FileRoutesByTo {
   '/eng/conveyance': typeof EngConveyanceRoute
   '/eng/profile': typeof EngProfileRoute
   '/eng/queue': typeof EngQueueRoute
+  '/fsr/preview': typeof FsrPreviewRoute
   '/invoice/preview': typeof InvoicePreviewRoute
   '/eng': typeof EngIndexRoute
   '/amc/$id': typeof AppAmcIdRoute
@@ -1066,6 +1074,7 @@ export interface FileRoutesById {
   '/eng/conveyance': typeof EngConveyanceRoute
   '/eng/profile': typeof EngProfileRoute
   '/eng/queue': typeof EngQueueRoute
+  '/fsr/preview': typeof FsrPreviewRoute
   '/invoice/preview': typeof InvoicePreviewRoute
   '/eng/': typeof EngIndexRoute
   '/_app/amc/$id': typeof AppAmcIdRoute
@@ -1199,6 +1208,7 @@ export interface FileRouteTypes {
     | '/eng/conveyance'
     | '/eng/profile'
     | '/eng/queue'
+    | '/fsr/preview'
     | '/invoice/preview'
     | '/eng/'
     | '/amc/$id'
@@ -1320,6 +1330,7 @@ export interface FileRouteTypes {
     | '/eng/conveyance'
     | '/eng/profile'
     | '/eng/queue'
+    | '/fsr/preview'
     | '/invoice/preview'
     | '/eng'
     | '/amc/$id'
@@ -1445,6 +1456,7 @@ export interface FileRouteTypes {
     | '/eng/conveyance'
     | '/eng/profile'
     | '/eng/queue'
+    | '/fsr/preview'
     | '/invoice/preview'
     | '/eng/'
     | '/_app/amc/$id'
@@ -1556,6 +1568,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   EngRoute: typeof EngRouteWithChildren
   RaiseTicketRoute: typeof RaiseTicketRoute
+  FsrPreviewRoute: typeof FsrPreviewRoute
   InvoicePreviewRoute: typeof InvoicePreviewRoute
 }
 
@@ -1608,6 +1621,13 @@ declare module '@tanstack/react-router' {
       path: '/invoice/preview'
       fullPath: '/invoice/preview'
       preLoaderRoute: typeof InvoicePreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fsr/preview': {
+      id: '/fsr/preview'
+      path: '/fsr/preview'
+      fullPath: '/fsr/preview'
+      preLoaderRoute: typeof FsrPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/eng/queue': {
@@ -2936,6 +2956,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   EngRoute: EngRouteWithChildren,
   RaiseTicketRoute: RaiseTicketRoute,
+  FsrPreviewRoute: FsrPreviewRoute,
   InvoicePreviewRoute: InvoicePreviewRoute,
 }
 export const routeTree = rootRouteImport
