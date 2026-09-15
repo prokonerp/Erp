@@ -682,6 +682,17 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
   return (
     <div style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.zone }} className="avoid-break">
       <table className="panel" style={{ flex: 1.35, minWidth: 0, width: "100%", tableLayout: "fixed" }}>
+        {/* Column widths MUST live here: with table-layout:fixed the first row
+            (the colspan-99 Band) defines the columns, so per-cell widths on the
+            header row are ignored and every column collapses to ~1%. */}
+        <colgroup>
+          <col style={{ width: "4%" }} />
+          <col style={{ width: "34%" }} />
+          <col style={{ width: "20%" }} />
+          <col style={{ width: "20%" }} />
+          <col style={{ width: "8%" }} />
+          <col style={{ width: "14%" }} />
+        </colgroup>
         <tbody>
           <Band>PART REPLACEMENT</Band>
           <tr>
