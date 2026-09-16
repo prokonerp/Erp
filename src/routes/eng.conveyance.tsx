@@ -7,7 +7,7 @@ import { useMyEmployee } from "@/hooks/useMyEmployee";
 import { supabase } from "@/integrations/supabase/client";
 import { engKeys } from "@/lib/queryKeys";
 import { compressImageToLimit } from "@/lib/image-compress";
-import { CHARGE_TYPES, kmTravelled, todayLocal, type ChargeType } from "@/lib/engineer-conveyance";
+import { CHARGE_TYPES, conveyanceLoadMessage, kmTravelled, todayLocal, type ChargeType } from "@/lib/engineer-conveyance";
 import {
   deleteConveyanceExpense,
   deleteEngineerAttachment,
@@ -81,48 +81,7 @@ async function fileToBase64(blob: Blob): Promise<string> {
   return base64;
 }
 
-/** Classify a conveyance-log load failure so the banner never blames the
- *  migration for RLS denials or network faults. Only missing-table errors
- *  keep the migration message. */
-function logLoadMessage(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err ?? "");
-  const m = msg.toLowerCase();
-  const isMissingTable =
-    m.includes("42p01") ||
-    m.includes("undefined_table") ||
-    (m.includes("does not exist") && (m.includes("relation") || m.includes("table"))) ||
-    m.includes("could not find the table") ||
-    m.includes("schema cache");
-  if (isMissingTable) {
-    return "Conveyance storage isn't set up yet — ask your admin to run the latest migration, then retry.";
-  }
-  const isDenied =
-    m.includes("42501") ||
-    m.includes("insufficient_privilege") ||
-    m.includes("permission denied") ||
-    m.includes("not authorized") ||
-    m.includes("unauthorized") ||
-    m.includes("row-level security") ||
-    m.includes("violates row-level") ||
-    m.includes("forbidden") ||
-    m.includes("jwt");
-  if (isDenied) {
-    return "Access denied loading conveyance — ask your admin to check your permissions, then retry.";
-  }
-  const isNetwork =
-    err instanceof TypeError ||
-    m.includes("failed to fetch") ||
-    m.includes("fetch failed") ||
-    m.includes("networkerror") ||
-    m.includes("network error") ||
-    m.includes("network request failed") ||
-    m.includes("load failed") ||
-    m.includes("offline") ||
-    m.includes("timeout") ||
-    m.includes("aborted");
-  if (isNetwork) return "Couldn't load conveyance — check your connection and retry.";
-  return msg !== "" ? msg : "Couldn't load conveyance — retry.";
-}
+/** Error taxonomy lives in the lib (unit-tested): see conveyanceLoadMessage. */
 
 function PhotoPicker({
   label,
@@ -499,7 +458,7 @@ function EngConveyance() {
       {logError ? (
         <Card className="rounded-xl border-amber-700/30">
           <CardContent className="p-4 text-sm text-amber-700">
-            {logLoadMessage(logQueryError)}
+            {conveyanceLoadMessage(logQueryError)}
           </CardContent>
         </Card>
       ) : null}

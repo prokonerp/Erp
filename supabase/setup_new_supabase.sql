@@ -1,6 +1,20 @@
 -- ============================================================================
 --  PROKON ERP - COMPLETE SUPABASE SETUP
 -- ============================================================================
+--  ⚠ STALE — DO NOT USE FOR NEW PROJECTS (deprecated Sep 2026).
+--  This merged snapshot predates ~4 weeks of migrations, including the
+--  ENTIRE engineers-portal series (field_service_reports, ticket_visits,
+--  ticket_customer/equipment_verifications, engineer_daily_logs,
+--  engineer_conveyance_expenses, ticket_assignment_history, custodian /
+--  carrier columns, the ims_transfer_status 'cancelled' value, and all
+--  engineer GRANTs/RLS policies). Bootstrapping from this file silently
+--  loses all of that. The versioned source of truth is
+--  supabase/migrations/ — replay it with `supabase db push` (or
+--  `supabase db reset` on a scratch project to prove green-field).
+--  Regenerate this file from a migrated database before trusting it again.
+--
+--  (Original header preserved below for archaeology.)
+-- ============================================================================
 --  This script replicates the ENTIRE database of the current Supabase project
 --  (project ref: vimkodursmcsaptrrzbl) for use on a brand-new Supabase project.
 --

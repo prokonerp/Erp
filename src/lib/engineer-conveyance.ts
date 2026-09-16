@@ -1,6 +1,51 @@
 import { z } from "zod";
 import { istDateKey } from "@/lib/time";
 
+/**
+ * Classify a conveyance-log load failure so UI banners never blame the
+ * migration for RLS denials or network faults. Only missing-table errors
+ * keep the migration message. Pure — unit-tested.
+ */
+export function conveyanceLoadMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  const m = msg.toLowerCase();
+  const isMissingTable =
+    m.includes("42p01") ||
+    m.includes("undefined_table") ||
+    (m.includes("does not exist") && (m.includes("relation") || m.includes("table"))) ||
+    m.includes("could not find the table") ||
+    m.includes("schema cache");
+  if (isMissingTable) {
+    return "Conveyance storage isn't set up yet — ask your admin to run the latest migration, then retry.";
+  }
+  const isDenied =
+    m.includes("42501") ||
+    m.includes("insufficient_privilege") ||
+    m.includes("permission denied") ||
+    m.includes("not authorized") ||
+    m.includes("unauthorized") ||
+    m.includes("row-level security") ||
+    m.includes("violates row-level") ||
+    m.includes("forbidden") ||
+    m.includes("jwt");
+  if (isDenied) {
+    return "Access denied loading conveyance — ask your admin to check your permissions, then retry.";
+  }
+  const isNetwork =
+    err instanceof TypeError ||
+    m.includes("failed to fetch") ||
+    m.includes("fetch failed") ||
+    m.includes("networkerror") ||
+    m.includes("network error") ||
+    m.includes("network request failed") ||
+    m.includes("load failed") ||
+    m.includes("offline") ||
+    m.includes("timeout") ||
+    m.includes("aborted");
+  if (isNetwork) return "Couldn't load conveyance — check your connection and retry.";
+  return msg !== "" ? msg : "Couldn't load conveyance — retry.";
+}
+
 // Pure conveyance layer: charge types, zod schemas, km math, and the
 // pending-material serial matcher. No supabase, no DOM — total over sparse
 // rows so the engineer portal never throws on missing data.
