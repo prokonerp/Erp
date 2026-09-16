@@ -133,10 +133,9 @@ before trusting it for RLS validation; production Supabase is unaffected.
 ## 5. One-command live check (read-only)
 
 Paste the whole of `scripts/verify-eng-live.sql` into the Supabase SQL editor
-and Run. It replays the §0 pre-flight + post-apply queries verbatim plus the
-new-batch checks (backfill residue, constraint validation flags, FK-only
-policy definitions, guarded grn/dc checks) — every row is `(check, result)`,
-and the file header carries the expected-vs-action table. Nothing writes.
+and Run. It is ONE union query, so you get a SINGLE result grid
+`(seq, check, result)` — copy all rows (runners that show only the last
+result set would otherwise hide every check but the final one).
 
 Failure → owning task:
 
