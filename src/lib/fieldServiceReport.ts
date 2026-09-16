@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const UPS_LOCATIONS = ["Computer Room", "Electrical Room", "Network Room", "Other"] as const;
 
-export type FsrEngineer = { employeeId: string | null; name: string; phone?: string | null };
+export type FsrEngineer = { employeeId: string | null; name: string; phone?: string | null; submissionId?: string };
 
 const emptyToUndefined = (v: unknown) =>
   v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? undefined : v;
@@ -155,6 +155,7 @@ export type FieldServiceReportPayload = {
   engineer_employee_id: string | null;
   engineer_name: string;
   engineer_phone: string | null;
+  submission_id: string | null;
   customer_signature_path: string;
   signature_captured_at: string | null;
   part_replacements: {
@@ -212,6 +213,10 @@ export function buildFsrPayload(
     engineer_employee_id: engineer.employeeId ?? null,
     engineer_name: engineer.name,
     engineer_phone: engineer.phone ?? null,
+    // Idempotency key: the submitter generates one uuid per Report attempt and
+    // reuses it across retries, so an ambiguous failure never creates a second
+    // row (UNIQUE index on field_service_reports.submission_id).
+    submission_id: engineer.submissionId ?? null,
     customer_signature_path: input.customerSignaturePath,
     signature_captured_at: input.signatureCapturedAt ?? null,
     part_replacements: input.partReplacements.map((p) => ({

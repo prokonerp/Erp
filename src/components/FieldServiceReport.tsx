@@ -351,6 +351,11 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   // double-Enter from the same render closure would start two submissions
   // (duplicate FSR rows). The ref flips synchronously — second call bails.
   const submittingRef = useRef(false);
+  // Idempotency key for this Report attempt: generated once, reused across
+  // retries (e.g. after a timeout with an ambiguous outcome), cleared on
+  // success. The UNIQUE index on field_service_reports.submission_id turns a
+  // duplicate retry into a 23505, which the submit handler treats as success.
+  const submissionIdRef = useRef<string | null>(null);
   const [submittedOk, setSubmittedOk] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [isOnline, setIsOnline] = useState(() =>
@@ -598,18 +603,32 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         }
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
+      if (!submissionIdRef.current) submissionIdRef.current = crypto.randomUUID();
       const { error } = await (supabase as any).from("field_service_reports").insert(
         buildFsrPayload(parsed.data, ticketId, {
           employeeId,
           name: engineerName,
           phone: engineerPhone,
+          submissionId: submissionIdRef.current,
         }) as never,
       );
       if (error) {
-        toast.error(error.message);
-        return;
+        // 23505 on the submission_id UNIQUE index = our earlier attempt
+        // already landed (ambiguous timeout). Not a failure: continue with
+        // the success path so parts-sync/finalize still run exactly once
+        // (both are idempotent server-side).
+        if ((error as { code?: string })?.code === "23505") {
+          toast.success("Report already submitted — continuing");
+        } else {
+          toast.error(error.message);
+          return;
+        }
+      } else {
+        toast.success("Field Service Report submitted");
       }
-      toast.success("Field Service Report submitted");
+      // The attempt resolved (inserted or deduplicated): mint a fresh key so
+      // a later report after an admin reopen can never collide with this one.
+      submissionIdRef.current = null;
       setSubmittedOk(true);
       await queryClient.invalidateQueries({
         queryKey: fieldServiceReportKeys.list({ ticket: ticketId }),

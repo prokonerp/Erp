@@ -576,6 +576,29 @@ describe("buildFsrPayload", () => {
     expect(payload).not.toHaveProperty("submitted_at");
   });
 
+  it("propagates the client submission id for idempotent retries", () => {
+    const parsed = fieldServiceReportSchema.parse(fullValidInput());
+    const payload = buildFsrPayload(parsed, "ticket-123", {
+      employeeId: "EMP-1",
+      name: "Jane Engineer",
+      phone: "9999999999",
+      submissionId: "sub-0001",
+    }) as Record<string, unknown>;
+
+    expect(payload.submission_id).toBe("sub-0001");
+  });
+
+  it("defaults a missing submission id to null (legacy callers)", () => {
+    const parsed = fieldServiceReportSchema.parse(fullValidInput());
+    const payload = buildFsrPayload(parsed, "ticket-123", {
+      employeeId: "EMP-1",
+      name: "Jane Engineer",
+      phone: "9999999999",
+    }) as Record<string, unknown>;
+
+    expect(payload.submission_id).toBeNull();
+  });
+
   it("maps undefined optionals to null and contains no legacy keys", () => {
     const parsed = fieldServiceReportSchema.parse({
       ...minimalInput(),
