@@ -64,6 +64,28 @@ function isAccountGateError(err: unknown): { code: string } | null {
 }
 
 /**
+ * Second-opinion liveness probe for the stored session. A getMyProfile
+ * failure alone can't distinguish a dead token from a server blip, and the
+ * server-fn error shape after serialization is unreliable — so ask GoTrue
+ * directly. Returns true only for auth-flavored failures; network errors
+ * and successes both mean "don't log out".
+ */
+async function isSessionDead(): Promise<boolean> {
+  try {
+    const { error } = await supabase.auth.getUser();
+    if (!error) return false;
+    const status = (error as { status?: unknown }).status;
+    if (status === 401 || status === 403) return true;
+    const message = (error as { message?: unknown }).message;
+    return (
+      typeof message === "string" && /invalid|expired|revoked|jwt|token|session/i.test(message)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Error boundary for the _app subtree. Catches account-gate denials (401s) thrown
  * by gated server fns in descendant route loaders/handlers — previously these
  * were swallowed into the generic error page and left the user on a broken shell.
@@ -170,7 +192,7 @@ function AppLayout() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  async function loadProfile() {
+  async function loadProfile(isCancelled?: () => boolean) {
     try {
       // Ensure a live access token exists before calling the protected
       // server fn; otherwise the auth middleware throws "No authorization
@@ -206,6 +228,19 @@ function AppLayout() {
         setForceChange(true);
       } else if (gate?.code === ACCOUNT_NOT_ACTIVE) {
         setGateBlocked(true);
+      } else {
+        // Dead session (stored session GoTrue no longer honors): route out
+        // via gateBlocked (purge + signOut + /auth) instead of rendering a
+        // profile-less shell with 401 spam. isSessionDead() awaits network:
+        // never let the probe throw out of the catch path, and skip the
+        // state update after unmount.
+        let dead = false;
+        try {
+          dead = (await isSessionDead()) && !isCancelled?.();
+        } catch {
+          dead = false;
+        }
+        if (dead) setGateBlocked(true);
       }
       setProfile(null);
       console.error("[profile] getMyProfile failed:", err instanceof Error ? err.message : err);
@@ -213,7 +248,11 @@ function AppLayout() {
   }
 
   useEffect(() => {
-    if (session) loadProfile();
+    let cancelled = false;
+    if (session) void loadProfile(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
