@@ -426,9 +426,7 @@ function EngTicketDetail() {
       // Server fn: writes the activity row AND flips the tickets column
       // (engineers cannot UPDATE tickets under RLS), idempotently — a retry
       // after an ambiguous failure returns already:true instead of duping.
-      const { acknowledgeTicketInstruction } = await import(
-        "@/lib/ticket-acknowledge.functions"
-      );
+      const { acknowledgeTicketInstruction } = await import("@/lib/ticket-acknowledge.functions");
       await acknowledgeTicketInstruction({ data: { ticketId: id } });
       // Flip locally for instant UI (server is source of truth on reload).
       setTicket((t) => (t ? { ...t, special_instruction_acknowledged: true } : t));
@@ -642,9 +640,7 @@ function EngTicketDetail() {
         // leaves no orphan (browser .remove() can't — storage DELETE on this
         // bucket is admin-gated, so this must go through the server fn).
         try {
-          const { deleteTicketAttachment } = await import(
-            "@/lib/public-ticket-uploads.functions"
-          );
+          const { deleteTicketAttachment } = await import("@/lib/public-ticket-uploads.functions");
           await deleteTicketAttachment({ data: { ticket_id: id, path: uploadResult.path } });
         } catch (cleanupErr) {
           console.warn("Photo cleanup failed:", cleanupErr);
@@ -662,9 +658,8 @@ function EngTicketDetail() {
             .eq("ticket_id", id)
             .maybeSingle();
           if ((current?.photo_path as string | null) === oldPhotoPath) {
-            const { deleteTicketAttachment } = await import(
-              "@/lib/public-ticket-uploads.functions"
-            );
+            const { deleteTicketAttachment } =
+              await import("@/lib/public-ticket-uploads.functions");
             await deleteTicketAttachment({ data: { ticket_id: id, path: oldPhotoPath } });
           }
         } catch (cleanupErr) {
@@ -829,9 +824,7 @@ function EngTicketDetail() {
         // leaves no orphan (browser .remove() can't — storage DELETE on this
         // bucket is admin-gated, so this must go through the server fn).
         try {
-          const { deleteTicketAttachment } = await import(
-            "@/lib/public-ticket-uploads.functions"
-          );
+          const { deleteTicketAttachment } = await import("@/lib/public-ticket-uploads.functions");
           await deleteTicketAttachment({ data: { ticket_id: id, path: uploadResult.path } });
         } catch (cleanupErr) {
           console.warn("Photo cleanup failed:", cleanupErr);
@@ -849,9 +842,8 @@ function EngTicketDetail() {
             .eq("ticket_id", id)
             .maybeSingle();
           if ((current?.photo_path as string | null) === oldPhotoPath) {
-            const { deleteTicketAttachment } = await import(
-              "@/lib/public-ticket-uploads.functions"
-            );
+            const { deleteTicketAttachment } =
+              await import("@/lib/public-ticket-uploads.functions");
             await deleteTicketAttachment({ data: { ticket_id: id, path: oldPhotoPath } });
           }
         } catch (cleanupErr) {
@@ -1431,7 +1423,24 @@ function EngTicketDetail() {
                   accept="image/*"
                   capture="environment"
                   className="hidden"
-                  onChange={(e) => setMatchedPhotoFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    if (
+                      f &&
+                      ![
+                        "image/jpeg",
+                        "image/png",
+                        "image/webp",
+                        "image/heic",
+                        "image/heif",
+                      ].includes(f.type.toLowerCase())
+                    ) {
+                      toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
+                      e.target.value = "";
+                      return;
+                    }
+                    setMatchedPhotoFile(f);
+                  }}
                 />
                 <Button
                   type="button"
@@ -1575,7 +1584,24 @@ function EngTicketDetail() {
                         accept="image/*"
                         capture="environment"
                         className="hidden"
-                        onChange={(e) => setMismatchPhotoFile(e.target.files?.[0] ?? null)}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] ?? null;
+                          if (
+                            f &&
+                            ![
+                              "image/jpeg",
+                              "image/png",
+                              "image/webp",
+                              "image/heic",
+                              "image/heif",
+                            ].includes(f.type.toLowerCase())
+                          ) {
+                            toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
+                            e.target.value = "";
+                            return;
+                          }
+                          setMismatchPhotoFile(f);
+                        }}
                       />
                       <Button
                         type="button"

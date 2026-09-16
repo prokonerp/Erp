@@ -63,7 +63,7 @@ const requiredOdometer = (message: string) =>
 
 const optionalPhotoPath = z
   .preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    (v) => (v == null || (typeof v === "string" && v.trim() === "") ? undefined : v),
     z.string().max(500).optional(),
   )
   .optional();
@@ -100,7 +100,7 @@ export const expenseEntrySchema = z.object({
   ),
   receipt_path: z
     .preprocess(
-      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      (v) => (v == null || (typeof v === "string" && v.trim() === "") ? undefined : v),
       z.string().max(500).optional(),
     )
     .optional(),

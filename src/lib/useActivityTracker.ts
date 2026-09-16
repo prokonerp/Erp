@@ -82,9 +82,21 @@ export function useActivityTracker(enabled: boolean) {
 
 export async function recordLogin() {
   try {
+    // SIGNED_IN race: the event can fire before the client holds a usable
+    // session, and that rpc then 401s (observed live; login_count stayed 0).
+    // Skip instead of emitting a doomed request; warn on real failures.
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.warn(
+        "[activity] getSession failed, skipping record_user_login:",
+        sessionError.message,
+      );
+      return;
+    }
+    if (!data.session) return;
     await supabase.rpc("record_user_login");
-  } catch {
-    // ignore
+  } catch (e) {
+    console.warn("[activity] record_user_login failed:", e instanceof Error ? e.message : e);
   }
 }
 
@@ -98,11 +110,15 @@ export async function recordLogout() {
 
 export type ActivityStatus = "active" | "idle" | "offline" | "never";
 
-export function computeActivityStatus(u: {
-  last_login: string | null;
-  last_activity: string | null;
-  last_logout: string | null;
-}, nowMs: number = Date.now(), idleWindowMs: number = 5 * 60 * 1000): ActivityStatus {
+export function computeActivityStatus(
+  u: {
+    last_login: string | null;
+    last_activity: string | null;
+    last_logout: string | null;
+  },
+  nowMs: number = Date.now(),
+  idleWindowMs: number = 5 * 60 * 1000,
+): ActivityStatus {
   if (!u.last_login) return "never";
   const act = u.last_activity ? Date.parse(u.last_activity) : 0;
   const out = u.last_logout ? Date.parse(u.last_logout) : 0;
