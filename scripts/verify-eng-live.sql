@@ -32,6 +32,9 @@
 --   engineer-uploads SELECT count                                | >=1       | owned by 20260922000004 — re-apply it, never hand-edit storage.objects (needs supabase_storage_admin)
 --   grn/dc columns on tickets                                    | absent/list | 'absent' before B1 ships; column list after
 --   grn/dc FK validation                                         | no rows pre-B1; rows+true after | B1 data task once 20260923000004 exists
+--   M1 stock RPC guards (3 rows)                                 | 3 guarded | apply 20260923000005; a missing row = overload unguarded
+--   M3/M4 reads scoped (2 rows)                                  | scoped    | 'PERMISSIVE!' = apply 20260923000007
+--   M6 history INSERT admin-only                                 | admin-only| otherwise apply 20260923000007
 --
 -- Every check emits exactly >=1 row EXCEPT: grn/dc FK rows (absent before B1
 -- ships — expected) and tcv/storage multi-row lists (one row per policy).
@@ -225,4 +228,24 @@ SELECT 26,
 FROM pg_constraint
 WHERE conrelid = 'public.tickets'::regclass
   AND (conname ILIKE '%grn%' OR conname ILIKE '%dc%')
+UNION ALL
+-- -- -- M-batch (20260923000005-08): guard + scope checks -- -- --
+-- 27. M1: all three stock RPCs carry the entry guard (expect 3 'guarded' rows; a missing row = unguarded overload live)
+SELECT 27,
+       'M1 stock RPC guards present (expect 3 guarded rows)',
+       p.proname || '=' || CASE WHEN p.prosrc LIKE '%Only stock editors may call%' THEN 'guarded' ELSE 'UNGUARDED!' END
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname IN ('ims_add_qty', 'ims_deduct_qty', 'invoice_cancel_restore_pooled')
+UNION ALL
+-- 28. M3/M4: timeline + visits SELECT scoped to assigned (expect 2 'scoped' rows)
+SELECT 28,
+       'M3/M4 reads scoped (expect scoped)',
+       policyname || '=' || CASE WHEN qual LIKE '%assigned_employee_id%' THEN 'scoped' ELSE 'PERMISSIVE!' END
+FROM pg_policies WHERE tablename IN ('ticket_activities', 'ticket_visits') AND policyname IN ('auth view tact', 'auth view ticket_visits')
+UNION ALL
+-- 29. M6: assignment-history INSERT admin-only (expect admin-only)
+SELECT 29,
+       'M6 history INSERT admin-only (expect admin-only)',
+       CASE WHEN with_check LIKE '%has_role%' AND with_check NOT LIKE '%has_permission%' THEN 'admin-only' ELSE 'NOT-TIGHTENED!' END
+FROM pg_policies WHERE tablename = 'ticket_assignment_history' AND policyname = 'auth insert assignment_history'
 ORDER BY 1, 2, 3;

@@ -148,3 +148,6 @@ Failure → owning task:
 | any rewritten policy still has a name leg | A5 (apply `20260923000003_remove_name_fallback_rls.sql`) |
 | `engineer-uploads` SELECT missing | owned by `20260922000004` — re-apply it; never hand-edit `storage.objects` (needs `supabase_storage_admin`) |
 | grn/dc checks show `absent` / no rows | expected before B1 ships; after B1, non-validated or orphan rows are a B1 data task |
+| M1 shows fewer than 3 `guarded` rows / any `UNGUARDED!` | apply `20260923000005_guard_stock_rpcs.sql` (a missing row = live overload without guard) |
+| M3/M4 show `PERMISSIVE!` | apply `20260923000007_scope_reads_tighten_history.sql` |
+| M6 shows `NOT-TIGHTENED!` | apply `20260923000007_scope_reads_tighten_history.sql` |
