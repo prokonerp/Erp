@@ -46,7 +46,7 @@ Post-apply (expectations):
 select policyname, roles from pg_policies
  where schemaname='storage' and tablename='objects' and cmd='INSERT';
 -- single migration version; hardened policies in force:
-select version from supabase_migrations where version in ('20260912000001','20260912000002');
+select version from supabase_migrations.supabase_migrations where version in ('20260912000001','20260912000002');
 select policyname from pg_policies where tablename='ticket_customer_verifications';
 -- engineer tables granted:
 select has_table_privilege('authenticated','public.field_service_reports','INSERT');
