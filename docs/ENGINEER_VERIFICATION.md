@@ -28,7 +28,8 @@ Pre-flight (read-only, Supabase SQL editor):
 
 ```sql
 -- 1. Which of the duplicate-version files actually applied?
-select version from supabase_migrations where version like '20260912000001%';
+-- (schema-qualified: bare supabase_migrations is not on the editor search_path)
+select version from supabase_migrations.supabase_migrations where version like '20260912000001%';
 -- 2. Orphan scan BEFORE #9 (predicts its NOTICEs):
 select t.id from tickets t left join employees e on e.id = t.assigned_employee_id
  where t.assigned_employee_id is not null and e.id is null;

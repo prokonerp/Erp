@@ -34,14 +34,16 @@
 -- -- -- A2 apply-state (from ENGINEER_VERIFICATION.md section 0, verbatim core) -- -- --
 
 -- 1. Which of the duplicate-version files actually applied? (expect 0)
+-- NOTE: schema-qualified — bare `supabase_migrations` is not on the SQL
+-- editor search_path (42P01); the table lives at supabase_migrations.supabase_migrations.
 SELECT 'duplicate 12000001 versions (expect 0)' AS check,
        count(*)::text AS result
-FROM supabase_migrations WHERE version LIKE '20260912000001%';
+FROM supabase_migrations.supabase_migrations WHERE version LIKE '20260912000001%';
 
 -- 2. Single hardened version in force (expect exactly 1 row: 20260912000002)
 SELECT 'hardened version 12000002 applied (expect 1)' AS check,
        count(*)::text AS result
-FROM supabase_migrations WHERE version IN ('20260912000001', '20260912000002');
+FROM supabase_migrations.supabase_migrations WHERE version IN ('20260912000001', '20260912000002');
 
 -- 3. Anon storage hole closed BEFORE/AFTER #1 (expect 0)
 SELECT 'anon INSERT policy on storage.objects (expect 0)' AS check,
