@@ -14,7 +14,8 @@
 -- BLAST-RADIUS: Engineer-role only; everyone else byte-identical. The admin
 -- leg, the non-engineer leg, and the assigned_employee_id FK legs stay
 -- byte-identical to 20260922000004. SELECT/INSERT policies on the
--- verification tables are untouched (not included here).
+-- verification tables are untouched (not included here). storage.objects is
+-- deliberately untouched (see NOTE below).
 --
 -- SAFE: additive only, idempotent (CREATE OR REPLACE + DROP IF EXISTS +
 -- CREATE; re-running changes nothing). Zero destructive statements; no rows
@@ -66,13 +67,13 @@ GRANT EXECUTE ON FUNCTION public.is_field_engineer(uuid) TO authenticated, servi
 GRANT EXECUTE ON FUNCTION public.my_employee_id(uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.my_employee_name(uuid) TO authenticated, service_role;
 
--- Self-sufficiency: RLS must be on for the storage policy below to have any
--- effect (it is on in production; this is a no-op there). Idempotent.
-DO $$ BEGIN
-  IF to_regclass('storage.objects') IS NOT NULL THEN
-    ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-  END IF;
-END $$;
+-- NOTE (live-apply fix): this migration deliberately touches NOTHING under
+-- storage.objects. The engineer-uploads SELECT policy is already FK-only and
+-- byte-identical since 20260922000004, so re-creating it here would be a pure
+-- no-op — and DROP/CREATE POLICY (like ENABLE RLS) on storage.objects
+-- requires table ownership (supabase_storage_admin), which restricted
+-- SQL-editor roles do not have (42501). 20260922000004 remains the owner of
+-- all storage.objects state; fresh resets replay it before this file.
 
 -- =====================================================================
 -- 1) Scoped policies (guarded: skip cleanly if prerequisites are missing)
@@ -225,19 +226,5 @@ DO $$ BEGIN
       )
     );
 
-  -- -- -- engineer-uploads SELECT: own folder (reads via signed URLs bypass RLS) -- -- --
-  DROP POLICY IF EXISTS "Authenticated can read engineer-uploads" ON storage.objects;
-  CREATE POLICY "Authenticated can read engineer-uploads" ON storage.objects
-    FOR SELECT TO authenticated
-    USING (
-      bucket_id = 'engineer-uploads'
-      AND (
-        public.has_role(auth.uid(), 'admin'::public.app_role)
-        OR NOT public.is_field_engineer(auth.uid())
-        OR (
-          (storage.foldername(name))[1] = 'engineer'
-          AND (storage.foldername(name))[2] = public.my_employee_id(auth.uid())::text
-        )
-      )
-    );
+  -- -- -- engineer-uploads SELECT: intentionally untouched (see NOTE above) -- -- --
 END $$;
