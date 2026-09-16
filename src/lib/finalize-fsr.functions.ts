@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
+import { reportDbError } from "@/lib/format-error";
 
 const finalizeInput = z.object({
   ticketId: z.string().uuid(),
@@ -33,7 +34,7 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
       .select("id, status, updated_at, assigned_employee_id, assigned_engineer_name")
       .eq("id", data.ticketId)
       .maybeSingle();
-    if (ticketErr) throw new Error(ticketErr.message);
+    if (ticketErr) throw new Error(reportDbError("finalize ticket load", ticketErr));
     if (!ticket) throw new Error(`NotFound: ticket ${data.ticketId} not found`);
 
     // Gate: admin OR the engineer assigned to this ticket (shared gate:
@@ -68,7 +69,7 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
       .eq("ticket_id", data.ticketId)
       .order("arrival_at", { ascending: false, nullsFirst: false })
       .limit(1);
-    if (visitErr) throw new Error(visitErr.message);
+    if (visitErr) throw new Error(reportDbError("finalize visit load", visitErr));
     const v = (Array.isArray(visitRows) && visitRows.length > 0
       ? visitRows[0]
       : null) as unknown as { arrival_at: string | null; departure_at: string | null } | null;
@@ -78,7 +79,7 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
         .eq("ticket_id", data.ticketId)
         .is("departure_at", null)
         .select("ticket_id");
-      if (departErr) throw new Error(departErr.message);
+      if (departErr) throw new Error(reportDbError("finalize auto-depart", departErr));
       if (!departRows || (departRows as unknown[]).length === 0) {
         // Lost the race (already departed elsewhere) — skip the activity insert; report truthfully that this call departed nothing.
         departed = false;
@@ -111,7 +112,7 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
         .eq("id", data.ticketId)
         .eq("updated_at", readUpdatedAt)
         .select("id");
-      if (updErr) throw new Error(updErr.message);
+      if (updErr) throw new Error(reportDbError("finalize auto-close", updErr));
       closed = !!updRows && updRows.length > 0;
     }
 

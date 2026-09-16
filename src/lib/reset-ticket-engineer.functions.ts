@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { reportDbError } from "@/lib/format-error";
 
 /** Engineer-work activity kinds that an admin reset is allowed to delete. Exact set. */
 export const RESET_ACTIVITY_KINDS = [
@@ -84,7 +85,7 @@ async function assertAdmin(supabaseAdmin: any, userId: string) {
     _user_id: userId,
     _role: "admin",
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(reportDbError("reset admin check", error));
   if (!data) throw new Error("Forbidden: admin only");
 }
 
@@ -169,14 +170,15 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       .from("ticket_customer_verifications")
       .delete()
       .eq("ticket_id", scope.ticketId);
-    if (delCustErr) throw new Error(delCustErr.message);
+    if (delCustErr)
+      throw new Error(reportDbError("reset delete customer verifications", delCustErr));
 
     // (c) Delete equipment verifications for this ticket only.
     const { error: delEqErr } = await supabaseAdmin
       .from("ticket_equipment_verifications")
       .delete()
       .eq("ticket_id", scope.ticketId);
-    if (delEqErr) throw new Error(delEqErr.message);
+    if (delEqErr) throw new Error(reportDbError("reset delete equipment verifications", delEqErr));
 
     // (d) Delete allow-listed engineer-work activities only. NEVER created/status.
     const { data: deletedActivities, error: delActErr } = await supabaseAdmin
@@ -185,7 +187,7 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       .eq("ticket_id", scope.ticketId)
       .in("kind", [...RESET_ACTIVITY_KINDS])
       .select("id");
-    if (delActErr) throw new Error(delActErr.message);
+    if (delActErr) throw new Error(reportDbError("reset delete activities", delActErr));
 
     // (e) Delete the site-visit row for this ticket only.
     const { error: delVisitErr } = await supabaseAdmin
@@ -193,7 +195,7 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       .from("ticket_visits" as any)
       .delete()
       .eq("ticket_id", scope.ticketId);
-    if (delVisitErr) throw new Error(delVisitErr.message);
+    if (delVisitErr) throw new Error(reportDbError("reset delete visit", delVisitErr));
 
     // (f) Delete field service reports for this ticket only. They belong to
     // the invalidated work run; the kind=verification_reset audit row below
@@ -203,7 +205,7 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       .delete()
       .eq("ticket_id", scope.ticketId)
       .select("id");
-    if (delFsrErr) throw new Error(delFsrErr.message);
+    if (delFsrErr) throw new Error(reportDbError("reset delete fsr", delFsrErr));
 
     // (g) Remove exact photo files only (allow-listed names under ticket/{id}/).
     const removedPhotos: string[] = [];
@@ -256,7 +258,7 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       })
       .select("id")
       .single();
-    if (resetErr) throw new Error(resetErr.message);
+    if (resetErr) throw new Error(reportDbError("reset audit insert", resetErr));
 
     return {
       deletedCustomer: customerRows,

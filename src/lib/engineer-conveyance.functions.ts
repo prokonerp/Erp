@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { fetchMyIdentityAdmin } from "@/lib/engineer-identity";
-import { storageUploadMessage } from "@/lib/format-error";
+import { formatDbError, storageUploadMessage } from "@/lib/format-error";
+import { uploadObjectRaw } from "@/lib/storage-upload-raw";
 import {
   CHARGE_TYPES,
   asEmployeeDocuments,
@@ -99,10 +100,14 @@ export const uploadEngineerAttachment = createServerFn({ method: "POST" })
         .slice(0, 5) || "jpg";
     const day = data.date ?? todayLocal();
     const path = `engineer/${caller.id}/${data.kind}/${day}/${data.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
-    const { error } = await admin.storage
-      .from(ENGINEER_BUCKET)
-      .upload(path, buf, { contentType: data.content_type, upsert: false });
-    if (error) throw new Error(storageUploadMessage("engineer-uploads", error, path));
+    await uploadObjectRaw({
+      adminUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
+      serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+      bucket: ENGINEER_BUCKET,
+      path,
+      body: buf,
+      contentType: data.content_type,
+    });
     return { path };
   });
 
@@ -155,7 +160,7 @@ export const saveEngineerDailyLog = createServerFn({ method: "POST" })
       .eq("employee_id", caller.id)
       .eq("log_date", data.log_date)
       .maybeSingle();
-    if (readErr) throw new Error(readErr.message);
+    if (readErr) throw new Error(formatDbError(readErr, "Failed to load daily log"));
     const prev = (existing ?? {}) as Record<string, unknown>;
     const pick = (key: string, fallback: unknown) => {
       const v = (data as Record<string, unknown>)[key];
@@ -200,7 +205,7 @@ export const saveEngineerDailyLog = createServerFn({ method: "POST" })
       },
       { onConflict: "employee_id,log_date" },
     );
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(formatDbError(error, "Failed to save daily log"));
     return {
       log_date: data.log_date,
       km: kmTravelled({
@@ -250,7 +255,7 @@ export const saveConveyanceExpense = createServerFn({ method: "POST" })
       })
       .select("id")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(formatDbError(error, "Failed to save expense"));
     return { id: (row as { id: string }).id };
   });
 
@@ -267,10 +272,10 @@ export const deleteConveyanceExpense = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .eq("employee_id", caller.id)
       .maybeSingle();
-    if (readErr) throw new Error(readErr.message);
+    if (readErr) throw new Error(formatDbError(readErr, "Failed to load expense"));
     if (!row) throw new Error("NotFound: expense not found");
     const { error } = await table.delete().eq("id", data.id).eq("employee_id", caller.id);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(formatDbError(error, "Failed to delete expense"));
     const receipt = (row as { receipt_path: string | null }).receipt_path;
     if (receipt) {
       try {
@@ -323,6 +328,6 @@ export const saveMyProfile = createServerFn({ method: "POST" })
       .update(update as never)
       .eq("id", caller.id)
       .eq("active", true);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(formatDbError(error, "Failed to save profile"));
     return { employeeId: caller.id };
   });

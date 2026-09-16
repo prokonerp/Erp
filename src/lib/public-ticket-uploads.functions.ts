@@ -6,6 +6,7 @@ import { checkRateLimit } from "@/lib/public-rate-limit";
 import { clientIpKey } from "@/lib/server-client-ip";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
 import { storageUploadMessage } from "@/lib/format-error";
+import { uploadObjectRaw } from "@/lib/storage-upload-raw";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -113,10 +114,16 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
       action: "upload attachments",
     });
 
-    const { error } = await supabaseAdmin.storage
-      .from("ticket-attachments")
-      .upload(path, buf, { cacheControl: "3600", upsert: false, contentType: data.content_type });
-    if (error) throw new Error(storageUploadMessage("ticket-attachments", error));
+    const adminUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+    await uploadObjectRaw({
+      adminUrl,
+      serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+      bucket: "ticket-attachments",
+      path,
+      body: buf,
+      contentType: data.content_type,
+      cacheControl: "3600",
+    });
     const token = await signPath(path);
     return { path, token };
   });
@@ -187,11 +194,16 @@ export const stagePublicTicketPhoto = createServerFn({ method: "POST" })
         .replace(/[^a-z0-9]/g, "")
         .slice(0, 5) || "jpg";
     const path = buildStagedPublicPath(new Date(), crypto.randomUUID(), data.kind, safeExt);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.storage
-      .from("ticket-attachments")
-      .upload(path, buf, { cacheControl: "3600", upsert: false, contentType: data.content_type });
-    if (error) throw new Error(storageUploadMessage("ticket-attachments", error, path));
+    const stagedAdminUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+    await uploadObjectRaw({
+      adminUrl: stagedAdminUrl,
+      serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+      bucket: "ticket-attachments",
+      path,
+      body: buf,
+      contentType: data.content_type,
+      cacheControl: "3600",
+    });
     const token = await signPath(path);
     return { path, token };
   });

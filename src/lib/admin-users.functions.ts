@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireActiveUser, requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { formatDbError, reportDbError } from "@/lib/format-error";
 
 const PASSWORD_EXPIRY_DAYS = 30;
 const HISTORY_LIMIT = 5;
@@ -65,10 +66,10 @@ async function markPasswordChanged(
         ...patch,
       })
       .eq("user_id", userId);
-    if (error) throw new Error(`Could not save password change date: ${error.message}`);
+    if (error) throw new Error(formatDbError(error, "Could not save password change date"));
   } else {
     const { error } = await supabaseAdmin.from("app_users").upsert(payload);
-    if (error) throw new Error(`Could not create profile row: ${error.message}`);
+    if (error) throw new Error(formatDbError(error, "Could not create profile row"));
   }
 }
 
@@ -93,7 +94,7 @@ async function assertAdmin(ctx: { supabase: any; userId: string }) {
     _user_id: ctx.userId,
     _role: "admin",
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(reportDbError("admin check", error));
   if (!data) throw new Error("Forbidden: admin only");
 }
 
@@ -157,7 +158,7 @@ export const createAppUser = createServerFn({ method: "POST" })
       password_changed_at: new Date().toISOString(),
       must_change_password: forceChange,
     });
-    if (upErr) throw new Error(upErr.message);
+    if (upErr) throw new Error(reportDbError("create app user profile", upErr));
     await markPasswordChanged(
       supabaseAdmin,
       uid,
@@ -200,7 +201,7 @@ export const updateAppUser = createServerFn({ method: "POST" })
     if (data.status !== undefined) patch.status = data.status;
     if (data.custom_permissions !== undefined) patch.custom_permissions = data.custom_permissions;
     const { error } = await supabaseAdmin.from("app_users").upsert(patch);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(reportDbError("update app user", error));
     if (data.is_admin === true) {
       await supabaseAdmin
         .from("user_roles")
@@ -391,7 +392,7 @@ export const provisionEngineerLogin = createServerFn({ method: "POST" })
       password_changed_at: new Date().toISOString(),
       must_change_password: true,
     });
-    if (upErr) throw new Error(upErr.message);
+    if (upErr) throw new Error(reportDbError("provision app user", upErr));
 
     await recordPasswordHistory(supabaseAdmin, uid, data.password);
 
@@ -403,7 +404,7 @@ export const provisionEngineerLogin = createServerFn({ method: "POST" })
       .from("employees")
       .update({ auth_user_id: uid } as any)
       .eq("id", data.employee_id) as any);
-    if (linkErr) throw new Error(linkErr.message);
+    if (linkErr) throw new Error(reportDbError("provision link employee", linkErr));
 
     // 7. Verify link — auth_user_id not in generated types
     const { data: verify } = await (supabaseAdmin
