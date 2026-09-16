@@ -36,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SignaturePad } from "./eng/SignaturePad";
+import { reportDbError } from "@/lib/format-error";
 import { FsrPrintButton, type FsrDbRow } from "./fsr/FsrPrintButton";
 
 let rowSeq = 0;
@@ -615,7 +616,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
         if ((error as { code?: string })?.code === "23505") {
           toast.success("Report already submitted — continuing");
         } else {
-          toast.error(error.message);
+          toast.error(reportDbError("FSR submit", error));
           return;
         }
       } else {

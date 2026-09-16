@@ -35,6 +35,14 @@
 --   M1 stock RPC guards (3 rows)                                 | 3 guarded | apply 20260923000005; a missing row = overload unguarded
 --   M3/M4 reads scoped (2 rows)                                  | scoped    | 'PERMISSIVE!' = apply 20260923000007
 --   M6 history INSERT admin-only                                 | admin-only| otherwise apply 20260923000007
+--   storage SELECT engineer-uploads count (owns 20260922000004)   | >=1       | re-apply 20260922000004, never hand-edit storage.objects (needs supabase_storage_admin)
+--   storage INSERT ticket-attachments inventory                   | rows      | apply 20260922000004, re-check
+--   storage.buckets both buckets                                  | 2 rows    | apply 20260922000004, re-check id/name/public/limit
+--   storage.objects force RLS flag                                | false     | drift — 20260922000004 owns storage.objects state, re-apply it, never ALTER by hand
+--   storage.objects user triggers                                 | 0         | drift — drop the trigger, re-apply 20260922000004 if policies changed
+--   20260923000004 grn/dc columns present                         | 2         | apply 20260923000004 (B1)
+--   20260923000008 password functions present                     | 2         | apply 20260923000008
+--   password fn proconfig search_path                             | public, extensions | apply 20260923000008, never ALTER FUNCTION by hand
 --
 -- Every check emits exactly >=1 row EXCEPT: grn/dc FK rows (absent before B1
 -- ships — expected) and tcv/storage multi-row lists (one row per policy).
@@ -240,12 +248,75 @@ UNION ALL
 -- 28. M3/M4: timeline + visits SELECT scoped to assigned (expect 2 'scoped' rows)
 SELECT 28,
        'M3/M4 reads scoped (expect scoped)',
-       policyname || '=' || CASE WHEN qual LIKE '%assigned_employee_id%' THEN 'scoped' ELSE 'PERMISSIVE!' END
-FROM pg_policies WHERE tablename IN ('ticket_activities', 'ticket_visits') AND policyname IN ('auth view tact', 'auth view ticket_visits')
+       v.policyname || '=' || CASE WHEN p.policyname IS NULL THEN 'MISSING!'
+            WHEN p.qual LIKE '%assigned_employee_id%' THEN 'scoped' ELSE 'PERMISSIVE!' END
+FROM (VALUES ('auth view tact', 'ticket_activities'), ('auth view ticket_visits', 'ticket_visits')) v(policyname, tablename)
+LEFT JOIN pg_policies p ON p.schemaname = 'public' AND p.tablename = v.tablename AND p.policyname = v.policyname
 UNION ALL
 -- 29. M6: assignment-history INSERT admin-only (expect admin-only)
 SELECT 29,
        'M6 history INSERT admin-only (expect admin-only)',
-       CASE WHEN with_check LIKE '%has_role%' AND with_check NOT LIKE '%has_permission%' THEN 'admin-only' ELSE 'NOT-TIGHTENED!' END
-FROM pg_policies WHERE tablename = 'ticket_assignment_history' AND policyname = 'auth insert assignment_history'
+       CASE WHEN p.policyname IS NULL THEN 'MISSING!'
+            WHEN p.with_check LIKE '%has_role%' AND p.with_check NOT LIKE '%has_permission%' THEN 'admin-only' ELSE 'NOT-TIGHTENED!' END
+FROM (VALUES ('auth insert assignment_history', 'ticket_assignment_history')) v(policyname, tablename)
+LEFT JOIN pg_policies p ON p.schemaname = 'public' AND p.tablename = v.tablename AND p.policyname = v.policyname
+UNION ALL
+-- -- -- Task E storage-tier drift (20260922000004 owns ALL storage.objects state; never hand-edit) -- -- --
+-- 30. engineer-uploads SELECT count (expect >=1; count-form so absence still prints a row)
+SELECT 30,
+       'storage SELECT engineer-uploads owned by 20260922000004 (expect >=1, never hand-edit)',
+       count(*)::text
+FROM pg_policies
+WHERE schemaname = 'storage' AND tablename = 'objects' AND cmd = 'SELECT'
+  AND (policyname ILIKE '%engineer%' OR qual LIKE '%engineer-uploads%')
+UNION ALL
+-- 31. ticket-attachments INSERT inventory (one row per policy; no rows = 20260922000004 missing)
+SELECT 31,
+       'storage INSERT ticket-attachments policies (expect rows)',
+       policyname || ' roles=' || roles::text
+FROM pg_policies
+WHERE schemaname = 'storage' AND tablename = 'objects' AND cmd = 'INSERT'
+  AND (policyname ILIKE '%ticket%' OR qual LIKE '%ticket-attachments%' OR COALESCE(with_check, '') LIKE '%ticket-attachments%')
+UNION ALL
+-- 32. Both buckets present with flags (one row per bucket; expect 2 rows)
+SELECT 32,
+       'storage.buckets both buckets (expect 2 rows)',
+       'id=' || id || ' name=' || name || ' public=' || public::text || ' limit=' || COALESCE(file_size_limit::text, 'NULL')
+FROM storage.buckets
+WHERE id IN ('engineer-uploads', 'ticket-attachments')
+UNION ALL
+-- 33. Force-RLS off so storage admins bypass (expect false)
+SELECT 33,
+       'storage.objects force RLS (expect false)',
+       relforcerowsecurity::text
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'storage' AND c.relname = 'objects'
+UNION ALL
+-- 34. No user triggers on storage.objects (expect 0; count-form so drift still prints)
+SELECT 34,
+       'storage.objects user triggers (expect 0)',
+       count(*)::text
+FROM pg_trigger
+WHERE tgrelid = 'storage.objects'::regclass AND NOT tgisinternal
+UNION ALL
+-- 35. 20260923000004 headline object: grn/dc columns on tickets (expect 2)
+SELECT 35,
+       '20260923000004 grn/dc columns present (expect 2)',
+       count(*)::text
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'tickets' AND column_name IN ('grn_id', 'dc_id')
+UNION ALL
+-- 36. 20260923000008 headline objects: password functions present (expect 2)
+SELECT 36,
+       '20260923000008 password functions present (expect 2)',
+       count(*)::text
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname IN ('record_password_history', 'check_password_reuse')
+UNION ALL
+-- 37. Password function search_path locked down (one row per function; expect public, extensions)
+SELECT 37,
+       'password fn proconfig search_path (expect public, extensions)',
+       p.proname || ' proconfig=' || COALESCE(array_to_string(p.proconfig, ', '), 'NULL')
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.proname IN ('record_password_history', 'check_password_reuse')
 ORDER BY 1, 2, 3;

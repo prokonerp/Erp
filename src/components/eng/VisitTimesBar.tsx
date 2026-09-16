@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Loader2, LogOut, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatISTTime } from "@/lib/time";
+import { reportDbError } from "@/lib/format-error";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -106,7 +107,7 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
         .is("arrival_at", null)
         .select("ticket_id");
       if (error) {
-        toast.error(error.message);
+        toast.error(reportDbError("visit arrive", error));
         return;
       }
       let effectiveArrival: string;
@@ -134,7 +135,7 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
           .from("ticket_visits")
           .insert({ ticket_id: ticketId, arrival_at: at } as never);
         if (insErr && (insErr as { code?: string }).code !== "23505") {
-          toast.error(insErr.message);
+          toast.error(reportDbError("visit arrive", insErr));
           return;
         }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
@@ -188,7 +189,7 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
         .is("departure_at", null)
         .select("ticket_id");
       if (error) {
-        toast.error(error.message);
+        toast.error(reportDbError("visit depart", error));
         return;
       }
       if (!departRows || departRows.length === 0) {

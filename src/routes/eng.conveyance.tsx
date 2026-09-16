@@ -3,11 +3,18 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { reportDbError } from "@/lib/format-error";
 import { useMyEmployee } from "@/hooks/useMyEmployee";
 import { supabase } from "@/integrations/supabase/client";
 import { engKeys } from "@/lib/queryKeys";
 import { compressImageToLimit } from "@/lib/image-compress";
-import { CHARGE_TYPES, conveyanceLoadMessage, kmTravelled, todayLocal, type ChargeType } from "@/lib/engineer-conveyance";
+import {
+  CHARGE_TYPES,
+  conveyanceLoadMessage,
+  kmTravelled,
+  todayLocal,
+  type ChargeType,
+} from "@/lib/engineer-conveyance";
 import {
   deleteConveyanceExpense,
   deleteEngineerAttachment,
@@ -341,7 +348,7 @@ function EngConveyance() {
       // Dashboard shows today's km — refresh its direct-query cache too.
       await queryClient.invalidateQueries({ queryKey: engKeys.dashboardPrefix });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      toast.error(reportDbError("conveyance save", err, "Save failed"));
     } finally {
       setSaving(null);
       savingRef.current = null;
@@ -367,15 +374,29 @@ function EngConveyance() {
     try {
       let receiptPath: string | null = null;
       if (receiptFile) receiptPath = await uploadPhoto(receiptFile, "receipt");
-      await callSaveExpense({
-        data: {
-          expense_date: date,
-          charge_type: chargeType,
-          amount: amount.trim(),
-          receipt_path: receiptPath,
-          notes: notes.trim() === "" ? null : notes.trim(),
-        },
-      });
+      try {
+        await callSaveExpense({
+          data: {
+            expense_date: date,
+            charge_type: chargeType,
+            amount: amount.trim(),
+            receipt_path: receiptPath,
+            notes: notes.trim() === "" ? null : notes.trim(),
+          },
+        });
+      } catch (saveErr) {
+        // Best-effort orphan cleanup (mirrors saveHalf above): a failed
+        // expense save must not leave its just-uploaded receipt behind.
+        // Never masks the original save error.
+        if (receiptPath) {
+          try {
+            await callDeleteUpload({ data: { path: receiptPath } });
+          } catch (cleanupErr) {
+            console.warn("Expense receipt cleanup failed:", cleanupErr);
+          }
+        }
+        throw saveErr;
+      }
       toast.success("Expense added");
       setChargeType("");
       setAmount("");
@@ -383,7 +404,7 @@ function EngConveyance() {
       setNotes("");
       await queryClient.invalidateQueries({ queryKey: expKey });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Save failed");
+      toast.error(reportDbError("expense save", err, "Save failed"));
     } finally {
       setExpenseBusy(false);
       expenseBusyRef.current = false;
@@ -402,7 +423,7 @@ function EngConveyance() {
       toast.success("Expense removed");
       await queryClient.invalidateQueries({ queryKey: expKey });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Delete failed");
+      toast.error(reportDbError("expense delete", err, "Delete failed"));
     } finally {
       removingRef.current = null;
       setRemovingId(null);

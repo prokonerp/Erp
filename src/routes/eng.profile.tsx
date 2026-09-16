@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { reportDbError } from "@/lib/format-error";
 import { useAuth, purgeAuthCaches } from "@/lib/useAuth";
 import { useIsEngineer } from "@/lib/useIsEngineer";
 import { useMyQueue } from "@/hooks/useMyQueue";
@@ -188,7 +189,7 @@ function EngProfile() {
       if (photoInputRef.current) photoInputRef.current.value = "";
       await refreshEmployee();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Photo upload failed");
+      toast.error(reportDbError("profile photo upload", err, "Photo upload failed"));
     } finally {
       setPhotoBusy(false);
       photoBusyRef.current = false;
@@ -239,7 +240,7 @@ function EngProfile() {
       if (docInputRef.current) docInputRef.current.value = "";
       await refreshEmployee();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Document upload failed");
+      toast.error(reportDbError("profile document upload", err, "Document upload failed"));
     } finally {
       setDocBusy(false);
       docBusyRef.current = false;
@@ -262,7 +263,7 @@ function EngProfile() {
       toast.success("Document removed");
       await refreshEmployee();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Remove failed");
+      toast.error(reportDbError("profile document remove", err, "Remove failed"));
     } finally {
       setDocBusy(false);
       docBusyRef.current = false;

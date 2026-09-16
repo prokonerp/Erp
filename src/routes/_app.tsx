@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { createFileRoute, Outlet, Link, Navigate, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
+import { SafeNavigate } from "@/components/SafeNavigate";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth, purgeAuthCaches } from "@/lib/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -73,7 +74,7 @@ function AccountBlockedSignOut() {
     purgeAuthCaches();
     void supabase.auth.signOut();
   }, []);
-  return <Navigate to="/auth" />;
+  return <SafeNavigate to="/auth" />;
 }
 
 function AppErrorBoundary({ error }: { error: Error }) {
@@ -226,9 +227,9 @@ function AppLayout() {
   }, [gateBlocked]);
 
   if (loading || engLoading) return <PageLoader label="Loading your workspace…" />;
-  if (!session) return <Navigate to="/auth" replace />;
-  if (gateBlocked) return <Navigate to="/auth" replace />;
-  if (isEngineer) return <Navigate to="/eng" replace />;
+  if (!session) return <SafeNavigate to="/auth" replace />;
+  if (gateBlocked) return <SafeNavigate to="/auth" replace />;
+  if (isEngineer) return <SafeNavigate to="/eng" replace />;
 
   const navItems = permLoading
     ? NAV_ITEMS

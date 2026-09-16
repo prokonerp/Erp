@@ -5,6 +5,7 @@ import { buildStagedPublicPath, isStagedPublicPath } from "@/lib/public-upload-g
 import { checkRateLimit } from "@/lib/public-rate-limit";
 import { clientIpKey } from "@/lib/server-client-ip";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
+import { storageUploadMessage } from "@/lib/format-error";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -115,7 +116,7 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.storage
       .from("ticket-attachments")
       .upload(path, buf, { cacheControl: "3600", upsert: false, contentType: data.content_type });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(storageUploadMessage("ticket-attachments", error));
     const token = await signPath(path);
     return { path, token };
   });
@@ -190,7 +191,7 @@ export const stagePublicTicketPhoto = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.storage
       .from("ticket-attachments")
       .upload(path, buf, { cacheControl: "3600", upsert: false, contentType: data.content_type });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(storageUploadMessage("ticket-attachments", error, path));
     const token = await signPath(path);
     return { path, token };
   });
@@ -256,6 +257,6 @@ export const deleteTicketAttachment = createServerFn({ method: "POST" })
       action: "delete attachments",
     });
     const { error } = await supabaseAdmin.storage.from("ticket-attachments").remove([data.path]);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(storageUploadMessage("ticket-attachments", error, data.path));
     return { ok: true };
   });

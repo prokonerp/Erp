@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { fetchMyIdentityAdmin } from "@/lib/engineer-identity";
+import { storageUploadMessage } from "@/lib/format-error";
 import {
   CHARGE_TYPES,
   asEmployeeDocuments,
@@ -101,7 +102,7 @@ export const uploadEngineerAttachment = createServerFn({ method: "POST" })
     const { error } = await admin.storage
       .from(ENGINEER_BUCKET)
       .upload(path, buf, { contentType: data.content_type, upsert: false });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(storageUploadMessage("engineer-uploads", error, path));
     return { path };
   });
 
@@ -123,7 +124,7 @@ export const deleteEngineerAttachment = createServerFn({ method: "POST" })
       throw new Error("Forbidden: you can only delete your own uploads");
     }
     const { error } = await admin.storage.from(ENGINEER_BUCKET).remove([data.path]);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(storageUploadMessage("engineer-uploads", error, data.path));
     return { path: data.path };
   });
 

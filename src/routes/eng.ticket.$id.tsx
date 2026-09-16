@@ -56,6 +56,7 @@ import {
 } from "lucide-react";
 import { compressImageToLimit } from "@/lib/image-compress";
 import { PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
+import { reportDbError } from "@/lib/format-error";
 
 export const Route = createFileRoute("/eng/ticket/$id")({
   component: EngTicketDetail,
@@ -404,7 +405,7 @@ function EngTicketDetail() {
         actor: u.user?.id ?? null,
       } as never);
       if (error) {
-        toast.error(error.message);
+        toast.error(reportDbError("note save", error));
         noteIdempotencyRef.current = "";
         return;
       }
@@ -438,7 +439,7 @@ function EngTicketDetail() {
         triggerPasswordChangeDialog();
         return;
       }
-      toast.error(err instanceof Error ? err.message : "Acknowledgement failed");
+      toast.error(reportDbError("acknowledge instruction", err, "Acknowledgement failed"));
     } finally {
       ackRef.current = false;
       setAckBusy(false);
@@ -465,7 +466,7 @@ function EngTicketDetail() {
         { onConflict: "ticket_id" },
       );
       if (error) {
-        toast.error(error.message);
+        toast.error(reportDbError("customer verify save", error));
         return;
       }
       try {
@@ -513,7 +514,7 @@ function EngTicketDetail() {
         { onConflict: "ticket_id" },
       );
       if (error) {
-        toast.error(error.message);
+        toast.error(reportDbError("customer correction save", error));
         return;
       }
       try {
@@ -545,7 +546,9 @@ function EngTicketDetail() {
       const resolved = resolveCustomerCorrection(buildCustomerSnapshot(ticket!), data);
       await handleCustomerIncorrect(resolved.corrected);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not resolve the correction");
+      toast.error(
+        reportDbError("resolve customer correction", err, "Could not resolve the correction"),
+      );
     }
   };
 
@@ -646,7 +649,7 @@ function EngTicketDetail() {
         } catch (cleanupErr) {
           console.warn("Photo cleanup failed:", cleanupErr);
         }
-        toast.error(error.message);
+        toast.error(reportDbError("equipment mismatch save", error));
         return;
       }
       if (oldPhotoPath && oldPhotoPath !== uploadResult.path) {
@@ -693,8 +696,7 @@ function EngTicketDetail() {
         triggerPasswordChangeDialog();
         return;
       }
-      const msg = err instanceof Error ? err.message : "Upload failed";
-      toast.error(msg);
+      toast.error(reportDbError("equipment mismatch upload", err, "Upload failed"));
       // Keep the picked file: a transient failure (GPS, network) must not
       // force the engineer to re-pick the photo. Cleared on success only.
     } finally {
@@ -719,7 +721,9 @@ function EngTicketDetail() {
         corrected_serial: resolved.corrected_serial,
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not resolve the correction");
+      toast.error(
+        reportDbError("resolve equipment correction", err, "Could not resolve the correction"),
+      );
     }
   };
 
@@ -832,7 +836,7 @@ function EngTicketDetail() {
         } catch (cleanupErr) {
           console.warn("Photo cleanup failed:", cleanupErr);
         }
-        toast.error(error.message);
+        toast.error(reportDbError("equipment matched save", error));
         return;
       }
       if (oldPhotoPath && oldPhotoPath !== uploadResult.path) {
@@ -873,8 +877,7 @@ function EngTicketDetail() {
         triggerPasswordChangeDialog();
         return;
       }
-      const msg = err instanceof Error ? err.message : "Upload failed";
-      toast.error(msg);
+      toast.error(reportDbError("equipment matched upload", err, "Upload failed"));
       // Keep the picked file: a transient failure must not force re-picking.
       // Cleared on success only.
     } finally {
@@ -944,8 +947,7 @@ function EngTicketDetail() {
         triggerPasswordChangeDialog();
         return;
       }
-      const msg = err instanceof Error ? err.message : "Upload failed";
-      toast.error(msg);
+      toast.error(reportDbError("photo upload", err, "Upload failed"));
     } finally {
       photoRef.current = false;
       setPhotoBusy(false);

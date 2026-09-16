@@ -1,5 +1,6 @@
-import { createFileRoute, useNavigate, useLocation } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import { shouldSkipNavigation } from "@/lib/safe-navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
@@ -46,11 +47,24 @@ function AuthPage() {
     }
   }, []);
 
+  // One-shot terminal redirect. Without the fired-ref + same-href skip,
+  // a re-render mid-transition (old match still mounted with the new
+  // location) re-commits the identical URL through commitLocation -> load(),
+  // self-looping into "Maximum update depth exceeded" (#3110 shape).
+  const redirectFiredRef = useRef(false);
+  const router = useRouter();
   useEffect(() => {
-    if (!session) return;
+    if (!session) {
+      redirectFiredRef.current = false;
+      return;
+    }
+    if (redirectFiredRef.current) return;
     const target = next && next !== pathname ? next : "/dashboard";
+    const built = router.buildLocation({ to: target, search: {} });
+    if (shouldSkipNavigation(router.latestLocation.href, built.href)) return;
+    redirectFiredRef.current = true;
     void navigate({ to: target, search: {} });
-  }, [session, next, pathname, navigate]);
+  }, [session, next, pathname, navigate, router]);
 
   if (loading) return <PageLoader />;
 

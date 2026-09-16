@@ -1,6 +1,7 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/useAuth";
 import { PageLoader } from "@/components/shared/skeletons";
+import { SafeNavigate } from "@/components/SafeNavigate";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -9,5 +10,5 @@ export const Route = createFileRoute("/")({
 function Index() {
   const { session, loading } = useAuth();
   if (loading) return <PageLoader />;
-  return <Navigate to={session ? "/dashboard" : "/auth"} replace />;
+  return <SafeNavigate to={session ? "/dashboard" : "/auth"} replace />;
 }

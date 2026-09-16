@@ -1,12 +1,6 @@
-import { useEffect, useState } from "react";
-import {
-  createFileRoute,
-  Outlet,
-  Link,
-  useLocation,
-  Navigate,
-  useNavigate,
-} from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import { createFileRoute, Outlet, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { SafeNavigate } from "@/components/SafeNavigate";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth, purgeAuthCaches } from "@/lib/useAuth";
 import { useIsEngineer } from "@/lib/useIsEngineer";
@@ -37,6 +31,9 @@ function EngLayout() {
   const navigate = useNavigate();
   const [forceChange, setForceChange] = useState(false);
   const fetchProfile = useServerFn(getMyProfile);
+  // Declared with the other hooks (above all early returns): hooks must run
+  // unconditionally in the same order every render (rules-of-hooks).
+  const logoutRef = useRef(false);
 
   useEffect(() => {
     if (!session) return;
@@ -68,19 +65,29 @@ function EngLayout() {
     return <PageLoader label="Loading engineer portal…" />;
   }
 
-  if (!session) return <Navigate to="/auth" replace />;
+  if (!session) return <SafeNavigate to="/auth" replace />;
 
+  // Synchronous re-entry lock (same pattern as the ticket-page ack/verify
+  // refs): two rapid taps must not commit /auth twice back-to-back, the
+  // second landing mid-transition. Reset in finally so a failed sign-out
+  // still allows retry.
   const handleLogout = async () => {
-    purgeAuthCaches();
-    await recordLogout();
-    await supabase.auth.signOut();
-    navigate({ to: "/auth" });
+    if (logoutRef.current) return;
+    logoutRef.current = true;
+    try {
+      purgeAuthCaches();
+      await recordLogout();
+      await supabase.auth.signOut();
+      navigate({ to: "/auth" });
+    } finally {
+      logoutRef.current = false;
+    }
   };
 
   // Non-engineers (e.g. an admin landing here) go back to the admin
   // shell instead of a dead-end screen.
   if (!isEngineer) {
-    return <Navigate to="/dashboard" replace />;
+    return <SafeNavigate to="/dashboard" replace />;
   }
 
   const isActive = (path: string) =>

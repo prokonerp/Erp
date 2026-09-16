@@ -13,6 +13,7 @@ import { useRef, useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { reportDbError } from "@/lib/format-error";
 import {
   DEFAULT_COMPANY_PROFILE,
   fetchCompanyProfile,
@@ -126,7 +127,9 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
       .eq("id", ticketId)
       .maybeSingle();
     if (terr || !trow) {
-      toast.error(terr?.message ?? "Ticket not found — cannot build the report");
+      toast.error(
+        reportDbError("fsr print ticket", terr, "Ticket not found — cannot build the report"),
+      );
       return null;
     }
     const t = trow as unknown as Record<string, string | boolean | null>;
@@ -227,7 +230,7 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
       await printMultiPageElement(el, filenameFor(current), { landscape: true });
       toast.success("Field Service Report sent to print");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Print failed");
+      toast.error(reportDbError("fsr print", e, "Print failed"));
     } finally {
       busyRef.current = false;
       setBusy(null);
@@ -247,7 +250,7 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
       await saveMultiPageElementAsPdf(el, filenameFor(current), { landscape: true });
       toast.success("Field Service Report downloaded");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Download failed");
+      toast.error(reportDbError("fsr print download", e, "Download failed"));
     } finally {
       busyRef.current = false;
       setBusy(null);
