@@ -53,7 +53,7 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
     if (!ticket) throw new Error(`NotFound: ticket ${data.ticketId} not found`);
 
     // Gate: admin OR the engineer assigned to this ticket (shared gate:
-    // FK match, else unique-name match; fail-loud on ambiguity).
+    // FK match only; fail-loud on ambiguity).
     // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
     const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
     await assertTicketAssignee(supabaseAdmin, {

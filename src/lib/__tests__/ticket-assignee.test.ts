@@ -77,7 +77,7 @@ describe("assertTicketAssignee", () => {
     ).resolves.toMatchObject({ id: "emp-asha" });
   });
 
-  it("returns the caller on unique name match (legacy rows)", async () => {
+  it("denies on name-only match (fallback removed — FK-only)", async () => {
     const admin = fakeAdmin({ employees: [{ ...asha, auth_user_id: null }] });
     await expect(
       assertTicketAssignee(admin, {
@@ -86,7 +86,18 @@ describe("assertTicketAssignee", () => {
         ticket: { assigned_employee_id: null, assigned_engineer_name: "Asha" },
         action: "sync",
       }),
-    ).resolves.toMatchObject({ id: "emp-asha" });
+    ).rejects.toThrow(/assigned engineer may sync/);
+  });
+
+  it("denies on name-only match even when the name is unique", async () => {
+    const admin = fakeAdmin({ employees: [asha, bala] });
+    await expect(
+      assertTicketAssignee(admin, {
+        userId: "uid-bala",
+        ticket: { assigned_employee_id: null, assigned_engineer_name: "Bala" },
+        action: "finalize",
+      }),
+    ).rejects.toThrow(/assigned engineer may finalize/);
   });
 
   it("denies on duplicate names even when one matches", async () => {

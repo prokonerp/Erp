@@ -332,17 +332,16 @@ function EngTicketDetail() {
     };
   }, []);
 
-  // Ownership guard: fail-closed when ticket names a different engineer
+  // Ownership guard: FK-only, mirroring the RLS policies — fail-closed when
+  // the ticket names a different engineer (or carries only a legacy name).
   const isOwner = (() => {
     if (!ticket) return true; // loading state, no guard yet
     const hasFk = !!ticket.assigned_employee_id;
     const hasName = !!ticket.assigned_engineer_name;
     // No assignee info at all → fail-open (RLS still governs)
     if (!hasFk && !hasName) return true;
-    // FK match
+    // FK match only (legacy name-only rows are not owned — RLS agrees)
     if (hasFk && myId && ticket.assigned_employee_id === myId) return true;
-    // Name match (only when engineer has a resolved name)
-    if (hasName && myName && ticket.assigned_engineer_name === myName) return true;
     // Assigned to someone else → blocked
     return false;
   })();

@@ -46,6 +46,7 @@ export class IdentityQueryError extends Error {
 
 export type TicketAssignee = {
   assigned_employee_id: string | null;
+  /** Legacy display column — carried for compat, ignored by the FK-only gate. */
   assigned_engineer_name: string | null;
 };
 
@@ -54,10 +55,12 @@ export type TicketAssignee = {
  * (finalize, parts-sync, uploads, deletes, acknowledges).
  *
  * Returns null for admins (no employee identity needed). Otherwise resolves
- * the caller via the central identity policy and requires an FK match, or a
- * name match that is UNIQUE across active employees (same-name engineers
- * must never see each other's tickets). Throws fail-loud Forbidden errors;
- * the `action` noun ("finalize", "sync", …) is interpolated into them.
+ * the caller via the central identity policy and requires an FK match on
+ * assigned_employee_id (FK-only, mirroring the RLS policies — the legacy
+ * assigned_engineer_name fallback was removed with
+ * 20260923000003_remove_name_fallback_rls). Throws fail-loud Forbidden
+ * errors; the `action` noun ("finalize", "sync", …) is interpolated into
+ * them.
  */
 export async function assertTicketAssignee(
   admin: SupabaseClient,
@@ -93,27 +96,7 @@ export async function assertTicketAssignee(
 
   const row = opts.ticket;
   const fkMatch = !!row.assigned_employee_id && row.assigned_employee_id === caller.id;
-  let nameMatch = false;
-  if (!fkMatch) {
-    const callerName = (caller.name ?? "").trim();
-    if (
-      callerName !== "" &&
-      !!row.assigned_engineer_name &&
-      row.assigned_engineer_name.trim().toLowerCase() === callerName.toLowerCase()
-    ) {
-      // Name equality alone is not enough: with duplicate names either
-      // engineer would pass. Count matches — exactly one wins.
-      const { data: sameNamed } = await db
-        .from("employees")
-        .select("id, name")
-        .eq("active", true);
-      const dupes = ((sameNamed ?? []) as { name?: string | null }[]).filter(
-        (r) => (r.name ?? "").trim().toLowerCase() === callerName.toLowerCase(),
-      );
-      nameMatch = dupes.length === 1;
-    }
-  }
-  if (!fkMatch && !nameMatch) throw deny();
+  if (!fkMatch) throw deny();
   return caller;
 }
 

@@ -11,11 +11,11 @@ import { engKeys } from "@/lib/queryKeys";
  *  1. Central identity policy (fetchMyIdentity): auth_user_id exact link,
  *     unique-email fallback, AMBIGUOUS_EMPLOYEE_MATCH on dupes.
  *     Both surface in the UI as "contact admin" (fail-loud, never silent).
- *  2. FK-first: match tickets.assigned_employee_id = employee.id
+ *  2. FK-only: match tickets.assigned_employee_id = employee.id
  *     (via .filter() so missing generated types can't break the build).
- *  3. Name fallback ONLY when the employee name is unique across active
- *     employees — otherwise same-name engineers would see each other's
- *     tickets. With duplicate names the queue is FK-only (safe subset).
+ *     The legacy assigned_engineer_name fallback was removed with
+ *     20260923000003_remove_name_fallback_rls — RLS returns zero rows for
+ *     name-only tickets, so no client-side name query exists anymore.
  *
  * No realtime subscription. staleTime 30s + refetchInterval 15s while visible.
  */
@@ -112,11 +112,10 @@ export function useMyQueue() {
       if (identity.status === "ambiguous") throw new Error("AMBIGUOUS_EMPLOYEE_MATCH");
       if (identity.status !== "ok") throw new Error("ACCOUNT_NOT_LINKED");
       const empId = identity.employee.id;
-      const engineerName = identity.employee.name as string | null;
 
       const baseSelect = QUEUE_COLS;
 
-      // FK-first: exact engineer match (safe under duplicate names).
+      // FK-only: exact engineer match (safe under duplicate names).
       // .filter() takes a plain string column so the not-yet-regenerated
       // Supabase types can't break this query at build time.
       const fkRes = await supabase
@@ -130,36 +129,7 @@ export function useMyQueue() {
         console.error("[useMyQueue]", fkRes.error.message);
         throw fkRes.error;
       }
-      const fkTickets = (fkRes.data || []) as QueueTicket[];
-
-      // Nameless employee rows cannot use the name fallback (safe subset:
-      // FK matches only). Previously the null flowed into .eq() untyped.
-      if (!engineerName) return fkTickets;
-
-      // Name fallback only when the name is unique across active employees.
-      const { count: nameCount } = await supabase
-        .from("employees")
-        .select("id", { count: "exact", head: true })
-        .eq("name", engineerName)
-        .eq("active", true);
-      if ((nameCount ?? 0) > 1) return fkTickets;
-
-      const nameRes = await supabase
-        .from("tickets")
-        .select(baseSelect)
-        .eq("is_deleted", false)
-        .eq("assigned_engineer_name", engineerName)
-        .not("status", "in", '("Closed","Cancelled")')
-        .order("created_at", { ascending: false });
-      if (nameRes.error) {
-        console.error("[useMyQueue]", nameRes.error.message);
-        throw nameRes.error;
-      }
-      const seen = new Set(fkTickets.map((t) => t.id));
-      return [
-        ...fkTickets,
-        ...((nameRes.data || []) as QueueTicket[]).filter((t) => !seen.has(t.id)),
-      ];
+      return ((fkRes.data || []) as QueueTicket[]);
     },
   });
 }

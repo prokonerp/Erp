@@ -15,8 +15,8 @@ const TERMINAL_STATUSES = ["Cancelled", "Closed"] as const;
  *
  * Engineers cannot UPDATE tickets under RLS, so both writes run here with
  * the service-role client. Same admin-or-assigned-engineer gate as
- * syncFsrPartsToTicket (FK-first on assigned_employee_id, name fallback on
- * assigned_engineer_name only when the name is unique across active employees).
+ * syncFsrPartsToTicket (FK-only on assigned_employee_id, mirroring the RLS
+ * policies).
  *
  * Idempotent: departure only when arrival_at exists and departure_at is
  * unset; close only when the ticket is not already terminal. Safe to call
@@ -37,7 +37,7 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
     if (!ticket) throw new Error(`NotFound: ticket ${data.ticketId} not found`);
 
     // Gate: admin OR the engineer assigned to this ticket (shared gate:
-    // FK match, else unique-name match; fail-loud on ambiguity).
+    // FK match only; fail-loud on ambiguity).
     // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
     const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
     await assertTicketAssignee(supabaseAdmin, {
