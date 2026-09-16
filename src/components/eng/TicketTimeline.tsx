@@ -13,6 +13,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { formatISTDate, formatISTTime } from "@/lib/time";
 
 export type TicketTimelineKind =
   | "note"
@@ -41,7 +42,20 @@ export type TicketTimelineActivity = {
 export type TicketTimelineProps = {
   activities: TicketTimelineActivity[];
   isLoading?: boolean;
+  /**
+   * Auth uid of the viewing engineer. Matching actors render as "You";
+   * anyone else renders as a short id — engineers cannot resolve other
+   * users' names (employees RLS exposes only their own row), so a raw
+   * UUID would be noise either way.
+   */
+  currentUserId?: string | null;
 };
+
+function displayActor(actor: string | null | undefined, currentUserId?: string | null): string | null {
+  if (!actor) return null;
+  if (currentUserId && actor === currentUserId) return "You";
+  return actor.length > 12 ? `${actor.slice(0, 8)}…` : actor;
+}
 
 const KIND_LABEL: Record<string, string> = {
   customer_verify: "Customer verification",
@@ -93,20 +107,24 @@ function TimelineIcon({ kind }: { kind: string }) {
 }
 
 function formatNoteBody(body: string): string {
+  // Keep the calendar date: bare HH:mm is ambiguous across multi-day visits.
+  // Unparseable matches are left untouched (same fallback as before).
   return body.replace(
     /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/g,
-    (m) => formatTime(m) || m,
+    (m) => {
+      const d = formatISTDate(m, "");
+      const t = formatISTTime(m, "");
+      return d && t ? `${d} ${t}` : m;
+    },
   );
 }
 
 export function formatTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  // "" convention preserved (empty = unparseable); clocks render in IST.
+  return formatISTTime(iso, "");
 }
 
-export function TicketTimeline({ activities, isLoading = false }: TicketTimelineProps) {
+export function TicketTimeline({ activities, isLoading = false, currentUserId = null }: TicketTimelineProps) {
   if (isLoading) {
     return (
       <Card>
@@ -161,7 +179,9 @@ export function TicketTimeline({ activities, isLoading = false }: TicketTimeline
                 <span>
                   <time dateTime={a.createdAt}>{formatTime(a.createdAt)}</time>
                 </span>
-                {a.actor ? <span aria-label="actor">{a.actor}</span> : null}
+                {a.actor ? (
+                  <span aria-label="actor">{displayActor(a.actor, currentUserId)}</span>
+                ) : null}
               </div>
               {a.message ? (
                 <p className="mt-1 whitespace-pre-wrap text-sm">{formatNoteBody(a.message)}</p>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { istDateKey } from "@/lib/time";
 
 // Pure conveyance layer: charge types, zod schemas, km math, and the
 // pending-material serial matcher. No supabase, no DOM — total over sparse
@@ -75,11 +76,9 @@ export function kmTravelled(log: {
   return Math.round((e - m) * 10) / 10;
 }
 
-/** YYYY-MM-DD in local time (conveyance days are calendar-local, not UTC). */
+/** YYYY-MM-DD in IST (conveyance days follow the app timezone, not the device). */
 export function todayLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return istDateKey();
 }
 
 export type FsrDefectiveLine = {

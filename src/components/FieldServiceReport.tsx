@@ -19,6 +19,9 @@ import {
   readingsSchema,
 } from "@/lib/fieldServiceReport";
 import { fieldServiceReportKeys } from "@/lib/queryKeys";
+import { engKeys } from "@/lib/queryKeys";
+import { fetchMyIdentity } from "@/lib/engineer-identity";
+import { formatISTDateTime } from "@/lib/time";
 import { syncFsrPartsToTicket } from "@/lib/sync-fsr-parts.functions";
 import { finalizeFsrSubmission } from "@/lib/finalize-fsr.functions";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
@@ -356,7 +359,6 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
   // success. The UNIQUE index on field_service_reports.submission_id turns a
   // duplicate retry into a 23505, which the submit handler treats as success.
   const submissionIdRef = useRef<string | null>(null);
-  const [submittedOk, setSubmittedOk] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
@@ -575,32 +577,25 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       }
       const email = u.user.email;
       const authUid = u.user.id;
+      // Central identity policy. Unlinked/ambiguous/query-error all fall back
+      // to the email-as-name default below (the FSR row still records who
+      // submitted; assignment is enforced separately by the server fns).
       let employeeId: string | null = null;
       let engineerName = email ?? "Engineer";
       let engineerPhone: string | null = null;
-      // Identity by auth_user_id first (exact); email fallback for legacy rows.
-      const { data: empByAuth } = await supabase
-        .from("employees")
-        .select("id,name,phone")
-        .eq("auth_user_id", authUid)
-        .eq("active", true)
-        .maybeSingle();
-      if (empByAuth) {
-        employeeId = empByAuth.id as string;
-        engineerName = (empByAuth.name as string) ?? email ?? "Engineer";
-        engineerPhone = (empByAuth.phone as string | null) ?? null;
-      } else if (email) {
-        const { data: emps } = await supabase
-          .from("employees")
-          .select("id,name,phone")
-          .eq("email", email)
-          .eq("active", true)
-          .limit(1);
-        if (emps && emps.length > 0) {
-          employeeId = emps[0].id as string;
-          engineerName = (emps[0].name as string) ?? email;
-          engineerPhone = (emps[0].phone as string | null) ?? null;
+      try {
+        const identity = await fetchMyIdentity(supabase, {
+          authUid,
+          email: email ?? null,
+          columns: "id,name,phone",
+        });
+        if (identity.status === "ok") {
+          employeeId = identity.employee.id;
+          engineerName = (identity.employee.name as string | null) ?? engineerName;
+          engineerPhone = (identity.employee.phone as string | null) ?? null;
         }
+      } catch {
+        // Identity failure must never block the report itself.
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
       if (!submissionIdRef.current) submissionIdRef.current = crypto.randomUUID();
@@ -629,7 +624,6 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       // The attempt resolved (inserted or deduplicated): mint a fresh key so
       // a later report after an admin reopen can never collide with this one.
       submissionIdRef.current = null;
-      setSubmittedOk(true);
       await queryClient.invalidateQueries({
         queryKey: fieldServiceReportKeys.list({ ticket: ticketId }),
       });
@@ -653,15 +647,15 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       } catch {
         toast.warning("Report saved; auto-depart/close pending — an admin can close the ticket.");
       }
-      // The queue still shows this ticket open (depart/close landed above) —
-      // bust it so /eng/queue drops the closed ticket without a manual refresh.
-      await queryClient.invalidateQueries({ queryKey: ["eng", "queue"] });
-      // Prevent the view-only gate from flashing during the transition out.
-      // NOTE: the submittedOk banner below stays in code but is superseded by
-      // this immediate navigation (Sonner toasts persist across routes).
+      // The queue + dashboard still show this ticket open (depart/close landed
+      // above) — bust both so /eng drops the closed ticket without a manual
+      // refresh (dashboard-direct is a separate key family from the queue).
+      await queryClient.invalidateQueries({ queryKey: engKeys.queuePrefix });
+      await queryClient.invalidateQueries({ queryKey: engKeys.dashboardPrefix });
+      // Prevent the view-only gate from flashing during the transition out
+      // (Sonner toasts persist across routes).
       setJustSubmitted(true);
       navigate({ to: "/eng/queue" });
-      setForm({ ...initialForm });
     } finally {
       setBusy(false);
       submittingRef.current = false;
@@ -705,7 +699,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
 
         <div className="rounded-xl border p-4 space-y-2 text-sm">
           <p className="text-[13px] font-medium">
-            Latest submission — {new Date(latest.submitted_at).toLocaleString()}
+            Latest submission — {formatISTDateTime(latest.submitted_at)}
           </p>
           <p className="text-[13px]">
             Voltage L-N: {latest.mains_voltage_ln ?? "—"} VAC · Voltage N-E:{" "}
@@ -741,30 +735,12 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
           <PhaseDot num="1" valid={readingsValid} />
           <PhaseDot num="2" valid={loadValid} />
           <PhaseDot num="3" valid={powerValid} />
-          <PhaseDot num="4" valid={signatureValid} />
-          <PhaseDot num="5" valid={ratingValid} />
+          <PhaseDot num="4" valid={partValid} />
+          <PhaseDot num="5" valid={signatureValid} />
+          <PhaseDot num="6" valid={ratingValid} />
         </div>
-        <p className="text-xs text-muted-foreground">Phases 1 · 2 · 3 · 4 · 5</p>
+        <p className="text-xs text-muted-foreground">Phases 1 · 2 · 3 · 4 · 5 · 6</p>
       </div>
-
-      {submittedOk && (
-        <div
-          role="status"
-          className="flex items-start gap-3 rounded-xl border border-border bg-card p-4"
-        >
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <Check className="size-4" />
-          </span>
-          <div className="space-y-0.5">
-            <p className="text-sm font-semibold text-card-foreground">
-              Field Service Report submitted
-            </p>
-            <p className="text-[13px] text-muted-foreground">
-              The latest submission summary below reflects the saved report.
-            </p>
-          </div>
-        </div>
-      )}
 
       <form
         id="fsr-form"
@@ -1247,7 +1223,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
           aria-label="Phase 4 customer signature"
           className="space-y-3 rounded-xl border border-border bg-card p-4"
         >
-          <SectionHeader num="4" title="Phase 4 — Customer Signature" valid={signatureValid} />
+          <SectionHeader num="5" title="Phase 5 — Customer Signature" valid={signatureValid} />
           <FsrField label="Customer signature" required>
             <div>
               <SignaturePad
@@ -1270,7 +1246,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
           aria-label="Phase 5 overall rating"
           className="space-y-3 rounded-xl border border-border bg-card p-4"
         >
-          <SectionHeader num="5" title="Phase 5 — Overall Rating" valid={ratingValid} />
+          <SectionHeader num="6" title="Phase 6 — Overall Rating" valid={ratingValid} />
           <FsrField
             label="How would you rate this service visit? (1 = poor, 10 = excellent)"
             required
@@ -1295,8 +1271,9 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
             <PhaseDot num="1" valid={readingsValid} />
             <PhaseDot num="2" valid={loadValid} />
             <PhaseDot num="3" valid={powerValid} />
-            <PhaseDot num="4" valid={signatureValid} />
-            <PhaseDot num="5" valid={ratingValid} />
+            <PhaseDot num="4" valid={partValid} />
+            <PhaseDot num="5" valid={signatureValid} />
+            <PhaseDot num="6" valid={ratingValid} />
           </div>
           <Button
             type="submit"
@@ -1320,7 +1297,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       {latest && (
         <div className="rounded-xl border p-4 space-y-2 text-sm mb-[calc(5rem+env(safe-area-inset-bottom,0px))]">
           <p className="text-[13px] font-medium">
-            Latest submission — {new Date(latest.submitted_at).toLocaleString()}
+            Latest submission — {formatISTDateTime(latest.submitted_at)}
           </p>
           <p className="text-[13px]">
             Voltage L-N: {latest.mains_voltage_ln ?? "—"} VAC · Voltage N-E:{" "}

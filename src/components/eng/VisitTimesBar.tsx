@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, LogOut, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { formatISTTime } from "@/lib/time";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -13,11 +14,7 @@ type VisitRow = {
 const OFFLINE_REASON = "No internet connection. Reconnect and retry — visit time was not recorded.";
 
 function formatClock(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return formatISTTime(iso);
 }
 
 function formatElapsed(ms: number): string {
@@ -98,28 +95,69 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
     setArriveBusy(true);
     try {
       const at = new Date().toISOString();
+      // Conditional on arrival_at IS NULL (mirrors the depart pattern below):
+      // a second "Arrive" from another device must NOT overwrite the first
+      // arrival time. 0 rows = already arrived elsewhere, or no visit row yet.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
-      const { error } = await (supabase as any)
+      const { data: arriveRows, error } = await (supabase as any)
         .from("ticket_visits")
-        .upsert({ ticket_id: ticketId, arrival_at: at } as never, {
-          onConflict: "ticket_id",
-        });
+        .update({ arrival_at: at } as never)
+        .eq("ticket_id", ticketId)
+        .is("arrival_at", null)
+        .select("ticket_id");
       if (error) {
         toast.error(error.message);
         return;
+      }
+      let effectiveArrival: string;
+      if (arriveRows && arriveRows.length > 0) {
+        effectiveArrival = at;
+        setVisit((v) => ({ arrival_at: at, departure_at: v?.departure_at ?? null }));
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
+        const { data: fresh } = await (supabase as any)
+          .from("ticket_visits")
+          .select("arrival_at,departure_at")
+          .eq("ticket_id", ticketId)
+          .maybeSingle();
+        const row = fresh as unknown as VisitRow | null;
+        if (row?.arrival_at) {
+          // Lost the race: another device arrived first. Show canonical time.
+          setVisit({ arrival_at: row.arrival_at, departure_at: row.departure_at });
+          toast.info("Arrival already recorded — showing the existing time");
+          return;
+        }
+        // No visit row yet: create it. A concurrent arrive wins via the
+        // ticket_id unique constraint (23505) — then fall through to re-read.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
+        const { error: insErr } = await (supabase as any)
+          .from("ticket_visits")
+          .insert({ ticket_id: ticketId, arrival_at: at } as never);
+        if (insErr && (insErr as { code?: string }).code !== "23505") {
+          toast.error(insErr.message);
+          return;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
+        const { data: fresh2 } = await (supabase as any)
+          .from("ticket_visits")
+          .select("arrival_at,departure_at")
+          .eq("ticket_id", ticketId)
+          .maybeSingle();
+        const row2 = fresh2 as unknown as VisitRow | null;
+        effectiveArrival = row2?.arrival_at ?? at;
+        setVisit({ arrival_at: effectiveArrival, departure_at: row2?.departure_at ?? null });
       }
       try {
         const { data: u } = await supabase.auth.getUser();
         await supabase.from("ticket_activities").insert({
           ticket_id: ticketId,
           kind: "arrival",
-          notes: `Arrived at site at ${at}`,
+          notes: `Arrived at site at ${effectiveArrival}`,
           actor: u.user?.id ?? null,
         } as never);
       } catch (actErr) {
         console.warn("Activity insert failed:", actErr);
       }
-      setVisit((v) => ({ arrival_at: at, departure_at: v?.departure_at ?? null }));
       toast.success("Arrival recorded");
     } finally {
       arriveRef.current = false;

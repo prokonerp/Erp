@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { verificationKeys } from "@/lib/queryKeys";
+import { fetchMyIdentity } from "@/lib/engineer-identity";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
@@ -135,10 +136,17 @@ function EngTicketDetail() {
   const queryClient = useQueryClient();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [activitiesError, setActivitiesError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [myId, setMyId] = useState<string | null>(null);
   const [myName, setMyName] = useState<string | null>(null);
+  // Auth uid (not the employee id): timeline activities record u.user.id.
+  const [myAuthUid, setMyAuthUid] = useState<string | null>(null);
+  // True until the identity effect settles (resolved, unlinked, or failed).
+  // The ownership guard waits for it instead of flashing "Not assigned".
+  const [identityLoading, setIdentityLoading] = useState(true);
   const [guardError, setGuardError] = useState<string | null>(null);
 
   function isPasswordChangeRequired(err: unknown): boolean {
@@ -261,7 +269,7 @@ function EngTicketDetail() {
         supabase
           .from("tickets")
           .select(
-            "id,case_id,call_type,product,serial_no,customer_name,customer_phone,customer_id,customer_email,customer_address,sector,location,complaint,status,priority,assigned_employee_id,assigned_engineer_name,special_instruction,special_instruction_acknowledged,created_at",
+            "id,case_id,call_type,product,serial_no,customer_name,customer_phone,customer_id,customer_email,customer_address,sector,location,complaint,status,priority,assigned_employee_id,assigned_engineer_name,assigned_engineer_phone,special_instruction,special_instruction_acknowledged,created_at",
           )
           .eq("id", id)
           .single(),
@@ -281,47 +289,43 @@ function EngTicketDetail() {
       } else {
         setLoadError(null);
       }
+      // A denied/failed activities query must not masquerade as "no activity".
+      const actErr = actRes.error as { message?: string } | null;
+      setActivitiesError(actErr?.message ?? null);
       setActivities((actRes.data || []) as Activity[]);
       setLoading(false);
     })();
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, retryCount]);
 
-  // Resolve current employee identity (same pattern as useMyQueue)
+  // Resolve current employee identity (central policy). Silent when
+  // unlinked/ambiguous — the ownership guard below fails closed on null
+  // identity, which is the safe direction.
   useEffect(() => {
     let active = true;
     (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      const authUid = u.user?.id;
-      const email = u.user?.email;
-      if (!authUid && !email) return;
-      // Identity by auth_user_id first (exact); email fallback for legacy rows.
-      if (authUid) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- auth_user_id pending generated types
-        const { data: empByAuth } = await (supabase as any)
-          .from("employees")
-          .select("id,name")
-          .eq("auth_user_id", authUid)
-          .eq("active", true)
-          .maybeSingle();
-        if (empByAuth) {
-          if (!active) return;
-          setMyId(empByAuth.id as string);
-          setMyName(empByAuth.name as string);
-          return;
-        }
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        const authUid = u.user?.id;
+        const email = u.user?.email ?? null;
+        if (!authUid) return;
+        if (active) setMyAuthUid(authUid);
+        const identity = await fetchMyIdentity(supabase, {
+          authUid,
+          email,
+          columns: "id,name",
+        });
+        if (!active || identity.status !== "ok") return;
+        setMyId(identity.employee.id);
+        setMyName(identity.employee.name);
+      } catch {
+        // Unidentified: ownership guard fails closed. No toast — the guard
+        // message ("Not assigned to you") already explains the state.
+      } finally {
+        if (active) setIdentityLoading(false);
       }
-      if (!email) return;
-      const { data: emps } = await supabase
-        .from("employees")
-        .select("id,name")
-        .eq("email", email)
-        .eq("active", true);
-      if (!active || !emps || emps.length === 0) return;
-      setMyId(emps[0].id as string);
-      setMyName(emps[0].name as string);
     })();
     return () => {
       active = false;
@@ -345,6 +349,15 @@ function EngTicketDetail() {
 
   const isRestricted = !loading && ticket !== null && !isOwner;
 
+  // While identity is unresolved AND the ticket names someone, neither the
+  // workspace (wrong for non-owners) nor "Not assigned" (wrong flash for the
+  // owner) is correct — show a neutral verifying state instead.
+  const identityPending =
+    !loading &&
+    ticket !== null &&
+    identityLoading &&
+    (!!ticket.assigned_employee_id || !!ticket.assigned_engineer_name);
+
   // Check if special instruction has been acknowledged (by ticket flag or activity)
   const isSpecialAcked = (() => {
     if (!ticket) return false;
@@ -353,11 +366,12 @@ function EngTicketDetail() {
   })();
 
   const refreshActivities = async () => {
-    const { data: actRes } = await supabase
+    const { data: actRes, error: actErr } = await supabase
       .from("ticket_activities")
       .select("id,kind,notes,created_at,actor")
       .eq("ticket_id", id)
       .order("created_at", { ascending: false });
+    setActivitiesError((actErr as { message?: string } | null)?.message ?? null);
     setActivities((actRes || []) as Activity[]);
   };
 
@@ -409,19 +423,23 @@ function EngTicketDetail() {
     ackRef.current = true;
     setAckBusy(true);
     try {
-      const { data: u } = await supabase.auth.getUser();
-      const { error } = await supabase.from("ticket_activities").insert({
-        ticket_id: id,
-        kind: "acknowledge",
-        notes: "Acknowledged special instruction",
-        actor: u.user?.id ?? null,
-      } as never);
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
+      // Server fn: writes the activity row AND flips the tickets column
+      // (engineers cannot UPDATE tickets under RLS), idempotently — a retry
+      // after an ambiguous failure returns already:true instead of duping.
+      const { acknowledgeTicketInstruction } = await import(
+        "@/lib/ticket-acknowledge.functions"
+      );
+      await acknowledgeTicketInstruction({ data: { ticketId: id } });
+      // Flip locally for instant UI (server is source of truth on reload).
+      setTicket((t) => (t ? { ...t, special_instruction_acknowledged: true } : t));
       toast.success("Acknowledged");
       await refreshActivities();
+    } catch (err) {
+      if (isPasswordChangeRequired(err)) {
+        triggerPasswordChangeDialog();
+        return;
+      }
+      toast.error(err instanceof Error ? err.message : "Acknowledgement failed");
     } finally {
       ackRef.current = false;
       setAckBusy(false);
@@ -524,8 +542,12 @@ function EngTicketDetail() {
     emailInput?: string;
     phoneInput?: string;
   }) => {
-    const resolved = resolveCustomerCorrection(buildCustomerSnapshot(ticket!), data);
-    await handleCustomerIncorrect(resolved.corrected);
+    try {
+      const resolved = resolveCustomerCorrection(buildCustomerSnapshot(ticket!), data);
+      await handleCustomerIncorrect(resolved.corrected);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not resolve the correction");
+    }
   };
 
   const handleEquipmentMismatch = async (data: {
@@ -614,8 +636,14 @@ function EngTicketDetail() {
         { onConflict: "ticket_id" },
       );
       if (error) {
+        // Best-effort: remove the just-uploaded file so a failed verify
+        // leaves no orphan (browser .remove() can't — storage DELETE on this
+        // bucket is admin-gated, so this must go through the server fn).
         try {
-          await supabase.storage.from("ticket-attachments").remove([uploadResult.path]);
+          const { deleteTicketAttachment } = await import(
+            "@/lib/public-ticket-uploads.functions"
+          );
+          await deleteTicketAttachment({ data: { ticket_id: id, path: uploadResult.path } });
         } catch (cleanupErr) {
           console.warn("Photo cleanup failed:", cleanupErr);
         }
@@ -623,8 +651,20 @@ function EngTicketDetail() {
         return;
       }
       if (oldPhotoPath && oldPhotoPath !== uploadResult.path) {
+        // Re-read first: a concurrent verify from another device may have
+        // already replaced the photo — never delete the winner's file.
         try {
-          await supabase.storage.from("ticket-attachments").remove([oldPhotoPath]);
+          const { data: current } = await supabase
+            .from("ticket_equipment_verifications")
+            .select("photo_path")
+            .eq("ticket_id", id)
+            .maybeSingle();
+          if ((current?.photo_path as string | null) === oldPhotoPath) {
+            const { deleteTicketAttachment } = await import(
+              "@/lib/public-ticket-uploads.functions"
+            );
+            await deleteTicketAttachment({ data: { ticket_id: id, path: oldPhotoPath } });
+          }
         } catch (cleanupErr) {
           console.warn("Old photo cleanup failed:", cleanupErr);
         }
@@ -656,7 +696,8 @@ function EngTicketDetail() {
       }
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast.error(msg);
-      setMismatchPhotoFile(null);
+      // Keep the picked file: a transient failure (GPS, network) must not
+      // force the engineer to re-pick the photo. Cleared on success only.
     } finally {
       mismatchRef.current = false;
       setMismatchBusy(false);
@@ -669,14 +710,18 @@ function EngTicketDetail() {
     modelInput?: string;
     serialInput?: string;
   }) => {
-    const resolved = resolveEquipmentCorrection(
-      { model: ticket?.product ?? null, serial: ticket?.serial_no ?? null },
-      data,
-    );
-    await handleEquipmentMismatch({
-      corrected_model: resolved.corrected_model,
-      corrected_serial: resolved.corrected_serial,
-    });
+    try {
+      const resolved = resolveEquipmentCorrection(
+        { model: ticket?.product ?? null, serial: ticket?.serial_no ?? null },
+        data,
+      );
+      await handleEquipmentMismatch({
+        corrected_model: resolved.corrected_model,
+        corrected_serial: resolved.corrected_serial,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not resolve the correction");
+    }
   };
 
   const handleEquipmentMatched = async () => {
@@ -698,6 +743,21 @@ function EngTicketDetail() {
     matchedRef.current = true;
     setVerdictBusy2(true);
     try {
+      // Best-effort location for the matched verdict (mandatory only for
+      // mismatch): consistent evidence chain without blocking indoor flows
+      // where GPS is unavailable.
+      let matchedGeo: {
+        lat: number;
+        long: number;
+        accuracy: number | null;
+        captured_at: string;
+      } | null = null;
+      try {
+        matchedGeo = await getCurrentGeo(8000);
+      } catch {
+        // No location: the serial photo remains the compulsory evidence.
+      }
+
       const compressed = await compressImageToLimit(matchedPhotoFile);
 
       const reader = new FileReader();
@@ -717,6 +777,14 @@ function EngTicketDetail() {
           content_type: compressed.contentType,
           kind: "serial_photo",
           data_base64: base64,
+          ...(matchedGeo
+            ? {
+                lat: matchedGeo.lat,
+                long: matchedGeo.long,
+                accuracy: matchedGeo.accuracy,
+                captured_at: matchedGeo.captured_at,
+              }
+            : {}),
         },
       });
 
@@ -740,14 +808,28 @@ function EngTicketDetail() {
           corrected_model: ticket?.product ?? null,
           corrected_serial: ticket?.serial_no ?? null,
           photo_path: uploadResult.path,
+          ...(matchedGeo
+            ? {
+                photo_lat: matchedGeo.lat,
+                photo_long: matchedGeo.long,
+                photo_accuracy: matchedGeo.accuracy,
+                photo_captured_at: matchedGeo.captured_at,
+              }
+            : {}),
           engineer_employee_id: myId,
           engineer_name: actorName,
         },
         { onConflict: "ticket_id" },
       );
       if (error) {
+        // Best-effort: remove the just-uploaded file so a failed verify
+        // leaves no orphan (browser .remove() can't — storage DELETE on this
+        // bucket is admin-gated, so this must go through the server fn).
         try {
-          await supabase.storage.from("ticket-attachments").remove([uploadResult.path]);
+          const { deleteTicketAttachment } = await import(
+            "@/lib/public-ticket-uploads.functions"
+          );
+          await deleteTicketAttachment({ data: { ticket_id: id, path: uploadResult.path } });
         } catch (cleanupErr) {
           console.warn("Photo cleanup failed:", cleanupErr);
         }
@@ -755,8 +837,20 @@ function EngTicketDetail() {
         return;
       }
       if (oldPhotoPath && oldPhotoPath !== uploadResult.path) {
+        // Re-read first: a concurrent verify from another device may have
+        // already replaced the photo — never delete the winner's file.
         try {
-          await supabase.storage.from("ticket-attachments").remove([oldPhotoPath]);
+          const { data: current } = await supabase
+            .from("ticket_equipment_verifications")
+            .select("photo_path")
+            .eq("ticket_id", id)
+            .maybeSingle();
+          if ((current?.photo_path as string | null) === oldPhotoPath) {
+            const { deleteTicketAttachment } = await import(
+              "@/lib/public-ticket-uploads.functions"
+            );
+            await deleteTicketAttachment({ data: { ticket_id: id, path: oldPhotoPath } });
+          }
         } catch (cleanupErr) {
           console.warn("Old photo cleanup failed:", cleanupErr);
         }
@@ -782,7 +876,8 @@ function EngTicketDetail() {
       }
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast.error(msg);
-      setMatchedPhotoFile(null);
+      // Keep the picked file: a transient failure must not force re-picking.
+      // Cleared on success only.
     } finally {
       matchedRef.current = false;
       setVerdictBusy2(false);
@@ -819,13 +914,6 @@ function EngTicketDetail() {
       });
 
       const base64 = dataUrl.split(",")[1];
-      const ext =
-        (compressed.name.split(".").pop() || "jpg")
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "")
-          .slice(0, 5) || "jpg";
-      const safeName = `issue-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
-      const path = `ticket/${id}/${new Date().toISOString().slice(0, 10)}/${safeName}`;
 
       setPhotoProgress("Uploading…");
 
@@ -876,7 +964,14 @@ function EngTicketDetail() {
             <AlertTriangle className="h-10 w-10 mx-auto text-amber-700" />
             <p className="font-semibold text-base">Couldn't load this ticket</p>
             <p className="text-[13px] text-muted-foreground">{loadError}</p>
-            <Button className="min-h-11" onClick={() => window.location.reload()}>
+            <Button
+              className="min-h-11"
+              onClick={() => {
+                setLoadError(null);
+                setLoading(true);
+                setRetryCount((c) => c + 1);
+              }}
+            >
               Retry
             </Button>
           </CardContent>
@@ -885,6 +980,28 @@ function EngTicketDetail() {
     );
   if (!ticket)
     return <div className="text-center py-20 text-muted-foreground">Ticket not found.</div>;
+
+  if (identityPending) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        <Link
+          to="/eng/queue"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to Queue
+        </Link>
+        <Card>
+          <CardContent className="py-10 text-center space-y-3">
+            <Loader2 className="h-10 w-10 mx-auto animate-spin text-muted-foreground" />
+            <p className="font-semibold text-base">Verifying assignment…</p>
+            <p className="text-[13px] text-muted-foreground">
+              Checking this call is assigned to you.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isRestricted) {
     return (
@@ -1596,6 +1713,11 @@ function EngTicketDetail() {
       </Card>
 
       {/* Activity timeline via shared component (arrival/departure/signature icons + labels built in) */}
+      {activitiesError ? (
+        <p role="status" className="text-[13px] text-amber-700">
+          Activity feed couldn&apos;t load ({activitiesError}) — showing ticket details only.
+        </p>
+      ) : null}
       <TicketTimeline
         activities={activities.map((a) => ({
           id: a.id,
@@ -1604,6 +1726,7 @@ function EngTicketDetail() {
           message: a.notes,
           actor: a.actor,
         }))}
+        currentUserId={myAuthUid}
       />
     </div>
   );

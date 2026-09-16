@@ -68,8 +68,18 @@ function EngDashboard() {
   }
 
   if (isError || !stats) {
+    const rawMsg =
+      error instanceof Error && error.message ? error.message : null;
+    // Fail-loud identity signals from useMyQueue (ACCOUNT_NOT_LINKED /
+    // AMBIGUOUS_EMPLOYEE_MATCH), or a null employee row with no fetch error
+    // (useMyEmployee fail-soft): the login isn't linked to an employee —
+    // not a connection failure.
     const msg =
-      error instanceof Error && error.message ? error.message : "Check your connection and retry.";
+      rawMsg === "ACCOUNT_NOT_LINKED" ||
+      rawMsg === "AMBIGUOUS_EMPLOYEE_MATCH" ||
+      rawMsg === null
+        ? "Your account isn't linked to an employee record — contact admin to link your account, then retry."
+        : rawMsg;
     return (
       <div className="mx-auto max-w-2xl">
         <EmptyState
@@ -144,7 +154,7 @@ function EngDashboard() {
           hint="Parts in your custody"
         />
         <StatCard
-          to="/eng"
+          to="/eng/queue"
           label="Material pending"
           value={String(stats.materialPending.length)}
           icon={PackageX}
@@ -188,8 +198,8 @@ function EngDashboard() {
               for the serial.
             </p>
             <ul className="divide-y divide-border rounded-lg border border-border">
-              {stats.materialPending.map((p) => (
-                <li key={`${p.ticket_id}-${p.serial}`}>
+              {stats.materialPending.map((p, i) => (
+                <li key={`${p.ticket_id}-${p.serial}-${i}`}>
                   <Link
                     to="/eng/ticket/$id"
                     params={{ id: p.ticket_id }}

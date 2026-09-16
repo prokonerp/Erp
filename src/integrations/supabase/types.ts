@@ -5208,6 +5208,36 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_assignment_history: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          employee_id: string | null
+          id: string
+          notes: string | null
+          ticket_id: string
+          unassigned_at: string | null
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          employee_id?: string | null
+          id?: string
+          notes?: string | null
+          ticket_id: string
+          unassigned_at?: string | null
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          employee_id?: string | null
+          id?: string
+          notes?: string | null
+          ticket_id?: string
+          unassigned_at?: string | null
+        }
+        Relationships: []
+      }
       ticket_customer_verifications: {
         Row: {
           id: string
@@ -5316,6 +5346,42 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_visits: {
+        Row: {
+          arrival_at: string | null
+          created_at: string
+          departure_at: string | null
+          engineer_employee_id: string | null
+          engineer_name: string | null
+          engineer_phone: string | null
+          id: string
+          ticket_id: string
+          updated_at: string
+        }
+        Insert: {
+          arrival_at?: string | null
+          created_at?: string
+          departure_at?: string | null
+          engineer_employee_id?: string | null
+          engineer_name?: string | null
+          engineer_phone?: string | null
+          id?: string
+          ticket_id: string
+          updated_at?: string
+        }
+        Update: {
+          arrival_at?: string | null
+          created_at?: string
+          departure_at?: string | null
+          engineer_employee_id?: string | null
+          engineer_name?: string | null
+          engineer_phone?: string | null
+          id?: string
+          ticket_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       field_service_reports: {
         Row: {
           id: string
@@ -5350,6 +5416,7 @@ export type Database = {
           engineer_name: string | null
           engineer_phone: string | null
           submitted_at: string
+          submission_id: string | null
           created_at: string
           updated_at: string
         }
@@ -5386,6 +5453,7 @@ export type Database = {
           engineer_name?: string | null
           engineer_phone?: string | null
           submitted_at?: string
+          submission_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -5422,6 +5490,7 @@ export type Database = {
           engineer_name?: string | null
           engineer_phone?: string | null
           submitted_at?: string
+          submission_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -5466,6 +5535,7 @@ export type Database = {
           acknowledged_by: string | null
           amc_id: string | null
           assigned_at: string | null
+          assigned_employee_id: string | null
           assigned_engineer_name: string | null
           assigned_engineer_phone: string | null
           attachments: Json
@@ -5480,6 +5550,7 @@ export type Database = {
           customer_id: string | null
           customer_name: string
           customer_phone: string | null
+          dc_no: string | null
           defective_parts_details: Json
           defective_parts_received: boolean
           deleted_at: string | null
@@ -5487,6 +5558,7 @@ export type Database = {
           equipment_id: string | null
           good_parts_details: Json
           good_parts_used: boolean
+          grn_no: string | null
           id: string
           is_deleted: boolean
           location: string | null
@@ -5517,6 +5589,7 @@ export type Database = {
           acknowledged_by?: string | null
           amc_id?: string | null
           assigned_at?: string | null
+          assigned_employee_id?: string | null
           assigned_engineer_name?: string | null
           assigned_engineer_phone?: string | null
           attachments?: Json
@@ -5531,6 +5604,7 @@ export type Database = {
           customer_id?: string | null
           customer_name: string
           customer_phone?: string | null
+          dc_no?: string | null
           defective_parts_details?: Json
           defective_parts_received?: boolean
           deleted_at?: string | null
@@ -5538,6 +5612,7 @@ export type Database = {
           equipment_id?: string | null
           good_parts_details?: Json
           good_parts_used?: boolean
+          grn_no?: string | null
           id?: string
           is_deleted?: boolean
           location?: string | null
@@ -5568,6 +5643,7 @@ export type Database = {
           acknowledged_by?: string | null
           amc_id?: string | null
           assigned_at?: string | null
+          assigned_employee_id?: string | null
           assigned_engineer_name?: string | null
           assigned_engineer_phone?: string | null
           attachments?: Json
@@ -5582,6 +5658,7 @@ export type Database = {
           customer_id?: string | null
           customer_name?: string
           customer_phone?: string | null
+          dc_no?: string | null
           defective_parts_details?: Json
           defective_parts_received?: boolean
           deleted_at?: string | null
@@ -5589,6 +5666,7 @@ export type Database = {
           equipment_id?: string | null
           good_parts_details?: Json
           good_parts_used?: boolean
+          grn_no?: string | null
           id?: string
           is_deleted?: boolean
           location?: string | null

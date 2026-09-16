@@ -43,4 +43,20 @@ describe("resolveEngineerStatus", () => {
   it("returns false on error (fail-closed)", () => {
     expect(resolveEngineerStatus(null, false, false)).toBe(false);
   });
+
+  it("does not treat 'Admin Assistant' as an admin (exact admin match)", () => {
+    // Substring matching used to bounce non-admin "Admin Assistant" holders
+    // to the admin shell. Exact match only; employee fallback still applies.
+    expect(resolveEngineerStatus("Admin Assistant", true, true)).toBe(false);
+    expect(resolveEngineerStatus("Admin Assistant", false, true)).toBe(true);
+  });
+
+  it("keeps substring tolerance for unknown engineer-role variants", () => {
+    expect(resolveEngineerStatus("Service Engineer", true, false)).toBe(true);
+  });
+
+  it("matches canonical admin names exactly, case-insensitively", () => {
+    expect(resolveEngineerStatus("ADMINISTRATOR", true, false)).toBe(false);
+    expect(resolveEngineerStatus("Owner", true, false)).toBe(false);
+  });
 });

@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
+import { fetchMyIdentity } from "@/lib/engineer-identity";
+import { engKeys } from "@/lib/queryKeys";
 
 /**
  * Read-only hook: fetch tickets assigned to the current engineer.
  *
  * Resolution strategy (no writes):
- *  1. Resolve auth user → employee record (by email). Zero rows →
- *     ACCOUNT_NOT_LINKED. Multiple rows → AMBIGUOUS_EMPLOYEE_MATCH.
+ *  1. Central identity policy (fetchMyIdentity): auth_user_id exact link,
+ *     unique-email fallback, AMBIGUOUS_EMPLOYEE_MATCH on dupes.
  *     Both surface in the UI as "contact admin" (fail-loud, never silent).
  *  2. FK-first: match tickets.assigned_employee_id = employee.id
  *     (via .filter() so missing generated types can't break the build).
@@ -57,7 +59,7 @@ export function useMyCarriedPartsCount(enabled = false) {
   const email = session?.user?.email ?? null;
 
   return useQuery({
-    queryKey: ["eng", "carried-count", uid] as const,
+    queryKey: engKeys.carriedCount(uid),
     enabled: !!uid && !!email && enabled,
     staleTime: 30_000,
     refetchInterval: false,
@@ -91,50 +93,26 @@ export function useMyQueue() {
   const email = session?.user?.email ?? null;
 
   return useQuery({
-    queryKey: ["eng", "queue", uid] as const,
+    queryKey: engKeys.queue(uid),
     enabled: !!uid,
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     queryFn: async (): Promise<QueueTicket[]> => {
       if (!uid) return [];
-      if (!email) throw new Error("ACCOUNT_NOT_LINKED");
 
-      // Identity by auth_user_id first (exact); email fallback for legacy rows.
-      let empId: string | null = null;
-      let engineerName: string | null = null;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- auth_user_id pending generated types
-        const { data: byAuth, error: byAuthErr } = await (supabase as any)
-          .from("employees")
-          .select("id,name")
-          .eq("auth_user_id", uid)
-          .eq("active", true)
-          .maybeSingle();
-        if (byAuthErr) {
-          console.error("[useMyQueue]", byAuthErr.message);
-        } else if (byAuth) {
-          empId = byAuth.id as string;
-          engineerName = byAuth.name as string;
-        }
-      } catch (e) {
-        console.error("[useMyQueue]", (e as Error)?.message ?? e);
-      }
-      if (!empId || !engineerName) {
-        const { data: emps, error: empErr } = await supabase
-          .from("employees")
-          .select("id,name")
-          .eq("email", email)
-          .eq("active", true);
-        if (empErr) {
-          console.error("[useMyQueue]", empErr.message);
-          throw empErr;
-        }
-        if (!emps || emps.length === 0) throw new Error("ACCOUNT_NOT_LINKED");
-        if (emps.length > 1) throw new Error("AMBIGUOUS_EMPLOYEE_MATCH");
-        empId = emps[0].id as string;
-        engineerName = emps[0].name as string;
-      }
+      // Central identity policy (auth_user_id exact, unique-email fallback,
+      // fail-loud on ambiguity). Error mapping preserved: unlinked or
+      // unresolvable -> ACCOUNT_NOT_LINKED, dupes -> AMBIGUOUS_EMPLOYEE_MATCH.
+      const identity = await fetchMyIdentity(supabase, {
+        authUid: uid,
+        email,
+        columns: "id,name",
+      });
+      if (identity.status === "ambiguous") throw new Error("AMBIGUOUS_EMPLOYEE_MATCH");
+      if (identity.status !== "ok") throw new Error("ACCOUNT_NOT_LINKED");
+      const empId = identity.employee.id;
+      const engineerName = identity.employee.name as string | null;
 
       const baseSelect = QUEUE_COLS;
 
@@ -153,6 +131,10 @@ export function useMyQueue() {
         throw fkRes.error;
       }
       const fkTickets = (fkRes.data || []) as QueueTicket[];
+
+      // Nameless employee rows cannot use the name fallback (safe subset:
+      // FK matches only). Previously the null flowed into .eq() untyped.
+      if (!engineerName) return fkTickets;
 
       // Name fallback only when the name is unique across active employees.
       const { count: nameCount } = await supabase

@@ -4,6 +4,7 @@ import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { buildStagedPublicPath, isStagedPublicPath } from "@/lib/public-upload-guards";
 import { checkRateLimit } from "@/lib/public-rate-limit";
 import { clientIpKey } from "@/lib/server-client-ip";
+import { assertTicketAssignee } from "@/lib/engineer-identity";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -91,7 +92,7 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: ticket, error: ticketErr } = await supabaseAdmin
       .from("tickets")
-      .select("id")
+      .select("id, assigned_employee_id, assigned_engineer_name")
       .eq("id", data.ticket_id)
       .maybeSingle();
     if (ticketErr || !ticket) {
@@ -99,70 +100,17 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
     }
 
     // Ownership gate: only the assigned engineer (or admin) may upload.
-    const { data: isAdmin } = await supabaseAdmin.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "admin",
+    // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
+    const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
+    await assertTicketAssignee(supabaseAdmin, {
+      userId: context.userId,
+      emailHint: typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null,
+      ticket: ticket as unknown as {
+        assigned_employee_id: string | null;
+        assigned_engineer_name: string | null;
+      },
+      action: "upload attachments",
     });
-    if (!isAdmin) {
-      // Identity by auth_user_id first (exact); email fallback for legacy rows.
-      // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
-      const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
-      let callerEmail = typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null;
-      let caller: { id: string; name: string | null } | null = null;
-      const { data: empByAuth } = await supabaseAdmin
-        .from("employees")
-        .select("id, name")
-        .eq("auth_user_id", context.userId)
-        .eq("active", true)
-        .maybeSingle();
-      if (empByAuth) {
-        caller = empByAuth as { id: string; name: string | null };
-      } else {
-        if (!callerEmail) {
-          const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
-          callerEmail = authData?.user?.email ?? null;
-        }
-        if (!callerEmail) {
-          throw new Error("Could not resolve your account email. Contact admin.");
-        }
-        const { data: empByEmail } = await supabaseAdmin
-          .from("employees")
-          .select("id, name")
-          .eq("email", callerEmail)
-          .eq("active", true)
-          .maybeSingle();
-        if (!empByEmail) {
-          throw new Error("Employee account not linked. Contact admin.");
-        }
-        caller = empByEmail as { id: string; name: string | null };
-      }
-      if (!caller) {
-        throw new Error("Employee account not linked. Contact admin.");
-      }
-      const { data: ticketRow } = (await supabaseAdmin
-        .from("tickets")
-        .select("assigned_employee_id, assigned_engineer_name")
-        .eq("id", data.ticket_id)
-        .maybeSingle()) as unknown as {
-        data: {
-          assigned_employee_id: string | null;
-          assigned_engineer_name: string | null;
-        } | null;
-      };
-      if (!ticketRow?.assigned_employee_id && !ticketRow?.assigned_engineer_name) {
-        throw new Error("Ticket has no assigned engineer. Contact Services.");
-      }
-      const fkMatch = ticketRow.assigned_employee_id === caller.id;
-      const nameMatch =
-        ticketRow.assigned_engineer_name &&
-        caller.name &&
-        ticketRow.assigned_engineer_name.toLowerCase() === caller.name.toLowerCase();
-      if (!fkMatch && !nameMatch) {
-        throw new Error(
-          "You are not the assigned engineer for this ticket. Only the assigned engineer may upload attachments.",
-        );
-      }
-    }
 
     const { error } = await supabaseAdmin.storage
       .from("ticket-attachments")
@@ -261,5 +209,53 @@ export const deleteStagedPublicPhoto = createServerFn({ method: "POST" })
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.storage.from("ticket-attachments").remove([data.path]);
+    return { ok: true };
+  });
+
+// =====================================================================
+// deleteTicketAttachment — assigned-engineer cleanup for ticket photos.
+//
+// Browser-client `.remove()` calls fail for non-admin engineers (storage
+// DELETE on this bucket is admin-gated), so verification re-tries and
+// old-photo replacement used to orphan files silently. This fn deletes via
+// the service-role client after verifying (a) the path lives under THIS
+// ticket's folder and (b) the caller is an admin or the assigned engineer.
+// Best-effort callers must still catch: a failed cleanup warns, never fails
+// the parent flow.
+// =====================================================================
+
+const deleteTicketAttachmentSchema = z.object({
+  ticket_id: z.string().uuid(),
+  path: z.string().min(1).max(500),
+});
+
+export const deleteTicketAttachment = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
+  .inputValidator((input) => deleteTicketAttachmentSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    if (!data.path.startsWith(`ticket/${data.ticket_id}/`)) {
+      throw new Error("Invalid path");
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: ticket, error: ticketErr } = await supabaseAdmin
+      .from("tickets")
+      .select("id, assigned_employee_id, assigned_engineer_name")
+      .eq("id", data.ticket_id)
+      .maybeSingle();
+    if (ticketErr || !ticket) {
+      throw new Error("Ticket not found");
+    }
+    const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
+    await assertTicketAssignee(supabaseAdmin, {
+      userId: context.userId,
+      emailHint: typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null,
+      ticket: ticket as unknown as {
+        assigned_employee_id: string | null;
+        assigned_engineer_name: string | null;
+      },
+      action: "delete attachments",
+    });
+    const { error } = await supabaseAdmin.storage.from("ticket-attachments").remove([data.path]);
+    if (error) throw new Error(error.message);
     return { ok: true };
   });

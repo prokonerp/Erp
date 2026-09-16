@@ -8,6 +8,7 @@ import { useIsEngineer } from "@/lib/useIsEngineer";
 import { useMyQueue } from "@/hooks/useMyQueue";
 import { useMyEmployee } from "@/hooks/useMyEmployee";
 import { supabase } from "@/integrations/supabase/client";
+import { engKeys } from "@/lib/queryKeys";
 import { recordLogout } from "@/lib/useActivityTracker";
 import { compressImageToLimit } from "@/lib/image-compress";
 import { asEmployeeDocuments } from "@/lib/engineer-conveyance";
@@ -42,9 +43,11 @@ export const Route = createFileRoute("/eng/profile")({
 function UploadViewer({
   path,
   render,
+  cache,
 }: {
   path: string | null | undefined;
   render: (url: string | null, loading: boolean) => React.ReactNode;
+  cache?: { current: Map<string, string> };
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -54,13 +57,20 @@ function UploadViewer({
       setUrl(null);
       return;
     }
+    const cached = cache?.current.get(path);
+    if (cached) {
+      setUrl(cached);
+      return;
+    }
     setLoading(true);
     supabase.storage
       .from("engineer-uploads")
       .createSignedUrl(path, 3600)
       .then(({ data, error }) => {
         if (cancelled) return;
-        setUrl(error ? null : (data?.signedUrl ?? null));
+        const signedUrl = error ? null : (data?.signedUrl ?? null);
+        if (signedUrl) cache?.current.set(path, signedUrl);
+        setUrl(signedUrl);
         setLoading(false);
       })
       .catch(() => {
@@ -79,7 +89,7 @@ function UploadViewer({
 function EngProfile() {
   const { session } = useAuth();
   const uid = session?.user?.id ?? null;
-  const { isEngineer, loading: roleLoading } = useIsEngineer();
+  const { loading: roleLoading } = useIsEngineer();
   const { employee, initials, isLoading: employeeLoading, error: employeeError } = useMyEmployee();
   const { data: tickets = [], isLoading: queueLoading, isError: queueError } = useMyQueue();
   const navigate = useNavigate();
@@ -91,6 +101,9 @@ function EngProfile() {
   const [docFile, setDocFile] = useState<File | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+  const photoBusyRef = useRef(false);
+  const docBusyRef = useRef(false);
+  const signedUrlCacheRef = useRef(new Map<string, string>());
   const callUpload = useServerFn(uploadEngineerAttachment);
   const callSaveProfile = useServerFn(saveMyProfile);
   const callDeleteUpload = useServerFn(deleteEngineerAttachment);
@@ -147,19 +160,22 @@ function EngProfile() {
   }
 
   async function refreshEmployee() {
-    await queryClient.invalidateQueries({ queryKey: ["eng", "employee", uid] });
+    await queryClient.invalidateQueries({ queryKey: engKeys.employee(uid) });
   }
 
   async function handlePhotoPick(file: File | null) {
     if (!file) return;
+    if (photoBusy || photoBusyRef.current) return;
+    photoBusyRef.current = true;
     if (!navigator.onLine) {
       toast.error("No internet connection. Reconnect and retry.");
+      photoBusyRef.current = false;
       return;
     }
+    const oldPath = employee?.photo_path ?? null;
     setPhotoBusy(true);
     try {
       const path = await uploadImage(file, "profile_photo");
-      const oldPath = employee?.photo_path ?? null;
       await callSaveProfile({ data: { photo_path: path } });
       if (oldPath && oldPath !== path) {
         try {
@@ -175,24 +191,31 @@ function EngProfile() {
       toast.error(err instanceof Error ? err.message : "Photo upload failed");
     } finally {
       setPhotoBusy(false);
+      photoBusyRef.current = false;
     }
   }
 
   async function handleDocAdd() {
+    if (docBusy || docBusyRef.current) return;
+    docBusyRef.current = true;
     if (docName.trim() === "") {
       toast.error("Enter a document name (e.g. Aadhaar)");
+      docBusyRef.current = false;
       return;
     }
     if (!docFile) {
       toast.error("Choose the document photo");
+      docBusyRef.current = false;
       return;
     }
     if (documents.length >= 10) {
       toast.error("Maximum 10 documents");
+      docBusyRef.current = false;
       return;
     }
     if (!navigator.onLine) {
       toast.error("No internet connection. Reconnect and retry.");
+      docBusyRef.current = false;
       return;
     }
     setDocBusy(true);
@@ -219,10 +242,14 @@ function EngProfile() {
       toast.error(err instanceof Error ? err.message : "Document upload failed");
     } finally {
       setDocBusy(false);
+      docBusyRef.current = false;
     }
   }
 
   async function handleDocRemove(docPath: string) {
+    if (docBusy || docBusyRef.current) return;
+    docBusyRef.current = true;
+    setDocBusy(true);
     try {
       await callSaveProfile({
         data: { documents: documents.filter((d) => d.path !== docPath) },
@@ -236,6 +263,9 @@ function EngProfile() {
       await refreshEmployee();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Remove failed");
+    } finally {
+      setDocBusy(false);
+      docBusyRef.current = false;
     }
   }
 
@@ -245,6 +275,7 @@ function EngProfile() {
         <CardContent className="p-4 flex items-center gap-3">
           <UploadViewer
             path={employee?.photo_path}
+            cache={signedUrlCacheRef}
             render={(url, loading) =>
               url ? (
                 <img
@@ -266,9 +297,7 @@ function EngProfile() {
           />
           <div className="min-w-0 flex-1 space-y-1">
             <p className="text-[18px] font-semibold truncate">{displayName}</p>
-            <p className="text-[13px] text-muted-foreground">
-              {isEngineer ? "Field Engineer" : "No engineer role — contact admin"}
-            </p>
+            <p className="text-[13px] text-muted-foreground">Field Engineer</p>
             <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground truncate">
               <Mail className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span className="truncate">{email}</span>
@@ -357,6 +386,7 @@ function EngProfile() {
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{d.name}</span>
                   <UploadViewer
                     path={d.path}
+                    cache={signedUrlCacheRef}
                     render={(url) =>
                       url ? (
                         <a
@@ -378,6 +408,7 @@ function EngProfile() {
                     size="sm"
                     className="min-h-[44px] min-w-[44px] shrink-0"
                     aria-label={`Remove ${d.name}`}
+                    disabled={docBusy}
                     onClick={() => handleDocRemove(d.path)}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden />

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { assertTicketAssignee } from "@/lib/engineer-identity";
 
 const finalizeInput = z.object({
   ticketId: z.string().uuid(),
@@ -35,75 +36,19 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
     if (ticketErr) throw new Error(ticketErr.message);
     if (!ticket) throw new Error(`NotFound: ticket ${data.ticketId} not found`);
 
-    // Gate: admin via has_role OR the engineer assigned to this ticket.
-    const { data: isAdmin, error: roleErr } = await supabaseAdmin.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "admin",
-    });
-    if (roleErr) throw new Error(roleErr.message);
-    if (!isAdmin) {
-      // Identity by auth_user_id first (exact); email fallback for legacy rows.
-      // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
-      const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
-      let callerEmail = typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null;
-      let caller: { id: string; name: string | null } | null = null;
-      const { data: empByAuth } = await supabaseAdmin
-        .from("employees")
-        .select("id, name")
-        .eq("auth_user_id", context.userId)
-        .eq("active", true)
-        .maybeSingle();
-      if (empByAuth) {
-        caller = empByAuth as { id: string; name: string | null };
-      } else {
-        if (!callerEmail) {
-          const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
-          callerEmail = authData?.user?.email ?? null;
-        }
-        if (!callerEmail) throw new Error("Forbidden: could not resolve your account email");
-        const { data: empByEmail } = await supabaseAdmin
-          .from("employees")
-          .select("id, name")
-          .eq("email", callerEmail)
-          .eq("active", true)
-          .maybeSingle();
-        if (!empByEmail) {
-          throw new Error("Forbidden: only an admin or the assigned engineer may finalize");
-        }
-        caller = empByEmail as { id: string; name: string | null };
-      }
-      const row = ticket as unknown as {
+    // Gate: admin OR the engineer assigned to this ticket (shared gate:
+    // FK match, else unique-name match; fail-loud on ambiguity).
+    // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
+    const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
+    await assertTicketAssignee(supabaseAdmin, {
+      userId: context.userId,
+      emailHint: typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null,
+      ticket: ticket as unknown as {
         assigned_employee_id: string | null;
         assigned_engineer_name: string | null;
-      };
-      const fkMatch =
-        !!caller && !!row.assigned_employee_id && row.assigned_employee_id === caller.id;
-      let nameMatch = false;
-      if (!fkMatch) {
-        const callerName = ((caller as { name?: string | null } | null)?.name ?? "").trim();
-        if (
-          !!caller &&
-          !!row.assigned_engineer_name &&
-          callerName !== "" &&
-          row.assigned_engineer_name.trim().toLowerCase() === callerName.toLowerCase()
-        ) {
-          const { data: sameNamed, error: sameNamedErr } = await supabaseAdmin
-            .from("employees")
-            .select("id, name")
-            .eq("active", true);
-          if (sameNamedErr) throw new Error(sameNamedErr.message);
-          const dupes = (sameNamed ?? []).filter(
-            (r) =>
-              ((r as unknown as { name?: string | null }).name ?? "").trim().toLowerCase() ===
-              callerName.toLowerCase(),
-          );
-          nameMatch = dupes.length === 1;
-        }
-      }
-      if (!fkMatch && !nameMatch) {
-        throw new Error("Forbidden: only an admin or the assigned engineer may finalize");
-      }
-    }
+      },
+      action: "finalize",
+    });
 
     const now = new Date().toISOString();
     let departed = false;
@@ -158,9 +103,11 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
     const status = (ticket as unknown as { status: string }).status;
     if (!(TERMINAL_STATUSES as readonly string[]).includes(status)) {
       const readUpdatedAt = (ticket as unknown as { updated_at: string }).updated_at;
+      // Auto-close stamps closed_at: print lifecycle, closed_at filters, and
+      // SLA math all key off it (previously only status flipped).
       const { data: updRows, error: updErr } = await supabaseAdmin
         .from("tickets")
-        .update({ status: "Closed" } as never)
+        .update({ status: "Closed", closed_at: new Date().toISOString() } as never)
         .eq("id", data.ticketId)
         .eq("updated_at", readUpdatedAt)
         .select("id");

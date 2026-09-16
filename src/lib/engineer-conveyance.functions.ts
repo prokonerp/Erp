@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { fetchMyIdentityAdmin } from "@/lib/engineer-identity";
 import {
   CHARGE_TYPES,
   asEmployeeDocuments,
@@ -42,32 +43,20 @@ function claimsEmail(context: unknown): string | null {
 
 /** Resolve the caller to their active employee row. Throws fail-loud errors. */
 async function resolveCaller(admin: AdminClient, userId: string, emailHint: string | null) {
-  // Exact link first — never ambiguous, no email needed.
-  const { data: byAuth, error: authErr } = await admin
-    .from("employees")
-    .select("id, name, auth_user_id")
-    .eq("auth_user_id", userId)
-    .eq("active", true)
-    .maybeSingle();
-  if (authErr) throw new Error(authErr.message);
-  if (byAuth) return byAuth as { id: string; name: string | null; auth_user_id: string | null };
-  // Legacy fallback: email link (rows predating auth_user_id backfill).
-  let callerEmail = emailHint;
-  if (!callerEmail) {
-    // Fallback: slow admin lookup (only when the JWT carries no email claim).
-    const { data: authData } = await admin.auth.admin.getUserById(userId);
-    callerEmail = authData?.user?.email ?? null;
+  // Central identity policy (auth_user_id exact, unique-email fallback,
+  // fail-loud on ambiguity).
+  const identity = await fetchMyIdentityAdmin(admin, {
+    userId,
+    emailHint,
+    columns: "id, name, auth_user_id",
+  });
+  if (identity.status === "ambiguous") {
+    throw new Error("Forbidden: multiple employee rows match your login. Contact admin.");
   }
-  if (!callerEmail) throw new Error("Forbidden: could not resolve your account email");
-  const { data: caller, error } = await admin
-    .from("employees")
-    .select("id, name, auth_user_id")
-    .eq("email", callerEmail)
-    .eq("active", true)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!caller) throw new Error("Forbidden: your login is not linked to an active employee");
-  return caller as { id: string; name: string | null; auth_user_id: string | null };
+  if (identity.status !== "ok") {
+    throw new Error("Forbidden: your login is not linked to an active employee");
+  }
+  return identity.employee as { id: string; name: string | null; auth_user_id: string | null };
 }
 
 // ---------------------------------------------------------------------------

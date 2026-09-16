@@ -19,7 +19,7 @@ export const Route = createFileRoute("/eng/queue")({
 });
 
 function EngQueue() {
-  const { data: tickets = [], isLoading, isError, error, refetch } = useMyQueue();
+  const { data: tickets = [], isLoading, isFetching, isError, error, refetch } = useMyQueue();
   const [search, setSearch] = useState("");
 
   const errMsg = error instanceof Error ? error.message : "";
@@ -84,15 +84,20 @@ function EngQueue() {
     );
   }
 
-  const sectionItems = sections.map((section) => ({
-    label: section.label,
-    items: sortTickets(filtered.filter(section.filter)),
-  }));
-  const coveredIds = new Set(sectionItems.flatMap((s) => s.items.map((t) => t.id)));
-  const otherItems = sortTickets(filtered.filter((t) => !coveredIds.has(t.id)));
-  const visibleSections = [...sectionItems, { label: "Other assigned", items: otherItems }].filter(
-    (s) => s.items.length > 0,
-  );
+  // Sections are mutually exclusive by construction except Today ∩ Waiting
+  // for Parts (a today ticket awaiting parts). Dedup sequentially in display
+  // order so each ticket renders exactly once (Today wins).
+  const seen = new Set<string>();
+  const sectionItems = sections.map((section) => {
+    const items = sortTickets(filtered.filter((t) => !seen.has(t.id) && section.filter(t)));
+    items.forEach((t) => seen.add(t.id));
+    return { label: section.label, items };
+  });
+  // "Carry Forward" (not-today AND status != "Waiting for Parts") already
+  // catches every non-today non-WFP ticket, and the queue query excludes
+  // Closed/Cancelled, so no "Other assigned" bucket can ever be non-empty.
+  // Date-null edge cases land in Carry Forward: isToday(null) is false.
+  const visibleSections = sectionItems.filter((s) => s.items.length > 0);
 
   return (
     <div className="space-y-5 max-w-2xl mx-auto">
@@ -110,10 +115,14 @@ function EngQueue() {
           <button
             type="button"
             onClick={() => refetch()}
-            aria-label="Refresh queue"
-            className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted/50"
+            disabled={isFetching}
+            aria-label={isFetching ? "Refreshing queue" : "Refresh queue"}
+            className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            <RefreshCw
+              className={`h-4 w-4${isFetching ? " animate-spin" : ""}`}
+              aria-hidden="true"
+            />
             <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
@@ -161,7 +170,7 @@ function EngQueue() {
                   status: t.status,
                   priority: t.priority,
                   customer: t.customer_name,
-                  site: t.location ?? t.product,
+                  site: t.location ?? "—",
                   createdAt: t.created_at,
                   assignedAt: t.assigned_at,
                   age: formatAge(t.created_at),

@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { engKeys } from "@/lib/queryKeys";
 import { useMyEmployee } from "@/hooks/useMyEmployee";
 import { useMyQueue } from "@/hooks/useMyQueue";
 import {
   assembleDashboardStats,
-  todayLocal,
   type DashboardPendingMaterial,
   type DashboardStats,
 } from "@/lib/engineer-conveyance";
+import { istDateKey } from "@/lib/time";
 
 /**
  * Engineer dashboard data without any server-function hop (no serverless
@@ -53,10 +54,10 @@ export function useEngineerDashboard() {
   const { employee } = useMyEmployee();
   const employeeId = employee?.id ?? null;
   const queue = useMyQueue();
-  const today = todayLocal();
+  const today = istDateKey();
 
   const rest = useQuery({
-    queryKey: ["eng", "dashboard-direct", employeeId, today] as const,
+    queryKey: engKeys.dashboard(employeeId, today),
     enabled: !!employeeId,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
@@ -65,10 +66,16 @@ export function useEngineerDashboard() {
       const [completedVisits, dayLog, material] = await Promise.all([
         (async () => {
           try {
+            // IST day window: submitted_at is a timestamptz, so bound it
+            // between IST midnight and the next IST midnight.
+            const dayStart = new Date(`${today}T00:00:00+05:30`);
+            const dayEnd = new Date(dayStart.getTime() + 86_400_000);
             const { count, error } = await supabase
               .from("field_service_reports")
               .select("id", { count: "exact", head: true })
-              .eq("engineer_employee_id", employeeId!);
+              .eq("engineer_employee_id", employeeId!)
+              .gte("submitted_at", dayStart.toISOString())
+              .lt("submitted_at", dayEnd.toISOString());
             if (error) throw error;
             return count ?? 0;
           } catch (e) {

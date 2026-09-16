@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { compressImageToLimit } from "@/lib/image-compress";
+import { supabase } from "@/integrations/supabase/client";
 
+// Points are stored NORMALIZED (0..1 of the pad box) so a resize/rotation
+// between strokes (or before save) rescales the signature instead of
+// skewing it — the old code stored CSS pixels of whatever box was live.
 type Point = { x: number; y: number };
 type Stroke = Point[];
 
@@ -43,11 +47,37 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
   const strokesRef = useRef<Stroke[]>([]);
   const redoRef = useRef<Stroke[]>([]);
   const drawingRef = useRef(false);
+  // Ref-based save lock: `busy` state commits on re-render, so a same-tick
+  // double-tap would upload the signature twice (orphaning the first file).
+  const saveRef = useRef(false);
   const [strokeCount, setStrokeCount] = useState(0);
   const [redoCount, setRedoCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  // Show the already-saved signature as an image (not a raw storage path).
+  // Reads go through a signed URL; engineers hold read access on this bucket.
+  useEffect(() => {
+    let active = true;
+    setSignedUrl(null);
+    if (!value || preview) return;
+    (async () => {
+      try {
+        const { data, error: signErr } = await supabase.storage
+          .from("ticket-attachments")
+          .createSignedUrl(value, 3600);
+        if (!active || signErr || !data?.signedUrl) return;
+        setSignedUrl(data.signedUrl);
+      } catch {
+        // Offline/sign failure: badge-only ("Saved"), no raw path text.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [value, preview]);
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -55,10 +85,12 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
     ctx.save();
     ctx.scale(dpr, dpr);
     ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = INK;
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
@@ -67,14 +99,14 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
       if (stroke.length === 1) {
         const p = stroke[0];
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 1.25, 0, Math.PI * 2);
+        ctx.arc(p.x * w, p.y * h, 1.25, 0, Math.PI * 2);
         ctx.fillStyle = INK;
         ctx.fill();
         continue;
       }
       ctx.beginPath();
-      ctx.moveTo(stroke[0].x, stroke[0].y);
-      for (let i = 1; i < stroke.length; i++) ctx.lineTo(stroke[i].x, stroke[i].y);
+      ctx.moveTo(stroke[0].x * w, stroke[0].y * h);
+      for (let i = 1; i < stroke.length; i++) ctx.lineTo(stroke[i].x * w, stroke[i].y * h);
       ctx.stroke();
     }
     ctx.restore();
@@ -102,7 +134,11 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
   const posFromEvent = (e: React.PointerEvent<HTMLCanvasElement>): Point => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    // Normalized 0..1 (guard against zero-size rects on hidden pads).
+    return {
+      x: rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0,
+      y: rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0,
+    };
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -160,7 +196,7 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
 
   const handleSave = async () => {
     const canvas = canvasRef.current;
-    if (!canvas || busy) return;
+    if (!canvas || busy || saveRef.current) return;
     if (strokesRef.current.length === 0) {
       setError("Please ask the customer to sign before saving.");
       return;
@@ -169,6 +205,7 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
       setError("No internet connection. Reconnect and retry — nothing was uploaded.");
       return;
     }
+    saveRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -205,6 +242,7 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Signature upload failed. Try again.");
     } finally {
+      saveRef.current = false;
       setBusy(false);
     }
   };
@@ -243,7 +281,7 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
         Sign inside the box with finger or mouse.
       </p>
 
-      {preview || value ? (
+      {preview || signedUrl ? (
         <div className="mt-3 flex items-center gap-3">
           {preview ? (
             <img
@@ -252,10 +290,12 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
               className="h-12 w-32 rounded-md border border-border bg-white object-contain"
             />
           ) : null}
-          {value && !preview ? (
-            <p className="truncate text-xs text-muted-foreground" title={value}>
-              Saved: {value}
-            </p>
+          {!preview && signedUrl ? (
+            <img
+              src={signedUrl}
+              alt="Saved customer signature"
+              className="h-12 w-32 rounded-md border border-border bg-white object-contain"
+            />
           ) : null}
         </div>
       ) : null}

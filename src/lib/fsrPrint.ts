@@ -2,6 +2,7 @@
 // No supabase, no DOM, no sessionStorage. All functions are total over
 // sparse DB rows: nulls/empties degrade to dashes, never throw.
 import { r2 } from "./money";
+import { formatISTDate, formatISTTime } from "./time";
 
 export type YesNo = "Yes" | "No" | "—";
 export type FeedbackStatus = "Complete" | "Incomplete" | "Under Observation";
@@ -312,13 +313,8 @@ function firstPresent(...vals: (string | null | undefined)[]): string {
 
 function splitDateTime(iso: string | null | undefined): { date: string; time: string } {
   if (!iso) return { date: "—", time: "—" };
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return { date: "—", time: "—" };
-  const pad = (n: number): string => String(n).padStart(2, "0");
-  return {
-    date: `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`,
-    time: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`,
-  };
+  // Printed times render in IST (same wall-clock the engineer saw on screen).
+  return { date: formatISTDate(iso), time: formatISTTime(iso) };
 }
 
 /** Build the full print model. Pure; never throws on sparse input. */

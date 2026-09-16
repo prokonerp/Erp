@@ -5,14 +5,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useMyEmployee } from "@/hooks/useMyEmployee";
 import { supabase } from "@/integrations/supabase/client";
+import { engKeys } from "@/lib/queryKeys";
 import { compressImageToLimit } from "@/lib/image-compress";
 import { CHARGE_TYPES, kmTravelled, todayLocal, type ChargeType } from "@/lib/engineer-conveyance";
 import {
   deleteConveyanceExpense,
+  deleteEngineerAttachment,
   saveConveyanceExpense,
   saveEngineerDailyLog,
   uploadEngineerAttachment,
 } from "@/lib/engineer-conveyance.functions";
+import { formatINR } from "@/lib/fsrPrint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +81,49 @@ async function fileToBase64(blob: Blob): Promise<string> {
   return base64;
 }
 
+/** Classify a conveyance-log load failure so the banner never blames the
+ *  migration for RLS denials or network faults. Only missing-table errors
+ *  keep the migration message. */
+function logLoadMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  const m = msg.toLowerCase();
+  const isMissingTable =
+    m.includes("42p01") ||
+    m.includes("undefined_table") ||
+    (m.includes("does not exist") && (m.includes("relation") || m.includes("table"))) ||
+    m.includes("could not find the table") ||
+    m.includes("schema cache");
+  if (isMissingTable) {
+    return "Conveyance storage isn't set up yet — ask your admin to run the latest migration, then retry.";
+  }
+  const isDenied =
+    m.includes("42501") ||
+    m.includes("insufficient_privilege") ||
+    m.includes("permission denied") ||
+    m.includes("not authorized") ||
+    m.includes("unauthorized") ||
+    m.includes("row-level security") ||
+    m.includes("violates row-level") ||
+    m.includes("forbidden") ||
+    m.includes("jwt");
+  if (isDenied) {
+    return "Access denied loading conveyance — ask your admin to check your permissions, then retry.";
+  }
+  const isNetwork =
+    err instanceof TypeError ||
+    m.includes("failed to fetch") ||
+    m.includes("fetch failed") ||
+    m.includes("networkerror") ||
+    m.includes("network error") ||
+    m.includes("network request failed") ||
+    m.includes("load failed") ||
+    m.includes("offline") ||
+    m.includes("timeout") ||
+    m.includes("aborted");
+  if (isNetwork) return "Couldn't load conveyance — check your connection and retry.";
+  return msg !== "" ? msg : "Couldn't load conveyance — retry.";
+}
+
 function PhotoPicker({
   label,
   file,
@@ -125,16 +171,18 @@ function EngConveyance() {
 
   const callUpload = useServerFn(uploadEngineerAttachment);
   const callSaveLog = useServerFn(saveEngineerDailyLog);
+  const callDeleteUpload = useServerFn(deleteEngineerAttachment);
   const callSaveExpense = useServerFn(saveConveyanceExpense);
   const callDeleteExpense = useServerFn(deleteConveyanceExpense);
 
-  const logKey = ["eng", "conveyance-log", employeeId, date] as const;
-  const expKey = ["eng", "conveyance-expenses", employeeId, date] as const;
+  const logKey = engKeys.conveyanceLog(employeeId, date);
+  const expKey = engKeys.conveyanceExpenses(employeeId, date);
 
   const {
     data: log,
     isLoading: logLoading,
     isError: logError,
+    error: logQueryError,
   } = useQuery({
     queryKey: logKey,
     enabled: !!employeeId,
@@ -170,6 +218,10 @@ function EngConveyance() {
   // Form state mirrors the loaded log so re-saves keep prior values.
   const [morningOdo, setMorningOdo] = useState("");
   const [eveningOdo, setEveningOdo] = useState("");
+  const [odoErrors, setOdoErrors] = useState<{ morning?: string; evening?: string }>({});
+  // Dirty once the engineer types/picks, so background refetches can't
+  // clobber mid-edit input. Cleared on successful save and day change.
+  const [formDirty, setFormDirty] = useState(false);
   const [morningFile, setMorningFile] = useState<File | null>(null);
   const [eveningFile, setEveningFile] = useState<File | null>(null);
   const [saving, setSaving] = useState<"morning" | "evening" | null>(null);
@@ -178,12 +230,28 @@ function EngConveyance() {
   // duplicate expense rows). Refs flip synchronously — second call bails.
   const savingRef = useRef<"morning" | "evening" | null>(null);
 
+  const mirroredDateRef = useRef(date);
   useEffect(() => {
+    // Skip mirroring on background refetches while the engineer is editing;
+    // only fresh server values on an untouched form (or a new day) win.
+    if (formDirty && mirroredDateRef.current === date) return;
     setMorningOdo(log?.morning_odometer != null ? String(log.morning_odometer) : "");
     setEveningOdo(log?.evening_odometer != null ? String(log.evening_odometer) : "");
     setMorningFile(null);
     setEveningFile(null);
-  }, [log?.morning_odometer, log?.evening_odometer, date]);
+    mirroredDateRef.current = date;
+    setFormDirty(false);
+    setOdoErrors({});
+  }, [log?.morning_odometer, log?.evening_odometer, date, formDirty]);
+
+  function clearOdoError(which: "morning" | "evening") {
+    setOdoErrors((prev) => {
+      if (prev[which] == null) return prev;
+      const next = { ...prev };
+      delete next[which];
+      return next;
+    });
+  }
 
   // Expense form state.
   const [chargeType, setChargeType] = useState<ChargeType | "">("");
@@ -233,33 +301,86 @@ function EngConveyance() {
       );
       return;
     }
+    // Client-side odometer check (same rules as the zod schema) before any
+    // upload, so rejects surface inline without orphaning a photo.
+    const label = which === "morning" ? "Morning" : "Evening";
+    const fail = (message: string) => {
+      setOdoErrors((prev) => ({ ...prev, [which]: message }));
+      toast.error(message);
+    };
+    const text = odoText.trim();
+    if (text !== "") {
+      const n = Number(text);
+      if (!Number.isFinite(n)) {
+        fail(`${label} reading must be a number`);
+        return;
+      }
+      if (n < 0) {
+        fail(`${label} reading cannot be negative`);
+        return;
+      }
+    }
+    const otherText = (which === "morning" ? eveningOdo : morningOdo).trim();
+    const mText = which === "morning" ? text : otherText;
+    const eText = which === "evening" ? text : otherText;
+    const mNum = mText !== "" ? Number(mText) : (log?.morning_odometer ?? null);
+    const eNum = eText !== "" ? Number(eText) : (log?.evening_odometer ?? null);
+    if (
+      typeof mNum === "number" &&
+      typeof eNum === "number" &&
+      Number.isFinite(mNum) &&
+      Number.isFinite(eNum) &&
+      eNum < mNum
+    ) {
+      fail("Evening reading cannot be less than the morning reading");
+      return;
+    }
+    clearOdoError(which);
     setSaving(which);
     savingRef.current = which;
     try {
       let photoPath: string | null = existingPhoto ?? null;
-      if (file) photoPath = await uploadPhoto(file, `${which}_reading`);
-      await callSaveLog({
-        data: {
-          log_date: date,
-          ...(which === "morning"
-            ? {
-                morning_odometer: odoText.trim() === "" ? undefined : odoText.trim(),
-                morning_photo_path: photoPath,
-              }
-            : {
-                evening_odometer: odoText.trim() === "" ? undefined : odoText.trim(),
-                evening_photo_path: photoPath,
-              }),
-        },
-      });
+      let uploadedPath: string | null = null;
+      if (file) {
+        photoPath = await uploadPhoto(file, `${which}_reading`);
+        uploadedPath = photoPath;
+      }
+      try {
+        await callSaveLog({
+          data: {
+            log_date: date,
+            ...(which === "morning"
+              ? {
+                  morning_odometer: odoText.trim() === "" ? undefined : odoText.trim(),
+                  morning_photo_path: photoPath,
+                }
+              : {
+                  evening_odometer: odoText.trim() === "" ? undefined : odoText.trim(),
+                  evening_photo_path: photoPath,
+                }),
+          },
+        });
+      } catch (saveErr) {
+        // Best-effort orphan cleanup (mirrors the ticket-verification
+        // delete-on-failure): never mask the original save error.
+        if (uploadedPath) {
+          try {
+            await callDeleteUpload({ data: { path: uploadedPath } });
+          } catch (cleanupErr) {
+            console.warn("Conveyance photo cleanup failed:", cleanupErr);
+          }
+        }
+        throw saveErr;
+      }
       toast.success(`${which === "morning" ? "Morning" : "Evening"} entry saved`);
+      setFormDirty(false);
       if (file) {
         if (which === "morning") setMorningFile(null);
         else setEveningFile(null);
       }
       await queryClient.invalidateQueries({ queryKey: logKey });
       // Dashboard shows today's km — refresh its direct-query cache too.
-      await queryClient.invalidateQueries({ queryKey: ["eng", "dashboard-direct"] });
+      await queryClient.invalidateQueries({ queryKey: engKeys.dashboardPrefix });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -378,8 +499,7 @@ function EngConveyance() {
       {logError ? (
         <Card className="rounded-xl border-amber-700/30">
           <CardContent className="p-4 text-sm text-amber-700">
-            Conveyance storage isn't set up yet — ask your admin to run the latest migration, then
-            retry.
+            {logLoadMessage(logQueryError)}
           </CardContent>
         </Card>
       ) : null}
@@ -408,16 +528,27 @@ function EngConveyance() {
                     type="text"
                     inputMode="decimal"
                     value={morningOdo}
-                    onChange={(e) => setMorningOdo(e.target.value)}
+                    onChange={(e) => {
+                      setMorningOdo(e.target.value);
+                      setFormDirty(true);
+                      clearOdoError("morning");
+                    }}
                     placeholder="e.g. 12540.5"
                     className="mt-1 h-11 min-h-[44px]"
                     aria-label="Morning odometer reading"
+                    aria-invalid={odoErrors.morning ? true : undefined}
                   />
+                  {odoErrors.morning ? (
+                    <p className="text-xs text-destructive">{odoErrors.morning}</p>
+                  ) : null}
                 </div>
                 <PhotoPicker
                   label="Morning photo"
                   file={morningFile}
-                  onPick={setMorningFile}
+                  onPick={(f) => {
+                    setMorningFile(f);
+                    setFormDirty(true);
+                  }}
                   disabled={saving !== null}
                 />
                 <Button
@@ -449,16 +580,27 @@ function EngConveyance() {
                     type="text"
                     inputMode="decimal"
                     value={eveningOdo}
-                    onChange={(e) => setEveningOdo(e.target.value)}
+                    onChange={(e) => {
+                      setEveningOdo(e.target.value);
+                      setFormDirty(true);
+                      clearOdoError("evening");
+                    }}
                     placeholder="e.g. 12615"
                     className="mt-1 h-11 min-h-[44px]"
                     aria-label="Evening odometer reading"
+                    aria-invalid={odoErrors.evening ? true : undefined}
                   />
+                  {odoErrors.evening ? (
+                    <p className="text-xs text-destructive">{odoErrors.evening}</p>
+                  ) : null}
                 </div>
                 <PhotoPicker
                   label="Evening photo"
                   file={eveningFile}
-                  onPick={setEveningFile}
+                  onPick={(f) => {
+                    setEveningFile(f);
+                    setFormDirty(true);
+                  }}
                   disabled={saving !== null}
                 />
                 <Button
@@ -590,7 +732,7 @@ function EngConveyance() {
                     ))}
                   </ul>
                   <p className="text-right text-sm font-semibold tabular-nums">
-                    Day total: ₹{dayTotal}
+                    Day total: {formatINR(dayTotal)}
                   </p>
                 </>
               )}

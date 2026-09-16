@@ -2,6 +2,7 @@
  * Pure helpers for the engineer queue.
  * Extracted for testability — no React, no Supabase, no side effects.
  */
+import { APP_TIME_ZONE } from "@/lib/time";
 
 /** Priority sort weight: P1 → 1 … P5 → 5, unknown → 99 (bottom). */
 export function priorityWeight(p: string | null | undefined): number {
@@ -13,7 +14,7 @@ export function priorityWeight(p: string | null | undefined): number {
 export function isToday(iso: string | null | undefined, assignedAt?: string | null): boolean {
   if (!iso) return false;
   const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
+    timeZone: APP_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

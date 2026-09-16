@@ -47,6 +47,25 @@ export const txnKeys = createKeyFactory(["ims_transactions"] as const);
 export const soKeys = createKeyFactory(["sales_orders"] as const);
 export const proformaKeys = createKeyFactory(["proforma_invoices"] as const);
 export const conversionKeys = createKeyFactory(["so_conversions"] as const);
+// Engineer portal keys. The portal historically used ad-hoc ["eng", …]
+// literals, which split cache invalidation across two conventions (a ticket
+// mutation invalidating ticketKeys never refreshed the eng queue). All eng
+// hooks and all eng cross-invalidations go through this factory; prefix
+// entries exist so one invalidateQueries call busts a whole family.
+export const engKeys = {
+  all: ["eng"] as const,
+  queue: (uid: string | null) => ["eng", "queue", uid] as const,
+  queuePrefix: ["eng", "queue"] as const,
+  carriedCount: (uid: string | null) => ["eng", "carried-count", uid] as const,
+  employee: (uid: string | null) => ["eng", "employee", uid] as const,
+  dashboard: (employeeId: string | null, today: string) =>
+    ["eng", "dashboard-direct", employeeId, today] as const,
+  dashboardPrefix: ["eng", "dashboard-direct"] as const,
+  conveyanceLog: (employeeId: string | null, date: string) =>
+    ["eng", "conveyance-log", employeeId, date] as const,
+  conveyanceExpenses: (employeeId: string | null, date: string) =>
+    ["eng", "conveyance-expenses", employeeId, date] as const,
+} as const;
 
 // Aggregate export for convenience
 export const queryKeys = {
@@ -64,4 +83,5 @@ export const queryKeys = {
   so: soKeys,
   proforma: proformaKeys,
   conversion: conversionKeys,
+  eng: engKeys,
 } as const;

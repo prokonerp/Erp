@@ -177,6 +177,8 @@ describe("rating", () => {
 });
 
 const fullInput: FsrPrintInput = {
+  // NOTE: inputs are UTC ISO strings; display expectations below are IST
+  // (+5:30) per src/lib/time.ts — screen and paper share one wall-clock.
   fsr: {
     id: "abcdefgh-1234-5678-90ab-cdef12345678",
     ticket_id: "ticket-1",
@@ -271,11 +273,11 @@ describe("buildFsrPrintModel", () => {
     expect(m.problem.reported).toBe("UPS beeping");
     expect(m.problem.reason).toBe("PM Call — Routine PM done");
     expect(m.timing.onSite).toBe("1h 30m");
-    expect(m.timing.preferredVisit).toBe("14/09/2026 16:30");
+    expect(m.timing.preferredVisit).toBe("14/09/2026 22:00");
     expect(m.lifecycle).toEqual({
-      createdAt: "13/09/2026 10:00",
-      preferredVisit: "14/09/2026 16:30",
-      closedAt: "15/09/2026 12:00",
+      createdAt: "13/09/2026 15:30",
+      preferredVisit: "14/09/2026 22:00",
+      closedAt: "15/09/2026 17:30",
     });
     expect(m.observation.mainsLn).toBe("230");
     expect(m.observation.mainsNe).toBe("2.1");
@@ -383,7 +385,7 @@ describe("buildFsrPrintModel", () => {
 
   it("formats timing.preferredVisit as DD/MM/YYYY HH:mm, dashes when missing", () => {
     // Catches: the Preferred Visit row rendering raw ISO or crashing.
-    expect(buildFsrPrintModel(fullInput).timing.preferredVisit).toBe("14/09/2026 16:30");
+    expect(buildFsrPrintModel(fullInput).timing.preferredVisit).toBe("14/09/2026 22:00");
     const missing = buildFsrPrintModel({ fsr: {}, ticket: {}, customer: null, visits: null });
     expect(missing.timing.preferredVisit).toBe("—");
   });
@@ -391,9 +393,9 @@ describe("buildFsrPrintModel", () => {
   it("builds lifecycle dates from the ticket, dashes per missing timestamp", () => {
     // Catches: lifecycle row mixing up created/preferred/closed sources.
     const m = buildFsrPrintModel(fullInput);
-    expect(m.lifecycle.createdAt).toBe("13/09/2026 10:00");
-    expect(m.lifecycle.preferredVisit).toBe("14/09/2026 16:30");
-    expect(m.lifecycle.closedAt).toBe("15/09/2026 12:00");
+    expect(m.lifecycle.createdAt).toBe("13/09/2026 15:30");
+    expect(m.lifecycle.preferredVisit).toBe("14/09/2026 22:00");
+    expect(m.lifecycle.closedAt).toBe("15/09/2026 17:30");
     const partial = buildFsrPrintModel({
       fsr: {},
       ticket: { closed_at: "2026-09-15T12:00:00Z" },
@@ -402,7 +404,7 @@ describe("buildFsrPrintModel", () => {
     });
     expect(partial.lifecycle.createdAt).toBe("—");
     expect(partial.lifecycle.preferredVisit).toBe("—");
-    expect(partial.lifecycle.closedAt).toBe("15/09/2026 12:00");
+    expect(partial.lifecycle.closedAt).toBe("15/09/2026 17:30");
   });
 
   it("uses formal_report_no when present, else falls back to the id slice", () => {

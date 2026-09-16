@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
+import { fetchMyIdentity } from "@/lib/engineer-identity";
+import { engKeys } from "@/lib/queryKeys";
 
 /**
  * Read-only hook: engineer identity card for the Profile surface.
@@ -77,7 +79,7 @@ export function useMyEmployee() {
   const email = session?.user?.email ?? null;
 
   const query = useQuery({
-    queryKey: ["eng", "employee", uid] as const,
+    queryKey: engKeys.employee(uid),
     enabled: !!uid && !!email,
     // Identity rarely changes — share cache across eng layouts/pages.
     staleTime: 5 * 60_000,
@@ -86,38 +88,16 @@ export function useMyEmployee() {
     refetchInterval: false,
     queryFn: async (): Promise<MyEmployee | null> => {
       try {
-        if (!email) return null;
-        // Identity by auth_user_id first (exact, never ambiguous); legacy
-        // email fallback only when the link column is empty. Duplicate
-        // active emails throw like useMyQueue instead of picking row[0].
-        if (uid) {
-          const { data: byAuth, error: authErr } = await supabase
-            .from("employees")
-            .select("id,name,phone,email,photo_path,documents")
-            .eq("auth_user_id", uid)
-            .eq("active", true)
-            .maybeSingle();
-          if (authErr) {
-            console.error("[useMyEmployee]", authErr.message);
-            return null;
-          }
-          if (byAuth) return pickEmployeeRow([byAuth]);
-        }
-        const { data: emps, error: empErr } = await supabase
-          .from("employees")
-          .select("id,name,phone,email,photo_path,documents")
-          .eq("email", email)
-          .eq("active", true);
-        if (empErr) {
-          console.error("[useMyEmployee]", empErr.message);
-          return null;
-        }
-        if ((emps ?? []).length > 1) {
-          throw new Error(
-            `AMBIGUOUS_EMPLOYEE_MATCH: ${emps!.length} active employees share ${email}`,
-          );
-        }
-        return pickEmployeeRow(emps);
+        if (!uid || !email) return null;
+        // Central identity policy; fail-soft mapping preserved: any
+        // non-ok outcome (unlinked, ambiguous, query error) -> null.
+        const identity = await fetchMyIdentity(supabase, {
+          authUid: uid,
+          email,
+          columns: "id,name,phone,email,photo_path,documents",
+        });
+        if (identity.status !== "ok") return null;
+        return pickEmployeeRow([identity.employee]);
       } catch (err) {
         console.error("[useMyEmployee]", err instanceof Error ? err.message : err);
         return null;

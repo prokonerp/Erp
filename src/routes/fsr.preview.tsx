@@ -1,10 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { FsrPrintView } from "@/components/fsr/FsrPrintView";
 import { buildFsrPrintModel, type FsrPrintInput } from "@/lib/fsrPrint";
 import { DEFAULT_COMPANY_PROFILE } from "@/lib/companyProfile";
 import apcLogo from "@/assets/oem-apc.png.asset.json";
 
 export const Route = createFileRoute("/fsr/preview")({
+  beforeLoad: () => {
+    if (!import.meta.env.DEV) {
+      throw redirect({ to: "/" });
+    }
+  },
   component: FsrPreviewPage,
 });
 

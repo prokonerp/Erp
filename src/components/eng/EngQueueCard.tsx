@@ -53,13 +53,19 @@ const PRIORITY_EDGE: Record<string, string> = {
 };
 
 export function EngQueueCard({ ticket, to }: EngQueueCardProps) {
-  const caseId = ticket.caseId ?? ticket.display ?? ticket.id;
+  const rawCaseId = ticket.caseId ?? ticket.display ?? ticket.id;
+  // A missing case id falls back to the raw row uuid — truncate UUID-shaped
+  // values so the headline never renders 36 hex chars.
+  const caseId =
+    /^[0-9a-f-]{36}$/i.test(rawCaseId) ? `${rawCaseId.slice(0, 8)}…` : rawCaseId;
   const site = ticket.site ?? ticket.location ?? null;
   const age = ticket.age ?? formatAge(ticket.createdAt);
   const edge =
     PRIORITY_EDGE[(ticket.priority || "").toUpperCase()] ?? "border-l-[oklch(0.7_0.02_260)]";
 
   return (
+    // `to` arrives as a runtime string (the queue builds destinations
+    // dynamically); the cast keeps TanStack's literal-path typing quiet.
     <Link
       to={to as never}
       className={`block min-h-11 rounded-xl border border-l-4 bg-card p-4 transition-colors hover:bg-muted/50 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${edge}`}

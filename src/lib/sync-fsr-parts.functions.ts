@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { assertTicketAssignee } from "@/lib/engineer-identity";
 import { mergePartLines, stageFsrParts, type FsrPartInput } from "@/lib/sync-fsr-parts";
 import type { PartLine } from "@/lib/tickets";
 
@@ -51,78 +52,19 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
     if (ticketErr) throw new Error(ticketErr.message);
     if (!ticket) throw new Error(`NotFound: ticket ${data.ticketId} not found`);
 
-    // Gate: admin via has_role OR the engineer assigned to this ticket
-    // (FK-first on assigned_employee_id, name fallback on assigned_engineer_name).
-    const { data: isAdmin, error: roleErr } = await supabaseAdmin.rpc("has_role", {
-      _user_id: context.userId,
-      _role: "admin",
-    });
-    if (roleErr) throw new Error(roleErr.message);
-    if (!isAdmin) {
-      // Identity by auth_user_id first (exact); email fallback for legacy rows.
-      // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
-      const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
-      let callerEmail = typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null;
-      let caller: { id: string; name: string | null } | null = null;
-      const { data: empByAuth } = await supabaseAdmin
-        .from("employees")
-        .select("id, name")
-        .eq("auth_user_id", context.userId)
-        .eq("active", true)
-        .maybeSingle();
-      if (empByAuth) {
-        caller = empByAuth as { id: string; name: string | null };
-      } else {
-        if (!callerEmail) {
-          const { data: authData } = await supabaseAdmin.auth.admin.getUserById(context.userId);
-          callerEmail = authData?.user?.email ?? null;
-        }
-        if (!callerEmail) throw new Error("Forbidden: could not resolve your account email");
-        const { data: empByEmail } = await supabaseAdmin
-          .from("employees")
-          .select("id, name")
-          .eq("email", callerEmail)
-          .eq("active", true)
-          .maybeSingle();
-        if (!empByEmail) {
-          throw new Error("Forbidden: only an admin or the assigned engineer may sync");
-        }
-        caller = empByEmail as { id: string; name: string | null };
-      }
-      const row = ticket as unknown as {
+    // Gate: admin OR the engineer assigned to this ticket (shared gate:
+    // FK match, else unique-name match; fail-loud on ambiguity).
+    // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
+    const claimsEmail = (context as unknown as { claims?: { email?: unknown } })?.claims?.email;
+    await assertTicketAssignee(supabaseAdmin, {
+      userId: context.userId,
+      emailHint: typeof claimsEmail === "string" && claimsEmail !== "" ? claimsEmail : null,
+      ticket: ticket as unknown as {
         assigned_employee_id: string | null;
         assigned_engineer_name: string | null;
-      };
-      const fkMatch =
-        !!caller && !!row.assigned_employee_id && row.assigned_employee_id === caller.id;
-      // Name fallback: the display name may be shared by several employees, so it
-      // only counts when exactly one active employee matches lower(trim(name)).
-      let nameMatch = false;
-      if (!fkMatch) {
-        const callerName = ((caller as { name?: string | null } | null)?.name ?? "").trim();
-        if (
-          !!caller &&
-          !!row.assigned_engineer_name &&
-          callerName !== "" &&
-          row.assigned_engineer_name.trim().toLowerCase() === callerName.toLowerCase()
-        ) {
-          const { data: sameNamed, error: sameNamedErr } = await supabaseAdmin
-            .from("employees")
-            .select("id, name")
-            .eq("active", true);
-          if (sameNamedErr) throw new Error(sameNamedErr.message);
-          const dupes = (sameNamed ?? []).filter(
-            (r) =>
-              ((r as unknown as { name?: string | null }).name ?? "").trim().toLowerCase() ===
-              callerName.toLowerCase(),
-          );
-          nameMatch = dupes.length === 1;
-        }
-      }
-      if (!fkMatch && !nameMatch) {
-        throw new Error("Forbidden: only an admin or the assigned engineer may sync FSR parts");
-      }
-    }
+      },
+      action: "sync FSR parts",
+    });
 
     // Read ALL field service reports for the ticket and stage every entry.
     const { data: fsrRows, error: fsrErr } = await supabaseAdmin

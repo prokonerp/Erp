@@ -5,14 +5,22 @@ import { useAuth } from "@/lib/useAuth";
 const ENGINEER_ROLE_NAMES = ["engineer", "field_engineer", "field engineer"];
 const ADMIN_ROLE_NAMES = ["admin", "administrator", "superadmin", "owner"];
 
+// Exact canonical names: precise for the common cases (no more "Admin
+// Assistant" matching "admin"). Substring stays ONLY as a legacy fallback
+// for unknown engineer-role variants.
+const ADMIN_EXACT = new Set(ADMIN_ROLE_NAMES);
+const ENGINEER_EXACT = new Set(ENGINEER_ROLE_NAMES);
+
 /**
  * Pure decision function — extracted for testability.
  *
  * Resolution order:
- *  1. An admin-ish role ANYWHERE (app_users OR legacy user_roles) → false.
- *     Admin wins over engineer (dual-role trap: otherwise an admin holding
- *     the Engineer role is bounced to /eng with no return path).
- *  2. An Engineer-ish role with ANY role row → true
+ *  1. An EXACT admin-ish name ANYWHERE (app_users OR legacy user_roles) →
+ *     false. Admin wins over engineer (dual-role trap: otherwise an admin
+ *     holding the Engineer role is bounced to /eng with no return path).
+ *  2. An Engineer-ish role with ANY role row → true (exact first, then
+ *     legacy substring tolerance for unknown variants like
+ *     "service engineer").
  *  3. A non-engineer, non-admin role row → false
  *  4. NO role row anywhere → fall back to employee-email match
  *     (preserves legacy pre-role users)
@@ -26,11 +34,16 @@ export function resolveEngineerStatus(
   const allNames = [roleNameOrNull, ...legacyRoles].filter(
     (n): n is string => typeof n === "string" && n !== "",
   );
-  if (allNames.some((n) => ADMIN_ROLE_NAMES.some((a) => n.toLowerCase().includes(a)))) {
+  const lowers = allNames.map((n) => n.toLowerCase());
+  // Exact admin anywhere wins (dual-role trap). Substring is deliberately
+  // NOT used here: "Admin Assistant" must not read as an admin.
+  if (lowers.some((n) => ADMIN_EXACT.has(n))) {
     return false;
   }
   if (hasRoleRow) {
     const roleLower = (roleNameOrNull ?? "").toLowerCase();
+    if (ENGINEER_EXACT.has(roleLower)) return true;
+    // Legacy tolerance for unknown engineer-role variants.
     return ENGINEER_ROLE_NAMES.some((n) => roleLower.includes(n));
   }
   return hasEmployeeMatch;
