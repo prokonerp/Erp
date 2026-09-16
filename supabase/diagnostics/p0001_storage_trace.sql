@@ -6,6 +6,7 @@
 --   2. BEFORE running: find/replace every occurrence of '<TEST_ENG_EMAIL>' below
 --      with the failing engineer's login email (keep the single quotes).
 --      Occurrences live in seq 110, 111, 112, 114 (Section 2).
+--      Seq 115-116 are substitution-free fallbacks (recent rows) — no edit needed.
 --   3. Paste this WHOLE file, press Run.
 --   4. You get ONE result grid (seq, check, result) — copy ALL rows back.
 --      (Single UNION ALL query on purpose: runners that show only the last
@@ -14,7 +15,8 @@
 --      (seq + check + result), plus the email you substituted.
 --
 -- NOTHING HERE WRITES. Catalog SELECTs only (pg_trigger / pg_proc /
--- pg_class / pg_policies / storage.buckets / information_schema),
+-- pg_class / pg_policies / pg_tables / pg_attrdef / pg_attribute /
+-- pg_constraint / storage.buckets / information_schema),
 -- has_table_privilege() probes, and COUNT(*) scans. No DDL, no
 -- UPDATE/INSERT/DELETE, no supabase_migrations reference (that schema does
 -- not exist on live), no aggregate over uuid (count(*), string_agg on text,
@@ -22,7 +24,10 @@
 --
 -- SEQ MAP: 100 triggers | 101 RLS flags | 102 policies | 103 policy-called
 -- functions + RAISE | 104 bucket rows | 105 objects columns | 106-109
--- privilege probes | 110-114 engineer-link audit for '<TEST_ENG_EMAIL>'.
+-- privilege probes | 110-114 engineer-link audit for '<TEST_ENG_EMAIL>' |
+-- 115-116 recent-row fallbacks (no substitution) | 120 storage RAISE
+-- inventory | 121 triggers on other storage tables | 122 version/multipart
+-- tables | 123 defaults, 124 generated/nullable, 125 checks/not-null.
 
 -- -- -- Section 1: storage tier (live-only raiser hunt) -- -- --
 
@@ -31,7 +36,7 @@
 -- timing/event; func name + RAISE flag appended.
 SELECT 100 AS seq,
        'storage triggers on objects/buckets (expect list; empty = none live)' AS check,
-       (c.relname || '.' || t.tgname || ' :: ' || pg_get_triggerdef(t.oid) || ' :: func=' || p.proname || ' :: has_RAISE=' || CASE WHEN COALESCE(p.prosrc, '') LIKE '%RAISE%' THEN 'yes' ELSE 'no' END)::text AS result
+       (c.relname || '.' || t.tgname || ' :: ' || pg_get_triggerdef(t.oid) || ' :: func=' || p.proname || ' :: has_RAISE=' || CASE WHEN COALESCE(p.prosrc, pg_get_functiondef(p.oid), '') LIKE '%RAISE%' THEN 'yes' ELSE 'no' END)::text AS result
 FROM pg_trigger t
 JOIN pg_class c ON c.oid = t.tgrelid
 JOIN pg_namespace ns ON ns.oid = c.relnamespace
@@ -65,7 +70,7 @@ UNION ALL
 -- bucket-policy qual/with_check text from seq 102.
 SELECT 103,
        'public functions called by bucket policies + RAISE flag (P0001 candidates)',
-       (p.proname || ' has_RAISE=' || CASE WHEN COALESCE(p.prosrc, '') LIKE '%RAISE%' THEN 'yes' ELSE 'no' END)::text
+       (p.proname || ' has_RAISE=' || CASE WHEN COALESCE(p.prosrc, pg_get_functiondef(p.oid), '') LIKE '%RAISE%' THEN 'yes' ELSE 'no' END)::text
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public'
@@ -83,9 +88,11 @@ WHERE n.nspname = 'public'
   )
 UNION ALL
 -- 104. storage.buckets rows for both buckets (1-2 rows; missing row = bucket absent live).
+-- Schema-proof: whole row as jsonb — survives owner vs owner_id drift across
+-- storage releases (a hardcoded column list would ERROR the entire tracer).
 SELECT 104,
-       'storage.buckets rows (id, name, public, file_size_limit, allowed_mime_types, owner)',
-       ('id=' || b.id::text || ' name=' || b.name::text || ' public=' || b.public::text || ' file_size_limit=' || b.file_size_limit::text || ' allowed_mime_types=' || b.allowed_mime_types::text || ' owner=' || b.owner::text)::text
+       'storage.buckets rows (full row as json — schema-proof)',
+       to_jsonb(b)::text
 FROM storage.buckets b
 WHERE b.id IN ('ticket-attachments', 'engineer-uploads')
 UNION ALL
@@ -149,4 +156,86 @@ SELECT 114,
        count(*)::text
 FROM public.tickets t
 WHERE t.assigned_employee_id IN (SELECT e.id FROM public.employees e WHERE e.email = '<TEST_ENG_EMAIL>')
+UNION ALL
+-- -- -- Section 2b: substitution-free fallbacks (signal even when '<TEST_ENG_EMAIL>' is untouched) -- -- --
+-- 115. Five most recent employees rows (full row as json; id-ordered, schema-proof).
+-- Parenthesised so its own ORDER BY/LIMIT applies to this branch only.
+(SELECT 115,
+       'employees 5 most recent (full row as json — no substitution needed)',
+       to_jsonb(e)::text
+FROM public.employees e
+ORDER BY e.id DESC LIMIT 5)
+UNION ALL
+-- 116. Five most recent app_users rows (full row as json; created_at proven live by seq 113).
+(SELECT 116,
+       'app_users 5 most recent (full row as json — no substitution needed)',
+       to_jsonb(u)::text
+FROM public.app_users u
+ORDER BY u.created_at DESC LIMIT 5)
+UNION ALL
+-- -- -- Section 3: unchecked storage surfaces (v1 cleared objects/buckets triggers+policies+privileges) -- -- --
+-- 120. Prime-suspect inventory: EVERY storage-schema function whose body
+-- contains RAISE (one row per function; schema.name + 200-char excerpt
+-- around the FIRST RAISE via strpos/substring; empty = no raiser in storage).
+SELECT 120,
+       'storage functions containing RAISE (schema.name + 200-char excerpt around first RAISE)',
+       (n.nspname || '.' || p.proname || ' :: excerpt=' || substring(COALESCE(p.prosrc, pg_get_functiondef(p.oid), '') from GREATEST(strpos(COALESCE(p.prosrc, pg_get_functiondef(p.oid), ''), 'RAISE') - 50, 1) for 200))::text
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'storage'
+  AND COALESCE(p.prosrc, pg_get_functiondef(p.oid), '') LIKE '%RAISE%'
+UNION ALL
+-- 121. Triggers on ALL storage-schema tables EXCEPT objects/buckets (table
+-- named per row; timing/event via pg_get_triggerdef; owning func + RAISE
+-- flag; expect rows for s3_multipart_uploads/_parts if triggers exist there).
+SELECT 121,
+       'storage triggers on tables OTHER than objects/buckets (table.trigger :: def :: func :: has_RAISE)',
+       (c.relname || '.' || t.tgname || ' :: ' || pg_get_triggerdef(t.oid) || ' :: func=' || p.proname || ' :: has_RAISE=' || CASE WHEN COALESCE(p.prosrc, pg_get_functiondef(p.oid), '') LIKE '%RAISE%' THEN 'yes' ELSE 'no' END)::text
+FROM pg_trigger t
+JOIN pg_class c ON c.oid = t.tgrelid
+JOIN pg_namespace ns ON ns.oid = c.relnamespace
+JOIN pg_proc p ON p.oid = t.tgfoid
+WHERE ns.nspname = 'storage'
+  AND c.relname NOT IN ('objects', 'buckets')
+UNION ALL
+-- 122. Storage tables matching %version% / %multipart% / %iceberg%
+-- (schemaname.tablename from pg_tables; expect >=1 row on versioned-objects releases).
+SELECT 122,
+       'storage tables matching %version%/%multipart%/%iceberg% (schemaname.tablename)',
+       (t.schemaname || '.' || t.tablename)::text
+FROM pg_tables t
+WHERE t.schemaname = 'storage'
+  AND (t.tablename LIKE '%version%' OR t.tablename LIKE '%multipart%' OR t.tablename LIKE '%iceberg%')
+UNION ALL
+-- 123a. Column defaults on storage.objects, verbatim via pg_attrdef/pg_get_expr
+-- (one row per defaulted column; any storage.*/public.* call shows verbatim).
+SELECT 123,
+       'storage.objects column defaults (column + pg_attrdef expr verbatim)',
+       (a.attname || ' default=' || pg_get_expr(d.adbin, d.adrelid))::text
+FROM pg_attrdef d
+JOIN pg_class c ON c.oid = d.adrelid
+JOIN pg_namespace ns ON ns.oid = c.relnamespace
+JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+WHERE ns.nspname = 'storage' AND c.relname = 'objects'
+UNION ALL
+-- 123b. Generated expressions + nullability per column via information_schema
+-- (one row per column; generated=<none> when not generated).
+SELECT 124,
+       'storage.objects generated/nullable (column + default/generated/nullable)',
+       (col.column_name || ' default=' || COALESCE(col.column_default, '<none>') || ' generated=' || COALESCE(col.is_generated, '<none>') || ' nullable=' || col.is_nullable)::text
+FROM information_schema.columns col
+WHERE col.table_schema = 'storage' AND col.table_name = 'objects'
+UNION ALL
+-- 123c. NOT NULL / CHECK constraints on storage.objects, verbatim via
+-- pg_get_constraintdef (one row per constrained column; <table> when
+-- table-level; any storage.*/public.* call shows verbatim).
+SELECT 125,
+       'storage.objects check/not-null constraints (column + pg_constraintdef verbatim)',
+       (COALESCE(a.attname, '<table>') || ' ' || con.contype::text || ' ' || con.conname || ' expr=' || pg_get_constraintdef(con.oid))::text
+FROM pg_constraint con
+JOIN pg_class c ON c.oid = con.conrelid
+JOIN pg_namespace ns ON ns.oid = c.relnamespace
+LEFT JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey)
+WHERE ns.nspname = 'storage' AND c.relname = 'objects'
+  AND con.contype IN ('c', 'n')
 ORDER BY 1, 2, 3;
