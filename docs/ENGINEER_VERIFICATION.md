@@ -124,5 +124,24 @@ before trusting it for RLS validation; production Supabase is unaffected.
   limits from the product document §12).
 - `useTicketsTable` per-page activities lookup (perf pattern, admin-side).
 - Legacy permissive-era exposure window is closed in-file-order; no action.
-- `front_indication`: dropped by `20260919000001` per product decision (user
-  confirmed: leave deleted; `rating` and all related columns untouched).
+ - `front_indication`: dropped by `20260919000001` per product decision (user
+   confirmed: leave deleted; `rating` and all related columns untouched).
+
+## 5. One-command live check (read-only)
+
+Paste the whole of `scripts/verify-eng-live.sql` into the Supabase SQL editor
+and Run. It replays the §0 pre-flight + post-apply queries verbatim plus the
+new-batch checks (backfill residue, constraint validation flags, FK-only
+policy definitions, guarded grn/dc checks) — every row is `(check, result)`,
+and the file header carries the expected-vs-action table. Nothing writes.
+
+Failure → owning task:
+
+| Failure | Task |
+|---|---|
+| duplicate `12000001` versions / anon INSERT hole / missing grants / missing `cancelled` enum | A2 (apply runbook incomplete — apply the matching Wave 0–1 migration) |
+| backfill residue unmatched/ambiguous > 0 | A3 (data cleanup); A5 GATE: do not apply name-fallback removal while > 0 without user sign-off |
+| any `convalidated = false` / orphan or CHECK-violation count > 0 | A4 (fix rows via the NOTICE report query, re-run the validate migration) |
+| any rewritten policy still has a name leg | A5 (apply `20260923000003_remove_name_fallback_rls.sql`) |
+| `engineer-uploads` SELECT missing | owned by `20260922000004` — re-apply it; never hand-edit `storage.objects` (needs `supabase_storage_admin`) |
+| grn/dc checks show `absent` / no rows | expected before B1 ships; after B1, non-validated or orphan rows are a B1 data task |
