@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { submitPublicTicket } from "@/lib/public-tickets.functions";
+import { getPublicCaptchaChallenge, submitPublicTicket } from "@/lib/public-tickets.functions";
 import {
-  uploadPublicTicketAttachment,
-  deletePublicTicketAttachment,
+  stagePublicTicketPhoto,
+  deleteStagedPublicPhoto,
 } from "@/lib/public-ticket-uploads.functions";
+import { compressImageToLimit } from "@/lib/image-compress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,14 +32,37 @@ type Attachment = { path: string; token: string; kind: "serial_photo" | "issue_p
 
 function PublicTicketForm() {
   const submit = useServerFn(submitPublicTicket);
-  const uploadFn = useServerFn(uploadPublicTicketAttachment);
-  const deleteFn = useServerFn(deletePublicTicketAttachment);
+  const uploadFn = useServerFn(stagePublicTicketPhoto);
+  const deleteFn = useServerFn(deleteStagedPublicPhoto);
+  const challengeFn = useServerFn(getPublicCaptchaChallenge);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [challenge, setChallenge] = useState<{
+    a: number;
+    b: number;
+    nonce: string;
+    expiry: number;
+    hmac: string;
+  } | null>(null);
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
   const serialCamRef = useRef<HTMLInputElement>(null);
   const issueCamRef = useRef<HTMLInputElement>(null);
+
+  const refreshChallenge = async () => {
+    try {
+      setChallenge(await challengeFn());
+    } catch {
+      setChallenge(null);
+    }
+    setCaptchaAnswer("");
+  };
+
+  useEffect(() => {
+    void refreshChallenge();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [form, setForm] = useState({
     customer_name: "",
@@ -60,20 +84,23 @@ function PublicTicketForm() {
     if (attachments.length >= 5) return toast.error("Max 5 photos");
     setUploading(true);
     try {
-      const buf = await file.arrayBuffer();
+      // Compress client-side (same pipeline as the engineer flows) so mobile
+      // uploads stay small; undecodable files pass through when under 8 MB.
+      const compressed = await compressImageToLimit(file);
+      const buf = await compressed.blob.arrayBuffer();
       let bin = "";
       const bytes = new Uint8Array(buf);
       for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
       const data_base64 = btoa(bin);
       const { path, token } = await uploadFn({
         data: {
-          filename: file.name || "upload.jpg",
-          content_type: file.type || "image/jpeg",
+          filename: compressed.name || file.name || "upload.jpg",
+          content_type: compressed.contentType || file.type || "image/jpeg",
           kind,
           data_base64,
         },
       });
-      const preview = URL.createObjectURL(file);
+      const preview = URL.createObjectURL(compressed.blob);
       setAttachments((a) => [...a, { path, token, kind, preview }]);
       toast.success("Photo uploaded");
     } catch (e) {
@@ -86,13 +113,27 @@ function PublicTicketForm() {
   const removePhoto = async (idx: number) => {
     const a = attachments[idx];
     setAttachments((arr) => arr.filter((_, i) => i !== idx));
+    try {
+      URL.revokeObjectURL(a.preview);
+    } catch {
+      // Preview already revoked — nothing to clean up.
+    }
     try { await deleteFn({ data: { path: a.path, token: a.token } }); } catch { /* ignore */ }
   };
 
   const onSubmit = async () => {
     if (!form.customer_name.trim()) return toast.error("Please enter your name");
     if (form.customer_phone.replace(/\D/g, "").length < 7) return toast.error("Please enter a valid phone number");
+    if (form.customer_email.trim() !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customer_email.trim())) {
+      return toast.error("Please enter a valid email address");
+    }
     if (form.complaint.trim().length < 5) return toast.error("Please describe the issue (min 5 characters)");
+    if (!challenge) {
+      await refreshChallenge();
+      return toast.error("Please solve the verification challenge first");
+    }
+    const answer = Number.parseInt(captchaAnswer.trim(), 10);
+    if (!Number.isInteger(answer)) return toast.error("Please answer the verification question");
     setBusy(true);
     try {
       const res = await submit({
@@ -106,15 +147,26 @@ function PublicTicketForm() {
           serial_no: form.serial_no,
           call_type: form.call_type as never,
           complaint: form.complaint,
-          captcha_answer: 0,
-          captcha_expected: 0,
+          captcha_a: challenge.a,
+          captcha_b: challenge.b,
+          captcha_nonce: challenge.nonce,
+          captcha_expiry: challenge.expiry,
+          captcha_hmac: challenge.hmac,
+          captcha_answer: answer,
           attachments: attachments.map(({ path, kind }) => ({ path, kind })),
         },
       });
       setDone(res.case_id);
-      attachments.forEach((a) => URL.revokeObjectURL(a.preview));
+      attachments.forEach((a) => {
+        try { URL.revokeObjectURL(a.preview); } catch { /* already revoked */ }
+      });
+      setAttachments([]);
+      await refreshChallenge();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Submission failed");
+      const msg = e instanceof Error ? e.message : "Submission failed";
+      toast.error(msg);
+      // A failed captcha burns the challenge — always issue a fresh one.
+      if (/captcha/i.test(msg)) await refreshChallenge();
     } finally {
       setBusy(false);
     }
@@ -267,6 +319,7 @@ function PublicTicketForm() {
                     rows={6}
                     value={form.complaint}
                     onChange={(e) => set({ complaint: e.target.value })}
+                    maxLength={2000}
                     placeholder="e.g. The UPS beeps continuously since this morning and does not back up the load."
                   />
                   <div className="text-xs text-muted-foreground text-right">{form.complaint.length} / 2000</div>
@@ -322,6 +375,33 @@ function PublicTicketForm() {
                   </div>
                 )}
             </section>
+
+            {/* Human verification */}
+            <div className="pt-4 border-t">
+              <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+                <Label>Verify you&apos;re human <span className="text-destructive">*</span></Label>
+                {challenge ? (
+                  <div className="flex items-center gap-2">
+                    <div className="text-lg font-semibold tabular-nums">
+                      {challenge.a} + {challenge.b} = ?
+                    </div>
+                    <Input
+                      inputMode="numeric"
+                      value={captchaAnswer}
+                      onChange={(e) => setCaptchaAnswer(e.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+                      placeholder="Answer"
+                      className="w-24"
+                      aria-label="Captcha answer"
+                    />
+                    <Button type="button" variant="ghost" size="sm" onClick={() => void refreshChallenge()}>
+                      New question
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Loading verification…</p>
+                )}
+              </div>
+            </div>
 
             {/* Submit */}
             <div className="pt-4 border-t">

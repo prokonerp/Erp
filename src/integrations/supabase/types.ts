@@ -4070,6 +4070,74 @@ export type Database = {
         }
         Relationships: []
       }
+      proforma_invoice_settings: {
+        Row: {
+          branch_id: string | null
+          company_address: string | null
+          company_name: string | null
+          copy_label: string | null
+          created_at: string
+          current_fy: string | null
+          email: string | null
+          fy_reset: boolean
+          id: string
+          next_seq: number
+          notes_default: string | null
+          phone: string | null
+          prefix: string
+          terms_default: string | null
+          theme_color: string | null
+          udyam_no: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          company_address?: string | null
+          company_name?: string | null
+          copy_label?: string | null
+          created_at?: string
+          current_fy?: string | null
+          email?: string | null
+          fy_reset?: boolean
+          id?: string
+          next_seq?: number
+          notes_default?: string | null
+          phone?: string | null
+          prefix?: string
+          terms_default?: string | null
+          theme_color?: string | null
+          udyam_no?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          company_address?: string | null
+          company_name?: string | null
+          copy_label?: string | null
+          created_at?: string
+          current_fy?: string | null
+          email?: string | null
+          fy_reset?: boolean
+          id?: string
+          next_seq?: number
+          notes_default?: string | null
+          phone?: string | null
+          prefix?: string
+          terms_default?: string | null
+          theme_color?: string | null
+          udyam_no?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proforma_invoice_settings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_items: {
         Row: {
           cess: number

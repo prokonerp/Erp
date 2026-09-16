@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { buildStagedPublicPath, isStagedPublicPath } from "@/lib/public-upload-guards";
+import { checkRateLimit } from "@/lib/public-rate-limit";
+import { clientIpKey } from "@/lib/server-client-ip";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -188,6 +191,75 @@ export const deletePublicTicketAttachment = createServerFn({ method: "POST" })
     if (roleErr || !isAdmin) {
       throw new Error("Only admin accounts may delete attachments");
     }
+    await supabaseAdmin.storage.from("ticket-attachments").remove([data.path]);
+    return { ok: true };
+  });
+
+// =====================================================================
+// Anonymous staging path for the PUBLIC raise-ticket form.
+//
+// The public form uploads photos BEFORE the ticket exists, so there is no
+// ticket_id yet. Files are staged under public/staged/<date>/... via the
+// service-role client (the anon storage INSERT policy is closed), and the
+// ticket submit fn only accepts paths that pass isStagedPublicPath.
+// Abuse is bounded by per-IP rate limits + the captcha on submit.
+// =====================================================================
+
+const stagedUploadSchema = z.object({
+  filename: z.string().min(1).max(200),
+  content_type: z.string().min(1).max(100),
+  kind: z.enum(["serial_photo", "issue_photo", "other"]).default("other"),
+  data_base64: z
+    .string()
+    .min(1)
+    .max(Math.ceil((MAX_BYTES * 4) / 3) + 1024),
+});
+
+const stagedUploadHits = new Map<string, number[]>();
+const STAGED_UPLOAD_LIMIT = { windowMs: 10 * 60 * 1000, max: 10 };
+
+export const stagePublicTicketPhoto = createServerFn({ method: "POST" })
+  .inputValidator((input) => stagedUploadSchema.parse(input))
+  .handler(async ({ data }) => {
+    const check = checkRateLimit(stagedUploadHits, clientIpKey(), Date.now(), STAGED_UPLOAD_LIMIT);
+    if (!check.allowed) {
+      throw new Error("Too many uploads. Please wait a few minutes and try again.");
+    }
+    if (!ALLOWED_MIME.includes(data.content_type.toLowerCase())) {
+      throw new Error("Only image uploads are allowed");
+    }
+    const buf = Buffer.from(data.data_base64, "base64");
+    if (buf.length === 0 || buf.length > MAX_BYTES) {
+      throw new Error("Image must be between 1 byte and 8 MB");
+    }
+    const safeExt =
+      (data.filename.split(".").pop() || "jpg")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .slice(0, 5) || "jpg";
+    const path = buildStagedPublicPath(new Date(), crypto.randomUUID(), data.kind, safeExt);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.storage
+      .from("ticket-attachments")
+      .upload(path, buf, { cacheControl: "3600", upsert: false, contentType: data.content_type });
+    if (error) throw new Error(error.message);
+    const token = await signPath(path);
+    return { path, token };
+  });
+
+export const deleteStagedPublicPhoto = createServerFn({ method: "POST" })
+  .inputValidator((input) => deleteSchema.parse(input))
+  .handler(async ({ data }) => {
+    // Bearer-token authorized: only staged paths, never ticket/<id>/... or
+    // anything outside the public staging area.
+    if (!isStagedPublicPath(data.path)) {
+      throw new Error("Invalid path");
+    }
+    const expected = await signPath(data.path);
+    if (!timingSafeEqual(expected, data.token)) {
+      throw new Error("Invalid delete token");
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.storage.from("ticket-attachments").remove([data.path]);
     return { ok: true };
   });

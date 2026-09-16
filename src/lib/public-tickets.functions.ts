@@ -1,5 +1,30 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { issueCaptchaChallenge, verifyCaptchaAnswer } from "@/lib/public-captcha";
+import { checkRateLimit } from "@/lib/public-rate-limit";
+import { isStagedPublicPath } from "@/lib/public-upload-guards";
+import { clientIpKey } from "@/lib/server-client-ip";
+
+const CHALLENGE_LIMIT = { windowMs: 10 * 60 * 1000, max: 20 };
+const SUBMIT_LIMIT = { windowMs: 10 * 60 * 1000, max: 5 };
+
+const challengeHits = new Map<string, number[]>();
+const submitHits = new Map<string, number[]>();
+
+function captchaSecret(): string {
+  // Reuses the high-entropy server-only key as the captcha HMAC secret.
+  // Never leaves the server; only the HMAC digest is sent to the client.
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!secret) throw new Error("Server misconfigured: SUPABASE_SERVICE_ROLE_KEY is missing");
+  return secret;
+}
+
+/** Issue a stateless arithmetic challenge for the public ticket form. No auth. */
+export const getPublicCaptchaChallenge = createServerFn({ method: "GET" }).handler(async () => {
+  const check = checkRateLimit(challengeHits, clientIpKey(), Date.now(), CHALLENGE_LIMIT);
+  if (!check.allowed) throw new Error("Too many requests. Please wait a minute and try again.");
+  return issueCaptchaChallenge(captchaSecret());
+});
 
 const schema = z.object({
   customer_name: z.string().trim().min(2).max(120),
@@ -11,8 +36,12 @@ const schema = z.object({
   serial_no: z.string().trim().max(80).optional().or(z.literal("")),
   call_type: z.enum(["OOW", "Installation", "Warranty", "AMC", "PM Call", "New Sale Delivery", "CCTV"]),
   complaint: z.string().trim().min(5).max(2000),
-  captcha_answer: z.number().int().optional().default(0),
-  captcha_expected: z.number().int().optional().default(0),
+  captcha_a: z.number().int().min(1).max(9),
+  captcha_b: z.number().int().min(1).max(9),
+  captcha_nonce: z.string().min(16).max(64),
+  captcha_expiry: z.number().int().positive(),
+  captcha_hmac: z.string().min(32).max(128),
+  captcha_answer: z.number().int().min(2).max(18),
   attachments: z.array(z.object({
     path: z.string().min(1).max(500),
     kind: z.enum(["serial_photo", "issue_photo", "other"]).default("other"),
@@ -28,6 +57,30 @@ export const submitPublicTicket = createServerFn({ method: "POST" })
   .inputValidator((input) => schema.parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // --- Abuse gates (before any DB work) ---
+    const submitCheck = checkRateLimit(submitHits, clientIpKey(), Date.now(), SUBMIT_LIMIT);
+    if (!submitCheck.allowed) {
+      throw new Error("Too many submissions. Please wait a few minutes and try again.");
+    }
+    const verdict = await verifyCaptchaAnswer(captchaSecret(), {
+      a: data.captcha_a,
+      b: data.captcha_b,
+      nonce: data.captcha_nonce,
+      expiry: data.captcha_expiry,
+      hmac: data.captcha_hmac,
+      answer: data.captcha_answer,
+    });
+    if (!verdict.ok) {
+      throw new Error("Captcha verification failed. Please solve the new challenge and try again.");
+    }
+    // Attachments may only reference server-staged public paths — never
+    // ticket/<id>/... or any other prefix smuggled into the jsonb.
+    for (const a of data.attachments ?? []) {
+      if (!isStagedPublicPath(a.path)) {
+        throw new Error("Invalid attachment. Please re-upload your photos and try again.");
+      }
+    }
 
     // --- Reverse-link: resolve existing customer + auto-create installed_equipment ---
     // Mirrors the internal flow in src/routes/_app/tickets.new.tsx -> getOrCreateEquipmentForTicket
