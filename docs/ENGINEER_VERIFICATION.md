@@ -28,8 +28,9 @@ Pre-flight (read-only, Supabase SQL editor):
 
 ```sql
 -- 1. Which of the duplicate-version files actually applied?
--- (schema-qualified: bare supabase_migrations is not on the editor search_path)
-select version from supabase_migrations.supabase_migrations where version like '20260912000001%';
+-- NOTE: live has no supabase_migrations schema (bootstrapped outside db push),
+-- so this is NOT runnable in SQL — check Dashboard > Database > Migrations
+-- (or `supabase migration list` from CLI) instead.
 -- 2. Orphan scan BEFORE #9 (predicts its NOTICEs):
 select t.id from tickets t left join employees e on e.id = t.assigned_employee_id
  where t.assigned_employee_id is not null and e.id is null;
@@ -46,7 +47,8 @@ Post-apply (expectations):
 select policyname, roles from pg_policies
  where schemaname='storage' and tablename='objects' and cmd='INSERT';
 -- single migration version; hardened policies in force:
-select version from supabase_migrations.supabase_migrations where version in ('20260912000001','20260912000002');
+-- version check is NOT runnable in SQL (no tracking schema on live) —
+-- confirm via Dashboard > Database > Migrations instead.
 select policyname from pg_policies where tablename='ticket_customer_verifications';
 -- engineer tables granted:
 select has_table_privilege('authenticated','public.field_service_reports','INSERT');
@@ -140,7 +142,8 @@ Failure → owning task:
 
 | Failure | Task |
 |---|---|
-| duplicate `12000001` versions / anon INSERT hole / missing grants / missing `cancelled` enum | A2 (apply runbook incomplete — apply the matching Wave 0–1 migration) |
+| duplicate `12000001` versions | NOT CHECKABLE in SQL (no tracking schema on live) — confirm via Dashboard > Database > Migrations |
+| anon INSERT hole / missing grants / missing `cancelled` enum | A2 (apply runbook incomplete — apply the matching Wave 0–1 migration) |
 | backfill residue unmatched/ambiguous > 0 | A3 (data cleanup); A5 GATE: do not apply name-fallback removal while > 0 without user sign-off |
 | any `convalidated = false` / orphan or CHECK-violation count > 0 | A4 (fix rows via the NOTICE report query, re-run the validate migration) |
 | any rewritten policy still has a name leg | A5 (apply `20260923000003_remove_name_fallback_rls.sql`) |

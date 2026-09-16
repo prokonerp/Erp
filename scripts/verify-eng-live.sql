@@ -12,7 +12,7 @@
 -- EXPECTED vs ACTION (per check label):
 --   label                                                        | must show | if not, do this
 --   -------------------------------------------------------------|-----------|-----------------------------------------------
---   duplicate 12000001 versions                                  | 0         | A2 apply incomplete — apply 20260912000002
+--   duplicate 12000001 versions                                  | Dashboard | no tracking schema on live — confirm via Dashboard > Database > Migrations
 --   anon INSERT policy on storage.objects                        | 0         | Wave-0 hole open — apply 20260922000001
 --   storage INSERT policies (authenticated remains)              | >=1 auth  | apply 20260922000001/22000002, re-check
 --   hardened tcv policies present                                | >=1 row   | apply 20260912000002
@@ -33,17 +33,18 @@
 
 -- -- -- A2 apply-state (from ENGINEER_VERIFICATION.md section 0, verbatim core) -- -- --
 
--- 1. Which of the duplicate-version files actually applied? (expect 0)
--- NOTE: schema-qualified — bare `supabase_migrations` is not on the SQL
--- editor search_path (42P01); the table lives at supabase_migrations.supabase_migrations.
-SELECT 'duplicate 12000001 versions (expect 0)' AS check,
-       count(*)::text AS result
-FROM supabase_migrations.supabase_migrations WHERE version LIKE '20260912000001%';
-
--- 2. Single hardened version in force (expect exactly 1 row: 20260912000002)
-SELECT 'hardened version 12000002 applied (expect 1)' AS check,
-       count(*)::text AS result
-FROM supabase_migrations.supabase_migrations WHERE version IN ('20260912000001', '20260912000002');
+-- 1-2. Migration version tracking: NOT queryable on this project.
+-- This live DB has NO supabase_migrations schema at all (bootstrapped outside
+-- `supabase db push` — snapshot SQL / manual applies, consistent with the
+-- out-of-band grants history). Any FROM on that table is 42P01, so these are
+-- static pointers instead of queries. Confirm applied files via
+-- Dashboard > Database > Migrations, or `supabase migration list` from CLI.
+-- (Harmless by design: every wave migration is idempotent, so push-state
+-- drift can only produce NOTICE noise, never damage.)
+SELECT 'duplicate 12000001 versions (see Dashboard > Migrations)' AS check,
+       'NOT CHECKABLE IN SQL — no supabase_migrations schema on live' AS result;
+SELECT 'hardened version 12000002 applied (see Dashboard > Migrations)' AS check,
+       'NOT CHECKABLE IN SQL — no supabase_migrations schema on live' AS result;
 
 -- 3. Anon storage hole closed BEFORE/AFTER #1 (expect 0)
 SELECT 'anon INSERT policy on storage.objects (expect 0)' AS check,
