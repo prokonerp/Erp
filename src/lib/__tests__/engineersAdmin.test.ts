@@ -127,6 +127,17 @@ describe("engineersAdmin/payableForPeriod", () => {
     expect(out.flatTotal).toBe(50);
   });
 
+  it("pays 0 km / 0 amount for odometer-reversal days (no wrap math)", () => {
+    const out = payableForPeriod({
+      employeeId: "e1",
+      rates,
+      days: [{ log_date: "2026-09-02", morning_odometer: 200, evening_odometer: 150 }],
+      expenses: [],
+    });
+    expect(out.perDay).toEqual([{ date: "2026-09-02", km: 0, rate: 10, amount: 0 }]);
+    expect(out.grandTotal).toBe(0);
+  });
+
   it("returns zeros for empty input without throwing", () => {
     const out = payableForPeriod({ employeeId: "e1", rates: null, days: null, expenses: null });
     expect(out).toEqual({ perDay: [], flatTotal: 0, amountTotal: 0, grandTotal: 0 });
@@ -294,6 +305,43 @@ describe("engineersAdmin/buildAttentionItems", () => {
       days: [{ log_date: "2026-09-05", morning_odometer: 0, evening_odometer: 500 }],
     });
     expect(out.map((i) => i.key)).toContain("km-outlier");
+  });
+
+  it("raises one medium negative-km item naming the affected-day count", () => {
+    const out = buildAttentionItems({
+      ...clean(),
+      days: [{ log_date: "2026-09-05", morning_odometer: 200, evening_odometer: 150 }],
+    });
+    const items = out.filter((i) => i.key === "negative-km");
+    expect(items).toHaveLength(1);
+    expect(items[0].severity).toBe("medium");
+    expect(items[0].label).toBe(
+      "Odometer reversal on 1 day(s) — evening reading below morning, verify readings.",
+    );
+  });
+
+  it("dedups negative-km: many reversed days still yield exactly one item with the count", () => {
+    const out = buildAttentionItems({
+      ...clean(),
+      days: [
+        { log_date: "2026-09-05", morning_odometer: 200, evening_odometer: 150 },
+        { log_date: "2026-09-06", morning_odometer: 300, evening_odometer: 250 },
+        { log_date: "2026-09-07", morning_odometer: 100, evening_odometer: 160 },
+      ],
+    });
+    const items = out.filter((i) => i.key === "negative-km");
+    expect(items).toHaveLength(1);
+    expect(items[0].label).toContain("2 day(s)");
+  });
+
+  it("raises no negative-km for clean or missing-reading days", () => {
+    expect(buildAttentionItems(clean()).map((i) => i.key)).not.toContain("negative-km");
+    const out = buildAttentionItems({
+      ...clean(),
+      days: [{ log_date: "2026-09-05", morning_odometer: 100, evening_odometer: null }],
+    });
+    expect(out.map((i) => i.key)).not.toContain("negative-km");
+    expect(out.map((i) => i.key)).toContain("missing-evening");
   });
 
   it("raises unapproved-past-cutoff only when past and not Approved", () => {

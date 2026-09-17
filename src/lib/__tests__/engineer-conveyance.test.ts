@@ -4,6 +4,8 @@ import {
   PROFILE_DOC_TYPES,
   asEmployeeDocuments,
   assembleDashboardStats,
+  assertLogDateNotFuture,
+  assertOwnLogPhoto,
   dailyLogEntrySchema,
   expenseEntrySchema,
   findDocByName,
@@ -34,15 +36,23 @@ describe("dailyLogEntrySchema", () => {
     expect(r.success).toBe(true);
   });
 
-  it("rejects evening reading below morning reading", () => {
+  it("ACCEPTS evening reading below morning (flagged downstream, never rejected)", () => {
     const r = dailyLogEntrySchema.safeParse({
       log_date: "2026-09-16",
       morning_odometer: "12540",
       evening_odometer: "12500",
     });
-    expect(r.success).toBe(false);
-    if (r.success) return;
-    expect(r.error.issues[0].path).toEqual(["evening_odometer"]);
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.morning_odometer).toBe(12540);
+    expect(r.data.evening_odometer).toBe(12500);
+    // Reversal still yields null km (payable 0) — no wrap math.
+    expect(
+      kmTravelled({
+        morning_odometer: r.data.morning_odometer ?? null,
+        evening_odometer: r.data.evening_odometer ?? null,
+      }),
+    ).toBeNull();
   });
 
   it("rejects blank morning reading and bad date format", () => {
@@ -52,6 +62,59 @@ describe("dailyLogEntrySchema", () => {
     expect(
       dailyLogEntrySchema.safeParse({ log_date: "16-09-2026", morning_odometer: "10" }).success,
     ).toBe(false);
+  });
+
+  it("still rejects negative readings and non-numeric input", () => {
+    expect(
+      dailyLogEntrySchema.safeParse({ log_date: "2026-09-16", morning_odometer: "-5" }).success,
+    ).toBe(false);
+    expect(
+      dailyLogEntrySchema.safeParse({
+        log_date: "2026-09-16",
+        morning_odometer: "10",
+        evening_odometer: "-1",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("assertOwnLogPhoto (save-handler ownership guard)", () => {
+  it("rejects a foreign morning photo with the exact handler error", () => {
+    expect(() => assertOwnLogPhoto("engineer/other/morning_reading/2026-09-16/a.jpg", "e1", "morning")).toThrow(
+      "Forbidden: morning photo must be your own upload",
+    );
+  });
+
+  it("rejects a foreign evening photo with the exact handler error", () => {
+    expect(() => assertOwnLogPhoto("engineer/other/evening_reading/2026-09-16/b.jpg", "e1", "evening")).toThrow(
+      "Forbidden: evening photo must be your own upload",
+    );
+  });
+
+  it("accepts own uploads and blank (photo optional)", () => {
+    expect(() =>
+      assertOwnLogPhoto("engineer/e1/morning_reading/2026-09-16/a.jpg", "e1", "morning"),
+    ).not.toThrow();
+    expect(() =>
+      assertOwnLogPhoto("engineer/e1/evening_reading/2026-09-16/b.jpg", "e1", "evening"),
+    ).not.toThrow();
+    expect(() => assertOwnLogPhoto("", "e1", "morning")).not.toThrow();
+    expect(() => assertOwnLogPhoto("   ", "e1", "evening")).not.toThrow();
+    expect(() => assertOwnLogPhoto(undefined, "e1", "morning")).not.toThrow();
+    expect(() => assertOwnLogPhoto(null, "e1", "evening")).not.toThrow();
+  });
+});
+
+describe("assertLogDateNotFuture (save-handler future-date guard)", () => {
+  it("rejects a future log_date, naming received date and today", () => {
+    expect(() => assertLogDateNotFuture("2026-09-18", "2026-09-17")).toThrow(
+      "Future log_date 2026-09-18 not allowed (today is 2026-09-17)",
+    );
+  });
+
+  it("accepts today and past dates", () => {
+    expect(() => assertLogDateNotFuture("2026-09-17", "2026-09-17")).not.toThrow();
+    expect(() => assertLogDateNotFuture("2026-09-16", "2026-09-17")).not.toThrow();
   });
 });
 

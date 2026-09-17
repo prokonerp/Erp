@@ -7,6 +7,8 @@ import { uploadObjectRaw } from "@/lib/storage-upload-raw";
 import {
   CHARGE_TYPES,
   asEmployeeDocuments,
+  assertLogDateNotFuture,
+  assertOwnLogPhoto,
   dailyLogEntrySchema,
   expenseEntrySchema,
   kmTravelled,
@@ -30,6 +32,7 @@ const uploadKinds = [
   "receipt",
   "profile_photo",
   "document",
+  "serial_photo",
 ] as const;
 
 type AdminClient = Awaited<ReturnType<typeof getAdmin>>;
@@ -132,6 +135,10 @@ export const uploadEngineerAttachment = createServerFn({ method: "POST" })
         nameKind = "PROFILE";
         nameLabel = sanitizeNameLabel(data.label);
         break;
+      case "serial_photo":
+        nameKind = "SERIAL";
+        nameLabel = "serial";
+        break;
     }
     const filename = buildUploadFilename({
       initials,
@@ -231,6 +238,7 @@ export const saveEngineerDailyLog = createServerFn({ method: "POST" })
   .middleware([requireActiveUser])
   .inputValidator((input) => dailyLogInput.parse(input))
   .handler(async ({ data, context }) => {
+    assertLogDateNotFuture(data.log_date, todayLocal());
     const admin = await getAdmin();
     const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
@@ -271,6 +279,10 @@ export const saveEngineerDailyLog = createServerFn({ method: "POST" })
     if (!parsed.success) {
       throw new Error(parsed.error.issues[0]?.message ?? "Invalid daily log");
     }
+    // Photo ownership: non-blank paths must be the caller's own uploads
+    // (verbatim parity with the expense receipt check). Blank stays legal.
+    assertOwnLogPhoto(parsed.data.morning_photo_path, caller.id, "morning");
+    assertOwnLogPhoto(parsed.data.evening_photo_path, caller.id, "evening");
     // Numbers + photo go together for each half of the day.
     if (parsed.data.morning_odometer != null && !parsed.data.morning_photo_path) {
       throw new Error("Morning photo is required with the morning reading");
@@ -317,6 +329,7 @@ const expenseInput = z.object({
   amount: z.union([z.number(), z.string()]),
   receipt_path: z.string().max(500).nullable().optional(),
   notes: z.string().trim().max(500).nullable().optional(),
+  client_key: z.string().uuid("Invalid request key"),
 });
 
 export const saveConveyanceExpense = createServerFn({ method: "POST" })
@@ -336,20 +349,39 @@ export const saveConveyanceExpense = createServerFn({ method: "POST" })
       throw new Error("Forbidden: receipt must be your own upload");
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
-    const { data: row, error } = await (admin as any)
+    // Idempotent insert: a retry reusing the same client_key hits
+    // ON CONFLICT (client_key) DO NOTHING and returns zero rows, so fall
+    // through to the existing-row select below instead of duplicating.
+    const { data: upserted, error } = await (admin as any)
       .from("engineer_conveyance_expenses")
-      .insert({
-        employee_id: caller.id,
-        expense_date: parsed.data.expense_date,
-        charge_type: parsed.data.charge_type,
-        amount: parsed.data.amount,
-        receipt_path: parsed.data.receipt_path ?? null,
-        notes: parsed.data.notes ?? null,
-      })
+      .upsert(
+        {
+          employee_id: caller.id,
+          expense_date: parsed.data.expense_date,
+          charge_type: parsed.data.charge_type,
+          amount: parsed.data.amount,
+          receipt_path: parsed.data.receipt_path ?? null,
+          notes: parsed.data.notes ?? null,
+          client_key: data.client_key,
+        },
+        { onConflict: "client_key", ignoreDuplicates: true },
+      )
       .select("id")
-      .single();
+      .maybeSingle();
     if (error) throw new Error(formatDbError(error, "Failed to save expense"));
-    return { id: (row as { id: string }).id };
+    const freshId = (upserted as { id: string } | null)?.id;
+    if (freshId) return { id: freshId };
+    // Retry path: the row already exists under this client_key. Scope the
+    // read to the caller's own rows so a foreign key can never leak a row.
+    const { data: existing, error: readErr } = await (admin as any)
+      .from("engineer_conveyance_expenses")
+      .select("id")
+      .eq("client_key", data.client_key)
+      .eq("employee_id", caller.id)
+      .maybeSingle();
+    if (readErr) throw new Error(formatDbError(readErr, "Failed to save expense"));
+    if (!existing) throw new Error("Failed to save expense");
+    return { id: (existing as { id: string }).id };
   });
 
 // ---------------------------------------------------------------------------

@@ -79,6 +79,24 @@ async function fileToBase64(blob: Blob): Promise<string> {
   return base64;
 }
 
+let expenseKeyFallback = 0;
+
+/** Mint an idempotency key (uuid v4). Counter fallback keeps uuid shape. */
+function mintExpenseKey(): string {
+  try {
+    const fn = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
+    if (fn) return fn();
+  } catch {
+    // Fall through to the counter fallback below.
+  }
+  expenseKeyFallback += 1;
+  const tail =
+    `${Date.now().toString(16).slice(-8)}${expenseKeyFallback.toString(16).padStart(4, "0")}`.slice(
+      -12,
+    );
+  return `00000000-0000-4000-8000-${tail}`;
+}
+
 /** Error taxonomy lives in the lib (unit-tested): see conveyanceLoadMessage. */
 
 function PhotoPicker({
@@ -473,6 +491,12 @@ function EngConveyance() {
   const [expenseBusy, setExpenseBusy] = useState(false);
   const expenseBusyRef = useRef(false);
 
+  // Expense idempotency key: minted ONCE per mount, reused by every submit
+  // attempt (retry / double-tap) so the server upsert dedupes on
+  // client_key. Regenerated only after a successful save.
+  const expenseKeyRef = useRef<string | null>(null);
+  if (expenseKeyRef.current == null) expenseKeyRef.current = mintExpenseKey();
+
   async function uploadPhoto(
     file: File,
     kind: "morning_reading" | "evening_reading" | "receipt",
@@ -616,6 +640,8 @@ function EngConveyance() {
     }
     setExpenseBusy(true);
     expenseBusyRef.current = true;
+    if (expenseKeyRef.current == null) expenseKeyRef.current = mintExpenseKey();
+    const clientKey = expenseKeyRef.current;
     try {
       let receiptPath: string | null = null;
       if (form.receiptFile) receiptPath = await uploadPhoto(form.receiptFile, "receipt", charge);
@@ -627,6 +653,7 @@ function EngConveyance() {
             amount: form.amount.trim(),
             receipt_path: receiptPath,
             notes: form.notes.trim() === "" ? null : form.notes.trim(),
+            client_key: clientKey,
           },
         });
       } catch (saveErr) {
@@ -644,6 +671,7 @@ function EngConveyance() {
       }
       toast.success("Expense added");
       form.reset();
+      expenseKeyRef.current = mintExpenseKey();
       await queryClient.invalidateQueries({ queryKey: expKey });
     } catch (err) {
       toast.error(reportDbError("expense save", err, "Save failed"));

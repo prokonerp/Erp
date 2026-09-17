@@ -77,17 +77,14 @@ export const dailyLogEntrySchema = z
     evening_photo_path: optionalPhotoPath,
     notes: z.string().trim().max(500).nullable().optional(),
   })
-  .partial({ evening_odometer: true, evening_photo_path: true })
-  .refine(
-    (d) =>
-      d.morning_odometer == null ||
-      d.evening_odometer == null ||
-      d.evening_odometer >= d.morning_odometer,
-    {
-      message: "Evening reading cannot be less than the morning reading",
-      path: ["evening_odometer"],
-    },
-  );
+  .partial({ evening_odometer: true, evening_photo_path: true });
+
+/**
+ * NOTE: evening < morning is ACCEPTED here (no refine). A reversal yields
+ * km null via kmTravelled (payable 0) and is surfaced to admins as a
+ * `negative-km` attention item (buildAttentionItems) — never silently dropped,
+ * never wrap-around math.
+ */
 
 export type DailyLogEntry = z.infer<typeof dailyLogEntrySchema>;
 
@@ -124,6 +121,32 @@ export function kmTravelled(log: {
 /** YYYY-MM-DD in IST (conveyance days follow the app timezone, not the device). */
 export function todayLocal(): string {
   return istDateKey();
+}
+
+/**
+ * Write-path guard: log_date must not be after today (IST). Throws — call
+ * only from the save handler, never on read paths.
+ */
+export function assertLogDateNotFuture(logDate: string, today: string): void {
+  if (logDate > today) {
+    throw new Error(`Future log_date ${logDate} not allowed (today is ${today})`);
+  }
+}
+
+/**
+ * Write-path guard: a non-blank daily-log photo must be the caller's own
+ * upload (`engineer/<employeeId>/…`), mirroring the expense receipt check.
+ * Blank stays legal (photo optional). Throws — save handler only.
+ */
+export function assertOwnLogPhoto(
+  photoPath: string | null | undefined,
+  employeeId: string,
+  which: "morning" | "evening",
+): void {
+  if (photoPath == null || photoPath.trim() === "") return;
+  if (!photoPath.startsWith(`engineer/${employeeId}/`)) {
+    throw new Error(`Forbidden: ${which} photo must be your own upload`);
+  }
 }
 
 export type FsrDefectiveLine = {

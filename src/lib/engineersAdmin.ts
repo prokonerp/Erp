@@ -208,7 +208,8 @@ export function docCompliance(docs: AdminDoc[] | null | undefined): {
 /**
  * One attention item per defect kind (never duplicates for the same kind):
  * missing rate, missing evening reading, missing receipt, missing doc,
- * km outlier, unapproved settlement past cut-off, unreturned parts.
+ * km outlier, odometer reversal (negative-km), unapproved settlement past
+ * cut-off, unreturned parts.
  * Today defaults to the IST calendar date (time.ts); tests pin todayISO.
  */
 export function buildAttentionItems(
@@ -273,6 +274,19 @@ export function buildAttentionItems(
       key: "km-outlier",
       severity: "medium",
       label: "At least one day exceeds 300 km — verify odometer readings.",
+    });
+  }
+
+  // Odometer reversal (evening < morning): accepted server-side, km null /
+  // payable 0, flagged here exactly once no matter how many days reverse.
+  const negativeKmDays = days.filter(
+    (d) => !!d && kmFlags(d.morning_odometer, d.evening_odometer).includes("negative-km"),
+  );
+  if (negativeKmDays.length > 0) {
+    items.push({
+      key: "negative-km",
+      severity: "medium",
+      label: `Odometer reversal on ${negativeKmDays.length} day(s) — evening reading below morning, verify readings.`,
     });
   }
 
