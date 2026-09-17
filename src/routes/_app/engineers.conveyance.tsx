@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { CalendarDays, Flag, IndianRupee, Receipt, Route as RouteIcon } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -267,6 +267,22 @@ function EngineerConveyancePage() {
           hint="Per-km rate today"
         />
       </div>
+
+      {rate == null && !loading && employeeId !== "" && (
+        <p
+          role="note"
+          className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+        >
+          No conveyance rate in force for {nameById.get(employeeId) ?? employeeId} —{" "}
+          <Link
+            to="/engineers/rates"
+            className="font-medium underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            set a rate
+          </Link>{" "}
+          before approving.
+        </p>
+      )}
 
       <section aria-label="Day matrix">
         <DataTable

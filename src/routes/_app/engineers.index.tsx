@@ -199,7 +199,11 @@ function EngineersIndex() {
           value={overview.data.kpis.openTickets}
           icon={Ticket}
           loading={overview.isLoading}
-          hint="Assigned, not closed"
+          hint={
+            !overview.isLoading && overview.data.kpis.openTickets === 0
+              ? "No open tickets right now"
+              : "Assigned, not closed"
+          }
         />
         <StatCard
           label="High attention"
@@ -214,7 +218,11 @@ function EngineersIndex() {
           value={overview.data.kpis.kmMonth}
           icon={Truck}
           loading={overview.isLoading}
-          hint="Logged odometer distance"
+          hint={
+            !overview.isLoading && overview.data.kpis.kmMonth === 0
+              ? "No distance logged this month"
+              : "Logged odometer distance"
+          }
         />
       </div>
 
