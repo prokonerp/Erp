@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { IdentityResult } from "@/lib/engineer-identity";
 
 export const UPS_LOCATIONS = ["Computer Room", "Electrical Room", "Network Room", "Other"] as const;
 
@@ -100,9 +101,169 @@ export const partReplacementSchema = z.object({
   newSrNo: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
   charges: optionalNonNegativeNumber,
   qty: optionalNonNegativeInt,
+  // Serial-photo evidence (B1.6): storage path of the captured serial photo.
+  // Required at finalize whenever oldSrNo/newSrNo is present (see gate
+  // below). camelCase like its siblings; mapped to photo_path for the DB.
+  photoPath: z.preprocess(emptyToUndefined, z.string().max(500).optional()),
 });
 
 export const partReplacementsSchema = z.array(partReplacementSchema).max(5).default([]);
+
+// ---------------------------------------------------------------------------
+// Serial-photo evidence gate.
+//
+// A serial-bearing line (old/new Sr. No present) must carry photo evidence
+// or finalize-fsr.functions.ts rejects it LOUDLY before any write. The form
+// captures it per part row (B1.6) into `photo_path`; SERIAL_PHOTO_KEYS keeps
+// forward-compat with any serialPhoto-style aliases.
+// ---------------------------------------------------------------------------
+
+/** Storage keys tolerated as serial-photo evidence (none exist in stored rows today). */
+const SERIAL_PHOTO_KEYS = [
+  "photo_path",
+  "photoPath",
+  "serial_photo",
+  "serialPhoto",
+  "serial_photo_path",
+  "serialPhotoPath",
+  "photo",
+  "photo_url",
+  "photoUrl",
+] as const;
+
+const SERIAL_OLD_KEYS = ["oldSrNo", "old_sr_no"] as const;
+const SERIAL_NEW_KEYS = ["newSrNo", "new_sr_no"] as const;
+
+function isNonBlankString(v: unknown): v is string {
+  return typeof v === "string" && v.trim() !== "";
+}
+
+function pickLineField(line: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const k of keys) {
+    const v = line[k];
+    if (isNonBlankString(v)) return v;
+  }
+  return null;
+}
+
+/** True when old Sr. No or new Sr. No is non-blank (whitespace counts as blank). */
+export function partLineHasSerialNumber(line: Record<string, unknown>): boolean {
+  return (
+    pickLineField(line, SERIAL_OLD_KEYS) !== null ||
+    pickLineField(line, SERIAL_NEW_KEYS) !== null
+  );
+}
+
+/**
+ * True when any tolerated photo-evidence key is non-blank. Always false for
+ * rows written by the current form (no photo field exists in the shape).
+ */
+export function partLineHasSerialPhoto(line: Record<string, unknown>): boolean {
+  return pickLineField(line, SERIAL_PHOTO_KEYS) !== null;
+}
+
+/**
+ * 0-based indices of serial-bearing lines with no photo evidence.
+ * Non-array input (null/missing column) yields [] — nothing to gate.
+ */
+export function findSerialLinesWithoutPhoto(list: unknown): number[] {
+  if (!Array.isArray(list)) return [];
+  const missing: number[] = [];
+  list.forEach((entry, i) => {
+    if (!entry || typeof entry !== "object") return;
+    const line = entry as Record<string, unknown>;
+    if (partLineHasSerialNumber(line) && !partLineHasSerialPhoto(line)) missing.push(i);
+  });
+  return missing;
+}
+
+/** Human ref for one offending line: report + line are 1-based for engineers. */
+export function serialPhotoLineRef(reportIndex: number, lineIndex: number): string {
+  return `part line ${lineIndex + 1} (report ${reportIndex + 1}) has a serial number but no serial photo evidence`;
+}
+
+/** Finalize rejection: lists every offending line, states nothing was written. */
+export function buildSerialPhotoBlockedError(refs: string[]): string {
+  return `Serial photo required — finalize blocked: ${refs.join("; ")}. Nothing was departed or closed.`;
+}
+
+// ---------------------------------------------------------------------------
+// Submit identity gate (FIX 2): identity failure blocks, never orphans.
+// ---------------------------------------------------------------------------
+
+/** Retryable block message shown when engineer identity cannot be verified. Nothing is saved. */
+export const IDENTITY_BLOCK_MESSAGE =
+  "Could not verify your engineer identity — check connection and retry. Nothing was saved.";
+
+export type SubmitIdentity =
+  | { blocked: true; message: string }
+  | { blocked: false; employeeId: string; engineerName: string; engineerPhone: string | null };
+
+/**
+ * Maps a fetchMyIdentity result to submit identity. Non-ok (not_linked,
+ * ambiguous) blocks with IDENTITY_BLOCK_MESSAGE; ok passes the row through
+ * with the exact legacy fallbacks (null name → fallback, null phone → null).
+ */
+export function resolveSubmitIdentity(
+  identity: IdentityResult,
+  fallbackName: string,
+): SubmitIdentity {
+  if (identity.status !== "ok") return { blocked: true, message: IDENTITY_BLOCK_MESSAGE };
+  const employee = identity.employee as unknown as {
+    id: string;
+    name: string | null;
+    phone?: string | null;
+  };
+  return {
+    blocked: false,
+    employeeId: employee.id,
+    engineerName: employee.name ?? fallbackName,
+    engineerPhone: employee.phone ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Latest-open-visit picker (FIX 3): single latest open visit, never all.
+// ---------------------------------------------------------------------------
+
+export type OpenVisitCandidate = {
+  id: string;
+  arrival_at: string | null;
+  departure_at: string | null;
+  created_at?: string | null;
+};
+
+/**
+ * Returns the single latest open visit (arrival set, departure unset),
+ * newest arrival first with created_at as tiebreak. Null/empty/all-closed/
+ * arrival-less input yields null (no phantom departures).
+ */
+export function pickLatestOpenVisit<T extends OpenVisitCandidate>(
+  rows: readonly T[] | null | undefined,
+): T | null {
+  if (!rows || rows.length === 0) return null;
+  const toTime = (v: string | null | undefined): number => {
+    if (!v) return Number.NEGATIVE_INFINITY;
+    const t = Date.parse(v);
+    return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
+  };
+  let best: T | null = null;
+  for (const row of rows) {
+    if (!row || !row.arrival_at || row.departure_at) continue;
+    if (!best) {
+      best = row;
+      continue;
+    }
+    const arrivalDelta = toTime(row.arrival_at) - toTime(best.arrival_at);
+    if (
+      arrivalDelta > 0 ||
+      (arrivalDelta === 0 && toTime(row.created_at) - toTime(best.created_at) > 0)
+    ) {
+      best = row;
+    }
+  }
+  return best;
+}
 
 export const ratingSchema = z.preprocess(
   emptyToUndefined,
@@ -164,6 +325,7 @@ export type FieldServiceReportPayload = {
     new_sr_no: string | null;
     charges: number | null;
     qty: number | null;
+    photo_path: string | null;
   }[];
 };
 
@@ -225,6 +387,7 @@ export function buildFsrPayload(
       new_sr_no: p.newSrNo ?? null,
       charges: p.charges ?? null,
       qty: p.qty ?? null,
+      photo_path: p.photoPath ?? null,
     })),
   };
 }

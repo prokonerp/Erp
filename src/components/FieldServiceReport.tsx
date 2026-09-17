@@ -3,7 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Check, Plus, X } from "lucide-react";
+import { Camera, Check, Loader2, Plus, X } from "lucide-react";
+import { compressImageToLimit } from "@/lib/image-compress";
+import { uploadEngineerAttachment } from "@/lib/engineer-conveyance.functions";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BATTERY_AH,
@@ -12,11 +14,13 @@ import {
   UPS_LOCATIONS,
   buildFsrPayload,
   fieldServiceReportSchema,
+  IDENTITY_BLOCK_MESSAGE,
   loadRecordSchema,
   partReplacementsSchema,
   powerConditionSchema,
   ratingSchema,
   readingsSchema,
+  resolveSubmitIdentity,
 } from "@/lib/fieldServiceReport";
 import { fieldServiceReportKeys } from "@/lib/queryKeys";
 import { engKeys } from "@/lib/queryKeys";
@@ -52,7 +56,112 @@ type PartReplacement = {
   newSrNo: string;
   charges: string;
   qty: string;
+  /** Storage path of the serial photo (B1.6). Required at finalize when a serial is present. */
+  photoPath: string;
 };
+
+/** Per-part-row serial-photo capture (B1.6). Uploads immediately via the
+ *  engineer-uploads bucket (kind serial_photo, caller-scoped path) and
+ *  reports the storage path. Compact chip UI — no signed-URL plumbing here;
+ *  the path is the evidence the finalize gate checks. */
+function PartPhotoCapture({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (path: string) => void;
+  disabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const callUpload = useServerFn(uploadEngineerAttachment);
+  const [uploading, setUploading] = useState(false);
+
+  const pick = async (file: File | null) => {
+    if (!file || uploading) return;
+    if (!navigator.onLine) {
+      toast.error("No internet connection. Reconnect and retry.");
+      return;
+    }
+    setUploading(true);
+    try {
+      const compressed = await compressImageToLimit(file);
+      const base64 = await fileToBase64(compressed.blob);
+      const res = await callUpload({
+        data: {
+          kind: "serial_photo",
+          filename: compressed.name,
+          content_type: compressed.contentType,
+          data_base64: base64,
+        },
+      });
+      onChange(res.path);
+      toast.success("Serial photo attached");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Photo upload failed");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        disabled={disabled || uploading}
+        onChange={(e) => pick(e.target.files?.[0] ?? null)}
+      />
+      {value ? (
+        <>
+          <span className="inline-flex items-center text-[13px] font-medium text-emerald-600">
+            <Check className="h-4 w-4 mr-1" aria-hidden />Photo attached
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onChange("")}
+            disabled={disabled || uploading}
+          >
+            Remove
+          </Button>
+        </>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => inputRef.current?.click()}
+          disabled={disabled || uploading}
+        >
+          {uploading ? (
+            <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden />
+          ) : (
+            <Camera className="h-4 w-4 mr-1" aria-hidden />
+          )}
+          {uploading ? "Uploading…" : "Capture serial photo"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+async function fileToBase64(blob: Blob): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+  const base64 = dataUrl.split(",")[1];
+  if (!base64) throw new Error("Could not read the photo");
+  return base64;
+}
 
 type FormState = {
   mainsVoltageLn: string;
@@ -491,6 +600,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 newSrNo: "",
                 charges: "",
                 qty: "",
+                photoPath: "",
               },
             ],
           },
@@ -578,9 +688,9 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
       }
       const email = u.user.email;
       const authUid = u.user.id;
-      // Central identity policy. Unlinked/ambiguous/query-error all fall back
-      // to the email-as-name default below (the FSR row still records who
-      // submitted; assignment is enforced separately by the server fns).
+      // Central identity policy. Identity failure BLOCKS the submit (no
+      // orphaned FSR rows with employeeId=null): the engineer retries — the
+      // finally below resets busy/submittingRef, nothing was saved.
       let employeeId: string | null = null;
       let engineerName = email ?? "Engineer";
       let engineerPhone: string | null = null;
@@ -590,13 +700,18 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
           email: email ?? null,
           columns: "id,name,phone",
         });
-        if (identity.status === "ok") {
-          employeeId = identity.employee.id;
-          engineerName = (identity.employee.name as string | null) ?? engineerName;
-          engineerPhone = (identity.employee.phone as string | null) ?? null;
+        const resolved = resolveSubmitIdentity(identity, engineerName);
+        if (resolved.blocked) {
+          toast.error(resolved.message);
+          return;
         }
+        employeeId = resolved.employeeId;
+        engineerName = resolved.engineerName;
+        engineerPhone = resolved.engineerPhone;
       } catch {
-        // Identity failure must never block the report itself.
+        // Identity failure must block the report (retryable — nothing saved).
+        toast.error(IDENTITY_BLOCK_MESSAGE);
+        return;
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
       if (!submissionIdRef.current) submissionIdRef.current = crypto.randomUUID();
@@ -1213,6 +1328,21 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                       placeholder="Qty"
                       error={errors[`partReplacements.${i}.qty`]}
                     />
+                  </FsrField>
+                  <FsrField label="Serial photo">
+                    <div>
+                      <PartPhotoCapture
+                        value={part.photoPath}
+                        onChange={(path) => setPart(i, "photoPath", path)}
+                        disabled={busy}
+                      />
+                      {(part.oldSrNo.trim() !== "" || part.newSrNo.trim() !== "") &&
+                        part.photoPath.trim() === "" && (
+                          <p className="text-[0.8rem] font-medium text-destructive mt-1">
+                            Required for finalize — capture the serial photo.
+                          </p>
+                        )}
+                    </div>
                   </FsrField>
                 </div>
               ))

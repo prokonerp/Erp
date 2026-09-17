@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { fieldServiceReportSchema, buildFsrPayload, UPS_LOCATIONS } from "@/lib/fieldServiceReport";
+import {
+  fieldServiceReportSchema,
+  partReplacementsSchema,
+  buildFsrPayload,
+  UPS_LOCATIONS,
+  buildSerialPhotoBlockedError,
+  findSerialLinesWithoutPhoto,
+  IDENTITY_BLOCK_MESSAGE,
+  partLineHasSerialNumber,
+  partLineHasSerialPhoto,
+  pickLatestOpenVisit,
+  resolveSubmitIdentity,
+  serialPhotoLineRef,
+} from "@/lib/fieldServiceReport";
 
 const validLocation = UPS_LOCATIONS[0];
 
@@ -688,6 +701,7 @@ describe("buildFsrPayload", () => {
         new_sr_no: "NEW1",
         charges: 1500,
         qty: 2,
+        photo_path: null,
       },
     ]);
   });
@@ -710,5 +724,170 @@ describe("buildFsrPayload", () => {
     }) as Record<string, unknown>;
     expect(minimalPayload.customer_signature_path).toBe("signatures/ticket-123.png");
     expect(minimalPayload.signature_captured_at).toBeNull();
+  });
+});
+
+describe("serial photo evidence gate", () => {
+  it("flags oldSrNo-only and newSrNo-only lines (camelCase)", () => {
+    expect(findSerialLinesWithoutPhoto([{ oldSrNo: "OLD1" }])).toEqual([0]);
+    expect(findSerialLinesWithoutPhoto([{ newSrNo: "NEW1" }])).toEqual([0]);
+  });
+
+  it("flags snake_case serial keys as stored in the DB rows", () => {
+    expect(findSerialLinesWithoutPhoto([{ old_sr_no: "OLD1" }])).toEqual([0]);
+    expect(findSerialLinesWithoutPhoto([{ new_sr_no: "NEW1" }])).toEqual([0]);
+  });
+
+  it("returns [] for serial-less, blank, and whitespace-only lines", () => {
+    expect(findSerialLinesWithoutPhoto([])).toEqual([]);
+    expect(
+      findSerialLinesWithoutPhoto([
+        { item: "Battery", qty: 2 },
+        { item: "", oldSrNo: "", newSrNo: "  ", charges: "", qty: "" },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("returns [] for non-array input (null/missing column)", () => {
+    expect(findSerialLinesWithoutPhoto(null)).toEqual([]);
+    expect(findSerialLinesWithoutPhoto(undefined)).toEqual([]);
+    expect(findSerialLinesWithoutPhoto("OLD1")).toEqual([]);
+  });
+
+  it("skips non-object entries, indexes only offending lines", () => {
+    expect(
+      findSerialLinesWithoutPhoto([
+        { item: "Fuse" },
+        null,
+        { item: "Battery", oldSrNo: "OLD1" },
+        "junk",
+        { item: "Board", newSrNo: "NEW9" },
+      ]),
+    ).toEqual([2, 4]);
+  });
+
+  it("partLineHasSerialNumber tolerates both casings, ignores blanks", () => {
+    expect(partLineHasSerialNumber({ oldSrNo: "A" })).toBe(true);
+    expect(partLineHasSerialNumber({ new_sr_no: "B" })).toBe(true);
+    expect(partLineHasSerialNumber({ oldSrNo: "  ", newSrNo: "" })).toBe(false);
+    expect(partLineHasSerialNumber({ item: "Battery" })).toBe(false);
+  });
+
+  it("partLineHasSerialPhoto is false for current-form rows, true for future photo keys", () => {
+    expect(partLineHasSerialPhoto({ oldSrNo: "OLD1", newSrNo: "NEW1" })).toBe(false);
+    expect(
+      findSerialLinesWithoutPhoto([{ oldSrNo: "OLD1", photo_path: "serials/p1.jpg" }]),
+    ).toEqual([]);
+    expect(partLineHasSerialPhoto({ serialPhoto: "serials/p2.jpg" })).toBe(true);
+  });
+
+  it("B1.6: schema keeps photoPath and payload maps it to photo_path", () => {
+    const parsed = partReplacementsSchema.safeParse([
+      { item: "PCB", oldSrNo: "O1", photoPath: "engineer/e1/serial_photo/2026-09-17/x.jpg" },
+    ]);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data[0]?.photoPath).toBe("engineer/e1/serial_photo/2026-09-17/x.jpg");
+    const payload = buildFsrPayload(
+      { ...minimalInput(), partReplacements: parsed.data } as never,
+      "T-1",
+      { employeeId: "E1", name: "Jane", phone: null, submissionId: "S1" },
+    );
+    expect(payload.part_replacements[0]?.photo_path).toBe(
+      "engineer/e1/serial_photo/2026-09-17/x.jpg",
+    );
+  });
+
+  it("error refs are 1-based and the blocked error states nothing was written", () => {
+    expect(serialPhotoLineRef(0, 1)).toBe(
+      "part line 2 (report 1) has a serial number but no serial photo evidence",
+    );
+    const err = buildSerialPhotoBlockedError([serialPhotoLineRef(0, 0), serialPhotoLineRef(1, 2)]);
+    expect(err).toBe(
+      "Serial photo required — finalize blocked: part line 1 (report 1) has a serial number but no serial photo evidence; part line 3 (report 2) has a serial number but no serial photo evidence. Nothing was departed or closed.",
+    );
+  });
+});
+
+describe("resolveSubmitIdentity (identity failure blocks, never orphans)", () => {
+  it("passes ok identity through with legacy fallbacks", () => {
+    const res = resolveSubmitIdentity(
+      { status: "ok", employee: { id: "EMP-1", name: "Jane", phone: "999" } },
+      "fallback@example.com",
+    );
+    expect(res).toEqual({
+      blocked: false,
+      employeeId: "EMP-1",
+      engineerName: "Jane",
+      engineerPhone: "999",
+    });
+  });
+
+  it("falls back to the email-as-name default only when name is null", () => {
+    const res = resolveSubmitIdentity(
+      { status: "ok", employee: { id: "EMP-1", name: null } },
+      "fallback@example.com",
+    );
+    expect(res).toEqual({
+      blocked: false,
+      employeeId: "EMP-1",
+      engineerName: "fallback@example.com",
+      engineerPhone: null,
+    });
+  });
+
+  it("blocks not_linked and ambiguous with the exact retryable message", () => {
+    expect(resolveSubmitIdentity({ status: "not_linked" }, "e@x.com")).toEqual({
+      blocked: true,
+      message: IDENTITY_BLOCK_MESSAGE,
+    });
+    expect(resolveSubmitIdentity({ status: "ambiguous", count: 2 }, "e@x.com")).toEqual({
+      blocked: true,
+      message: IDENTITY_BLOCK_MESSAGE,
+    });
+    expect(IDENTITY_BLOCK_MESSAGE).toBe(
+      "Could not verify your engineer identity — check connection and retry. Nothing was saved.",
+    );
+  });
+});
+
+describe("pickLatestOpenVisit (single latest open visit, never all)", () => {
+  const open = (id: string, arrival_at: string | null, created_at: string | null = null) => ({
+    id,
+    arrival_at,
+    departure_at: null,
+    created_at,
+  });
+
+  it("returns null for null/empty/all-departed/arrival-less rows (no phantom departures)", () => {
+    expect(pickLatestOpenVisit(null)).toBeNull();
+    expect(pickLatestOpenVisit([])).toBeNull();
+    expect(
+      pickLatestOpenVisit([
+        { id: "a", arrival_at: "2026-09-14T10:00:00.000Z", departure_at: "2026-09-14T12:00:00.000Z" },
+      ]),
+    ).toBeNull();
+    expect(pickLatestOpenVisit([open("b", null)])).toBeNull();
+  });
+
+  it("picks the newest arrival and ignores departed rows", () => {
+    const rows = [
+      open("old", "2026-09-13T10:00:00.000Z"),
+      {
+        id: "departed",
+        arrival_at: "2026-09-15T10:00:00.000Z",
+        departure_at: "2026-09-15T12:00:00.000Z",
+      },
+      open("new", "2026-09-14T10:00:00.000Z"),
+    ];
+    expect(pickLatestOpenVisit(rows)?.id).toBe("new");
+  });
+
+  it("breaks arrival ties by created_at", () => {
+    const rows = [
+      open("first", "2026-09-14T10:00:00.000Z", "2026-09-14T10:01:00.000Z"),
+      open("second", "2026-09-14T10:00:00.000Z", "2026-09-14T10:02:00.000Z"),
+    ];
+    expect(pickLatestOpenVisit(rows)?.id).toBe("second");
   });
 });
