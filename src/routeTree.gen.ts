@@ -91,6 +91,7 @@ import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppEngineersReconcileRouteImport } from './routes/_app/engineers.reconcile'
 import { Route as AppEngineersRatesRouteImport } from './routes/_app/engineers.rates'
 import { Route as AppEngineersExpensesRouteImport } from './routes/_app/engineers.expenses'
+import { Route as AppEngineersDirectoryRouteImport } from './routes/_app/engineers.directory'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
 import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
@@ -135,6 +136,7 @@ import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
 import { Route as AppGrnGeneralNewRouteImport } from './routes/_app/grn.general.new'
 import { Route as AppGrnCustomerNewRouteImport } from './routes/_app/grn.customer.new'
 import { Route as AppGrnIdEditRouteImport } from './routes/_app/grn.$id_.edit'
+import { Route as AppEngineersDirectoryEmployeeIdRouteImport } from './routes/_app/engineers.directory.$employeeId'
 import { Route as AppCrmQuotationsNewRouteImport } from './routes/_app/crm.quotations.new'
 import { Route as AppCrmQuotationsIdRouteImport } from './routes/_app/crm.quotations.$id'
 import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
@@ -556,6 +558,11 @@ const AppEngineersExpensesRoute = AppEngineersExpensesRouteImport.update({
   path: '/expenses',
   getParentRoute: () => AppEngineersRoute,
 } as any)
+const AppEngineersDirectoryRoute = AppEngineersDirectoryRouteImport.update({
+  id: '/directory',
+  path: '/directory',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
 const AppCrmSettingsRoute = AppCrmSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -777,6 +784,12 @@ const AppGrnIdEditRoute = AppGrnIdEditRouteImport.update({
   path: '/$id/edit',
   getParentRoute: () => AppGrnRoute,
 } as any)
+const AppEngineersDirectoryEmployeeIdRoute =
+  AppEngineersDirectoryEmployeeIdRouteImport.update({
+    id: '/$employeeId',
+    path: '/$employeeId',
+    getParentRoute: () => AppEngineersDirectoryRoute,
+  } as any)
 const AppCrmQuotationsNewRoute = AppCrmQuotationsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -875,6 +888,7 @@ export interface FileRoutesByFullPath {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
+  '/engineers/directory': typeof AppEngineersDirectoryRouteWithChildren
   '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/engineers/reconcile': typeof AppEngineersReconcileRoute
@@ -932,6 +946,7 @@ export interface FileRoutesByFullPath {
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
   '/crm/quotations/new': typeof AppCrmQuotationsNewRoute
+  '/engineers/directory/$employeeId': typeof AppEngineersDirectoryEmployeeIdRoute
   '/grn/$id/edit': typeof AppGrnIdEditRoute
   '/grn/customer/new': typeof AppGrnCustomerNewRoute
   '/grn/general/new': typeof AppGrnGeneralNewRoute
@@ -999,6 +1014,7 @@ export interface FileRoutesByTo {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
+  '/engineers/directory': typeof AppEngineersDirectoryRouteWithChildren
   '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/engineers/reconcile': typeof AppEngineersReconcileRoute
@@ -1051,6 +1067,7 @@ export interface FileRoutesByTo {
   '/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
   '/crm/quotations/new': typeof AppCrmQuotationsNewRoute
+  '/engineers/directory/$employeeId': typeof AppEngineersDirectoryEmployeeIdRoute
   '/grn/$id/edit': typeof AppGrnIdEditRoute
   '/grn/customer/new': typeof AppGrnCustomerNewRoute
   '/grn/general/new': typeof AppGrnGeneralNewRoute
@@ -1133,6 +1150,7 @@ export interface FileRoutesById {
   '/_app/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
+  '/_app/engineers/directory': typeof AppEngineersDirectoryRouteWithChildren
   '/_app/engineers/expenses': typeof AppEngineersExpensesRoute
   '/_app/engineers/rates': typeof AppEngineersRatesRoute
   '/_app/engineers/reconcile': typeof AppEngineersReconcileRoute
@@ -1190,6 +1208,7 @@ export interface FileRoutesById {
   '/_app/crm/leads/$id': typeof AppCrmLeadsIdRoute
   '/_app/crm/quotations/$id': typeof AppCrmQuotationsIdRoute
   '/_app/crm/quotations/new': typeof AppCrmQuotationsNewRoute
+  '/_app/engineers/directory/$employeeId': typeof AppEngineersDirectoryEmployeeIdRoute
   '/_app/grn/$id_/edit': typeof AppGrnIdEditRoute
   '/_app/grn/customer/new': typeof AppGrnCustomerNewRoute
   '/_app/grn/general/new': typeof AppGrnGeneralNewRoute
@@ -1272,6 +1291,7 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
+    | '/engineers/directory'
     | '/engineers/expenses'
     | '/engineers/rates'
     | '/engineers/reconcile'
@@ -1329,6 +1349,7 @@ export interface FileRouteTypes {
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
     | '/crm/quotations/new'
+    | '/engineers/directory/$employeeId'
     | '/grn/$id/edit'
     | '/grn/customer/new'
     | '/grn/general/new'
@@ -1396,6 +1417,7 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
+    | '/engineers/directory'
     | '/engineers/expenses'
     | '/engineers/rates'
     | '/engineers/reconcile'
@@ -1448,6 +1470,7 @@ export interface FileRouteTypes {
     | '/crm/leads/$id'
     | '/crm/quotations/$id'
     | '/crm/quotations/new'
+    | '/engineers/directory/$employeeId'
     | '/grn/$id/edit'
     | '/grn/customer/new'
     | '/grn/general/new'
@@ -1529,6 +1552,7 @@ export interface FileRouteTypes {
     | '/_app/crm/leads'
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
+    | '/_app/engineers/directory'
     | '/_app/engineers/expenses'
     | '/_app/engineers/rates'
     | '/_app/engineers/reconcile'
@@ -1586,6 +1610,7 @@ export interface FileRouteTypes {
     | '/_app/crm/leads/$id'
     | '/_app/crm/quotations/$id'
     | '/_app/crm/quotations/new'
+    | '/_app/engineers/directory/$employeeId'
     | '/_app/grn/$id_/edit'
     | '/_app/grn/customer/new'
     | '/_app/grn/general/new'
@@ -2206,6 +2231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppEngineersExpensesRouteImport
       parentRoute: typeof AppEngineersRoute
     }
+    '/_app/engineers/directory': {
+      id: '/_app/engineers/directory'
+      path: '/directory'
+      fullPath: '/engineers/directory'
+      preLoaderRoute: typeof AppEngineersDirectoryRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
     '/_app/crm/settings': {
       id: '/_app/crm/settings'
       path: '/settings'
@@ -2514,6 +2546,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGrnIdEditRouteImport
       parentRoute: typeof AppGrnRoute
     }
+    '/_app/engineers/directory/$employeeId': {
+      id: '/_app/engineers/directory/$employeeId'
+      path: '/$employeeId'
+      fullPath: '/engineers/directory/$employeeId'
+      preLoaderRoute: typeof AppEngineersDirectoryEmployeeIdRouteImport
+      parentRoute: typeof AppEngineersDirectoryRoute
+    }
     '/_app/crm/quotations/new': {
       id: '/_app/crm/quotations/new'
       path: '/new'
@@ -2719,7 +2758,21 @@ const AppCrmRouteChildren: AppCrmRouteChildren = {
 const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
+interface AppEngineersDirectoryRouteChildren {
+  AppEngineersDirectoryEmployeeIdRoute: typeof AppEngineersDirectoryEmployeeIdRoute
+}
+
+const AppEngineersDirectoryRouteChildren: AppEngineersDirectoryRouteChildren = {
+  AppEngineersDirectoryEmployeeIdRoute: AppEngineersDirectoryEmployeeIdRoute,
+}
+
+const AppEngineersDirectoryRouteWithChildren =
+  AppEngineersDirectoryRoute._addFileChildren(
+    AppEngineersDirectoryRouteChildren,
+  )
+
 interface AppEngineersRouteChildren {
+  AppEngineersDirectoryRoute: typeof AppEngineersDirectoryRouteWithChildren
   AppEngineersExpensesRoute: typeof AppEngineersExpensesRoute
   AppEngineersRatesRoute: typeof AppEngineersRatesRoute
   AppEngineersReconcileRoute: typeof AppEngineersReconcileRoute
@@ -2727,6 +2780,7 @@ interface AppEngineersRouteChildren {
 }
 
 const AppEngineersRouteChildren: AppEngineersRouteChildren = {
+  AppEngineersDirectoryRoute: AppEngineersDirectoryRouteWithChildren,
   AppEngineersExpensesRoute: AppEngineersExpensesRoute,
   AppEngineersRatesRoute: AppEngineersRatesRoute,
   AppEngineersReconcileRoute: AppEngineersReconcileRoute,
