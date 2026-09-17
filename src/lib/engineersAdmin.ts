@@ -134,7 +134,7 @@ export function payableForPeriod(input: {
 }): {
   perDay: { date: string; km: number; rate: number | null; amount: number }[];
   flatTotal: number;
-  kmTotal: number;
+  amountTotal: number;
   grandTotal: number;
 } {
   const src = input ?? ({} as NonNullable<typeof input>);
@@ -154,8 +154,8 @@ export function payableForPeriod(input: {
     flatTotal += asFiniteNumber(e.amount) ?? 0;
   }
   flatTotal = round2(flatTotal);
-  const kmTotal = round2(perDay.reduce((s, d) => s + d.amount, 0));
-  return { perDay, flatTotal, kmTotal, grandTotal: round2(kmTotal + flatTotal) };
+  const amountTotal = round2(perDay.reduce((s, d) => s + d.amount, 0));
+  return { perDay, flatTotal, amountTotal, grandTotal: round2(amountTotal + flatTotal) };
 }
 
 /**

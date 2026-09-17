@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   applyCarrierSelection,
   clearCarrierSelection,
+  escapeIlike,
   matchPrefillCarrierByName,
   parsePrefillCarrier,
+  preferUserText,
   resolveCarrierDisplay,
 } from "@/lib/carrierEmployee";
 
@@ -121,5 +123,26 @@ describe("matchPrefillCarrierByName", () => {
       ),
     ).toBeNull();
     expect(matchPrefillCarrierByName(rows, "  ")).toBeNull();
+  });
+});
+
+describe("escapeIlike", () => {
+  it("escapes LIKE wildcards so lookups stay exact", () => {
+    expect(escapeIlike("100%_x\\y")).toBe("100\\%\\_x\\\\y");
+    expect(escapeIlike("Asha Devi")).toBe("Asha Devi");
+    expect(escapeIlike(null)).toBe("");
+  });
+});
+
+describe("preferUserText", () => {
+  it("keeps non-blank user text verbatim", () => {
+    expect(preferUserText(" Ravi ", "Asha")).toBe(" Ravi ");
+  });
+
+  it("falls back to the prefill on blank or missing text", () => {
+    expect(preferUserText("   ", "Asha")).toBe("Asha");
+    expect(preferUserText("", "Asha")).toBe("Asha");
+    expect(preferUserText(null, "Asha")).toBe("Asha");
+    expect(preferUserText(null, null)).toBe("");
   });
 });

@@ -13,6 +13,24 @@ import {
   buildAttentionItems,
   groupExpensesByType,
 } from "@/lib/engineersAdmin";
+import { PROFILE_DOC_TYPES } from "@/lib/engineer-conveyance";
+
+// ── doc-type drift guard (B0.1) ────────────────────────────────────────
+// docCompliance mirrors PROFILE_DOC_TYPES as a local const (the module file
+// takes no value imports beyond @/lib/time). This test fails loudly if the
+// two lists ever diverge, instead of silently mis-grading compliance.
+
+describe("engineersAdmin/docTypes", () => {
+  it("grades exactly the PROFILE_DOC_TYPES blocks", () => {
+    const all = [...PROFILE_DOC_TYPES].map((t) => ({ name: t, path: `/docs/${t}.pdf` }));
+    const { present, missing } = docCompliance(all);
+    expect(missing).toEqual([]);
+    expect([...present].sort()).toEqual([...PROFILE_DOC_TYPES].sort());
+    const { present: nonePresent, missing: allMissing } = docCompliance([]);
+    expect(nonePresent).toEqual([]);
+    expect([...allMissing].sort()).toEqual([...PROFILE_DOC_TYPES].sort());
+  });
+});
 
 // ── rateInForce (6) ────────────────────────────────────────────────────
 
@@ -78,7 +96,7 @@ describe("engineersAdmin/payableForPeriod", () => {
       { date: "2026-09-02", km: 50, rate: 10, amount: 500 },
       { date: "2026-09-03", km: 20, rate: 10, amount: 200 },
     ]);
-    expect(out.kmTotal).toBe(700);
+    expect(out.amountTotal).toBe(700);
     expect(out.flatTotal).toBe(50);
     expect(out.grandTotal).toBe(750);
   });
@@ -111,7 +129,7 @@ describe("engineersAdmin/payableForPeriod", () => {
 
   it("returns zeros for empty input without throwing", () => {
     const out = payableForPeriod({ employeeId: "e1", rates: null, days: null, expenses: null });
-    expect(out).toEqual({ perDay: [], flatTotal: 0, kmTotal: 0, grandTotal: 0 });
+    expect(out).toEqual({ perDay: [], flatTotal: 0, amountTotal: 0, grandTotal: 0 });
   });
 
   it("sorts perDay by date ascending", () => {

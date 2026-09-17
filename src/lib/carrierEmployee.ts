@@ -94,3 +94,19 @@ export function matchPrefillCarrierByName<T extends { name: string }>(
   const exact = (rows || []).filter((r) => (r?.name || "").trim().toLowerCase() === want);
   return exact.length === 1 ? exact[0] : null;
 }
+
+/** Escape LIKE wildcards so `.ilike("name", escapeIlike(input))` behaves as
+ *  an exact case-insensitive lookup instead of a pattern scan. */
+export function escapeIlike(s: string | null | undefined): string {
+  return (s ?? "").replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/** Keep the user's typed text when it is non-blank (whitespace counts as
+ *  blank); otherwise take the prefill value. Never mangles user input. */
+export function preferUserText(
+  current: string | null | undefined,
+  prefill: string | null | undefined,
+): string {
+  const c = (current ?? "").trim();
+  return c ? (current as string) : (prefill ?? "");
+}

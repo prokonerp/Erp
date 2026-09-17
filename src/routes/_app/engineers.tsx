@@ -20,8 +20,10 @@ export const Route = createFileRoute("/_app/engineers")({
 
 type EngTab = { to: string; label: string; icon: LucideIcon; exact?: boolean };
 
-/** Admin Field-Ops tabs. Child routes land in B2 (money) and B3 (oversight);
- *  tabs for not-yet-built routes render but 404 until their task lands. */
+/** Admin Field-Ops tabs. Child routes land in B2 (money) and B3 (oversight).
+ *  B0.1: tabs without a built route render disabled (never a dead link). */
+const BUILT_TABS = new Set<string>(["/engineers"]);
+
 const TABS: EngTab[] = [
   { to: "/engineers", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/engineers/directory", label: "Directory", icon: Users },
@@ -41,6 +43,21 @@ function EngineersLayout() {
       <div className="flex flex-wrap gap-1 mb-4 border-b pb-2 print:hidden">
         {TABS.map((t) => {
           const active = t.exact ? loc.pathname === t.to : loc.pathname.startsWith(t.to);
+          if (!BUILT_TABS.has(t.to)) {
+            return (
+              <Button
+                key={t.to}
+                variant="ghost"
+                size="sm"
+                disabled
+                aria-disabled="true"
+                title={`${t.label} — lands in B2/B3`}
+                className="opacity-50"
+              >
+                <t.icon className="h-4 w-4 mr-1" />{t.label}
+              </Button>
+            );
+          }
           return (
             <Link key={t.to} to={t.to}>
               <Button variant={active ? "default" : "ghost"} size="sm">
