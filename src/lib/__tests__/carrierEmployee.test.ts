@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   applyCarrierSelection,
   clearCarrierSelection,
+  matchPrefillCarrierByName,
+  parsePrefillCarrier,
   resolveCarrierDisplay,
 } from "@/lib/carrierEmployee";
 
@@ -76,5 +78,48 @@ describe("resolveCarrierDisplay", () => {
         driver_mobile: "",
       }),
     ).toEqual({ name: "Ravi Kumar", mobile: "", linked: true });
+  });
+});
+
+describe("parsePrefillCarrier", () => {
+  it("extracts FK truth and trimmed name from a ticket prefill payload", () => {
+    expect(
+      parsePrefillCarrier({ assigned_employee_id: "emp-1", assigned_engineer_name: "  Asha " }),
+    ).toEqual({ employeeId: "emp-1", engineerName: "Asha" });
+  });
+
+  it("returns empty hint when the prefill carries no engineer", () => {
+    expect(parsePrefillCarrier({})).toEqual({ employeeId: null, engineerName: "" });
+    expect(
+      parsePrefillCarrier({ assigned_employee_id: null, assigned_engineer_name: null }),
+    ).toEqual({ employeeId: null, engineerName: "" });
+  });
+
+  it("ignores non-string payload values", () => {
+    expect(
+      parsePrefillCarrier({ assigned_employee_id: 42, assigned_engineer_name: ["x"] }),
+    ).toEqual({ employeeId: null, engineerName: "" });
+  });
+});
+
+describe("matchPrefillCarrierByName", () => {
+  const rows = [
+    { id: "e1", name: "Ravi Kumar" },
+    { id: "e2", name: "Asha Devi" },
+  ];
+
+  it("matches a single exact name case-insensitively", () => {
+    expect(matchPrefillCarrierByName(rows, "asha devi")).toEqual({ id: "e2", name: "Asha Devi" });
+  });
+
+  it("returns null on zero or ambiguous hits", () => {
+    expect(matchPrefillCarrierByName(rows, "Nobody")).toBeNull();
+    expect(
+      matchPrefillCarrierByName(
+        [...rows, { id: "e3", name: "asha devi" }],
+        "Asha Devi",
+      ),
+    ).toBeNull();
+    expect(matchPrefillCarrierByName(rows, "  ")).toBeNull();
   });
 });

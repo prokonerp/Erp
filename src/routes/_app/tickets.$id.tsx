@@ -187,6 +187,9 @@ type Ticket = {
   status: string;
   assigned_engineer_name: string | null;
   assigned_engineer_phone: string | null;
+  /** FK truth for the assigned engineer (select("*") returns it at runtime);
+   *  optional so older cached rows still typecheck. Carried into DC/GRN prefill. */
+  assigned_employee_id?: string | null;
   assigned_at: string | null;
   equipment_id: string | null;
   parts_used: boolean;
@@ -900,6 +903,8 @@ function TicketDetail() {
     ticketId: t.id,
     caseId: t.case_id,
     customerId: t.customer_id,
+    assignedEmployeeId: t.assigned_employee_id ?? null,
+    assignedEngineerName: t.assigned_engineer_name,
   });
   const handleGenerateGrn = () => {
     stageTicketGrnPrefill(

@@ -111,6 +111,21 @@ describe("buildTicketGrnPrefill", () => {
     expect(payload.items).toHaveLength(1);
     expect(payload.items[0].part_name).toBe("Fan");
   });
+
+  it("carries the assigned engineer (FK + name) into the GRN payload", () => {
+    const payload = buildTicketGrnPrefill(
+      { ...input, assignedEmployeeId: "emp-1", assignedEngineerName: "Asha" },
+      [],
+    );
+    expect(payload.assigned_employee_id).toBe("emp-1");
+    expect(payload.assigned_engineer_name).toBe("Asha");
+  });
+
+  it("defaults engineer keys to null when the ticket carries no engineer", () => {
+    const payload = buildTicketGrnPrefill(input, []);
+    expect(payload.assigned_employee_id).toBeNull();
+    expect(payload.assigned_engineer_name).toBeNull();
+  });
 });
 
 describe("buildTicketDcPrefill", () => {
@@ -168,6 +183,21 @@ describe("buildTicketDcPrefill", () => {
     ]);
     expect(payload.items).toHaveLength(1);
     expect(payload.items[0].qty).toBe("1");
+  });
+
+  it("carries the assigned engineer (FK + name) into the DC payload", () => {
+    const payload = buildTicketDcPrefill(
+      { ...input, assignedEmployeeId: "emp-1", assignedEngineerName: "Asha" },
+      [],
+    );
+    expect(payload.assigned_employee_id).toBe("emp-1");
+    expect(payload.assigned_engineer_name).toBe("Asha");
+  });
+
+  it("defaults engineer keys to null when the ticket carries no engineer", () => {
+    const payload = buildTicketDcPrefill(input, []);
+    expect(payload.assigned_employee_id).toBeNull();
+    expect(payload.assigned_engineer_name).toBeNull();
   });
 });
 

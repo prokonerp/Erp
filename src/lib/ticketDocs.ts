@@ -3,11 +3,16 @@ import type { ChallanItem } from "@/lib/challan";
 import type { GrnItem } from "@/lib/grn";
 import type { PartLine } from "@/lib/tickets";
 
-/** Identity of the source ticket for both prefill builders. */
+/** Identity of the source ticket for both prefill builders.
+ *  assignedEmployeeId is the FK truth (tickets.assigned_employee_id);
+ *  assignedEngineerName is the legacy display fallback. Both are optional so
+ *  non-ticket callers and unassigned tickets stage exactly as before. */
 export type TicketDocInput = {
   ticketId: string;
   caseId: string;
   customerId: string | null;
+  assignedEmployeeId?: string | null;
+  assignedEngineerName?: string | null;
 };
 
 /** No exported const exists repo-wide for the customer-DC prefill key
@@ -80,6 +85,8 @@ export function buildTicketGrnPrefill(input: TicketDocInput, defective: PartLine
     source_doc_type: "Field Service Report",
     source_doc_no: `Ticket ${input.caseId}`,
     ticket_no: input.caseId,
+    assigned_employee_id: input.assignedEmployeeId ?? null,
+    assigned_engineer_name: input.assignedEngineerName ?? null,
     internal_remarks: `Defective parts received from customer against ticket ${input.caseId}`,
     items,
   };
@@ -123,6 +130,8 @@ export function buildTicketDcPrefill(input: TicketDocInput, good: PartLine[]) {
     ticket_id: input.ticketId,
     customer_id: input.customerId,
     reference_no: `Ticket ${input.caseId}`,
+    assigned_employee_id: input.assignedEmployeeId ?? null,
+    assigned_engineer_name: input.assignedEngineerName ?? null,
     internal_remarks: `Good parts issued to customer against ticket ${input.caseId}`,
     items,
   };

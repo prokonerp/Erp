@@ -64,3 +64,33 @@ export function resolveCarrierDisplay(r: CarrierRecord): {
     linked: false,
   };
 }
+
+/** Carrier hint staged by a ticket prefill: FK truth + legacy display name. */
+export type PrefillCarrierHint = {
+  employeeId: string | null;
+  engineerName: string;
+};
+
+/** Pull the carrier hint out of a staged prefill payload (untyped JSON).
+ *  Empty when the prefill carries no engineer — callers must no-op then. */
+export function parsePrefillCarrier(payload: Record<string, unknown>): PrefillCarrierHint {
+  const fk = payload.assigned_employee_id;
+  const nm = payload.assigned_engineer_name;
+  return {
+    employeeId: typeof fk === "string" && fk ? fk : null,
+    engineerName: typeof nm === "string" ? nm.trim() : "",
+  };
+}
+
+/** Exact case-insensitive name match — the only safe text fallback.
+ *  Returns the row only on a single exact hit; null when zero/ambiguous so
+ *  the picker stays blank instead of linking the wrong employee. */
+export function matchPrefillCarrierByName<T extends { name: string }>(
+  rows: T[],
+  name: string,
+): T | null {
+  const want = name.trim().toLowerCase();
+  if (!want) return null;
+  const exact = (rows || []).filter((r) => (r?.name || "").trim().toLowerCase() === want);
+  return exact.length === 1 ? exact[0] : null;
+}

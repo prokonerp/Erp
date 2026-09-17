@@ -15,7 +15,7 @@ import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { GrnSerialInputs } from "@/components/GrnSerialInputs";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import { CarrierEmployeePicker } from "@/components/CarrierEmployeePicker";
-import { applyCarrierSelection, clearCarrierSelection } from "@/lib/carrierEmployee";
+import { applyCarrierSelection, clearCarrierSelection, matchPrefillCarrierByName, parsePrefillCarrier } from "@/lib/carrierEmployee";
 import type { Customer, CustomerBranch } from "@/lib/crm";
 import { branchToDocumentFields } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
@@ -154,6 +154,73 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     }));
   };
 
+  // Pre-select CarrierEmployeePicker from a staged ticket prefill (B0-4):
+  // FK-first via assigned_employee_id (driver text filled from the linked
+  // employee row); exact name-match fallback via assigned_engineer_name.
+  // Picker stays blank when neither resolves — the engineer name is still
+  // kept as editable driver text so the server trigger can resolve the FK
+  // from text on save. No-op when the prefill carries no engineer.
+  const preSelectCarrierFromPrefill = (payload: Record<string, unknown>) => {
+    const hint = parsePrefillCarrier(payload);
+    const fkId = hint.employeeId;
+    const fallbackName = hint.engineerName;
+    if (!fkId && !fallbackName) return;
+    if (fkId) {
+      setCarrierEmployeeId(fkId);
+      (async () => {
+        const { data } = await supabase
+          .from("assignable_engineers")
+          .select("id,name,phone")
+          .eq("id", fkId)
+          .maybeSingle();
+        const row = data as unknown as { name: string | null; phone: string | null } | null;
+        const nm = (row?.name || "").trim() || fallbackName;
+        if (row && nm) {
+          const next = applyCarrierSelection(
+            { driver_name: "", driver_mobile: "", carrier_employee_id: null },
+            { id: fkId, name: nm, phone: (row.phone || "").trim() || null },
+          );
+          setForm((f) => ({
+            ...f,
+            driver_name: f.driver_name || next.driver_name,
+            driver_mobile: f.driver_mobile || next.driver_mobile,
+          }));
+        } else if (fallbackName) {
+          setForm((f) => ({ ...f, driver_name: f.driver_name || fallbackName }));
+        } else {
+          // FK points at a deleted employee and no name to fall back to —
+          // leave the picker blank rather than linking a dead id.
+          setCarrierEmployeeId(null);
+        }
+      })();
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("assignable_engineers")
+        .select("id,name,phone")
+        .ilike("name", fallbackName);
+      const rows = (
+        (data as unknown as Array<{ id: string; name: string; phone: string | null }> | null) || []
+      ).filter((r) => r?.id && r?.name);
+      const hit = matchPrefillCarrierByName(rows, fallbackName);
+      if (hit) {
+        const next = applyCarrierSelection(
+          { driver_name: "", driver_mobile: "", carrier_employee_id: null },
+          { id: hit.id, name: hit.name, phone: hit.phone },
+        );
+        setCarrierEmployeeId(next.carrier_employee_id);
+        setForm((f) => ({
+          ...f,
+          driver_name: f.driver_name || next.driver_name,
+          driver_mobile: f.driver_mobile || next.driver_mobile,
+        }));
+      } else {
+        setForm((f) => ({ ...f, driver_name: f.driver_name || fallbackName }));
+      }
+    })();
+  };
+
   // Prefill from a source document (e.g. Indent → Generate GRN).
   useEffect(() => {
     if (editId) return; // do not run session prefill in edit mode
@@ -213,6 +280,9 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
     }));
     const preWh = (payload.warehouse_id as string | null | undefined) || null;
     if (preWh) setWarehouseId(preWh);
+    // Pre-select the carrier from the ticket's assigned engineer (FK-first,
+    // exact name-match fallback). Untouched when the prefill carries neither.
+    preSelectCarrierFromPrefill(payload);
     if (kind === "customer" && customerId) {
       (async () => {
         const { data } = await supabase.from("customers").select("*").eq("id", customerId).maybeSingle();
