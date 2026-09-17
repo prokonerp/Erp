@@ -355,6 +355,32 @@ export type AdminWarning = {
 };
 
 /**
+ * Append-only guard for engineer_conveyance_rates: one row per
+ * (employee_id, effective_from) — mirrors the DB constraint
+ * engineer_conveyance_rates_one_per_day (migration 20260925000001).
+ * Rates are never updated or deleted; a correction is a new row.
+ * Malformed existing rows are skipped; bad input yields ok:false, never a throw.
+ */
+export function validateRateAppend(
+  rates: AdminRate[] | null | undefined,
+  employeeId: string | null | undefined,
+  effectiveFrom: string | null | undefined,
+): { ok: true } | { ok: false; error: string } {
+  if (!employeeId || typeof employeeId !== "string") {
+    return { ok: false, error: "Select an engineer first." };
+  }
+  const day = asDateKey(effectiveFrom);
+  if (!day) return { ok: false, error: "Effective date must be YYYY-MM-DD." };
+  for (const r of rates ?? []) {
+    if (!r || r.employee_id !== employeeId) continue;
+    if (asDateKey(r.effective_from) === day) {
+      return { ok: false, error: `A rate already exists for ${day} — append a new day instead.` };
+    }
+  }
+  return { ok: true };
+}
+
+/**
  * Normalize an IST calendar window for SQL date bounds. String compare is
  * deliberate: YYYY-MM-DD bounds compare lexicographically, so an inverted
  * window swaps instead of querying backwards. A single bad bound falls back
