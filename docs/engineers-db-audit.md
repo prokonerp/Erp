@@ -231,3 +231,12 @@ Static grep over `supabase/migrations/` (all files, not just the four above):
 - `engineer_daily_logs` / `engineer_conveyance_expenses` → 20260920000001_engineer_conveyance_profile (base RLS + indexes) + 20260925000003 (integrity).
 - `ims_stock_items` → 20260830000001_fix_ims_insert_rls, 20260923000006_enable_base_rls, 20260916000002_engineer_custody_postings.
 No orphan table: every table/RPC the hooks touch has coverage somewhere in the chain. Remaining step is runtime: paste the SQL block above into the Supabase SQL editor and compare counts.
+
+## Runtime verification 2026-09-18 — PASS (owner-pasted results)
+
+- **Counts:** daily_logs 1, expenses 0, rates 0, settlements 0, audit 0, employees 11, tickets 453, stock 165.
+  Reconciliation: 453 tickets total vs 346 roster-assigned in-app = unassigned/deleted rows the tab correctly filters out (`.not(assigned_employee_id, is, null)` + `is_deleted=false`); 11 employees vs 6 roster = `list_engineers()` field-gate subset; 165 stock items with 0 custodians = honest empty custody ledger; 0 rates = "no rate in force" states are correct, business next step is entering rates via Rates tab.
+- **RLS:** enabled on all 8 tables, forced on none. Policies match §inventory (admin ALL + own/own-email SELECT per money table; employees view; tickets auth view; ims_stock_* CRUD).
+- **Indexes:** all expected present — rates(employee_from), settlements(employee_period + no-overlap gist), audit(entity), norm-serial expr, expense client_key unique, logs one-per-day + employee/date, tickets assigned_employee partial, stock custodian.
+- **RPCs:** all 12 present; DEFINER throughout except `guard_custodian_write` (trigger, INVOKER correct) and `normalize_serial` (immutable util, INVOKER correct).
+- One eyebrow, non-blocking: `tickets / "Admin only hard delete" / roles {public} / DELETE` — harmless only if its qual is fail-closed; pre-existing, outside engineers scope. Re-check `qual`/`with_check` in `pg_policies` if ever touched.
