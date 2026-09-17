@@ -46,16 +46,20 @@ function EngineersLayout() {
         {TABS.map((t) => {
           const active = t.exact ? loc.pathname === t.to : loc.pathname.startsWith(t.to);
           if (!BUILT_TABS.has(t.to)) {
+            const hintId = `eng-tab-hint${t.to.replaceAll("/", "-")}`;
             return (
-              <Button key={t.to} variant="ghost" size="sm" disabled className="opacity-50" title={`${t.label} — lands in B3`} aria-disabled="true">
-                <t.icon className="h-4 w-4 mr-1" />{t.label}
-              </Button>
+              <span key={t.to} className="inline-flex items-center">
+                <Button variant="ghost" size="sm" className="opacity-50" title={`${t.label} — lands in B3`} aria-disabled="true" aria-describedby={hintId}>
+                  <t.icon className="h-4 w-4 mr-1" aria-hidden="true" />{t.label}
+                </Button>
+                <span id={hintId} className="sr-only">{`${t.label} — lands in B3`}</span>
+              </span>
             );
           }
           return (
-            <Link key={t.to} to={t.to}>
+            <Link key={t.to} to={t.to} aria-current={active ? "page" : undefined}>
               <Button variant={active ? "default" : "ghost"} size="sm">
-                <t.icon className="h-4 w-4 mr-1" />{t.label}
+                <t.icon className="h-4 w-4 mr-1" aria-hidden="true" />{t.label}
               </Button>
             </Link>
           );

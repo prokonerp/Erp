@@ -277,9 +277,14 @@ function EngineerReconcilePage() {
               rows={rows}
               columns={exportCols}
             />
-            <Button variant="outline" size="sm" disabled={!slipReady} onClick={() => window.print()}>
+            <Button variant="outline" size="sm" disabled={!slipReady} aria-describedby="slip-status-hint" onClick={() => window.print()}>
               <Printer className="h-4 w-4 mr-1" />Print A4
             </Button>
+            <span id="slip-status-hint" className="sr-only">
+              {slipReady
+                ? "Payslip ready — prints the selected settlement."
+                : "Select a settlement row to enable printing."}
+            </span>
           </>
         }
       />

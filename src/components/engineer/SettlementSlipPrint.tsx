@@ -156,10 +156,10 @@ export function SettlementSlipPrint({
       <table className="items">
         <thead>
           <tr>
-            <th style={{ textAlign: "left" }}>Date</th>
-            <th style={{ textAlign: "right" }}>Km</th>
-            <th style={{ textAlign: "right" }}>Rate (₹/km)</th>
-            <th style={{ textAlign: "right" }}>Amount (₹)</th>
+            <th scope="col" style={{ textAlign: "left" }}>Date</th>
+            <th scope="col" style={{ textAlign: "right" }}>Km</th>
+            <th scope="col" style={{ textAlign: "right" }}>Rate (₹/km)</th>
+            <th scope="col" style={{ textAlign: "right" }}>Amount (₹)</th>
           </tr>
         </thead>
         <tbody>

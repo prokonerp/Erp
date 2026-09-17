@@ -172,6 +172,27 @@ function EngineerExpensesPage() {
     ...(settlementsWarning ? [`settlements: ${settlementsWarning}`] : []),
   ];
 
+  const tableColumns: ColumnDef<SettlementListRow>[] = [
+    ...PERIOD_COLUMNS,
+    {
+      key: "_actions",
+      header: "Actions",
+      align: "right",
+      render: (r) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            openDrawerFor(r);
+          }}
+        >
+          Review
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -248,7 +269,7 @@ function EngineerExpensesPage() {
       </div>
 
       <DataTable
-        columns={PERIOD_COLUMNS}
+        columns={tableColumns}
         data={settlements}
         isLoading={payables.isLoading}
         rowKey={(r) => r.id}

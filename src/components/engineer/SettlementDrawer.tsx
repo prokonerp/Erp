@@ -224,7 +224,7 @@ export function SettlementDrawer({
 
         <div className="space-y-4 py-4">
           {isLocked ? (
-            <p className="flex items-center gap-2 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            <p id="settlement-lock-hint" className="flex items-center gap-2 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
               <Lock className="h-3.5 w-3.5" />
               Period locked{settlement?.status ? ` · ${settlement.status}` : ""} — read-only.
             </p>
@@ -335,6 +335,7 @@ export function SettlementDrawer({
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={!canDecide}
+              aria-describedby={!canDecide ? (!settlement ? "settlement-decide-hint" : "settlement-lock-hint") : undefined}
               onClick={() => setDialog("approve")}
             >
               Approve & lock
@@ -342,12 +343,13 @@ export function SettlementDrawer({
             <Button
               variant="destructive"
               disabled={!canDecide}
+              aria-describedby={!canDecide ? (!settlement ? "settlement-decide-hint" : "settlement-lock-hint") : undefined}
               onClick={() => setDialog("reject")}
             >
               Reject
             </Button>
             {!settlement && (
-              <span className="self-center text-xs text-muted-foreground">
+              <span id="settlement-decide-hint" className="self-center text-xs text-muted-foreground">
                 Save the period first, then approve or reject.
               </span>
             )}
