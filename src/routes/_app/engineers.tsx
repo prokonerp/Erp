@@ -10,6 +10,7 @@ import {
   Wallet,
   Package,
   Bell,
+  ReceiptIndianRupee,
   type LucideIcon,
 } from "lucide-react";
 
@@ -20,10 +21,10 @@ export const Route = createFileRoute("/_app/engineers")({
 
 type EngTab = { to: string; label: string; icon: LucideIcon; exact?: boolean };
 
-/** Admin Field-Ops tabs. Child routes land in B2 (money) and B3 (oversight).
- *  B0.1: tabs without a built route render disabled (never a dead link). */
-const BUILT_TABS = new Set<string>(["/engineers"]);
-
+/** Admin Field-Ops tabs. 4 live in B2 (money): Overview, Rates,
+ *  Payable & Expenses, Reconcile. The rest land in B3 (oversight) —
+ *  B2 tabs are keyboard-reachable links; B3 tabs stay disabled until their routes land. */
+const BUILT_TABS = new Set(["/engineers", "/engineers/rates", "/engineers/expenses", "/engineers/reconcile"]);
 const TABS: EngTab[] = [
   { to: "/engineers", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/engineers/directory", label: "Directory", icon: Users },
@@ -32,6 +33,7 @@ const TABS: EngTab[] = [
   { to: "/engineers/documents", label: "Documents", icon: FileText },
   { to: "/engineers/rates", label: "Rates", icon: IndianRupee },
   { to: "/engineers/expenses", label: "Payable & Expenses", icon: Wallet },
+  { to: "/engineers/reconcile", label: "Reconcile", icon: ReceiptIndianRupee },
   { to: "/engineers/custody", label: "Custody", icon: Package },
   { to: "/engineers/attention", label: "Needs Attention", icon: Bell },
 ];
@@ -45,15 +47,7 @@ function EngineersLayout() {
           const active = t.exact ? loc.pathname === t.to : loc.pathname.startsWith(t.to);
           if (!BUILT_TABS.has(t.to)) {
             return (
-              <Button
-                key={t.to}
-                variant="ghost"
-                size="sm"
-                disabled
-                aria-disabled="true"
-                title={`${t.label} — lands in B2/B3`}
-                className="opacity-50"
-              >
+              <Button key={t.to} variant="ghost" size="sm" disabled className="opacity-50" title={`${t.label} — lands in B3`} aria-disabled="true">
                 <t.icon className="h-4 w-4 mr-1" />{t.label}
               </Button>
             );

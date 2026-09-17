@@ -154,4 +154,19 @@ describe("engineersAdmin/settlementStatusChangeAllowed", () => {
       settlementStatusChangeAllowed({ status: "Pending", locked_at: null }, "Archived" as never),
     ).toEqual({ ok: false, error: expect.stringContaining("Approved or Rejected") });
   });
+
+  it("refuses re-pay of an already-paid settlement (paid_at set)", () => {
+    expect(
+      settlementStatusChangeAllowed(
+        { status: "Approved", locked_at: "2026-09-30T10:00:00.000Z", paid_at: "2026-10-01T10:00:00.000Z" },
+        "Approved",
+      ),
+    ).toEqual({ ok: false, error: expect.stringContaining("paid") });
+    expect(
+      settlementStatusChangeAllowed(
+        { status: "Approved", locked_at: null, paid_at: "2026-10-01T10:00:00.000Z" },
+        "Rejected",
+      ),
+    ).toEqual({ ok: false, error: expect.stringContaining("paid") });
+  });
 });

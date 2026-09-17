@@ -265,3 +265,64 @@ export const setSettlementStatus = createServerFn({ method: "POST" })
     if (auditErr) console.error("[setSettlementStatus] audit insert failed:", auditErr.message);
     return { ok: true as const, id: data.settlement_id, status: data.status };
   });
+
+const markPaidInput = z.object({
+  settlement_id: z.string().uuid(),
+  payment_ref: z.string().max(200),
+});
+
+type PaidRow = SettlementRow & { paid_at: string | null; payment_ref: string | null };
+
+/**
+ * Mark an approved settlement paid: stamps paid_at (timestamptz now) +
+ * payment_ref, and locks the row (locked_at/by) when still unlocked.
+ * Requires a non-blank payment_ref; refuses already-paid rows
+ * (paid_at set). MEM-054: update only, never a delete.
+ */
+export const markSettlementPaid = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
+  .inputValidator((input) => markPaidInput.parse(input))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const ref = data.payment_ref.trim();
+    if (ref === "") throw new Error("A payment reference is required to mark paid.");
+    const admin = await getAdmin();
+    const { data: row, error: readErr } = await admin
+      .from("engineer_conveyance_settlements")
+      .select("id, period_start, period_end, status, locked_at, paid_at, payment_ref")
+      .eq("id", data.settlement_id)
+      .maybeSingle();
+    if (readErr) throw new Error(reportDbError("read settlement", readErr));
+    if (!row) throw new Error("Settlement not found.");
+    const current = row as PaidRow & { employee_id?: string };
+    const paidAt = typeof current.paid_at === "string" ? current.paid_at.trim() : current.paid_at;
+    if (paidAt != null && paidAt !== "") throw new Error("Settlement is already paid.");
+    const now = new Date().toISOString();
+    const patch: Record<string, string> = { paid_at: now, payment_ref: ref };
+    const lockedAt =
+      typeof current.locked_at === "string" ? current.locked_at.trim() : current.locked_at;
+    if (lockedAt == null || lockedAt === "") {
+      patch.locked_at = now;
+      patch.locked_by = context.userId;
+    }
+    const { error } = await admin
+      .from("engineer_conveyance_settlements")
+      .update(patch)
+      .eq("id", data.settlement_id);
+    if (error) throw new Error(reportDbError("mark settlement paid", error));
+    // Audit is log-only.
+    const { error: auditErr } = await admin.from("engineer_admin_audit").insert({
+      actor: context.userId,
+      action: "settlement.paid",
+      entity: "engineer_conveyance_settlements",
+      entity_id: data.settlement_id,
+      after: {
+        payment_ref: ref,
+        paid_at: now,
+        period_start: String(current.period_start).slice(0, 10),
+        period_end: String(current.period_end).slice(0, 10),
+      },
+    });
+    if (auditErr) console.error("[markSettlementPaid] audit insert failed:", auditErr.message);
+    return { ok: true as const, id: data.settlement_id, paid_at: now, payment_ref: ref };
+  });

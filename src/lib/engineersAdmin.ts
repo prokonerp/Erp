@@ -398,6 +398,7 @@ export function payableWindow(
 
 /**
  * Settlement status-change guard (TASK 3): locked periods are immutable.
+ * - paid_at set (non-blank) → refuse re-pay (already-paid rows are terminal).
  * - locked_at set (non-blank) → refuse any change.
  * - status Approved → refuse (terminal; corrections belong in a new period).
  * - Pending/Rejected → Approved/Rejected ok.
@@ -406,12 +407,20 @@ export function payableWindow(
  *   computed total stands. Bad input yields ok:false, never a throw.
  */
 export function settlementStatusChangeAllowed(
-  settlement: { status?: string | null; locked_at?: string | null } | null | undefined,
+  settlement:
+    | { status?: string | null; locked_at?: string | null; paid_at?: string | null }
+    | null
+    | undefined,
   nextStatus: "Approved" | "Rejected",
   opts?: { overriddenAmount?: number | string | null; reason?: string | null },
 ): { ok: true } | { ok: false; error: string } {
   if (nextStatus !== "Approved" && nextStatus !== "Rejected") {
     return { ok: false, error: "Status must be Approved or Rejected." };
+  }
+  const paidAt =
+    typeof settlement?.paid_at === "string" ? settlement.paid_at.trim() : settlement?.paid_at;
+  if (paidAt != null && paidAt !== "") {
+    return { ok: false, error: "Settlement is already paid — it cannot be paid again." };
   }
   const lockedAt = typeof settlement?.locked_at === "string" ? settlement.locked_at.trim() : settlement?.locked_at;
   if (lockedAt != null && lockedAt !== "") {

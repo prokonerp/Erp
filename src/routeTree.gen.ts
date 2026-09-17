@@ -88,6 +88,7 @@ import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
 import { Route as AppGrnIdRouteImport } from './routes/_app/grn.$id'
 import { Route as AppGatepassNewRouteImport } from './routes/_app/gatepass.new'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
+import { Route as AppEngineersReconcileRouteImport } from './routes/_app/engineers.reconcile'
 import { Route as AppEngineersRatesRouteImport } from './routes/_app/engineers.rates'
 import { Route as AppEngineersExpensesRouteImport } from './routes/_app/engineers.expenses'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
@@ -540,6 +541,11 @@ const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   path: '/gatepass/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEngineersReconcileRoute = AppEngineersReconcileRouteImport.update({
+  id: '/reconcile',
+  path: '/reconcile',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
 const AppEngineersRatesRoute = AppEngineersRatesRouteImport.update({
   id: '/rates',
   path: '/rates',
@@ -871,6 +877,7 @@ export interface FileRoutesByFullPath {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
+  '/engineers/reconcile': typeof AppEngineersReconcileRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
@@ -994,6 +1001,7 @@ export interface FileRoutesByTo {
   '/crm/settings': typeof AppCrmSettingsRoute
   '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
+  '/engineers/reconcile': typeof AppEngineersReconcileRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
@@ -1127,6 +1135,7 @@ export interface FileRoutesById {
   '/_app/crm/settings': typeof AppCrmSettingsRoute
   '/_app/engineers/expenses': typeof AppEngineersExpensesRoute
   '/_app/engineers/rates': typeof AppEngineersRatesRoute
+  '/_app/engineers/reconcile': typeof AppEngineersReconcileRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/gatepass/new': typeof AppGatepassNewRoute
   '/_app/grn/$id': typeof AppGrnIdRoute
@@ -1265,6 +1274,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/engineers/expenses'
     | '/engineers/rates'
+    | '/engineers/reconcile'
     | '/gatepass/$id'
     | '/gatepass/new'
     | '/grn/$id'
@@ -1388,6 +1398,7 @@ export interface FileRouteTypes {
     | '/crm/settings'
     | '/engineers/expenses'
     | '/engineers/rates'
+    | '/engineers/reconcile'
     | '/gatepass/$id'
     | '/gatepass/new'
     | '/grn/$id'
@@ -1520,6 +1531,7 @@ export interface FileRouteTypes {
     | '/_app/crm/settings'
     | '/_app/engineers/expenses'
     | '/_app/engineers/rates'
+    | '/_app/engineers/reconcile'
     | '/_app/gatepass/$id'
     | '/_app/gatepass/new'
     | '/_app/grn/$id'
@@ -2173,6 +2185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGatepassIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/engineers/reconcile': {
+      id: '/_app/engineers/reconcile'
+      path: '/reconcile'
+      fullPath: '/engineers/reconcile'
+      preLoaderRoute: typeof AppEngineersReconcileRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
     '/_app/engineers/rates': {
       id: '/_app/engineers/rates'
       path: '/rates'
@@ -2703,12 +2722,14 @@ const AppCrmRouteWithChildren =
 interface AppEngineersRouteChildren {
   AppEngineersExpensesRoute: typeof AppEngineersExpensesRoute
   AppEngineersRatesRoute: typeof AppEngineersRatesRoute
+  AppEngineersReconcileRoute: typeof AppEngineersReconcileRoute
   AppEngineersIndexRoute: typeof AppEngineersIndexRoute
 }
 
 const AppEngineersRouteChildren: AppEngineersRouteChildren = {
   AppEngineersExpensesRoute: AppEngineersExpensesRoute,
   AppEngineersRatesRoute: AppEngineersRatesRoute,
+  AppEngineersReconcileRoute: AppEngineersReconcileRoute,
   AppEngineersIndexRoute: AppEngineersIndexRoute,
 }
 
