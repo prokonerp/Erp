@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engineers Admin Module — Prokon ERP</title>
+<style>
+/* ============================================================
+   ENGINEERS ADMIN MODULE — DECK
+   Fixed 1280x720 canvas, auto-scaled to any screen. Offline:
+   zero external requests, no CDN, inline CSS/SVG only.
+   Matches docs/presentation.html conventions.
+   ============================================================ */
+:root{
+  --navy:#1e3a5f; --navy2:#16304f; --ink:#1f2937; --mut:#64748b;
+  --paper:#f4f7fb; --line:#dbe3ee; --gold:#f59e0b;
+  --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --info:#0284c7;
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:#0e1c30 radial-gradient(1200px 700px at 70% -10%, #27476b55, transparent);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  overflow:hidden;
+}
+#progress{position:fixed;top:0;left:0;height:5px;background:linear-gradient(90deg,#38bdf8,var(--gold));width:0;z-index:60;border-radius:0 4px 4px 0;transition:width .35s ease}
+#stage{
+  width:1280px;height:720px;background:#fff;border-radius:18px;overflow:hidden;
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  box-shadow:0 30px 80px rgba(0,0,0,.45);
+}
+.slide{position:absolute;inset:0;display:none;flex-direction:column;padding:56px 64px 60px;background:#fff;color:var(--ink)}
+.slide.active{display:flex}
+.sect{position:absolute;top:26px;left:64px;font-size:14px;font-weight:800;letter-spacing:.22em;color:#94a3b8;text-transform:uppercase}
+.brandtag{position:absolute;top:20px;right:64px;font-size:15px;font-weight:800;color:#b6c2d4;letter-spacing:.06em}
+h1{font-size:52px;line-height:1.08;color:var(--navy);letter-spacing:-.01em}
+h2{font-size:36px;line-height:1.15;color:var(--navy)}
+.sub{font-size:21px;color:var(--mut);margin-top:14px;line-height:1.45}
+.kicker{display:inline-block;font-size:14px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-bottom:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:26px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:24px}
+.card{border:1px solid var(--line);border-radius:12px;padding:18px 20px;background:#fff}
+.card.dark{background:var(--navy);color:#fff;border-color:var(--navy)}
+.card .t{font-size:15px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
+.card.dark .t{color:#9fc0e8}
+.card .v{font-size:26px;font-weight:800}
+.card p{font-size:16px;line-height:1.5;margin-top:6px}
+.mono{font-family:var(--mono);font-size:.82em;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:1px 7px;white-space:nowrap}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:8px;vertical-align:baseline}
+.ok{background:var(--ok)} .warn{background:var(--warn)} .bad{background:var(--bad)} .info{background:var(--info)}
+table.contract{width:100%;border-collapse:collapse;margin-top:22px;font-size:17px}
+table.contract th{text-align:left;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);padding:10px 14px;border-bottom:2px solid var(--navy)}
+table.contract td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+.flow{display:flex;align-items:stretch;gap:0;margin-top:26px}
+.step{flex:1;border:1px solid var(--line);border-radius:12px;padding:16px 14px;text-align:center;background:#fff}
+.step .n{font-family:var(--mono);font-size:13px;color:var(--mut)}
+.step .e{font-size:30px;margin:6px 0}
+.step .t{font-size:16px;font-weight:800;color:var(--navy)}
+.step .c{font-size:13.5px;color:var(--mut);margin-top:5px;line-height:1.4}
+.step.bad{border-color:#f3c1c1;background:#fef4f4}
+.step.good{border-color:#bfe6cd;background:#f2fbf5}
+.arrow{align-self:center;padding:0 8px;font-size:24px;color:#9db4cf;font-weight:800}
+ul.tight{margin-top:18px;list-style:none}
+ul.tight li{font-size:18px;line-height:1.5;padding:9px 0 9px 30px;position:relative;border-bottom:1px solid var(--paper)}
+ul.tight li::before{content:"▸";position:absolute;left:6px;color:var(--gold);font-weight:800}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:22px}
+.tab{border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:15px}
+.tab b{display:block;font-size:16px;color:var(--navy)}
+.tab span{color:var(--mut);font-size:13.5px}
+.tab.done{border-left:5px solid var(--ok)}
+.tab.next{border-left:5px solid var(--gold)}
+.tab.later{border-left:5px solid var(--line);opacity:.75}
+.foot{margin-top:auto;padding-top:16px;font-size:14px;color:#94a3b8;display:flex;justify-content:space-between}
+.foot .mono{font-size:12px}
+.big{font-size:64px;font-weight:800;color:var(--navy);line-height:1}
+#prev,#next{position:absolute;top:0;bottom:0;width:64px;z-index:50;cursor:pointer}
+#prev{left:0}#next{right:0}
+@media print{
+  @page{size:1280px 720px;margin:0}
+  body{background:#fff}
+  #stage{position:static;transform:none;box-shadow:none;border-radius:0}
+  .slide{position:relative;display:flex;page-break-after:always;border:1px solid var(--line)}
+  #prev,#next,#progress{display:none}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="stage">
+
+  <!-- 1 TITLE -->
+  <div class="slide active">
+    <div class="sect">Field Ops · Admin Console</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">Engineers Admin Module</div>
+    <h1>Every part accounted for.<br>Every kilometre paid for.</h1>
+    <p class="sub">One console for field-engineer money, oversight, and part custody —<br>built on a custody ledger the old system never had.</p>
+    <div class="grid3">
+      <div class="card dark"><div class="t">Money</div><div class="v">Rates → Payable</div><p>₹/km matrix, settlements, printed statements.</p></div>
+      <div class="card dark"><div class="t">Oversight</div><div class="v">11 admin tabs</div><p>Directory, tickets, conveyance, documents, attention.</p></div>
+      <div class="card dark"><div class="t">Custody</div><div class="v">Union ledger</div><p>Who holds what, until it comes home.</p></div>
+    </div>
+    <div class="foot"><span>Build status: B0 · B0.1 · B1 · B1.5 · B1.6 shipped — 2026-09-17</span><span>1 / 12</span></div>
+  </div>
+
+  <!-- 2 THE TWO LEAKS -->
+  <div class="slide">
+    <div class="sect">The problem</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">Two leaks</div>
+    <h2>Money walked out the door.<br>Parts never came home.</h2>
+    <div class="grid2">
+      <div class="card"><div class="t"><span class="dot bad"></span>Custody leak</div>
+        <p>On every swap, the dispatched part stayed on the engineer's holding <b>forever</b> — the GRN cleared a row that was never stamped, and the real row leaked. "Material holding" was a growing fiction.</p></div>
+      <div class="card"><div class="t"><span class="dot warn"></span>Money leak</div>
+        <p>No rate table, no payable ledger, no settlement record. Kilometres were claimed, expenses doubled on retry, and nobody could prove what a month was worth.</p></div>
+    </div>
+    <div class="foot"><span>Found by a 30-defect bug hunt across custody, conveyance, FSR, and expenses</span><span>2 / 12</span></div>
+  </div>
+
+  <!-- 3 JOURNEY BEFORE -->
+  <div class="slide">
+    <div class="sect">The journey of one part · before</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">Watch it break</div>
+    <h2>NEW-A goes out. OLD-B comes back.<br>Neither is recorded correctly.</h2>
+    <div class="flow">
+      <div class="step"><div class="n">1</div><div class="e">📦</div><div class="t">DC stamps NEW-A</div><div class="c">custodian = engineer<br><span class="mono">transaction_ref = DC …</span></div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="n">2</div><div class="e">🔧</div><div class="t">Engineer swaps</div><div class="c">OLD-B leaves the machine.<br>Nobody writes it down.</div></div>
+      <div class="arrow">→</div>
+      <div class="step bad"><div class="n">3</div><div class="e">📥</div><div class="t">GRN names OLD-B</div><div class="c">Clear matches <span class="mono">LIMIT 1</span>, wrong row or none. Warning swallowed.</div></div>
+      <div class="arrow">→</div>
+      <div class="step bad"><div class="n">4</div><div class="e">🕳️</div><div class="t">Forever</div><div class="c">NEW-A held forever.<br>OLD-B pending forever.</div></div>
+    </div>
+    <div class="foot"><span>Three conflicting serial normalizations made the same part three different strings</span><span>3 / 12</span></div>
+  </div>
+
+  <!-- 4 JOURNEY AFTER -->
+  <div class="slide">
+    <div class="sect">The journey of one part · after</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">Watch it close</div>
+    <h2>Every handoff is a ledger entry.</h2>
+    <div class="flow">
+      <div class="step good"><div class="n">1</div><div class="e">📦</div><div class="t">DC stamps NEW-A</div><div class="c">+ set_at timestamp</div></div>
+      <div class="arrow">→</div>
+      <div class="step good"><div class="n">2</div><div class="e">✅</div><div class="t">Admin confirms FSR</div><div class="c">OLD-B stamped to the engineer</div></div>
+      <div class="arrow">→</div>
+      <div class="step good"><div class="n">3</div><div class="e">📥</div><div class="t">GRN names OLD-B</div><div class="c">ALL matching rows clear, normalized</div></div>
+      <div class="arrow">→</div>
+      <div class="step good"><div class="n">4</div><div class="e">🏁</div><div class="t">Ticket closes</div><div class="c">NEW-A cleared = installed.<br>Ledger balances to zero.</div></div>
+    </div>
+    <div class="foot"><span>DC-cancel and GDC-cancel clear stranded dispatches · ticket-cancel never clears (part must come back)</span><span>4 / 12</span></div>
+  </div>
+
+  <!-- 5 CONTRACT -->
+  <div class="slide">
+    <div class="sect">The model</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">One normative rule</div>
+    <h2><span class="mono">custodian_employee_id</span> means<br>“this engineer owes it back.”</h2>
+    <table class="contract">
+      <tr><th>Event</th><th>Effect</th></tr>
+      <tr><td><span class="dot info"></span>DC Submitted with carrier</td><td>STAMP the dispatched rows (+ timestamp)</td></tr>
+      <tr><td><span class="dot info"></span>FSR defective line admin-confirmed</td><td>STAMP the old serial to the assigned engineer</td></tr>
+      <tr><td><span class="dot ok"></span>GRN Submitted naming the serial</td><td>CLEAR every matching row (one <span class="mono">normalize_serial()</span> everywhere)</td></tr>
+      <tr><td><span class="dot ok"></span>Ticket → Closed</td><td>CLEAR the DC-dispatched good part (installed, job done)</td></tr>
+      <tr><td><span class="dot ok"></span>DC / GDC Cancelled</td><td>CLEAR the stranded dispatch</td></tr>
+      <tr><td><span class="dot warn"></span>Ticket Cancelled</td><td>FLAG — never silently cleared; attention queue</td></tr>
+    </table>
+    <div class="foot"><span>Direct writes are rejected at the database: system-owned field</span><span>5 / 12</span></div>
+  </div>
+
+  <!-- 6 MONEY -->
+  <div class="slide">
+    <div class="sect">The journey of one month</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">Money, provably</div>
+    <h2>Rate → kilometres → payable → settled.</h2>
+    <div class="flow">
+      <div class="step"><div class="n">1</div><div class="e">📐</div><div class="t">Rate in force</div><div class="c">₹/km, effective-dated,<br>append-only</div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="n">2</div><div class="e">🚗</div><div class="t">km × rate</div><div class="c">per day, per engineer,<br>flags on anomalies</div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="n">3</div><div class="e">🧾</div><div class="t">Approve / reject</div><div class="c">override needs a reason,<br>locked periods immutable</div></div>
+      <div class="arrow">→</div>
+      <div class="step"><div class="n">4</div><div class="e">🖨️</div><div class="t">Settle + print</div><div class="c">payslip statement,<br>mark-as-paid</div></div>
+    </div>
+    <div class="foot"><span>Expenses are idempotent (one key per submit — retries return the saved row, never a duplicate)</span><span>6 / 12</span></div>
+  </div>
+
+  <!-- 7 CONSOLE -->
+  <div class="slide">
+    <div class="sect">The console</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">11 tabs · dense operator UI</div>
+    <h2>Built for an 8-hour screen.</h2>
+    <div class="tabs">
+      <div class="tab done"><b>Overview</b><span>KPI strip + leaderboard + sparklines</span></div>
+      <div class="tab done"><b>Shell + Directory</b><span>roster, rate today, docs dots</span></div>
+      <div class="tab next"><b>Rates</b><span>timeline + append-only editor</span></div>
+      <div class="tab next"><b>Payable</b><span>per-day drawer, reason-gated</span></div>
+      <div class="tab next"><b>Reconcile</b><span>payslip print + paid</span></div>
+      <div class="tab next"><b>Tickets</b><span>engineer lens + unassigned</span></div>
+      <div class="tab next"><b>Conveyance</b><span>odometer matrix + flags</span></div>
+      <div class="tab next"><b>Documents</b><span>compliance grid, masked reveal</span></div>
+      <div class="tab next"><b>Custody</b><span>union ledger + drill-down</span></div>
+      <div class="tab next"><b>Attention</b><span>severity queue, deep links</span></div>
+      <div class="tab later"><b>Detail</b><span>per-engineer dossier</span></div>
+      <div class="tab later"><b>Setup guard</b><span>graceful pre-migration</span></div>
+    </div>
+    <div class="foot"><span>Mono IDs · tabular numbers · status dots, never pills · keyboard-first</span><span>7 / 12</span></div>
+  </div>
+
+  <!-- 8 FOUND -->
+  <div class="slide">
+    <div class="sect">What we found</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">30 defects, triaged</div>
+    <h2>Seven corrupted the numbers.<br>Six more leaked or forged them.</h2>
+    <div class="grid3">
+      <div class="card"><div class="t"><span class="dot bad"></span>Blockers · 7</div><p>Staging bypass · custodian forgery · custody leak · <span class="mono">LIMIT 1</span> clear · reset stranding · RPC asymmetry · sync duplicates</p></div>
+      <div class="card"><div class="t"><span class="dot warn"></span>High · 6</div><p>Photo-path spoof · dangling carrier FK · expense doubles · 500-row caps · RLS split-brain · unenforced serial photos</p></div>
+      <div class="card"><div class="t"><span class="dot info"></span>Rest · 17</div><p>Future dates · odometer gaps · orphaned FSRs · mass auto-depart · misleading names · dead tabs — all fixed or queued.</p></div>
+    </div>
+    <div class="foot"><span>Every one independently confirmed against source before a fix was written</span><span>8 / 12</span></div>
+  </div>
+
+  <!-- 9 PROOF -->
+  <div class="slide">
+    <div class="sect">How we proved it</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">Evidence before assertions</div>
+    <h2>A real database ran the proofs.</h2>
+    <div class="grid2">
+      <div class="card dark"><div class="t">Scratch PG15 harness</div><div class="v">3 migrations × 3 applies</div><p>Zero errors — including resume-from-mid-failure and apply-twice idempotency.</p></div>
+      <div class="card dark"><div class="t">Functional asserts</div><div class="v">14 green</div><p>Confirm-stamp · duplicate clear · close-clear · cancel-clear · full NEW-A/OLD-B swap · write-guard raise/pass · idempotent retry.</p></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><div class="t"><span class="dot ok"></span>Suite</div><div class="v">972 / 972</div></div>
+      <div class="card"><div class="t"><span class="dot ok"></span>Types</div><div class="v">tsc exit 0</div></div>
+    </div>
+    <div class="foot"><span>The harness caught two defects in our own migration before they shipped</span><span>9 / 12</span></div>
+  </div>
+
+  <!-- 10 LESSONS -->
+  <div class="slide">
+    <div class="sect">Two Postgres lessons</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">Bought with real failures</div>
+    <h2>The database kept its secrets<br>until we tested it.</h2>
+    <div class="grid2">
+      <div class="card"><div class="t"><span class="dot bad"></span>Lesson 1</div><div class="v">DEFINER blinds you</div><p>Inside <span class="mono">SECURITY DEFINER</span>, <span class="mono">current_user</span> is the function <b>owner</b> — a permission guard written there can never see <span class="mono">authenticated</span> and never fires. Guards must be <span class="mono">SECURITY INVOKER</span>. Proven on scratch.</p></div>
+      <div class="card"><div class="t"><span class="dot warn"></span>Lesson 2</div><div class="v">Grants add up</div><p>A table-level <span class="mono">UPDATE</span> grant authorizes <b>every</b> column — a later column <span class="mono">REVOKE</span> is a silent no-op. The trigger is the real lock; the revoke is decoration.</p></div>
+    </div>
+    <div class="foot"><span>Both are now permanent engineering rules in project memory</span><span>10 / 12</span></div>
+  </div>
+
+  <!-- 11 ROLLOUT -->
+  <div class="slide">
+    <div class="sect">Rollout</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">Migrations + gates</div>
+    <h2>Three files. Two gates. Then screens.</h2>
+    <ul class="tight">
+      <li><span class="mono">20260925000001</span> — rates, settlements, audit, roster RPC <b>· applied 2026-09-17</b></li>
+      <li><span class="mono">20260925000002</span> — custody ledger, write-lock, RPC rewrites <b>· applied 2026-09-17</b></li>
+      <li><span class="mono">20260925000003</span> — expense idempotency, email-fallback reads <b>· prepared, awaiting apply</b></li>
+      <li><b>Gate 1</b> — every migration applied twice; post-conditions assert themselves (a clean apply <i>is</i> the proof)</li>
+      <li><b>Gate 2</b> — <span class="mono">list_engineers()</span> returns the full headcount (NULL <span class="mono">auth_user_id</span> is the known silent-exclusion)</li>
+      <li>After apply: reload the PostgREST schema cache, then run the 5-step app smoke (shell → DC pre-select → confirm → GRN → clear)</li>
+    </ul>
+    <div class="foot"><span>Migrations are prepared-never-applied by policy — a human always runs them</span><span>11 / 12</span></div>
+  </div>
+
+  <!-- 12 STATUS -->
+  <div class="slide">
+    <div class="sect">Where we are</div>
+    <div class="brandtag">PROKON ERP</div>
+    <div class="kicker">Status · 2026-09-17</div>
+    <h2>Integrity first. Screens next.</h2>
+    <div class="grid3">
+      <div class="card"><div class="t"><span class="dot ok"></span>Shipped</div><p>B0 shell+rates+logic+carrier · B0.1 repairs · B1 custody core · B1.5 conveyance+FSR+expense integrity · B1.6 serial-photo capture — <b>14 local commits</b>.</p></div>
+      <div class="card"><div class="t"><span class="dot warn"></span>Next</div><p>B2 money tabs (Rates → Payable → Reconcile), then B3 oversight (7 tabs), then harden + E2E + docs.</p></div>
+      <div class="card"><div class="t"><span class="dot info"></span>Watch items</div><p>Open P0001 upload blocker surfaces in receipts/docs · pre-existing advisory-lock work still uncommitted · roster gate unconfirmed.</p></div>
+    </div>
+    <div class="foot"><span class="mono">4c8d541 → 174343f6 · fsr-print-polish · commits local-only, no push</span><span>12 / 12</span></div>
+  </div>
+
+</div>
+<div id="prev"></div><div id="next"></div>
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var bar = document.getElementById('progress');
+  var i = 0;
+  function show(n){
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function(s, k){ s.classList.toggle('active', k === i); });
+    bar.style.width = ((i + 1) / slides.length * 100) + '%';
+    try { location.hash = 's' + (i + 1); } catch (e) {}
+  }
+  function fit(){
+    var s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    var st = document.getElementById('stage');
+    st.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
+  }
+  function next(){ show(i + 1); }
+  function prev(){ show(i - 1); }
+  window.addEventListener('resize', fit);
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', prev);
+  document.addEventListener('click', function(e){
+    if (e.target.closest('#prev')) return prev();
+    if (e.target.closest('#next')) return next();
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    if (e.key === 'Home') show(0);
+    if (e.key === 'End') show(slides.length - 1);
+  });
+  var tx = 0;
+  document.addEventListener('touchstart', function(e){ tx = e.touches[0].clientX; }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    var dx = e.changedTouches[0].clientX - tx;
+    if (dx < -40) next(); else if (dx > 40) prev();
+  }, {passive:true});
+  var m = /s(\d+)/.exec(location.hash || '');
+  fit(); show(m ? parseInt(m[1], 10) - 1 : 0);
+})();
+</script>
+</body>
+</html>
