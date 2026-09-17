@@ -157,15 +157,26 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
     };
 
     // Customer — copied from tickets.$id.tsx; tolerate null.
+    // maybeSingle (NOT single): with .single() PostgREST answers
+    // Accept: application/vnd.pgrst.object+json and returns HTTP 406 /
+    // PGRST116 when the row is absent or RLS-hidden — a console error on
+    // every print. maybeSingle returns data:null + error:null for 0 rows,
+    // matching the tickets/visits reads above. A genuine fetch error is
+    // surfaced instead of silently blanking the customer block.
     let customer: FsrPrintCustomer | null = null;
     const customerId = str(t.customer_id);
     if (customerId) {
       try {
-        const { data: c } = await supabase
+        const { data: c, error: cErr } = await supabase
           .from("customers")
           .select(CUSTOMER_SELECT)
           .eq("id", customerId)
-          .single();
+          .maybeSingle();
+        if (cErr) {
+          toast.warning(
+            reportDbError("fsr print customer", cErr, "Customer details could not be loaded"),
+          );
+        }
         customer = (c as unknown as FsrPrintCustomer | null) ?? null;
       } catch {
         customer = null;
