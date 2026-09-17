@@ -245,29 +245,55 @@ AS $$
 $$;
 
 -- =====================================================================
--- 8) GRANTs (mirrors 20260922000002 to_regclass-guarded pattern)
+-- 8) GRANTs (mirrors 20260922000002 to_regclass-guarded pattern).
+--    Every grant is additionally role-guarded: a missing role (e.g. a bare
+--    scratch cluster without service_role) must NOTICE-skip, never abort.
 -- =====================================================================
-GRANT EXECUTE ON FUNCTION public.list_engineers() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.conveyance_rate_for(uuid, date) TO authenticated;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    GRANT EXECUTE ON FUNCTION public.list_engineers() TO authenticated;
+    GRANT EXECUTE ON FUNCTION public.conveyance_rate_for(uuid, date) TO authenticated;
+  ELSE
+    RAISE NOTICE 'skipping function grants: role authenticated missing';
+  END IF;
+END $$;
 
 DO $$ BEGIN
   IF to_regclass('public.engineer_conveyance_rates') IS NOT NULL THEN
-    GRANT SELECT, INSERT, UPDATE, DELETE ON public.engineer_conveyance_rates TO authenticated;
-    GRANT ALL ON public.engineer_conveyance_rates TO service_role;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+      GRANT SELECT, INSERT, UPDATE, DELETE ON public.engineer_conveyance_rates TO authenticated;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+      GRANT ALL ON public.engineer_conveyance_rates TO service_role;
+    ELSE
+      RAISE NOTICE 'skipping service_role grant on engineer_conveyance_rates: role missing';
+    END IF;
   END IF;
 END $$;
 
 DO $$ BEGIN
   IF to_regclass('public.engineer_conveyance_settlements') IS NOT NULL THEN
-    GRANT SELECT, INSERT, UPDATE, DELETE ON public.engineer_conveyance_settlements TO authenticated;
-    GRANT ALL ON public.engineer_conveyance_settlements TO service_role;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+      GRANT SELECT, INSERT, UPDATE, DELETE ON public.engineer_conveyance_settlements TO authenticated;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+      GRANT ALL ON public.engineer_conveyance_settlements TO service_role;
+    ELSE
+      RAISE NOTICE 'skipping service_role grant on engineer_conveyance_settlements: role missing';
+    END IF;
   END IF;
 END $$;
 
 DO $$ BEGIN
   IF to_regclass('public.engineer_admin_audit') IS NOT NULL THEN
-    GRANT SELECT, INSERT, UPDATE, DELETE ON public.engineer_admin_audit TO authenticated;
-    GRANT ALL ON public.engineer_admin_audit TO service_role;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+      GRANT SELECT, INSERT, UPDATE, DELETE ON public.engineer_admin_audit TO authenticated;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+      GRANT ALL ON public.engineer_admin_audit TO service_role;
+    ELSE
+      RAISE NOTICE 'skipping service_role grant on engineer_admin_audit: role missing';
+    END IF;
   END IF;
 END $$;
 
