@@ -39,7 +39,7 @@ export function EngineerSelect({
           {allowAll && <SelectItem value="all">{allLabel ?? "All engineers"}</SelectItem>}
           {engineers.map((e) => (
             <SelectItem key={e.employee_id} value={e.employee_id}>
-              {e.name ?? e.employee_id}
+              {e.name && e.name.trim() !== "" ? e.name : e.employee_id}
             </SelectItem>
           ))}
         </SelectContent>

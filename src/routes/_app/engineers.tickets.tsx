@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Clock, Search, Ticket } from "lucide-react";
-import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { StatusBadge, type StatusTone } from "@/components/shared/StatusBadge";
 import { ExportButtons } from "@/components/ExportButtons";
 import { StatCard } from "@/components/crm/StatCard";
 import { Input } from "@/components/ui/input";
@@ -15,7 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AdminWarnings } from "@/components/engineer/AdminWarnings";
+import { EngineerSelect } from "@/components/engineer/EngineerSelect";
+import { TicketQueueTable, type TicketQueueRow } from "@/components/engineer/TicketQueueTable";
 import { useEngineerRoster, useEngineerTickets } from "@/hooks/useEngineerAdmin";
+import { partitionOrphans, rosterNameMap } from "@/lib/engineersAdmin";
 import type { ExportColumn } from "@/lib/exports";
 
 export const Route = createFileRoute("/_app/engineers/tickets")({
@@ -31,12 +33,6 @@ function isOpen(status: string | null): boolean {
   return status !== "Closed" && status !== "Cancelled";
 }
 
-function ticketTone(status: string | null): StatusTone {
-  if (status === "Closed") return "success";
-  if (status === "Cancelled") return "neutral";
-  return "info";
-}
-
 /** Whole days from created_at to closed_at (or now for open tickets). */
 function ageDays(created: string | null, closed: string | null): number | null {
   if (!created) return null;
@@ -47,81 +43,8 @@ function ageDays(created: string | null, closed: string | null): number | null {
   return Math.max(0, Math.floor((endMs - start) / 86_400_000));
 }
 
-type QueueRow = {
-  id: string;
-  case_id: string | null;
-  customer_name: string | null;
-  product: string | null;
-  serial_no: string | null;
-  status: string | null;
-  assigned_employee_id: string | null;
-  assigned_engineer_name: string | null;
-  created_at: string | null;
-  closed_at: string | null;
-  engineerLabel: string;
-  age: number | null;
-};
-
-const QUEUE_COLUMNS: ColumnDef<QueueRow>[] = [
-  {
-    key: "case_id",
-    header: "Case",
-    sortable: true,
-    render: (r) => (
-      <Link
-        to="/tickets/$id"
-        params={{ id: r.id }}
-        className="font-mono text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {r.case_id ?? r.id.slice(0, 8)}
-      </Link>
-    ),
-  },
-  {
-    key: "customer_name",
-    header: "Customer",
-    sortable: true,
-    render: (r) => <span>{r.customer_name ?? "—"}</span>,
-  },
-  {
-    key: "product",
-    header: "Product / Serial",
-    render: (r) => (
-      <span className="block max-w-48 truncate">
-        <span>{r.product ?? "—"}</span>
-        {r.serial_no ? (
-          <span className="block font-mono text-xs text-muted-foreground">{r.serial_no}</span>
-        ) : null}
-      </span>
-    ),
-  },
-  {
-    key: "status",
-    header: "Status",
-    sortable: true,
-    render: (r) => <StatusBadge tone={ticketTone(r.status)}>{r.status ?? "Unknown"}</StatusBadge>,
-  },
-  {
-    key: "engineerLabel",
-    header: "Engineer",
-    sortable: true,
-    render: (r) => <span>{r.engineerLabel}</span>,
-  },
-  {
-    key: "age",
-    header: "Age / Wait",
-    align: "right",
-    sortable: true,
-    render: (r) => (
-      <span className="tabular-nums">
-        {r.age == null ? <span className="text-muted-foreground">—</span> : `${r.age}d`}
-        <span className="block font-mono text-xs font-normal text-muted-foreground">
-          {(r.created_at ?? "").slice(0, 10) || "—"}
-        </span>
-      </span>
-    ),
-  },
-];
+/** Queue row plus the roster id needed for orphan partitioning (TicketQueueRow drops it). */
+type FilteredRow = TicketQueueRow & { assigned_employee_id: string | null };
 
 type ExportRow = {
   case_id: string;
@@ -156,19 +79,11 @@ function EngineerTicketsPage() {
 
   const ticketsQuery = useEngineerTickets(engineerId === "all" ? null : engineerId);
 
-  const nameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const e of rosterQuery.roster) {
-      if (e && typeof e.employee_id === "string" && e.employee_id !== "") {
-        map.set(e.employee_id, e.name && e.name !== "" ? e.name : e.employee_id);
-      }
-    }
-    return map;
-  }, [rosterQuery.roster]);
+  const nameById = useMemo(() => rosterNameMap(rosterQuery.roster), [rosterQuery.roster]);
 
-  const filtered = useMemo<QueueRow[]>(() => {
+  const filtered = useMemo<FilteredRow[]>(() => {
     const q = search.trim().toLowerCase();
-    const out: QueueRow[] = [];
+    const out: FilteredRow[] = [];
     for (const t of ticketsQuery.data) {
       if (!t || typeof t.id !== "string") continue;
       if (engineerId !== "all" && t.assigned_employee_id !== engineerId) continue;
@@ -187,12 +102,10 @@ function EngineerTicketsPage() {
         serial_no: t.serial_no,
         status: t.status,
         assigned_employee_id: t.assigned_employee_id,
-        assigned_engineer_name: t.assigned_engineer_name,
         created_at: t.created_at,
         closed_at: t.closed_at,
         engineerLabel:
           rosterName ?? (t.assigned_engineer_name || "Unknown engineer"),
-        age: ageDays(t.created_at, t.closed_at),
       });
     }
     return out;
@@ -200,37 +113,31 @@ function EngineerTicketsPage() {
 
   // Orphans: assigned ids with no roster entry. Partitioned into their own
   // section below so they are counted and visible, never silently dropped.
-  const { rosterRows, orphanRows } = useMemo(() => {
-    const roster: QueueRow[] = [];
-    const orphans: QueueRow[] = [];
-    for (const r of filtered) {
-      if (r.assigned_employee_id && !nameById.has(r.assigned_employee_id)) orphans.push(r);
-      else roster.push(r);
-    }
-    return { rosterRows: roster, orphanRows: orphans };
-  }, [filtered, nameById]);
+  const { roster: rosterRows, orphans: orphanRows } = useMemo(
+    () => partitionOrphans(filtered, nameById, (r) => r.assigned_employee_id),
+    [filtered, nameById],
+  );
 
   const openCount = useMemo(() => filtered.filter((r) => isOpen(r.status)).length, [filtered]);
 
   const exportRows = useMemo<ExportRow[]>(
     () =>
-      filtered.map((r) => ({
-        case_id: r.case_id ?? r.id.slice(0, 8),
-        customer: r.customer_name ?? "—",
-        product: r.product ?? "—",
-        serial_no: r.serial_no ?? "—",
-        status: r.status ?? "Unknown",
-        engineer: r.engineerLabel,
-        created: (r.created_at ?? "").slice(0, 10) || "—",
-        age_days: r.age ?? "—",
-      })),
+      filtered.map((r) => {
+        const age = ageDays(r.created_at, r.closed_at);
+        return {
+          case_id: r.case_id ?? r.id.slice(0, 8),
+          customer: r.customer_name ?? "—",
+          product: r.product ?? "—",
+          serial_no: r.serial_no ?? "—",
+          status: r.status ?? "Unknown",
+          engineer: r.engineerLabel,
+          created: (r.created_at ?? "").slice(0, 10) || "—",
+          age_days: age ?? "—",
+        };
+      }),
     [filtered],
   );
 
-  const warnings = useMemo(
-    () => [...rosterQuery.warnings, ...ticketsQuery.warnings],
-    [rosterQuery.warnings, ticketsQuery.warnings],
-  );
   const loading = rosterQuery.isLoading || ticketsQuery.isLoading;
 
   return (
@@ -248,33 +155,17 @@ function EngineerTicketsPage() {
         }
       />
 
-      {warnings.length > 0 && (
-        <ul role="status" aria-live="polite" className="space-y-1 rounded-lg border p-3 text-sm text-muted-foreground">
-          {warnings.map((w) => (
-            <li key={`${w.section}::${w.message}`}>
-              <span className="font-medium text-foreground">{w.section}:</span> {w.message}
-            </li>
-          ))}
-        </ul>
-      )}
+      <AdminWarnings lists={[rosterQuery.warnings, ticketsQuery.warnings]} />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="tickets-engineer">Engineer</Label>
-          <Select value={engineerId} onValueChange={setEngineerId}>
-            <SelectTrigger id="tickets-engineer">
-              <SelectValue placeholder="All engineers" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All engineers</SelectItem>
-              {rosterQuery.roster.map((e) => (
-                <SelectItem key={e.employee_id} value={e.employee_id}>
-                  {nameById.get(e.employee_id) ?? e.employee_id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <EngineerSelect
+          id="tickets-engineer"
+          value={engineerId}
+          onChange={setEngineerId}
+          engineers={rosterQuery.roster}
+          allowAll
+          allLabel="All engineers"
+        />
         <div className="space-y-1.5">
           <Label htmlFor="tickets-status">Status</Label>
           <Select value={status} onValueChange={(v) => setStatus(v as StatusFilter)}>
@@ -322,15 +213,7 @@ function EngineerTicketsPage() {
       </div>
 
       <section aria-label="Ticket queue">
-        <DataTable
-          columns={QUEUE_COLUMNS}
-          data={rosterRows}
-          isLoading={loading}
-          rowKey="id"
-          emptyIcon={Ticket}
-          emptyTitle="No tickets match these filters"
-          emptyHint="Try a different engineer, status, or search."
-        />
+        <TicketQueueTable rows={rosterRows} isLoading={loading} />
       </section>
 
       {orphanRows.length > 0 && (
@@ -341,15 +224,7 @@ function EngineerTicketsPage() {
               ({orphanRows.length} ticket{orphanRows.length === 1 ? "" : "s"} assigned outside the roster)
             </span>
           </h2>
-          <DataTable
-            columns={QUEUE_COLUMNS}
-            data={orphanRows}
-            isLoading={loading}
-            rowKey="id"
-            emptyIcon={Ticket}
-            emptyTitle="No tickets match these filters"
-            emptyHint="Try a different engineer, status, or search."
-          />
+          <TicketQueueTable rows={orphanRows} isLoading={loading} />
         </section>
       )}
     </div>

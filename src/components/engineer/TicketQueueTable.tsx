@@ -15,11 +15,6 @@ export type TicketQueueRow = {
   closed_at: string | null;
 };
 
-/** Open = not Closed/Cancelled — tickets-dashboard convention. */
-function isOpen(status: string | null): boolean {
-  return status !== "Closed" && status !== "Cancelled";
-}
-
 function ticketTone(status: string | null): StatusTone {
   if (status === "Closed") return "success";
   if (status === "Cancelled") return "neutral";

@@ -4,6 +4,7 @@ import { Bell, CircleAlert, TriangleAlert } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge, type StatusTone } from "@/components/shared/StatusBadge";
+import { AdminWarnings } from "@/components/engineer/AdminWarnings";
 import { StatCard } from "@/components/crm/StatCard";
 import { Label } from "@/components/ui/label";
 import {
@@ -94,15 +95,7 @@ function EngineersAttentionPage() {
         description="Severity-ordered queue across the roster — one row per defect."
       />
 
-      {attentionQuery.warnings.length > 0 && (
-        <ul role="status" aria-live="polite" className="space-y-1 rounded-lg border p-3 text-sm text-muted-foreground">
-          {attentionQuery.warnings.map((w) => (
-            <li key={`${w.section}::${w.message}`}>
-              <span className="font-medium text-foreground">{w.section}:</span> {w.message}
-            </li>
-          ))}
-        </ul>
-      )}
+      <AdminWarnings lists={[attentionQuery.warnings]} />
 
       <div className="space-y-1.5">
         <Label htmlFor="attention-severity">Severity</Label>

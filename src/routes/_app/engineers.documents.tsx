@@ -1,6 +1,8 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { AdminWarnings } from "@/components/engineer/AdminWarnings";
+import { DocComplianceGrid } from "@/components/engineer/DocComplianceGrid";
 import { useEmployeeDocuments, useEngineerRoster } from "@/hooks/useEngineerAdmin";
 
 export const Route = createFileRoute("/_app/engineers/documents")({
@@ -12,27 +14,16 @@ export const Route = createFileRoute("/_app/engineers/documents")({
 function EngineerDocBlocks({ employeeId }: { employeeId: string }) {
   const docsQuery = useEmployeeDocuments(employeeId);
 
-  if (docsQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
-  }
-
   const compliance = docsQuery.data?.compliance ?? { present: [], missing: [] };
-  const blocks = [
-    ...compliance.present.map((name) => ({ name, present: true })),
-    ...compliance.missing.map((name) => ({ name, present: false })),
-  ];
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        {blocks.map((b) => (
-          <StatusBadge key={b.name} tone={b.present ? "success" : "danger"}>
-            {b.name}
-          </StatusBadge>
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">{compliance.present.length}/6 on file</p>
-      {docsQuery.warnings.length > 0 && (
+      <DocComplianceGrid
+        present={compliance.present}
+        missing={compliance.missing}
+        isLoading={docsQuery.isLoading}
+      />
+      {!docsQuery.isLoading && docsQuery.warnings.length > 0 && (
         <div className="space-y-1">
           {docsQuery.warnings.map((w) => (
             <p key={`${w.section}::${w.message}`} className="text-xs text-muted-foreground">
@@ -59,15 +50,7 @@ function EngineerDocumentsPage() {
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
         <>
-          {rosterQuery.warnings.length > 0 && (
-            <ul role="status" aria-live="polite" className="space-y-1 rounded-lg border p-3 text-sm text-muted-foreground">
-              {rosterQuery.warnings.map((w) => (
-                <li key={`${w.section}::${w.message}`}>
-                  <span className="font-medium text-foreground">{w.section}:</span> {w.message}
-                </li>
-              ))}
-            </ul>
-          )}
+          <AdminWarnings lists={[rosterQuery.warnings]} />
 
           {rosterQuery.roster.length === 0 ? (
             <p className="text-sm text-muted-foreground">No engineers in roster.</p>

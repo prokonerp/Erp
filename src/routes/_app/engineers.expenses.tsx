@@ -10,14 +10,8 @@ import { SettlementDrawer } from "@/components/engineer/SettlementDrawer";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { StatCard } from "@/components/crm/StatCard";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { AdminWarnings } from "@/components/engineer/AdminWarnings";
+import { EngineerSelect } from "@/components/engineer/EngineerSelect";
 import { payableForPeriod } from "@/lib/engineersAdmin";
 import type { DateRange, RangeMode } from "@/lib/dateRange";
 import { currentMonth, resolveRange } from "@/lib/dateRange";
@@ -166,11 +160,9 @@ function EngineerExpensesPage() {
     void refetchSettlements();
   }
 
-  const allWarnings = [
-    ...rosterWarnings.map((w) => `Roster: ${w.message}`),
-    ...payables.warnings.map((w) => `${w.section}: ${w.message}`),
-    ...(settlementsWarning ? [`settlements: ${settlementsWarning}`] : []),
-  ];
+  const settlementWarnings = settlementsWarning
+    ? [{ section: "settlements", message: settlementsWarning }]
+    : [];
 
   const tableColumns: ColumnDef<SettlementListRow>[] = [
     ...PERIOD_COLUMNS,
@@ -214,30 +206,16 @@ function EngineerExpensesPage() {
         </Button>
       </div>
 
-      {allWarnings.length > 0 && (
-        <div className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
-          {allWarnings.map((w, i) => (
-            <p key={i}>{w}</p>
-          ))}
-        </div>
-      )}
+      <AdminWarnings lists={[rosterWarnings, payables.warnings, settlementWarnings]} />
 
       <div className="grid gap-3 md:grid-cols-[320px_1fr]">
-        <div className="space-y-1.5">
-          <Label htmlFor="expense-engineer">Engineer</Label>
-          <Select value={selectedId ?? ""} onValueChange={setSelectedId}>
-            <SelectTrigger id="expense-engineer">
-              <SelectValue placeholder="Select an engineer" />
-            </SelectTrigger>
-            <SelectContent>
-              {roster.map((e) => (
-                <SelectItem key={e.employee_id} value={e.employee_id}>
-                  {e.name ?? e.employee_id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <EngineerSelect
+          id="expense-engineer"
+          value={selectedId ?? ""}
+          onChange={setSelectedId}
+          engineers={roster}
+          placeholder="Select an engineer"
+        />
         <DateFilterBar mode={mode} setMode={setMode} range={range} setRange={setRange} />
       </div>
 

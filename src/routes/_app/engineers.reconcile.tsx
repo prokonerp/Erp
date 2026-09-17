@@ -17,6 +17,7 @@ import { DateFilterBar } from "@/components/DateFilterBar";
 import { ExportButtons } from "@/components/ExportButtons";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import { SettlementSlipPrint } from "@/components/engineer/SettlementSlipPrint";
+import { AdminWarnings } from "@/components/engineer/AdminWarnings";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -257,11 +258,7 @@ function EngineerReconcilePage() {
     { header: "Paid at", get: (r) => (r.paid_at ?? "").slice(0, 10) },
   ];
 
-  const allWarnings = [
-    ...rosterWarnings.map((w) => `Roster: ${w.message}`),
-    ...ledger.warnings.map((w) => `${w.section}: ${w.message}`),
-    ...(rowsWarning ? [`settlements: ${rowsWarning}`] : []),
-  ];
+  const settlementWarnings = rowsWarning ? [{ section: "settlements", message: rowsWarning }] : [];
 
   return (
     <div className="space-y-4">
@@ -289,13 +286,7 @@ function EngineerReconcilePage() {
         }
       />
 
-      {allWarnings.length > 0 && (
-        <div className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
-          {allWarnings.map((w, i) => (
-            <p key={i}>{w}</p>
-          ))}
-        </div>
-      )}
+      <AdminWarnings lists={[rosterWarnings, ledger.warnings, settlementWarnings]} />
 
       <DateFilterBar mode={mode} setMode={setMode} range={range} setRange={setRange} />
 

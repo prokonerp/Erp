@@ -7,12 +7,13 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge, type StatusTone } from "@/components/shared/StatusBadge";
 import { StatCard } from "@/components/crm/StatCard";
 import { Button } from "@/components/ui/button";
+import { AdminWarnings } from "@/components/engineer/AdminWarnings";
+import { TableSkeleton } from "@/components/shared/skeletons";
 import {
   useAttentionQueue,
   useEngineerOverview,
   useEngineerRoster,
 } from "@/hooks/useEngineerAdmin";
-import type { AdminWarning } from "@/lib/engineersAdmin";
 
 export const Route = createFileRoute("/_app/engineers/")({
   component: EngineersIndex,
@@ -24,18 +25,6 @@ const SEVERITY_TONE: Record<string, StatusTone> = {
   medium: "warning",
   low: "info",
 };
-
-function dedupeWarnings(lists: AdminWarning[][]): AdminWarning[] {
-  const seen = new Set<string>();
-  const out: AdminWarning[] = [];
-  for (const w of lists.flat()) {
-    const key = `${w.section}::${w.message}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(w);
-  }
-  return out;
-}
 
 type RosterRow = {
   employee_id: string;
@@ -155,7 +144,6 @@ function EngineersIndex() {
     [attentionQuery.data],
   );
 
-  const warnings = dedupeWarnings([overview.warnings, rosterQuery.warnings, attentionQuery.warnings]);
   const loading = overview.isLoading || rosterQuery.isLoading;
 
   return (
@@ -170,15 +158,7 @@ function EngineersIndex() {
         }
       />
 
-      {warnings.length > 0 && (
-        <ul role="status" aria-live="polite" className="space-y-1 rounded-lg border p-3 text-sm text-muted-foreground">
-          {warnings.map((w) => (
-            <li key={`${w.section}::${w.message}`}>
-              <span className="font-medium text-foreground">{w.section}:</span> {w.message}
-            </li>
-          ))}
-        </ul>
-      )}
+      <AdminWarnings lists={[overview.warnings, rosterQuery.warnings, attentionQuery.warnings]} />
       {rosterQuery.isError && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           Could not load roster:{" "}
@@ -241,7 +221,7 @@ function EngineersIndex() {
       <section aria-label="Needs attention" className="space-y-2">
         <h2 className="text-sm font-semibold">Needs attention</h2>
         {attentionQuery.isLoading ? (
-          <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading…</div>
+          <TableSkeleton rows={3} colCount={1} />
         ) : attentionPreview.length === 0 ? (
           <EmptyState
             icon={Bell}

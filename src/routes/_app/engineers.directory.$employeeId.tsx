@@ -4,8 +4,6 @@ import {
   Bell,
   FileText,
   IndianRupee,
-  Package,
-  Ticket,
   Truck,
   UserX,
   Wallet,
@@ -15,6 +13,18 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatusBadge, type StatusTone } from "@/components/shared/StatusBadge";
 import { StatCard } from "@/components/crm/StatCard";
+import { AdminWarnings } from "@/components/engineer/AdminWarnings";
+import { ConveyanceMatrixTable } from "@/components/engineer/ConveyanceMatrixTable";
+import { CustodyLedgerTable } from "@/components/engineer/CustodyLedgerTable";
+import { DocComplianceGrid } from "@/components/engineer/DocComplianceGrid";
+import {
+  ExpenseLinesTable,
+  type ExpenseLine,
+} from "@/components/engineer/ExpenseLinesTable";
+import {
+  TicketQueueTable,
+  type TicketQueueRow,
+} from "@/components/engineer/TicketQueueTable";
 import {
   useAttentionQueue,
   useEmployeeDocuments,
@@ -24,8 +34,7 @@ import {
   useEngineerRoster,
   useEngineerTickets,
 } from "@/hooks/useEngineerAdmin";
-import { rateInForce } from "@/lib/engineersAdmin";
-import type { AdminWarning } from "@/lib/engineersAdmin";
+import { rateInForce, rosterNameMap } from "@/lib/engineersAdmin";
 import { istDateKey } from "@/lib/time";
 
 export const Route = createFileRoute("/_app/engineers/directory/$employeeId")({
@@ -50,75 +59,10 @@ function settlementTone(status: string | null): StatusTone {
   return "neutral";
 }
 
-function ticketTone(status: string | null): StatusTone {
-  if (status === "Closed") return "success";
-  if (status === "Cancelled") return "neutral";
-  return "info";
-}
-
 function asNumber(v: unknown): number {
   const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
   return Number.isFinite(n) ? n : 0;
 }
-
-function SectionWarnings({ warnings }: { warnings: AdminWarning[] }) {
-  if (warnings.length === 0) return null;
-  return (
-    <ul role="status" aria-live="polite" className="space-y-1 rounded-lg border p-3 text-sm text-muted-foreground">
-      {warnings.map((w) => (
-        <li key={`${w.section}::${w.message}`}>
-          <span className="font-medium text-foreground">{w.section}:</span> {w.message}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-type TicketRow = {
-  id: string;
-  case_id: string | null;
-  status: string | null;
-  created_at: string | null;
-  closed_at: string | null;
-};
-
-const TICKET_COLUMNS: ColumnDef<TicketRow>[] = [
-  {
-    key: "case_id",
-    header: "Case",
-    sortable: true,
-    render: (r) => (
-      <Link
-        to="/tickets/$id"
-        params={{ id: r.id }}
-        className="font-mono text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {r.case_id ?? r.id.slice(0, 8)}
-      </Link>
-    ),
-  },
-  {
-    key: "status",
-    header: "Status",
-    render: (r) => <StatusBadge tone={ticketTone(r.status)}>{r.status ?? "Unknown"}</StatusBadge>,
-  },
-  {
-    key: "created_at",
-    header: "Created",
-    render: (r) => (
-      <span className="font-mono text-xs">{(r.created_at ?? "—").slice(0, 10)}</span>
-    ),
-  },
-  {
-    key: "closed_at",
-    header: "Closed",
-    render: (r) => (
-      <span className="font-mono text-xs">
-        {r.closed_at ? r.closed_at.slice(0, 10) : "—"}
-      </span>
-    ),
-  },
-];
 
 type SettlementRow = {
   key: string;
@@ -143,38 +87,6 @@ const SETTLEMENT_COLUMNS: ColumnDef<SettlementRow>[] = [
     render: (r) => (
       <StatusBadge tone={settlementTone(r.status)}>{r.status ?? "Unknown"}</StatusBadge>
     ),
-  },
-];
-
-type CustodyRow = Record<string, unknown> & {
-  stock_item_id: string | null;
-  part_serial_no: string | null;
-  ticket_id: string | null;
-  set_at: string | null;
-};
-
-const CUSTODY_COLUMNS: ColumnDef<CustodyRow>[] = [
-  { key: "stock_item_id", header: "Item", render: (r) => r.stock_item_id ?? "—" },
-  {
-    key: "part_serial_no",
-    header: "Serial",
-    render: (r) => (
-      <span className="font-mono text-xs">{r.part_serial_no ?? "—"}</span>
-    ),
-  },
-  {
-    key: "ticket_id",
-    header: "Ticket",
-    render: (r) => (
-      <span className="font-mono text-xs">
-        {r.ticket_id ? r.ticket_id.slice(0, 8) : "—"}
-      </span>
-    ),
-  },
-  {
-    key: "set_at",
-    header: "Since",
-    render: (r) => <span className="font-mono text-xs">{(r.set_at ?? "—").slice(0, 10)}</span>,
   },
 ];
 
@@ -308,11 +220,6 @@ function EngineerDetailPage() {
     .join("")
     .toUpperCase();
 
-  const docBlocks = [
-    ...docsQuery.data.compliance.present.map((name) => ({ name, present: true })),
-    ...docsQuery.data.compliance.missing.map((name) => ({ name, present: false })),
-  ];
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -352,7 +259,7 @@ function EngineerDetailPage() {
 
       <section aria-label="Needs attention" className="space-y-2">
         <h2 className="text-sm font-semibold">Needs attention</h2>
-        <SectionWarnings warnings={attentionQuery.warnings} />
+        <AdminWarnings lists={[attentionQuery.warnings]} />
         {attentionQuery.isLoading ? (
           <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading…</div>
         ) : attentionItems.length === 0 ? (
@@ -380,30 +287,17 @@ function EngineerDetailPage() {
 
       <section aria-label="Documents" className="space-y-2">
         <h2 className="text-sm font-semibold">Documents</h2>
-        <SectionWarnings warnings={docsQuery.warnings} />
-        {docsQuery.isLoading ? (
-          <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading…</div>
-        ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            {docBlocks.map((d) => (
-              <div key={d.name} className="rounded-lg border p-3 text-sm">
-                <div className="font-medium">{d.name}</div>
-                <div className="mt-2">
-                  {d.present ? (
-                    <StatusBadge tone="success">On file</StatusBadge>
-                  ) : (
-                    <StatusBadge tone="warning">Missing</StatusBadge>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <AdminWarnings lists={[docsQuery.warnings]} />
+        <DocComplianceGrid
+          present={docsQuery.data.compliance.present}
+          missing={docsQuery.data.compliance.missing}
+          isLoading={docsQuery.isLoading}
+        />
       </section>
 
       <section aria-label="Conveyance rate" className="space-y-2">
         <h2 className="text-sm font-semibold">Conveyance rate</h2>
-        <SectionWarnings warnings={conveyanceQuery.warnings} />
+        <AdminWarnings lists={[conveyanceQuery.warnings]} />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             label="Rate in force today"
@@ -447,7 +341,7 @@ function EngineerDetailPage() {
 
       <section aria-label="Conveyance this month" className="space-y-2">
         <h2 className="text-sm font-semibold">Conveyance this month</h2>
-        <SectionWarnings warnings={conveyanceQuery.warnings} />
+        <AdminWarnings lists={[conveyanceQuery.warnings]} />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             label="KM logged"
@@ -471,11 +365,26 @@ function EngineerDetailPage() {
             hint="Flat claims this month"
           />
         </div>
+        <ConveyanceMatrixTable
+          matrix={conveyanceQuery.data.matrix}
+          isLoading={conveyanceQuery.isLoading}
+        />
+        <ExpenseLinesTable
+          expenses={conveyanceQuery.data.expenses.map(
+            (e): ExpenseLine => ({
+              expense_date: e?.expense_date ?? null,
+              charge_type: e?.charge_type ?? null,
+              amount: e?.amount ?? null,
+              receipt_path: e?.receipt_path ?? null,
+            }),
+          )}
+          isLoading={conveyanceQuery.isLoading}
+        />
       </section>
 
       <section aria-label="Settlements" className="space-y-2">
         <h2 className="text-sm font-semibold">Settlements</h2>
-        <SectionWarnings warnings={ledgerQuery.warnings} />
+        <AdminWarnings lists={[ledgerQuery.warnings]} />
         <DataTable
           columns={SETTLEMENT_COLUMNS}
           data={settlements}
@@ -489,29 +398,33 @@ function EngineerDetailPage() {
 
       <section aria-label="Assigned tickets" className="space-y-2">
         <h2 className="text-sm font-semibold">Assigned tickets</h2>
-        <SectionWarnings warnings={ticketsQuery.warnings} />
-        <DataTable
-          columns={TICKET_COLUMNS}
-          data={tickets}
+        <AdminWarnings lists={[ticketsQuery.warnings]} />
+        <TicketQueueTable
+          rows={tickets.map(
+            (t): TicketQueueRow => ({
+              id: t.id,
+              case_id: t.case_id,
+              customer_name: t.customer_name,
+              product: t.product,
+              serial_no: t.serial_no,
+              status: t.status,
+              engineerLabel: displayName,
+              created_at: t.created_at,
+              closed_at: t.closed_at,
+            }),
+          )}
           isLoading={ticketsQuery.isLoading}
-          rowKey="id"
-          emptyIcon={Ticket}
-          emptyTitle="No tickets assigned"
-          emptyHint="Tickets assigned to this engineer appear here, newest first."
         />
       </section>
 
       <section aria-label="Parts in custody" className="space-y-2">
         <h2 className="text-sm font-semibold">Parts in custody</h2>
-        <SectionWarnings warnings={custodyQuery.warnings} />
-        <DataTable
-          columns={CUSTODY_COLUMNS}
-          data={custodyQuery.data}
+        <AdminWarnings lists={[custodyQuery.warnings]} />
+        <CustodyLedgerTable
+          rows={custodyQuery.data}
+          nameById={rosterNameMap(rosterQuery.roster)}
           isLoading={custodyQuery.isLoading}
-          rowKey={(r) => `${r.stock_item_id ?? ""}::${r.set_at ?? ""}`}
-          emptyIcon={Package}
-          emptyTitle="No parts in custody"
-          emptyHint="Stock handed to this engineer appears here until returned."
+          showCustodian={false}
         />
       </section>
     </div>
