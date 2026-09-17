@@ -413,6 +413,7 @@ export const saveConveyanceExpense = createServerFn({ method: "POST" })
 // ---------------------------------------------------------------------------
 const profileInput = z.object({
   photo_path: z.string().max(500).nullable().optional(),
+  vehicle_no: z.string().trim().max(20).nullable().optional(),
   documents: z
     .array(
       z.object({
@@ -441,6 +442,10 @@ export const saveMyProfile = createServerFn({ method: "POST" })
     }
     const update: Record<string, unknown> = {};
     if (data.photo_path !== undefined) update.photo_path = data.photo_path;
+    if (data.vehicle_no !== undefined) {
+      const v = (data.vehicle_no ?? "").trim().toUpperCase().replace(/\s+/g, "");
+      update.vehicle_no = v === "" ? null : v.slice(0, 20);
+    }
     if (docs !== undefined) update.documents = docs;
     if (Object.keys(update).length === 0) return { employeeId: caller.id };
     const { error } = await admin
@@ -450,4 +455,53 @@ export const saveMyProfile = createServerFn({ method: "POST" })
       .eq("active", true);
     if (error) throw new Error(formatDbError(error, "Failed to save profile"));
     return { employeeId: caller.id };
+  });
+
+// ---------------------------------------------------------------------------
+// Place visits — timestamp + typed note list (never a charge, never settled).
+// ---------------------------------------------------------------------------
+const placeVisitInput = z.object({
+  note: z.string().trim().min(1, "Place is required").max(300),
+  visited_at: z.string().datetime().optional(),
+});
+
+export const savePlaceVisit = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
+  .inputValidator((input) => placeVisitInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const admin = await getAdmin();
+    const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260926000001)
+    const { data: row, error } = await (admin as any)
+      .from("engineer_place_visits")
+      .insert({
+        employee_id: caller.id,
+        visited_at: data.visited_at ?? new Date().toISOString(),
+        note: data.note.trim(),
+      })
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(formatDbError(error, "Failed to save place visit"));
+    if (!row) throw new Error("Failed to save place visit");
+    return { id: (row as { id: string }).id };
+  });
+
+const deletePlaceVisitInput = z.object({
+  id: z.string().uuid("Invalid visit id"),
+});
+
+export const deletePlaceVisit = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
+  .inputValidator((input) => deletePlaceVisitInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const admin = await getAdmin();
+    const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260926000001)
+    const { error } = await (admin as any)
+      .from("engineer_place_visits")
+      .delete()
+      .eq("id", data.id)
+      .eq("employee_id", caller.id);
+    if (error) throw new Error(formatDbError(error, "Failed to delete place visit"));
+    return { id: data.id };
   });

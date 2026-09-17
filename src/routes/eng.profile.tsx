@@ -22,6 +22,7 @@ import {
 } from "@/lib/engineer-conveyance.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +35,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { CardSkeleton } from "@/components/shared/skeletons";
-import { Camera, FileText, Loader2, Mail, Phone, LogOut } from "lucide-react";
+import { Bike, Camera, FileText, Loader2, Mail, Phone, LogOut } from "lucide-react";
 
 export const Route = createFileRoute("/eng/profile")({
   component: EngProfile,
@@ -102,6 +103,12 @@ function EngProfile() {
   const queryClient = useQueryClient();
   const [loggingOut, setLoggingOut] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [vehicleNo, setVehicleNo] = useState("");
+  const [vehicleBusy, setVehicleBusy] = useState(false);
+  const vehicleNoFromDb = employee?.vehicle_no ?? "";
+  useEffect(() => {
+    setVehicleNo(vehicleNoFromDb);
+  }, [vehicleNoFromDb]);
   const pendingBlockRef = useRef<ProfileDocType | null>(null);
   const [busyBlock, setBusyBlock] = useState<ProfileDocType | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -174,6 +181,20 @@ function EngProfile() {
 
   async function refreshEmployee() {
     await queryClient.invalidateQueries({ queryKey: engKeys.employee(uid) });
+  }
+
+  async function handleVehicleSave() {
+    if (vehicleBusy) return;
+    setVehicleBusy(true);
+    try {
+      await callSaveProfile({ data: { vehicle_no: vehicleNo.trim() === "" ? null : vehicleNo } });
+      toast.success("Bike number saved");
+      await refreshEmployee();
+    } catch (err) {
+      toast.error(reportDbError("bike number save", err, "Failed to save bike number"));
+    } finally {
+      setVehicleBusy(false);
+    }
   }
 
   async function handlePhotoPick(file: File | null) {
@@ -332,6 +353,31 @@ function EngProfile() {
                 </a>
               </p>
             ) : null}
+            <div className="flex items-center gap-2 pt-1">
+              <Bike className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <Input
+                value={vehicleNo}
+                onChange={(e) => setVehicleNo(e.target.value)}
+                placeholder="Bike number e.g. DL8CAB1234"
+                className="h-11 min-h-[44px] flex-1"
+                aria-label="Bike number"
+                maxLength={20}
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="min-h-[44px] shrink-0"
+                disabled={
+                  vehicleBusy ||
+                  vehicleNo.trim().toUpperCase().replace(/\s+/g, "") ===
+                    (employee?.vehicle_no ?? "").trim().toUpperCase().replace(/\s+/g, "")
+                }
+                onClick={handleVehicleSave}
+              >
+                {vehicleBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden /> : null}
+                Save
+              </Button>
+            </div>
             {employeeError || queueError ? (
               <p role="alert" className="text-[13px] text-muted-foreground">
                 Some details couldn’t load — showing what’s available.

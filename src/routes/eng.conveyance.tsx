@@ -16,8 +16,10 @@ import {
 } from "@/lib/engineer-conveyance";
 import {
   deleteEngineerAttachment,
+  deletePlaceVisit,
   saveConveyanceExpense,
   saveEngineerDailyLog,
+  savePlaceVisit,
   uploadEngineerAttachment,
 } from "@/lib/engineer-conveyance.functions";
 import { MAX_ACCEPTED_BYTES, acceptedUploadMessage } from "@/lib/upload-limits";
@@ -34,11 +36,14 @@ import {
   ChevronRight,
   Gauge,
   Loader2,
+  MapPin,
   Receipt,
   Sunrise,
   Sunset,
   Upload,
+  X,
 } from "lucide-react";
+import { formatISTDate, formatISTTime } from "@/lib/time";
 
 export const Route = createFileRoute("/eng/conveyance")({
   component: EngConveyance,
@@ -58,6 +63,12 @@ type ExpenseRow = {
   amount: number;
   receipt_path: string | null;
   notes: string | null;
+};
+
+type PlaceVisitRow = {
+  id: string;
+  visited_at: string;
+  note: string;
 };
 
 function shiftDate(dateStr: string, days: number): string {
@@ -319,6 +330,78 @@ function ExpenseSection({
   );
 }
 
+/** Places visited — a simple timestamp + typed-note list (never a charge). */
+function PlaceVisitsSection({
+  visits,
+  busy,
+  onAdd,
+  onDelete,
+}: {
+  visits: PlaceVisitRow[];
+  busy: boolean;
+  onAdd: (note: string, reset: () => void) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [note, setNote] = useState("");
+
+  return (
+    <Card className="rounded-xl">
+      <CardContent className="space-y-3 p-4">
+        <p className="flex items-center gap-1.5 text-[15px] font-semibold">
+          <MapPin className="h-4 w-4" aria-hidden /> Places visit
+        </p>
+        <div className="flex gap-2">
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. ABC Motors, Sector 62"
+            className="h-11 min-h-[44px] flex-1"
+            aria-label="Place visited"
+            maxLength={300}
+          />
+          <Button
+            className="min-h-[44px] shrink-0"
+            disabled={busy || note.trim() === ""}
+            onClick={() => onAdd(note.trim(), () => setNote(""))}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden /> : null}
+            Add
+          </Button>
+        </div>
+
+        {visits.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">No places recorded for this day.</p>
+        ) : (
+          <ul className="divide-y divide-border rounded-lg border border-border">
+            {visits.map((v) => (
+              <li
+                key={v.id}
+                className="flex min-h-[44px] items-center justify-between gap-2 px-3 py-2"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{v.note}</span>
+                  <span className="block text-xs text-muted-foreground tabular-nums">
+                    {formatISTDate(v.visited_at, "")} {formatISTTime(v.visited_at, "")}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onDelete(v.id)}
+                  disabled={busy}
+                  aria-label={`Remove visit ${v.note}`}
+                  className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-destructive disabled:opacity-60"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function EngConveyance() {
   const queryClient = useQueryClient();
   const { employee } = useMyEmployee();
@@ -331,9 +414,13 @@ function EngConveyance() {
   const callSaveLog = useServerFn(saveEngineerDailyLog);
   const callDeleteUpload = useServerFn(deleteEngineerAttachment);
   const callSaveExpense = useServerFn(saveConveyanceExpense);
+  const callSaveVisit = useServerFn(savePlaceVisit);
+  const callDeleteVisit = useServerFn(deletePlaceVisit);
+  const [visitBusy, setVisitBusy] = useState(false);
 
   const logKey = engKeys.conveyanceLog(employeeId, date);
   const expKey = engKeys.conveyanceExpenses(employeeId, date);
+  const visitsKey = engKeys.placeVisits(employeeId, date);
 
   const {
     data: log,
@@ -371,6 +458,55 @@ function EngConveyance() {
       return (data as ExpenseRow[] | null) ?? [];
     },
   });
+
+  const { data: visits = [], isLoading: visitsLoading } = useQuery({
+    queryKey: visitsKey,
+    enabled: !!employeeId,
+    staleTime: 15_000,
+    queryFn: async (): Promise<PlaceVisitRow[]> => {
+      const dayStart = new Date(`${date}T00:00:00+05:30`);
+      const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated client nuance (migration 20260926000001)
+      const { data, error } = await (supabase as any)
+        .from("engineer_place_visits")
+        .select("id, visited_at, note")
+        .eq("employee_id", employeeId!)
+        .gte("visited_at", dayStart.toISOString())
+        .lt("visited_at", dayEnd.toISOString())
+        .order("visited_at", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data as PlaceVisitRow[] | null) ?? [];
+    },
+  });
+
+  const addVisit = async (visitNote: string, reset: () => void) => {
+    if (visitBusy || visitNote.trim() === "") return;
+    setVisitBusy(true);
+    try {
+      await callSaveVisit({ data: { note: visitNote } });
+      reset();
+      toast.success("Place visit added");
+      await queryClient.invalidateQueries({ queryKey: visitsKey });
+    } catch (err) {
+      toast.error(reportDbError("place visit save", err, "Failed to save place visit"));
+    } finally {
+      setVisitBusy(false);
+    }
+  };
+
+  const removeVisit = async (visitId: string) => {
+    if (visitBusy) return;
+    setVisitBusy(true);
+    try {
+      await callDeleteVisit({ data: { id: visitId } });
+      toast.success("Place visit removed");
+      await queryClient.invalidateQueries({ queryKey: visitsKey });
+    } catch (err) {
+      toast.error(reportDbError("place visit delete", err, "Failed to delete place visit"));
+    } finally {
+      setVisitBusy(false);
+    }
+  };
 
   // Form state mirrors the loaded log so re-saves keep prior values.
   const [morningOdo, setMorningOdo] = useState("");
@@ -740,7 +876,7 @@ function EngConveyance() {
         </Card>
       ) : null}
 
-      {logLoading || expLoading ? (
+      {logLoading || expLoading || visitsLoading ? (
         <div className="space-y-3" role="status" aria-busy="true">
           <CardSkeleton />
           <CardSkeleton />
@@ -1004,12 +1140,11 @@ function EngConveyance() {
             busy={expenseBusy}
             onAdd={addExpense}
           />
-          <ExpenseSection
-            title="Places visit"
-            charge="Place Visit"
-            entries={expenses.filter((e) => e.charge_type === "Place Visit")}
-            busy={expenseBusy}
-            onAdd={addExpense}
+          <PlaceVisitsSection
+            visits={visits}
+            busy={visitBusy}
+            onAdd={addVisit}
+            onDelete={removeVisit}
           />
           <p className="text-right text-sm font-semibold tabular-nums">
             Day total: {formatINR(dayTotal)}

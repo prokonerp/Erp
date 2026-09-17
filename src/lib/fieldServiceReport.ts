@@ -274,11 +274,14 @@ export const ratingSchema = z.preprocess(
     .max(10, "Rating must be between 1 and 10"),
 );
 
+const optionalRemarks = z.preprocess(emptyToUndefined, z.string().trim().max(1000).optional());
+
 export const fieldServiceReportSchema = readingsSchema
   .merge(loadRecordSchema)
   .merge(powerConditionSchema)
   .merge(z.object({ partReplacements: partReplacementsSchema }))
   .merge(z.object({ rating: ratingSchema }))
+  .merge(z.object({ customerRemarks: optionalRemarks, engineerRemarks: optionalRemarks }))
   .merge(
     z.object({
       customerSignaturePath: z.string().min(1, "Customer signature is required"),
@@ -319,6 +322,8 @@ export type FieldServiceReportPayload = {
   submission_id: string | null;
   customer_signature_path: string;
   signature_captured_at: string | null;
+  customer_remarks: string | null;
+  engineer_remarks: string | null;
   part_replacements: {
     item: string | null;
     old_sr_no: string | null;
@@ -381,6 +386,8 @@ export function buildFsrPayload(
     submission_id: engineer.submissionId ?? null,
     customer_signature_path: input.customerSignaturePath,
     signature_captured_at: input.signatureCapturedAt ?? null,
+    customer_remarks: input.customerRemarks ?? null,
+    engineer_remarks: input.engineerRemarks ?? null,
     part_replacements: input.partReplacements.map((p) => ({
       item: p.item ?? null,
       old_sr_no: p.oldSrNo ?? null,

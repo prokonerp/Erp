@@ -30,6 +30,7 @@ import { syncFsrPartsToTicket } from "@/lib/sync-fsr-parts.functions";
 import { finalizeFsrSubmission } from "@/lib/finalize-fsr.functions";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SignaturePad } from "./eng/SignaturePad";
+import { TicketPartPicker } from "./TicketPartPicker";
 import { reportDbError } from "@/lib/format-error";
 import { FsrPrintButton, type FsrDbRow } from "./fsr/FsrPrintButton";
 
@@ -190,6 +192,8 @@ type FormState = {
   rating: string;
   customerSignaturePath: string;
   signatureCapturedAt: string;
+  customerRemarks: string;
+  engineerRemarks: string;
 };
 
 const initialForm: FormState = {
@@ -219,6 +223,8 @@ const initialForm: FormState = {
   rating: "",
   customerSignaturePath: "",
   signatureCapturedAt: "",
+  customerRemarks: "",
+  engineerRemarks: "",
 };
 
 function FieldError({ message, id }: { message?: string; id?: string }) {
@@ -456,7 +462,13 @@ function PhaseDot({ num, valid }: { num: string; valid: boolean }) {
   );
 }
 
-export function FieldServiceReport({ ticketId }: { ticketId: string }) {
+export function FieldServiceReport({
+  ticketId,
+  ticketProduct,
+}: {
+  ticketId: string;
+  ticketProduct?: string | null;
+}) {
   const [form, setForm] = useState<FormState>(initialForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -867,7 +879,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
           aria-label="Phase 1 readings"
           className="space-y-3 rounded-xl border border-border bg-card p-4"
         >
-          <SectionHeader num="1" title="Phase 1 — Readings" valid={readingsValid} />
+          <SectionHeader num="1" title="Readings" valid={readingsValid} />
           <div className="space-y-4">
             <FsrField label="Voltage L-N (VAC)" required>
               <NumInput
@@ -964,7 +976,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
           aria-label="Phase 2 load record"
           className="space-y-3 rounded-xl border border-border bg-card p-4"
         >
-          <SectionHeader num="2" title="Phase 2 — Load Record" valid={loadValid} />
+          <SectionHeader num="2" title="Load Record" valid={loadValid} />
           <div className="space-y-4">
             <FsrField label="AC Provided" required>
               <YesNoRequired
@@ -1169,7 +1181,7 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
           aria-label="Phase 3 power condition"
           className="space-y-3 rounded-xl border border-border bg-card p-4"
         >
-          <SectionHeader num="3" title="Phase 3 — Power Condition" valid={powerValid} />
+          <SectionHeader num="3" title="Power Condition" valid={powerValid} />
           <div className="space-y-4">
             <FsrField label="No. of Power Failures in a Day">
               <NumInput
@@ -1276,13 +1288,20 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                   </div>
                   <FsrField label="Item / part description">
                     <div>
+                      <TicketPartPicker
+                        ticketProduct={ticketProduct ?? null}
+                        value={part.item || null}
+                        onSelect={(item) => setPart(i, "item", item.name)}
+                        disabled={busy}
+                      />
                       <Input
                         type="text"
                         value={part.item}
                         onChange={(e) => setPart(i, "item", e.target.value)}
-                        placeholder="Item / part description"
+                        placeholder="Or type item / part description"
+                        aria-label={`Part ${i + 1} item (free text)`}
                         aria-invalid={!!errors[`partReplacements.${i}.item`]}
-                        className={`h-11 min-h-[44px] ${errors[`partReplacements.${i}.item`] ? "border-destructive" : ""}`}
+                        className={`h-11 min-h-[44px] mt-2 ${errors[`partReplacements.${i}.item`] ? "border-destructive" : ""}`}
                       />
                       <FieldError message={errors[`partReplacements.${i}.item`]} />
                     </div>
@@ -1369,6 +1388,32 @@ export function FieldServiceReport({ ticketId }: { ticketId: string }) {
                 }
               />
               <FieldError message={errors.customerSignaturePath} />
+            </div>
+          </FsrField>
+          <FsrField label="Customer remarks">
+            <div>
+              <Textarea
+                value={form.customerRemarks}
+                onChange={(e) => set("customerRemarks", e.target.value)}
+                placeholder="Customer remarks (optional)"
+                rows={2}
+                aria-invalid={!!errors.customerRemarks}
+                className={errors.customerRemarks ? "border-destructive" : ""}
+              />
+              <FieldError message={errors.customerRemarks} />
+            </div>
+          </FsrField>
+          <FsrField label="Engineer remarks">
+            <div>
+              <Textarea
+                value={form.engineerRemarks}
+                onChange={(e) => set("engineerRemarks", e.target.value)}
+                placeholder="Engineer remarks (optional)"
+                rows={2}
+                aria-invalid={!!errors.engineerRemarks}
+                className={errors.engineerRemarks ? "border-destructive" : ""}
+              />
+              <FieldError message={errors.engineerRemarks} />
             </div>
           </FsrField>
         </section>

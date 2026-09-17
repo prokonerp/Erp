@@ -27,6 +27,7 @@ export type MyEmployee = {
   phone: string | null;
   email: string | null;
   photo_path: string | null;
+  vehicle_no: string | null;
   documents: unknown;
 };
 
@@ -66,6 +67,7 @@ export function pickEmployeeRow(rows: unknown): MyEmployee | null {
       phone: typeof row.phone === "string" ? row.phone : null,
       email: typeof row.email === "string" ? row.email : null,
       photo_path: typeof row.photo_path === "string" ? row.photo_path : null,
+      vehicle_no: typeof row.vehicle_no === "string" ? row.vehicle_no : null,
       documents: (row as { documents?: unknown }).documents ?? [],
     };
   } catch {
@@ -94,7 +96,7 @@ export function useMyEmployee() {
         const identity = await fetchMyIdentity(supabase, {
           authUid: uid,
           email,
-          columns: "id,name,phone,email,photo_path,documents",
+          columns: "id,name,phone,email,photo_path,vehicle_no,documents",
         });
         if (identity.status !== "ok") return null;
         return pickEmployeeRow([identity.employee]);

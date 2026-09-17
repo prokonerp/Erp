@@ -50,8 +50,10 @@ export function conveyanceLoadMessage(err: unknown): string {
 // pending-material serial matcher. No supabase, no DOM — total over sparse
 // rows so the engineer portal never throws on missing data.
 
-/** Conveyance charge types offered in the expense dropdown. */
-export const CHARGE_TYPES = ["Place Visit", "Parking", "Toll"] as const;
+/** Conveyance charge types offered in the expense dropdown.
+ * NOTE: 'Place Visit' was retired in 20260926000001 — places visited are now
+ * a plain timestamp+note list (engineer_place_visits), never a charge. */
+export const CHARGE_TYPES = ["Toll", "Parking"] as const;
 
 export type ChargeType = (typeof CHARGE_TYPES)[number];
 
@@ -273,10 +275,58 @@ export function upsertDocByName(
   return list.map((d, i) => (i === idx ? entry : d));
 }
 
+// ---- Place-visit list (timestamp + typed note, never a charge) ----
+
+export const placeVisitSchema = z.object({
+  visited_at: z.string().datetime({ message: "Visit time must be ISO" }).optional(),
+  note: z.string().trim().min(1, "Place is required").max(300),
+});
+
+export type PlaceVisitEntry = z.infer<typeof placeVisitSchema>;
+
+export type PlaceVisitRow = {
+  id: string;
+  visited_at: string;
+  note: string;
+};
+
+// ---- Pending payout (unpaid settlements only) ----
+
+export type SettlementPayoutRow = {
+  computed_amount: number | null | undefined;
+  flat_expenses: number | null | undefined;
+  adjusted_amount: number | null | undefined;
+  status: string | null | undefined;
+  paid_at: string | null | undefined;
+};
+
+/**
+ * Sum of settlement rows not yet marked paid. Rejected rows excluded.
+ * Per row: (adjusted_amount ?? computed_amount ?? 0) + (flat_expenses ?? 0).
+ * Pure — unit-tested.
+ */
+export function pendingPayoutTotal(rows: SettlementPayoutRow[] | null | undefined): number {
+  return (rows ?? [])
+    .filter((r) => !r?.paid_at && (r?.status ?? "") !== "Rejected")
+    .reduce((sum, r) => {
+      const base =
+        typeof r?.adjusted_amount === "number"
+          ? r.adjusted_amount
+          : typeof r?.computed_amount === "number"
+            ? r.computed_amount
+            : 0;
+      const flat = typeof r?.flat_expenses === "number" ? r.flat_expenses : 0;
+      return sum + base + flat;
+    }, 0);
+}
+
 // ---- Dashboard assembler (pure; the page stays thin) ----
 
 /** Ticket statuses that leave the pending-calls count (exact match, mirrors the queue filter). */
 export const TERMINAL_TICKET_STATUSES: ReadonlySet<string> = new Set(["Closed", "Cancelled"]);
+
+/** Today-view: Assigned = all assigned today; Pending = not started (New/Call Log); Completed = Closed. */
+export const NOT_STARTED_TICKET_STATUSES: ReadonlySet<string> = new Set(["New", "Call Log"]);
 
 export type DashboardTicket = { id: string; status: string | null };
 
@@ -301,6 +351,10 @@ export type DashboardStats = {
   todayKm: number | null;
   todayLogDate: string;
   warnings: string[];
+  assignedToday: number;
+  pendingToday: number;
+  completedToday: number;
+  pendingPayout: number;
 };
 
 /**
@@ -310,6 +364,8 @@ export type DashboardStats = {
 export function assembleDashboardStats(input: {
   employeeName: string | null | undefined;
   tickets: DashboardTicket[] | null | undefined;
+  todayTickets?: DashboardTicket[] | null | undefined;
+  pendingPayout?: number | null | undefined;
   completedVisits: number | null | undefined;
   dayLog: DashboardDayLog | undefined;
   materialHolding: number | null | undefined;
@@ -318,6 +374,7 @@ export function assembleDashboardStats(input: {
   todayLogDate: string;
 }): DashboardStats {
   const tickets = input.tickets ?? [];
+  const todayTickets = input.todayTickets ?? [];
   return {
     employeeName: input.employeeName ?? "",
     pendingCalls: tickets.filter((t) => !TERMINAL_TICKET_STATUSES.has(t.status ?? "")).length,
@@ -332,5 +389,11 @@ export function assembleDashboardStats(input: {
       : null,
     todayLogDate: input.todayLogDate,
     warnings: input.warnings,
+    assignedToday: todayTickets.length,
+    pendingToday: todayTickets.filter((t) =>
+      NOT_STARTED_TICKET_STATUSES.has((t.status ?? "").trim()),
+    ).length,
+    completedToday: todayTickets.filter((t) => (t.status ?? "").trim() === "Closed").length,
+    pendingPayout: typeof input.pendingPayout === "number" ? input.pendingPayout : 0,
   };
 }

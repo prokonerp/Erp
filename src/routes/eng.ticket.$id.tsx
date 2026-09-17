@@ -12,7 +12,6 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Drawer,
@@ -47,13 +46,14 @@ import {
   ArrowLeft,
   Upload,
   Loader2,
-  MessageCircle,
   AlertTriangle,
   Check,
   CheckCircle2,
+  MessageCircle,
   ShieldAlert,
   Phone,
 } from "lucide-react";
+import { whatsappUrl } from "@/lib/eng-queue-utils";
 import { compressImageToLimit } from "@/lib/image-compress";
 import { PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
 import { reportDbError } from "@/lib/format-error";
@@ -169,11 +169,6 @@ function EngTicketDetail() {
   function triggerPasswordChangeDialog() {
     window.dispatchEvent(new CustomEvent("eng:password-change-required"));
   }
-
-  // Note form
-  const [noteText, setNoteText] = useState("");
-  const [noteBusy, setNoteBusy] = useState(false);
-  const noteIdempotencyRef = useRef("");
 
   // Photo upload
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -419,48 +414,6 @@ function EngTicketDetail() {
       .order("created_at", { ascending: false });
     setActivitiesError((actErr as { message?: string } | null)?.message ?? null);
     setActivities((actRes || []) as Activity[]);
-  };
-
-  const addNote = async () => {
-    if (!navigator.onLine) {
-      toast.error("You're offline — note will not be saved");
-      return;
-    }
-    const text = noteText.trim();
-    if (!text) return;
-
-    // Idempotency bucket covers the ticket + minute + content: same-tick
-    // double-taps of the SAME text are deduped, but a second DISTINCT note
-    // within the minute must not be falsely rejected.
-    let h = 5381;
-    for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
-    const bucket = `${id}:${Math.floor(Date.now() / 60_000)}:${(h >>> 0).toString(36)}`;
-    if (noteIdempotencyRef.current === bucket) {
-      toast.info("Note already recorded");
-      return;
-    }
-    noteIdempotencyRef.current = bucket;
-
-    setNoteBusy(true);
-    try {
-      const { data: u } = await supabase.auth.getUser();
-      const { error } = await supabase.from("ticket_activities").insert({
-        ticket_id: id,
-        kind: "note",
-        notes: text,
-        actor: u.user?.id ?? null,
-      } as never);
-      if (error) {
-        toast.error(reportDbError("note save", error));
-        noteIdempotencyRef.current = "";
-        return;
-      }
-      setNoteText("");
-      toast.success("Note added");
-      await refreshActivities();
-    } finally {
-      setNoteBusy(false);
-    }
   };
 
   const acknowledgeInstruction = async () => {
@@ -1150,11 +1103,24 @@ function EngTicketDetail() {
               <span className="text-muted-foreground text-xs">Customer</span>
               <p className="font-medium">{ticket.customer_name}</p>
               {ticket.customer_phone && (
-                <Button asChild className="min-h-[44px] w-full sm:w-auto mt-2">
-                  <a href={`tel:${ticket.customer_phone}`}>
-                    <Phone className="h-4 w-4" /> Call {ticket.customer_phone}
-                  </a>
-                </Button>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Button asChild size="sm" className="min-h-[44px]">
+                    <a href={`tel:${ticket.customer_phone}`}>
+                      <Phone className="h-4 w-4" /> Call
+                    </a>
+                  </Button>
+                  {whatsappUrl(ticket.customer_phone) && (
+                    <Button asChild size="sm" variant="outline" className="min-h-[44px]">
+                      <a
+                        href={whatsappUrl(ticket.customer_phone) as string}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <MessageCircle className="h-4 w-4" /> WhatsApp
+                      </a>
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
             {ticket.location && (
@@ -1712,82 +1678,7 @@ function EngTicketDetail() {
             ) ? (
             <p className="text-xs text-muted-foreground">Complete verification first.</p>
           ) : (
-            <FieldServiceReport ticketId={id} />
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Activity composer — notes + photo merged, gated */}
-      <Card className="rounded-xl">
-        <CardContent className="space-y-3 p-4">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Field update
-          </p>
-          <h3 className="text-[15px] font-semibold flex items-center gap-1.5">
-            <MessageCircle className="h-4 w-4" /> Activity composer
-          </h3>
-          {verifLoading ? (
-            <CardSkeleton />
-          ) : !canProceedToWork(
-              verifications?.customer ?? null,
-              verifications?.equipment ?? null,
-            ) ? (
-            <p className="text-xs text-muted-foreground">Complete verification first.</p>
-          ) : (
-            <>
-              <div className="space-y-3">
-                <Textarea
-                  placeholder="Type a note…"
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  rows={3}
-                  disabled={noteBusy}
-                />
-                <Button
-                  size="sm"
-                  className="min-h-[44px]"
-                  disabled={!noteText.trim() || noteBusy}
-                  onClick={addNote}
-                >
-                  {noteBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  Add Note
-                </Button>
-              </div>
-              <div className="border-t border-border pt-3 space-y-3">
-                <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                  <Upload className="h-4 w-4" /> Upload Photo
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  Max 5 MB · compressed on upload · JPEG, PNG, WebP, HEIC
-                </p>
-                <div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handlePhotoUpload}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="min-h-[44px] min-w-[160px]"
-                    disabled={photoBusy}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {photoBusy ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                    ) : (
-                      <Upload className="h-4 w-4 mr-1" />
-                    )}
-                    Choose Photo
-                  </Button>
-                  {photoProgress && (
-                    <p className="text-xs text-muted-foreground">{photoProgress}</p>
-                  )}
-                </div>
-              </div>
-            </>
+            <FieldServiceReport ticketId={id} ticketProduct={ticket?.product ?? null} />
           )}
         </CardContent>
       </Card>
@@ -1808,6 +1699,53 @@ function EngTicketDetail() {
         }))}
         currentUserId={myAuthUid}
       />
+
+      {/* Upload photo — last option, gated on verification */}
+      <Card className="rounded-xl">
+        <CardContent className="space-y-3 p-4">
+          <h3 className="text-[15px] font-semibold flex items-center gap-1.5">
+            <Upload className="h-4 w-4" /> Upload Photo
+          </h3>
+          {verifLoading ? (
+            <CardSkeleton />
+          ) : !canProceedToWork(
+              verifications?.customer ?? null,
+              verifications?.equipment ?? null,
+            ) ? (
+            <p className="text-xs text-muted-foreground">Complete verification first.</p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Max 5 MB · compressed on upload · JPEG, PNG, WebP, HEIC
+              </p>
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-[44px] min-w-[160px]"
+                  disabled={photoBusy}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {photoBusy ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-1" />
+                  )}
+                  Choose Photo
+                </Button>
+                {photoProgress && <p className="text-xs text-muted-foreground">{photoProgress}</p>}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

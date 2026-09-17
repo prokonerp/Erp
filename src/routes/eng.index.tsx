@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { formatINR } from "@/lib/fsrPrint";
 import {
   AlertTriangle,
   CalendarClock,
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   Route as RouteIcon,
   Ticket,
+  Wallet,
   Wrench,
 } from "lucide-react";
 
@@ -48,6 +50,35 @@ function StatCard({
         {value}
       </span>
       {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
+    </Link>
+  );
+}
+
+/** Compact today-call tile (Assigned / Pending / Completed trio). */
+function CompactStat({
+  to,
+  label,
+  value,
+  icon: Icon,
+}: {
+  to: string;
+  label: string;
+  value: string;
+  icon: typeof Ticket;
+}) {
+  return (
+    <Link
+      to={to}
+      className="rounded-xl border border-border bg-card px-3 py-2.5 active:bg-muted/50"
+      aria-label={`${label}: ${value}`}
+    >
+      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+        <Icon className="h-3 w-3" aria-hidden />
+        {label}
+      </span>
+      <span className="mt-0.5 block text-[20px] font-semibold tabular-nums leading-tight">
+        {value}
+      </span>
     </Link>
   );
 }
@@ -130,6 +161,45 @@ function EngDashboard() {
           </CardContent>
         </Card>
       ) : null}
+
+      <div className="grid grid-cols-3 gap-2">
+        <CompactStat
+          to="/eng/queue"
+          label="Assigned"
+          value={String(stats.assignedToday)}
+          icon={ClipboardList}
+        />
+        <CompactStat
+          to="/eng/queue"
+          label="Pending"
+          value={String(stats.pendingToday)}
+          icon={Ticket}
+        />
+        <CompactStat
+          to="/eng/queue"
+          label="Completed"
+          value={String(stats.completedToday)}
+          icon={Wrench}
+        />
+      </div>
+
+      <Card className="rounded-xl">
+        <CardContent className="flex items-center gap-3 p-4">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+            <Wallet className="h-5 w-5" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted-foreground">Pending payout</p>
+            <p className="text-[20px] font-semibold tabular-nums leading-tight">
+              {formatINR(stats.pendingPayout)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">Conveyance + charges not yet paid</p>
+          </div>
+          <Button asChild variant="outline" size="sm" className="min-h-[44px] shrink-0">
+            <Link to="/eng/conveyance">Details</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-2 gap-3">
         <StatCard

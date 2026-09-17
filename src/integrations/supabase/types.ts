@@ -1616,6 +1616,7 @@ export type Database = {
           documents: Json
           role: string | null
           updated_at: string
+          vehicle_no: string | null
         }
         Insert: {
           active?: boolean
@@ -1636,6 +1637,7 @@ export type Database = {
           documents?: Json
           role?: string | null
           updated_at?: string
+          vehicle_no?: string | null
         }
         Update: {
           active?: boolean
@@ -1656,6 +1658,7 @@ export type Database = {
           documents?: Json
           role?: string | null
           updated_at?: string
+          vehicle_no?: string | null
         }
         Relationships: []
       }
@@ -5208,6 +5211,30 @@ export type Database = {
         }
         Relationships: []
       }
+      engineer_place_visits: {
+        Row: {
+          id: string
+          employee_id: string
+          visited_at: string
+          note: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          visited_at?: string
+          note: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          visited_at?: string
+          note?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       ticket_assignment_history: {
         Row: {
           assigned_at: string | null
@@ -5412,6 +5439,8 @@ export type Database = {
           rating: number | null
           customer_signature_path: string | null
           signature_captured_at: string | null
+          customer_remarks: string | null
+          engineer_remarks: string | null
           engineer_employee_id: string | null
           engineer_name: string | null
           engineer_phone: string | null
@@ -5449,6 +5478,8 @@ export type Database = {
           rating?: number | null
           customer_signature_path?: string | null
           signature_captured_at?: string | null
+          customer_remarks?: string | null
+          engineer_remarks?: string | null
           engineer_employee_id?: string | null
           engineer_name?: string | null
           engineer_phone?: string | null
@@ -5486,6 +5517,8 @@ export type Database = {
           rating?: number | null
           customer_signature_path?: string | null
           signature_captured_at?: string | null
+          customer_remarks?: string | null
+          engineer_remarks?: string | null
           engineer_employee_id?: string | null
           engineer_name?: string | null
           engineer_phone?: string | null

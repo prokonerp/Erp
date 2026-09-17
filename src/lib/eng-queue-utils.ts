@@ -52,6 +52,22 @@ export function formatAge(iso: string): string {
 }
 
 /**
+ * wa.me deep link for a customer phone. Strips non-digits; prefixes 91 for
+ * 10-digit Indian numbers (or a leading 0). Null when no usable digits.
+ * Pure — unit-tested.
+ */
+export function whatsappUrl(phone: string | null | undefined): string | null {
+  let digits = (phone ?? "").replace(/\D/g, "");
+  if (digits === "") return null;
+  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.length === 10) digits = `91${digits}`;
+  if (digits.length === 12 && digits.startsWith("91")) return `https://wa.me/${digits}`;
+  // Already international (13-15 digits) — trust as-is.
+  if (digits.length >= 13 && digits.length <= 15) return `https://wa.me/${digits}`;
+  return digits.length >= 10 ? `https://wa.me/${digits}` : null;
+}
+
+/**
  * Mark directory entries with portal-login status.
  * `linkedIds` = employee ids with auth_user_id set (can actually sign in).
  */

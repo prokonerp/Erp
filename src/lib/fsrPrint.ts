@@ -132,6 +132,8 @@ export interface FsrPrintFsr {
   engineer_phone?: string | null;
   fse_feedback?: string | null;
   customer_feedback?: string | null;
+  customer_remarks?: string | null;
+  engineer_remarks?: string | null;
   engineer_signature_path?: string | null;
   formal_report_no?: string | null;
   verdict?: string | null;
@@ -228,6 +230,10 @@ export interface FsrPrintModel {
     upsSerial: string;
     statusLabel: StatusLabel;
     typeOfCall: CallKind;
+    /** Raw ticket.call_type ("Warranty", "AMC", "PM Call", …) — what the
+     *  report header and PRODUCT & CALL panel print. typeOfCall stays for the
+     *  PM/Installation derivation contract; callType is the human label. */
+    callType: string;
     oemCall: YesNo;
   };
   problem: {
@@ -328,14 +334,23 @@ export function buildFsrPrintModel(input: FsrPrintInput): FsrPrintModel {
 
   // Address mirrors tickets.$id.tsx: billing_address || street+address combo,
   // then city/state/country combo; ticket address only when no customer row.
+  // The street line often already embeds city/state ("…Sector 62, Gurugram,
+  // Haryana - 122011") — only append the city/state/country parts that are
+  // not already in it, so the report never prints "Haryana …, Gurugram, Haryana".
+  const cityParts = [
+    clean(customer?.city),
+    clean(customer?.state),
+    clean(customer?.country),
+  ].filter(Boolean);
+  const streetLine =
+    clean(customer?.billing_address) ||
+    [clean(customer?.street), clean(customer?.address)].filter(Boolean).join("\n") ||
+    "";
+  const normAddr = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const addressLines: string[] = customer
     ? [
-        clean(customer.billing_address) ||
-          [clean(customer.street), clean(customer.address)].filter(Boolean).join("\n") ||
-          "",
-        [clean(customer.city), clean(customer.state), clean(customer.country)]
-          .filter(Boolean)
-          .join(", "),
+        streetLine,
+        cityParts.filter((p) => !normAddr(streetLine).includes(normAddr(p))).join(", "),
       ].filter(Boolean)
     : [clean(ticket.customer_address)].filter(Boolean);
 
@@ -360,8 +375,15 @@ export function buildFsrPrintModel(input: FsrPrintInput): FsrPrintModel {
 
   // TODO(boundary): formalReportNo is the future "FSR-2026-000042" numbering.
   // Until a DB column/sequence backs it, fall back to the id-derived reportNo.
+  // Short ids (sample/demo rows like "SMPL-FSR-0001") print in full — slicing
+  // those mid-word ("SMPL-FSR") looks broken; only long UUID-style ids get
+  // the 8-char short form.
   const formalNo = clean(fsr.formal_report_no);
-  const reportNo = rawId ? rawId.slice(0, 8).toUpperCase() : "—";
+  const reportNo = rawId
+    ? rawId.length > 16
+      ? rawId.slice(0, 8).toUpperCase()
+      : rawId.toUpperCase()
+    : "—";
 
   // Battery bank text like "12V 100Ah" splits into voltage + capacity.
   // Anything else (e.g. legacy "42") keeps the raw text as ah, voltage "—".
@@ -389,6 +411,7 @@ export function buildFsrPrintModel(input: FsrPrintInput): FsrPrintModel {
       upsSerial: displayOrDash(ticket.serial_no),
       statusLabel: statusLabel(callType || null),
       typeOfCall: typeOfCall(callType || null),
+      callType: displayOrDash(callType || null),
       oemCall: boolYesNo(ticket.oem_call),
     },
     problem: {
@@ -462,8 +485,8 @@ export function buildFsrPrintModel(input: FsrPrintInput): FsrPrintModel {
     feedback: {
       status: mapCallStatus(clean(ticket.status) || null),
       rating: displayOrDash(fsr.rating),
-      fseFeedback: displayOrDash(fsr.fse_feedback),
-      customerFeedback: displayOrDash(fsr.customer_feedback),
+      fseFeedback: displayOrDash(fsr.engineer_remarks ?? fsr.fse_feedback),
+      customerFeedback: displayOrDash(fsr.customer_remarks ?? fsr.customer_feedback),
       // IMPORTANT: verdict must NEVER be derived from ticket.status — it has
       // no source yet, so it stays "—" until a real verdict feed exists.
       verdict: displayOrDash(fsr.verdict),

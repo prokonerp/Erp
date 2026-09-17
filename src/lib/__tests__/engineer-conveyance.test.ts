@@ -11,6 +11,8 @@ import {
   findDocByName,
   kmTravelled,
   pendingMaterialSerials,
+  pendingPayoutTotal,
+  placeVisitSchema,
   todayLocal,
   upsertDocByName,
 } from "@/lib/engineer-conveyance";
@@ -148,8 +150,8 @@ describe("expenseEntrySchema", () => {
     ).toBe(false);
   });
 
-  it("exposes exactly the three charge types", () => {
-    expect([...CHARGE_TYPES]).toEqual(["Place Visit", "Parking", "Toll"]);
+  it("exposes exactly the two reimbursable charge types", () => {
+    expect([...CHARGE_TYPES]).toEqual(["Toll", "Parking"]);
   });
 });
 
@@ -339,7 +341,26 @@ describe("assembleDashboardStats", () => {
     expect(s.todayKm).toBe(60);
   });
 
-  it("degrades every card to 0/[]/null when parts are missing", () => {
+  it("counts today Assigned / Pending / Completed + pending payout", () => {
+    const s = assembleDashboardStats({
+      employeeName: "Est Eng",
+      ...base,
+      tickets: [{ id: "a", status: "In Progress" }],
+      todayTickets: [
+        { id: "t1", status: "New" },
+        { id: "t2", status: "Call Log" },
+        { id: "t3", status: "In Progress" },
+        { id: "t4", status: "Closed" },
+      ],
+      pendingPayout: 1250.5,
+    });
+    expect(s.assignedToday).toBe(4);
+    expect(s.pendingToday).toBe(2);
+    expect(s.completedToday).toBe(1);
+    expect(s.pendingPayout).toBe(1250.5);
+  });
+
+  it("defaults today counts + payout to 0 when missing", () => {
     const s = assembleDashboardStats({
       employeeName: null,
       tickets: null,
@@ -356,5 +377,62 @@ describe("assembleDashboardStats", () => {
     expect(s.materialPending).toEqual([]);
     expect(s.todayKm).toBeNull();
     expect(s.warnings).toEqual(["holding: boom"]);
+    expect(s.assignedToday).toBe(0);
+    expect(s.pendingToday).toBe(0);
+    expect(s.completedToday).toBe(0);
+    expect(s.pendingPayout).toBe(0);
+  });
+});
+
+describe("pendingPayoutTotal", () => {
+  it("sums adjusted ?? computed + flat for unpaid, skips paid + rejected", () => {
+    expect(
+      pendingPayoutTotal([
+        {
+          computed_amount: 1000,
+          flat_expenses: 200,
+          adjusted_amount: null,
+          status: "Approved",
+          paid_at: null,
+        },
+        {
+          computed_amount: 500,
+          flat_expenses: 0,
+          adjusted_amount: 700,
+          status: "Pending",
+          paid_at: null,
+        },
+        {
+          computed_amount: 900,
+          flat_expenses: 100,
+          adjusted_amount: null,
+          status: "Approved",
+          paid_at: "2026-09-01T00:00:00Z",
+        },
+        {
+          computed_amount: 300,
+          flat_expenses: 0,
+          adjusted_amount: null,
+          status: "Rejected",
+          paid_at: null,
+        },
+      ]),
+    ).toBe(1900);
+  });
+
+  it("returns 0 for null/empty", () => {
+    expect(pendingPayoutTotal(null)).toBe(0);
+    expect(pendingPayoutTotal([])).toBe(0);
+  });
+});
+
+describe("placeVisitSchema", () => {
+  it("parses a note-only entry", () => {
+    expect(placeVisitSchema.safeParse({ note: "ABC Motors, Sector 62" }).success).toBe(true);
+  });
+
+  it("rejects blank notes and over-long notes", () => {
+    expect(placeVisitSchema.safeParse({ note: "   " }).success).toBe(false);
+    expect(placeVisitSchema.safeParse({ note: "x".repeat(301) }).success).toBe(false);
   });
 });

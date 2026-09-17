@@ -5,6 +5,7 @@ import {
   isCarryForward,
   matchesSearch,
   formatAge,
+  whatsappUrl,
   attachLoginFlags,
   sortEngineersLoginFirst,
 } from "@/lib/eng-queue-utils";
@@ -110,6 +111,21 @@ describe("formatAge", () => {
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 3_600_000).toISOString();
     const result = formatAge(threeDaysAgo);
     expect(result).toMatch(/^\d+d$/);
+  });
+});
+
+describe("whatsappUrl", () => {
+  it("prefixes 91 for 10-digit numbers", () => {
+    expect(whatsappUrl("98765 43210")).toBe("https://wa.me/919876543210");
+  });
+  it("strips leading 0 / +91", () => {
+    expect(whatsappUrl("09876543210")).toBe("https://wa.me/919876543210");
+    expect(whatsappUrl("+91-9876543210")).toBe("https://wa.me/919876543210");
+  });
+  it("returns null for blank / too-short input", () => {
+    expect(whatsappUrl(null)).toBeNull();
+    expect(whatsappUrl("")).toBeNull();
+    expect(whatsappUrl("12345")).toBeNull();
   });
 });
 

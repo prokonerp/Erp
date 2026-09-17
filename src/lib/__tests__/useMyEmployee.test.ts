@@ -54,6 +54,7 @@ describe("pickEmployeeRow (fail-soft)", () => {
       phone: "98XXXXXX01",
       email: "a@x.com",
       photo_path: "engineer/e1/profile_photo/2026-09-16/p.jpg",
+      vehicle_no: null,
       documents: [{ name: "Aadhaar", path: "engineer/e1/document/2026-09-16/a.jpg" }],
     });
     expect(pickEmployeeRow([{ id: "e2" }])).toEqual({
@@ -62,6 +63,7 @@ describe("pickEmployeeRow (fail-soft)", () => {
       phone: null,
       email: null,
       photo_path: null,
+      vehicle_no: null,
       documents: [],
     });
   });

@@ -5,6 +5,7 @@ import { useMyEmployee } from "@/hooks/useMyEmployee";
 import { useMyQueue } from "@/hooks/useMyQueue";
 import {
   assembleDashboardStats,
+  pendingPayoutTotal,
   type DashboardPendingMaterial,
   type DashboardStats,
 } from "@/lib/engineer-conveyance";
@@ -68,13 +69,13 @@ export function useEngineerDashboard() {
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const warnings: string[] = [];
-      const [completedVisits, dayLog, material] = await Promise.all([
+      const dayStart = new Date(`${today}T00:00:00+05:30`);
+      const dayEnd = new Date(dayStart.getTime() + 86_400_000);
+      const [completedVisits, dayLog, material, todayTickets, pendingPayout] = await Promise.all([
         (async () => {
           try {
             // IST day window: submitted_at is a timestamptz, so bound it
             // between IST midnight and the next IST midnight.
-            const dayStart = new Date(`${today}T00:00:00+05:30`);
-            const dayEnd = new Date(dayStart.getTime() + 86_400_000);
             const { count, error } = await supabase
               .from("field_service_reports")
               .select("id", { count: "exact", head: true })
@@ -116,8 +117,48 @@ export function useEngineerDashboard() {
             return { holding: 0, pending: [] } satisfies MaterialRpc;
           }
         })(),
+        (async () => {
+          // Today's assigned calls: assigned_at inside the IST day window.
+          try {
+            const { data, error } = await supabase
+              .from("tickets")
+              .select("id, status")
+              .filter("assigned_employee_id", "eq", employeeId!)
+              .eq("is_deleted", false)
+              .gte("assigned_at", dayStart.toISOString())
+              .lt("assigned_at", dayEnd.toISOString());
+            if (error) throw error;
+            return (data ?? []) as { id: string; status: string | null }[];
+          } catch (e) {
+            warnings.push(`today: ${errMessage(e).message}`);
+            return [] as { id: string; status: string | null }[];
+          }
+        })(),
+        (async () => {
+          // Pending payout: unpaid settlement rows (own rows via RLS).
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- settlements table pending generated select nuance
+            const { data, error } = await (supabase as any)
+              .from("engineer_conveyance_settlements")
+              .select("computed_amount, flat_expenses, adjusted_amount, status, paid_at")
+              .eq("employee_id", employeeId!);
+            if (error) throw error;
+            return pendingPayoutTotal(
+              (data ?? []) as {
+                computed_amount: number | null;
+                flat_expenses: number | null;
+                adjusted_amount: number | null;
+                status: string | null;
+                paid_at: string | null;
+              }[],
+            );
+          } catch (e) {
+            warnings.push(`payout: ${errMessage(e).message}`);
+            return 0;
+          }
+        })(),
       ]);
-      return { completedVisits, dayLog, material, warnings };
+      return { completedVisits, dayLog, material, warnings, todayTickets, pendingPayout };
     },
   });
 
@@ -126,6 +167,8 @@ export function useEngineerDashboard() {
       ? assembleDashboardStats({
           employeeName: employee?.name ?? null,
           tickets: (queue.data ?? []).map((t) => ({ id: t.id, status: t.status })),
+          todayTickets: rest.data.todayTickets,
+          pendingPayout: rest.data.pendingPayout,
           completedVisits: rest.data.completedVisits,
           dayLog: rest.data.dayLog,
           materialHolding: rest.data.material.holding,

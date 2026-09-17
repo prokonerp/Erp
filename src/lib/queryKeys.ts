@@ -65,6 +65,8 @@ export const engKeys = {
     ["eng", "conveyance-log", employeeId, date] as const,
   conveyanceExpenses: (employeeId: string | null, date: string) =>
     ["eng", "conveyance-expenses", employeeId, date] as const,
+  placeVisits: (employeeId: string | null, date: string) =>
+    ["eng", "place-visits", employeeId, date] as const,
 } as const;
 
 // Engineers admin keys. Separate "admin-eng" namespace so admin roster /
