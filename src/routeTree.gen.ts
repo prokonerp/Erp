@@ -92,7 +92,11 @@ import { Route as AppEngineersTicketsRouteImport } from './routes/_app/engineers
 import { Route as AppEngineersReconcileRouteImport } from './routes/_app/engineers.reconcile'
 import { Route as AppEngineersRatesRouteImport } from './routes/_app/engineers.rates'
 import { Route as AppEngineersExpensesRouteImport } from './routes/_app/engineers.expenses'
+import { Route as AppEngineersDocumentsRouteImport } from './routes/_app/engineers.documents'
 import { Route as AppEngineersDirectoryRouteImport } from './routes/_app/engineers.directory'
+import { Route as AppEngineersCustodyRouteImport } from './routes/_app/engineers.custody'
+import { Route as AppEngineersConveyanceRouteImport } from './routes/_app/engineers.conveyance'
+import { Route as AppEngineersAttentionRouteImport } from './routes/_app/engineers.attention'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
 import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
@@ -564,9 +568,29 @@ const AppEngineersExpensesRoute = AppEngineersExpensesRouteImport.update({
   path: '/expenses',
   getParentRoute: () => AppEngineersRoute,
 } as any)
+const AppEngineersDocumentsRoute = AppEngineersDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
 const AppEngineersDirectoryRoute = AppEngineersDirectoryRouteImport.update({
   id: '/directory',
   path: '/directory',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersCustodyRoute = AppEngineersCustodyRouteImport.update({
+  id: '/custody',
+  path: '/custody',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersConveyanceRoute = AppEngineersConveyanceRouteImport.update({
+  id: '/conveyance',
+  path: '/conveyance',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersAttentionRoute = AppEngineersAttentionRouteImport.update({
+  id: '/attention',
+  path: '/attention',
   getParentRoute: () => AppEngineersRoute,
 } as any)
 const AppCrmSettingsRoute = AppCrmSettingsRouteImport.update({
@@ -894,7 +918,11 @@ export interface FileRoutesByFullPath {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
+  '/engineers/attention': typeof AppEngineersAttentionRoute
+  '/engineers/conveyance': typeof AppEngineersConveyanceRoute
+  '/engineers/custody': typeof AppEngineersCustodyRoute
   '/engineers/directory': typeof AppEngineersDirectoryRouteWithChildren
+  '/engineers/documents': typeof AppEngineersDocumentsRoute
   '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/engineers/reconcile': typeof AppEngineersReconcileRoute
@@ -1021,7 +1049,11 @@ export interface FileRoutesByTo {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
+  '/engineers/attention': typeof AppEngineersAttentionRoute
+  '/engineers/conveyance': typeof AppEngineersConveyanceRoute
+  '/engineers/custody': typeof AppEngineersCustodyRoute
   '/engineers/directory': typeof AppEngineersDirectoryRouteWithChildren
+  '/engineers/documents': typeof AppEngineersDocumentsRoute
   '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/engineers/reconcile': typeof AppEngineersReconcileRoute
@@ -1158,7 +1190,11 @@ export interface FileRoutesById {
   '/_app/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
+  '/_app/engineers/attention': typeof AppEngineersAttentionRoute
+  '/_app/engineers/conveyance': typeof AppEngineersConveyanceRoute
+  '/_app/engineers/custody': typeof AppEngineersCustodyRoute
   '/_app/engineers/directory': typeof AppEngineersDirectoryRouteWithChildren
+  '/_app/engineers/documents': typeof AppEngineersDocumentsRoute
   '/_app/engineers/expenses': typeof AppEngineersExpensesRoute
   '/_app/engineers/rates': typeof AppEngineersRatesRoute
   '/_app/engineers/reconcile': typeof AppEngineersReconcileRoute
@@ -1300,7 +1336,11 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
+    | '/engineers/attention'
+    | '/engineers/conveyance'
+    | '/engineers/custody'
     | '/engineers/directory'
+    | '/engineers/documents'
     | '/engineers/expenses'
     | '/engineers/rates'
     | '/engineers/reconcile'
@@ -1427,7 +1467,11 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
+    | '/engineers/attention'
+    | '/engineers/conveyance'
+    | '/engineers/custody'
     | '/engineers/directory'
+    | '/engineers/documents'
     | '/engineers/expenses'
     | '/engineers/rates'
     | '/engineers/reconcile'
@@ -1563,7 +1607,11 @@ export interface FileRouteTypes {
     | '/_app/crm/leads'
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
+    | '/_app/engineers/attention'
+    | '/_app/engineers/conveyance'
+    | '/_app/engineers/custody'
     | '/_app/engineers/directory'
+    | '/_app/engineers/documents'
     | '/_app/engineers/expenses'
     | '/_app/engineers/rates'
     | '/_app/engineers/reconcile'
@@ -2250,11 +2298,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppEngineersExpensesRouteImport
       parentRoute: typeof AppEngineersRoute
     }
+    '/_app/engineers/documents': {
+      id: '/_app/engineers/documents'
+      path: '/documents'
+      fullPath: '/engineers/documents'
+      preLoaderRoute: typeof AppEngineersDocumentsRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
     '/_app/engineers/directory': {
       id: '/_app/engineers/directory'
       path: '/directory'
       fullPath: '/engineers/directory'
       preLoaderRoute: typeof AppEngineersDirectoryRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/custody': {
+      id: '/_app/engineers/custody'
+      path: '/custody'
+      fullPath: '/engineers/custody'
+      preLoaderRoute: typeof AppEngineersCustodyRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/conveyance': {
+      id: '/_app/engineers/conveyance'
+      path: '/conveyance'
+      fullPath: '/engineers/conveyance'
+      preLoaderRoute: typeof AppEngineersConveyanceRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/attention': {
+      id: '/_app/engineers/attention'
+      path: '/attention'
+      fullPath: '/engineers/attention'
+      preLoaderRoute: typeof AppEngineersAttentionRouteImport
       parentRoute: typeof AppEngineersRoute
     }
     '/_app/crm/settings': {
@@ -2791,7 +2867,11 @@ const AppEngineersDirectoryRouteWithChildren =
   )
 
 interface AppEngineersRouteChildren {
+  AppEngineersAttentionRoute: typeof AppEngineersAttentionRoute
+  AppEngineersConveyanceRoute: typeof AppEngineersConveyanceRoute
+  AppEngineersCustodyRoute: typeof AppEngineersCustodyRoute
   AppEngineersDirectoryRoute: typeof AppEngineersDirectoryRouteWithChildren
+  AppEngineersDocumentsRoute: typeof AppEngineersDocumentsRoute
   AppEngineersExpensesRoute: typeof AppEngineersExpensesRoute
   AppEngineersRatesRoute: typeof AppEngineersRatesRoute
   AppEngineersReconcileRoute: typeof AppEngineersReconcileRoute
@@ -2800,7 +2880,11 @@ interface AppEngineersRouteChildren {
 }
 
 const AppEngineersRouteChildren: AppEngineersRouteChildren = {
+  AppEngineersAttentionRoute: AppEngineersAttentionRoute,
+  AppEngineersConveyanceRoute: AppEngineersConveyanceRoute,
+  AppEngineersCustodyRoute: AppEngineersCustodyRoute,
   AppEngineersDirectoryRoute: AppEngineersDirectoryRouteWithChildren,
+  AppEngineersDocumentsRoute: AppEngineersDocumentsRoute,
   AppEngineersExpensesRoute: AppEngineersExpensesRoute,
   AppEngineersRatesRoute: AppEngineersRatesRoute,
   AppEngineersReconcileRoute: AppEngineersReconcileRoute,
