@@ -11,6 +11,7 @@ import {
   Warehouse,
   Users,
   Truck,
+  HardHat,
   Package,
   MonitorCheck,
   IdCard,
@@ -285,6 +286,14 @@ export const NAV_ITEMS: NavItem[] = [
     adminOnly: true,
     group: "System",
   },
+  {
+    to: "/engineers",
+    label: "Engineers",
+    icon: HardHat,
+    module: "engineers",
+    adminOnly: true,
+    group: "Field Ops",
+  },
 ];
 
 /** Quick-create actions used by the command palette and dashboard. */
@@ -315,6 +324,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 export const GROUP_ORDER = [
   "Masters",
   "Service Desk",
+  "Field Ops",
   "Customers",
   "Sales",
   "Procurement",

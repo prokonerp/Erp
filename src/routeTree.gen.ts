@@ -34,6 +34,7 @@ import { Route as AppIndentRouteImport } from './routes/_app/indent'
 import { Route as AppImsRouteImport } from './routes/_app/ims'
 import { Route as AppImportRouteImport } from './routes/_app/import'
 import { Route as AppGrnRouteImport } from './routes/_app/grn'
+import { Route as AppEngineersRouteImport } from './routes/_app/engineers'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCrmRouteImport } from './routes/_app/crm'
 import { Route as AppChallanRouteImport } from './routes/_app/challan'
@@ -46,6 +47,7 @@ import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
 import { Route as AppImsIndexRouteImport } from './routes/_app/ims.index'
 import { Route as AppGrnIndexRouteImport } from './routes/_app/grn.index'
 import { Route as AppGatepassIndexRouteImport } from './routes/_app/gatepass.index'
+import { Route as AppEngineersIndexRouteImport } from './routes/_app/engineers.index'
 import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
 import { Route as AppChallanIndexRouteImport } from './routes/_app/challan.index'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
@@ -265,6 +267,11 @@ const AppGrnRoute = AppGrnRouteImport.update({
   path: '/grn',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEngineersRoute = AppEngineersRouteImport.update({
+  id: '/engineers',
+  path: '/engineers',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -324,6 +331,11 @@ const AppGatepassIndexRoute = AppGatepassIndexRouteImport.update({
   id: '/gatepass/',
   path: '/gatepass/',
   getParentRoute: () => AppRoute,
+} as any)
+const AppEngineersIndexRoute = AppEngineersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppEngineersRoute,
 } as any)
 const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
   id: '/',
@@ -808,6 +820,7 @@ export interface FileRoutesByFullPath {
   '/challan': typeof AppChallanRouteWithChildren
   '/crm': typeof AppCrmRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
+  '/engineers': typeof AppEngineersRouteWithChildren
   '/grn': typeof AppGrnRouteWithChildren
   '/import': typeof AppImportRoute
   '/ims': typeof AppImsRouteWithChildren
@@ -884,6 +897,7 @@ export interface FileRoutesByFullPath {
   '/amc/': typeof AppAmcIndexRoute
   '/challan/': typeof AppChallanIndexRoute
   '/crm/': typeof AppCrmIndexRoute
+  '/engineers/': typeof AppEngineersIndexRoute
   '/gatepass/': typeof AppGatepassIndexRoute
   '/grn/': typeof AppGrnIndexRoute
   '/ims/': typeof AppImsIndexRoute
@@ -999,6 +1013,7 @@ export interface FileRoutesByTo {
   '/amc': typeof AppAmcIndexRoute
   '/challan': typeof AppChallanIndexRoute
   '/crm': typeof AppCrmIndexRoute
+  '/engineers': typeof AppEngineersIndexRoute
   '/gatepass': typeof AppGatepassIndexRoute
   '/grn': typeof AppGrnIndexRoute
   '/ims': typeof AppImsIndexRoute
@@ -1057,6 +1072,7 @@ export interface FileRoutesById {
   '/_app/challan': typeof AppChallanRouteWithChildren
   '/_app/crm': typeof AppCrmRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/engineers': typeof AppEngineersRouteWithChildren
   '/_app/grn': typeof AppGrnRouteWithChildren
   '/_app/import': typeof AppImportRoute
   '/_app/ims': typeof AppImsRouteWithChildren
@@ -1133,6 +1149,7 @@ export interface FileRoutesById {
   '/_app/amc/': typeof AppAmcIndexRoute
   '/_app/challan/': typeof AppChallanIndexRoute
   '/_app/crm/': typeof AppCrmIndexRoute
+  '/_app/engineers/': typeof AppEngineersIndexRoute
   '/_app/gatepass/': typeof AppGatepassIndexRoute
   '/_app/grn/': typeof AppGrnIndexRoute
   '/_app/ims/': typeof AppImsIndexRoute
@@ -1191,6 +1208,7 @@ export interface FileRouteTypes {
     | '/challan'
     | '/crm'
     | '/dashboard'
+    | '/engineers'
     | '/grn'
     | '/import'
     | '/ims'
@@ -1267,6 +1285,7 @@ export interface FileRouteTypes {
     | '/amc/'
     | '/challan/'
     | '/crm/'
+    | '/engineers/'
     | '/gatepass/'
     | '/grn/'
     | '/ims/'
@@ -1382,6 +1401,7 @@ export interface FileRouteTypes {
     | '/amc'
     | '/challan'
     | '/crm'
+    | '/engineers'
     | '/gatepass'
     | '/grn'
     | '/ims'
@@ -1439,6 +1459,7 @@ export interface FileRouteTypes {
     | '/_app/challan'
     | '/_app/crm'
     | '/_app/dashboard'
+    | '/_app/engineers'
     | '/_app/grn'
     | '/_app/import'
     | '/_app/ims'
@@ -1515,6 +1536,7 @@ export interface FileRouteTypes {
     | '/_app/amc/'
     | '/_app/challan/'
     | '/_app/crm/'
+    | '/_app/engineers/'
     | '/_app/gatepass/'
     | '/_app/grn/'
     | '/_app/ims/'
@@ -1749,6 +1771,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGrnRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/engineers': {
+      id: '/_app/engineers'
+      path: '/engineers'
+      fullPath: '/engineers'
+      preLoaderRoute: typeof AppEngineersRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -1832,6 +1861,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/gatepass/'
       preLoaderRoute: typeof AppGatepassIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/engineers/': {
+      id: '/_app/engineers/'
+      path: '/'
+      fullPath: '/engineers/'
+      preLoaderRoute: typeof AppEngineersIndexRouteImport
+      parentRoute: typeof AppEngineersRoute
     }
     '/_app/crm/': {
       id: '/_app/crm/'
@@ -2626,6 +2662,18 @@ const AppCrmRouteChildren: AppCrmRouteChildren = {
 const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
+interface AppEngineersRouteChildren {
+  AppEngineersIndexRoute: typeof AppEngineersIndexRoute
+}
+
+const AppEngineersRouteChildren: AppEngineersRouteChildren = {
+  AppEngineersIndexRoute: AppEngineersIndexRoute,
+}
+
+const AppEngineersRouteWithChildren = AppEngineersRoute._addFileChildren(
+  AppEngineersRouteChildren,
+)
+
 interface AppGrnCustomerRouteChildren {
   AppGrnCustomerNewRoute: typeof AppGrnCustomerNewRoute
   AppGrnCustomerIndexRoute: typeof AppGrnCustomerIndexRoute
@@ -2884,6 +2932,7 @@ interface AppRouteChildren {
   AppChallanRoute: typeof AppChallanRouteWithChildren
   AppCrmRoute: typeof AppCrmRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
+  AppEngineersRoute: typeof AppEngineersRouteWithChildren
   AppGrnRoute: typeof AppGrnRouteWithChildren
   AppImportRoute: typeof AppImportRoute
   AppImsRoute: typeof AppImsRouteWithChildren
@@ -2910,6 +2959,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppChallanRoute: AppChallanRouteWithChildren,
   AppCrmRoute: AppCrmRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
+  AppEngineersRoute: AppEngineersRouteWithChildren,
   AppGrnRoute: AppGrnRouteWithChildren,
   AppImportRoute: AppImportRoute,
   AppImsRoute: AppImsRouteWithChildren,
