@@ -309,29 +309,23 @@ export function useEngineerOverview(): {
   const today = istDateKey();
   const monthStart = `${today.slice(0, 7)}-01`;
 
+  // Single roster source: list_engineers is fetched once by useEngineerRoster
+  // and shared here (and by useAttentionQueue) instead of one RPC per hook.
+  const rosterQ = useEngineerRoster();
+
   const query = useQuery({
     queryKey: adminEngKeys.overview(),
+    enabled: !rosterQ.isLoading,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async (): Promise<{
-      roster: AdminEngineer[];
-      kpis: RosterKpis;
+      tickets: OverviewTicketRow[];
+      days: DayRow[];
       warnings: AdminWarning[];
     }> => {
       const warnings: AdminWarning[] = [];
-      let roster: AdminEngineer[] = [];
       let tickets: OverviewTicketRow[] = [];
       let days: DayRow[] = [];
-
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- list_engineers() pending generated types
-        const { data, error } = await (supabase as any).rpc("list_engineers");
-        if (error) throw error;
-        roster = Array.isArray(data) ? (data as AdminEngineer[]) : [];
-      } catch (e) {
-        warnings.push({ section: "roster", message: hintFor(e, "20260925000001") });
-        roster = [];
-      }
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tickets pending generated types
@@ -369,14 +363,16 @@ export function useEngineerOverview(): {
         days = [];
       }
 
-      return { roster, kpis: rosterKpis(roster, tickets, days, today), warnings };
+      return { tickets, days, warnings };
     },
   });
 
+  const tickets = query.data?.tickets ?? [];
+  const days = query.data?.days ?? [];
   return {
-    data: query.data ?? { roster: [], kpis: rosterKpis([], [], [], today) },
-    warnings: query.data?.warnings ?? [],
-    isLoading: query.isLoading,
+    data: { roster: rosterQ.roster, kpis: rosterKpis(rosterQ.roster, tickets, days, today) },
+    warnings: [...rosterQ.warnings, ...(query.data?.warnings ?? [])],
+    isLoading: rosterQ.isLoading || query.isLoading,
   };
 }
 
@@ -627,28 +623,23 @@ export function useAttentionQueue(): {
   const today = istDateKey();
   const monthStart = `${today.slice(0, 7)}-01`;
 
+  // Roster comes from the shared useEngineerRoster() cache (see
+  // useEngineerOverview) — no second list_engineers RPC.
+  const rosterQ = useEngineerRoster();
+
   const query = useQuery({
     queryKey: adminEngKeys.attention(),
+    enabled: !rosterQ.isLoading,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async (): Promise<{ items: AttentionQueueItem[]; warnings: AdminWarning[] }> => {
       const warnings: AdminWarning[] = [];
-      let roster: AdminEngineer[] = [];
       let tickets: (OverviewTicketRow & { closed_at: string | null })[] = [];
       let logs: AllLogRow[] = [];
       let rates: AllRateRow[] = [];
       let expenses: AllExpenseRow[] = [];
       let docRows: DocRow[] = [];
       let settlements: SettlementRow[] = [];
-
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- list_engineers() pending generated types
-        const { data, error } = await (supabase as any).rpc("list_engineers");
-        if (error) throw error;
-        roster = Array.isArray(data) ? (data as AdminEngineer[]) : [];
-      } catch (e) {
-        warnings.push({ section: "roster", message: hintFor(e, "20260925000001") });
-      }
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tickets pending generated types
@@ -777,7 +768,7 @@ export function useAttentionQueue(): {
         }
       }
 
-      const summaries = roster
+      const summaries = rosterQ.roster
         .filter((r) => !!r && typeof r.employee_id === "string" && r.employee_id !== "")
         .map((r) =>
           perEngineerSummary({
@@ -799,7 +790,7 @@ export function useAttentionQueue(): {
 
   return {
     data: query.data?.items ?? [],
-    warnings: query.data?.warnings ?? [],
-    isLoading: query.isLoading,
+    warnings: [...rosterQ.warnings, ...(query.data?.warnings ?? [])],
+    isLoading: rosterQ.isLoading || query.isLoading,
   };
 }

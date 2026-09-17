@@ -1,5 +1,7 @@
 import { createFileRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { ModuleGate } from "@/components/ModuleGate";
+import { useAttentionQueue } from "@/hooks/useEngineerAdmin";
 import {
   LayoutDashboard,
   Users,
@@ -22,7 +24,9 @@ export const Route = createFileRoute("/_app/engineers")({
 type EngTab = { to: string; label: string; icon: LucideIcon; exact?: boolean };
 
 /** Admin Field-Ops tabs. All ten are live routes — every tab is a
- *  keyboard-reachable link; no disabled placeholders remain. */
+ *  keyboard-reachable link; no disabled placeholders remain. The layout is
+ *  gated on the engineers module (action "read", matching the sidebar
+ *  filter) — RLS stays authoritative, this only controls the shell. */
 const TABS: EngTab[] = [
   { to: "/engineers", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/engineers/directory", label: "Directory", icon: Users },
@@ -38,21 +42,36 @@ const TABS: EngTab[] = [
 
 function EngineersLayout() {
   const loc = useLocation();
+  const attentionQ = useAttentionQueue();
+  const attentionCount = attentionQ.data.length;
   return (
-    <div>
-      <div className="flex flex-wrap gap-1 mb-4 border-b pb-2 print:hidden">
-        {TABS.map((t) => {
-          const active = t.exact ? loc.pathname === t.to : loc.pathname.startsWith(t.to);
-          return (
-            <Link key={t.to} to={t.to} aria-current={active ? "page" : undefined}>
-              <Button variant={active ? "default" : "ghost"} size="sm">
-                <t.icon className="h-4 w-4 mr-1" aria-hidden="true" />{t.label}
-              </Button>
-            </Link>
-          );
-        })}
-      </div>
+    <ModuleGate module="engineers" action="read" title="Engineers — access restricted">
+      <nav aria-label="Engineer sections" className="print:hidden">
+        <div className="flex gap-1 mb-4 border-b pb-2 overflow-x-auto">
+          {TABS.map((t) => {
+            const active = t.exact ? loc.pathname === t.to : loc.pathname.startsWith(t.to);
+            const badge = t.to === "/engineers/attention" ? attentionCount : 0;
+            return (
+              <Link
+                key={t.to}
+                to={t.to}
+                aria-current={active ? "page" : undefined}
+                className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Button variant={active ? "default" : "ghost"} size="sm">
+                  <t.icon className="h-4 w-4 mr-1" aria-hidden="true" />{t.label}
+                  {badge > 0 && (
+                    <span className="ml-1 rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground">
+                      {badge}
+                    </span>
+                  )}
+                </Button>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
       <Outlet />
-    </div>
+    </ModuleGate>
   );
 }
