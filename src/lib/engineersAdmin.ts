@@ -439,3 +439,271 @@ export function settlementStatusChangeAllowed(
   }
   return { ok: true };
 }
+
+// ---- Engineers console Phase 1: overview foundation -------------------
+// Pure, fail-soft overview aggregators. Bad input yields null/empty, never
+// a throw. Reuse only the helpers above (rateInForce, dayKm, kmFlags,
+// docCompliance, buildAttentionItems, groupExpensesByType is intentionally
+// unused here — no by-type breakdown in Phase 1) plus istDateKey/asDateKey.
+// IST rule: only YYYY-MM-DD string compare for date columns; closed_at
+// (timestamptz) is truncated via asDateKey before comparing.
+
+export type RosterKpis = {
+  totalEngineers: number;
+  openTickets: number;
+  attentionHigh: number;
+  kmMonth: number;
+};
+
+export type PerEngineerSummaryInput = {
+  engineer: AdminEngineer;
+  rates?: AdminRate[] | null;
+  days?: PayableDay[] | null;
+  expenses?: PayableExpense[] | null;
+  docs?: AdminDoc[] | null;
+  settlement?: AdminSettlement | null;
+  tickets?: { status?: string | null; closed_at?: string | null }[] | null;
+  todayISO?: string | null;
+};
+
+export type PerEngineerSummary = {
+  employeeId: string;
+  name: string;
+  openTickets: number;
+  closed30d: number;
+  kmMonth: number;
+  expensesMonth: number;
+  docsMissing: string[];
+  attention: { severity: "high" | "medium" | "low"; key: string; label: string }[];
+  rateToday: number | null;
+};
+
+export type AttentionQueueItem = {
+  employeeId: string;
+  name: string;
+  severity: "high" | "medium" | "low";
+  key: string;
+  label: string;
+};
+
+export type ConveyanceMatrixRow = {
+  log_date: string;
+  morning: number | null;
+  evening: number | null;
+  km: number | null;
+  flags: string[];
+};
+
+export type CustodyLedgerRow = {
+  stock_item_id: string | null;
+  custodian_employee_id: string | null;
+  custodian_name: string | null;
+  part_serial_no: string | null;
+  ticket_id: string | null;
+  set_at: string | null;
+};
+
+/** Open = anything not Closed/Cancelled (tickets dashboard convention). */
+function isOpenTicket(status: unknown): boolean {
+  return status !== "Closed" && status !== "Cancelled";
+}
+
+/** Sum of dayKm for days inside the IST month of `todayKey` (YYYY-MM-DD). */
+function monthKm(days: PayableDay[] | null | undefined, todayKey: string): number {
+  const prefix = todayKey.slice(0, 7);
+  let sum = 0;
+  for (const d of days ?? []) {
+    if (!d) continue;
+    const key = asDateKey(d.log_date);
+    if (!key || !key.startsWith(prefix)) continue;
+    // dayKm is fail-soft (null until both readings exist and agree).
+    sum += dayKm(d.morning_odometer, d.evening_odometer) ?? 0;
+  }
+  return Math.round(sum * 10) / 10;
+}
+
+/**
+ * Console KPIs from roster + ticket statuses + day logs. attentionHigh
+ * defaults to the count of high-severity items from buildAttentionItems over
+ * the same day set (0 when no days carry a high-severity defect); pass a
+ * non-empty per-engineer summaries list to count summaries carrying at least
+ * one high-severity item instead. The real per-engineer queue comes from
+ * attentionQueue via useAttentionQueue.
+ * todayISO pins "current month" for tests; defaults to the IST date.
+ */
+export function rosterKpis(
+  roster: AdminEngineer[] | null | undefined,
+  tickets: { status?: string | null }[] | null | undefined,
+  days: PayableDay[] | null | undefined,
+  todayISO?: string | null,
+  summaries?: PerEngineerSummary[] | null,
+): RosterKpis {
+  const list = Array.isArray(roster) ? roster : [];
+  const tix = Array.isArray(tickets) ? tickets : [];
+  const today = asDateKey(todayISO) ?? istDateKey();
+  const attentionHigh =
+    Array.isArray(summaries) && summaries.length > 0
+      ? summaries.filter(
+          (s) =>
+            !!s &&
+            Array.isArray(s.attention) &&
+            s.attention.some((a) => !!a && a.severity === "high"),
+        ).length
+      : buildAttentionItems({ days: Array.isArray(days) ? days : [], todayISO: today }).filter(
+          (a) => a.severity === "high",
+        ).length;
+  return {
+    totalEngineers: list.length,
+    openTickets: tix.filter((t) => !!t && isOpenTicket(t.status)).length,
+    attentionHigh,
+    kmMonth: monthKm(Array.isArray(days) ? days : [], today),
+  };
+}
+
+/**
+ * One engineer's console card inputs. closed30d counts status === "Closed"
+ * rows whose closed_at date key falls in [today − 30d, today]. expensesMonth
+ * sums current-month expense amounts (round2, like groupExpensesByType
+ * totals). Bad engineer input yields an empty card, never a throw.
+ */
+export function perEngineerSummary(
+  input: PerEngineerSummaryInput | null | undefined,
+): PerEngineerSummary {
+  const empty = {
+    employeeId: "",
+    name: "",
+    openTickets: 0,
+    closed30d: 0,
+    kmMonth: 0,
+    expensesMonth: 0,
+    docsMissing: [] as string[],
+    attention: [] as PerEngineerSummary["attention"],
+    rateToday: null as number | null,
+  };
+  const src = input ?? ({} as PerEngineerSummaryInput);
+  const eng = src.engineer;
+  if (!eng || typeof eng.employee_id !== "string" || eng.employee_id === "") return empty;
+  const employeeId = eng.employee_id;
+  const today = asDateKey(src.todayISO) ?? istDateKey();
+  const prefix = today.slice(0, 7);
+  const tix = Array.isArray(src.tickets) ? src.tickets : [];
+
+  const dayMs = new Date(`${today}T00:00:00+05:30`).getTime();
+  const cutoff = Number.isFinite(dayMs) ? istDateKey(new Date(dayMs - 30 * 86_400_000)) : today;
+  const closed30d = tix.filter(
+    (t) => !!t && t.status === "Closed" && (asDateKey(t.closed_at) ?? "") >= cutoff,
+  ).length;
+
+  let expensesMonth = 0;
+  for (const e of src.expenses ?? []) {
+    if (!e) continue;
+    const key = asDateKey(e.expense_date);
+    if (!key || !key.startsWith(prefix)) continue;
+    expensesMonth += asFiniteNumber(e.amount) ?? 0;
+  }
+  expensesMonth = round2(expensesMonth);
+
+  const docs = Array.isArray(src.docs) ? src.docs : [];
+  return {
+    employeeId,
+    name: typeof eng.name === "string" && eng.name !== "" ? eng.name : employeeId,
+    openTickets: tix.filter((t) => !!t && isOpenTicket(t.status)).length,
+    closed30d,
+    kmMonth: monthKm(Array.isArray(src.days) ? src.days : [], today),
+    expensesMonth,
+    docsMissing: docCompliance(docs).missing,
+    attention: buildAttentionItems({
+      employeeId,
+      rates: src.rates,
+      days: src.days,
+      expenses: src.expenses,
+      docs,
+      settlement: src.settlement,
+      todayISO: today,
+    }),
+    rateToday: rateInForce(src.rates, employeeId, today),
+  };
+}
+
+const SEVERITY_RANK: Record<AttentionQueueItem["severity"], number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+/**
+ * Flatten per-engineer attention lists into one queue sorted
+ * high → medium → low, then name. Unknown severities are dropped.
+ */
+export function attentionQueue(
+  summaries: PerEngineerSummary[] | null | undefined,
+): AttentionQueueItem[] {
+  if (!Array.isArray(summaries)) return [];
+  const out: AttentionQueueItem[] = [];
+  for (const s of summaries) {
+    if (!s || !Array.isArray(s.attention)) continue;
+    const employeeId = typeof s.employeeId === "string" ? s.employeeId : "";
+    const name = typeof s.name === "string" ? s.name : "";
+    for (const a of s.attention) {
+      if (!a || (a.severity !== "high" && a.severity !== "medium" && a.severity !== "low")) continue;
+      if (typeof a.key !== "string" || typeof a.label !== "string") continue;
+      out.push({ employeeId, name, severity: a.severity, key: a.key, label: a.label });
+    }
+  }
+  out.sort(
+    (x, y) => SEVERITY_RANK[x.severity] - SEVERITY_RANK[y.severity] || x.name.localeCompare(y.name),
+  );
+  return out;
+}
+
+/**
+ * Day-log matrix for the conveyance tab: one row per parseable log_date
+ * (unparseable dates skipped), sorted ascending. km via dayKm, flags via
+ * kmFlags — non-numeric readings coerce to null (missing-reading flag).
+ */
+export function conveyanceMatrix(
+  days: PayableDay[] | null | undefined,
+): ConveyanceMatrixRow[] {
+  if (!Array.isArray(days)) return [];
+  const rows: ConveyanceMatrixRow[] = [];
+  for (const d of days) {
+    if (!d) continue;
+    const date = asDateKey(d.log_date);
+    if (!date) continue;
+    const morning =
+      typeof d.morning_odometer === "number" && Number.isFinite(d.morning_odometer)
+        ? d.morning_odometer
+        : null;
+    const evening =
+      typeof d.evening_odometer === "number" && Number.isFinite(d.evening_odometer)
+        ? d.evening_odometer
+        : null;
+    rows.push({ log_date: date, morning, evening, km: dayKm(morning, evening), flags: kmFlags(morning, evening) });
+  }
+  rows.sort((a, b) => (a.log_date < b.log_date ? -1 : a.log_date > b.log_date ? 1 : 0));
+  return rows;
+}
+
+/**
+ * Normalize admin_stock_custody RPC rows: null-tolerant passthrough —
+ * missing fields become null, non-object rows are skipped, non-array input
+ * yields []. Never throws.
+ */
+export function custodyLedger(rows: unknown): CustodyLedgerRow[] {
+  if (!Array.isArray(rows)) return [];
+  const asStr = (v: unknown): string | null => (typeof v === "string" ? v : null);
+  const out: CustodyLedgerRow[] = [];
+  for (const r of rows) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    out.push({
+      stock_item_id: asStr(o.stock_item_id),
+      custodian_employee_id: asStr(o.custodian_employee_id),
+      custodian_name: asStr(o.custodian_name),
+      part_serial_no: asStr(o.part_serial_no),
+      ticket_id: asStr(o.ticket_id),
+      set_at: asStr(o.set_at),
+    });
+  }
+  return out;
+}

@@ -80,6 +80,19 @@ export const adminEngKeys = {
   ratesPrefix: ["admin-eng", "rates"] as const,
   settlements: (employeeId: string | null) => ["admin-eng", "settlements", employeeId] as const,
   settlementsPrefix: ["admin-eng", "settlements"] as const,
+  overview: () => ["admin-eng", "overview"] as const,
+  overviewPrefix: ["admin-eng", "overview"] as const,
+  tickets: (employeeId: string | null) => ["admin-eng", "tickets", employeeId] as const,
+  ticketsPrefix: ["admin-eng", "tickets"] as const,
+  conveyance: (employeeId: string | null, from: string, to: string) =>
+    ["admin-eng", "conveyance", employeeId, from, to] as const,
+  conveyancePrefix: ["admin-eng", "conveyance"] as const,
+  documents: (employeeId: string | null) => ["admin-eng", "documents", employeeId] as const,
+  documentsPrefix: ["admin-eng", "documents"] as const,
+  custody: (employeeId: string | null) => ["admin-eng", "custody", employeeId] as const,
+  custodyPrefix: ["admin-eng", "custody"] as const,
+  attention: () => ["admin-eng", "attention"] as const,
+  attentionPrefix: ["admin-eng", "attention"] as const,
 } as const;
 
 // Aggregate export for convenience
