@@ -12,6 +12,10 @@ import {
   docCompliance,
   buildAttentionItems,
   groupExpensesByType,
+  dedupeWarnings,
+  rosterNameMap,
+  partitionOrphans,
+  type AdminEngineer,
 } from "@/lib/engineersAdmin";
 import { PROFILE_DOC_TYPES } from "@/lib/engineer-conveyance";
 
@@ -410,5 +414,134 @@ describe("engineersAdmin/groupExpensesByType", () => {
       { expense_date: "2026-09-01", charge_type: "Toll", amount: "junk", receipt_path: "r1" },
     ]);
     expect(out).toEqual({ Toll: { count: 1, total: 0 } });
+  });
+});
+
+// ── dedupeWarnings (4) ─────────────────────────────────────────────────
+
+describe("engineersAdmin/dedupeWarnings", () => {
+  it("collapses exact dupes by section::message", () => {
+    const out = dedupeWarnings([
+      [{ section: "rates", message: "No rate in force" }],
+      [{ section: "rates", message: "No rate in force" }],
+    ]);
+    expect(out).toEqual([{ section: "rates", message: "No rate in force" }]);
+  });
+
+  it("keeps first-seen order across lists", () => {
+    const out = dedupeWarnings([
+      [
+        { section: "b", message: "two" },
+        { section: "a", message: "one" },
+      ],
+      [
+        { section: "b", message: "two" },
+        { section: "c", message: "three" },
+      ],
+    ]);
+    expect(out).toEqual([
+      { section: "b", message: "two" },
+      { section: "a", message: "one" },
+      { section: "c", message: "three" },
+    ]);
+  });
+
+  it("treats the same message in different sections as distinct", () => {
+    const out = dedupeWarnings([
+      [
+        { section: "rates", message: "Missing" },
+        { section: "docs", message: "Missing" },
+      ],
+    ]);
+    expect(out).toHaveLength(2);
+  });
+
+  it("returns [] for empty input and tolerates null lists/entries", () => {
+    expect(dedupeWarnings([])).toEqual([]);
+    expect(dedupeWarnings(null)).toEqual([]);
+    expect(dedupeWarnings(undefined)).toEqual([]);
+    expect(dedupeWarnings([null, undefined] as never)).toEqual([]);
+    expect(
+      dedupeWarnings([[null, undefined] as never, [{ section: "a", message: "m" }]]),
+    ).toEqual([{ section: "a", message: "m" }]);
+  });
+});
+
+// ── rosterNameMap (4) ──────────────────────────────────────────────────
+
+describe("engineersAdmin/rosterNameMap", () => {
+  const row = (employee_id: string, name: string | null): AdminEngineer => ({
+    employee_id,
+    name,
+    phone: null,
+    email: null,
+    active: true,
+    auth_user_id: null,
+    photo_path: null,
+  });
+
+  it("maps ids to names", () => {
+    const m = rosterNameMap([row("e1", "Asha"), row("e2", "Ravi")]);
+    expect(m.get("e1")).toBe("Asha");
+    expect(m.get("e2")).toBe("Ravi");
+  });
+
+  it("skips missing/blank employee_ids", () => {
+    const m = rosterNameMap([row("", "Nope"), row("   ", "Blank"), row("e1", "Asha")]);
+    expect(m.has("")).toBe(false);
+    expect(m.size).toBe(1);
+    expect(m.get("e1")).toBe("Asha");
+  });
+
+  it("falls back to the id when the name is blank or null", () => {
+    const m = rosterNameMap([row("e1", ""), row("e2", "   "), row("e3", null)]);
+    expect(m.get("e1")).toBe("e1");
+    expect(m.get("e2")).toBe("e2");
+    expect(m.get("e3")).toBe("e3");
+  });
+
+  it("returns an empty map for empty/null input", () => {
+    expect(rosterNameMap([]).size).toBe(0);
+    expect(rosterNameMap(null).size).toBe(0);
+    expect(rosterNameMap(undefined).size).toBe(0);
+  });
+});
+
+// ── partitionOrphans (4) ───────────────────────────────────────────────
+
+describe("engineersAdmin/partitionOrphans", () => {
+  type Row = { id: string | null; v: number };
+  const idOf = (r: Row) => r.id;
+  const nameById = new Map([["e1", "Asha"]]);
+
+  it("sends unknown ids to orphans and known ids to roster", () => {
+    const out = partitionOrphans(
+      [
+        { id: "e1", v: 1 },
+        { id: "zx", v: 2 },
+      ],
+      nameById,
+      idOf,
+    );
+    expect(out.roster).toEqual([{ id: "e1", v: 1 }]);
+    expect(out.orphans).toEqual([{ id: "zx", v: 2 }]);
+  });
+
+  it("sends null-id rows to roster, never orphans", () => {
+    const out = partitionOrphans([{ id: null, v: 1 }], nameById, idOf);
+    expect(out.roster).toEqual([{ id: null, v: 1 }]);
+    expect(out.orphans).toEqual([]);
+  });
+
+  it("returns empty lists for empty input", () => {
+    expect(partitionOrphans([], nameById, idOf)).toEqual({ roster: [], orphans: [] });
+  });
+
+  it("tolerates null rows without dropping or throwing", () => {
+    const rows = [null, { id: "zx", v: 2 }] as unknown as Row[];
+    const out = partitionOrphans(rows, nameById, idOf);
+    expect(out.roster).toHaveLength(1);
+    expect(out.orphans).toEqual([{ id: "zx", v: 2 }]);
+    expect(out.roster.length + out.orphans.length).toBe(2);
   });
 });

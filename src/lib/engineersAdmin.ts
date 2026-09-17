@@ -707,3 +707,78 @@ export function custodyLedger(rows: unknown): CustodyLedgerRow[] {
   }
   return out;
 }
+
+// ---- FSR print polish: warning/orphan helpers -------------------------
+// Pure, fail-soft list helpers for the FSR print path. Bad input yields
+// empty results, never a throw.
+
+/**
+ * Flatten warning lists into one list, dropping duplicates by
+ * `${section}::${message}`. First-seen order wins. Null/undefined lists
+ * and entries are skipped, never throw.
+ */
+export function dedupeWarnings(
+  lists: AdminWarning[][] | null | undefined,
+): AdminWarning[] {
+  const seen = new Set<string>();
+  const out: AdminWarning[] = [];
+  for (const list of lists ?? []) {
+    if (!Array.isArray(list)) continue;
+    for (const w of list) {
+      if (!w || typeof w !== "object") continue;
+      const key = `${w.section}::${w.message}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(w);
+    }
+  }
+  return out;
+}
+
+/**
+ * employee_id → display name for roster lookups. Entries with a
+ * missing/blank employee_id are skipped; a blank/null name falls back to
+ * the employee_id itself. Never throws.
+ */
+export function rosterNameMap(
+  roster: AdminEngineer[] | null | undefined,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const r of roster ?? []) {
+    if (!r || typeof r !== "object") continue;
+    const id = r.employee_id;
+    if (typeof id !== "string" || id.trim() === "") continue;
+    const key = id.trim();
+    const name = r.name;
+    out.set(key, typeof name === "string" && name.trim() !== "" ? name.trim() : key);
+  }
+  return out;
+}
+
+/**
+ * Split rows into roster hits vs orphans (ids absent from the roster
+ * map). A row is an orphan iff its id is truthy AND not in nameById;
+ * everything else — including null-id and null rows — lands in roster.
+ * Never drops a row, never throws (idOf errors fail soft to roster).
+ */
+export function partitionOrphans<T>(
+  rows: T[] | null | undefined,
+  nameById: Map<string, string> | null | undefined,
+  idOf: (r: T) => string | null | undefined,
+): { roster: T[]; orphans: T[] } {
+  const roster: T[] = [];
+  const orphans: T[] = [];
+  const map = nameById instanceof Map ? nameById : new Map<string, string>();
+  if (!Array.isArray(rows)) return { roster, orphans };
+  for (const row of rows) {
+    let id: string | null | undefined;
+    try {
+      id = row == null ? undefined : idOf(row);
+    } catch {
+      id = undefined;
+    }
+    if (id && !map.has(id)) orphans.push(row);
+    else roster.push(row);
+  }
+  return { roster, orphans };
+}
