@@ -67,6 +67,17 @@ export const engKeys = {
     ["eng", "conveyance-expenses", employeeId, date] as const,
 } as const;
 
+// Engineers admin keys. Separate "admin-eng" namespace so admin roster /
+// payables / ledger caches never collide with the engineer-portal "eng"
+// family above (engKeys intentionally untouched).
+export const adminEngKeys = {
+  all: ["admin-eng"] as const,
+  roster: () => ["admin-eng", "roster"] as const,
+  payables: (employeeId: string | null, from: string, to: string) =>
+    ["admin-eng", "payables", employeeId, from, to] as const,
+  ledger: (from: string, to: string) => ["admin-eng", "ledger", from, to] as const,
+} as const;
+
 // Aggregate export for convenience
 export const queryKeys = {
   master: masterKeys,
@@ -84,4 +95,5 @@ export const queryKeys = {
   proforma: proformaKeys,
   conversion: conversionKeys,
   eng: engKeys,
+  adminEng: adminEngKeys,
 } as const;

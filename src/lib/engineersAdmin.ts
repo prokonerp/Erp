@@ -16,7 +16,7 @@ import { istDateKey } from "@/lib/time";
 // expense_date, charge_type, amount, receipt_path). Docs mirror
 // EmployeeDocument ({ name, path }).
 
-type AdminRate = {
+export type AdminRate = {
   employee_id?: string | null;
   rate_per_km?: number | string | null;
   effective_from?: string | null;
@@ -331,4 +331,41 @@ export function groupExpensesByType(
     out[type] = slot;
   }
   return out;
+}
+
+// ---- Admin hook shapes (TASK 1) ---------------------------------------
+// Roster rows mirror list_engineers() (migration 20260925000001 §6):
+// employee_id, name, phone, email, active, auth_user_id, photo_path.
+// Warnings are per-section fail-soft signals — never inferred from
+// count === 0 because RLS-denied reads return 0 rows.
+
+export type AdminEngineer = {
+  employee_id: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  active: boolean | null;
+  auth_user_id: string | null;
+  photo_path: string | null;
+};
+
+export type AdminWarning = {
+  section: string;
+  message: string;
+};
+
+/**
+ * Normalize an IST calendar window for SQL date bounds. String compare is
+ * deliberate: YYYY-MM-DD bounds compare lexicographically, so an inverted
+ * window swaps instead of querying backwards. A single bad bound falls back
+ * to the valid side; both bad fall back to today's IST date. Never throws.
+ */
+export function payableWindow(
+  from: string | null | undefined,
+  to: string | null | undefined,
+): { from: string; to: string } {
+  const fallback = istDateKey();
+  const f = asDateKey(from) ?? asDateKey(to) ?? fallback;
+  const t = asDateKey(to) ?? asDateKey(from) ?? fallback;
+  return f <= t ? { from: f, to: t } : { from: t, to: f };
 }
