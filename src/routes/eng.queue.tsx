@@ -33,7 +33,14 @@ function EngQueue() {
   const term = search.trim();
   const filtered = term
     ? tickets.filter((t) =>
-        matchesSearch(term, [t.case_id, t.customer_name, t.product, t.serial_no, t.location]),
+        matchesSearch(term, [
+          t.case_id,
+          t.customer_name,
+          t.product,
+          t.serial_no,
+          t.location,
+          t.sector,
+        ]),
       )
     : tickets;
 
@@ -170,7 +177,8 @@ function EngQueue() {
                   status: t.status,
                   priority: t.priority,
                   customer: t.customer_name,
-                  site: t.location ?? "—",
+                  site: t.location ?? null,
+                  sector: t.sector,
                   createdAt: t.created_at,
                   assignedAt: t.assigned_at,
                   age: formatAge(t.created_at),

@@ -152,9 +152,14 @@ function EngTicketDetail() {
 
   function isPasswordChangeRequired(err: unknown): boolean {
     if (!err || typeof err !== "object") return false;
-    const e = err as Record<string, any>;
+    const e = err as { code?: unknown; statusCode?: unknown; message?: unknown };
     if (e.code === PASSWORD_CHANGE_REQUIRED) return true;
-    if (e.statusCode === 401 && /password change required/i.test(e.message ?? "")) return true;
+    if (
+      e.statusCode === 401 &&
+      typeof e.message === "string" &&
+      /password change required/i.test(e.message)
+    )
+      return true;
     return false;
   }
 
@@ -180,7 +185,6 @@ function EngTicketDetail() {
   const { data: fsrRows } = useFieldServiceReport(id);
   const [verdictBusy, setVerdictBusy] = useState(false);
   const [verdictBusy2, setVerdictBusy2] = useState(false);
-  const [mismatchPhotoFile, setMismatchPhotoFile] = useState<File | null>(null);
   const [matchedPhotoFile, setMatchedPhotoFile] = useState<File | null>(null);
   const [mismatchBusy, setMismatchBusy] = useState(false);
   // Ref-based re-entry locks (same pattern as conveyance/FSR): busy state
@@ -194,7 +198,6 @@ function EngTicketDetail() {
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsMismatchOpen, setDetailsMismatchOpen] = useState(false);
-  const mismatchFileInputRef = useRef<HTMLInputElement>(null);
   const matchedFileInputRef = useRef<HTMLInputElement>(null);
 
   // Step 1 forms — per-field Email / Mobile toggles (only these two are verifiable)
@@ -364,6 +367,8 @@ function EngTicketDetail() {
     if (ticket.special_instruction_acknowledged) return true;
     return activities.some((a) => a.kind === "acknowledge");
   })();
+
+  const isWarranty = (ticket?.call_type ?? "").trim().toLowerCase() === "warranty";
 
   const refreshActivities = async () => {
     const { data: actRes, error: actErr } = await supabase
@@ -558,12 +563,12 @@ function EngTicketDetail() {
       toast.error("No internet connection. Reconnect and retry — nothing was uploaded.");
       return;
     }
-    if (!mismatchPhotoFile) {
-      toast.error("Photo is required for mismatch report");
+    if (!matchedPhotoFile) {
+      toast.error("Serial number photo is required");
       return;
     }
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
-    if (!allowed.includes(mismatchPhotoFile.type)) {
+    if (!allowed.includes(matchedPhotoFile.type)) {
       toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
       return;
     }
@@ -580,7 +585,9 @@ function EngTicketDetail() {
         return;
       }
 
-      const compressed = await compressImageToLimit(mismatchPhotoFile);
+      const compressed = await compressImageToLimit(matchedPhotoFile, {
+        preset: "document",
+      });
 
       const reader = new FileReader();
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -677,13 +684,15 @@ function EngTicketDetail() {
         console.warn("Activity insert failed:", actErr);
       }
       toast.success("Equipment mismatch recorded");
-      setMismatchPhotoFile(null);
+      setMatchedPhotoFile(null);
+      if (matchedFileInputRef.current) matchedFileInputRef.current.value = "";
       resetMismatch({
         modelIncorrect: false,
         serialIncorrect: false,
         modelInput: ticket?.product ?? "",
         serialInput: ticket?.serial_no ?? "",
       });
+      setDetailsMismatchOpen(false);
       await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
       await refreshActivities();
     } catch (err) {
@@ -1068,7 +1077,17 @@ function EngTicketDetail() {
             >
               {ticket.status}
             </StatusBadge>
-            <span className="text-xs text-muted-foreground">{ticket.call_type}</span>
+            {ticket.call_type && (
+              <span
+                className={
+                  isWarranty
+                    ? "text-xs font-bold uppercase tracking-wide text-foreground"
+                    : "text-xs font-semibold text-foreground"
+                }
+              >
+                {ticket.call_type}
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -1085,8 +1104,14 @@ function EngTicketDetail() {
             </div>
             {ticket.location && (
               <div>
-                <span className="text-muted-foreground text-xs">Location</span>
+                <span className="text-muted-foreground text-xs">City / Area</span>
                 <p className="font-medium">{ticket.location}</p>
+              </div>
+            )}
+            {ticket.sector && (
+              <div>
+                <span className="text-muted-foreground text-xs">Sector</span>
+                <p className="font-medium">{ticket.sector}</p>
               </div>
             )}
           </div>
@@ -1390,13 +1415,16 @@ function EngTicketDetail() {
               ) : null}
               {verifications.equipment.verdict === "mismatch" && (
                 <div className="space-y-3 mt-2">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Photo evidence (serial number)</p>
+                    <SerialPhotoLink photoPath={verifications.equipment.photo_path} />
+                  </div>
                   <VerificationDiff
                     label="Model"
                     original={verifications.equipment.original_model}
                     corrected={verifications.equipment.corrected_model}
                     engineer={verifications.equipment.engineer_name}
                     at={verifications.equipment.verified_at}
-                    photoPath={verifications.equipment.photo_path}
                   />
                   <VerificationDiff
                     label="Serial No"
@@ -1404,7 +1432,6 @@ function EngTicketDetail() {
                     corrected={verifications.equipment.corrected_serial}
                     engineer={verifications.equipment.engineer_name}
                     at={verifications.equipment.verified_at}
-                    photoPath={verifications.equipment.photo_path}
                   />
                 </div>
               )}
@@ -1470,7 +1497,7 @@ function EngTicketDetail() {
                 <Button
                   className="min-h-[44px] flex-1"
                   variant="secondary"
-                  disabled={mismatchBusy}
+                  disabled={mismatchBusy || !matchedPhotoFile}
                   onClick={() => {
                     setDetailsMismatchOpen(true);
                   }}
@@ -1483,7 +1510,9 @@ function EngTicketDetail() {
                   <DrawerHeader>
                     <DrawerTitle>Report equipment mismatch</DrawerTitle>
                     <DrawerDescription>
-                      Mark each field correct or enter the corrected value, then add a photo.
+                      Mark each field correct or enter the corrected value. The report uses the
+                      serial-number photo chosen above (compulsory), with GPS captured live at
+                      submit.
                     </DrawerDescription>
                   </DrawerHeader>
                   <form
@@ -1576,60 +1605,21 @@ function EngTicketDetail() {
                       </p>
                     )}
                     {gpsError && <p className="text-destructive text-xs">{gpsError}</p>}
-                    <div>
-                      <Label className="text-xs">Photo + GPS required</Label>
-                      <input
-                        ref={mismatchFileInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0] ?? null;
-                          if (
-                            f &&
-                            ![
-                              "image/jpeg",
-                              "image/png",
-                              "image/webp",
-                              "image/heic",
-                              "image/heif",
-                            ].includes(f.type.toLowerCase())
-                          ) {
-                            toast.error("Only JPEG, PNG, WebP, HEIC images allowed");
-                            e.target.value = "";
-                            return;
-                          }
-                          setMismatchPhotoFile(f);
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="mt-1 min-h-[44px] w-full"
-                        onClick={() => mismatchFileInputRef.current?.click()}
-                      >
-                        <Upload className="h-4 w-4 mr-1" />
-                        {mismatchPhotoFile ? mismatchPhotoFile.name : "Choose Photo"}
-                      </Button>
-                    </div>
                     <DrawerFooter className="px-0">
                       <Button
                         type="submit"
                         className="min-h-[44px]"
                         variant="secondary"
                         disabled={
-                          mismatchBusy ||
-                          !mismatchPhotoFile ||
-                          (!modelIncorrect && !serialIncorrect)
+                          mismatchBusy || !matchedPhotoFile || (!modelIncorrect && !serialIncorrect)
                         }
                       >
                         {mismatchBusy ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                         Upload & Record Mismatch
                       </Button>
-                      {(!mismatchPhotoFile || (!modelIncorrect && !serialIncorrect)) && (
+                      {(!matchedPhotoFile || (!modelIncorrect && !serialIncorrect)) && (
                         <p className="text-xs text-muted-foreground">
-                          Photo + at least one corrected field are required
+                          Serial photo + at least one corrected field are required
                         </p>
                       )}
                       <DrawerClose asChild>

@@ -13,9 +13,16 @@ import {
   todayLocal,
 } from "@/lib/engineer-conveyance";
 
+import { ALLOWED_IMAGE_MIME, MAX_ACCEPTED_BYTES, acceptedUploadMessage } from "@/lib/upload-limits";
+import {
+  buildUploadFilename,
+  initialsFromName,
+  makeNameToken,
+  sanitizeNameLabel,
+  type UploadNameKind,
+} from "@/lib/upload-naming";
+
 const ENGINEER_BUCKET = "engineer-uploads";
-const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
-const MAX_BYTES = 8 * 1024 * 1024;
 
 const uploadKinds = [
   "morning_reading",
@@ -73,23 +80,24 @@ const uploadInput = z.object({
   data_base64: z
     .string()
     .min(1)
-    .max(Math.ceil((MAX_BYTES * 4) / 3) + 1024),
+    .max(Math.ceil((MAX_ACCEPTED_BYTES * 4) / 3) + 1024),
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
+  label: z.string().max(24).optional(),
 });
 
 export const uploadEngineerAttachment = createServerFn({ method: "POST" })
   .middleware([requireActiveUser])
   .inputValidator((input) => uploadInput.parse(input))
   .handler(async ({ data, context }) => {
-    if (!ALLOWED_MIME.includes(data.content_type.toLowerCase())) {
+    if (!(ALLOWED_IMAGE_MIME as readonly string[]).includes(data.content_type.toLowerCase())) {
       throw new Error("Only JPEG, PNG, WebP, HEIC images allowed");
     }
     const buf = Buffer.from(data.data_base64, "base64");
-    if (buf.length === 0 || buf.length > MAX_BYTES) {
-      throw new Error("Image must be between 1 byte and 8 MB");
+    if (buf.length === 0 || buf.length > MAX_ACCEPTED_BYTES) {
+      throw new Error(acceptedUploadMessage());
     }
     const admin = await getAdmin();
     const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
@@ -99,7 +107,41 @@ export const uploadEngineerAttachment = createServerFn({ method: "POST" })
         .replace(/[^a-z0-9]/g, "")
         .slice(0, 5) || "jpg";
     const day = data.date ?? todayLocal();
-    const path = `engineer/${caller.id}/${data.kind}/${day}/${data.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
+    const initials = initialsFromName(caller.name);
+    const token = makeNameToken();
+    let nameKind: UploadNameKind = "CONVEYANCE";
+    let nameLabel: string | null = null;
+    switch (data.kind) {
+      case "morning_reading":
+        nameKind = "CONVEYANCE";
+        nameLabel = "morning";
+        break;
+      case "evening_reading":
+        nameKind = "CONVEYANCE";
+        nameLabel = "evening";
+        break;
+      case "receipt":
+        nameKind = "CONVEYANCE";
+        nameLabel = sanitizeNameLabel(data.label) ?? "receipt";
+        break;
+      case "profile_photo":
+        nameKind = "PROFILE";
+        nameLabel = null;
+        break;
+      case "document":
+        nameKind = "PROFILE";
+        nameLabel = sanitizeNameLabel(data.label);
+        break;
+    }
+    const filename = buildUploadFilename({
+      initials,
+      kind: nameKind,
+      date: day,
+      label: nameLabel,
+      token,
+      ext: safeExt,
+    });
+    const path = `engineer/${caller.id}/${data.kind}/${day}/${filename}`;
     await uploadObjectRaw({
       adminUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
       serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
@@ -127,6 +169,44 @@ export const deleteEngineerAttachment = createServerFn({ method: "POST" })
     const prefix = `engineer/${caller.id}/`;
     if (!data.path.startsWith(prefix)) {
       throw new Error("Forbidden: you can only delete your own uploads");
+    }
+    // Refuse submitted uploads — only orphan / replaced paths may be deleted.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
+    const { data: logRows, error: logErr } = await (admin as any)
+      .from("engineer_daily_logs")
+      .select("morning_photo_path,evening_photo_path")
+      .eq("employee_id", caller.id);
+    if (logErr) throw new Error(formatDbError(logErr, "Failed to verify upload usage"));
+    const logHit = (
+      logRows as Array<{
+        morning_photo_path: string | null;
+        evening_photo_path: string | null;
+      }> | null
+    )?.some((r) => r.morning_photo_path === data.path || r.evening_photo_path === data.path);
+    if (logHit) {
+      throw new Error("This upload is already submitted and cannot be deleted");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
+    const { data: expRows, error: expErr } = await (admin as any)
+      .from("engineer_conveyance_expenses")
+      .select("receipt_path")
+      .eq("employee_id", caller.id);
+    if (expErr) throw new Error(formatDbError(expErr, "Failed to verify upload usage"));
+    const expHit = (expRows as Array<{ receipt_path: string | null }> | null)?.some(
+      (r) => r.receipt_path === data.path,
+    );
+    if (expHit) {
+      throw new Error("This upload is already submitted and cannot be deleted");
+    }
+    const { data: empRow, error: empErr } = await admin
+      .from("employees")
+      .select("documents")
+      .eq("id", caller.id)
+      .maybeSingle();
+    if (empErr) throw new Error(formatDbError(empErr, "Failed to verify upload usage"));
+    const docs = asEmployeeDocuments((empRow as { documents: unknown } | null)?.documents ?? []);
+    if (docs.some((d) => d.path === data.path)) {
+      throw new Error("This upload is already submitted and cannot be deleted");
     }
     const { error } = await admin.storage.from(ENGINEER_BUCKET).remove([data.path]);
     if (error) throw new Error(storageUploadMessage("engineer-uploads", error, data.path));
@@ -161,6 +241,19 @@ export const saveEngineerDailyLog = createServerFn({ method: "POST" })
       .eq("log_date", data.log_date)
       .maybeSingle();
     if (readErr) throw new Error(formatDbError(readErr, "Failed to load daily log"));
+    // Hard lock: a confirmed half rejects ANY re-submit, even an identical one.
+    if (
+      (existing?.morning_odometer ?? null) != null &&
+      (data.morning_odometer !== undefined || data.morning_photo_path !== undefined)
+    ) {
+      throw new Error("Morning entry is already confirmed and locked");
+    }
+    if (
+      (existing?.evening_odometer ?? null) != null &&
+      (data.evening_odometer !== undefined || data.evening_photo_path !== undefined)
+    ) {
+      throw new Error("Evening entry is already confirmed and locked");
+    }
     const prev = (existing ?? {}) as Record<string, unknown>;
     const pick = (key: string, fallback: unknown) => {
       const v = (data as Record<string, unknown>)[key];
@@ -216,7 +309,7 @@ export const saveEngineerDailyLog = createServerFn({ method: "POST" })
   });
 
 // ---------------------------------------------------------------------------
-// saveConveyanceExpense / deleteConveyanceExpense — own-row expense CRUD.
+// saveConveyanceExpense — own-row expense insert.
 // ---------------------------------------------------------------------------
 const expenseInput = z.object({
   expense_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -257,34 +350,6 @@ export const saveConveyanceExpense = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(formatDbError(error, "Failed to save expense"));
     return { id: (row as { id: string }).id };
-  });
-
-export const deleteConveyanceExpense = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
-  .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
-  .handler(async ({ data, context }) => {
-    const admin = await getAdmin();
-    const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
-    const table = (admin as any).from("engineer_conveyance_expenses");
-    const { data: row, error: readErr } = await table
-      .select("id, receipt_path")
-      .eq("id", data.id)
-      .eq("employee_id", caller.id)
-      .maybeSingle();
-    if (readErr) throw new Error(formatDbError(readErr, "Failed to load expense"));
-    if (!row) throw new Error("NotFound: expense not found");
-    const { error } = await table.delete().eq("id", data.id).eq("employee_id", caller.id);
-    if (error) throw new Error(formatDbError(error, "Failed to delete expense"));
-    const receipt = (row as { receipt_path: string | null }).receipt_path;
-    if (receipt) {
-      try {
-        await admin.storage.from(ENGINEER_BUCKET).remove([receipt]);
-      } catch (e) {
-        console.warn("Receipt cleanup failed:", e);
-      }
-    }
-    return { id: data.id };
   });
 
 // ---------------------------------------------------------------------------

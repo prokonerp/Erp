@@ -7,6 +7,7 @@ import {
   deleteStagedPublicPhoto,
 } from "@/lib/public-ticket-uploads.functions";
 import { compressImageToLimit } from "@/lib/image-compress";
+import { MAX_ACCEPTED_BYTES, acceptedUploadMessage } from "@/lib/upload-limits";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,7 +81,7 @@ function PublicTicketForm() {
 
   const uploadPhoto = async (file: File, kind: Attachment["kind"]) => {
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) return toast.error("Image must be under 8 MB");
+    if (file.size > MAX_ACCEPTED_BYTES) return toast.error(acceptedUploadMessage());
     if (attachments.length >= 5) return toast.error("Max 5 photos");
     setUploading(true);
     try {

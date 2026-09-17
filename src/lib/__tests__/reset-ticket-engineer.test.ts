@@ -68,15 +68,18 @@ describe("reset-ticket-engineer scoping (pure)", () => {
     }
   });
 
-  it("storage filter allows equipment_correction / issue_photo / customer_signature filenames", () => {
+  it("storage filter allows equipment_correction / issue_photo / customer_signature / serial_photo filenames", () => {
     expect([...RESET_STORAGE_KIND_ALLOWLIST].sort()).toEqual(
-      ["customer_signature", "equipment_correction", "issue_photo"].sort(),
+      ["customer_signature", "equipment_correction", "issue_photo", "serial_photo"].sort(),
     );
     const scope = buildResetScope(TICKET_ID);
     expect(scope.storagePrefix).toBe(`ticket/${TICKET_ID}/`);
     // allowed exact photo paths
     expect(
-      isResetStoragePathAllowed(`ticket/${TICKET_ID}/2026-09-12/equipment_correction-abc.jpg`, TICKET_ID),
+      isResetStoragePathAllowed(
+        `ticket/${TICKET_ID}/2026-09-12/equipment_correction-abc.jpg`,
+        TICKET_ID,
+      ),
     ).toBe(true);
     expect(
       isResetStoragePathAllowed(`ticket/${TICKET_ID}/2026-09-12/issue_photo-xyz.jpg`, TICKET_ID),
@@ -87,19 +90,68 @@ describe("reset-ticket-engineer scoping (pure)", () => {
         TICKET_ID,
       ),
     ).toBe(true);
-    // rejected: wrong prefix, serial_photo, other, prefix wipe
-    expect(isResetStoragePathAllowed(`ticket/other-id/2026-09-12/issue_photo-x.jpg`, TICKET_ID)).toBe(
-      false,
-    );
+    // rejected: wrong prefix, other, signature, prefix wipe
+    expect(
+      isResetStoragePathAllowed(`ticket/other-id/2026-09-12/issue_photo-x.jpg`, TICKET_ID),
+    ).toBe(false);
     expect(
       isResetStoragePathAllowed(`ticket/other-id/2026-09-12/customer_signature-x.png`, TICKET_ID),
     ).toBe(false);
+    // grandfathered legacy serial photos now delete too
     expect(
       isResetStoragePathAllowed(`ticket/${TICKET_ID}/2026-09-12/serial_photo-a.jpg`, TICKET_ID),
-    ).toBe(false);
+    ).toBe(true);
+    expect(isResetStoragePathAllowed(`ticket/${TICKET_ID}/2026-09-12/other-a.jpg`, TICKET_ID)).toBe(
+      false,
+    );
     expect(
-      isResetStoragePathAllowed(`ticket/${TICKET_ID}/2026-09-12/other-a.jpg`, TICKET_ID),
+      isResetStoragePathAllowed(`ticket/${TICKET_ID}/2026-09-12/signature-a.jpg`, TICKET_ID),
     ).toBe(false);
     expect(isResetStoragePathAllowed(`ticket/${TICKET_ID}/`, TICKET_ID)).toBe(false);
+    // new-scheme deletable kinds allowed
+    expect(
+      isResetStoragePathAllowed(
+        `ticket/${TICKET_ID}/2026-09-17/JD_SERIAL_2026-09-17-4f2a9c1d.jpg`,
+        TICKET_ID,
+      ),
+    ).toBe(true);
+    expect(
+      isResetStoragePathAllowed(
+        `ticket/${TICKET_ID}/2026-09-17/AB_MISMATCH_2026-09-17-ab12cd34.jpg`,
+        TICKET_ID,
+      ),
+    ).toBe(true);
+    expect(
+      isResetStoragePathAllowed(
+        `ticket/${TICKET_ID}/2026-09-17/XX_ISSUE_2026-09-17-ef567890.jpg`,
+        TICKET_ID,
+      ),
+    ).toBe(true);
+    expect(
+      isResetStoragePathAllowed(
+        `ticket/${TICKET_ID}/2026-09-17/YY_SIGNATURE_2026-09-17-1234abcd.png`,
+        TICKET_ID,
+      ),
+    ).toBe(true);
+    // new-scheme non-deletable kinds rejected
+    expect(
+      isResetStoragePathAllowed(
+        `ticket/${TICKET_ID}/2026-09-17/ZZ_PROFILE_2026-09-17-4f2a9c1d.jpg`,
+        TICKET_ID,
+      ),
+    ).toBe(false);
+    expect(
+      isResetStoragePathAllowed(
+        `ticket/${TICKET_ID}/2026-09-17/ZZ_CONVEYANCE_2026-09-17-4f2a9c1d.jpg`,
+        TICKET_ID,
+      ),
+    ).toBe(false);
+    // new-scheme under wrong ticket rejected
+    expect(
+      isResetStoragePathAllowed(
+        `ticket/other-id/2026-09-17/JD_SERIAL_2026-09-17-4f2a9c1d.jpg`,
+        TICKET_ID,
+      ),
+    ).toBe(false);
   });
 });

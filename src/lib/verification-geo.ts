@@ -7,9 +7,9 @@ export type GeoFix = {
 
 export function validateGeoForMismatch(geo: GeoFix | null): string | null {
   if (!geo)
-    return "Live location is required for mismatch photo. Allow location and retry.";
+    return "Live location is required with the serial-number photo. Allow location and retry.";
   if (!Number.isFinite(geo.lat) || !Number.isFinite(geo.long))
-    return "Live location is required for mismatch photo. Allow location and retry.";
+    return "Live location is required with the serial-number photo. Allow location and retry.";
   if (!geo.captured_at) return "Photo capture time missing. Retake the photo.";
   return null;
 }

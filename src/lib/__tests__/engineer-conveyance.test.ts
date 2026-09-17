@@ -1,13 +1,16 @@
 import { describe, it, expect } from "vitest";
 import {
   CHARGE_TYPES,
+  PROFILE_DOC_TYPES,
   asEmployeeDocuments,
   assembleDashboardStats,
   dailyLogEntrySchema,
   expenseEntrySchema,
+  findDocByName,
   kmTravelled,
   pendingMaterialSerials,
   todayLocal,
+  upsertDocByName,
 } from "@/lib/engineer-conveyance";
 
 describe("dailyLogEntrySchema", () => {
@@ -143,13 +146,104 @@ describe("asEmployeeDocuments", () => {
       "nope",
       null,
     ]);
-    expect(out).toHaveLength(2);
+    expect(out).toHaveLength(1);
+    expect(out[0].name).toBe("Aadhaar");
+  });
+
+  it("filters out entries with empty or whitespace-only paths", () => {
+    const out = asEmployeeDocuments([
+      { name: "Aadhaar", path: "engineer/e1/document/2026-09-16/a.jpg", uploaded_at: "x" },
+      { path: "" },
+      { path: "   " },
+      { name: "PAN" },
+    ]);
+    expect(out).toHaveLength(1);
     expect(out[0].name).toBe("Aadhaar");
   });
 
   it("returns [] for non-arrays", () => {
     expect(asEmployeeDocuments(null)).toEqual([]);
     expect(asEmployeeDocuments({})).toEqual([]);
+  });
+});
+
+describe("findDocByName / upsertDocByName", () => {
+  const docs = [
+    { name: "Aadhaar", path: "a.jpg", uploaded_at: "t1" },
+    { name: "PAN", path: "p.jpg", uploaded_at: "t2" },
+  ];
+
+  it("finds an exact name match", () => {
+    expect(findDocByName(docs, "Aadhaar")?.path).toBe("a.jpg");
+  });
+
+  it("matches case-insensitively with surrounding whitespace", () => {
+    expect(findDocByName(docs, "  pan ")?.path).toBe("p.jpg");
+  });
+
+  it("returns undefined for null/undefined/empty input", () => {
+    expect(findDocByName(null, "Aadhaar")).toBeUndefined();
+    expect(findDocByName(undefined, "Aadhaar")).toBeUndefined();
+    expect(findDocByName([], "Aadhaar")).toBeUndefined();
+    expect(findDocByName(docs, "Photo")).toBeUndefined();
+  });
+
+  it("appends when there is no match", () => {
+    const out = upsertDocByName(docs, { name: "Photo", path: "ph.jpg", uploaded_at: "t3" });
+    expect(out).toHaveLength(3);
+    expect(out[2]).toEqual({ name: "Photo", path: "ph.jpg", uploaded_at: "t3" });
+  });
+
+  it("replaces in place and preserves order", () => {
+    const out = upsertDocByName(docs, { name: "aadhaar", path: "a2.jpg", uploaded_at: "t9" });
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual({ name: "aadhaar", path: "a2.jpg", uploaded_at: "t9" });
+    expect(out[1]).toEqual(docs[1]);
+    expect([...PROFILE_DOC_TYPES]).toEqual([
+      "Aadhaar",
+      "PAN",
+      "Driving Licence",
+      "Bank Passbook",
+      "Photo",
+      "Other",
+    ]);
+  });
+
+  it("treats null/undefined docs as [] and never mutates the input", () => {
+    const out = upsertDocByName(null, { name: "PAN", path: "p.jpg", uploaded_at: "t" });
+    expect(out).toHaveLength(1);
+    expect(
+      upsertDocByName(undefined, { name: "PAN", path: "p.jpg", uploaded_at: "t" }),
+    ).toHaveLength(1);
+    const snapshot = [...docs];
+    upsertDocByName(docs, { name: "PAN", path: "p2.jpg", uploaded_at: "t" });
+    expect(docs).toEqual(snapshot);
+  });
+
+  it("returns the FIRST match when two entries normalize equal", () => {
+    const legacy = [
+      { name: "Aadhaar", path: "first.jpg", uploaded_at: "t1" },
+      { name: "  aadhaar ", path: "second.jpg", uploaded_at: "t2" },
+    ];
+    expect(findDocByName(legacy, "AADHAAR")?.path).toBe("first.jpg");
+    expect(findDocByName(legacy, "  aadhaar ")?.path).toBe("first.jpg");
+  });
+
+  it("replaces ONLY the first duplicate normalized name, leaving the second untouched", () => {
+    const legacy = [
+      { name: "Aadhaar", path: "first.jpg", uploaded_at: "t1" },
+      { name: "  aadhaar ", path: "second.jpg", uploaded_at: "t2" },
+    ];
+    const out = upsertDocByName(legacy, { name: "Aadhaar", path: "new.jpg", uploaded_at: "t9" });
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual({ name: "Aadhaar", path: "new.jpg", uploaded_at: "t9" });
+    expect(out[1]).toEqual({ name: "  aadhaar ", path: "second.jpg", uploaded_at: "t2" });
+  });
+
+  it("replaces (not appends) on whitespace-padded normalized match, keeping the new casing", () => {
+    const out = upsertDocByName(docs, { name: "  PAN ", path: "p2.jpg", uploaded_at: "t9" });
+    expect(out).toHaveLength(2);
+    expect(out[1]).toEqual({ name: "  PAN ", path: "p2.jpg", uploaded_at: "t9" });
   });
 });
 

@@ -14,6 +14,7 @@ export interface EngQueueTicket {
   customer: string;
   /** Site alias (location from query rows). */
   site?: string | null;
+  sector?: string | null;
   location?: string | null;
   createdAt: string;
   assignedAt?: string | null;
@@ -56,9 +57,9 @@ export function EngQueueCard({ ticket, to }: EngQueueCardProps) {
   const rawCaseId = ticket.caseId ?? ticket.display ?? ticket.id;
   // A missing case id falls back to the raw row uuid — truncate UUID-shaped
   // values so the headline never renders 36 hex chars.
-  const caseId =
-    /^[0-9a-f-]{36}$/i.test(rawCaseId) ? `${rawCaseId.slice(0, 8)}…` : rawCaseId;
+  const caseId = /^[0-9a-f-]{36}$/i.test(rawCaseId) ? `${rawCaseId.slice(0, 8)}…` : rawCaseId;
   const site = ticket.site ?? ticket.location ?? null;
+  const sectorLine = [ticket.sector, site].filter(Boolean).join(" · ");
   const age = ticket.age ?? formatAge(ticket.createdAt);
   const edge =
     PRIORITY_EDGE[(ticket.priority || "").toUpperCase()] ?? "border-l-[oklch(0.7_0.02_260)]";
@@ -82,7 +83,9 @@ export function EngQueueCard({ ticket, to }: EngQueueCardProps) {
         </div>
       </div>
       <p className="mt-1 text-sm text-foreground line-clamp-2">{ticket.customer}</p>
-      {site && <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{site}</p>}
+      {sectorLine && (
+        <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{sectorLine}</p>
+      )}
       <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
         <Clock className="h-3.5 w-3.5" aria-hidden="true" />
         {age}

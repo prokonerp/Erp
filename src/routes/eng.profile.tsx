@@ -12,7 +12,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { engKeys } from "@/lib/queryKeys";
 import { recordLogout } from "@/lib/useActivityTracker";
 import { compressImageToLimit } from "@/lib/image-compress";
-import { asEmployeeDocuments } from "@/lib/engineer-conveyance";
+import { MAX_ACCEPTED_BYTES, acceptedUploadMessage } from "@/lib/upload-limits";
+import { asEmployeeDocuments, findDocByName, PROFILE_DOC_TYPES } from "@/lib/engineer-conveyance";
+import type { ProfileDocType } from "@/lib/engineer-conveyance";
 import {
   deleteEngineerAttachment,
   saveMyProfile,
@@ -20,8 +22,6 @@ import {
 } from "@/lib/engineer-conveyance.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +34,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { CardSkeleton } from "@/components/shared/skeletons";
-import { Camera, FileText, Loader2, Mail, Phone, LogOut, Trash2 } from "lucide-react";
+import { Camera, FileText, Loader2, Mail, Phone, LogOut } from "lucide-react";
 
 export const Route = createFileRoute("/eng/profile")({
   component: EngProfile,
@@ -48,7 +48,7 @@ function UploadViewer({
 }: {
   path: string | null | undefined;
   render: (url: string | null, loading: boolean) => React.ReactNode;
-  cache?: { current: Map<string, string> };
+  cache?: { current: Map<string, { url: string; expiresAt: number }> };
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -60,8 +60,12 @@ function UploadViewer({
     }
     const cached = cache?.current.get(path);
     if (cached) {
-      setUrl(cached);
-      return;
+      if (cached.expiresAt <= Date.now()) {
+        cache?.current.delete(path);
+      } else {
+        setUrl(cached.url);
+        return;
+      }
     }
     setLoading(true);
     supabase.storage
@@ -70,7 +74,8 @@ function UploadViewer({
       .then(({ data, error }) => {
         if (cancelled) return;
         const signedUrl = error ? null : (data?.signedUrl ?? null);
-        if (signedUrl) cache?.current.set(path, signedUrl);
+        if (signedUrl)
+          cache?.current.set(path, { url: signedUrl, expiresAt: Date.now() + 3500 * 1000 });
         setUrl(signedUrl);
         setLoading(false);
       })
@@ -83,7 +88,7 @@ function UploadViewer({
     return () => {
       cancelled = true;
     };
-  }, [path]);
+  }, [path, cache]);
   return <>{render(url, loading)}</>;
 }
 
@@ -97,14 +102,13 @@ function EngProfile() {
   const queryClient = useQueryClient();
   const [loggingOut, setLoggingOut] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
-  const [docBusy, setDocBusy] = useState(false);
-  const [docName, setDocName] = useState("");
-  const [docFile, setDocFile] = useState<File | null>(null);
+  const pendingBlockRef = useRef<ProfileDocType | null>(null);
+  const [busyBlock, setBusyBlock] = useState<ProfileDocType | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const docInputRef = useRef<HTMLInputElement>(null);
+  const blockInputRef = useRef<HTMLInputElement>(null);
   const photoBusyRef = useRef(false);
-  const docBusyRef = useRef(false);
-  const signedUrlCacheRef = useRef(new Map<string, string>());
+  const blockBusyRef = useRef(false);
+  const signedUrlCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
   const callUpload = useServerFn(uploadEngineerAttachment);
   const callSaveProfile = useServerFn(saveMyProfile);
   const callDeleteUpload = useServerFn(deleteEngineerAttachment);
@@ -137,10 +141,13 @@ function EngProfile() {
     }
   };
 
-  async function uploadImage(file: File, kind: "profile_photo" | "document"): Promise<string> {
+  async function uploadImage(file: File, kind: "profile_photo" | "document", label?: string): Promise<string> {
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
     if (!allowed.includes(file.type)) throw new Error("Only JPEG, PNG, WebP, HEIC images allowed");
-    const compressed = await compressImageToLimit(file);
+    const compressed = await compressImageToLimit(
+      file,
+      kind === "document" ? { preset: "document" } : undefined,
+    );
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -152,6 +159,7 @@ function EngProfile() {
     const res = await callUpload({
       data: {
         kind,
+        ...(kind === "document" ? { label } : {}),
         filename: compressed.name,
         content_type: compressed.contentType,
         data_base64: base64,
@@ -167,6 +175,11 @@ function EngProfile() {
   async function handlePhotoPick(file: File | null) {
     if (!file) return;
     if (photoBusy || photoBusyRef.current) return;
+    if (file.size > MAX_ACCEPTED_BYTES) {
+      toast.error(acceptedUploadMessage());
+      if (photoInputRef.current) photoInputRef.current.value = "";
+      return;
+    }
     photoBusyRef.current = true;
     if (!navigator.onLine) {
       toast.error("No internet connection. Reconnect and retry.");
@@ -196,77 +209,68 @@ function EngProfile() {
     }
   }
 
-  async function handleDocAdd() {
-    if (docBusy || docBusyRef.current) return;
-    docBusyRef.current = true;
-    if (docName.trim() === "") {
-      toast.error("Enter a document name (e.g. Aadhaar)");
-      docBusyRef.current = false;
+  async function handleBlockPick(file: File | null) {
+    const block = pendingBlockRef.current;
+    if (!file || !block) {
+      if (blockInputRef.current) blockInputRef.current.value = "";
       return;
     }
-    if (!docFile) {
-      toast.error("Choose the document photo");
-      docBusyRef.current = false;
+    if (blockBusyRef.current) return;
+    if (file.size > MAX_ACCEPTED_BYTES) {
+      toast.error(acceptedUploadMessage());
+      pendingBlockRef.current = null;
+      if (blockInputRef.current) blockInputRef.current.value = "";
       return;
     }
-    if (documents.length >= 10) {
-      toast.error("Maximum 10 documents");
-      docBusyRef.current = false;
-      return;
-    }
+    blockBusyRef.current = true;
     if (!navigator.onLine) {
       toast.error("No internet connection. Reconnect and retry.");
-      docBusyRef.current = false;
+      blockBusyRef.current = false;
+      pendingBlockRef.current = null;
+      if (blockInputRef.current) blockInputRef.current.value = "";
       return;
     }
-    setDocBusy(true);
+    const oldDoc = findDocByName(documents, block);
+    const oldPath = oldDoc?.path ?? null;
+    setBusyBlock(block);
+    let uploadedPath: string | null = null;
     try {
-      const path = await uploadImage(docFile, "document");
-      await callSaveProfile({
-        data: {
-          documents: [
-            ...documents.map((d) => ({
-              name: d.name,
-              path: d.path,
-              uploaded_at: d.uploaded_at,
-            })),
-            { name: docName.trim(), path, uploaded_at: new Date().toISOString() },
-          ],
-        },
-      });
-      toast.success("Document uploaded");
-      setDocName("");
-      setDocFile(null);
-      if (docInputRef.current) docInputRef.current.value = "";
+      uploadedPath = await uploadImage(file, "document", block);
+      try {
+        await callSaveProfile({
+          data: {
+            documents: [
+              ...documents.filter(
+                (d) => d.name.trim().toLowerCase() !== block.trim().toLowerCase(),
+              ),
+              { name: block, path: uploadedPath, uploaded_at: new Date().toISOString() },
+            ],
+          },
+        });
+      } catch (saveErr) {
+        try {
+          await callDeleteUpload({ data: { path: uploadedPath } });
+        } catch (e) {
+          console.warn("Orphan document cleanup failed:", e);
+        }
+        throw saveErr;
+      }
+      if (oldPath && oldPath !== uploadedPath) {
+        try {
+          await callDeleteUpload({ data: { path: oldPath } });
+        } catch (e) {
+          console.warn("Old document cleanup failed:", e);
+        }
+      }
+      toast.success(oldDoc ? "Document replaced" : "Document uploaded");
       await refreshEmployee();
     } catch (err) {
       toast.error(reportDbError("profile document upload", err, "Document upload failed"));
     } finally {
-      setDocBusy(false);
-      docBusyRef.current = false;
-    }
-  }
-
-  async function handleDocRemove(docPath: string) {
-    if (docBusy || docBusyRef.current) return;
-    docBusyRef.current = true;
-    setDocBusy(true);
-    try {
-      await callSaveProfile({
-        data: { documents: documents.filter((d) => d.path !== docPath) },
-      });
-      try {
-        await callDeleteUpload({ data: { path: docPath } });
-      } catch (e) {
-        console.warn("Document file cleanup failed:", e);
-      }
-      toast.success("Document removed");
-      await refreshEmployee();
-    } catch (err) {
-      toast.error(reportDbError("profile document remove", err, "Remove failed"));
-    } finally {
-      setDocBusy(false);
-      docBusyRef.current = false;
+      setBusyBlock(null);
+      pendingBlockRef.current = null;
+      blockBusyRef.current = false;
+      if (blockInputRef.current) blockInputRef.current.value = "";
     }
   }
 
@@ -373,86 +377,67 @@ function EngProfile() {
           <p className="flex items-center gap-1.5 text-[15px] font-semibold">
             <FileText className="h-4 w-4" aria-hidden /> Documents
           </p>
-          {documents.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">
-              No documents yet — upload your Aadhaar and others below.
-            </p>
-          ) : (
-            <ul className="divide-y divide-border rounded-lg border border-border">
-              {documents.map((d) => (
-                <li
-                  key={d.path}
-                  className="flex min-h-[44px] items-center justify-between gap-2 px-3 py-2"
-                >
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{d.name}</span>
-                  <UploadViewer
-                    path={d.path}
-                    cache={signedUrlCacheRef}
-                    render={(url) =>
-                      url ? (
-                        <a
-                          className="text-xs underline underline-offset-2"
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View
-                        </a>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Unavailable</span>
-                      )
-                    }
-                  />
+          <input
+            ref={blockInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => handleBlockPick(e.target.files?.[0] ?? null)}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            {PROFILE_DOC_TYPES.map((block) => {
+              const doc = findDocByName(documents, block);
+              const busy = busyBlock === block;
+              return (
+                <div key={block} className="rounded-xl border border-border p-3 space-y-1.5">
+                  <p className="text-xs font-semibold truncate">{block}</p>
+                  <p className={doc ? "text-xs text-emerald-600" : "text-xs text-muted-foreground"}>
+                    {doc ? "Uploaded" : "Not uploaded"}
+                  </p>
+                  {doc ? (
+                    <UploadViewer
+                      path={doc.path}
+                      cache={signedUrlCacheRef}
+                      render={(url) =>
+                        url ? (
+                          <a
+                            className="min-h-[44px] inline-flex items-center text-xs underline underline-offset-2"
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View
+                          </a>
+                        ) : (
+                          <span className="min-h-[44px] inline-flex items-center text-xs text-muted-foreground">
+                            Unavailable
+                          </span>
+                        )
+                      }
+                    />
+                  ) : null}
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="min-h-[44px] min-w-[44px] shrink-0"
-                    aria-label={`Remove ${d.name}`}
-                    disabled={docBusy}
-                    onClick={() => handleDocRemove(d.path)}
+                    className="min-h-[44px] w-full"
+                    disabled={busyBlock !== null}
+                    onClick={() => {
+                      pendingBlockRef.current = block;
+                      blockInputRef.current?.click();
+                    }}
                   >
-                    <Trash2 className="h-4 w-4" aria-hidden />
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden />
+                    ) : (
+                      <Camera className="h-4 w-4 mr-1" aria-hidden />
+                    )}
+                    {doc ? "Replace" : "Upload"}
                   </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="space-y-2 rounded-xl border border-border p-3">
-            <div>
-              <Label className="text-xs">Document name</Label>
-              <Input
-                value={docName}
-                onChange={(e) => setDocName(e.target.value)}
-                placeholder="e.g. Aadhaar, Driving licence"
-                className="mt-1 h-11 min-h-[44px]"
-                aria-label="Document name"
-              />
-            </div>
-            <div>
-              <input
-                ref={docInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-[44px] w-full"
-                disabled={docBusy}
-                onClick={() => docInputRef.current?.click()}
-              >
-                <Camera className="h-4 w-4 mr-1" aria-hidden />
-                {docFile ? docFile.name : "Choose document photo"}
-              </Button>
-            </div>
-            <Button className="min-h-[44px] w-full" disabled={docBusy} onClick={handleDocAdd}>
-              {docBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden /> : null}
-              Upload document
-            </Button>
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>

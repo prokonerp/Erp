@@ -1,4 +1,9 @@
-const SERVER_MAX = 8 * 1024 * 1024;
+import {
+  MAX_ACCEPTED_BYTES,
+  COMPRESS_TARGET_BYTES,
+  HEIC_MIME,
+  acceptedUploadMessage,
+} from "@/lib/upload-limits";
 
 export type CompressedImage = {
   blob: Blob;
@@ -59,13 +64,18 @@ function toBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promi
 
 export async function compressImageToLimit(
   file: File | (Blob & { name?: string; type?: string }),
-  opts?: { maxBytes?: number },
+  opts?: { maxBytes?: number; maxInputBytes?: number; preset?: "document" | "photo" },
   env?: { createImageBitmapFn?: typeof createImageBitmap; documentRef?: Document },
 ): Promise<CompressedImage> {
-  const maxBytes = opts?.maxBytes ?? 2 * 1024 * 1024;
+  const maxBytes = opts?.maxBytes ?? COMPRESS_TARGET_BYTES;
+  const maxInputBytes = opts?.maxInputBytes ?? MAX_ACCEPTED_BYTES;
+  const ceiling = opts?.preset === "photo" ? 2048 : 2560;
   const originalBytes = file.size;
   const inputName = (file as { name?: string }).name ?? "photo";
-  const inputType = (file as { type?: string }).type ?? "image/jpeg";
+
+  if (file.size > maxInputBytes) {
+    throw new Error(acceptedUploadMessage());
+  }
 
   let bitmap: ImageBitmap | null = null;
   let imgEl: HTMLImageElement | null = null;
@@ -88,8 +98,18 @@ export async function compressImageToLimit(
       }
     }
 
+    if (!decodeFailed && (decodedWidth <= 0 || decodedHeight <= 0)) {
+      decodeFailed = true;
+    }
+
     if (decodeFailed) {
-      if (originalBytes <= SERVER_MAX) {
+      const fileType = (file as { type?: string }).type ?? "";
+      if ((HEIC_MIME as readonly string[]).includes(fileType)) {
+        throw new Error(
+          "This photo (HEIC) could not be read on this device. Switch the camera to JPEG / Most Compatible and retake.",
+        );
+      }
+      if (originalBytes <= maxBytes) {
         const inputType2 = (file as { type?: string }).type ?? "image/jpeg";
         return {
           blob: file as Blob,
@@ -112,22 +132,28 @@ export async function compressImageToLimit(
     if (!src) throw new Error("decode");
 
     const maxSide = Math.max(decodedWidth, decodedHeight);
-    let quality = 0.92;
-    const side = Math.min(2048, maxSide);
-    const sideSteps = [2048, 1600, 1280];
+    const LADDER = [2560, 2240, 2048, 1792, 1600, 1280];
+    const QUALITIES = [0.9, 0.85];
+
+    // Never upscale: cap every tried side at the decoded max side.
+    let triedSides: number[];
+    if (maxSide < 1280) {
+      triedSides = [maxSide];
+    } else {
+      const topSide = Math.min(ceiling, maxSide);
+      triedSides = [topSide, ...LADDER.filter((s) => s < topSide)];
+    }
 
     const doc = env?.documentRef ?? document;
     const canvas = doc.createElement("canvas");
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas not supported");
 
-    let sideIdx = sideSteps.indexOf(side);
-    if (sideIdx === -1) sideIdx = 0;
-
     let outBlob: Blob | null = null;
+    let quality = QUALITIES[0];
 
-    while (sideIdx < sideSteps.length) {
-      const currentSide = sideSteps[sideIdx];
+    outer: for (let i = 0; i < triedSides.length; i++) {
+      const currentSide = triedSides[i];
       const aspect = decodedWidth / decodedHeight;
       const w = aspect >= 1 ? currentSide : Math.round(currentSide * aspect);
       const h = aspect >= 1 ? Math.round(currentSide / aspect) : currentSide;
@@ -136,25 +162,25 @@ export async function compressImageToLimit(
       canvas.height = h;
       ctx.drawImage(src, 0, 0, w, h);
 
-      quality = sideIdx === 0 ? 0.92 : 0.8;
-
-      while (quality >= 0.68) {
+      // Fast path: only the first (largest) side tries both qualities;
+      // every smaller side tries 0.85 once.
+      const qualities = i === 0 ? QUALITIES : [0.85];
+      for (const q of qualities) {
+        quality = q;
         outBlob = await toBlob(canvas, "image/jpeg", quality);
         if (outBlob.size <= maxBytes) {
-          break;
+          break outer;
         }
-        quality -= 0.08;
       }
-
-      if (outBlob && outBlob.size <= maxBytes) break;
-
-      quality = 0.8;
-      sideIdx++;
     }
 
     if (!outBlob || outBlob.size > maxBytes) {
+      const sizeLabel =
+        maxBytes >= 1024 * 1024
+          ? `${Math.round(maxBytes / 1024 / 1024)} MB`
+          : `${Math.round(maxBytes / 1024)} KB`;
       throw new Error(
-        `Photo could not be compressed under ${Math.round(maxBytes / 1024 / 1024)} MB. Retake closer to the plate.`,
+        `Photo could not be compressed under ${sizeLabel}. Try a smaller photo or retake it.`,
       );
     }
 

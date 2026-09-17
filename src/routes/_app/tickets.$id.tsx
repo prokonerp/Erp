@@ -54,7 +54,7 @@ import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
 import { useTicketVerifications } from "@/hooks/useTicketVerifications";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
-import { VerificationDiff } from "@/components/VerificationDiff";
+import { VerificationDiff, isBucketMissingError } from "@/components/VerificationDiff";
 import { FsrPrintButton, type FsrDbRow } from "@/components/fsr/FsrPrintButton";
 import { fetchEngineerLoginIds } from "@/hooks/useTicketsTable";
 import { attachLoginFlags, sortEngineersLoginFirst } from "@/lib/eng-queue-utils";
@@ -97,6 +97,73 @@ type FsrPart = {
 
 function asFsrArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function EquipmentVerificationPhoto({
+  photoPath,
+  linkLabel,
+}: {
+  photoPath: string | null | undefined;
+  linkLabel: string;
+}) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!photoPath) {
+      setSignedUrl(null);
+      setPhotoError(null);
+      setPhotoLoading(false);
+      return;
+    }
+    setPhotoLoading(true);
+    setPhotoError(null);
+    setSignedUrl(null);
+    supabase.storage
+      .from("ticket-attachments")
+      .createSignedUrl(photoPath, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setPhotoError(error.message);
+        } else {
+          setSignedUrl(data?.signedUrl ?? null);
+        }
+        setPhotoLoading(false);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setPhotoError(e instanceof Error ? e.message : String(e));
+        setPhotoLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [photoPath]);
+
+  if (!photoPath) return null;
+  if (photoLoading) {
+    return <div className="text-xs text-muted-foreground">Loading photo…</div>;
+  }
+  if (signedUrl) {
+    return (
+      <a className="text-xs underline" href={signedUrl} target="_blank" rel="noreferrer">
+        {linkLabel}
+      </a>
+    );
+  }
+  if (photoError) {
+    return (
+      <div className="text-xs text-muted-foreground">
+        {isBucketMissingError(photoError)
+          ? "Photo unavailable (storage bucket missing - ask admin to run bucket SQL)"
+          : `Photo unavailable (${photoError})`}
+      </div>
+    );
+  }
+  return null;
 }
 
 export const Route = createFileRoute("/_app/tickets/$id")({
@@ -2109,13 +2176,16 @@ function TicketDetail() {
                     </Badge>
                     {verifications.equipment.verdict === "mismatch" && (
                       <div className="space-y-1 mt-1">
+                        <EquipmentVerificationPhoto
+                          photoPath={verifications.equipment.photo_path}
+                          linkLabel="View correction photo"
+                        />
                         <VerificationDiff
                           label="Model"
                           original={verifications.equipment.original_model}
                           corrected={verifications.equipment.corrected_model}
                           engineer={verifications.equipment.engineer_name}
                           at={verifications.equipment.verified_at}
-                          photoPath={verifications.equipment.photo_path}
                         />
                         <VerificationDiff
                           label="Serial No"
@@ -2123,7 +2193,14 @@ function TicketDetail() {
                           corrected={verifications.equipment.corrected_serial}
                           engineer={verifications.equipment.engineer_name}
                           at={verifications.equipment.verified_at}
+                        />
+                      </div>
+                    )}
+                    {verifications.equipment.verdict === "matched" && (
+                      <div className="mt-1">
+                        <EquipmentVerificationPhoto
                           photoPath={verifications.equipment.photo_path}
+                          linkLabel="View serial photo"
                         />
                       </div>
                     )}

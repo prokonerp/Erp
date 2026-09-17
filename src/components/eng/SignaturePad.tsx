@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { compressImageToLimit } from "@/lib/image-compress";
+import {
+  MAX_ACCEPTED_BYTES,
+  COMPRESS_TARGET_BYTES,
+  acceptedUploadMessage,
+} from "@/lib/upload-limits";
 import { supabase } from "@/integrations/supabase/client";
 
 // Points are stored NORMALIZED (0..1 of the pad box) so a resize/rotation
@@ -14,7 +19,6 @@ type SignaturePadProps = {
   onChange: (path: string) => void;
 };
 
-const MAX_BYTES = 2 * 1024 * 1024;
 const INK = "oklch(0.20 0.03 260)";
 const PAPER = "oklch(1 0 0)";
 
@@ -213,17 +217,17 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
       let payload: Blob = png;
       let filename = `signature-${Date.now()}.png`;
       let contentType = "image/png";
-      if (png.size > MAX_BYTES) {
+      if (png.size > MAX_ACCEPTED_BYTES) {
         const compressed = await compressImageToLimit(
           new File([png], filename, { type: "image/png" }),
-          { maxBytes: MAX_BYTES },
+          { maxBytes: COMPRESS_TARGET_BYTES },
         );
         payload = compressed.blob;
         filename = compressed.name;
         contentType = compressed.contentType;
       }
-      if (payload.size > MAX_BYTES) {
-        throw new Error("Signature is over 2 MB even after compression. Clear and sign smaller.");
+      if (payload.size > MAX_ACCEPTED_BYTES) {
+        throw new Error(acceptedUploadMessage());
       }
       const dataBase64 = await blobToBase64(payload);
       const { uploadPublicTicketAttachment } =

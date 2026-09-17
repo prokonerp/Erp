@@ -165,13 +165,52 @@ export function asEmployeeDocuments(value: unknown): EmployeeDocument[] {
   return value
     .filter(
       (d): d is Record<string, unknown> =>
-        !!d && typeof d === "object" && typeof (d as Record<string, unknown>).path === "string",
+        !!d &&
+        typeof d === "object" &&
+        typeof (d as Record<string, unknown>).path === "string" &&
+        ((d as Record<string, unknown>).path as string).trim() !== "",
     )
     .map((d) => ({
       name: typeof d.name === "string" && d.name.trim() !== "" ? d.name.trim() : "Document",
       path: d.path as string,
       uploaded_at: typeof d.uploaded_at === "string" ? d.uploaded_at : "",
     }));
+}
+
+/** Fixed profile document blocks matched by name on the engineer profile page. */
+export const PROFILE_DOC_TYPES = [
+  "Aadhaar",
+  "PAN",
+  "Driving Licence",
+  "Bank Passbook",
+  "Photo",
+  "Other",
+] as const;
+
+export type ProfileDocType = (typeof PROFILE_DOC_TYPES)[number];
+
+/** Find a document by name (case-insensitive, trimmed). Undefined-safe. */
+export function findDocByName(
+  docs: EmployeeDocument[] | null | undefined,
+  name: string,
+): EmployeeDocument | undefined {
+  const needle = name.trim().toLowerCase();
+  return (docs ?? []).find((d) => d.name.trim().toLowerCase() === needle);
+}
+
+/**
+ * Replace the matching document in place (preserving order) or append when
+ * absent. Returns a new array — never mutates the input.
+ */
+export function upsertDocByName(
+  docs: EmployeeDocument[] | null | undefined,
+  entry: EmployeeDocument,
+): EmployeeDocument[] {
+  const list = docs ?? [];
+  const needle = entry.name.trim().toLowerCase();
+  const idx = list.findIndex((d) => d.name.trim().toLowerCase() === needle);
+  if (idx === -1) return [...list, entry];
+  return list.map((d, i) => (i === idx ? entry : d));
 }
 
 // ---- Dashboard assembler (pure; the page stays thin) ----

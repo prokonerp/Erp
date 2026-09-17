@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { reportDbError } from "@/lib/format-error";
+import { parseUploadFilename } from "@/lib/upload-naming";
 
 /** Engineer-work activity kinds that an admin reset is allowed to delete. Exact set. */
 export const RESET_ACTIVITY_KINDS = [
@@ -31,7 +32,11 @@ export const RESET_STORAGE_KIND_ALLOWLIST = [
   "equipment_correction",
   "issue_photo",
   "customer_signature",
+  "serial_photo",
 ] as const;
+
+/** New-scheme upload kinds the reset is allowed to remove. */
+export const RESET_DELETABLE_NAME_KINDS = ["SERIAL", "ISSUE", "MISMATCH", "SIGNATURE"] as const;
 
 /**
  * Allow-listed tables touched by this module. Exported so pure scoping tests
@@ -67,8 +72,9 @@ export function buildResetScope(ticket_id: string): ResetScope {
 
 /**
  * Pure helper: true only for exact file paths under ticket/{id}/ whose
- * filename starts with equipment_correction-, issue_photo-, or
- * customer_signature-. Never true for a bare prefix (prefix wipe guard).
+ * filename parses via parseUploadFilename as either a new-scheme name with
+ * kind in RESET_DELETABLE_NAME_KINDS, or a legacy name with legacyKind in
+ * RESET_STORAGE_KIND_ALLOWLIST. Never true for a bare prefix (prefix wipe guard).
  */
 export function isResetStoragePathAllowed(path: string, ticket_id: string): boolean {
   const prefix = `ticket/${ticket_id}/`;
@@ -77,7 +83,12 @@ export function isResetStoragePathAllowed(path: string, ticket_id: string): bool
   // Must be a file inside a subfolder (date/name), never the prefix itself.
   if (!rest || !rest.includes("/") || rest.endsWith("/")) return false;
   const filename = rest.split("/").pop() || "";
-  return RESET_STORAGE_KIND_ALLOWLIST.some((k) => filename.startsWith(`${k}-`));
+  const parsed = parseUploadFilename(filename);
+  if (!parsed) return false;
+  if (!parsed.legacy) {
+    return (RESET_DELETABLE_NAME_KINDS as readonly string[]).includes(parsed.kind);
+  }
+  return (RESET_STORAGE_KIND_ALLOWLIST as readonly string[]).includes(parsed.legacyKind);
 }
 
 async function assertAdmin(supabaseAdmin: any, userId: string) {

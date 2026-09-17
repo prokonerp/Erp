@@ -21,7 +21,7 @@ import { engKeys } from "@/lib/queryKeys";
  */
 
 const QUEUE_COLS =
-  "id,case_id,status,priority,customer_name,customer_phone,product,serial_no,location,complaint,created_at,assigned_engineer_name,assigned_engineer_phone,call_type,assigned_at";
+  "id,case_id,status,priority,customer_name,customer_phone,product,serial_no,location,complaint,created_at,assigned_engineer_name,assigned_engineer_phone,call_type,assigned_at,sector";
 // NOTE: assigned_employee_id is intentionally NOT in the projection — it is
 // not yet in the generated Supabase types and would poison the select type.
 // FK matching uses .filter("assigned_employee_id",...) which takes a plain
@@ -43,6 +43,7 @@ export type QueueTicket = {
   assigned_engineer_phone: string | null;
   call_type: string;
   assigned_at: string | null;
+  sector: string | null;
 };
 
 /**
@@ -129,7 +130,7 @@ export function useMyQueue() {
         console.error("[useMyQueue]", fkRes.error.message);
         throw fkRes.error;
       }
-      return ((fkRes.data || []) as QueueTicket[]);
+      return (fkRes.data || []) as QueueTicket[];
     },
   });
 }

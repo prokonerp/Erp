@@ -9,30 +9,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { engKeys } from "@/lib/queryKeys";
 import { compressImageToLimit } from "@/lib/image-compress";
 import {
-  CHARGE_TYPES,
   conveyanceLoadMessage,
   kmTravelled,
   todayLocal,
   type ChargeType,
 } from "@/lib/engineer-conveyance";
 import {
-  deleteConveyanceExpense,
   deleteEngineerAttachment,
   saveConveyanceExpense,
   saveEngineerDailyLog,
   uploadEngineerAttachment,
 } from "@/lib/engineer-conveyance.functions";
+import { MAX_ACCEPTED_BYTES, acceptedUploadMessage } from "@/lib/upload-limits";
 import { formatINR } from "@/lib/fsrPrint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import {
@@ -44,7 +36,6 @@ import {
   Receipt,
   Sunrise,
   Sunset,
-  Trash2,
   Upload,
 } from "lucide-react";
 
@@ -127,6 +118,206 @@ function PhotoPicker({
   );
 }
 
+/** Signed-URL cache for locked-card photo previews (path -> { url, expiresAt }). */
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
+
+function SavedPhoto({ path, alt }: { path: string | null; alt: string }) {
+  const [url, setUrl] = useState<string | null>(() => {
+    if (!path) return null;
+    const cached = signedUrlCache.get(path);
+    if (!cached) return null;
+    if (cached.expiresAt <= Date.now()) {
+      signedUrlCache.delete(path);
+      return null;
+    }
+    return cached.url;
+  });
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(() => {
+    if (!path) return "loading";
+    const cached = signedUrlCache.get(path);
+    if (!cached) return "loading";
+    if (cached.expiresAt <= Date.now()) {
+      signedUrlCache.delete(path);
+      return "loading";
+    }
+    return "ready";
+  });
+
+  useEffect(() => {
+    if (!path) {
+      setStatus("error");
+      setUrl(null);
+      return;
+    }
+    const cached = signedUrlCache.get(path);
+    if (cached) {
+      if (cached.expiresAt <= Date.now()) {
+        signedUrlCache.delete(path);
+      } else {
+        setUrl(cached.url);
+        setStatus("ready");
+        return;
+      }
+    }
+    let cancelled = false;
+    setStatus("loading");
+    supabase.storage
+      .from("engineer-uploads")
+      .createSignedUrl(path, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data?.signedUrl) {
+          setStatus("error");
+        } else {
+          if (signedUrlCache.size >= 25) {
+            const oldest = signedUrlCache.keys().next().value;
+            if (oldest !== undefined) signedUrlCache.delete(oldest);
+          }
+          signedUrlCache.set(path, { url: data.signedUrl, expiresAt: Date.now() + 3500 * 1000 });
+          setUrl(data.signedUrl);
+          setStatus("ready");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  if (!path) {
+    return null;
+  }
+  if (status === "error") {
+    return <p className="text-xs text-muted-foreground">Photo unavailable</p>;
+  }
+  if (status === "loading" || !url) {
+    return <p className="text-xs text-muted-foreground">Loading photo…</p>;
+  }
+  return (
+    <img
+      src={url}
+      alt={alt}
+      loading="lazy"
+      onError={() => setStatus("error")}
+      className="h-24 w-auto rounded-lg border border-border object-cover"
+    />
+  );
+}
+
+function ExpenseSection({
+  title,
+  charge,
+  entries,
+  busy,
+  onAdd,
+}: {
+  title: string;
+  charge: ChargeType;
+  entries: ExpenseRow[];
+  busy: boolean;
+  onAdd: (
+    charge: ChargeType,
+    form: { amount: string; receiptFile: File | null; notes: string;     reset: () => void },
+  ) => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [notes, setNotes] = useState("");
+  const subtotal = entries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+  return (
+    <Card className="rounded-xl">
+      <CardContent className="space-y-3 p-4">
+        <p className="flex items-center gap-1.5 text-[15px] font-semibold">
+          <Receipt className="h-4 w-4" aria-hidden /> {title}
+        </p>
+        <div className="space-y-2 rounded-xl border border-border p-3">
+          <div>
+            <Label className="text-xs">Charges (₹)</Label>
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="e.g. 120"
+              className="mt-1 h-11 min-h-[44px]"
+              aria-label={`${title} amount`}
+            />
+          </div>
+          <PhotoPicker
+            label="Receipt photo (optional)"
+            file={receiptFile}
+            onPick={setReceiptFile}
+            disabled={busy}
+          />
+          <div>
+            <Label className="text-xs">Notes (optional)</Label>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Toll plaza name"
+              className="mt-1 h-11 min-h-[44px]"
+              aria-label={`${title} notes`}
+            />
+          </div>
+          <Button
+            className="min-h-[44px] w-full"
+            disabled={busy}
+            onClick={() =>
+              onAdd(charge, {
+                amount,
+                receiptFile,
+                notes,
+                reset: () => {
+                  setAmount("");
+                  setReceiptFile(null);
+                  setNotes("");
+                },
+              })
+            }
+          >
+            {busy ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden />
+            ) : (
+              <Upload className="h-4 w-4 mr-1" aria-hidden />
+            )}
+            Add expense
+          </Button>
+        </div>
+
+        {entries.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">
+            No {title.toLowerCase()} expenses for this day.
+          </p>
+        ) : (
+          <>
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {entries.map((e) => (
+                <li
+                  key={e.id}
+                  className="flex min-h-[44px] items-center justify-between gap-2 px-3 py-2"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">
+                      {e.charge_type} · ₹{e.amount}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[e.notes, e.receipt_path ? "receipt ✓" : null].filter(Boolean).join(" · ") ||
+                        "—"}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-right text-sm font-semibold tabular-nums">
+              {title} subtotal: {formatINR(subtotal)}
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function EngConveyance() {
   const queryClient = useQueryClient();
   const { employee } = useMyEmployee();
@@ -139,7 +330,6 @@ function EngConveyance() {
   const callSaveLog = useServerFn(saveEngineerDailyLog);
   const callDeleteUpload = useServerFn(deleteEngineerAttachment);
   const callSaveExpense = useServerFn(saveConveyanceExpense);
-  const callDeleteExpense = useServerFn(deleteConveyanceExpense);
 
   const logKey = engKeys.conveyanceLog(employeeId, date);
   const expKey = engKeys.conveyanceExpenses(employeeId, date);
@@ -191,10 +381,40 @@ function EngConveyance() {
   const [morningFile, setMorningFile] = useState<File | null>(null);
   const [eveningFile, setEveningFile] = useState<File | null>(null);
   const [saving, setSaving] = useState<"morning" | "evening" | null>(null);
-  // Ref-based re-entry locks: `saving`/`expenseBusy`/`removingId` state commits
+  // Ref-based re-entry locks: `saving`/`expenseBusy` state commits
   // on re-render, so two taps in the same tick would both fire (double upload,
   // duplicate expense rows). Refs flip synchronously — second call bails.
   const savingRef = useRef<"morning" | "evening" | null>(null);
+  const [morningReviewing, setMorningReviewing] = useState(false);
+  const [eveningReviewing, setEveningReviewing] = useState(false);
+  const [morningPreviewUrl, setMorningPreviewUrl] = useState<string | null>(null);
+  const [eveningPreviewUrl, setEveningPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!morningFile) {
+      setMorningPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(morningFile);
+    setMorningPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [morningFile]);
+
+  useEffect(() => {
+    if (!eveningFile) {
+      setEveningPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(eveningFile);
+    setEveningPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [eveningFile]);
+
+  useEffect(() => {
+    setMorningReviewing(false);
+    setEveningReviewing(false);
+    setOdoErrors({});
+  }, [date]);
 
   const mirroredDateRef = useRef(date);
   useEffect(() => {
@@ -219,21 +439,52 @@ function EngConveyance() {
     });
   }
 
-  // Expense form state.
-  const [chargeType, setChargeType] = useState<ChargeType | "">("");
-  const [amount, setAmount] = useState("");
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [notes, setNotes] = useState("");
+  function validateOdo(which: "morning" | "evening"): string | null {
+    const odoText = which === "morning" ? morningOdo : eveningOdo;
+    const existingOdo = which === "morning" ? log?.morning_odometer : log?.evening_odometer;
+    const label = which === "morning" ? "Morning" : "Evening";
+    const text = odoText.trim();
+    if (text === "") {
+      if (existingOdo == null) return `${label} reading is required`;
+    } else {
+      const n = Number(text);
+      if (!Number.isFinite(n)) return `${label} reading must be a number`;
+      if (n < 0) return `${label} reading cannot be negative`;
+    }
+    const otherText = (which === "morning" ? eveningOdo : morningOdo).trim();
+    const mText = which === "morning" ? text : otherText;
+    const eText = which === "evening" ? text : otherText;
+    const mNum = mText !== "" ? Number(mText) : (log?.morning_odometer ?? null);
+    const eNum = eText !== "" ? Number(eText) : (log?.evening_odometer ?? null);
+    if (
+      typeof mNum === "number" &&
+      typeof eNum === "number" &&
+      Number.isFinite(mNum) &&
+      Number.isFinite(eNum) &&
+      eNum < mNum
+    ) {
+      return "Evening reading cannot be less than the morning reading";
+    }
+    return null;
+  }
+
+  // Shared add-expense lock: the three ExpenseSection forms hold their own
+  // amount/receipt/notes state, but only one add runs at a time.
   const [expenseBusy, setExpenseBusy] = useState(false);
   const expenseBusyRef = useRef(false);
 
   async function uploadPhoto(
     file: File,
     kind: "morning_reading" | "evening_reading" | "receipt",
+    label?: string,
   ): Promise<string> {
+    if (file.size > MAX_ACCEPTED_BYTES) throw new Error(acceptedUploadMessage());
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
     if (!allowed.includes(file.type)) throw new Error("Only JPEG, PNG, WebP, HEIC images allowed");
-    const compressed = await compressImageToLimit(file);
+    const compressed = await compressImageToLimit(
+      file,
+      kind === "receipt" ? { preset: "document" } : undefined,
+    );
     const base64 = await fileToBase64(compressed.blob);
     const res = await callUpload({
       data: {
@@ -242,6 +493,7 @@ function EngConveyance() {
         content_type: compressed.contentType,
         data_base64: base64,
         date,
+        ...(label ? { label } : {}),
       },
     });
     return res.path;
@@ -269,36 +521,13 @@ function EngConveyance() {
     }
     // Client-side odometer check (same rules as the zod schema) before any
     // upload, so rejects surface inline without orphaning a photo.
-    const label = which === "morning" ? "Morning" : "Evening";
     const fail = (message: string) => {
       setOdoErrors((prev) => ({ ...prev, [which]: message }));
       toast.error(message);
     };
-    const text = odoText.trim();
-    if (text !== "") {
-      const n = Number(text);
-      if (!Number.isFinite(n)) {
-        fail(`${label} reading must be a number`);
-        return;
-      }
-      if (n < 0) {
-        fail(`${label} reading cannot be negative`);
-        return;
-      }
-    }
-    const otherText = (which === "morning" ? eveningOdo : morningOdo).trim();
-    const mText = which === "morning" ? text : otherText;
-    const eText = which === "evening" ? text : otherText;
-    const mNum = mText !== "" ? Number(mText) : (log?.morning_odometer ?? null);
-    const eNum = eText !== "" ? Number(eText) : (log?.evening_odometer ?? null);
-    if (
-      typeof mNum === "number" &&
-      typeof eNum === "number" &&
-      Number.isFinite(mNum) &&
-      Number.isFinite(eNum) &&
-      eNum < mNum
-    ) {
-      fail("Evening reading cannot be less than the morning reading");
+    const err = validateOdo(which);
+    if (err) {
+      fail(err);
       return;
     }
     clearOdoError(which);
@@ -348,6 +577,18 @@ function EngConveyance() {
       // Dashboard shows today's km — refresh its direct-query cache too.
       await queryClient.invalidateQueries({ queryKey: engKeys.dashboardPrefix });
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("already confirmed and locked")) {
+        await queryClient.invalidateQueries({ queryKey: logKey });
+        if (typeof (toast as unknown as { message?: unknown }).message === "function") {
+          (toast as unknown as { message: (msg: string) => void }).message(
+            "Already confirmed — showing the saved entry",
+          );
+        } else {
+          toast.success("Already confirmed — showing the saved entry");
+        }
+        return;
+      }
       toast.error(reportDbError("conveyance save", err, "Save failed"));
     } finally {
       setSaving(null);
@@ -355,33 +596,37 @@ function EngConveyance() {
     }
   }
 
-  async function addExpense() {
+  async function addExpense(
+    charge: ChargeType,
+    form: { amount: string; receiptFile: File | null; notes: string; reset: () => void },
+  ) {
     if (!navigator.onLine) {
       toast.error("No internet connection. Reconnect and retry.");
       return;
     }
     if (expenseBusyRef.current) return;
-    if (!chargeType) {
-      toast.error("Select the charge type");
+    if (form.amount.trim() === "") {
+      toast.error("Enter the charges");
       return;
     }
-    if (amount.trim() === "") {
-      toast.error("Enter the charges");
+    const amt = Number(form.amount.trim());
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toast.error("Charges must be above 0");
       return;
     }
     setExpenseBusy(true);
     expenseBusyRef.current = true;
     try {
       let receiptPath: string | null = null;
-      if (receiptFile) receiptPath = await uploadPhoto(receiptFile, "receipt");
+      if (form.receiptFile) receiptPath = await uploadPhoto(form.receiptFile, "receipt", charge);
       try {
         await callSaveExpense({
           data: {
             expense_date: date,
-            charge_type: chargeType,
-            amount: amount.trim(),
+            charge_type: charge,
+            amount: form.amount.trim(),
             receipt_path: receiptPath,
-            notes: notes.trim() === "" ? null : notes.trim(),
+            notes: form.notes.trim() === "" ? null : form.notes.trim(),
           },
         });
       } catch (saveErr) {
@@ -398,35 +643,13 @@ function EngConveyance() {
         throw saveErr;
       }
       toast.success("Expense added");
-      setChargeType("");
-      setAmount("");
-      setReceiptFile(null);
-      setNotes("");
+      form.reset();
       await queryClient.invalidateQueries({ queryKey: expKey });
     } catch (err) {
       toast.error(reportDbError("expense save", err, "Save failed"));
     } finally {
       setExpenseBusy(false);
       expenseBusyRef.current = false;
-    }
-  }
-
-  const [removingId, setRemovingId] = useState<string | null>(null);
-  const removingRef = useRef<string | null>(null);
-
-  async function removeExpense(id: string) {
-    if (removingRef.current) return;
-    removingRef.current = id;
-    setRemovingId(id);
-    try {
-      await callDeleteExpense({ data: { id } });
-      toast.success("Expense removed");
-      await queryClient.invalidateQueries({ queryKey: expKey });
-    } catch (err) {
-      toast.error(reportDbError("expense delete", err, "Delete failed"));
-    } finally {
-      removingRef.current = null;
-      setRemovingId(null);
     }
   }
 
@@ -498,49 +721,107 @@ function EngConveyance() {
                   <Sunrise className="h-4 w-4" aria-hidden /> Morning reading
                 </p>
                 {log?.morning_odometer != null ? (
-                  <p className="text-[11px] font-medium text-emerald-700">
-                    Saved: {log.morning_odometer} km{log.morning_photo_path ? " · photo ✓" : ""}
-                  </p>
-                ) : null}
-                <div>
-                  <Label className="text-xs">Odometer (km)</Label>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={morningOdo}
-                    onChange={(e) => {
-                      setMorningOdo(e.target.value);
-                      setFormDirty(true);
-                      clearOdoError("morning");
-                    }}
-                    placeholder="e.g. 12540.5"
-                    className="mt-1 h-11 min-h-[44px]"
-                    aria-label="Morning odometer reading"
-                    aria-invalid={odoErrors.morning ? true : undefined}
-                  />
-                  {odoErrors.morning ? (
-                    <p className="text-xs text-destructive">{odoErrors.morning}</p>
-                  ) : null}
-                </div>
-                <PhotoPicker
-                  label="Morning photo"
-                  file={morningFile}
-                  onPick={(f) => {
-                    setMorningFile(f);
-                    setFormDirty(true);
-                  }}
-                  disabled={saving !== null}
-                />
-                <Button
-                  className="min-h-[44px] w-full"
-                  disabled={saving !== null}
-                  onClick={() => saveHalf("morning")}
-                >
-                  {saving === "morning" ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden />
-                  ) : null}
-                  Save morning entry
-                </Button>
+                  <>
+                    <p className="text-sm font-semibold">Morning entry locked</p>
+                    <p className="text-[11px] font-medium text-emerald-700">
+                      Saved: {log.morning_odometer} km{log.morning_photo_path ? " · photo ✓" : ""}
+                    </p>
+                    <p className="text-[20px] font-semibold tabular-nums leading-tight">
+                      {log.morning_odometer} km
+                    </p>
+                    <SavedPhoto path={log.morning_photo_path} alt="Morning odometer photo" />
+                  </>
+                ) : morningReviewing ? (
+                  <div className="space-y-2 rounded-xl border border-border p-3">
+                    <p className="text-sm font-semibold">Review morning entry</p>
+                    <p className="text-[20px] font-semibold tabular-nums leading-tight">
+                      {morningOdo.trim()} km
+                    </p>
+                    {odoErrors.morning ? (
+                      <p className="text-xs text-destructive">{odoErrors.morning}</p>
+                    ) : null}
+                    {morningFile && morningPreviewUrl ? (
+                      <img
+                        src={morningPreviewUrl}
+                        alt="Morning odometer photo preview"
+                        className="h-24 w-auto rounded-lg border border-border object-cover"
+                      />
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Existing photo kept</p>
+                    )}
+                    <Button
+                      className="min-h-[44px] w-full"
+                      disabled={saving !== null}
+                      onClick={() => saveHalf("morning")}
+                    >
+                      {saving === "morning" ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden />
+                      ) : null}
+                      Confirm morning entry
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="min-h-[44px] w-full"
+                      disabled={saving !== null}
+                      onClick={() => setMorningReviewing(false)}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <Label className="text-xs">Odometer (km)</Label>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        value={morningOdo}
+                        onChange={(e) => {
+                          setMorningOdo(e.target.value);
+                          setFormDirty(true);
+                          clearOdoError("morning");
+                        }}
+                        placeholder="e.g. 12540.5"
+                        className="mt-1 h-11 min-h-[44px]"
+                        aria-label="Morning odometer reading"
+                        aria-invalid={odoErrors.morning ? true : undefined}
+                      />
+                      {odoErrors.morning ? (
+                        <p className="text-xs text-destructive">{odoErrors.morning}</p>
+                      ) : null}
+                    </div>
+                    <PhotoPicker
+                      label="Morning photo"
+                      file={morningFile}
+                      onPick={(f) => {
+                        setMorningFile(f);
+                        setFormDirty(true);
+                      }}
+                      disabled={saving !== null}
+                    />
+                    <Button
+                      className="min-h-[44px] w-full"
+                      disabled={
+                        saving !== null ||
+                        morningOdo.trim() === "" ||
+                        (morningFile == null && log?.morning_photo_path == null) ||
+                        odoErrors.morning != null
+                      }
+                      onClick={() => {
+                        const err = validateOdo("morning");
+                        if (err) {
+                          setOdoErrors((prev) => ({ ...prev, morning: err }));
+                          toast.error(err);
+                          return;
+                        }
+                        setMorningReviewing(true);
+                      }}
+                    >
+                      Review morning entry
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -550,49 +831,107 @@ function EngConveyance() {
                   <Sunset className="h-4 w-4" aria-hidden /> Evening reading
                 </p>
                 {log?.evening_odometer != null ? (
-                  <p className="text-[11px] font-medium text-emerald-700">
-                    Saved: {log.evening_odometer} km{log.evening_photo_path ? " · photo ✓" : ""}
-                  </p>
-                ) : null}
-                <div>
-                  <Label className="text-xs">Odometer (km)</Label>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={eveningOdo}
-                    onChange={(e) => {
-                      setEveningOdo(e.target.value);
-                      setFormDirty(true);
-                      clearOdoError("evening");
-                    }}
-                    placeholder="e.g. 12615"
-                    className="mt-1 h-11 min-h-[44px]"
-                    aria-label="Evening odometer reading"
-                    aria-invalid={odoErrors.evening ? true : undefined}
-                  />
-                  {odoErrors.evening ? (
-                    <p className="text-xs text-destructive">{odoErrors.evening}</p>
-                  ) : null}
-                </div>
-                <PhotoPicker
-                  label="Evening photo"
-                  file={eveningFile}
-                  onPick={(f) => {
-                    setEveningFile(f);
-                    setFormDirty(true);
-                  }}
-                  disabled={saving !== null}
-                />
-                <Button
-                  className="min-h-[44px] w-full"
-                  disabled={saving !== null}
-                  onClick={() => saveHalf("evening")}
-                >
-                  {saving === "evening" ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden />
-                  ) : null}
-                  Save evening entry
-                </Button>
+                  <>
+                    <p className="text-sm font-semibold">Evening entry locked</p>
+                    <p className="text-[11px] font-medium text-emerald-700">
+                      Saved: {log.evening_odometer} km{log.evening_photo_path ? " · photo ✓" : ""}
+                    </p>
+                    <p className="text-[20px] font-semibold tabular-nums leading-tight">
+                      {log.evening_odometer} km
+                    </p>
+                    <SavedPhoto path={log.evening_photo_path} alt="Evening odometer photo" />
+                  </>
+                ) : eveningReviewing ? (
+                  <div className="space-y-2 rounded-xl border border-border p-3">
+                    <p className="text-sm font-semibold">Review evening entry</p>
+                    <p className="text-[20px] font-semibold tabular-nums leading-tight">
+                      {eveningOdo.trim()} km
+                    </p>
+                    {odoErrors.evening ? (
+                      <p className="text-xs text-destructive">{odoErrors.evening}</p>
+                    ) : null}
+                    {eveningFile && eveningPreviewUrl ? (
+                      <img
+                        src={eveningPreviewUrl}
+                        alt="Evening odometer photo preview"
+                        className="h-24 w-auto rounded-lg border border-border object-cover"
+                      />
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Existing photo kept</p>
+                    )}
+                    <Button
+                      className="min-h-[44px] w-full"
+                      disabled={saving !== null}
+                      onClick={() => saveHalf("evening")}
+                    >
+                      {saving === "evening" ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden />
+                      ) : null}
+                      Confirm evening entry
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="min-h-[44px] w-full"
+                      disabled={saving !== null}
+                      onClick={() => setEveningReviewing(false)}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <Label className="text-xs">Odometer (km)</Label>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        value={eveningOdo}
+                        onChange={(e) => {
+                          setEveningOdo(e.target.value);
+                          setFormDirty(true);
+                          clearOdoError("evening");
+                        }}
+                        placeholder="e.g. 12615"
+                        className="mt-1 h-11 min-h-[44px]"
+                        aria-label="Evening odometer reading"
+                        aria-invalid={odoErrors.evening ? true : undefined}
+                      />
+                      {odoErrors.evening ? (
+                        <p className="text-xs text-destructive">{odoErrors.evening}</p>
+                      ) : null}
+                    </div>
+                    <PhotoPicker
+                      label="Evening photo"
+                      file={eveningFile}
+                      onPick={(f) => {
+                        setEveningFile(f);
+                        setFormDirty(true);
+                      }}
+                      disabled={saving !== null}
+                    />
+                    <Button
+                      className="min-h-[44px] w-full"
+                      disabled={
+                        saving !== null ||
+                        eveningOdo.trim() === "" ||
+                        (eveningFile == null && log?.evening_photo_path == null) ||
+                        odoErrors.evening != null
+                      }
+                      onClick={() => {
+                        const err = validateOdo("evening");
+                        if (err) {
+                          setOdoErrors((prev) => ({ ...prev, evening: err }));
+                          toast.error(err);
+                          return;
+                        }
+                        setEveningReviewing(true);
+                      }}
+                    >
+                      Review evening entry
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -618,106 +957,30 @@ function EngConveyance() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-xl">
-            <CardContent className="space-y-3 p-4">
-              <p className="flex items-center gap-1.5 text-[15px] font-semibold">
-                <Receipt className="h-4 w-4" aria-hidden /> Places visited · Parking · Tolls
-              </p>
-              <div className="space-y-2 rounded-xl border border-border p-3">
-                <div>
-                  <Label className="text-xs">Charge type</Label>
-                  <Select value={chargeType} onValueChange={(v) => setChargeType(v as ChargeType)}>
-                    <SelectTrigger className="mt-1 min-h-[44px]" aria-label="Charge type">
-                      <SelectValue placeholder="Select charge type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CHARGE_TYPES.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {c}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Charges (₹)</Label>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="e.g. 120"
-                    className="mt-1 h-11 min-h-[44px]"
-                    aria-label="Charges amount"
-                  />
-                </div>
-                <PhotoPicker
-                  label="Receipt photo (optional)"
-                  file={receiptFile}
-                  onPick={setReceiptFile}
-                  disabled={expenseBusy}
-                />
-                <div>
-                  <Label className="text-xs">Notes (optional)</Label>
-                  <Input
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="e.g. Toll plaza name"
-                    className="mt-1 h-11 min-h-[44px]"
-                    aria-label="Expense notes"
-                  />
-                </div>
-                <Button className="min-h-[44px] w-full" disabled={expenseBusy} onClick={addExpense}>
-                  {expenseBusy ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-1" aria-hidden />
-                  ) : (
-                    <Upload className="h-4 w-4 mr-1" aria-hidden />
-                  )}
-                  Add expense
-                </Button>
-              </div>
-
-              {expenses.length === 0 ? (
-                <p className="text-[13px] text-muted-foreground">No expenses for this day.</p>
-              ) : (
-                <>
-                  <ul className="divide-y divide-border rounded-lg border border-border">
-                    {expenses.map((e) => (
-                      <li
-                        key={e.id}
-                        className="flex min-h-[44px] items-center justify-between gap-2 px-3 py-2"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium">
-                            {e.charge_type} · ₹{e.amount}
-                          </span>
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {[e.notes, e.receipt_path ? "receipt ✓" : null]
-                              .filter(Boolean)
-                              .join(" · ") || "—"}
-                          </span>
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="min-h-[44px] min-w-[44px] shrink-0"
-                          aria-label={`Remove ${e.charge_type} expense`}
-                          disabled={removingId !== null}
-                          onClick={() => removeExpense(e.id)}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden />
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="text-right text-sm font-semibold tabular-nums">
-                    Day total: {formatINR(dayTotal)}
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
+          <ExpenseSection
+            title="Toll"
+            charge="Toll"
+            entries={expenses.filter((e) => e.charge_type === "Toll")}
+            busy={expenseBusy}
+            onAdd={addExpense}
+          />
+          <ExpenseSection
+            title="Parking"
+            charge="Parking"
+            entries={expenses.filter((e) => e.charge_type === "Parking")}
+            busy={expenseBusy}
+            onAdd={addExpense}
+          />
+          <ExpenseSection
+            title="Places visit"
+            charge="Place Visit"
+            entries={expenses.filter((e) => e.charge_type === "Place Visit")}
+            busy={expenseBusy}
+            onAdd={addExpense}
+          />
+          <p className="text-right text-sm font-semibold tabular-nums">
+            Day total: {formatINR(dayTotal)}
+          </p>
         </>
       )}
     </div>

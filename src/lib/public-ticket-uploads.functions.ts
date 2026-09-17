@@ -7,9 +7,14 @@ import { clientIpKey } from "@/lib/server-client-ip";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
 import { storageUploadMessage } from "@/lib/format-error";
 import { uploadObjectRaw } from "@/lib/storage-upload-raw";
-
-const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
-const MAX_BYTES = 8 * 1024 * 1024;
+import { ALLOWED_IMAGE_MIME, MAX_ACCEPTED_BYTES, acceptedUploadMessage } from "@/lib/upload-limits";
+import type { UploadNameKind } from "@/lib/upload-naming";
+import {
+  buildUploadFilename,
+  initialsFromName,
+  makeNameToken,
+  sanitizeNameLabel,
+} from "@/lib/upload-naming";
 
 export const uploadSchema = z
   .object({
@@ -26,12 +31,14 @@ export const uploadSchema = z
     data_base64: z
       .string()
       .min(1)
-      .max(Math.ceil((MAX_BYTES * 4) / 3) + 1024),
+      .max(Math.ceil((MAX_ACCEPTED_BYTES * 4) / 3) + 1024),
     lat: z.number().min(-90).max(90).optional(),
     long: z.number().min(-180).max(180).optional(),
     accuracy: z.number().nullable().optional(),
     captured_at: z.string().nullable().optional(),
   })
+  // equipment_correction reuses the compulsory serial-number photo: live GPS
+  // (lat/long/captured_at) is captured alongside the serial photo at mismatch submit.
   .refine(
     (parsed) => {
       if (parsed.kind === "equipment_correction") {
@@ -77,29 +84,50 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
   .middleware([requireActiveUser])
   .inputValidator((input) => uploadSchema.parse(input))
   .handler(async ({ data, context }) => {
-    if (!ALLOWED_MIME.includes(data.content_type.toLowerCase())) {
+    if (!(ALLOWED_IMAGE_MIME as readonly string[]).includes(data.content_type.toLowerCase())) {
       throw new Error("Only image uploads are allowed");
     }
     const buf = Buffer.from(data.data_base64, "base64");
-    if (buf.length === 0 || buf.length > MAX_BYTES) {
-      throw new Error("Image must be between 1 byte and 8 MB");
+    if (buf.length === 0 || buf.length > MAX_ACCEPTED_BYTES) {
+      throw new Error(acceptedUploadMessage());
     }
     const safeExt =
       (data.filename.split(".").pop() || "jpg")
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "")
         .slice(0, 5) || "jpg";
-    const name = `${data.kind}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
-    const path = `ticket/${data.ticket_id}/${new Date().toISOString().slice(0, 10)}/${name}`;
+    const KIND_TO_NAME: Record<string, UploadNameKind> = {
+      serial_photo: "SERIAL",
+      issue_photo: "ISSUE",
+      equipment_correction: "MISMATCH",
+      customer_signature: "SIGNATURE",
+      other: "ISSUE",
+    };
+    const date = new Date().toISOString().slice(0, 10);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: ticket, error: ticketErr } = await supabaseAdmin
       .from("tickets")
-      .select("id, assigned_employee_id, assigned_engineer_name")
+      .select("id, assigned_employee_id, assigned_engineer_name, case_id")
       .eq("id", data.ticket_id)
       .maybeSingle();
     if (ticketErr || !ticket) {
       throw new Error("Ticket not found");
     }
+    const meta = ticket as unknown as {
+      assigned_engineer_name: string | null;
+      case_id: string | null;
+    };
+    const initials = initialsFromName(meta.assigned_engineer_name ?? "ENG");
+    const label = sanitizeNameLabel(meta.case_id ?? null);
+    const name = buildUploadFilename({
+      initials,
+      kind: KIND_TO_NAME[data.kind] ?? "ISSUE",
+      date,
+      label,
+      token: makeNameToken(),
+      ext: safeExt,
+    });
+    const path = `ticket/${data.ticket_id}/${date}/${name}`;
 
     // Ownership gate: only the assigned engineer (or admin) may upload.
     // Fast path: verified JWT email (skips the slow GoTrue admin lookup).
@@ -168,7 +196,7 @@ const stagedUploadSchema = z.object({
   data_base64: z
     .string()
     .min(1)
-    .max(Math.ceil((MAX_BYTES * 4) / 3) + 1024),
+    .max(Math.ceil((MAX_ACCEPTED_BYTES * 4) / 3) + 1024),
 });
 
 const stagedUploadHits = new Map<string, number[]>();
@@ -181,12 +209,12 @@ export const stagePublicTicketPhoto = createServerFn({ method: "POST" })
     if (!check.allowed) {
       throw new Error("Too many uploads. Please wait a few minutes and try again.");
     }
-    if (!ALLOWED_MIME.includes(data.content_type.toLowerCase())) {
+    if (!(ALLOWED_IMAGE_MIME as readonly string[]).includes(data.content_type.toLowerCase())) {
       throw new Error("Only image uploads are allowed");
     }
     const buf = Buffer.from(data.data_base64, "base64");
-    if (buf.length === 0 || buf.length > MAX_BYTES) {
-      throw new Error("Image must be between 1 byte and 8 MB");
+    if (buf.length === 0 || buf.length > MAX_ACCEPTED_BYTES) {
+      throw new Error(acceptedUploadMessage());
     }
     const safeExt =
       (data.filename.split(".").pop() || "jpg")
@@ -268,6 +296,14 @@ export const deleteTicketAttachment = createServerFn({ method: "POST" })
       },
       action: "delete attachments",
     });
+    const { data: verification } = await supabaseAdmin
+      .from("ticket_equipment_verifications")
+      .select("photo_path")
+      .eq("ticket_id", data.ticket_id)
+      .maybeSingle();
+    if (verification && verification.photo_path === data.path) {
+      throw new Error("This photo is already submitted and cannot be deleted");
+    }
     const { error } = await supabaseAdmin.storage.from("ticket-attachments").remove([data.path]);
     if (error) throw new Error(storageUploadMessage("ticket-attachments", error, data.path));
     return { ok: true };
