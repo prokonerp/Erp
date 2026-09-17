@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { reportDbError } from "@/lib/format-error";
 import {
+  markPaidAllowed,
   payableForPeriod,
   resolveAdjustment,
   settlementStatusChangeAllowed,
@@ -135,11 +136,7 @@ export const upsertSettlement = createServerFn({ method: "POST" })
       expenses: Array.isArray(expenses) ? expenses : [],
     });
     const computedKm = Math.round(payable.perDay.reduce((s, d) => s + d.km, 0) * 10) / 10;
-    const final = resolveAdjustment(
-      payable.grandTotal,
-      data.overridden_amount,
-      data.reason,
-    );
+    const final = resolveAdjustment(payable.grandTotal, data.overridden_amount, data.reason);
 
     // 3. Upsert on the one-row-per-period key.
     const { data: row, error } = await admin
@@ -276,8 +273,9 @@ type PaidRow = SettlementRow & { paid_at: string | null; payment_ref: string | n
 /**
  * Mark an approved settlement paid: stamps paid_at (timestamptz now) +
  * payment_ref, and locks the row (locked_at/by) when still unlocked.
- * Requires a non-blank payment_ref; refuses already-paid rows
- * (paid_at set). MEM-054: update only, never a delete.
+ * Requires a non-blank payment_ref; refuses unless status is Approved
+ * (markPaidAllowed: unpaid + unlocked + Approved only). MEM-054: update
+ * only, never a delete.
  */
 export const markSettlementPaid = createServerFn({ method: "POST" })
   .middleware([requireActiveUser])
@@ -295,8 +293,8 @@ export const markSettlementPaid = createServerFn({ method: "POST" })
     if (readErr) throw new Error(reportDbError("read settlement", readErr));
     if (!row) throw new Error("Settlement not found.");
     const current = row as PaidRow & { employee_id?: string };
-    const paidAt = typeof current.paid_at === "string" ? current.paid_at.trim() : current.paid_at;
-    if (paidAt != null && paidAt !== "") throw new Error("Settlement is already paid.");
+    const gate = markPaidAllowed(current);
+    if (!gate.ok) throw new Error(gate.error);
     const now = new Date().toISOString();
     const patch: Record<string, string> = { paid_at: now, payment_ref: ref };
     const lockedAt =

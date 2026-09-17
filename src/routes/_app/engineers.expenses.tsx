@@ -92,7 +92,11 @@ function EngineerExpensesPage() {
   }, [selectedId, roster]);
 
   const effective = resolveRange(mode, range);
-  const payables = useEngineerPayables({ employeeId: selectedId, from: effective.from, to: effective.to });
+  const payables = useEngineerPayables({
+    employeeId: selectedId,
+    from: effective.from,
+    to: effective.to,
+  });
   const selected = roster.find((e) => e.employee_id === selectedId) ?? null;
 
   const totals = useMemo(
@@ -107,10 +111,7 @@ function EngineerExpensesPage() {
   );
 
   // Settlement periods overlapping the window (fail-soft: errors warn, never blank).
-  const {
-    data: settlementData,
-    refetch: refetchSettlements,
-  } = useQuery({
+  const { data: settlementData, refetch: refetchSettlements } = useQuery({
     queryKey: [...adminEngKeys.settlements(selectedId), payables.window.from, payables.window.to],
     enabled: !!selectedId,
     staleTime: 30_000,
@@ -156,6 +157,12 @@ function EngineerExpensesPage() {
 
   function handleChanged() {
     void queryClient.invalidateQueries({ queryKey: adminEngKeys.settlementsPrefix });
+    // Approve/reject reshapes ledger + derived views (no ledger *Prefix
+    // factory exists, so use the family prefix).
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.conveyancePrefix });
+    void queryClient.invalidateQueries({ queryKey: ["admin-eng", "ledger"] });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.attentionPrefix });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.overviewPrefix });
     void payables.refetch();
     void refetchSettlements();
   }

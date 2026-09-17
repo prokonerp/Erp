@@ -1,13 +1,6 @@
 import { useMemo } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import {
-  Bell,
-  FileText,
-  IndianRupee,
-  Truck,
-  UserX,
-  Wallet,
-} from "lucide-react";
+import { Bell, FileText, IndianRupee, Truck, UserX, Wallet } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -17,14 +10,8 @@ import { AdminWarnings } from "@/components/engineer/AdminWarnings";
 import { ConveyanceMatrixTable } from "@/components/engineer/ConveyanceMatrixTable";
 import { CustodyLedgerTable } from "@/components/engineer/CustodyLedgerTable";
 import { DocComplianceGrid } from "@/components/engineer/DocComplianceGrid";
-import {
-  ExpenseLinesTable,
-  type ExpenseLine,
-} from "@/components/engineer/ExpenseLinesTable";
-import {
-  TicketQueueTable,
-  type TicketQueueRow,
-} from "@/components/engineer/TicketQueueTable";
+import { ExpenseLinesTable, type ExpenseLine } from "@/components/engineer/ExpenseLinesTable";
+import { TicketQueueTable, type TicketQueueRow } from "@/components/engineer/TicketQueueTable";
 import {
   useAttentionQueue,
   useEmployeeDocuments,
@@ -53,10 +40,15 @@ function severityLabel(s: string): string {
 }
 
 function settlementTone(status: string | null): StatusTone {
+  if (status === "Paid") return "success";
   if (status === "Approved") return "success";
   if (status === "Pending") return "warning";
   if (status === "Rejected") return "danger";
   return "neutral";
+}
+
+function isNonBlankPaid(v: string | null | undefined): boolean {
+  return typeof v === "string" ? v.trim() !== "" : v != null;
 }
 
 function asNumber(v: unknown): number {
@@ -69,6 +61,8 @@ type SettlementRow = {
   period_start: string | null;
   period_end: string | null;
   status: string | null;
+  paid_at: string | null;
+  locked_at: string | null;
 };
 
 const SETTLEMENT_COLUMNS: ColumnDef<SettlementRow>[] = [
@@ -84,9 +78,11 @@ const SETTLEMENT_COLUMNS: ColumnDef<SettlementRow>[] = [
   {
     key: "status",
     header: "Status",
-    render: (r) => (
-      <StatusBadge tone={settlementTone(r.status)}>{r.status ?? "Unknown"}</StatusBadge>
-    ),
+    render: (r) => {
+      const paid = isNonBlankPaid(r.paid_at);
+      const label = paid ? "Paid" : (r.status ?? "Unknown");
+      return <StatusBadge tone={settlementTone(label)}>{label}</StatusBadge>;
+    },
   },
 ];
 
@@ -154,16 +150,13 @@ function EngineerDetailPage() {
 
   const kmTotal = useMemo(
     () =>
-      Math.round(
-        conveyanceQuery.data.matrix.reduce((s, row) => s + (row.km ?? 0), 0) * 10,
-      ) / 10,
+      Math.round(conveyanceQuery.data.matrix.reduce((s, row) => s + (row.km ?? 0), 0) * 10) / 10,
     [conveyanceQuery.data.matrix],
   );
   const expensesTotal = useMemo(
     () =>
-      Math.round(
-        conveyanceQuery.data.expenses.reduce((s, e) => s + asNumber(e?.amount), 0) * 100,
-      ) / 100,
+      Math.round(conveyanceQuery.data.expenses.reduce((s, e) => s + asNumber(e?.amount), 0) * 100) /
+      100,
     [conveyanceQuery.data.expenses],
   );
 
@@ -176,6 +169,8 @@ function EngineerDetailPage() {
           period_start: s.period_start,
           period_end: s.period_end,
           status: s.status,
+          paid_at: s.paid_at ?? null,
+          locked_at: (s as { locked_at?: string | null }).locked_at ?? null,
         })),
     [ledgerQuery.settlements, employeeId],
   );

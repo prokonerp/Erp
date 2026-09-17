@@ -85,7 +85,9 @@ function EngineerReconcilePage() {
   const [company, setCompany] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
 
   useEffect(() => {
-    fetchCompanyProfile().then(setCompany).catch(() => {});
+    fetchCompanyProfile()
+      .then(setCompany)
+      .catch(() => {});
   }, []);
 
   const effective = resolveRange(mode, range);
@@ -148,6 +150,12 @@ function EngineerReconcilePage() {
     void queryClient.invalidateQueries({
       queryKey: adminEngKeys.ledger(ledger.window.from, ledger.window.to),
     });
+    // Mark-paid flips attention/overview/payables/conveyance (no payables
+    // *Prefix factory exists, so use the family prefix).
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.conveyancePrefix });
+    void queryClient.invalidateQueries({ queryKey: ["admin-eng", "payables"] });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.attentionPrefix });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.overviewPrefix });
     void ledger.refetch();
     void refetchRows();
   }
@@ -200,9 +208,7 @@ function EngineerReconcilePage() {
       key: "net",
       header: "Net",
       align: "right",
-      render: (r) => (
-        <span className="tabular-nums">₹{netOf(r).toLocaleString("en-IN")}</span>
-      ),
+      render: (r) => <span className="tabular-nums">₹{netOf(r).toLocaleString("en-IN")}</span>,
     },
     {
       key: "payment",
@@ -226,7 +232,8 @@ function EngineerReconcilePage() {
             onClick={() => setSlipId(r.id)}
             title={`Payslip ${r.id.slice(0, 8)}`}
           >
-            <Printer className="h-4 w-4 mr-1" />Slip
+            <Printer className="h-4 w-4 mr-1" />
+            Slip
           </Button>
           {!isPaid(r) && (
             <Button
@@ -238,7 +245,8 @@ function EngineerReconcilePage() {
               }}
               title={`Mark paid ${r.id.slice(0, 8)}`}
             >
-              <IndianRupee className="h-4 w-4 mr-1" />Mark paid
+              <IndianRupee className="h-4 w-4 mr-1" />
+              Mark paid
             </Button>
           )}
         </span>
@@ -274,8 +282,15 @@ function EngineerReconcilePage() {
               rows={rows}
               columns={exportCols}
             />
-            <Button variant="outline" size="sm" disabled={!slipReady} aria-describedby="slip-status-hint" onClick={() => window.print()}>
-              <Printer className="h-4 w-4 mr-1" />Print A4
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!slipReady}
+              aria-describedby="slip-status-hint"
+              onClick={() => window.print()}
+            >
+              <Printer className="h-4 w-4 mr-1" />
+              Print A4
             </Button>
             <span id="slip-status-hint" className="sr-only">
               {slipReady

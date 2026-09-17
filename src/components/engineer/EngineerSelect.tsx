@@ -22,7 +22,7 @@ export function EngineerSelect({
   label?: string;
   value: string;
   onChange: (id: string) => void;
-  engineers: { employee_id: string; name: string | null }[];
+  engineers: { employee_id: string; name: string | null; link_status?: string | null }[];
   allowAll?: boolean;
   allLabel?: string;
   placeholder?: string;
@@ -39,7 +39,8 @@ export function EngineerSelect({
           {allowAll && <SelectItem value="all">{allLabel ?? "All engineers"}</SelectItem>}
           {engineers.map((e) => (
             <SelectItem key={e.employee_id} value={e.employee_id}>
-              {e.name && e.name.trim() !== "" ? e.name : e.employee_id}
+              {(e.name && e.name.trim() !== "" ? e.name : e.employee_id) +
+                (e.link_status === "unlinked" ? " · no portal login" : "")}
             </SelectItem>
           ))}
         </SelectContent>

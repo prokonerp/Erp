@@ -46,6 +46,13 @@ function EngineerRatesPage() {
 
   function handleSaved() {
     void queryClient.invalidateQueries({ queryKey: adminEngKeys.ratesPrefix });
+    // Rates feed payable math — bust the derived families too (no
+    // payables/ledger *Prefix factory exists, so use the family prefixes).
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.conveyancePrefix });
+    void queryClient.invalidateQueries({ queryKey: ["admin-eng", "payables"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin-eng", "ledger"] });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.attentionPrefix });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.overviewPrefix });
     void refetch();
   }
 
@@ -58,7 +65,10 @@ function EngineerRatesPage() {
         </p>
       </div>
       {ratesError ? (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+        >
           Could not load rates: {(ratesError as Error).message}
         </p>
       ) : null}

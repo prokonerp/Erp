@@ -32,6 +32,7 @@ type RosterRow = {
   phone: string | null;
   email: string | null;
   active: boolean | null;
+  linkStatus: string | null;
   attentionCount: number;
   hasHigh: boolean;
 };
@@ -53,6 +54,20 @@ const ROSTER_COLUMNS: ColumnDef<RosterRow>[] = [
   },
   { key: "phone", header: "Phone", render: (r) => r.phone ?? "—" },
   { key: "email", header: "Email", render: (r) => r.email ?? "—" },
+  {
+    key: "linkStatus",
+    header: "Portal",
+    render: (r) =>
+      r.linkStatus === "unlinked" ? (
+        <StatusBadge tone="warning">No login</StatusBadge>
+      ) : r.linkStatus === "linked" ? (
+        <StatusBadge tone="neutral">Linked</StatusBadge>
+      ) : (
+        <span className="text-muted-foreground" title="Portal-link status unavailable">
+          —
+        </span>
+      ),
+  },
   {
     key: "active",
     header: "Status",
@@ -132,6 +147,7 @@ function EngineersIndex() {
           phone: e.phone,
           email: e.email,
           active: e.active,
+          linkStatus: e.link_status ?? null,
           attentionCount: slot?.count ?? 0,
           hasHigh: slot?.hasHigh ?? false,
         };
@@ -139,8 +155,18 @@ function EngineersIndex() {
     [rosterQuery.roster, attentionByEngineer],
   );
 
+  // Engineers on the roster with no portal login (migration 20260925000007).
+  // undefined link_status = migration not applied yet → count nothing.
+  const noLoginCount = useMemo(
+    () => rosterQuery.roster.filter((e) => e.link_status === "unlinked").length,
+    [rosterQuery.roster],
+  );
+
   const attentionPreview = useMemo(
-    () => attentionQuery.data.filter((i) => i.severity === "high" || i.severity === "medium").slice(0, 5),
+    () =>
+      attentionQuery.data
+        .filter((i) => i.severity === "high" || i.severity === "medium")
+        .slice(0, 5),
     [attentionQuery.data],
   );
 
@@ -160,7 +186,10 @@ function EngineersIndex() {
 
       <AdminWarnings lists={[overview.warnings, rosterQuery.warnings, attentionQuery.warnings]} />
       {rosterQuery.isError && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+        >
           Could not load roster:{" "}
           {rosterQuery.error instanceof Error ? rosterQuery.error.message : "failed"}
         </p>
@@ -172,7 +201,7 @@ function EngineersIndex() {
           value={overview.data.kpis.totalEngineers}
           icon={Users}
           loading={overview.isLoading}
-          hint="On field roster"
+          hint={noLoginCount > 0 ? `${noLoginCount} without a portal login` : "On field roster"}
         />
         <StatCard
           label="Open tickets"

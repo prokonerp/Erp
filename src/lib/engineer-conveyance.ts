@@ -134,6 +134,43 @@ export function assertLogDateNotFuture(logDate: string, today: string): void {
 }
 
 /**
+ * Settlement period row shape for the lock guard (subset of
+ * engineer_conveyance_settlements columns — keep queries minimal).
+ */
+export type SettlementPeriod = {
+  period_start: string;
+  period_end: string;
+  status: string | null | undefined;
+  locked_at?: string | null | undefined;
+  paid_at?: string | null | undefined;
+};
+
+/**
+ * Settlement-lock guard: true when the date falls inside a locking period.
+ * A settlement counts as locking when `status === "Approved"` OR `locked_at`
+ * is set OR `paid_at` is set, and the date is within
+ * [period_start, period_end] (date-only compare via slice(0, 10) so
+ * timestamptz values compare as calendar dates). Pure — unit-tested.
+ */
+export function isDateInLockedPeriod(
+  dateISO: string,
+  settlements: SettlementPeriod[] | null | undefined,
+): boolean {
+  const day = (dateISO ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  return (settlements ?? []).some((s) => {
+    const start = (s?.period_start ?? "").slice(0, 10);
+    const end = (s?.period_end ?? "").slice(0, 10);
+    if (start === "" || end === "") return false;
+    if (day < start || day > end) return false;
+    if (s?.status === "Approved") return true;
+    const lockedAt = typeof s?.locked_at === "string" ? s.locked_at.trim() : "";
+    const paidAt = typeof s?.paid_at === "string" ? s.paid_at.trim() : "";
+    return lockedAt !== "" || paidAt !== "";
+  });
+}
+
+/**
  * Write-path guard: a non-blank daily-log photo must be the caller's own
  * upload (`engineer/<employeeId>/…`), mirroring the expense receipt check.
  * Blank stays legal (photo optional). Throws — save handler only.

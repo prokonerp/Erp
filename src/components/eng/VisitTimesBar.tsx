@@ -33,7 +33,13 @@ function formatElapsed(ms: number): string {
  * ticket, UNIQUE ticket_id) is upserted, while every arrival / departure is
  * also appended to `ticket_activities` (insert-only, never updated).
  */
-export function VisitTimesBar({ ticketId }: { ticketId: string }) {
+export function VisitTimesBar({
+  ticketId,
+  onVisitRecorded,
+}: {
+  ticketId: string;
+  onVisitRecorded?: () => void;
+}) {
   const [visit, setVisit] = useState<VisitRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [arriveBusy, setArriveBusy] = useState(false);
@@ -160,6 +166,7 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
         console.warn("Activity insert failed:", actErr);
       }
       toast.success("Arrival recorded");
+      onVisitRecorded?.();
     } finally {
       arriveRef.current = false;
       setArriveBusy(false);
@@ -219,6 +226,7 @@ export function VisitTimesBar({ ticketId }: { ticketId: string }) {
       }
       setVisit((v) => ({ arrival_at: v?.arrival_at ?? null, departure_at: at }));
       toast.success("Departure recorded");
+      onVisitRecorded?.();
     } finally {
       departRef.current = false;
       setDepartBusy(false);

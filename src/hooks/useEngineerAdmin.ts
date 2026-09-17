@@ -47,6 +47,8 @@ type SettlementRow = {
   period_start: string | null;
   period_end: string | null;
   status: string | null;
+  paid_at?: string | null;
+  locked_at?: string | null;
 };
 
 function errMessage(e: unknown): { message: string; code?: string } {
@@ -214,7 +216,7 @@ export function useEngineerLedger(input: { from: string; to: string }) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
         const { data, error } = await (supabase as any)
           .from("engineer_conveyance_settlements")
-          .select("employee_id, period_start, period_end, status")
+          .select("employee_id, period_start, period_end, status, paid_at, locked_at")
           .lte("period_start", window.to)
           .gte("period_end", window.from)
           .order("period_start", { ascending: true });
@@ -337,7 +339,10 @@ export function useEngineerOverview(): {
         if (error) throw error;
         tickets = Array.isArray(data) ? (data as OverviewTicketRow[]) : [];
         if (tickets.length === 2000) {
-          warnings.push({ section: "tickets", message: "large dataset truncated — refine filters" });
+          warnings.push({
+            section: "tickets",
+            message: "large dataset truncated — refine filters",
+          });
         }
       } catch (e) {
         warnings.push({ section: "tickets", message: hintFor(e, "20260925000001") });
@@ -395,9 +400,11 @@ export function useEngineerTickets(employeeId: string | null): {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tickets pending generated types
           const { data, error } = await (supabase as any)
             .from("tickets")
-            .select("id, case_id, status, created_at, closed_at, customer_name, product, serial_no, assigned_employee_id, assigned_engineer_name")
+            .select(
+              "id, case_id, status, created_at, closed_at, customer_name, product, serial_no, assigned_employee_id, assigned_engineer_name",
+            )
             .eq("assigned_employee_id", employeeId)
-            .is("is_deleted", false)
+            .eq("is_deleted", false)
             .order("created_at", { ascending: false })
             .limit(500);
           if (error) throw error;
@@ -406,15 +413,19 @@ export function useEngineerTickets(employeeId: string | null): {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tickets pending generated types
         const { data, error } = await (supabase as any)
           .from("tickets")
-          .select("id, case_id, status, created_at, closed_at, customer_name, product, serial_no, assigned_employee_id, assigned_engineer_name")
+          .select(
+            "id, case_id, status, created_at, closed_at, customer_name, product, serial_no, assigned_employee_id, assigned_engineer_name",
+          )
           .eq("is_deleted", false)
-          .not("assigned_employee_id", "is", null)
           .order("created_at", { ascending: false })
           .limit(1000);
         if (error) throw error;
         const rows = Array.isArray(data) ? (data as TicketRow[]) : [];
         if (rows.length === 1000) {
-          warnings.push({ section: "tickets", message: "large dataset truncated — refine filters" });
+          warnings.push({
+            section: "tickets",
+            message: "large dataset truncated — refine filters",
+          });
         }
         return { rows, warnings };
       } catch (e) {
@@ -653,7 +664,10 @@ export function useAttentionQueue(): {
           ? (data as (OverviewTicketRow & { closed_at: string | null })[])
           : [];
         if (tickets.length === 2000) {
-          warnings.push({ section: "tickets", message: "large dataset truncated — refine filters" });
+          warnings.push({
+            section: "tickets",
+            message: "large dataset truncated — refine filters",
+          });
         }
       } catch (e) {
         warnings.push({ section: "tickets", message: hintFor(e, "20260925000001") });
@@ -706,7 +720,10 @@ export function useAttentionQueue(): {
         if (error) throw error;
         expenses = Array.isArray(data) ? (data as AllExpenseRow[]) : [];
         if (expenses.length === 2000) {
-          warnings.push({ section: "expenses", message: "large dataset truncated — refine filters" });
+          warnings.push({
+            section: "expenses",
+            message: "large dataset truncated — refine filters",
+          });
         }
       } catch (e) {
         warnings.push({ section: "expenses", message: hintFor(e, "20260925000001") });
@@ -722,7 +739,10 @@ export function useAttentionQueue(): {
         if (error) throw error;
         docRows = Array.isArray(data) ? (data as DocRow[]) : [];
         if (docRows.length === 2000) {
-          warnings.push({ section: "documents", message: "large dataset truncated — refine filters" });
+          warnings.push({
+            section: "documents",
+            message: "large dataset truncated — refine filters",
+          });
         }
       } catch (e) {
         warnings.push({ section: "documents", message: hintFor(e, "20260925000001") });
@@ -732,12 +752,33 @@ export function useAttentionQueue(): {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
         const { data, error } = await (supabase as any)
           .from("engineer_conveyance_settlements")
-          .select("employee_id, period_start, period_end, status")
+          .select("employee_id, period_start, period_end, status, paid_at, locked_at")
           .lte("period_start", today)
           .gte("period_end", monthStart)
           .order("period_end", { ascending: true });
         if (error) throw error;
         settlements = Array.isArray(data) ? (data as SettlementRow[]) : [];
+      } catch (e) {
+        warnings.push({ section: "settlements", message: hintFor(e, "20260925000001") });
+      }
+
+      try {
+        // Legacy unsettled fetch: pre-month rows that are not Approved and
+        // unpaid would otherwise never load, so the unapproved-past-cutoff
+        // warning could never fire for them. Merged into `settlements`;
+        // the latest-per-engineer map below collapses duplicates.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
+        const { data: legacyData, error: legacyError } = await (supabase as any)
+          .from("engineer_conveyance_settlements")
+          .select("employee_id, period_start, period_end, status, paid_at")
+          .lt("period_end", monthStart)
+          .neq("status", "Approved")
+          .is("paid_at", null)
+          .order("period_end", { ascending: true });
+        if (legacyError) throw legacyError;
+        if (Array.isArray(legacyData)) {
+          settlements = [...settlements, ...(legacyData as SettlementRow[])];
+        }
       } catch (e) {
         warnings.push({ section: "settlements", message: hintFor(e, "20260925000001") });
       }

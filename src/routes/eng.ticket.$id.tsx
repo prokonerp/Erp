@@ -148,6 +148,9 @@ function EngTicketDetail() {
   // True until the identity effect settles (resolved, unlinked, or failed).
   // The ownership guard waits for it instead of flashing "Not assigned".
   const [identityLoading, setIdentityLoading] = useState(true);
+  // Admin exemption for the ownership guard, resolved alongside identity via
+  // the has_role rpc (same _role 'admin' convention as the server fns).
+  const [isAdmin, setIsAdmin] = useState(false);
   const [guardError, setGuardError] = useState<string | null>(null);
 
   function isPasswordChangeRequired(err: unknown): boolean {
@@ -304,62 +307,100 @@ function EngTicketDetail() {
     };
   }, [id, retryCount]);
 
-  // Resolve current employee identity (central policy). Silent when
-  // unlinked/ambiguous — the ownership guard below fails closed on null
-  // identity, which is the safe direction.
+  // Resolve current employee identity (central policy) + admin flag. Silent
+  // when unlinked/ambiguous — the ownership guard below fails closed on null
+  // identity, which is the safe direction. Re-runs when the auth session
+  // changes user (same-shell user switch), via onAuthStateChange.
   useEffect(() => {
     let active = true;
-    (async () => {
+    let lastUid: string | null = null;
+    const resolveIdentity = async (authUid: string | null, email: string | null) => {
+      if (!authUid) {
+        if (active) {
+          setMyAuthUid(null);
+          setMyId(null);
+          setMyName(null);
+          setIsAdmin(false);
+          setIdentityLoading(false);
+        }
+        return;
+      }
+      if (active) {
+        setIdentityLoading(true);
+        setMyAuthUid(authUid);
+      }
       try {
-        const { data: u } = await supabase.auth.getUser();
-        const authUid = u.user?.id;
-        const email = u.user?.email ?? null;
-        if (!authUid) return;
-        if (active) setMyAuthUid(authUid);
-        const identity = await fetchMyIdentity(supabase, {
-          authUid,
-          email,
-          columns: "id,name",
-        });
-        if (!active || identity.status !== "ok") return;
-        setMyId(identity.employee.id);
-        setMyName(identity.employee.name);
+        const [identity, adminRes] = await Promise.all([
+          fetchMyIdentity(supabase, {
+            authUid,
+            email,
+            columns: "id,name",
+          }),
+          supabase.rpc("has_role", { _user_id: authUid, _role: "admin" }),
+        ]);
+        if (!active) return;
+        if (identity.status === "ok") {
+          setMyId(identity.employee.id);
+          setMyName(identity.employee.name);
+        } else {
+          setMyId(null);
+          setMyName(null);
+        }
+        setIsAdmin(adminRes.data === true);
       } catch {
         // Unidentified: ownership guard fails closed. No toast — the guard
         // message ("Not assigned to you") already explains the state.
+        if (active) {
+          setMyId(null);
+          setMyName(null);
+          setIsAdmin(false);
+        }
       } finally {
         if (active) setIdentityLoading(false);
       }
+    };
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        lastUid = u.user?.id ?? null;
+        await resolveIdentity(lastUid, u.user?.email ?? null);
+      } catch {
+        if (active) setIdentityLoading(false);
+      }
     })();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      const newUid = newSession?.user?.id ?? null;
+      if (newUid === lastUid) return;
+      lastUid = newUid;
+      await resolveIdentity(newUid, newSession?.user?.email ?? null);
+    });
     return () => {
       active = false;
+      subscription.unsubscribe();
     };
   }, []);
 
-  // Ownership guard: FK-only, mirroring the RLS policies — fail-closed when
-  // the ticket names a different engineer (or carries only a legacy name).
+  // Ownership guard: FK-only, mirroring the RLS policies — fail-closed.
+  // Admins are exempt; every other non-match (different engineer, legacy
+  // name-only row, or no assignee at all) is blocked once loaded.
   const isOwner = (() => {
-    if (!ticket) return true; // loading state, no guard yet
+    if (isAdmin) return true;
+    if (!ticket) return false; // loading/unknown: never render workspace
     const hasFk = !!ticket.assigned_employee_id;
-    const hasName = !!ticket.assigned_engineer_name;
-    // No assignee info at all → fail-open (RLS still governs)
-    if (!hasFk && !hasName) return true;
     // FK match only (legacy name-only rows are not owned — RLS agrees)
     if (hasFk && myId && ticket.assigned_employee_id === myId) return true;
-    // Assigned to someone else → blocked
+    // Assigned to someone else, or names no assignee → blocked
     return false;
   })();
 
   const isRestricted = !loading && ticket !== null && !isOwner;
 
-  // While identity is unresolved AND the ticket names someone, neither the
-  // workspace (wrong for non-owners) nor "Not assigned" (wrong flash for the
-  // owner) is correct — show a neutral verifying state instead.
-  const identityPending =
-    !loading &&
-    ticket !== null &&
-    identityLoading &&
-    (!!ticket.assigned_employee_id || !!ticket.assigned_engineer_name);
+  // While identity is unresolved, neither the workspace (wrong for
+  // non-owners) nor "Not assigned" (wrong flash for the owner/admin) is
+  // correct — show a neutral verifying state instead.
+  const identityPending = !loading && ticket !== null && identityLoading;
 
   // Check if special instruction has been acknowledged (by ticket flag or activity)
   const isSpecialAcked = (() => {
@@ -922,7 +963,7 @@ function EngTicketDetail() {
 
       const { uploadPublicTicketAttachment } =
         await import("@/lib/public-ticket-uploads.functions");
-      await uploadPublicTicketAttachment({
+      const uploadResult = await uploadPublicTicketAttachment({
         data: {
           ticket_id: id,
           filename: compressed.name,
@@ -932,14 +973,28 @@ function EngTicketDetail() {
         },
       });
 
-      // Log the upload as an activity
+      // Log the upload as an activity — checked: an unchecked insert would
+      // toast success while the timeline stays empty.
       const { data: u } = await supabase.auth.getUser();
-      await supabase.from("ticket_activities").insert({
+      const { error: actError } = await supabase.from("ticket_activities").insert({
         ticket_id: id,
         kind: "photo",
         notes: `Photo uploaded: ${compressed.name}`,
         actor: u.user?.id ?? null,
       } as never);
+      if (actError) {
+        // Best-effort: remove the just-uploaded file so a failed activity
+        // leaves no orphan (browser .remove() can't — storage DELETE on this
+        // bucket is admin-gated, so this must go through the server fn).
+        try {
+          const { deleteTicketAttachment } = await import("@/lib/public-ticket-uploads.functions");
+          await deleteTicketAttachment({ data: { ticket_id: id, path: uploadResult.path } });
+        } catch (cleanupErr) {
+          console.warn("Photo cleanup failed:", cleanupErr);
+        }
+        toast.error(reportDbError("photo activity save", actError));
+        return;
+      }
 
       toast.success("Photo uploaded");
       await refreshActivities();
@@ -1177,7 +1232,13 @@ function EngTicketDetail() {
           step2Done={!!verifications?.equipment}
           step3Done={(fsrRows?.length ?? 0) > 0}
         />
-        <VisitTimesBar ticketId={id} />
+        <VisitTimesBar
+          ticketId={id}
+          onVisitRecorded={async () => {
+            await refreshActivities();
+            await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
+          }}
+        />
       </div>
 
       {/* Step 1: Customer — numbered section with done state */}
@@ -1696,7 +1757,9 @@ function EngTicketDetail() {
                 <h4 className="text-sm font-semibold flex items-center gap-1.5">
                   <Upload className="h-4 w-4" /> Upload Photo
                 </h4>
-                <p className="text-xs text-muted-foreground">Max 2 MB · JPEG, PNG, WebP, HEIC</p>
+                <p className="text-xs text-muted-foreground">
+                  Max 5 MB · compressed on upload · JPEG, PNG, WebP, HEIC
+                </p>
                 <div>
                   <input
                     ref={fileInputRef}

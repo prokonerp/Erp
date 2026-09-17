@@ -51,7 +51,7 @@ function EngineerConveyancePage() {
   const rate = rateInForce(
     conv.data.rates,
     employeeId === "" ? null : employeeId,
-    istDateKey(),
+    effective.to ?? istDateKey(),
   );
 
   const loading = rosterQuery.isLoading || conv.isLoading;
@@ -105,7 +105,7 @@ function EngineerConveyancePage() {
           icon={IndianRupee}
           tone={rate == null ? "warning" : "default"}
           loading={loading}
-          hint="Per-km rate today"
+          hint="Per-km rate at window end"
         />
       </div>
 

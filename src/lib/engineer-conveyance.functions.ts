@@ -11,6 +11,7 @@ import {
   assertOwnLogPhoto,
   dailyLogEntrySchema,
   expenseEntrySchema,
+  isDateInLockedPeriod,
   kmTravelled,
   todayLocal,
 } from "@/lib/engineer-conveyance";
@@ -242,6 +243,17 @@ export const saveEngineerDailyLog = createServerFn({ method: "POST" })
     const admin = await getAdmin();
     const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
+    const { data: lockRows, error: lockErr } = await (admin as any)
+      .from("engineer_conveyance_settlements")
+      .select("id, period_start, period_end, status, locked_at, paid_at")
+      .eq("employee_id", caller.id)
+      .lte("period_start", data.log_date)
+      .gte("period_end", data.log_date);
+    if (lockErr) throw new Error(formatDbError(lockErr, "Failed to verify settlement lock"));
+    if (isDateInLockedPeriod(data.log_date, lockRows ?? [])) {
+      throw new Error("Settlement period is locked — it cannot be changed.");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
     const logs = (admin as any).from("engineer_daily_logs");
     const { data: existing, error: readErr } = await logs
       .select("*")
@@ -342,6 +354,17 @@ export const saveConveyanceExpense = createServerFn({ method: "POST" })
     }
     const admin = await getAdmin();
     const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
+    const { data: lockRows, error: lockErr } = await (admin as any)
+      .from("engineer_conveyance_settlements")
+      .select("id, period_start, period_end, status, locked_at, paid_at")
+      .eq("employee_id", caller.id)
+      .lte("period_start", parsed.data.expense_date)
+      .gte("period_end", parsed.data.expense_date);
+    if (lockErr) throw new Error(formatDbError(lockErr, "Failed to verify settlement lock"));
+    if (isDateInLockedPeriod(parsed.data.expense_date, lockRows ?? [])) {
+      throw new Error("Settlement period is locked — it cannot be changed.");
+    }
     if (
       parsed.data.receipt_path &&
       !parsed.data.receipt_path.startsWith(`engineer/${caller.id}/`)

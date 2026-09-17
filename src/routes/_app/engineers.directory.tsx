@@ -20,6 +20,7 @@ type DirectoryRow = {
   phone: string | null;
   email: string | null;
   active: boolean | null;
+  linkStatus: string | null;
   attentionCount: number;
   hasHigh: boolean;
 };
@@ -41,6 +42,20 @@ const DIRECTORY_COLUMNS: ColumnDef<DirectoryRow>[] = [
   },
   { key: "phone", header: "Phone", render: (r) => r.phone ?? "—" },
   { key: "email", header: "Email", render: (r) => r.email ?? "—" },
+  {
+    key: "linkStatus",
+    header: "Portal",
+    render: (r) =>
+      r.linkStatus === "unlinked" ? (
+        <StatusBadge tone="warning">No login</StatusBadge>
+      ) : r.linkStatus === "linked" ? (
+        <StatusBadge tone="neutral">Linked</StatusBadge>
+      ) : (
+        <span className="text-muted-foreground" title="Portal-link status unavailable">
+          —
+        </span>
+      ),
+  },
   {
     key: "active",
     header: "Status",
@@ -116,6 +131,7 @@ function EngineerDirectoryPage() {
           phone: e.phone,
           email: e.email,
           active: e.active,
+          linkStatus: e.link_status ?? null,
           attentionCount: slot?.count ?? 0,
           hasHigh: slot?.hasHigh ?? false,
         };
@@ -134,7 +150,11 @@ function EngineerDirectoryPage() {
       />
 
       {warnings.length > 0 && (
-        <ul role="status" aria-live="polite" className="space-y-1 rounded-lg border p-3 text-sm text-muted-foreground">
+        <ul
+          role="status"
+          aria-live="polite"
+          className="space-y-1 rounded-lg border p-3 text-sm text-muted-foreground"
+        >
           {warnings.map((w) => (
             <li key={`${w.section}::${w.message}`}>
               <span className="font-medium text-foreground">{w.section}:</span> {w.message}
@@ -143,7 +163,10 @@ function EngineerDirectoryPage() {
         </ul>
       )}
       {rosterQuery.isError && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+        >
           Could not load directory:{" "}
           {rosterQuery.error instanceof Error ? rosterQuery.error.message : "failed"}
         </p>

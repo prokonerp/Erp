@@ -140,7 +140,9 @@ export function payableForPeriod(input: {
   const src = input ?? ({} as NonNullable<typeof input>);
   const days = [...(src.days ?? [])]
     .filter((d) => !!d && asDateKey(d.log_date) !== null)
-    .sort((a, b) => (asDateKey(a.log_date) as string) < (asDateKey(b.log_date) as string) ? -1 : 1);
+    .sort((a, b) =>
+      (asDateKey(a.log_date) as string) < (asDateKey(b.log_date) as string) ? -1 : 1,
+    );
   const perDay = days.map((d) => {
     const date = asDateKey(d.log_date) as string;
     const km = dayKm(d.morning_odometer, d.evening_odometer) ?? 0;
@@ -151,7 +153,8 @@ export function payableForPeriod(input: {
   let flatTotal = 0;
   for (const e of src.expenses ?? []) {
     if (!e) continue;
-    flatTotal += asFiniteNumber(e.amount) ?? 0;
+    // Clamp per-row negatives to 0 (legacy history guard; schema blocks new negatives).
+    flatTotal += Math.max(0, asFiniteNumber(e.amount) ?? 0);
   }
   flatTotal = round2(flatTotal);
   const amountTotal = round2(perDay.reduce((s, d) => s + d.amount, 0));
@@ -194,7 +197,11 @@ export function docCompliance(docs: AdminDoc[] | null | undefined): {
   const have = new Set(
     (docs ?? [])
       .filter((d) => !!d && typeof d.path === "string" && d.path.trim() !== "")
-      .map((d) => String(d.name ?? "").trim().toLowerCase()),
+      .map((d) =>
+        String(d.name ?? "")
+          .trim()
+          .toLowerCase(),
+      ),
   );
   const present: string[] = [];
   const missing: string[] = [];
@@ -235,7 +242,12 @@ export function buildAttentionItems(
     });
   }
 
-  if (days.some((d) => !!d && (typeof d.evening_odometer !== "number" || !Number.isFinite(d.evening_odometer)))) {
+  if (
+    days.some(
+      (d) =>
+        !!d && (typeof d.evening_odometer !== "number" || !Number.isFinite(d.evening_odometer)),
+    )
+  ) {
     items.push({
       key: "missing-evening",
       severity: "medium",
@@ -323,7 +335,9 @@ export function groupExpensesByType(
   for (const e of expenses ?? []) {
     if (!e) continue;
     const type =
-      typeof e.charge_type === "string" && e.charge_type.trim() !== "" ? e.charge_type.trim() : "Unknown";
+      typeof e.charge_type === "string" && e.charge_type.trim() !== ""
+        ? e.charge_type.trim()
+        : "Unknown";
     const amount = asFiniteNumber(e.amount) ?? 0;
     const slot = out[type] ?? { count: 0, total: 0 };
     slot.count += 1;
@@ -347,6 +361,14 @@ export type AdminEngineer = {
   active: boolean | null;
   auth_user_id: string | null;
   photo_path: string | null;
+  /**
+   * Portal-link annotation added by migration 20260925000007:
+   * 'linked' = has a portal login (auth_user_id), 'unlinked' = roster row that
+   * exists only via the engineer-role fallback. OPTIONAL on purpose — it is
+   * `undefined` until that migration is applied, and every reader must treat
+   * unknown as "don't claim anything" rather than defaulting to linked.
+   */
+  link_status?: string | null;
 };
 
 export type AdminWarning = {
@@ -422,7 +444,8 @@ export function settlementStatusChangeAllowed(
   if (paidAt != null && paidAt !== "") {
     return { ok: false, error: "Settlement is already paid — it cannot be paid again." };
   }
-  const lockedAt = typeof settlement?.locked_at === "string" ? settlement.locked_at.trim() : settlement?.locked_at;
+  const lockedAt =
+    typeof settlement?.locked_at === "string" ? settlement.locked_at.trim() : settlement?.locked_at;
   if (lockedAt != null && lockedAt !== "") {
     return { ok: false, error: "Settlement period is locked — it cannot be changed." };
   }
@@ -431,11 +454,43 @@ export function settlementStatusChangeAllowed(
   }
   const raw = opts?.overriddenAmount;
   const override =
-    typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && raw.trim() !== ""
+        ? Number(raw)
+        : NaN;
   if (Number.isFinite(override)) {
     // Mirrors resolveAdjustment: the override wins only with a reason.
     const r = resolveAdjustment(null, override, opts?.reason);
     if (!r.overridden) return { ok: false, error: "An override amount needs a reason." };
+  }
+  return { ok: true };
+}
+
+/**
+ * Mark-paid guard: only an exactly-"Approved", unpaid, unlocked settlement
+ * may be marked paid. Paid/locked refusal semantics mirror
+ * settlementStatusChangeAllowed (paid first, then locked). Bad input yields
+ * ok:false, never a throw.
+ */
+export function markPaidAllowed(
+  settlement:
+    | { status?: string | null; locked_at?: string | null; paid_at?: string | null }
+    | null
+    | undefined,
+): { ok: true } | { ok: false; error: string } {
+  const paidAt =
+    typeof settlement?.paid_at === "string" ? settlement.paid_at.trim() : settlement?.paid_at;
+  if (paidAt != null && paidAt !== "") {
+    return { ok: false, error: "Settlement is already paid — it cannot be paid again." };
+  }
+  const lockedAt =
+    typeof settlement?.locked_at === "string" ? settlement.locked_at.trim() : settlement?.locked_at;
+  if (lockedAt != null && lockedAt !== "") {
+    return { ok: false, error: "Settlement period is locked — it cannot be changed." };
+  }
+  if (settlement?.status !== "Approved") {
+    return { ok: false, error: "Only Approved settlements can be marked paid." };
   }
   return { ok: true };
 }
@@ -591,7 +646,11 @@ export function perEngineerSummary(
   const dayMs = new Date(`${today}T00:00:00+05:30`).getTime();
   const cutoff = Number.isFinite(dayMs) ? istDateKey(new Date(dayMs - 30 * 86_400_000)) : today;
   const closed30d = tix.filter(
-    (t) => !!t && t.status === "Closed" && (asDateKey(t.closed_at) ?? "") >= cutoff,
+    (t) =>
+      !!t &&
+      t.status === "Closed" &&
+      (asDateKey(t.closed_at) ?? "") >= cutoff &&
+      (asDateKey(t.closed_at) ?? "") <= today,
   ).length;
 
   let expensesMonth = 0;
@@ -645,7 +704,8 @@ export function attentionQueue(
     const employeeId = typeof s.employeeId === "string" ? s.employeeId : "";
     const name = typeof s.name === "string" ? s.name : "";
     for (const a of s.attention) {
-      if (!a || (a.severity !== "high" && a.severity !== "medium" && a.severity !== "low")) continue;
+      if (!a || (a.severity !== "high" && a.severity !== "medium" && a.severity !== "low"))
+        continue;
       if (typeof a.key !== "string" || typeof a.label !== "string") continue;
       out.push({ employeeId, name, severity: a.severity, key: a.key, label: a.label });
     }
@@ -661,9 +721,7 @@ export function attentionQueue(
  * (unparseable dates skipped), sorted ascending. km via dayKm, flags via
  * kmFlags — non-numeric readings coerce to null (missing-reading flag).
  */
-export function conveyanceMatrix(
-  days: PayableDay[] | null | undefined,
-): ConveyanceMatrixRow[] {
+export function conveyanceMatrix(days: PayableDay[] | null | undefined): ConveyanceMatrixRow[] {
   if (!Array.isArray(days)) return [];
   const rows: ConveyanceMatrixRow[] = [];
   for (const d of days) {
@@ -678,7 +736,13 @@ export function conveyanceMatrix(
       typeof d.evening_odometer === "number" && Number.isFinite(d.evening_odometer)
         ? d.evening_odometer
         : null;
-    rows.push({ log_date: date, morning, evening, km: dayKm(morning, evening), flags: kmFlags(morning, evening) });
+    rows.push({
+      log_date: date,
+      morning,
+      evening,
+      km: dayKm(morning, evening),
+      flags: kmFlags(morning, evening),
+    });
   }
   rows.sort((a, b) => (a.log_date < b.log_date ? -1 : a.log_date > b.log_date ? 1 : 0));
   return rows;
@@ -717,9 +781,7 @@ export function custodyLedger(rows: unknown): CustodyLedgerRow[] {
  * `${section}::${message}`. First-seen order wins. Null/undefined lists
  * and entries are skipped, never throw.
  */
-export function dedupeWarnings(
-  lists: AdminWarning[][] | null | undefined,
-): AdminWarning[] {
+export function dedupeWarnings(lists: AdminWarning[][] | null | undefined): AdminWarning[] {
   const seen = new Set<string>();
   const out: AdminWarning[] = [];
   for (const list of lists ?? []) {
@@ -740,9 +802,7 @@ export function dedupeWarnings(
  * missing/blank employee_id are skipped; a blank/null name falls back to
  * the employee_id itself. Never throws.
  */
-export function rosterNameMap(
-  roster: AdminEngineer[] | null | undefined,
-): Map<string, string> {
+export function rosterNameMap(roster: AdminEngineer[] | null | undefined): Map<string, string> {
   const out = new Map<string, string>();
   for (const r of roster ?? []) {
     if (!r || typeof r !== "object") continue;
@@ -757,9 +817,9 @@ export function rosterNameMap(
 
 /**
  * Split rows into roster hits vs orphans (ids absent from the roster
- * map). A row is an orphan iff its id is truthy AND not in nameById;
- * everything else — including null-id and null rows — lands in roster.
- * Never drops a row, never throws (idOf errors fail soft to roster).
+ * map). A row is an orphan iff its id is missing/blank OR not in
+ * nameById; only exact roster hits land in roster. Never drops a row,
+ * never throws (idOf errors fail soft to orphans as blank ids).
  */
 export function partitionOrphans<T>(
   rows: T[] | null | undefined,
@@ -777,7 +837,7 @@ export function partitionOrphans<T>(
     } catch {
       id = undefined;
     }
-    if (id && !map.has(id)) orphans.push(row);
+    if (typeof id !== "string" || id.trim() === "" || !map.has(id)) orphans.push(row);
     else roster.push(row);
   }
   return { roster, orphans };

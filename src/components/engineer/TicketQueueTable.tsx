@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Ticket } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { StatusBadge, type StatusTone } from "@/components/shared/StatusBadge";
+import { usePermissions } from "@/lib/usePermissions";
 
 export type TicketQueueRow = {
   id: string;
@@ -31,20 +32,32 @@ function ageDays(created: string | null, closed: string | null): number | null {
   return Math.max(0, Math.floor((endMs - start) / 86_400_000));
 }
 
+/** Ticket deep-link gated on tickets/read — engineers.read-only admins hit a
+ *  deny wall on /tickets/$id, so without read access the case renders as
+ *  plain text. Same `can("tickets", "read")` check as the dashboard widget
+ *  gate (dashboard.tsx) and the ModuleGate pattern. */
+function TicketCase({ id, label }: { id: string; label: string }) {
+  const { can } = usePermissions();
+  if (!can("tickets", "read")) {
+    return <span className="font-mono text-xs text-muted-foreground">{label}</span>;
+  }
+  return (
+    <Link
+      to="/tickets/$id"
+      params={{ id }}
+      className="font-mono text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {label}
+    </Link>
+  );
+}
+
 const QUEUE_COLUMNS: ColumnDef<TicketQueueRow>[] = [
   {
     key: "case_id",
     header: "Case",
     sortable: true,
-    render: (r) => (
-      <Link
-        to="/tickets/$id"
-        params={{ id: r.id }}
-        className="font-mono text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {r.case_id ?? r.id.slice(0, 8)}
-      </Link>
-    ),
+    render: (r) => <TicketCase id={r.id} label={r.case_id ?? r.id.slice(0, 8)} />,
   },
   {
     key: "customer_name",

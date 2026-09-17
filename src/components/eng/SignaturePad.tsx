@@ -214,18 +214,13 @@ export function SignaturePad({ ticketId, value, onChange }: SignaturePadProps) {
     setError(null);
     try {
       const png = await canvasToPngBlob(canvas);
-      let payload: Blob = png;
-      let filename = `signature-${Date.now()}.png`;
-      let contentType = "image/png";
-      if (png.size > MAX_ACCEPTED_BYTES) {
-        const compressed = await compressImageToLimit(
-          new File([png], filename, { type: "image/png" }),
-          { maxBytes: COMPRESS_TARGET_BYTES },
-        );
-        payload = compressed.blob;
-        filename = compressed.name;
-        contentType = compressed.contentType;
-      }
+      const compressed = await compressImageToLimit(
+        new File([png], `signature-${Date.now()}.png`, { type: "image/png" }),
+        { maxBytes: COMPRESS_TARGET_BYTES },
+      );
+      const payload: Blob = compressed.blob;
+      const filename = compressed.name;
+      const contentType = compressed.contentType;
       if (payload.size > MAX_ACCEPTED_BYTES) {
         throw new Error(acceptedUploadMessage());
       }

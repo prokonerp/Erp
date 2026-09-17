@@ -51,7 +51,10 @@ export type TicketTimelineProps = {
   currentUserId?: string | null;
 };
 
-function displayActor(actor: string | null | undefined, currentUserId?: string | null): string | null {
+function displayActor(
+  actor: string | null | undefined,
+  currentUserId?: string | null,
+): string | null {
   if (!actor) return null;
   if (currentUserId && actor === currentUserId) return "You";
   return actor.length > 12 ? `${actor.slice(0, 8)}…` : actor;
@@ -69,6 +72,7 @@ const KIND_LABEL: Record<string, string> = {
   mismatch: "Mismatch",
   match: "Match",
   reset: "Reset",
+  verification_reset: "Verification reset",
   arrival: "Arrival",
   departure: "Departure",
   signature: "Signature",
@@ -109,14 +113,11 @@ function TimelineIcon({ kind }: { kind: string }) {
 function formatNoteBody(body: string): string {
   // Keep the calendar date: bare HH:mm is ambiguous across multi-day visits.
   // Unparseable matches are left untouched (same fallback as before).
-  return body.replace(
-    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/g,
-    (m) => {
-      const d = formatISTDate(m, "");
-      const t = formatISTTime(m, "");
-      return d && t ? `${d} ${t}` : m;
-    },
-  );
+  return body.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/g, (m) => {
+    const d = formatISTDate(m, "");
+    const t = formatISTTime(m, "");
+    return d && t ? `${d} ${t}` : m;
+  });
 }
 
 export function formatTime(iso: string): string {
@@ -124,7 +125,11 @@ export function formatTime(iso: string): string {
   return formatISTTime(iso, "");
 }
 
-export function TicketTimeline({ activities, isLoading = false, currentUserId = null }: TicketTimelineProps) {
+export function TicketTimeline({
+  activities,
+  isLoading = false,
+  currentUserId = null,
+}: TicketTimelineProps) {
   if (isLoading) {
     return (
       <Card>

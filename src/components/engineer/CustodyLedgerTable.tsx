@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Package } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import type { CustodyLedgerRow } from "@/lib/engineersAdmin";
+import { usePermissions } from "@/lib/usePermissions";
 
 function custodianLabel(row: CustodyLedgerRow, nameById: Map<string, string>): string {
   if (row.custodian_name && row.custodian_name !== "") return row.custodian_name;
@@ -11,6 +12,24 @@ function custodianLabel(row: CustodyLedgerRow, nameById: Map<string, string>): s
     return row.custodian_employee_id.slice(0, 8);
   }
   return "—";
+}
+
+/** Same tickets/read gate as TicketQueueTable.TicketCase — without read
+ *  access the ticket id renders as plain text instead of a deny-wall link. */
+function CustodyTicket({ ticketId }: { ticketId: string }) {
+  const { can } = usePermissions();
+  if (!can("tickets", "read")) {
+    return <span className="font-mono text-xs text-muted-foreground">{ticketId.slice(0, 8)}</span>;
+  }
+  return (
+    <Link
+      to="/tickets/$id"
+      params={{ id: ticketId }}
+      className="font-mono text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {ticketId.slice(0, 8)}
+    </Link>
+  );
 }
 
 export function CustodyLedgerTable({
@@ -55,13 +74,7 @@ export function CustodyLedgerTable({
       header: "Ticket",
       render: (r) =>
         r.ticket_id ? (
-          <Link
-            to="/tickets/$id"
-            params={{ id: r.ticket_id }}
-            className="font-mono text-xs font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {r.ticket_id.slice(0, 8)}
-          </Link>
+          <CustodyTicket ticketId={r.ticket_id} />
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -71,9 +84,7 @@ export function CustodyLedgerTable({
       header: "Since",
       sortable: true,
       align: "right",
-      render: (r) => (
-        <span className="tabular-nums">{(r.set_at ?? "").slice(0, 10) || "—"}</span>
-      ),
+      render: (r) => <span className="tabular-nums">{(r.set_at ?? "").slice(0, 10) || "—"}</span>,
     },
   ];
   return (

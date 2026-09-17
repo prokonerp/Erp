@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { reportDbError } from "@/lib/format-error";
 import { useMyEmployee } from "@/hooks/useMyEmployee";
 import { supabase } from "@/integrations/supabase/client";
-import { engKeys } from "@/lib/queryKeys";
+import { adminEngKeys, engKeys } from "@/lib/queryKeys";
 import { compressImageToLimit } from "@/lib/image-compress";
 import {
   conveyanceLoadMessage,
@@ -21,6 +21,7 @@ import {
   uploadEngineerAttachment,
 } from "@/lib/engineer-conveyance.functions";
 import { MAX_ACCEPTED_BYTES, acceptedUploadMessage } from "@/lib/upload-limits";
+import { expenseFingerprint, nextExpenseKey, type ExpenseKeyState } from "@/lib/expense-client-key";
 import { formatINR } from "@/lib/fsrPrint";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -77,24 +78,6 @@ async function fileToBase64(blob: Blob): Promise<string> {
   const base64 = dataUrl.split(",")[1];
   if (!base64) throw new Error("Could not read the photo");
   return base64;
-}
-
-let expenseKeyFallback = 0;
-
-/** Mint an idempotency key (uuid v4). Counter fallback keeps uuid shape. */
-function mintExpenseKey(): string {
-  try {
-    const fn = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
-    if (fn) return fn();
-  } catch {
-    // Fall through to the counter fallback below.
-  }
-  expenseKeyFallback += 1;
-  const tail =
-    `${Date.now().toString(16).slice(-8)}${expenseKeyFallback.toString(16).padStart(4, "0")}`.slice(
-      -12,
-    );
-  return `00000000-0000-4000-8000-${tail}`;
 }
 
 /** Error taxonomy lives in the lib (unit-tested): see conveyanceLoadMessage. */
@@ -234,7 +217,7 @@ function ExpenseSection({
   busy: boolean;
   onAdd: (
     charge: ChargeType,
-    form: { amount: string; receiptFile: File | null; notes: string;     reset: () => void },
+    form: { amount: string; receiptFile: File | null; notes: string; reset: () => void },
   ) => void;
 }) {
   const [amount, setAmount] = useState("");
@@ -491,11 +474,13 @@ function EngConveyance() {
   const [expenseBusy, setExpenseBusy] = useState(false);
   const expenseBusyRef = useRef(false);
 
-  // Expense idempotency key: minted ONCE per mount, reused by every submit
-  // attempt (retry / double-tap) so the server upsert dedupes on
-  // client_key. Regenerated only after a successful save.
-  const expenseKeyRef = useRef<string | null>(null);
-  if (expenseKeyRef.current == null) expenseKeyRef.current = mintExpenseKey();
+  // Expense idempotency key: fingerprint-aware. The {key, fingerprint}
+  // pair is minted lazily at submit via nextExpenseKey — the same payload
+  // reuses the key (in-flight retry / double-tap dedupes on client_key),
+  // any payload change mints a fresh key so an edited resubmit after a
+  // client-side timeout never hits ON CONFLICT DO NOTHING on a stale row.
+  // Reset only after a successful save.
+  const expenseKeyRef = useRef<ExpenseKeyState | null>(null);
 
   async function uploadPhoto(
     file: File,
@@ -600,6 +585,13 @@ function EngConveyance() {
       await queryClient.invalidateQueries({ queryKey: logKey });
       // Dashboard shows today's km — refresh its direct-query cache too.
       await queryClient.invalidateQueries({ queryKey: engKeys.dashboardPrefix });
+      // Same-day edits feed the admin-eng payables/conveyance matrix,
+      // attention queue, and overview — bust those families too (no payables
+      // *Prefix factory exists, so use the family prefix).
+      await queryClient.invalidateQueries({ queryKey: adminEngKeys.conveyancePrefix });
+      await queryClient.invalidateQueries({ queryKey: ["admin-eng", "payables"] });
+      await queryClient.invalidateQueries({ queryKey: adminEngKeys.attentionPrefix });
+      await queryClient.invalidateQueries({ queryKey: adminEngKeys.overviewPrefix });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("already confirmed and locked")) {
@@ -640,8 +632,15 @@ function EngConveyance() {
     }
     setExpenseBusy(true);
     expenseBusyRef.current = true;
-    if (expenseKeyRef.current == null) expenseKeyRef.current = mintExpenseKey();
-    const clientKey = expenseKeyRef.current;
+    const fingerprint = expenseFingerprint({
+      charge_type: charge,
+      amount: form.amount.trim(),
+      expense_date: date,
+      receipt_name: form.receiptFile?.name ?? null,
+    });
+    const next = nextExpenseKey(expenseKeyRef.current, fingerprint);
+    expenseKeyRef.current = { key: next.key, fingerprint: next.fingerprint };
+    const clientKey = next.key;
     try {
       let receiptPath: string | null = null;
       if (form.receiptFile) receiptPath = await uploadPhoto(form.receiptFile, "receipt", charge);
@@ -671,8 +670,14 @@ function EngConveyance() {
       }
       toast.success("Expense added");
       form.reset();
-      expenseKeyRef.current = mintExpenseKey();
+      expenseKeyRef.current = null;
       await queryClient.invalidateQueries({ queryKey: expKey });
+      // Cross-namespace fan-out: expense adds feed the admin payables /
+      // conveyance matrix, attention and overview (same as saveHalf above).
+      await queryClient.invalidateQueries({ queryKey: adminEngKeys.conveyancePrefix });
+      await queryClient.invalidateQueries({ queryKey: ["admin-eng", "payables"] });
+      await queryClient.invalidateQueries({ queryKey: adminEngKeys.attentionPrefix });
+      await queryClient.invalidateQueries({ queryKey: adminEngKeys.overviewPrefix });
     } catch (err) {
       toast.error(reportDbError("expense save", err, "Save failed"));
     } finally {

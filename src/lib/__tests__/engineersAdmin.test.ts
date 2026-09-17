@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import {
   rateInForce,
   payableForPeriod,
+  perEngineerSummary,
   resolveAdjustment,
   kmFlags,
   docCompliance,
@@ -94,7 +95,9 @@ describe("engineersAdmin/payableForPeriod", () => {
         { log_date: "2026-09-02", morning_odometer: 100, evening_odometer: 150 },
         { log_date: "2026-09-03", morning_odometer: 150, evening_odometer: 170 },
       ],
-      expenses: [{ expense_date: "2026-09-02", charge_type: "Toll", amount: 50, receipt_path: "r1" }],
+      expenses: [
+        { expense_date: "2026-09-02", charge_type: "Toll", amount: 50, receipt_path: "r1" },
+      ],
     });
     expect(out.perDay).toEqual([
       { date: "2026-09-02", km: 50, rate: 10, amount: 500 },
@@ -158,6 +161,21 @@ describe("engineersAdmin/payableForPeriod", () => {
       expenses: [],
     });
     expect(out.perDay.map((d) => d.date)).toEqual(["2026-09-01", "2026-09-05"]);
+  });
+
+  it("clamps per-row negative expense amounts to 0 in flatTotal", () => {
+    const out = payableForPeriod({
+      employeeId: "e1",
+      rates,
+      days: [],
+      expenses: [
+        { expense_date: "2026-09-02", charge_type: "Toll", amount: -50, receipt_path: "r1" },
+        { expense_date: "2026-09-03", charge_type: "Toll", amount: "-20", receipt_path: "r2" },
+        { expense_date: "2026-09-04", charge_type: "Parking", amount: 30, receipt_path: "r3" },
+      ],
+    });
+    expect(out.flatTotal).toBe(30);
+    expect(out.grandTotal).toBe(30);
   });
 });
 
@@ -255,7 +273,12 @@ describe("engineersAdmin/buildAttentionItems", () => {
     (name) => ({ name, path: `docs/${name}.pdf` }),
   );
   const cleanDay = { log_date: "2026-09-05", morning_odometer: 100, evening_odometer: 150 };
-  const cleanExpense = { expense_date: "2026-09-05", charge_type: "Toll", amount: 40, receipt_path: "r1" };
+  const cleanExpense = {
+    expense_date: "2026-09-05",
+    charge_type: "Toll",
+    amount: 40,
+    receipt_path: "r1",
+  };
 
   function clean() {
     return {
@@ -291,7 +314,9 @@ describe("engineersAdmin/buildAttentionItems", () => {
   it("raises missing-receipt", () => {
     const out = buildAttentionItems({
       ...clean(),
-      expenses: [{ expense_date: "2026-09-05", charge_type: "Parking", amount: 20, receipt_path: "" }],
+      expenses: [
+        { expense_date: "2026-09-05", charge_type: "Parking", amount: 20, receipt_path: "" },
+      ],
     });
     expect(out.map((i) => i.key)).toContain("missing-receipt");
   });
@@ -352,7 +377,10 @@ describe("engineersAdmin/buildAttentionItems", () => {
     const past = { period_start: "2026-08-01", period_end: "2026-08-31", status: "Pending" };
     const out = buildAttentionItems({ ...clean(), settlement: past });
     expect(out.find((i) => i.key === "unapproved-past-cutoff")?.severity).toBe("high");
-    const approved = buildAttentionItems({ ...clean(), settlement: { ...past, status: "Approved" } });
+    const approved = buildAttentionItems({
+      ...clean(),
+      settlement: { ...past, status: "Approved" },
+    });
     expect(approved.map((i) => i.key)).not.toContain("unapproved-past-cutoff");
     const future = buildAttentionItems({
       ...clean(),
@@ -362,7 +390,10 @@ describe("engineersAdmin/buildAttentionItems", () => {
   });
 
   it("raises unreturned-parts and ignores blank serials", () => {
-    const out = buildAttentionItems({ ...clean(), pendingParts: [{ serial: "SN-1" }, { serial: "" }] });
+    const out = buildAttentionItems({
+      ...clean(),
+      pendingParts: [{ serial: "SN-1" }, { serial: "" }],
+    });
     expect(out.filter((i) => i.key === "unreturned-parts")).toHaveLength(1);
     expect(buildAttentionItems({ ...clean(), pendingParts: [{ serial: "  " }] })).toEqual([]);
   });
@@ -461,9 +492,9 @@ describe("engineersAdmin/dedupeWarnings", () => {
     expect(dedupeWarnings(null)).toEqual([]);
     expect(dedupeWarnings(undefined)).toEqual([]);
     expect(dedupeWarnings([null, undefined] as never)).toEqual([]);
-    expect(
-      dedupeWarnings([[null, undefined] as never, [{ section: "a", message: "m" }]]),
-    ).toEqual([{ section: "a", message: "m" }]);
+    expect(dedupeWarnings([[null, undefined] as never, [{ section: "a", message: "m" }]])).toEqual([
+      { section: "a", message: "m" },
+    ]);
   });
 });
 
@@ -527,10 +558,26 @@ describe("engineersAdmin/partitionOrphans", () => {
     expect(out.orphans).toEqual([{ id: "zx", v: 2 }]);
   });
 
-  it("sends null-id rows to roster, never orphans", () => {
+  it("sends null-id rows to orphans, never roster", () => {
     const out = partitionOrphans([{ id: null, v: 1 }], nameById, idOf);
-    expect(out.roster).toEqual([{ id: null, v: 1 }]);
-    expect(out.orphans).toEqual([]);
+    expect(out.roster).toEqual([]);
+    expect(out.orphans).toEqual([{ id: null, v: 1 }]);
+  });
+
+  it("sends blank-id rows to orphans", () => {
+    const out = partitionOrphans(
+      [
+        { id: "", v: 1 },
+        { id: "   ", v: 2 },
+      ],
+      nameById,
+      idOf,
+    );
+    expect(out.roster).toEqual([]);
+    expect(out.orphans).toEqual([
+      { id: "", v: 1 },
+      { id: "   ", v: 2 },
+    ]);
   });
 
   it("returns empty lists for empty input", () => {
@@ -540,8 +587,44 @@ describe("engineersAdmin/partitionOrphans", () => {
   it("tolerates null rows without dropping or throwing", () => {
     const rows = [null, { id: "zx", v: 2 }] as unknown as Row[];
     const out = partitionOrphans(rows, nameById, idOf);
-    expect(out.roster).toHaveLength(1);
-    expect(out.orphans).toEqual([{ id: "zx", v: 2 }]);
+    expect(out.roster).toEqual([]);
+    expect(out.orphans).toHaveLength(2);
     expect(out.roster.length + out.orphans.length).toBe(2);
+  });
+});
+
+// ── perEngineerSummary/closed30d upper bound ─────────────────────────────
+
+describe("engineersAdmin/perEngineerSummary-closed30d", () => {
+  const engineer: AdminEngineer = {
+    employee_id: "e1",
+    name: "Asha",
+    phone: null,
+    email: null,
+    active: true,
+    auth_user_id: null,
+    photo_path: null,
+  };
+
+  it("excludes future-dated Closed rows from closed30d", () => {
+    const out = perEngineerSummary({
+      engineer,
+      todayISO: "2026-09-17",
+      tickets: [
+        { status: "Closed", closed_at: "2026-09-10" },
+        { status: "Closed", closed_at: "2026-09-20" },
+        { status: "Closed", closed_at: "2026-10-05" },
+      ],
+    });
+    expect(out.closed30d).toBe(1);
+  });
+
+  it("counts a Closed row stamped exactly today", () => {
+    const out = perEngineerSummary({
+      engineer,
+      todayISO: "2026-09-17",
+      tickets: [{ status: "Closed", closed_at: "2026-09-17" }],
+    });
+    expect(out.closed30d).toBe(1);
   });
 });

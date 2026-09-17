@@ -2,7 +2,13 @@ import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Lock, TriangleAlert, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +41,7 @@ export type DrawerExpense = {
 export type DrawerSettlement = {
   id: string;
   locked_at?: string | null;
+  paid_at?: string | null;
   status?: string | null;
 };
 
@@ -136,9 +143,15 @@ export function SettlementDrawer({
   const dayRows = useMemo<DayRow[]>(() => {
     const flagsByDate = new Map<string, string[]>();
     for (const d of days) {
-      if (!d || typeof d.log_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d.log_date.slice(0, 10))) continue;
+      if (
+        !d ||
+        typeof d.log_date !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(d.log_date.slice(0, 10))
+      )
+        continue;
       const key = d.log_date.slice(0, 10);
-      if (!flagsByDate.has(key)) flagsByDate.set(key, kmFlags(d.morning_odometer, d.evening_odometer));
+      if (!flagsByDate.has(key))
+        flagsByDate.set(key, kmFlags(d.morning_odometer, d.evening_odometer));
     }
     return payable.perDay.map((d) => ({ ...d, flags: flagsByDate.get(d.date) ?? [] }));
   }, [payable, days]);
@@ -155,9 +168,18 @@ export function SettlementDrawer({
 
   const warnedRows = useMemo(() => dayRows.filter((r) => r.flags.length > 0), [dayRows]);
 
+  // Mirrors settlementStatusChangeAllowed (engineersAdmin.ts): paid_at is
+  // checked first — a paid row is terminal and can no longer be decided.
+  const isPaid =
+    !!settlement &&
+    (typeof settlement.paid_at === "string"
+      ? settlement.paid_at.trim() !== ""
+      : settlement.paid_at != null);
+
   const isLocked =
     !!settlement &&
-    (settlement.status === "Approved" ||
+    (isPaid ||
+      settlement.status === "Approved" ||
       (typeof settlement.locked_at === "string"
         ? settlement.locked_at.trim() !== ""
         : settlement.locked_at != null));
@@ -167,7 +189,8 @@ export function SettlementDrawer({
   async function confirmOverride({ reason }: { reason: string }) {
     if (!employeeId) throw new Error("Select an engineer first.");
     const amt = Number(overrideAmount);
-    if (!Number.isFinite(amt) || amt < 0) throw new Error("Override must be a non-negative number.");
+    if (!Number.isFinite(amt) || amt < 0)
+      throw new Error("Override must be a non-negative number.");
     try {
       await callUpsert({
         data: {
@@ -190,7 +213,9 @@ export function SettlementDrawer({
     if (!settlement) throw new Error("Save the period first, then approve or reject.");
     try {
       await callStatus({ data: { settlement_id: settlement.id, status, reason } });
-      toast.success(status === "Approved" ? "Settlement approved and locked." : "Settlement rejected.");
+      toast.success(
+        status === "Approved" ? "Settlement approved and locked." : "Settlement rejected.",
+      );
       onChanged();
     } catch (e) {
       throw new Error(reportDbError("update settlement", e, "Could not update settlement"));
@@ -224,14 +249,20 @@ export function SettlementDrawer({
 
         <div className="space-y-4 py-4">
           {isLocked ? (
-            <p id="settlement-lock-hint" className="flex items-center gap-2 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            <p
+              id="settlement-lock-hint"
+              className="flex items-center gap-2 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            >
               <Lock className="h-3.5 w-3.5" />
-              Period locked{settlement?.status ? ` · ${settlement.status}` : ""} — read-only.
+              {isPaid
+                ? `Paid${settlement?.status ? ` · ${settlement.status}` : ""} — read-only.`
+                : `Period locked${settlement?.status ? ` · ${settlement.status}` : ""} — read-only.`}
             </p>
           ) : settlement ? (
             <p className="rounded-md border px-3 py-2 text-xs text-muted-foreground">
-              Status: <span className="font-medium text-foreground">{settlement.status ?? "Pending"}</span>
-              {" "}— save recomputes and reopens as Pending; approve locks the period.
+              Status:{" "}
+              <span className="font-medium text-foreground">{settlement.status ?? "Pending"}</span>{" "}
+              — save recomputes and reopens as Pending; approve locks the period.
             </p>
           ) : (
             <p className="rounded-md border px-3 py-2 text-xs text-muted-foreground">
@@ -247,7 +278,9 @@ export function SettlementDrawer({
               { label: "Grand total", value: inr(payable.grandTotal) },
             ].map((s) => (
               <div key={s.label} className="rounded-md border bg-card px-3 py-2">
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{s.label}</div>
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  {s.label}
+                </div>
                 <div className="text-sm font-semibold tabular-nums">{s.value}</div>
               </div>
             ))}
@@ -328,14 +361,21 @@ export function SettlementDrawer({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Override wins only with a reason — without one the computed {inr(payable.grandTotal)} stands.
+              Override wins only with a reason — without one the computed {inr(payable.grandTotal)}{" "}
+              stands.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={!canDecide}
-              aria-describedby={!canDecide ? (!settlement ? "settlement-decide-hint" : "settlement-lock-hint") : undefined}
+              aria-describedby={
+                !canDecide
+                  ? !settlement
+                    ? "settlement-decide-hint"
+                    : "settlement-lock-hint"
+                  : undefined
+              }
               onClick={() => setDialog("approve")}
             >
               Approve & lock
@@ -343,13 +383,22 @@ export function SettlementDrawer({
             <Button
               variant="destructive"
               disabled={!canDecide}
-              aria-describedby={!canDecide ? (!settlement ? "settlement-decide-hint" : "settlement-lock-hint") : undefined}
+              aria-describedby={
+                !canDecide
+                  ? !settlement
+                    ? "settlement-decide-hint"
+                    : "settlement-lock-hint"
+                  : undefined
+              }
               onClick={() => setDialog("reject")}
             >
               Reject
             </Button>
             {!settlement && (
-              <span id="settlement-decide-hint" className="self-center text-xs text-muted-foreground">
+              <span
+                id="settlement-decide-hint"
+                className="self-center text-xs text-muted-foreground"
+              >
                 Save the period first, then approve or reject.
               </span>
             )}

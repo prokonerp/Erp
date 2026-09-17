@@ -76,7 +76,9 @@ export function EngQueueCard({ ticket, to }: EngQueueCardProps) {
         <div className="flex shrink-0 items-center gap-2">
           <StatusBadge tone={statusTone(ticket.status)}>{ticket.status}</StatusBadge>
           {ticket.priority && (
-            <StatusBadge tone={PRIORITY_TONE[ticket.priority] ?? "neutral"}>
+            <StatusBadge
+              tone={PRIORITY_TONE[String(ticket.priority ?? "").toUpperCase()] ?? "neutral"}
+            >
               {ticket.priority}
             </StatusBadge>
           )}

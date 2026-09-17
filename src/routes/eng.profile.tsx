@@ -141,7 +141,11 @@ function EngProfile() {
     }
   };
 
-  async function uploadImage(file: File, kind: "profile_photo" | "document", label?: string): Promise<string> {
+  async function uploadImage(
+    file: File,
+    kind: "profile_photo" | "document",
+    label?: string,
+  ): Promise<string> {
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
     if (!allowed.includes(file.type)) throw new Error("Only JPEG, PNG, WebP, HEIC images allowed");
     const compressed = await compressImageToLimit(
@@ -188,10 +192,20 @@ function EngProfile() {
     }
     const oldPath = employee?.photo_path ?? null;
     setPhotoBusy(true);
+    let uploadedPath: string | null = null;
     try {
-      const path = await uploadImage(file, "profile_photo");
-      await callSaveProfile({ data: { photo_path: path } });
-      if (oldPath && oldPath !== path) {
+      uploadedPath = await uploadImage(file, "profile_photo");
+      try {
+        await callSaveProfile({ data: { photo_path: uploadedPath } });
+      } catch (saveErr) {
+        try {
+          await callDeleteUpload({ data: { path: uploadedPath } });
+        } catch (e) {
+          console.warn("Orphan photo cleanup failed:", e);
+        }
+        throw saveErr;
+      }
+      if (oldPath && oldPath !== uploadedPath) {
         try {
           await callDeleteUpload({ data: { path: oldPath } });
         } catch (e) {

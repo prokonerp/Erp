@@ -16,7 +16,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { istDateKey } from "@/lib/time";
-import { rateInForce, validateRateAppend, type AdminEngineer, type AdminRate } from "@/lib/engineersAdmin";
+import {
+  rateInForce,
+  validateRateAppend,
+  type AdminEngineer,
+  type AdminRate,
+} from "@/lib/engineersAdmin";
 import { reportDbError } from "@/lib/format-error";
 import { backfillEngineerRates, upsertEngineerRate } from "@/lib/engineer-admin.functions";
 
@@ -59,7 +64,7 @@ export function RateEditor({
     () =>
       [...rates]
         .filter((r) => typeof r.effective_from === "string")
-        .sort((a, b) => (b.effective_from as string < (a.effective_from as string) ? -1 : 1))
+        .sort((a, b) => ((b.effective_from as string) < (a.effective_from as string) ? -1 : 1))
         .map((r) => ({
           ...r,
           effective_from: (r.effective_from as string).slice(0, 10),
@@ -116,17 +121,25 @@ export function RateEditor({
   }
 
   async function handleBackfill() {
-    const rate = Number(backfillRate);
-    await callBackfill({
-      data: {
-        employee_id: selectedEmployeeId as string,
-        rate_per_km: Math.round(rate * 100) / 100,
-        from: backfillFrom.slice(0, 10),
-        to: backfillTo.slice(0, 10),
-      },
-    });
-    onSaved();
-    setBackfillOpen(false);
+    if (!selectedEmployeeId) {
+      toast.error("Select an engineer first.");
+      return;
+    }
+    try {
+      const rate = Number(backfillRate);
+      await callBackfill({
+        data: {
+          employee_id: selectedEmployeeId,
+          rate_per_km: Math.round(rate * 100) / 100,
+          from: backfillFrom.slice(0, 10),
+          to: backfillTo.slice(0, 10),
+        },
+      });
+      onSaved();
+      setBackfillOpen(false);
+    } catch (e) {
+      toast.error(reportDbError("rate backfill", e, "Could not backfill rates"));
+    }
   }
 
   function openBackfill() {
@@ -155,10 +168,7 @@ export function RateEditor({
       <div className="grid gap-3 md:grid-cols-[1fr_320px]">
         <div className="space-y-1.5">
           <Label htmlFor="rate-engineer">Engineer</Label>
-          <Select
-            value={selectedEmployeeId ?? ""}
-            onValueChange={onSelectEmployee}
-          >
+          <Select value={selectedEmployeeId ?? ""} onValueChange={onSelectEmployee}>
             <SelectTrigger id="rate-engineer" className="max-w-md">
               <SelectValue placeholder="Select an engineer" />
             </SelectTrigger>

@@ -4,6 +4,7 @@ import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import {
+  useAttentionQueue,
   useEmployeeDocuments,
   useEngineerConveyance,
   useEngineerTickets,
@@ -14,6 +15,12 @@ const mocks = vi.hoisted(() => {
   const limit = vi.fn();
   const eq = vi.fn();
   const not = vi.fn();
+  const is = vi.fn();
+  const lt = vi.fn();
+  const neq = vi.fn();
+  const or = vi.fn();
+  const gte = vi.fn();
+  const lte = vi.fn();
   function builder(table: string) {
     const b: Record<string, unknown> = {};
     b.select = vi.fn(() => b);
@@ -21,7 +28,10 @@ const mocks = vi.hoisted(() => {
       (eq as (...a: never[]) => unknown)(...args);
       return b;
     });
-    b.is = vi.fn(() => b);
+    b.is = vi.fn((...args: never[]) => {
+      (is as (...a: never[]) => unknown)(...args);
+      return b;
+    });
     b.not = vi.fn((...args: never[]) => {
       (not as (...a: never[]) => unknown)(...args);
       return b;
@@ -31,8 +41,26 @@ const mocks = vi.hoisted(() => {
       (limit as (...a: never[]) => unknown)(...args);
       return b;
     });
-    b.gte = vi.fn(() => b);
-    b.lte = vi.fn(() => b);
+    b.gte = vi.fn((...args: never[]) => {
+      (gte as (...a: never[]) => unknown)(...args);
+      return b;
+    });
+    b.lte = vi.fn((...args: never[]) => {
+      (lte as (...a: never[]) => unknown)(...args);
+      return b;
+    });
+    b.lt = vi.fn((...args: never[]) => {
+      (lt as (...a: never[]) => unknown)(...args);
+      return b;
+    });
+    b.neq = vi.fn((...args: never[]) => {
+      (neq as (...a: never[]) => unknown)(...args);
+      return b;
+    });
+    b.or = vi.fn((...args: never[]) => {
+      (or as (...a: never[]) => unknown)(...args);
+      return b;
+    });
     b.maybeSingle = vi.fn(() => b);
     b.single = vi.fn(() => b);
     b.then = (
@@ -48,6 +76,12 @@ const mocks = vi.hoisted(() => {
     limit,
     eq,
     not,
+    is,
+    lt,
+    neq,
+    or,
+    gte,
+    lte,
     from,
     rpc,
     setPayload(table: string, data: unknown, error: unknown = null) {
@@ -59,10 +93,14 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: mocks.from, rpc: mocks.rpc } }));
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: { from: mocks.from, rpc: mocks.rpc },
+}));
 
 function createWrapper() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return React.createElement(QueryClientProvider, { client: qc }, children);
   };
@@ -120,7 +158,10 @@ describe("useEngineerTickets all-mode (null)", () => {
   });
 
   it("pushes the truncation warning at exactly 1000 rows", async () => {
-    mocks.setPayload("tickets", Array.from({ length: 1000 }, (_, i) => ticket(`t${i}`)));
+    mocks.setPayload(
+      "tickets",
+      Array.from({ length: 1000 }, (_, i) => ticket(`t${i}`)),
+    );
     const { result } = renderHook(() => useEngineerTickets(null), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.data).toHaveLength(1000));
     expect(result.current.warnings).toHaveLength(1);
@@ -129,7 +170,10 @@ describe("useEngineerTickets all-mode (null)", () => {
   });
 
   it("emits no warning at 999 rows", async () => {
-    mocks.setPayload("tickets", Array.from({ length: 999 }, (_, i) => ticket(`t${i}`)));
+    mocks.setPayload(
+      "tickets",
+      Array.from({ length: 999 }, (_, i) => ticket(`t${i}`)),
+    );
     const { result } = renderHook(() => useEngineerTickets(null), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.data).toHaveLength(999));
     expect(result.current.warnings).toEqual([]);
@@ -155,5 +199,86 @@ describe("error path", () => {
     expect(result.current.data).toEqual([]);
     expect(result.current.warnings[0].section).toBe("tickets");
     expect(result.current.warnings[0].message).toMatch(/boom/);
+  });
+});
+
+describe("BUG1: legacy name-only tickets are included in the admin queue", () => {
+  it("all-tickets query has no assigned_employee_id exclusion (null-FK rows included)", async () => {
+    mocks.setPayload("tickets", [
+      ticket("t1"),
+      {
+        id: "t-legacy",
+        case_id: "C-legacy",
+        status: "open",
+        created_at: "2026-08-01T00:00:00Z",
+        closed_at: null,
+        customer_name: "Legacy Co",
+        product: "Pump",
+        serial_no: "S9",
+        assigned_employee_id: null,
+        assigned_engineer_name: "Legacy Name",
+      },
+    ]);
+    const { result } = renderHook(() => useEngineerTickets(null), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    expect(mocks.from).toHaveBeenCalledWith("tickets");
+    expect(mocks.eq).toHaveBeenCalledWith("is_deleted", false);
+    expect(mocks.not).not.toHaveBeenCalledWith("assigned_employee_id", "is", null);
+    // Legacy row survives the query layer (no FK exclusion filtering it out).
+    expect(result.current.data.some((t) => t.assigned_employee_id === null)).toBe(true);
+  });
+
+  it("per-id mode filters is_deleted via eq (consistent with sibling queries)", async () => {
+    mocks.setPayload("tickets", [ticket("t1")]);
+    const { result } = renderHook(() => useEngineerTickets("e1"), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+    expect(mocks.eq).toHaveBeenCalledWith("is_deleted", false);
+    expect(mocks.is).not.toHaveBeenCalledWith("is_deleted", false);
+  });
+});
+
+describe("BUG2: attention settlements include pre-month unsettled rows", () => {
+  it("fetches legacy unsettled settlements (period_end < monthStart, not Approved, paid_at null) and fires unapproved-past-cutoff", async () => {
+    mocks.setPayload("__rpc__", [
+      {
+        employee_id: "e1",
+        name: "Aarav",
+        phone: null,
+        email: null,
+        active: true,
+        auth_user_id: null,
+        photo_path: null,
+      },
+    ]);
+    mocks.setPayload("tickets", []);
+    mocks.setPayload("engineer_daily_logs", []);
+    mocks.setPayload("engineer_conveyance_rates", []);
+    mocks.setPayload("engineer_conveyance_expenses", []);
+    mocks.setPayload("employees", []);
+    mocks.setPayload("engineer_conveyance_settlements", [
+      {
+        employee_id: "e1",
+        period_start: "2026-07-01",
+        period_end: "2026-07-31",
+        status: "Pending",
+        paid_at: null,
+      },
+    ]);
+    const { result } = renderHook(() => useAttentionQueue(), { wrapper: createWrapper() });
+    await waitFor(() =>
+      expect(result.current.data.some((i) => i.key === "unapproved-past-cutoff")).toBe(true),
+    );
+    const calls = mocks.from.mock.calls.filter(
+      (c) => (c as unknown[])[0] === "engineer_conveyance_settlements",
+    );
+    // Widened fetch: current-window query + legacy unsettled query merged.
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(mocks.lt).toHaveBeenCalledWith("period_end", expect.any(String));
+    expect(mocks.neq).toHaveBeenCalledWith("status", "Approved");
+    expect(mocks.is).toHaveBeenCalledWith("paid_at", null);
+    expect(result.current.data.find((i) => i.key === "unapproved-past-cutoff")).toMatchObject({
+      employeeId: "e1",
+      severity: "high",
+    });
   });
 });
