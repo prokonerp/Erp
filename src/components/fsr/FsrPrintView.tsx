@@ -1,13 +1,18 @@
 /**
- * FsrPrintView — single-page A4 LANDSCAPE Field Service Report.
+ * FsrPrintView — single-page A4 PORTRAIT Field Service Report.
  *
  * Premium corporate service report + engineering document (NOT a dashboard).
  * One `.defective-tag-page` wrapper = one printed/PDF page (see
  * printMultiPageElement / saveMultiPageElementAsPdf in src/lib/docPdf.ts —
- * both are called with `{ landscape: true }` from FsrPrintButton).
- * 287mm sheet (matches the pipeline content box exactly so the PDF fit never
- * double-scales), NO inline min-height (an inline min-height overrides the
- * print-stylesheet rule and breaks one-page fit).
+ * both are called WITHOUT the landscape opt-in from FsrPrintButton, so the
+ * frame renders A4 portrait).
+ * 200mm sheet (matches the portrait pipeline content box exactly so the PDF
+ * fit never double-scales: a wider sheet would raster-shrink to ~70%), NO
+ * inline min-height (an inline min-height overrides the print-stylesheet rule
+ * and breaks one-page fit).
+ * Two-column grid: portrait panels are ~99mm — wider than the old 92mm
+ * landscape 3-col cells — so text runs at 8/9px labels/values and still fits
+ * the 287mm one-page height budget.
  * Pure presentational — every value comes from `model` (built via
  * buildFsrPrintModel); sparse data already degrades to "—" in the model
  * layer, so this view never throws.
@@ -42,15 +47,17 @@ const SUBTLE = "#4A5A51"; // labels, secondary text
 const HAIR = "#D5DED8"; // SECONDARY — internal row separators only (0.5px)
 const FRAME = "#0E7C3A";
 
-/** Spacing scale — every margin/gap in this sheet comes from here. */
-const GAP = { zone: 3, panel: 2, inner: 1.5, micro: 1 } as const;
+/** Spacing scale — every margin/gap in this sheet comes from here. zone is
+ *  tight (2px) by design: the 287mm one-page budget leaves no room for airy
+ *  section gaps. */
+const GAP = { zone: 2, panel: 2, inner: 1.5, micro: 1 } as const;
 
 const FONT = "Arial, Helvetica, sans-serif";
 const NUM = { fontVariantNumeric: "tabular-nums" } as const;
 
-/** 6.8px bold uppercase muted label. */
+/** 8px bold uppercase muted label. */
 const labelStyle: CSSProperties = {
-  fontSize: 6.8,
+  fontSize: 8,
   fontWeight: 700,
   color: SUBTLE,
   textTransform: "uppercase",
@@ -60,29 +67,29 @@ const labelStyle: CSSProperties = {
   borderBottom: `0.5px solid ${HAIR}`,
   whiteSpace: "nowrap",
   verticalAlign: "top",
-  lineHeight: 1.2,
+  lineHeight: 1.25,
 };
 
-/** 7.6px ink value. */
+/** 9px ink value. */
 const valueStyle: CSSProperties = {
-  fontSize: 7.6,
+  fontSize: 9,
   color: INK,
   padding: "3px 6px",
   borderBottom: `0.5px solid ${HAIR}`,
   verticalAlign: "top",
   fontVariantNumeric: "tabular-nums",
-  lineHeight: 1.2,
+  lineHeight: 1.25,
 };
 
 const sheetStyle: CSSProperties = {
-  width: "287mm",
+  width: "200mm",
   margin: "0 auto",
   background: "#ffffff",
   color: INK,
   fontFamily: FONT,
   border: `1px solid ${FRAME}`,
   borderRadius: 2,
-  padding: "2mm 3mm",
+  padding: "3mm 4mm",
   boxSizing: "border-box",
   display: "flex",
   flexDirection: "column",
@@ -110,8 +117,8 @@ const STYLE_BLOCK = `
   .fsr-print tr, .fsr-print .avoid-break { page-break-inside: avoid; break-inside: avoid; }
 
   @media print {
-    @page { size: A4 landscape; margin: 5mm; }
-    .fsr-print { width: 287mm; margin: 0 auto !important; min-height: 0; }
+    @page { size: A4 portrait; margin: 5mm; }
+    .fsr-print { width: 200mm; margin: 0 auto !important; min-height: 0; }
   }
 `;
 
@@ -119,14 +126,14 @@ const STYLE_BLOCK = `
 // Small building blocks
 // ---------------------------------------------------------------------------
 
-/** Green band section header (8.5px bold white). */
+/** Green band section header (9.5px bold white). */
 function Band({ children }: { children: ReactNode }) {
   return (
     <tr className="g-bg">
       <th
         colSpan={99}
         style={{
-          fontSize: 8.5,
+          fontSize: 9.5,
           fontWeight: 700,
           color: "#fff",
           textAlign: "left",
@@ -206,6 +213,14 @@ function clampPrint(value: ReactNode, max: number): ReactNode {
   return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 
+/** String-only clamp (keeps the string type for FeedbackValue and friends).
+ *  Print is a summary surface: engineer/customer remarks can run to 1000
+ *  chars, which alone would blow the one-page budget — the full text lives
+ *  in the app. */
+function clampText(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
 /** "—" renders as a clean muted dash, never an underline. */
 function FeedbackValue({ value }: { value: string }) {
   return (
@@ -239,7 +254,11 @@ function Header({
     .join("  |  ");
   const status = model.feedback.status;
   const statusText =
-    status === "Complete" ? "✓ Complete" : status === "Under Observation" ? "◐ Under Obs." : "! Incomplete";
+    status === "Complete"
+      ? "✓ Complete"
+      : status === "Under Observation"
+        ? "◐ Under Obs."
+        : "! Incomplete";
   const metas: { label: string; value: ReactNode }[] = [
     { label: "Service Report No.", value: model.header.formalReportNo },
     {
@@ -247,7 +266,9 @@ function Header({
       value: model.header.submittedAt === "—" ? "—" : fmtDate(model.header.submittedAt),
     },
     { label: "Case ID", value: model.header.caseId },
-    { label: "Call Type", value: model.product.typeOfCall || "—" },
+    // Raw ticket.call_type ("Warranty"/"AMC"/"PM Call") — NOT the PM/Installation
+    // derivation, which is blank for Warranty/AMC and used to print "—" here.
+    { label: "Call Type", value: model.product.callType },
     { label: "Call Status", value: statusText },
   ];
   return (
@@ -260,12 +281,12 @@ function Header({
           style={{ height: 28, objectFit: "contain", flex: "0 0 auto" }}
         />
         <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.3, color: INK }}>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: 0.3, color: INK }}>
             {company.name.toUpperCase()}
           </div>
           <div
             style={{
-              fontSize: 6.8,
+              fontSize: 7.5,
               color: SUBTLE,
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -286,7 +307,7 @@ function Header({
             style={{ height: 26, objectFit: "contain" }}
           />
           {showPartnerCaption ? (
-            <div style={{ fontSize: 6.5, fontWeight: 700, color: GREEN, letterSpacing: 0.6 }}>
+            <div style={{ fontSize: 7, fontWeight: 700, color: GREEN, letterSpacing: 0.6 }}>
               AUTHORIZED SALES PARTNER
             </div>
           ) : null}
@@ -297,7 +318,7 @@ function Header({
         <div
           style={{
             color: GREEN,
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 700,
             letterSpacing: 2,
             whiteSpace: "nowrap",
@@ -327,7 +348,7 @@ function Header({
           >
             <div
               style={{
-                fontSize: 6.8,
+                fontSize: 7.5,
                 fontWeight: 700,
                 color: SUBTLE,
                 textTransform: "uppercase",
@@ -336,7 +357,7 @@ function Header({
             >
               {m.label}
             </div>
-            <div style={{ fontSize: 8, fontWeight: 600, color: INK, ...NUM }}>{m.value}</div>
+            <div style={{ fontSize: 8.5, fontWeight: 600, color: INK, ...NUM }}>{m.value}</div>
           </div>
         ))}
       </div>
@@ -345,65 +366,53 @@ function Header({
 }
 
 // ---------------------------------------------------------------------------
-// B) LIFECYCLE ROW — subtle centered one-liner, no bands, no borders
+// C) CUSTOMER + PRODUCT ROW — two panels; the old lifecycle one-liner is gone
+// (Preferred Visit already lives in VISIT TIMING; created/closed stay in the
+// model for the app, not the paper).
 // ---------------------------------------------------------------------------
 
-function LifecycleRow({ model }: { model: FsrPrintModel }) {
-  const l = model.lifecycle;
-  return (
-    <div
-      className="avoid-break"
-      style={{ marginTop: GAP.zone, fontSize: 6.8, color: SUBTLE, textAlign: "center", ...NUM }}
-    >
-      {`Ticket Created ${l.createdAt}  ·  Preferred Visit ${l.preferredVisit}  ·  Ticket Closed ${l.closedAt}`}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// C) THREE-COLUMN BLOCK — customer / product & call / visit timing
-// ---------------------------------------------------------------------------
-
-function ThreeColumnBlock({ model }: { model: FsrPrintModel }) {
+function CustomerProductRow({ model }: { model: FsrPrintModel }) {
   const c = model.customer;
   const p = model.product;
-  const t = model.timing;
   const panel: CSSProperties = { flex: 1, minWidth: 0 };
   return (
-    <div style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.zone }} className="avoid-break">
+    <div
+      style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.zone }}
+      className="avoid-break"
+    >
       <table className="panel" style={panel}>
         <tbody>
           <Band>CUSTOMER</Band>
-          <Pair label="Name" labelWidth={92}>{clampPrint(c.name, 80)}</Pair>
-          <Pair label="Address" labelWidth={92}>{c.addressLines.length ? clampPrint(c.addressLines.join(", "), 180) : "—"}</Pair>
-          <Pair label="Phone • Email" labelWidth={92}>
+          <Pair label="Name" labelWidth={88}>
+            {clampPrint(c.name, 80)}
+          </Pair>
+          <Pair label="Address" labelWidth={88}>
+            {c.addressLines.length ? clampPrint(c.addressLines.join(", "), 320) : "—"}
+          </Pair>
+          <Pair label="Phone • Email" labelWidth={88}>
             {[c.phones.join(" | "), c.email].filter((v) => v && v !== "—").join("  •  ") || "—"}
           </Pair>
-          <Pair label="GSTIN" labelWidth={92}>{c.gstin}</Pair>
+          <Pair label="GSTIN" labelWidth={88}>
+            {c.gstin}
+          </Pair>
           <Filler />
         </tbody>
       </table>
       <table className="panel" style={panel}>
         <tbody>
           <Band>PRODUCT &amp; CALL</Band>
-          <Pair label="Model" labelWidth={84}>{p.model}</Pair>
-          <Pair label="UPS Sr No." labelWidth={84}>{p.upsSerial}</Pair>
-          <Pair label="Call Type" labelWidth={84}>{p.typeOfCall || "—"}</Pair>
-          <Pair label="OEM Call" labelWidth={84}>{p.oemCall}</Pair>
-          <Filler />
-        </tbody>
-      </table>
-      <table className="panel" style={panel}>
-        <tbody>
-          <Band>VISIT TIMING</Band>
-          <Pair label="Arrival" labelWidth={96}>
-            {t.arrivalDate} {t.arrivalTime}
+          <Pair label="Model" labelWidth={80}>
+            {p.model}
           </Pair>
-          <Pair label="Departure" labelWidth={96}>
-            {t.departureDate} {t.departureTime}
+          <Pair label="UPS Sr No." labelWidth={80}>
+            {p.upsSerial}
           </Pair>
-          <Pair label="On-site Time" labelWidth={96}>{t.onSite}</Pair>
-          <Pair label="Preferred Visit" labelWidth={96}>{t.preferredVisit}</Pair>
+          <Pair label="Call Type" labelWidth={80}>
+            {p.callType}
+          </Pair>
+          <Pair label="OEM Call" labelWidth={80}>
+            {p.oemCall}
+          </Pair>
           <Filler />
         </tbody>
       </table>
@@ -430,48 +439,92 @@ function ProblemReason({ model }: { model: FsrPrintModel }) {
           >
             {label}
           </td>
-          <td style={{ fontSize: 7.6, color: INK, padding: "4px 6px", ...NUM }}>
-            {value}
-          </td>
+          <td style={{ fontSize: 9, color: INK, padding: "4px 6px", ...NUM }}>{value}</td>
         </tr>
       </tbody>
     </table>
   );
   return (
     <div style={{ marginTop: GAP.zone }} className="avoid-break">
-      {row("Problem Reported", clampPrint(model.problem.reported, 180))}
+      {row("Problem Reported", clampPrint(model.problem.reported, 400))}
       <div style={{ height: GAP.panel }} />
-      {row("Reason for Visit", clampPrint(model.problem.reason, 180))}
+      {row("Reason for Visit", clampPrint(model.problem.reason, 400))}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// E) ENGINEERING ROW — site observation / connected load / power condition
+// E) VISIT + SITE ROW — visit timing / site observation
 // ---------------------------------------------------------------------------
 
-function EngineeringRow({ model }: { model: FsrPrintModel }) {
+function VisitSiteRow({ model }: { model: FsrPrintModel }) {
   const o = model.observation;
+  const t = model.timing;
   const l = model.load;
   const panel: CSSProperties = { flex: 1, minWidth: 0 };
   return (
-    <div style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.zone }} className="avoid-break">
+    <div
+      style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.zone }}
+      className="avoid-break"
+    >
       <table className="panel" style={panel}>
         <tbody>
-          <Band>SITE OBSERVATION</Band>
-          <Pair label="Mains L-N" labelWidth={74}>
-            <span style={{ textAlign: "center" }}>{o.mainsLn} V</span>
+          <Band>VISIT TIMING</Band>
+          <Pair label="Arrival" labelWidth={88}>
+            {t.arrivalDate} {t.arrivalTime}
           </Pair>
-          <Pair label="Mains N-E" labelWidth={74}>
-            <span style={{ textAlign: "center" }}>{o.mainsNe} V</span>
+          <Pair label="Departure" labelWidth={88}>
+            {t.departureDate} {t.departureTime}
           </Pair>
-          <Pair label="AC Provided" labelWidth={74}>{l.ac}</Pair>
-          <Pair label="DG Provided" labelWidth={74}>{l.dg}</Pair>
-          <Pair label="Env. Duty" labelWidth={74}>{l.duty}</Pair>
-          <Pair label="UPS Location" labelWidth={74}>{l.location}</Pair>
+          <Pair label="On-site Time" labelWidth={88}>
+            {t.onSite}
+          </Pair>
+          <Pair label="Preferred Visit" labelWidth={88}>
+            {t.preferredVisit}
+          </Pair>
           <Filler />
         </tbody>
       </table>
+      <table className="panel" style={panel}>
+        <tbody>
+          <Band>SITE OBSERVATION</Band>
+          <Pair label="Mains L-N" labelWidth={80}>
+            <span style={{ textAlign: "center" }}>{o.mainsLn} V</span>
+          </Pair>
+          <Pair label="Mains N-E" labelWidth={80}>
+            <span style={{ textAlign: "center" }}>{o.mainsNe} V</span>
+          </Pair>
+          <Pair label="AC Provided" labelWidth={80}>
+            {l.ac}
+          </Pair>
+          <Pair label="DG Provided" labelWidth={80}>
+            {l.dg}
+          </Pair>
+          <Pair label="Env. Duty" labelWidth={80}>
+            {l.duty}
+          </Pair>
+          <Pair label="UPS Location" labelWidth={80}>
+            {l.location}
+          </Pair>
+          <Filler />
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// F) LOAD + POWER ROW — connected load / power condition
+// ---------------------------------------------------------------------------
+
+function LoadPowerRow({ model }: { model: FsrPrintModel }) {
+  const l = model.load;
+  const panel: CSSProperties = { flex: 1, minWidth: 0 };
+  return (
+    <div
+      style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.zone }}
+      className="avoid-break"
+    >
       <table className="panel" style={panel}>
         <tbody>
           <Band>CONNECTED LOAD</Band>
@@ -491,22 +544,32 @@ function EngineeringRow({ model }: { model: FsrPrintModel }) {
             </Pair>
           ))}
           {!l.pcs.length && !l.printers.length && !l.scanners.length ? (
-            <Pair label="Load" labelWidth={88}>None</Pair>
+            <Pair label="Load" labelWidth={88}>
+              None
+            </Pair>
           ) : null}
           <Pair label="Power Failures" labelWidth={88}>
             {model.power.failures} nos / {model.power.durationMin} min
           </Pair>
-          <Pair label="Load on DG" labelWidth={88}>{model.power.loadDgPct} %</Pair>
+          <Pair label="Load on DG" labelWidth={88}>
+            {model.power.loadDgPct} %
+          </Pair>
           <Filler />
         </tbody>
       </table>
       <table className="panel" style={panel}>
         <tbody>
           <Band>POWER CONDITION</Band>
-          <Pair label="DG Set" labelWidth={82}>{model.power.dgSet}</Pair>
-          <Pair label="DG Cap. (kVA)" labelWidth={82}>{model.power.dgCapacity}</Pair>
-          <Pair label="AMF Panel" labelWidth={82}>{model.power.amf}</Pair>
-          <Pair label="Non-Biz / Hol." labelWidth={82}>
+          <Pair label="DG Set" labelWidth={88}>
+            {model.power.dgSet}
+          </Pair>
+          <Pair label="DG Cap. (kVA)" labelWidth={88}>
+            {model.power.dgCapacity}
+          </Pair>
+          <Pair label="AMF Panel" labelWidth={88}>
+            {model.power.amf}
+          </Pair>
+          <Pair label="Non-Biz / Hol." labelWidth={88}>
             {model.power.nonBiz} / {model.power.holidays}
           </Pair>
           <Filler />
@@ -529,17 +592,17 @@ function BatterySection({ model }: { model: FsrPrintModel }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontSize: 7,
+              fontSize: 8,
               fontWeight: 600,
               color: INK,
               background: GREEN_TINT,
-              padding: "2px 8px",
+              padding: "2.5px 8px",
               borderBottom: `0.7px solid ${GREEN}`,
             }}
           >
             {title}
           </div>
-          <div style={{ fontSize: 7.6, color: SUBTLE, padding: "4px 8px" }}>
+          <div style={{ fontSize: 8.5, color: SUBTLE, padding: "4px 8px" }}>
             No readings recorded
           </div>
         </div>
@@ -559,11 +622,11 @@ function BatterySection({ model }: { model: FsrPrintModel }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: 7,
+            fontSize: 8,
             fontWeight: 600,
             color: INK,
             background: GREEN_TINT,
-            padding: "2px 8px",
+            padding: "2.5px 8px",
             borderBottom: `0.7px solid ${GREEN}`,
             WebkitPrintColorAdjust: "exact",
             printColorAdjust: "exact",
@@ -581,7 +644,7 @@ function BatterySection({ model }: { model: FsrPrintModel }) {
                       key={j}
                       style={{
                         ...cellBase,
-                        fontSize: 6.6,
+                        fontSize: 7.5,
                         fontWeight: 400,
                         color: SUBTLE,
                         borderBottom: `0.5px solid ${HAIR}`,
@@ -592,15 +655,13 @@ function BatterySection({ model }: { model: FsrPrintModel }) {
                     </th>
                   ))}
                 </tr>
-                <tr
-                  style={ri % 2 ? { background: GREEN_PALE } : undefined}
-                >
+                <tr style={ri % 2 ? { background: GREEN_PALE } : undefined}>
                   {cells.map((v, j) => (
                     <td
                       key={j}
                       style={{
                         ...cellBase,
-                        fontSize: 7.2,
+                        fontSize: 8.5,
                         fontWeight: 700,
                         color: INK,
                         lineHeight: 1.15,
@@ -637,13 +698,13 @@ function BatterySection({ model }: { model: FsrPrintModel }) {
                 style={{
                   width: "25%",
                   textAlign: "center",
-                  padding: "2.5px 4px",
+                  padding: "2px 4px",
                   ...(i ? { borderLeft: `0.5px solid ${HAIR}` } : null),
                 }}
               >
                 <div
                   style={{
-                    fontSize: 6.8,
+                    fontSize: 7.5,
                     fontWeight: 700,
                     color: SUBTLE,
                     textTransform: "uppercase",
@@ -652,15 +713,22 @@ function BatterySection({ model }: { model: FsrPrintModel }) {
                 >
                   {s.label}
                 </div>
-                <div style={{ fontSize: 7.6, fontWeight: 700, color: INK, ...NUM }}>
-                  {s.value}
-                </div>
+                <div style={{ fontSize: 8.5, fontWeight: 700, color: INK, ...NUM }}>{s.value}</div>
               </td>
             ))}
           </tr>
         </tbody>
       </table>
-      <div style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.inner }}>
+      {/* Portrait: the two voltage strips stack full-width (≈24mm cells)
+          instead of squeezing side-by-side (≈12mm cells). */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: GAP.inner,
+          marginTop: GAP.inner,
+        }}
+      >
         {renderStrip("CHARGING VOLTAGE", b.chargingGrid)}
         {renderStrip("DISCHARGING VOLTAGE", b.dischargingGrid)}
       </div>
@@ -669,19 +737,13 @@ function BatterySection({ model }: { model: FsrPrintModel }) {
 }
 
 // ---------------------------------------------------------------------------
-// G) PARTS + FEEDBACK ROW
+// G) PARTS TABLE — full-width: six columns need the room in portrait
 // ---------------------------------------------------------------------------
 
-function PartsFeedback({ model }: { model: FsrPrintModel }) {
-  const s = model.feedback.status;
-  const statusItems: { mark: string; label: string; on: boolean }[] = [
-    { mark: "✓", label: "Complete", on: s === "Complete" },
-    { mark: "◐", label: "Under Obs.", on: s === "Under Observation" },
-    { mark: "!", label: "Incomplete", on: s === "Incomplete" },
-  ];
+function PartsTable({ model }: { model: FsrPrintModel }) {
   return (
-    <div style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.zone }} className="avoid-break">
-      <table className="panel" style={{ flex: 1.35, minWidth: 0, width: "100%", tableLayout: "fixed" }}>
+    <div style={{ marginTop: GAP.zone }} className="avoid-break">
+      <table className="panel" style={{ width: "100%", tableLayout: "fixed" }}>
         {/* Column widths MUST live here: with table-layout:fixed the first row
             (the colspan-99 Band) defines the columns, so per-cell widths on the
             header row are ignored and every column collapses to ~1%. */}
@@ -696,30 +758,35 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
         <tbody>
           <Band>PART REPLACEMENT</Band>
           <tr>
-            {[["#", "4%"], ["Item Replaced", "34%"], ["Old Sr No", "20%"], ["New Sr No", "20%"], ["Qty", "8%"], ["Charges ₹", "14%"]].map(
-              ([h, w], i) => (
-                <th
-                  key={h}
-                  style={{
-                    fontSize: 7,
-                    fontWeight: 600,
-                    color: SUBTLE,
-                    textAlign: i === 1 ? "left" : i === 4 || i === 5 ? "right" : "center",
-                    padding: "1.5px 4px",
-                    borderBottom: `0.5px solid ${HAIR}`,
-                    width: w,
-                  }}
-                >
-                  {h}
-                </th>
-              ),
-            )}
+            {[
+              ["#", "4%"],
+              ["Item Replaced", "34%"],
+              ["Old Sr No", "20%"],
+              ["New Sr No", "20%"],
+              ["Qty", "8%"],
+              ["Charges ₹", "14%"],
+            ].map(([h, w], i) => (
+              <th
+                key={h}
+                style={{
+                  fontSize: 8,
+                  fontWeight: 600,
+                  color: SUBTLE,
+                  textAlign: i === 1 ? "left" : i === 4 || i === 5 ? "right" : "center",
+                  padding: "2px 4px",
+                  borderBottom: `0.5px solid ${HAIR}`,
+                  width: w,
+                }}
+              >
+                {h}
+              </th>
+            ))}
           </tr>
           {model.parts.length === 0 ? (
             <tr>
               <td
                 colSpan={6}
-                style={{ fontSize: 7.4, color: SUBTLE, textAlign: "center", padding: "3px 4px" }}
+                style={{ fontSize: 8.5, color: SUBTLE, textAlign: "center", padding: "3px 4px" }}
               >
                 No parts replaced
               </td>
@@ -729,7 +796,7 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
               <tr key={p.n} style={i % 2 ? { background: GREEN_PALE } : undefined}>
                 <td
                   style={{
-                    fontSize: 7.4,
+                    fontSize: 8.5,
                     color: INK,
                     textAlign: "center",
                     padding: "2px 4px",
@@ -741,7 +808,7 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
                 </td>
                 <td
                   style={{
-                    fontSize: 7.4,
+                    fontSize: 8.5,
                     fontWeight: 700,
                     color: INK,
                     textAlign: "left",
@@ -753,7 +820,7 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
                 </td>
                 <td
                   style={{
-                    fontSize: 7.4,
+                    fontSize: 8.5,
                     color: INK,
                     textAlign: "center",
                     padding: "2px 4px",
@@ -764,7 +831,7 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
                 </td>
                 <td
                   style={{
-                    fontSize: 7.4,
+                    fontSize: 8.5,
                     color: INK,
                     textAlign: "center",
                     padding: "2px 4px",
@@ -775,7 +842,7 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
                 </td>
                 <td
                   style={{
-                    fontSize: 7.4,
+                    fontSize: 8.5,
                     color: INK,
                     textAlign: "right",
                     padding: "2px 4px",
@@ -787,7 +854,7 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
                 </td>
                 <td
                   style={{
-                    fontSize: 7.4,
+                    fontSize: 8.5,
                     color: INK,
                     textAlign: "right",
                     padding: "2px 4px",
@@ -800,26 +867,43 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
               </tr>
             ))
           )}
-          <Filler />
         </tbody>
       </table>
-      <table className="panel" style={{ flex: 1, minWidth: 0 }}>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// H) FEEDBACK STRIP — full-width; remarks clamp at 280 chars (print is a
+// summary surface — the full 1000-char text lives in the app)
+// ---------------------------------------------------------------------------
+
+function FeedbackStrip({ model }: { model: FsrPrintModel }) {
+  const s = model.feedback.status;
+  const statusItems: { label: string; on: boolean }[] = [
+    { label: "Complete", on: s === "Complete" },
+    { label: "Under Obs.", on: s === "Under Observation" },
+    { label: "Incomplete", on: s === "Incomplete" },
+  ];
+  return (
+    <div style={{ marginTop: GAP.zone }} className="avoid-break">
+      <table className="panel" style={{ width: "100%" }}>
         <tbody>
           <Band>FEEDBACK &amp; SIGN-OFF</Band>
           <Pair label="FSE Feedback" labelWidth={88}>
-            <FeedbackValue value={model.feedback.fseFeedback} />
+            <FeedbackValue value={clampText(model.feedback.fseFeedback, 280)} />
           </Pair>
           <Pair label="Customer Fdbk" labelWidth={88}>
-            <FeedbackValue value={model.feedback.customerFeedback} />
+            <FeedbackValue value={clampText(model.feedback.customerFeedback, 280)} />
           </Pair>
           <Pair label="Rating" labelWidth={88}>
-            <span style={{ fontWeight: 700, fontSize: 8 }}>{model.feedback.rating} / 10</span>
+            <span style={{ fontWeight: 700, fontSize: 9 }}>{model.feedback.rating} / 10</span>
           </Pair>
           <Pair label="FSR Status" labelWidth={88}>
-            <span style={{ display: "inline-flex", gap: 8, fontSize: 7, ...NUM }}>
+            <span style={{ display: "inline-flex", gap: 10, fontSize: 8, ...NUM }}>
               {statusItems.map((it) => (
                 <span key={it.label}>
-                  {it.on ? "☑" : "☐"} {it.mark} {it.label}
+                  {it.on ? "☑" : "☐"} {it.label}
                 </span>
               ))}
             </span>
@@ -827,7 +911,6 @@ function PartsFeedback({ model }: { model: FsrPrintModel }) {
           <Pair label="FSR Verdict" labelWidth={88}>
             <FeedbackValue value={model.feedback.verdict} />
           </Pair>
-          <Filler />
         </tbody>
       </table>
     </div>
@@ -854,21 +937,24 @@ function Signatures({
     padding: 5,
   };
   const head: CSSProperties = {
-    fontSize: 7.6,
+    fontSize: 8.5,
     fontWeight: 700,
     letterSpacing: 0.8,
     color: GREEN,
   };
-  const cap: CSSProperties = { fontSize: 6.5, fontWeight: 700, color: SUBTLE };
+  const cap: CSSProperties = { fontSize: 7, fontWeight: 700, color: SUBTLE };
   return (
-    <div style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.zone }} className="avoid-break">
+    <div
+      style={{ display: "flex", gap: GAP.panel, alignItems: "stretch", marginTop: GAP.zone }}
+      className="avoid-break"
+    >
       <div style={box}>
         <div style={head}>CUSTOMER</div>
         <div style={{ display: "flex", gap: 6, marginTop: GAP.inner }}>
           <div style={{ flex: 1.4, minWidth: 0 }}>
             <div
               style={{
-                minHeight: 40,
+                minHeight: 34,
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -881,12 +967,12 @@ function Signatures({
                   src={signatureDataUrl}
                   alt="Customer signature"
                   crossOrigin="anonymous"
-                  style={{ maxHeight: 30, maxWidth: "100%", objectFit: "contain" }}
+                  style={{ maxHeight: 28, maxWidth: "100%", objectFit: "contain" }}
                 />
               ) : null}
             </div>
           </div>
-          <div style={{ flex: 1, minWidth: 0, fontSize: 7.6, color: INK, ...NUM }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 9, color: INK, ...NUM }}>
             <b>Name:</b> {clampPrint(sig.customerName, 60)}
           </div>
         </div>
@@ -907,7 +993,7 @@ function Signatures({
           <div style={{ flex: 1.4, minWidth: 0 }}>
             <div
               style={{
-                minHeight: 40,
+                minHeight: 34,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -916,7 +1002,7 @@ function Signatures({
               {/* Blank area by design — the FSE signature path has no source yet. */}
             </div>
           </div>
-          <div style={{ flex: 1, minWidth: 0, fontSize: 7.6, color: INK, ...NUM }}>
+          <div style={{ flex: 1, minWidth: 0, fontSize: 9, color: INK, ...NUM }}>
             <b>Name:</b> {clampPrint(sig.fseName, 60)}
             <br />
             <b>No:</b> {sig.fsePhone}
@@ -961,7 +1047,7 @@ function FooterStrip({ oem }: { oem: FsrOemLogo }) {
           crossOrigin="anonymous"
           style={{ height: 14, objectFit: "contain" }}
         />
-        <div style={{ flex: 1, textAlign: "center", fontSize: 6.8, fontWeight: 700, color: INK }}>
+        <div style={{ flex: 1, textAlign: "center", fontSize: 7.5, fontWeight: 700, color: INK }}>
           Power Backup Solutions
           <span style={{ color: GREEN, padding: "0 6px" }}>|</span>UPS
           <span style={{ color: GREEN, padding: "0 6px" }}>|</span>Batteries
@@ -971,7 +1057,7 @@ function FooterStrip({ oem }: { oem: FsrOemLogo }) {
         <div
           className="g-bg"
           style={{
-            fontSize: 7,
+            fontSize: 7.5,
             fontStyle: "italic",
             fontWeight: 700,
             padding: "1px 10px",
@@ -986,7 +1072,7 @@ function FooterStrip({ oem }: { oem: FsrOemLogo }) {
 }
 
 // ---------------------------------------------------------------------------
-// Root — everything on ONE landscape sheet
+// Root — everything on ONE portrait sheet, in reading order
 // ---------------------------------------------------------------------------
 
 export function FsrPrintView({ model, company, oem, signatureDataUrl }: FsrPrintViewProps) {
@@ -995,12 +1081,13 @@ export function FsrPrintView({ model, company, oem, signatureDataUrl }: FsrPrint
       <div className="fsr-print" style={sheetStyle}>
         <style>{STYLE_BLOCK}</style>
         <Header model={model} company={company} oem={oem} />
-        <LifecycleRow model={model} />
-        <ThreeColumnBlock model={model} />
+        <CustomerProductRow model={model} />
         <ProblemReason model={model} />
-        <EngineeringRow model={model} />
+        <VisitSiteRow model={model} />
+        <LoadPowerRow model={model} />
         <BatterySection model={model} />
-        <PartsFeedback model={model} />
+        <PartsTable model={model} />
+        <FeedbackStrip model={model} />
         <Signatures model={model} signatureDataUrl={signatureDataUrl} />
         <FooterStrip oem={oem} />
       </div>

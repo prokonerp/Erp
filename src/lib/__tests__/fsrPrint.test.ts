@@ -270,6 +270,7 @@ describe("buildFsrPrintModel", () => {
     expect(m.product.oemCall).toBe("Yes");
     expect(m.product.statusLabel).toBe("Billable");
     expect(m.product.typeOfCall).toBe("PM");
+    expect(m.product.callType).toBe("PM Call");
     expect(m.problem.reported).toBe("UPS beeping");
     expect(m.problem.reason).toBe("PM Call — Routine PM done");
     expect(m.timing.onSite).toBe("1h 30m");
@@ -377,7 +378,12 @@ describe("buildFsrPrintModel", () => {
   it("maps oem_call to Yes/No/— (unknown never poses as No)", () => {
     // Catches: a missing oem_call printing "No" on a customer-facing report.
     expect(buildFsrPrintModel(fullInput).product.oemCall).toBe("Yes");
-    const no = buildFsrPrintModel({ fsr: {}, ticket: { oem_call: false }, customer: null, visits: null });
+    const no = buildFsrPrintModel({
+      fsr: {},
+      ticket: { oem_call: false },
+      customer: null,
+      visits: null,
+    });
     expect(no.product.oemCall).toBe("No");
     const missing = buildFsrPrintModel({ fsr: {}, ticket: {}, customer: null, visits: null });
     expect(missing.product.oemCall).toBe("—");
@@ -435,6 +441,50 @@ describe("buildFsrPrintModel", () => {
     expect(withText.feedback.fseFeedback).toBe("Bank healthy");
     expect(withText.feedback.customerFeedback).toBe("Satisfied");
     expect(withText.feedback.verdict).toBe("Healthy");
+  });
+
+  it("prints the raw ticket call type (header/panel), dashes when missing", () => {
+    // Catches: header "Call Type" rendering the PM/Installation enum instead —
+    // every Warranty/AMC call printed "—".
+    expect(buildFsrPrintModel(fullInput).product.callType).toBe("PM Call");
+    const warranty = buildFsrPrintModel({
+      fsr: {},
+      ticket: { call_type: "Warranty" },
+      customer: null,
+      visits: null,
+    });
+    expect(warranty.product.callType).toBe("Warranty");
+    const missing = buildFsrPrintModel({ fsr: {}, ticket: {}, customer: null, visits: null });
+    expect(missing.product.callType).toBe("—");
+  });
+
+  it("drops city/state parts already embedded in the street line", () => {
+    // Catches: "…Haryana - 122011, Gurugram, Haryana" duplication on the report.
+    const m = buildFsrPrintModel({
+      fsr: {},
+      ticket: {},
+      customer: {
+        billing_address: "WDWFEFWGRG, Tower B, 9th Floor, Sector 62, Gurugram, Haryana - 122011",
+        city: "Gurugram",
+        state: "Haryana",
+      },
+      visits: null,
+    });
+    expect(m.customer.addressLines).toEqual([
+      "WDWFEFWGRG, Tower B, 9th Floor, Sector 62, Gurugram, Haryana - 122011",
+    ]);
+  });
+
+  it("prints short report ids in full, slices only long UUIDs", () => {
+    // Catches: "SMPL-FSR-0001" printing as the broken fragment "SMPL-FSR".
+    const short = buildFsrPrintModel({
+      fsr: { id: "SMPL-FSR-0001" },
+      ticket: {},
+      customer: null,
+      visits: null,
+    });
+    expect(short.header.reportNo).toBe("SMPL-FSR-0001");
+    expect(short.header.formalReportNo).toBe("SMPL-FSR-0001");
   });
 
   it("parses battery voltage from bank text, dashes when unparseable", () => {

@@ -5,9 +5,9 @@
  * for the ticket via useFieldServiceReport), then — only when the user clicks
  * Print/Download, never on mount — loads company + ticket + customer + visits
  * + customer signature, builds the print model via buildFsrPrintModel, and
- * renders it into a hidden print host for the multi-page pipeline
- * (printMultiPageElement / saveMultiPageElementAsPdf). Sparse data never
- * throws: customer/visits/signature degrade to null with a warning toast.
+ * renders it into a hidden print host for the single-page A4 portrait pipeline
+ * (printMultiPageElement / saveMultiPageElementAsPdf, portrait default).
+ * Sparse data never throws: customer/visits/signature degrade to null with a warning toast.
  */
 import { useRef, useState } from "react";
 import { Download, Printer } from "lucide-react";
@@ -238,7 +238,9 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
       const el = await waitForPrintHost(printRef);
       if (!el) throw new Error("Print not ready");
       const { printMultiPageElement } = await import("@/lib/docPdf");
-      await printMultiPageElement(el, filenameFor(current), { landscape: true });
+      // Portrait default: the sheet is designed at the 200mm portrait content
+      // width, so no landscape opt-in (a wider sheet would raster-shrink).
+      await printMultiPageElement(el, filenameFor(current));
       toast.success("Field Service Report sent to print");
     } catch (e: unknown) {
       toast.error(reportDbError("fsr print", e, "Print failed"));
@@ -258,7 +260,7 @@ export function FsrPrintButton({ ticketId, fsrRow = null, compact = false }: Fsr
       const el = await waitForPrintHost(printRef);
       if (!el) throw new Error("Print not ready");
       const { saveMultiPageElementAsPdf } = await import("@/lib/docPdf");
-      await saveMultiPageElementAsPdf(el, filenameFor(current), { landscape: true });
+      await saveMultiPageElementAsPdf(el, filenameFor(current));
       toast.success("Field Service Report downloaded");
     } catch (e: unknown) {
       toast.error(reportDbError("fsr print download", e, "Download failed"));

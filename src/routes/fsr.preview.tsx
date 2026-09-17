@@ -16,13 +16,11 @@ export const Route = createFileRoute("/fsr/preview")({
 /* ── Rich showroom sample: 16+16 battery cells, 5 parts, long texts ── */
 
 const chargingValues = [
-  13.8, 13.7, 13.8, 13.6, 13.7, 13.8, 13.7, 13.6, 13.8, 13.7, 13.5, 13.8, 13.7, 13.6,
-  13.8, 13.7,
+  13.8, 13.7, 13.8, 13.6, 13.7, 13.8, 13.7, 13.6, 13.8, 13.7, 13.5, 13.8, 13.7, 13.6, 13.8, 13.7,
 ];
 
 const dischargingValues = [
-  12.9, 12.8, 12.9, 12.7, 12.8, 12.9, 12.8, 12.7, 12.9, 12.8, 12.6, 12.9, 12.8, 12.7,
-  12.9, 12.8,
+  12.9, 12.8, 12.9, 12.7, 12.8, 12.9, 12.8, 12.7, 12.9, 12.8, 12.6, 12.9, 12.8, 12.7, 12.9, 12.8,
 ];
 
 const sampleInput: FsrPrintInput = {
@@ -56,14 +54,36 @@ const sampleInput: FsrPrintInput = {
     operate_non_business_hours: true,
     operate_holidays: false,
     part_replacements: [
-      { item: "Battery 12V 100Ah", old_sr_no: "EXD22A001", new_sr_no: "EXD26I101", charges: 12500, qty: 2 },
-      { item: "DC Capacitor 4700uF", old_sr_no: "CAP-8812", new_sr_no: "CAP-9031", charges: 1800, qty: 1 },
-      { item: "Cooling Fan 120mm", old_sr_no: "FAN-4410", new_sr_no: "FAN-5523", charges: 950, qty: 2 },
+      {
+        item: "Battery 12V 100Ah",
+        old_sr_no: "EXD22A001",
+        new_sr_no: "EXD26I101",
+        charges: 12500,
+        qty: 2,
+      },
+      {
+        item: "DC Capacitor 4700uF",
+        old_sr_no: "CAP-8812",
+        new_sr_no: "CAP-9031",
+        charges: 1800,
+        qty: 1,
+      },
+      {
+        item: "Cooling Fan 120mm",
+        old_sr_no: "FAN-4410",
+        new_sr_no: "FAN-5523",
+        charges: 950,
+        qty: 2,
+      },
       { item: "Control Card", old_sr_no: "CTL-1102", new_sr_no: "CTL-1187", charges: 6400, qty: 1 },
       { item: "Fuse Kit 63A", old_sr_no: "FUS-0063", new_sr_no: "FUS-0071", charges: 450, qty: 4 },
     ],
     engineer_name: "Amit Kumar",
     engineer_phone: "+91-98111-22334",
+    engineer_remarks:
+      "Battery bank healthy; two cells (B11 charging, B11 discharging) read marginally low — advised replacement within 90 days. Mains wiring tightened at the input MCB and load wiring verified.",
+    customer_remarks:
+      "Engineer explained the battery readings and the AMC renewal options. Site left clean; UPS running normally on mains at departure. Satisfied with the visit.",
   },
   ticket: {
     case_id: "CS-2026-0915-0042",
@@ -71,8 +91,7 @@ const sampleInput: FsrPrintInput = {
     product: "APC Smart-UPS SRT10KXLI",
     serial_no: "210924H95V",
     customer_name: "7Minion Technology Pvt. Ltd.",
-    customer_address:
-      "WDWFEFWGRG, Tower B, 9th Floor, Sector 62, Gurugram, Haryana - 122011",
+    customer_address: "WDWFEFWGRG, Tower B, 9th Floor, Sector 62, Gurugram, Haryana - 122011",
     customer_email: "accounts@7minion.com",
     customer_phone: "+91-98765-43210",
     complaint:
@@ -90,8 +109,7 @@ const sampleInput: FsrPrintInput = {
     contact_name: "Rahul Sharma",
     phone: "+91-98765-43210",
     email: "accounts@7minion.com",
-    billing_address:
-      "WDWFEFWGRG, Tower B, 9th Floor, Sector 62, Gurugram, Haryana - 122011",
+    billing_address: "WDWFEFWGRG, Tower B, 9th Floor, Sector 62, Gurugram, Haryana - 122011",
     city: "Gurugram",
     state: "Haryana",
     gst: "06AAACZ8266C1Z9",

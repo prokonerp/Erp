@@ -72,8 +72,76 @@ idempotency key) · `ticket_assignment_history` (audit) ·
   readings vs bank qty enforcement; stale snapshots after admin edits;
   no mismatch alerts; GPS spoofability (see verification doc §8).
 
+## Portal login provisioning — and the 2026-09-18 auth outage
+
+**The one rule:** the `auth` schema belongs to GoTrue. Application SQL never
+inserts or updates `auth.users` / `auth.identities`. A row written by hand omits
+columns GoTrue needs non-NULL, and the failure is brutal: 500 on every read of
+that row — engineer sign-in, Admin → Users, the Supabase Auth dashboard.
+
+**What happened (root cause, verified live).** `scripts/provision-engineers.sql`
+created the five `@eng.prokonhitech.com` logins with a raw
+`INSERT INTO auth.users (…)` / `INSERT INTO auth.identities (…)` listing only a
+subset of columns. The omitted nullable columns stored NULL; GoTrue scans them
+into non-pointer Go fields, so the row became undecodable:
+
+| Probe | Result |
+| --- | --- |
+| `POST /auth/v1/token` as an engineer | 500 `Database error querying schema` |
+| `GET /auth/v1/admin/users/{id}` for the 5 engineers | 500 `Database error loading user` |
+| `GET /auth/v1/admin/users` | 500 `Database error finding users` |
+| same calls for every non-engineer user | 200 |
+| `POST /auth/v1/token` with an unknown email | 400 `invalid_credentials` (query fine → row decode is what fails) |
+
+Repair (idempotent, 5 rows, audit → fix → post-check in one file):
+`supabase/repair_20260918_auth_users_null_columns.sql`.
+`scripts/provision-engineers.sql` is now **link-only** and carries the safety
+assertion "zero writes to the auth schema".
+
+**Canonical path for a new portal login** (Admin API — GoTrue writes every column):
+
+1. Employee must be active and have an email in Employees master.
+2. In-app: **Admin → Roles & Users → "Provision login"** on that employee row
+   (`provisionEngineerLogin`: Admin API create/update, strong-password validation,
+   `password_history`, `must_change_password` for first-login rotation).
+   Scripted alternative: `node scripts/create-users.mjs`.
+3. Only if the employee link is still missing: run `scripts/provision-engineers.sql`
+   (links `employees.auth_user_id`, upserts `app_users`; finds the auth user, never creates it).
+4. Verify each row with Section 0 of the repair file, or
+   `GET /auth/v1/admin/users/{id}` → 200.
+
+**Verified 2026-09-18 (after the operator applied the repair).**
+`node scripts/diagnose-portal-logins.mjs '<email>:<pw>'` → 11/11 PASS, exit 0 (all 5
+engineer rows decode, session issued). `node scripts/smoke-engineer-portal.mjs
+https://localhost:8080 <5 email:pw pairs>` → all 5 reach `/eng` with the portal
+rendered, zero failed requests, zero console errors.
+
+Two behaviours worth knowing:
+
+- the login hop is `/auth → /dashboard → /eng`; the dashboard loads first and the
+  engineer gate bounces it. Cold-cache hops take 2.5–7s, so a short wait makes a
+  healthy engineer look like they landed on `/dashboard`. The smoke script waits 20s
+  on purpose.
+- an engineer's `tickets` read is name-scoped as well as FK-scoped, so a ticket
+  assigned to a *dangling legacy employee row with the same name* still shows in that
+  engineer's history (observed: 9 tickets for "Vipin Chhonker" under employee id
+  `5fff1eee…`, while the linked row is `a59e143c…`). Those are that engineer's own
+  legacy calls — not another engineer's — but the roster's orphan section is the
+  place to reconcile them.
+
+**Shared-password caveat (product, open).** The five engineers were provisioned
+with one shared password and `must_change_password = false`, so any engineer can
+sign in as any other and the engineer↔ticket audit trail is not per-person.
+Rotation to per-engineer passwords (`Admin → Roles & Users → Reset password`)
+would close that.
+
 ## Conventions for future changes
 
+- `auth` schema: read-only from the app. Never `INSERT` / `UPDATE` / `DELETE`
+  `auth.users` or `auth.identities` from SQL — provision through the GoTrue
+  Admin API (`provisionEngineerLogin` / `create-users.mjs`). See
+  `supabase/repair_20260918_auth_users_null_columns.sql` for the repair recipe if
+  a hand-written row ever slips in.
 - New migrations: idempotent (`IF NOT EXISTS` / `CREATE OR REPLACE` /
   guarded `DO`), additive only (zero `DELETE FROM` / `TRUNCATE` /
   `DROP TABLE` / `DROP COLUMN`), safety-assertion header, `NOT VALID` +

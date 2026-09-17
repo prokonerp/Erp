@@ -1,47 +1,59 @@
 -- scripts/provision-engineers.sql
--- PROKON ERP — Provision portal logins for the 5 Service Engineers.
+-- PROKON ERP — link the 5 Service Engineer portal logins to their employee rows.
 --
--- HOW TO RUN (Supabase Dashboard → SQL Editor, live project):
---   1. Copy THIS file. Make ONE edit in your pasted copy: type the shared
---      engineer password between the quotes on the v_pw line below.
---      NEVER commit the edited file — the committed version has NULL here.
---   2. Paste the whole thing, press Run. Run as ONE batch.
+-- ⚠️  REWRITTEN 2026-09-18 AFTER A LIVE OUTAGE. READ THIS BEFORE EDITING.
+--
+--   The previous version of this file created the auth users itself with a raw
+--     INSERT INTO auth.users (instance_id, id, aud, role, email, encrypted_password, ...)
+--     INSERT INTO auth.identities (user_id, identity_data, provider, provider_id)
+--   Those inserts listed only a subset of columns. Postgres stored NULL in the
+--   omitted nullable ones, GoTrue cannot decode a user row containing NULL in
+--   those columns, and every read of those rows started returning HTTP 500:
+--     * engineer sign-in        -> 500 "Database error querying schema"
+--     * Admin → Users (app)     -> 500 "Database error finding users"
+--     * Supabase Auth dashboard -> 500
+--   Repair for the 5 affected rows (already applied / to apply):
+--     supabase/repair_20260918_auth_users_null_columns.sql
+--
+--   THIS FILE NO LONGER WRITES TO THE auth SCHEMA. It only links an EXISTING
+--   auth user (created by GoTrue, which writes every column itself) to an
+--   employee row and upserts the app_users profile.
+--
+-- CANONICAL WAY TO CREATE THE AUTH USER (do this FIRST, one per engineer):
+--   * In-app:  Admin → Roles & Users → "Provision login" on the employee row
+--              (server fn provisionEngineerLogin — Admin API, strong-password
+--              validation, password_history, forced first-login rotation)
+--   * Script:  node scripts/create-users.mjs   (Admin API, preserved UUIDs)
+--   * Then run THIS file only if the employee link is still missing.
+--
+-- HOW TO RUN (Supabase Dashboard → SQL Editor, live project)
+--   1. Create the auth users with one of the two paths above.
+--   2. Paste this file, press Run. Run as ONE batch.
 --   3. Check the trailing verification SELECT (expect 5 rows, linked=true).
 --
--- WHAT IT DOES (mirrors the app's own provisionEngineerLogin, idempotent):
---   employees.email set → auth.users find-or-create (bcrypt, confirmed) +
---   auth.identities email row → password_history insert (bcrypt bf/12, same
---   format as the app's record_password_history RPC — which is itself broken
---   on live, see step-5 note; fix its search_path separately) +
---   app_users upsert (Engineer role, active, must_change_password=false per
---   admin decision: engineers keep the shared password, no forced rotation)
---   → employees.auth_user_id link.
+-- WHAT IT DOES
+--   employees.email set → app_users upsert (Engineer role, active) →
+--   employees.auth_user_id link → post-link verification per row.
 --
--- SCOPE: ONLY the 5 Service Engineers below. Aarti / Baldev / Daksh (and all
--- other users) are NOT touched by any statement here.
--- SAFE: no DELETE / DROP / UPDATE of unrelated rows. Re-running skips
--- already-linked engineers (no-op); only still-unlinked engineers are hashed.
+-- SAFETY ASSERTION (keep this true on every edit)
+--   * zero INSERT / UPDATE / DELETE against auth.users or auth.identities
+--   * zero DROP / TRUNCATE / ALTER TABLE
+--   * no password is set, hashed or stored here — ever
+--   * no DELETE of unrelated rows; re-running is a no-op for linked engineers
+--   * SCOPE: only the 5 Service Engineers named below
 --
--- Pre-flight: pgcrypto for crypt()/gen_salt().
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- See docs/ENGINEER_PORTAL.md → "Portal login provisioning" for the full rule.
 
 DO $$
 DECLARE
-  -- !!! Type the shared engineer password between SINGLE quotes below
-  -- !!! (like this: 'password' — NOT double quotes "like this").
-  -- !!! Nothing else needs editing. (NULL + length check = the guard.)
-  v_pw text := NULL;
   v_engineer_role_id uuid;
-  r RECORD;
-  v_emp_id uuid;
-  v_emp_name text;
-  v_email text;
-  v_uid uuid;
+  r           RECORD;
+  v_emp_id    uuid;
+  v_emp_name  text;
+  v_email     text;
+  v_uid       uuid;
+  v_missing   text[] := ARRAY[]::text[];
 BEGIN
-  IF v_pw IS NULL OR length(v_pw) < 8 THEN
-    RAISE EXCEPTION 'Set v_pw above to the shared engineer password (min 8 chars) before running this script';
-  END IF;
-
   SELECT id INTO v_engineer_role_id FROM public.app_roles WHERE name = 'Engineer';
   IF v_engineer_role_id IS NULL THEN
     RAISE EXCEPTION 'Engineer role not found — apply migration 20260915000003_engineer_role_seed.sql first';
@@ -70,73 +82,38 @@ BEGIN
     -- 2) employees master email (provisioning rule: email must be set first)
     UPDATE public.employees SET email = v_email WHERE id = v_emp_id;
 
-    -- 3) auth.users find-or-create (LINK path mirrors updateUserById)
+    -- 3) FIND-ONLY. The auth user must already exist, created by GoTrue.
     SELECT u.id INTO v_uid FROM auth.users u WHERE lower(u.email) = v_email LIMIT 1;
     IF v_uid IS NULL THEN
-      INSERT INTO auth.users (
-        instance_id, id, aud, role, email, encrypted_password,
-        email_confirmed_at,
-        raw_app_meta_data, raw_user_meta_data,
-        created_at, updated_at
-      ) VALUES (
-        '00000000-0000-0000-0000-000000000000', gen_random_uuid(),
-        'authenticated', 'authenticated', v_email,
-        crypt(v_pw, gen_salt('bf', 10)),
-        now(),
-        '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb,
-        now(), now()
-      )
-      RETURNING id INTO v_uid;
-      RAISE NOTICE 'created auth user % -> %', v_email, v_uid;
-    ELSE
-      UPDATE auth.users
-      SET encrypted_password = crypt(v_pw, gen_salt('bf', 10)),
-          email_confirmed_at = COALESCE(email_confirmed_at, now()),
-          updated_at         = now()
-      WHERE id = v_uid;
-      RAISE NOTICE 'existing auth user % (%): password synced', v_email, v_uid;
+      RAISE NOTICE 'MISSING auth user for % — provision it via Admin → Roles & Users → "Provision login" (or scripts/create-users.mjs), then re-run this file',
+        v_email;
+      v_missing := v_missing || (v_emp_name || ' <' || v_email || '>');
+      CONTINUE;
     END IF;
 
-    -- 4) auth.identities email row (GoTrue needs it for sign-in;
-    --    provider_id = user uuid, matching the auth Admin API convention)
-    INSERT INTO auth.identities (user_id, identity_data, provider, provider_id)
-    VALUES (v_uid, jsonb_build_object('sub', v_uid::text, 'email', v_email), 'email', v_uid::text)
-    ON CONFLICT (provider, provider_id) DO NOTHING;
-
-    -- 5) password history — bcrypt format IDENTICAL to the app's own
-    --    record_password_history RPC: password_hash = crypt(pw, gen_salt bf/12).
-    --    NOTE: inserted directly instead of calling that RPC, because the RPC
-    --    is broken on live — it pins SET search_path TO 'public' while pgcrypto
-    --    lives in extensions, so gen_salt() is unresolvable inside it (42883).
-    --    The app swallows that failure client-side; here we fail loud instead.
-    --    To fix the RPC itself (recommended, separate run):
-    --      ALTER FUNCTION public.record_password_history(uuid, text)
-    --        SET search_path TO 'public, extensions';
-    --      ALTER FUNCTION public.check_password_reuse(uuid, text)
-    --        SET search_path TO 'public, extensions';
-    INSERT INTO public.password_history (user_id, password_hash)
-    VALUES (v_uid, crypt(v_pw, gen_salt('bf', 12)));
-
-    -- 6) app_users upsert (Engineer role; no forced rotation per admin decision)
-    INSERT INTO public.app_users
-      (user_id, name, email, role_id, status, password_changed_at, must_change_password)
-    VALUES (v_uid, v_emp_name, v_email, v_engineer_role_id, 'active', now(), false)
+    -- 4) app_users upsert (Engineer role, active). Password state is owned by
+    --    the provisioning path — this file deliberately does not touch it.
+    INSERT INTO public.app_users (user_id, name, email, role_id, status)
+    VALUES (v_uid, v_emp_name, v_email, v_engineer_role_id, 'active')
     ON CONFLICT (user_id) DO UPDATE
       SET role_id = EXCLUDED.role_id,
-          status  = 'active',
-          must_change_password = false,
-          password_changed_at  = now();
+          status  = 'active';
 
-    -- 7) link employee → auth user
+    -- 5) link employee → auth user
     UPDATE public.employees SET auth_user_id = v_uid WHERE id = v_emp_id;
 
-    -- 8) verify link (mirrors the app's post-link check)
+    -- 6) verify link (mirrors the app's post-link check)
     PERFORM 1 FROM public.employees WHERE id = v_emp_id AND auth_user_id = v_uid;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'link verification failed for % (%)', v_emp_name, v_uid;
     END IF;
     RAISE NOTICE 'linked % (%) OK', v_emp_name, v_uid;
   END LOOP;
+
+  IF array_length(v_missing, 1) > 0 THEN
+    RAISE WARNING 'NO auth user exists for: %. Create the login in the app first (Admin → Roles & Users → "Provision login").',
+      array_to_string(v_missing, ', ');
+  END IF;
 END $$;
 
 -- ── Verification (expect 5 rows, all linked / Engineer / active) ──
