@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { reportDbError } from "@/lib/format-error";
 import { parseUploadFilename } from "@/lib/upload-naming";
+import { PART_SOURCE_FSR } from "@/lib/sync-fsr-parts";
+import type { PartLine } from "@/lib/tickets";
 
 /** Engineer-work activity kinds that an admin reset is allowed to delete. Exact set. */
 export const RESET_ACTIVITY_KINDS = [
@@ -106,6 +108,70 @@ const resetInput = z.object({
   reason: z.string().max(500).optional(),
 });
 
+/** Upper(trim()) serial normalization for custody matching; "" when blank/non-string. */
+export function normalizeResetSerial(v: unknown): string {
+  return typeof v === "string" ? v.trim().toUpperCase() : "";
+}
+
+/**
+ * Pure helper: collect old+new serials named in deleted FSRs' part_replacements
+ * (stored snake_case; tolerates camelCase). Upper(trim())-normalized, blanks
+ * skipped, de-duplicated in first-seen order.
+ */
+export function collectResetCustodySerials(
+  fsrRows: { part_replacements?: unknown }[] | null | undefined,
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const r of fsrRows ?? []) {
+    const list = (r as { part_replacements?: unknown }).part_replacements;
+    if (!Array.isArray(list)) continue;
+    for (const e of list) {
+      if (!e || typeof e !== "object") continue;
+      const rec = e as Record<string, unknown>;
+      for (const k of ["old_sr_no", "oldSrNo", "new_sr_no", "newSrNo"]) {
+        const s = normalizeResetSerial(rec[k]);
+        if (s && !seen.has(s)) {
+          seen.add(s);
+          out.push(s);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Pure helper: drop FSR-staged lines (source === "fsr") from a ticket part-line
+ * array. Admin hand-added lines (any other source, including unset) survive.
+ */
+export function stripFsrPartLines(lines: PartLine[] | null | undefined): PartLine[] {
+  return (lines ?? []).filter((l) => (l as PartLine).source !== PART_SOURCE_FSR);
+}
+
+/**
+ * Pure helper: recompute ticket part flags from the REMAINING lines —
+ * defective_parts_received iff the defective array is non-empty,
+ * good_parts_used/parts_used iff the good array is non-empty.
+ */
+export function recomputeResetPartFlags(
+  defective: PartLine[] | null | undefined,
+  good: PartLine[] | null | undefined,
+): { defective_parts_received: boolean; good_parts_used: boolean; parts_used: boolean } {
+  const hasDefective = (defective ?? []).length > 0;
+  const hasGood = (good ?? []).length > 0;
+  return {
+    defective_parts_received: hasDefective,
+    good_parts_used: hasGood,
+    parts_used: hasGood,
+  };
+}
+
+/** Coerce an unknown ticket part-details value to a PartLine array. */
+function asResetPartLines(v: unknown): PartLine[] {
+  return Array.isArray(v) ? (v as PartLine[]) : [];
+}
+
 export const resetTicketEngineerWork = createServerFn({ method: "POST" })
   .middleware([requireActiveUser])
   .inputValidator((input) => resetInput.parse(input))
@@ -121,6 +187,7 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       { data: activityRows },
       { data: visitRow },
       { data: fsrRows },
+      { data: ticketRow },
     ] = await Promise.all([
       supabaseAdmin
         .from("ticket_customer_verifications")
@@ -147,6 +214,14 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
         .from("field_service_reports")
         .select("id, customer_signature_path")
         .eq("ticket_id", scope.ticketId),
+      // Part lines + assignee for the FSR-line strip / flag recompute / custody
+      // release below. Scoped read of this ticket only; the update in (f2)
+      // writes part-detail + flag columns only (never created/status/identity).
+      supabaseAdmin
+        .from("tickets")
+        .select("id, assigned_employee_id, defective_parts_details, good_parts_details")
+        .eq("id", scope.ticketId)
+        .maybeSingle(),
     ]);
     const customerRows = customerRow ? 1 : 0;
     const equipmentRows = equipmentRow ? 1 : 0;
@@ -215,8 +290,68 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       .from("field_service_reports")
       .delete()
       .eq("ticket_id", scope.ticketId)
-      .select("id");
+      .select("id, part_replacements");
     if (delFsrErr) throw new Error(reportDbError("reset delete fsr", delFsrErr));
+
+    // (f2) Strip FSR-staged part lines from THIS ticket only, recompute flags
+    // from the remaining lines, and release custody held by the ticket's
+    // assignee for serials named in the deleted FSRs.
+    // FORBIDDEN-list tension (reported, not resolved by deletion): the
+    // RESET_FORBIDDEN_TABLES list names "tickets" and "ims_stock_items", but
+    // the reset contract requires scoped UPDATEs — never row DELETEs — on
+    // exactly those tables here. No rows are deleted from either table; only
+    // this ticket's part-line arrays + flags are rewritten, and only
+    // ims_stock_items rows whose custodian equals this ticket's
+    // assigned_employee_id are NULLed. Created/status/identity columns are
+    // never written.
+    const deletedFsrRows = (deletedFsr || []) as { id: string; part_replacements?: unknown }[];
+    const custodySerials = collectResetCustodySerials(deletedFsrRows);
+    const tRow = (ticketRow || {}) as {
+      assigned_employee_id?: string | null;
+      defective_parts_details?: unknown;
+      good_parts_details?: unknown;
+    };
+    const remainingDefective = stripFsrPartLines(asResetPartLines(tRow.defective_parts_details));
+    const remainingGood = stripFsrPartLines(asResetPartLines(tRow.good_parts_details));
+    const removedFsrDefective =
+      asResetPartLines(tRow.defective_parts_details).length - remainingDefective.length;
+    const removedFsrGood = asResetPartLines(tRow.good_parts_details).length - remainingGood.length;
+    const partFlags = recomputeResetPartFlags(remainingDefective, remainingGood);
+    if (ticketRow) {
+      const { error: partStripErr } = await supabaseAdmin
+        .from("tickets")
+        .update({
+          defective_parts_details: remainingDefective,
+          good_parts_details: remainingGood,
+          ...partFlags,
+        } as never)
+        .eq("id", scope.ticketId);
+      if (partStripErr) throw new Error(reportDbError("reset strip fsr part lines", partStripErr));
+    }
+    let releasedCustody = 0;
+    const assigneeId =
+      typeof tRow.assigned_employee_id === "string" && tRow.assigned_employee_id.trim() !== ""
+        ? tRow.assigned_employee_id
+        : null;
+    if (assigneeId && custodySerials.length > 0) {
+      const wanted = new Set(custodySerials);
+      const { data: heldRows, error: heldErr } = await supabaseAdmin
+        .from("ims_stock_items")
+        .select("id, part_serial_no")
+        .eq("custodian_employee_id", assigneeId);
+      if (heldErr) throw new Error(reportDbError("reset read custody rows", heldErr));
+      const releaseIds = ((heldRows || []) as { id: string; part_serial_no?: unknown }[])
+        .filter((r) => wanted.has(normalizeResetSerial(r.part_serial_no)))
+        .map((r) => r.id);
+      if (releaseIds.length > 0) {
+        const { error: releaseErr } = await supabaseAdmin
+          .from("ims_stock_items")
+          .update({ custodian_employee_id: null } as never)
+          .in("id", releaseIds);
+        if (releaseErr) throw new Error(reportDbError("reset release custody", releaseErr));
+        releasedCustody = releaseIds.length;
+      }
+    }
 
     // (g) Remove exact photo files only (allow-listed names under ticket/{id}/).
     const removedPhotos: string[] = [];
@@ -257,6 +392,8 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       `Engineer work reset by admin ${context.userId}: ` +
       `customer=${customerRows} equipment=${equipmentRows} activities=${(deletedActivities || []).length} ` +
       `visits=${visitRows} fsr=${(deletedFsr || []).length} (customer signature cleared) ` +
+      `fsr_part_lines_removed=defective:${removedFsrDefective},good:${removedFsrGood} ` +
+      `custody_released=${releasedCustody} ` +
       `photos=${removedPhotos.length}. Reason: ${data.reason?.trim() || "—"}. ` +
       `Assignment and status preserved.`;
     const { data: resetRow, error: resetErr } = await supabaseAdmin
@@ -277,6 +414,9 @@ export const resetTicketEngineerWork = createServerFn({ method: "POST" })
       deletedActivities: (deletedActivities || []).length,
       deletedVisits: visitRows,
       deletedFsr: (deletedFsr || []).length,
+      removedFsrDefective,
+      removedFsrGood,
+      releasedCustody,
       removedPhotos,
       resetActivityId: (resetRow as { id: string }).id,
     };

@@ -27,6 +27,9 @@ export function toStageInput(e: Record<string, unknown>): FsrPartInput {
         : typeof qtyRaw === "string" && qtyRaw.trim() !== "" && Number.isFinite(Number(qtyRaw))
           ? Number(qtyRaw)
           : null,
+    // FSR payload rows carry no model today; tolerate model/model_no/modelNo
+    // so the model flows into the staged line + dedupe key when present.
+    model: pick("model", "model_no", "modelNo"),
     oldSrNo: pick("oldSrNo", "old_sr_no"),
     newSrNo: pick("newSrNo", "new_sr_no"),
   };
@@ -113,8 +116,11 @@ export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
     if (updErr) throw new Error(updErr.message);
     if (!updRows || updRows.length === 0) {
       // Optimistic-concurrency miss (an admin auto-save bumped updated_at
-      // mid-sync). Re-read once and retry — merge is additive/idempotent,
-      // so the retry converges instead of failing to a warning toast.
+      // mid-sync). Re-read once and retry a single time — merge is
+      // additive/idempotent over a widened seen-set (ALL existing lines seed
+      // dedupe), so the retry converges instead of duplicating or failing to
+      // a warning toast. No further retries: a second miss means live
+      // contention the caller must resolve by retrying.
       const { data: fresh, error: freshErr } = await supabaseAdmin
         .from("tickets")
         .select("defective_parts_details, good_parts_details, updated_at")

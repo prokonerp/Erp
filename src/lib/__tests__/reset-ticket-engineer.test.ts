@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   buildResetScope,
+  collectResetCustodySerials,
+  normalizeResetSerial,
+  recomputeResetPartFlags,
+  stripFsrPartLines,
   RESET_ACTIVITY_KINDS,
   RESET_FORBIDDEN_KINDS,
   RESET_FORBIDDEN_TABLES,
@@ -8,6 +12,8 @@ import {
   isResetStoragePathAllowed,
   RESET_MODULE_SOURCE,
 } from "@/lib/reset-ticket-engineer.functions";
+import { PART_SOURCE_FSR } from "@/lib/sync-fsr-parts";
+import type { PartLine } from "@/lib/tickets";
 
 const TICKET_ID = "123e4567-e89b-12d3-a456-426614174000";
 
@@ -153,5 +159,137 @@ describe("reset-ticket-engineer scoping (pure)", () => {
         TICKET_ID,
       ),
     ).toBe(false);
+  });
+});
+
+describe("normalizeResetSerial (pure)", () => {
+  it("uppercases and trims string serials", () => {
+    expect(normalizeResetSerial("  abc123 ")).toBe("ABC123");
+    expect(normalizeResetSerial("ABC123")).toBe("ABC123");
+    expect(normalizeResetSerial("aBc-9/x")).toBe("ABC-9/X");
+  });
+
+  it('returns "" for blank and non-string inputs', () => {
+    expect(normalizeResetSerial("")).toBe("");
+    expect(normalizeResetSerial("   ")).toBe("");
+    expect(normalizeResetSerial(null)).toBe("");
+    expect(normalizeResetSerial(undefined)).toBe("");
+    expect(normalizeResetSerial(123)).toBe("");
+    expect(normalizeResetSerial({})).toBe("");
+    expect(normalizeResetSerial(["A1"])).toBe("");
+  });
+});
+
+describe("collectResetCustodySerials (pure)", () => {
+  it("covers old+new serials in snake_case", () => {
+    expect(
+      collectResetCustodySerials([{ part_replacements: [{ old_sr_no: "a1", new_sr_no: "b2" }] }]),
+    ).toEqual(["A1", "B2"]);
+  });
+
+  it("tolerates camelCase keys and upper(trims) values", () => {
+    expect(
+      collectResetCustodySerials([{ part_replacements: [{ oldSrNo: "  c3 ", newSrNo: "d4" }] }]),
+    ).toEqual(["C3", "D4"]);
+  });
+
+  it("skips blanks and de-duplicates in first-seen order", () => {
+    expect(
+      collectResetCustodySerials([
+        {
+          part_replacements: [
+            { old_sr_no: "A1", new_sr_no: "a1 " },
+            { old_sr_no: "  ", new_sr_no: null },
+            { item: "PCB" },
+          ],
+        },
+        { part_replacements: [{ oldSrNo: " a1" }, { new_sr_no: "B2" }] },
+      ]),
+    ).toEqual(["A1", "B2"]);
+  });
+
+  it("tolerates null input, missing lists, and non-object entries", () => {
+    expect(collectResetCustodySerials(null)).toEqual([]);
+    expect(collectResetCustodySerials(undefined)).toEqual([]);
+    expect(collectResetCustodySerials([])).toEqual([]);
+    expect(collectResetCustodySerials([{}, { part_replacements: null }])).toEqual([]);
+    expect(
+      collectResetCustodySerials([{ part_replacements: [null, "A1", 42, { old_sr_no: "z9" }] }]),
+    ).toEqual(["Z9"]);
+  });
+});
+
+describe("stripFsrPartLines (pure)", () => {
+  const fsr = PART_SOURCE_FSR as PartLine["source"];
+
+  it("drops fsr lines only, keeping admin hand-added lines of every other source", () => {
+    const adminManual: PartLine = { name: "PCB", qty: "1", serial: "A1", source: "manual" };
+    const adminOracle: PartLine = {
+      name: "Fan",
+      qty: "2",
+      serial: "F1",
+      source: "oracle_exchange",
+    };
+    const adminUnset: PartLine = { name: "Relay", qty: "1", serial: "R1" };
+    const fsrLine: PartLine = { name: "PCB", qty: "1", serial: "OLD1", source: fsr };
+    expect(stripFsrPartLines([adminManual, fsrLine, adminOracle, adminUnset])).toEqual([
+      adminManual,
+      adminOracle,
+      adminUnset,
+    ]);
+  });
+
+  it("returns [] for null, undefined, and empty input", () => {
+    expect(stripFsrPartLines(null)).toEqual([]);
+    expect(stripFsrPartLines(undefined)).toEqual([]);
+    expect(stripFsrPartLines([])).toEqual([]);
+  });
+
+  it("empties an all-fsr array while leaving a no-fsr array untouched", () => {
+    const onlyFsr: PartLine[] = [
+      { name: "PCB", qty: "1", serial: "OLD1", source: fsr },
+      { name: "Fan", qty: "1", serial: "OLD2", source: fsr },
+    ];
+    expect(stripFsrPartLines(onlyFsr)).toEqual([]);
+    const noFsr: PartLine[] = [{ name: "PCB", qty: "1", serial: "A1", source: "manual" }];
+    expect(stripFsrPartLines(noFsr)).toEqual(noFsr);
+  });
+});
+
+describe("recomputeResetPartFlags (pure)", () => {
+  const line: PartLine = { name: "PCB", qty: "1", serial: "A1", source: "manual" };
+
+  it("sets all flags true when both remainders are non-empty", () => {
+    expect(recomputeResetPartFlags([line], [line])).toEqual({
+      defective_parts_received: true,
+      good_parts_used: true,
+      parts_used: true,
+    });
+  });
+
+  it("clears all flags to false on empty remainders (post-strip reset)", () => {
+    expect(recomputeResetPartFlags([], [])).toEqual({
+      defective_parts_received: false,
+      good_parts_used: false,
+      parts_used: false,
+    });
+    expect(recomputeResetPartFlags(null, undefined)).toEqual({
+      defective_parts_received: false,
+      good_parts_used: false,
+      parts_used: false,
+    });
+  });
+
+  it("tracks each side independently", () => {
+    expect(recomputeResetPartFlags([line], [])).toEqual({
+      defective_parts_received: true,
+      good_parts_used: false,
+      parts_used: false,
+    });
+    expect(recomputeResetPartFlags([], [line])).toEqual({
+      defective_parts_received: false,
+      good_parts_used: true,
+      parts_used: true,
+    });
   });
 });
