@@ -60,6 +60,7 @@ import { fetchEngineerLoginIds } from "@/hooks/useTicketsTable";
 import { attachLoginFlags, sortEngineersLoginFirst } from "@/lib/eng-queue-utils";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
 import {
+  findSwapConflicts,
   stageableTicketLines,
   stageTicketDcPrefill,
   stageTicketGrnPrefill,
@@ -907,17 +908,29 @@ function TicketDetail() {
     assignedEngineerName: t.assigned_engineer_name,
   });
   const handleGenerateGrn = () => {
-    stageTicketGrnPrefill(
-      ticketDocInput(),
-      stageableTicketLines(t.defective_parts_details || []).included,
-    );
+    const stagedDef = stageableTicketLines(t.defective_parts_details || []);
+    const stagedGood = stageableTicketLines(t.good_parts_details || []);
+    const conflicts = findSwapConflicts(stagedGood.included, stagedDef.included);
+    if (conflicts.length > 0) {
+      toast.error(
+        `Same serial on good and defective sides: ${conflicts.map((c) => c.serial).join(", ")} — fix before generating`,
+      );
+      return;
+    }
+    stageTicketGrnPrefill(ticketDocInput(), stagedDef.included);
     navigate({ to: "/grn/new" });
   };
   const handleGenerateDc = () => {
-    stageTicketDcPrefill(
-      ticketDocInput(),
-      stageableTicketLines(t.good_parts_details || []).included,
-    );
+    const stagedDef = stageableTicketLines(t.defective_parts_details || []);
+    const stagedGood = stageableTicketLines(t.good_parts_details || []);
+    const conflicts = findSwapConflicts(stagedGood.included, stagedDef.included);
+    if (conflicts.length > 0) {
+      toast.error(
+        `Same serial on good and defective sides: ${conflicts.map((c) => c.serial).join(", ")} — fix before generating`,
+      );
+      return;
+    }
+    stageTicketDcPrefill(ticketDocInput(), stagedGood.included);
     navigate({ to: "/challan/customer/new" });
   };
   // Nulls the doc-number stamp (covers abandoned drafts). If the grn_no/dc_no

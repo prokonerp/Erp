@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   buildTicketDcPrefill,
   buildTicketGrnPrefill,
+  findSwapConflicts,
   stageableTicketLines,
   stageTicketDcPrefill,
   stageTicketGrnPrefill,
@@ -237,6 +238,57 @@ describe("stageableTicketLines", () => {
 
   it("handles empty input", () => {
     expect(stageableTicketLines([])).toEqual({ included: [], excludedUnconfirmed: 0 });
+  });
+
+  it("excludes confirmed:false + source manual (explicit false always blocks)", () => {
+    const { included } = stageableTicketLines([line({ name: "X", source: "manual", confirmed: false })]);
+    expect(included).toHaveLength(0);
+  });
+
+  it("excludes confirmed:false + source fsr", () => {
+    const { included } = stageableTicketLines([line({ name: "X", source: "fsr", confirmed: false })]);
+    expect(included).toHaveLength(0);
+  });
+
+  it("includes confirmed:undefined + source manual (legacy hand-added lines keep staging)", () => {
+    const { included } = stageableTicketLines([line({ name: "X", source: "manual" })]);
+    expect(included).toHaveLength(1);
+  });
+});
+
+describe("findSwapConflicts", () => {
+  it("finds a serial present on both sides", () => {
+    const conflicts = findSwapConflicts(
+      [line({ name: "PCB", serial: "SN1" })],
+      [line({ name: "PCB", serial: "SN1" })],
+    );
+    expect(conflicts).toEqual([{ serial: "SN1" }]);
+  });
+
+  it("matches case- and whitespace-insensitively", () => {
+    const conflicts = findSwapConflicts(
+      [line({ name: "PCB", serial: "  sn1 " })],
+      [line({ name: "PCB", serial: "SN1" })],
+    );
+    expect(conflicts).toEqual([{ serial: "SN1" }]);
+  });
+
+  it("reports no conflict when a serial is on one side only", () => {
+    expect(
+      findSwapConflicts(
+        [line({ name: "PCB", serial: "SN1" })],
+        [line({ name: "PCB", serial: "SN2" })],
+      ),
+    ).toEqual([]);
+  });
+
+  it("ignores blank serials", () => {
+    expect(
+      findSwapConflicts(
+        [line({ name: "PCB", serial: "  " }), line({ name: "Fan" })],
+        [line({ name: "PCB", serial: "" }), line({ name: "Fan" })],
+      ),
+    ).toEqual([]);
   });
 });
 

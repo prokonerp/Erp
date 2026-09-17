@@ -14,7 +14,7 @@ import { emptyItem, isChallanEditable } from "@/lib/challan";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { CarrierEmployeePicker } from "@/components/CarrierEmployeePicker";
-import { applyCarrierSelection, clearCarrierSelection, matchPrefillCarrierByName, parsePrefillCarrier } from "@/lib/carrierEmployee";
+import { applyCarrierSelection, clearCarrierSelection, escapeIlike, matchPrefillCarrierByName, parsePrefillCarrier, preferUserText } from "@/lib/carrierEmployee";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import type { Customer, CustomerBranch } from "@/lib/crm";
@@ -97,6 +97,8 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   // discards it) so the save path can stamp tickets.dc_no back. Null unless
   // this DC was staged from a service ticket.
   const ticketLinkRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   const itemsSectionRef = useRef<HTMLDivElement | null>(null);
   // Non-blocking warnings when the physical location of a serial does not
   // match the "Supply From Warehouse" (branch) chosen on the document.
@@ -164,38 +166,42 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   // Picker stays blank when neither resolves — the engineer name is still
   // kept as editable driver text so the server trigger can resolve the FK
   // from text on save. No-op when the prefill carries no engineer.
+  // B0.1: the FK is set only after the employee row is confirmed (never a
+  // dead id); every async completion is mounted-guarded.
   const preSelectCarrierFromPrefill = (payload: Record<string, unknown>) => {
     const hint = parsePrefillCarrier(payload);
     const fkId = hint.employeeId;
     const fallbackName = hint.engineerName;
     if (!fkId && !fallbackName) return;
+    const alive = () => mountedRef.current;
     if (fkId) {
-      setCarrierEmployeeId(fkId);
       (async () => {
         const { data } = await supabase
           .from("assignable_engineers")
           .select("id,name,phone")
           .eq("id", fkId)
           .maybeSingle();
+        if (!alive()) return;
         const row = data as unknown as { name: string | null; phone: string | null } | null;
-        const nm = (row?.name || "").trim() || fallbackName;
-        if (row && nm) {
-          const next = applyCarrierSelection(
-            { driver_name: "", driver_mobile: "", carrier_employee_id: null },
-            { id: fkId, name: nm, phone: (row.phone || "").trim() || null },
-          );
-          setForm((f) => ({
-            ...f,
-            driver_name: f.driver_name || next.driver_name,
-            driver_mobile: f.driver_mobile || next.driver_mobile,
-          }));
-        } else if (fallbackName) {
-          setForm((f) => ({ ...f, driver_name: f.driver_name || fallbackName }));
-        } else {
-          // FK points at a deleted employee and no name to fall back to —
-          // leave the picker blank rather than linking a dead id.
+        if (!row) {
+          // FK points at a deleted employee — never link a dead id.
           setCarrierEmployeeId(null);
+          if (fallbackName) {
+            setForm((f) => ({ ...f, driver_name: preferUserText(f.driver_name, fallbackName) }));
+          }
+          return;
         }
+        const nm = (row.name || "").trim() || fallbackName;
+        const next = applyCarrierSelection(
+          { driver_name: "", driver_mobile: "", carrier_employee_id: null },
+          { id: fkId, name: nm, phone: (row.phone || "").trim() || null },
+        );
+        setCarrierEmployeeId(next.carrier_employee_id);
+        setForm((f) => ({
+          ...f,
+          driver_name: preferUserText(f.driver_name, next.driver_name),
+          driver_mobile: preferUserText(f.driver_mobile, next.driver_mobile),
+        }));
       })();
       return;
     }
@@ -203,7 +209,8 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
       const { data } = await supabase
         .from("assignable_engineers")
         .select("id,name,phone")
-        .ilike("name", fallbackName);
+        .ilike("name", escapeIlike(fallbackName));
+      if (!alive()) return;
       const rows = (
         (data as unknown as Array<{ id: string; name: string; phone: string | null }> | null) || []
       ).filter((r) => r?.id && r?.name);
@@ -216,11 +223,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         setCarrierEmployeeId(next.carrier_employee_id);
         setForm((f) => ({
           ...f,
-          driver_name: f.driver_name || next.driver_name,
-          driver_mobile: f.driver_mobile || next.driver_mobile,
+          driver_name: preferUserText(f.driver_name, next.driver_name),
+          driver_mobile: preferUserText(f.driver_mobile, next.driver_mobile),
         }));
       } else {
-        setForm((f) => ({ ...f, driver_name: f.driver_name || fallbackName }));
+        setForm((f) => ({ ...f, driver_name: preferUserText(f.driver_name, fallbackName) }));
       }
     })();
   };
@@ -450,8 +457,8 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
   };
 
   // Ticket stamp-back: when this DC was staged from a ticket, write the
-  // saved challan number back to tickets.dc_no. Best-effort — a missing
-  // column (migration not yet applied) or any error never blocks save.
+  // saved challan number (dc_no) plus the FK link (dc_id) back to the ticket
+  // row. Best-effort — any error never blocks save; the DC itself stands.
   const stampTicketDcNo = async (challanId: string) => {
     const ticketId = ticketLinkRef.current;
     if (!ticketId) return;
@@ -462,13 +469,16 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
         .eq("id", challanId)
         .maybeSingle();
       const no = (saved as { challan_no?: unknown } | null)?.challan_no;
-      if (typeof no === "string" && no) {
-        const { error: stampError } = await supabase.from("tickets").update({ dc_no: no } as never).eq("id", ticketId);
-        if (stampError) toast.warning("Ticket link not stamped — re-generate or clear the link from the ticket");
-      }
+      const patch: Record<string, string | null> = { dc_id: challanId };
+      if (typeof no === "string" && no) patch.dc_no = no;
+      const { error: stampError } = await supabase
+        .from("tickets")
+        .update(patch as never)
+        .eq("id", ticketId);
+      if (stampError) toast.warning("DC created but ticket link not saved");
     } catch {
       /* best-effort stamp-back — never blocks save */
-      toast.warning("Ticket link not stamped — re-generate or clear the link from the ticket");
+      toast.warning("DC created but ticket link not saved");
     }
   };
 

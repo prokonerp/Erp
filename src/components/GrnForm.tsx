@@ -15,7 +15,7 @@ import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { GrnSerialInputs } from "@/components/GrnSerialInputs";
 import { ContactPersonPicker } from "@/components/ContactPersonPicker";
 import { CarrierEmployeePicker } from "@/components/CarrierEmployeePicker";
-import { applyCarrierSelection, clearCarrierSelection, matchPrefillCarrierByName, parsePrefillCarrier } from "@/lib/carrierEmployee";
+import { applyCarrierSelection, clearCarrierSelection, escapeIlike, matchPrefillCarrierByName, parsePrefillCarrier, preferUserText } from "@/lib/carrierEmployee";
 import type { Customer, CustomerBranch } from "@/lib/crm";
 import { branchToDocumentFields } from "@/lib/crm";
 import { FormShell, FormSection, FormGrid, FormField, StickyMobileActions } from "@/components/form-kit";
@@ -106,6 +106,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   // discards it) so the save path can stamp tickets.grn_no back. Null unless
   // this GRN was staged from a service ticket.
   const ticketLinkRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   // Auto-populate Received By with the current logged-in user's name (new records only).
   useEffect(() => {
@@ -160,38 +162,42 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
   // Picker stays blank when neither resolves — the engineer name is still
   // kept as editable driver text so the server trigger can resolve the FK
   // from text on save. No-op when the prefill carries no engineer.
+  // B0.1: the FK is set only after the employee row is confirmed (never a
+  // dead id); every async completion is mounted-guarded.
   const preSelectCarrierFromPrefill = (payload: Record<string, unknown>) => {
     const hint = parsePrefillCarrier(payload);
     const fkId = hint.employeeId;
     const fallbackName = hint.engineerName;
     if (!fkId && !fallbackName) return;
+    const alive = () => mountedRef.current;
     if (fkId) {
-      setCarrierEmployeeId(fkId);
       (async () => {
         const { data } = await supabase
           .from("assignable_engineers")
           .select("id,name,phone")
           .eq("id", fkId)
           .maybeSingle();
+        if (!alive()) return;
         const row = data as unknown as { name: string | null; phone: string | null } | null;
-        const nm = (row?.name || "").trim() || fallbackName;
-        if (row && nm) {
-          const next = applyCarrierSelection(
-            { driver_name: "", driver_mobile: "", carrier_employee_id: null },
-            { id: fkId, name: nm, phone: (row.phone || "").trim() || null },
-          );
-          setForm((f) => ({
-            ...f,
-            driver_name: f.driver_name || next.driver_name,
-            driver_mobile: f.driver_mobile || next.driver_mobile,
-          }));
-        } else if (fallbackName) {
-          setForm((f) => ({ ...f, driver_name: f.driver_name || fallbackName }));
-        } else {
-          // FK points at a deleted employee and no name to fall back to —
-          // leave the picker blank rather than linking a dead id.
+        if (!row) {
+          // FK points at a deleted employee — never link a dead id.
           setCarrierEmployeeId(null);
+          if (fallbackName) {
+            setForm((f) => ({ ...f, driver_name: preferUserText(f.driver_name, fallbackName) }));
+          }
+          return;
         }
+        const nm = (row.name || "").trim() || fallbackName;
+        const next = applyCarrierSelection(
+          { driver_name: "", driver_mobile: "", carrier_employee_id: null },
+          { id: fkId, name: nm, phone: (row.phone || "").trim() || null },
+        );
+        setCarrierEmployeeId(next.carrier_employee_id);
+        setForm((f) => ({
+          ...f,
+          driver_name: preferUserText(f.driver_name, next.driver_name),
+          driver_mobile: preferUserText(f.driver_mobile, next.driver_mobile),
+        }));
       })();
       return;
     }
@@ -199,7 +205,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       const { data } = await supabase
         .from("assignable_engineers")
         .select("id,name,phone")
-        .ilike("name", fallbackName);
+        .ilike("name", escapeIlike(fallbackName));
+      if (!alive()) return;
       const rows = (
         (data as unknown as Array<{ id: string; name: string; phone: string | null }> | null) || []
       ).filter((r) => r?.id && r?.name);
@@ -212,11 +219,11 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         setCarrierEmployeeId(next.carrier_employee_id);
         setForm((f) => ({
           ...f,
-          driver_name: f.driver_name || next.driver_name,
-          driver_mobile: f.driver_mobile || next.driver_mobile,
+          driver_name: preferUserText(f.driver_name, next.driver_name),
+          driver_mobile: preferUserText(f.driver_mobile, next.driver_mobile),
         }));
       } else {
-        setForm((f) => ({ ...f, driver_name: f.driver_name || fallbackName }));
+        setForm((f) => ({ ...f, driver_name: preferUserText(f.driver_name, fallbackName) }));
       }
     })();
   };
@@ -569,8 +576,8 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
       .insert(payload as never).select("id").single();
     if (error) { setBusy(false); return toast.error(error.message); }
     // Ticket stamp-back: this GRN was staged from a ticket — write the saved
-    // grn_no back to tickets.grn_no. Best-effort: a missing column (migration
-    // not yet applied) or any error never blocks the success toast/navigation.
+    // grn_no plus the FK link (grn_id) back to the ticket row. Best-effort:
+    // any error never blocks the success toast/navigation; the GRN stands.
     if (ticketLinkRef.current) {
       try {
         const newId = (data as { id: string }).id;
@@ -581,12 +588,12 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
           .maybeSingle();
         const grnNo = (saved as { grn_no?: unknown } | null)?.grn_no;
         if (typeof grnNo === "string" && grnNo) {
-          const { error: stampError } = await supabase.from("tickets").update({ grn_no: grnNo } as never).eq("id", ticketLinkRef.current);
-          if (stampError) toast.warning("Ticket link not stamped — re-generate or clear the link from the ticket");
+          const { error: stampError } = await supabase.from("tickets").update({ grn_no: grnNo, grn_id: newId } as never).eq("id", ticketLinkRef.current);
+          if (stampError) toast.warning("GRN created but ticket link not saved");
         }
       } catch {
         /* best-effort stamp-back — never blocks save */
-        toast.warning("Ticket link not stamped — re-generate or clear the link from the ticket");
+        toast.warning("GRN created but ticket link not saved");
       }
     }
     setBusy(false);

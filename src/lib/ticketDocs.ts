@@ -38,9 +38,29 @@ export function stageableTicketLines(lines: PartLine[]): {
   excludedUnconfirmed: number;
 } {
   const list = lines ?? [];
-  const included = list.filter((p) => p.confirmed || p.source !== "fsr");
-  const excludedUnconfirmed = list.filter((p) => p.source === "fsr" && !p.confirmed).length;
+  const included = list.filter((p) => p.confirmed !== false && (p.confirmed || p.source !== "fsr"));
+  // Every staged-out line counts — including confirmed:false non-FSR lines,
+  // so the admin banner never under-reports what was held back.
+  const excludedUnconfirmed = list.length - included.length;
   return { included, excludedUnconfirmed };
+}
+
+/** Swap-pair guard: a serial present on BOTH the good-parts side and the
+ *  defective-parts side means the same physical part was staged twice —
+ *  block staging, don't guess which side is right. Comparison is
+ *  upper(trim())-normalized; blank serials are ignored. */
+export function findSwapConflicts(good: PartLine[], defective: PartLine[]): { serial: string }[] {
+  const norm = (v: string | null | undefined): string => (v ?? "").trim().toUpperCase();
+  const goodSet = new Set((good ?? []).map((p) => norm(p?.serial)).filter(Boolean));
+  const seen = new Set<string>();
+  const out: { serial: string }[] = [];
+  for (const p of defective ?? []) {
+    const s = norm(p?.serial);
+    if (!s || !goodSet.has(s) || seen.has(s)) continue;
+    seen.add(s);
+    out.push({ serial: s });
+  }
+  return out;
 }
 
 /** Build the Customer GRN prefill payload for defective ticket parts.
