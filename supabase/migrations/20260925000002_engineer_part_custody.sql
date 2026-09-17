@@ -77,6 +77,20 @@
 --    if you re-apply that file; the GRN/DC bodies replaced here stay replaced.)
 
 -- =====================================================================
+-- 0) Precondition: 20260916000002 must be applied first. Without
+--    ims_stock_items.custodian_employee_id the trigger below fails with a
+--    cryptic error — raise the legible one instead.
+-- =====================================================================
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = 'public'
+                   AND table_name = 'ims_stock_items'
+                   AND column_name = 'custodian_employee_id') THEN
+    RAISE EXCEPTION 'Migration 20260925000002 requires 20260916000002 (ims_stock_items.custodian_employee_id missing). Apply 20260916000002 first.';
+  END IF;
+END $$;
+
+-- =====================================================================
 -- 1) Canonical serial normalization + expression index
 -- =====================================================================
 CREATE OR REPLACE FUNCTION public.normalize_serial(s text)
