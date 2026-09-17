@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
+import { friendlySignInError } from "@/lib/auth-errors";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { PageLoader } from "@/components/shared/skeletons";
 
@@ -71,9 +72,10 @@ function AuthPage() {
 
   const signIn = async () => {
     setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Trim: pasted emails with stray whitespace fail with a bare 400.
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(friendlySignInError(error.message), { duration: 8000 });
     if (next) {
       window.location.href = next;
       return;

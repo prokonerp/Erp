@@ -27,11 +27,16 @@ function errMessage(e: unknown): { message: string; code?: string } {
   };
 }
 
-/** Friendly pointer when a conveyance/material table is missing in the DB. */
-function hintFor(e: unknown, migration: string): string {
+/** Friendly pointer when a conveyance/material table is missing in the DB,
+ *  or a column's type no longer matches what the query assumes (e.g. the
+ *  22P02 enum-coercion failure fixed by 20260925000004). Exported for tests. */
+export function hintFor(e: unknown, migration: string): string {
   const { message, code } = errMessage(e);
   if (code === "42703" || code === "42P01" || /does not exist/i.test(message)) {
     return `not set up yet — ask admin to run migration ${migration}`;
+  }
+  if (code === "22P02" && /enum/i.test(message)) {
+    return `data-type fix needed — ask admin to run migration ${migration}`;
   }
   return message;
 }
@@ -107,7 +112,7 @@ export function useEngineerDashboard() {
           try {
             return await fetchMaterial();
           } catch (e) {
-            warnings.push(`material: ${hintFor(e, "20260921000001")}`);
+            warnings.push(`material: ${hintFor(e, "20260925000004")}`);
             return { holding: 0, pending: [] } satisfies MaterialRpc;
           }
         })(),
