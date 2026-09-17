@@ -395,3 +395,38 @@ export function payableWindow(
   const t = asDateKey(to) ?? asDateKey(from) ?? fallback;
   return f <= t ? { from: f, to: t } : { from: t, to: f };
 }
+
+/**
+ * Settlement status-change guard (TASK 3): locked periods are immutable.
+ * - locked_at set (non-blank) → refuse any change.
+ * - status Approved → refuse (terminal; corrections belong in a new period).
+ * - Pending/Rejected → Approved/Rejected ok.
+ * - A finite override amount wins only with a non-blank reason (the
+ *   resolveAdjustment rule) — override without reason refuses, so the
+ *   computed total stands. Bad input yields ok:false, never a throw.
+ */
+export function settlementStatusChangeAllowed(
+  settlement: { status?: string | null; locked_at?: string | null } | null | undefined,
+  nextStatus: "Approved" | "Rejected",
+  opts?: { overriddenAmount?: number | string | null; reason?: string | null },
+): { ok: true } | { ok: false; error: string } {
+  if (nextStatus !== "Approved" && nextStatus !== "Rejected") {
+    return { ok: false, error: "Status must be Approved or Rejected." };
+  }
+  const lockedAt = typeof settlement?.locked_at === "string" ? settlement.locked_at.trim() : settlement?.locked_at;
+  if (lockedAt != null && lockedAt !== "") {
+    return { ok: false, error: "Settlement period is locked — it cannot be changed." };
+  }
+  if (settlement?.status === "Approved") {
+    return { ok: false, error: "Approved settlements are final — open a new period instead." };
+  }
+  const raw = opts?.overriddenAmount;
+  const override =
+    typeof raw === "number" ? raw : typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
+  if (Number.isFinite(override)) {
+    // Mirrors resolveAdjustment: the override wins only with a reason.
+    const r = resolveAdjustment(null, override, opts?.reason);
+    if (!r.overridden) return { ok: false, error: "An override amount needs a reason." };
+  }
+  return { ok: true };
+}

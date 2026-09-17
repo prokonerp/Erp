@@ -89,6 +89,7 @@ import { Route as AppGrnIdRouteImport } from './routes/_app/grn.$id'
 import { Route as AppGatepassNewRouteImport } from './routes/_app/gatepass.new'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppEngineersRatesRouteImport } from './routes/_app/engineers.rates'
+import { Route as AppEngineersExpensesRouteImport } from './routes/_app/engineers.expenses'
 import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
 import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
 import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
@@ -544,6 +545,11 @@ const AppEngineersRatesRoute = AppEngineersRatesRouteImport.update({
   path: '/rates',
   getParentRoute: () => AppEngineersRoute,
 } as any)
+const AppEngineersExpensesRoute = AppEngineersExpensesRouteImport.update({
+  id: '/expenses',
+  path: '/expenses',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
 const AppCrmSettingsRoute = AppCrmSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -863,6 +869,7 @@ export interface FileRoutesByFullPath {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
+  '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
@@ -985,6 +992,7 @@ export interface FileRoutesByTo {
   '/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/crm/settings': typeof AppCrmSettingsRoute
+  '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
@@ -1117,6 +1125,7 @@ export interface FileRoutesById {
   '/_app/crm/leads': typeof AppCrmLeadsRouteWithChildren
   '/_app/crm/quotations': typeof AppCrmQuotationsRouteWithChildren
   '/_app/crm/settings': typeof AppCrmSettingsRoute
+  '/_app/engineers/expenses': typeof AppEngineersExpensesRoute
   '/_app/engineers/rates': typeof AppEngineersRatesRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/gatepass/new': typeof AppGatepassNewRoute
@@ -1254,6 +1263,7 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
+    | '/engineers/expenses'
     | '/engineers/rates'
     | '/gatepass/$id'
     | '/gatepass/new'
@@ -1376,6 +1386,7 @@ export interface FileRouteTypes {
     | '/crm/leads'
     | '/crm/quotations'
     | '/crm/settings'
+    | '/engineers/expenses'
     | '/engineers/rates'
     | '/gatepass/$id'
     | '/gatepass/new'
@@ -1507,6 +1518,7 @@ export interface FileRouteTypes {
     | '/_app/crm/leads'
     | '/_app/crm/quotations'
     | '/_app/crm/settings'
+    | '/_app/engineers/expenses'
     | '/_app/engineers/rates'
     | '/_app/gatepass/$id'
     | '/_app/gatepass/new'
@@ -2168,6 +2180,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppEngineersRatesRouteImport
       parentRoute: typeof AppEngineersRoute
     }
+    '/_app/engineers/expenses': {
+      id: '/_app/engineers/expenses'
+      path: '/expenses'
+      fullPath: '/engineers/expenses'
+      preLoaderRoute: typeof AppEngineersExpensesRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
     '/_app/crm/settings': {
       id: '/_app/crm/settings'
       path: '/settings'
@@ -2682,11 +2701,13 @@ const AppCrmRouteWithChildren =
   AppCrmRoute._addFileChildren(AppCrmRouteChildren)
 
 interface AppEngineersRouteChildren {
+  AppEngineersExpensesRoute: typeof AppEngineersExpensesRoute
   AppEngineersRatesRoute: typeof AppEngineersRatesRoute
   AppEngineersIndexRoute: typeof AppEngineersIndexRoute
 }
 
 const AppEngineersRouteChildren: AppEngineersRouteChildren = {
+  AppEngineersExpensesRoute: AppEngineersExpensesRoute,
   AppEngineersRatesRoute: AppEngineersRatesRoute,
   AppEngineersIndexRoute: AppEngineersIndexRoute,
 }

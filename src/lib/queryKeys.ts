@@ -78,6 +78,8 @@ export const adminEngKeys = {
   ledger: (from: string, to: string) => ["admin-eng", "ledger", from, to] as const,
   rates: (employeeId: string | null) => ["admin-eng", "rates", employeeId] as const,
   ratesPrefix: ["admin-eng", "rates"] as const,
+  settlements: (employeeId: string | null) => ["admin-eng", "settlements", employeeId] as const,
+  settlementsPrefix: ["admin-eng", "settlements"] as const,
 } as const;
 
 // Aggregate export for convenience

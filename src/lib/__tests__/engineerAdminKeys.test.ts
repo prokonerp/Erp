@@ -3,7 +3,7 @@
 // no DOM — mirrors engineersAdmin.test.ts conventions.
 import { describe, it, expect } from "vitest";
 import { adminEngKeys } from "@/lib/queryKeys";
-import { payableWindow, validateRateAppend } from "@/lib/engineersAdmin";
+import { payableWindow, settlementStatusChangeAllowed, validateRateAppend } from "@/lib/engineersAdmin";
 
 describe("engineerAdminKeys/adminEngKeys", () => {
   it("exposes a stable roster key", () => {
@@ -84,5 +84,74 @@ describe("engineersAdmin/validateRateAppend", () => {
     expect(validateRateAppend(rates, "", "2026-09-02").ok).toBe(false);
     expect(validateRateAppend(rates, "e1", "not-a-date").ok).toBe(false);
     expect(validateRateAppend(null, "e1", "2026-09-02")).toEqual({ ok: true });
+  });
+});
+
+describe("engineerAdminKeys/adminEngKeys.settlements", () => {
+  it("scopes settlements by employee", () => {
+    expect(adminEngKeys.settlements("e1")).toEqual(["admin-eng", "settlements", "e1"]);
+  });
+
+  it("exposes a settlements prefix for invalidation", () => {
+    expect(adminEngKeys.settlementsPrefix).toEqual(["admin-eng", "settlements"]);
+  });
+});
+
+describe("engineersAdmin/settlementStatusChangeAllowed", () => {
+  it("locks Approved periods — no status change allowed", () => {
+    expect(
+      settlementStatusChangeAllowed({ status: "Approved", locked_at: null }, "Rejected"),
+    ).toEqual({ ok: false, error: expect.stringContaining("final") });
+    expect(
+      settlementStatusChangeAllowed({ status: "Approved", locked_at: null }, "Approved"),
+    ).toEqual({ ok: false, error: expect.stringContaining("final") });
+  });
+
+  it("refuses locked_at rows even when status is still Pending", () => {
+    expect(
+      settlementStatusChangeAllowed(
+        { status: "Pending", locked_at: "2026-09-30T10:00:00Z" },
+        "Approved",
+      ),
+    ).toEqual({ ok: false, error: expect.stringContaining("locked") });
+  });
+
+  it("allows Pending → Approved and Pending → Rejected", () => {
+    expect(
+      settlementStatusChangeAllowed({ status: "Pending", locked_at: null }, "Approved"),
+    ).toEqual({ ok: true });
+    expect(
+      settlementStatusChangeAllowed({ status: "Pending", locked_at: null }, "Rejected"),
+    ).toEqual({ ok: true });
+  });
+
+  it("lets an override win only with a reason", () => {
+    expect(
+      settlementStatusChangeAllowed(
+        { status: "Pending", locked_at: null },
+        "Approved",
+        { overriddenAmount: 5000, reason: "  " },
+      ),
+    ).toEqual({ ok: false, error: expect.stringContaining("reason") });
+    expect(
+      settlementStatusChangeAllowed(
+        { status: "Pending", locked_at: null },
+        "Approved",
+        { overriddenAmount: 5000, reason: "River crossing toll" },
+      ),
+    ).toEqual({ ok: true });
+  });
+
+  it("ignores a non-numeric override and rejects bad input", () => {
+    expect(
+      settlementStatusChangeAllowed(
+        { status: "Pending", locked_at: null },
+        "Approved",
+        { overriddenAmount: "n/a", reason: "" },
+      ),
+    ).toEqual({ ok: true });
+    expect(
+      settlementStatusChangeAllowed({ status: "Pending", locked_at: null }, "Archived" as never),
+    ).toEqual({ ok: false, error: expect.stringContaining("Approved or Rejected") });
   });
 });
