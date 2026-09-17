@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CALL_TYPES,
   TICKET_STATUSES,
@@ -49,7 +50,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getOemLogo } from "@/lib/oemLogos";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
 import { useTicketVerifications } from "@/hooks/useTicketVerifications";
@@ -319,6 +319,28 @@ function TicketDetail() {
   const [customer, setCustomer] = useState<CustomerBilling | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [deptFilter, setDeptFilter] = useState<string>("all");
+  // Lower-half tabs (FSR / Verification / Activity / Assign) — persisted per
+  // ticket so the autosave re-render never yanks the admin back to tab one.
+  const LOWER_TABS = ["fsr", "verification", "activity", "assign"] as const;
+  type LowerTab = (typeof LOWER_TABS)[number];
+  const [lowerTab, setLowerTab] = useState<LowerTab>(() => {
+    try {
+      const saved = sessionStorage.getItem(`ticket-lower-tab:${id}`);
+      return LOWER_TABS.includes(saved as LowerTab) ? (saved as LowerTab) : "fsr";
+    } catch {
+      // sessionStorage unavailable (private mode) — tab just won't persist.
+      return "fsr";
+    }
+  });
+  const handleLowerTab = (v: string) => {
+    if (!LOWER_TABS.includes(v as LowerTab)) return;
+    setLowerTab(v as LowerTab);
+    try {
+      sessionStorage.setItem(`ticket-lower-tab:${id}`, v);
+    } catch {
+      // sessionStorage unavailable — tab just won't persist.
+    }
+  };
   const [oemBrands, setOemBrands] = useState<string[]>([
     "APC",
     "Luminous",
@@ -1166,41 +1188,15 @@ function TicketDetail() {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Branded header with OEM at top */}
-      <Card className="print:hidden">
-        <CardContent className="py-3 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <img src={prokonLogo.url} alt="Prokon" className="h-10 w-auto object-contain" />
-            <div>
-              <div className="font-semibold leading-tight">Prokon Hi-Tech Systems</div>
-              <div className="text-xs text-muted-foreground">
-                Ticket · <span className="font-mono">{t.case_id}</span>
-              </div>
-            </div>
-          </div>
-          {t.oem_call &&
-            (() => {
-              const oem = getOemLogo(t.oem_brand);
-              return (
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-purple-600 text-white hover:bg-purple-700">
-                    OEM{t.oem_brand ? ` · ${t.oem_brand}` : ""}
-                  </Badge>
-                  {oem && <img src={oem.url} alt={oem.alt} className="h-9 w-auto object-contain" />}
-                </div>
-              );
-            })()}
-        </CardContent>
-      </Card>
-
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
+    <div className="space-y-2">
+      <div className="sticky top-0 z-20 flex items-center justify-between flex-wrap gap-2 bg-background/95 py-1.5 backdrop-blur print:static print:bg-transparent print:p-0 print:backdrop-blur-none">
+        <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/tickets" })}>
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back
           </Button>
-          <div className="flex flex-col gap-1">
+          <img src={prokonLogo.url} alt="Prokon" className="h-6 w-auto shrink-0 object-contain" />
+          <div className="flex flex-col gap-0.5">
             {showSpecialRibbon && (
               <div
                 className={`inline-flex items-center gap-2 self-start rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${acknowledged ? "border-green-400 bg-green-100 text-green-800" : "border-red-300 bg-red-50 text-red-700 animate-pulse"}`}
@@ -1234,7 +1230,7 @@ function TicketDetail() {
                 Preferred Visit: {formatPreferred(t.preferred_visit_datetime)}
               </div>
             )}
-            <h2 className="text-xl font-semibold font-mono">{t.case_id}</h2>
+            <h2 className="text-base font-semibold font-mono leading-tight">{t.case_id}</h2>
           </div>
           <Badge className={STATUS_COLOR[t.status] || ""} variant="secondary">
             {t.status}
@@ -1243,7 +1239,7 @@ function TicketDetail() {
             variant={t.oem_call ? "default" : "outline"}
             className={t.oem_call ? "bg-purple-600 text-white hover:bg-purple-700" : ""}
           >
-            {t.oem_call ? "OEM" : "PHS"}
+            {t.oem_call ? `OEM${t.oem_brand ? ` · ${t.oem_brand}` : ""}` : "PHS"}
           </Badge>
           <div className="flex items-center gap-2 ml-2 text-sm">
             <span className="text-muted-foreground">OEM Call</span>
@@ -1309,15 +1305,15 @@ function TicketDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 print:hidden">
+      <div className="ticket-dense grid grid-cols-1 lg:grid-cols-3 gap-2 print:hidden">
         {/* Left: ticket details */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-2">
           {t.oem_call && (
-            <Card className="border-purple-300">
-              <CardHeader>
+            <Card className="border-purple-300 rounded-lg shadow-none">
+              <CardHeader className="px-3 py-1.5 border-b">
                 <CardTitle className="text-base">OEM Details</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-x-2 gap-y-1.5 p-3">
                 <div>
                   <Label>OEM Brand *</Label>
                   <Select value={t.oem_brand || ""} onValueChange={(v) => update({ oem_brand: v })}>
@@ -1353,11 +1349,11 @@ function TicketDetail() {
             </Card>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Ticket Details</CardTitle>
+          <Card className="rounded-lg shadow-none">
+            <CardHeader className="px-3 py-1.5 border-b">
+              <CardTitle className="text-[13px]">Ticket Details</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-x-2 gap-y-1.5 p-3">
               <div className="md:col-span-1">
                 <Label>Case ID</Label>
                 <Input
@@ -1433,7 +1429,7 @@ function TicketDetail() {
                   </span>
                 </Label>
                 <Textarea
-                  rows={2}
+                  rows={1}
                   value={t.special_instruction || ""}
                   onChange={(e) => update({ special_instruction: e.target.value })}
                   placeholder="Critical handling notes for engineer (optional)"
@@ -1472,11 +1468,11 @@ function TicketDetail() {
             </div>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer</CardTitle>
+          <Card className="rounded-lg shadow-none">
+            <CardHeader className="px-3 py-1.5 border-b">
+              <CardTitle className="text-[13px]">Customer</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-2 gap-y-1.5 p-3">
               <div>
                 <Label>Name *</Label>
                 <Input
@@ -1513,10 +1509,10 @@ function TicketDetail() {
                   onChange={(e) => update({ location: e.target.value })}
                 />
               </div>
-              <div className="md:col-span-2">
+              <div className="sm:col-span-2 md:col-span-3">
                 <Label>Address</Label>
                 <Textarea
-                  rows={2}
+                  rows={1}
                   value={t.customer_address || ""}
                   onChange={(e) => update({ customer_address: e.target.value })}
                 />
@@ -1525,16 +1521,16 @@ function TicketDetail() {
           </Card>
 
           {customer && (
-            <Card>
-              <CardHeader>
-                <CardTitle>
+            <Card className="rounded-lg shadow-none">
+              <CardHeader className="px-3 py-1.5 border-b">
+                <CardTitle className="text-[13px]">
                   Billing Address{" "}
                   <span className="text-xs font-normal text-muted-foreground">
                     (from Customer Master)
                   </span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm space-y-1">
+              <CardContent className="text-xs space-y-0.5 p-2">
                 <div className="font-semibold">{customer.company}</div>
                 {(customer.billing_address || customer.address || customer.street) && (
                   <div className="whitespace-pre-wrap text-muted-foreground">
@@ -1574,9 +1570,9 @@ function TicketDetail() {
             </Card>
           )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>
+          <Card className="rounded-lg shadow-none">
+            <CardHeader className="flex flex-row items-center justify-between px-3 py-1.5 border-b">
+              <CardTitle className="text-[13px]">
                 Defective Parts Received{" "}
                 <span className="text-xs font-normal text-muted-foreground">(from customer)</span>
               </CardTitle>
@@ -1597,7 +1593,7 @@ function TicketDetail() {
                 />
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3">
               {t.defective_parts_received ? (
                 <div className="space-y-2">
                   {(t.defective_parts_details || []).length === 0 && (
@@ -1690,7 +1686,7 @@ function TicketDetail() {
                       );
                     })()}
                   {(t.defective_parts_details || []).map((p, i) => (
-                    <div key={i} className="rounded-md border p-2">
+                    <div key={i} className="rounded-md border p-1.5">
                       {p.source === "fsr" && (
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant="secondary" className="text-[10px]">
@@ -1709,8 +1705,8 @@ function TicketDetail() {
                           )}
                         </div>
                       )}
-                      <div className="grid grid-cols-12 gap-2 items-end">
-                        <div className="col-span-12 md:col-span-1 flex items-center pb-1">
+                      <div className="grid grid-cols-12 gap-1.5 items-end">
+                        <div className="col-span-12 md:col-span-1 flex items-center">
                           <Checkbox
                             checked={!!selectedDefRows[i]}
                             disabled={!(p.oracle_no && p.oracle_no.trim())}
@@ -1719,16 +1715,15 @@ function TicketDetail() {
                           />
                         </div>
                         <div className="col-span-12 md:col-span-2">
-                          <Label>Oracle #</Label>
                           <Input
                             value={p.oracle_no || ""}
                             onChange={(e) => updDef(i, { oracle_no: e.target.value.toUpperCase() })}
-                            placeholder="e.g. ORA-001"
+                            placeholder="Oracle #"
+                            aria-label="Oracle number"
                             className="font-mono"
                           />
                         </div>
                         <div className="col-span-12 md:col-span-2">
-                          <Label>Part / Item</Label>
                           <TicketPartPicker
                             ticketProduct={t.product}
                             value={p.model_no || p.name}
@@ -1738,32 +1733,36 @@ function TicketDetail() {
                           />
                         </div>
                         <div className="col-span-12 md:col-span-2">
-                          <Label>Model / Part No</Label>
                           <Input
                             value={p.model_no || ""}
                             onChange={(e) => updDef(i, { model_no: e.target.value })}
+                            placeholder="Model / Part No"
+                            aria-label="Model or part number"
                           />
                         </div>
                         <div className="col-span-12 md:col-span-2">
-                          <Label>Serial No</Label>
                           <Input
                             value={p.serial || ""}
                             onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })}
+                            placeholder="Serial No"
+                            aria-label="Serial number"
                             className="font-mono"
                           />
                         </div>
                         <div className="col-span-4 md:col-span-1">
-                          <Label>Qty</Label>
                           <Input
                             value={p.qty}
                             onChange={(e) => updDef(i, { qty: e.target.value })}
+                            placeholder="Qty"
+                            aria-label="Quantity"
                           />
                         </div>
                         <div className="col-span-6 md:col-span-1">
-                          <Label>Remarks</Label>
                           <Input
                             value={p.remarks || ""}
                             onChange={(e) => updDef(i, { remarks: e.target.value })}
+                            placeholder="Remarks"
+                            aria-label="Remarks"
                           />
                         </div>
                         <div className="col-span-12 md:col-span-2 flex items-end gap-1">
@@ -1828,9 +1827,9 @@ function TicketDetail() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>
+          <Card className="rounded-lg shadow-none">
+            <CardHeader className="flex flex-row items-center justify-between px-3 py-1.5 border-b">
+              <CardTitle className="text-[13px]">
                 Good Parts Used{" "}
                 <span className="text-xs font-normal text-muted-foreground">
                   (issued to customer)
@@ -1853,7 +1852,7 @@ function TicketDetail() {
                 />
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3">
               {t.good_parts_used ? (
                 <div className="space-y-2">
                   {(t.good_parts_details || []).length === 0 && (
@@ -1910,7 +1909,7 @@ function TicketDetail() {
                     return (
                       <div
                         key={i}
-                        className={`rounded-md border p-2 ${fromOracle ? "bg-muted/40 border-primary/30" : ""}`}
+                        className={`rounded-md border p-1.5 ${fromOracle ? "bg-muted/40 border-primary/30" : ""}`}
                       >
                         {fromOracle && (
                           <div className="flex items-center justify-between mb-1">
@@ -1948,9 +1947,8 @@ function TicketDetail() {
                               ))}
                           </div>
                         )}
-                        <div className="grid grid-cols-12 gap-2 items-end">
+                        <div className="grid grid-cols-12 gap-1.5 items-end">
                           <div className="col-span-12 md:col-span-3">
-                            <Label>Part / Item</Label>
                             <TicketPartPicker
                               ticketProduct={t.product}
                               value={p.model_no || p.name}
@@ -1961,35 +1959,39 @@ function TicketDetail() {
                             />
                           </div>
                           <div className="col-span-12 md:col-span-3">
-                            <Label>Model / Part No</Label>
                             <Input
                               value={p.model_no || ""}
                               onChange={(e) => updGood(i, { model_no: e.target.value })}
+                              placeholder="Model / Part No"
+                              aria-label="Model or part number"
                               readOnly={ro}
                             />
                           </div>
                           <div className="col-span-12 md:col-span-2">
-                            <Label>Serial No</Label>
                             <Input
                               value={p.serial || ""}
                               onChange={(e) => updGood(i, { serial: e.target.value.toUpperCase() })}
+                              placeholder="Serial No"
+                              aria-label="Serial number"
                               className="font-mono"
                               readOnly={ro}
                             />
                           </div>
                           <div className="col-span-4 md:col-span-1">
-                            <Label>Qty</Label>
                             <Input
                               value={p.qty}
                               onChange={(e) => updGood(i, { qty: e.target.value })}
+                              placeholder="Qty"
+                              aria-label="Quantity"
                               readOnly={ro}
                             />
                           </div>
                           <div className="col-span-6 md:col-span-2">
-                            <Label>Remarks</Label>
                             <Input
                               value={p.remarks || ""}
                               onChange={(e) => updGood(i, { remarks: e.target.value })}
+                              placeholder="Remarks"
+                              aria-label="Remarks"
                               readOnly={ro}
                             />
                           </div>
@@ -2019,70 +2021,15 @@ function TicketDetail() {
               )}
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity Log</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add a note…"
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                  />
-                  <Button onClick={addNote}>Add</Button>
-                </div>
-                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                  <Checkbox
-                    checked={noteSpecial}
-                    onCheckedChange={(v) => setNoteSpecial(v === true)}
-                  />
-                  <span>
-                    Tag as <b className="text-red-700">Special Instruction</b> (flags this ticket as
-                    critical)
-                  </span>
-                </label>
-              </div>
-              <div className="space-y-2 max-h-72 overflow-auto">
-                {activities.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No activity yet.</p>
-                )}
-                {activities.map((a) => (
-                  <div
-                    key={a.id}
-                    className={`border rounded-md p-2 text-sm ${a.special_instruction ? "border-red-300 bg-red-50/60" : ""}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium capitalize flex items-center gap-2">
-                        {VERIFY_LABEL[a.kind] ?? a.kind}
-                        {a.special_instruction && (
-                          <span className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
-                            <AlertTriangle className="h-3 w-3" />
-                            Special
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(a.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    {a.notes && <div className="text-muted-foreground mt-1">{a.notes}</div>}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
-        {/* Right: status + actions */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Status</CardTitle>
+        {/* Right: status + sections */}
+        <div className="space-y-2">
+          <Card className="rounded-lg shadow-none">
+            <CardHeader className="px-3 py-1.5 border-b">
+              <CardTitle className="text-[13px]">Status</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-1.5 p-2">
               <Select value={t.status} onValueChange={changeStatus}>
                 <SelectTrigger>
                   <SelectValue />
@@ -2122,7 +2069,12 @@ function TicketDetail() {
                 </p>
               )}
               {t.status !== "Closed" && t.status !== "Cancelled" && (
-                <Button variant="outline" className="w-full" onClick={() => changeStatus("Closed")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => changeStatus("Closed")}
+                >
                   <CheckCircle2 className="h-4 w-4 mr-1" />
                   Close & Notify Customer
                 </Button>
@@ -2130,698 +2082,830 @@ function TicketDetail() {
             </CardContent>
           </Card>
 
-          {verifications && (verifications.customer || verifications.equipment) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Engineer Verification</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {verifications.customer && (
-                  <div className="space-y-1">
-                    <Badge
-                      variant={
-                        verifications.customer.verdict === "verified" ? "default" : "destructive"
-                      }
-                      className="text-[10px]"
-                    >
-                      Customer:{" "}
-                      {verifications.customer.verdict === "verified" ? "Verified" : "Corrected"}
+          <div className="min-w-0">
+            <Tabs value={lowerTab} onValueChange={handleLowerTab} className="print:hidden">
+              <TabsList className="h-auto flex-wrap">
+                <TabsTrigger value="fsr" className="gap-1.5">
+                  Field Service Report
+                  {(fsrRows ?? []).length > 0 && (
+                    <Badge variant="secondary" className="px-1 text-[10px]">
+                      {(fsrRows ?? []).length}
                     </Badge>
-                    {verifications.customer.verdict === "incorrect" &&
-                      verifications.customer.snapshot &&
-                      verifications.customer.corrected && (
-                        <div className="space-y-1 mt-1">
-                          <VerificationDiff
-                            label="Customer mobile"
-                            original={
-                              (verifications.customer.snapshot as Record<string, unknown>)
-                                .customer_phone as string | null
-                            }
-                            corrected={
-                              (verifications.customer.corrected as Record<string, unknown>)
-                                .customer_phone as string | null
-                            }
-                            engineer={verifications.customer.engineer_name}
-                            at={verifications.customer.verified_at}
-                          />
-                          <VerificationDiff
-                            label="Email"
-                            original={
-                              (verifications.customer.snapshot as Record<string, unknown>)
-                                .customer_email as string | null
-                            }
-                            corrected={
-                              (verifications.customer.corrected as Record<string, unknown>)
-                                .customer_email as string | null
-                            }
-                            engineer={verifications.customer.engineer_name}
-                            at={verifications.customer.verified_at}
-                          />
-                        </div>
-                      )}
-                  </div>
-                )}
-                {verifications.equipment && (
-                  <div className="space-y-1">
-                    <Badge
-                      variant={
-                        verifications.equipment.verdict === "matched" ? "default" : "destructive"
-                      }
-                      className="text-[10px]"
-                    >
-                      Equipment:{" "}
-                      {verifications.equipment.verdict === "matched" ? "Matched" : "Mismatch"}
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="verification">Verification</TabsTrigger>
+                <TabsTrigger value="activity" className="gap-1.5">
+                  Activity
+                  {(activities ?? []).length > 0 && (
+                    <Badge variant="secondary" className="px-1 text-[10px]">
+                      {(activities ?? []).length}
                     </Badge>
-                    {verifications.equipment.verdict === "mismatch" && (
-                      <div className="space-y-1 mt-1">
-                        <EquipmentVerificationPhoto
-                          photoPath={verifications.equipment.photo_path}
-                          linkLabel="View correction photo"
-                        />
-                        <VerificationDiff
-                          label="Model"
-                          original={verifications.equipment.original_model}
-                          corrected={verifications.equipment.corrected_model}
-                          engineer={verifications.equipment.engineer_name}
-                          at={verifications.equipment.verified_at}
-                        />
-                        <VerificationDiff
-                          label="Serial No"
-                          original={verifications.equipment.original_serial}
-                          corrected={verifications.equipment.corrected_serial}
-                          engineer={verifications.equipment.engineer_name}
-                          at={verifications.equipment.verified_at}
-                        />
-                      </div>
-                    )}
-                    {verifications.equipment.verdict === "matched" && (
-                      <div className="mt-1">
-                        <EquipmentVerificationPhoto
-                          photoPath={verifications.equipment.photo_path}
-                          linkLabel="View serial photo"
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
-              <CardTitle>Field Service Report</CardTitle>
-              <FsrPrintButton ticketId={id} fsrRow={fsrLatest as unknown as FsrDbRow | null} />
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {!fsrLatest ? (
-                <p className="text-xs text-muted-foreground">
-                  No field service report submitted yet.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Submitted</span>
-                      <span className="font-medium">
-                        {fsrLatest.submitted_at
-                          ? new Date(fsrLatest.submitted_at).toLocaleString()
-                          : "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Engineer</span>
-                      <span className="font-medium">{fsrLatest.engineer_name ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Overall rating (1–10)</span>
-                      <Badge variant="default" className="text-[10px]">
-                        {fsrLatest.rating ?? "—"}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Readings
-                    </p>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Mains voltage L-N (VAC)</span>
-                      <span className="font-medium">{fsrLatest.mains_voltage_ln ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Mains voltage N-E (VAC)</span>
-                      <span className="font-medium">{fsrLatest.mains_voltage_ne ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Battery bank make</span>
-                      <span className="font-medium">{fsrLatest.battery_bank_make ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Battery bank Ah</span>
-                      <span className="font-medium">{fsrLatest.battery_bank_ah ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Battery bank qty</span>
-                      <span className="font-medium">{fsrLatest.battery_bank_qty ?? "—"}</span>
-                    </div>
-                    {(() => {
-                      const charging = asFsrArray<FsrVolts>(fsrLatest.charging_readings);
-                      if (charging.length === 0) {
-                        return (
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="assign">Assign & Notify</TabsTrigger>
+              </TabsList>
+              <TabsContent
+                value="fsr"
+                forceMount
+                className="mt-2 space-y-2 data-[state=inactive]:hidden"
+              >
+                <Card className="rounded-lg shadow-none">
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap px-3 py-1.5 border-b">
+                    <CardTitle className="text-[13px]">Field Service Report</CardTitle>
+                    <FsrPrintButton
+                      ticketId={id}
+                      fsrRow={fsrLatest as unknown as FsrDbRow | null}
+                    />
+                  </CardHeader>
+                  <CardContent className="space-y-2 p-3">
+                    {!fsrLatest ? (
+                      <p className="text-xs text-muted-foreground">
+                        No field service report submitted yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="space-y-1">
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Charging</span>
-                            <span className="font-medium">None</span>
+                            <span className="text-muted-foreground">Submitted</span>
+                            <span className="font-medium">
+                              {fsrLatest.submitted_at
+                                ? new Date(fsrLatest.submitted_at).toLocaleString()
+                                : "—"}
+                            </span>
                           </div>
-                        );
-                      }
-                      return charging.map((r, i) => (
-                        <div
-                          key={`charging-${i}`}
-                          className="flex items-center justify-between gap-2 text-xs"
-                        >
-                          <span className="text-muted-foreground">Charging</span>
-                          <span className="font-medium">
-                            Battery {i + 1}: {r?.volts ?? "—"} Vdc
-                          </span>
-                        </div>
-                      ));
-                    })()}
-                    {(() => {
-                      const discharging = asFsrArray<FsrVolts>(fsrLatest.discharging_readings);
-                      if (discharging.length === 0) {
-                        return (
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Discharging</span>
-                            <span className="font-medium">None</span>
+                            <span className="text-muted-foreground">Engineer</span>
+                            <span className="font-medium">{fsrLatest.engineer_name ?? "—"}</span>
                           </div>
-                        );
-                      }
-                      return discharging.map((r, i) => (
-                        <div
-                          key={`discharging-${i}`}
-                          className="flex items-center justify-between gap-2 text-xs"
-                        >
-                          <span className="text-muted-foreground">Discharging</span>
-                          <span className="font-medium">
-                            Battery {i + 1}: {r?.volts ?? "—"} Vdc
-                          </span>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Load Record
-                    </p>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">AC provided</span>
-                      <Badge
-                        variant={fsrLatest.ac_provided ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {fsrLatest.ac_provided ? "Yes" : "No"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">DG provided</span>
-                      <Badge
-                        variant={fsrLatest.dg_provided ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {fsrLatest.dg_provided ? "Yes" : "No"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Environment duty</span>
-                      <Badge
-                        variant={fsrLatest.environment_duty ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {fsrLatest.environment_duty ? "Yes" : "No"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">UPS location</span>
-                      <span className="font-medium">{fsrLatest.ups_location ?? "—"}</span>
-                    </div>
-                    {(() => {
-                      const pcs = asFsrArray<FsrPc>(fsrLatest.pc_details);
-                      if (pcs.length === 0) {
-                        return (
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">PCs</span>
-                            <span className="font-medium">None</span>
+                            <span className="text-muted-foreground">Overall rating (1–10)</span>
+                            <Badge variant="default" className="text-[10px]">
+                              {fsrLatest.rating ?? "—"}
+                            </Badge>
                           </div>
-                        );
-                      }
-                      return pcs.map((p, i) => (
-                        <div
-                          key={`pc-${i}`}
-                          className="flex items-center justify-between gap-2 text-xs"
-                        >
-                          <span className="text-muted-foreground">
-                            {i === 0 ? `PCs (${pcs.length})` : `PC ${i + 1}`}
-                          </span>
-                          <span className="font-medium">
-                            {p?.monitor_size_in ?? "—"}″ × {p?.qty ?? "—"}
-                          </span>
                         </div>
-                      ));
-                    })()}
-                    {(() => {
-                      const printers = asFsrArray<FsrWattQty>(fsrLatest.printer_details);
-                      if (printers.length === 0) {
-                        return (
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Printers</span>
-                            <span className="font-medium">None</span>
-                          </div>
-                        );
-                      }
-                      return printers.map((p, i) => (
-                        <div
-                          key={`printer-${i}`}
-                          className="flex items-center justify-between gap-2 text-xs"
-                        >
-                          <span className="text-muted-foreground">
-                            {i === 0 ? `Printers (${printers.length})` : `Printer ${i + 1}`}
-                          </span>
-                          <span className="font-medium">
-                            {p?.rating_w ?? "—"} W × {p?.qty ?? "—"}
-                          </span>
-                        </div>
-                      ));
-                    })()}
-                    {(() => {
-                      const scanners = asFsrArray<FsrWattQty>(fsrLatest.scanner_details);
-                      if (scanners.length === 0) {
-                        return (
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Scanners</span>
-                            <span className="font-medium">None</span>
-                          </div>
-                        );
-                      }
-                      return scanners.map((s, i) => (
-                        <div
-                          key={`scanner-${i}`}
-                          className="flex items-center justify-between gap-2 text-xs"
-                        >
-                          <span className="text-muted-foreground">
-                            {i === 0 ? `Scanners (${scanners.length})` : `Scanner ${i + 1}`}
-                          </span>
-                          <span className="font-medium">
-                            {s?.rating_w ?? "—"} W × {s?.qty ?? "—"}
-                          </span>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Power Condition
-                    </p>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Power failures / day</span>
-                      <span className="font-medium">{fsrLatest.power_failures_count ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Failure duration (min / day)</span>
-                      <span className="font-medium">
-                        {fsrLatest.power_failures_duration_min ?? "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Load on DG (%)</span>
-                      <span className="font-medium">{fsrLatest.load_on_dg_percent ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">DG set</span>
-                      <Badge
-                        variant={fsrLatest.dg_set ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {fsrLatest.dg_set ? "Yes" : "No"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">DG set capacity (kVA)</span>
-                      <span className="font-medium">{fsrLatest.dg_set_capacity_kva ?? "—"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">AMF panel</span>
-                      <Badge
-                        variant={fsrLatest.amf_panel ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {fsrLatest.amf_panel ? "Yes" : "No"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Operates non-business hours</span>
-                      <Badge
-                        variant={fsrLatest.operate_non_business_hours ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {fsrLatest.operate_non_business_hours ? "Yes" : "No"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="text-muted-foreground">Operates on holidays</span>
-                      <Badge
-                        variant={fsrLatest.operate_holidays ? "default" : "secondary"}
-                        className="text-[10px]"
-                      >
-                        {fsrLatest.operate_holidays ? "Yes" : "No"}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Part Replacements
-                    </p>
-                    {(() => {
-                      const parts = asFsrArray<FsrPart>(fsrLatest.part_replacements);
-                      if (parts.length === 0) {
-                        return <p className="text-xs text-muted-foreground">None</p>;
-                      }
-                      return parts.map((p, i) => (
-                        <div key={`part-${i}`} className="space-y-1">
-                          <p className="text-xs font-medium">
-                            Part {i + 1}
-                            {p.item ? ` — ${p.item}` : ""}
+                        <div className="space-y-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Readings
                           </p>
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Item</span>
-                            <span className="font-medium">{p.item ?? "—"}</span>
+                            <span className="text-muted-foreground">Mains voltage L-N (VAC)</span>
+                            <span className="font-medium">{fsrLatest.mains_voltage_ln ?? "—"}</span>
                           </div>
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Old Sr. No</span>
-                            <span className="font-medium">{p.old_sr_no ?? "—"}</span>
+                            <span className="text-muted-foreground">Mains voltage N-E (VAC)</span>
+                            <span className="font-medium">{fsrLatest.mains_voltage_ne ?? "—"}</span>
                           </div>
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">New Sr. No</span>
-                            <span className="font-medium">{p.new_sr_no ?? "—"}</span>
+                            <span className="text-muted-foreground">Battery bank make</span>
+                            <span className="font-medium">
+                              {fsrLatest.battery_bank_make ?? "—"}
+                            </span>
                           </div>
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Charges</span>
-                            <span className="font-medium">{p.charges ?? "—"}</span>
+                            <span className="text-muted-foreground">Battery bank Ah</span>
+                            <span className="font-medium">{fsrLatest.battery_bank_ah ?? "—"}</span>
                           </div>
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Qty</span>
-                            <span className="font-medium">{p.qty ?? "—"}</span>
+                            <span className="text-muted-foreground">Battery bank qty</span>
+                            <span className="font-medium">{fsrLatest.battery_bank_qty ?? "—"}</span>
+                          </div>
+                          {(() => {
+                            const charging = asFsrArray<FsrVolts>(fsrLatest.charging_readings);
+                            if (charging.length === 0) {
+                              return (
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">Charging</span>
+                                  <span className="font-medium">None</span>
+                                </div>
+                              );
+                            }
+                            return charging.map((r, i) => (
+                              <div
+                                key={`charging-${i}`}
+                                className="flex items-center justify-between gap-2 text-xs"
+                              >
+                                <span className="text-muted-foreground">Charging</span>
+                                <span className="font-medium">
+                                  Battery {i + 1}: {r?.volts ?? "—"} Vdc
+                                </span>
+                              </div>
+                            ));
+                          })()}
+                          {(() => {
+                            const discharging = asFsrArray<FsrVolts>(
+                              fsrLatest.discharging_readings,
+                            );
+                            if (discharging.length === 0) {
+                              return (
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">Discharging</span>
+                                  <span className="font-medium">None</span>
+                                </div>
+                              );
+                            }
+                            return discharging.map((r, i) => (
+                              <div
+                                key={`discharging-${i}`}
+                                className="flex items-center justify-between gap-2 text-xs"
+                              >
+                                <span className="text-muted-foreground">Discharging</span>
+                                <span className="font-medium">
+                                  Battery {i + 1}: {r?.volts ?? "—"} Vdc
+                                </span>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Load Record
+                          </p>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">AC provided</span>
+                            <Badge
+                              variant={fsrLatest.ac_provided ? "default" : "secondary"}
+                              className="text-[10px]"
+                            >
+                              {fsrLatest.ac_provided ? "Yes" : "No"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">DG provided</span>
+                            <Badge
+                              variant={fsrLatest.dg_provided ? "default" : "secondary"}
+                              className="text-[10px]"
+                            >
+                              {fsrLatest.dg_provided ? "Yes" : "No"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Environment duty</span>
+                            <Badge
+                              variant={fsrLatest.environment_duty ? "default" : "secondary"}
+                              className="text-[10px]"
+                            >
+                              {fsrLatest.environment_duty ? "Yes" : "No"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">UPS location</span>
+                            <span className="font-medium">{fsrLatest.ups_location ?? "—"}</span>
+                          </div>
+                          {(() => {
+                            const pcs = asFsrArray<FsrPc>(fsrLatest.pc_details);
+                            if (pcs.length === 0) {
+                              return (
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">PCs</span>
+                                  <span className="font-medium">None</span>
+                                </div>
+                              );
+                            }
+                            return pcs.map((p, i) => (
+                              <div
+                                key={`pc-${i}`}
+                                className="flex items-center justify-between gap-2 text-xs"
+                              >
+                                <span className="text-muted-foreground">
+                                  {i === 0 ? `PCs (${pcs.length})` : `PC ${i + 1}`}
+                                </span>
+                                <span className="font-medium">
+                                  {p?.monitor_size_in ?? "—"}″ × {p?.qty ?? "—"}
+                                </span>
+                              </div>
+                            ));
+                          })()}
+                          {(() => {
+                            const printers = asFsrArray<FsrWattQty>(fsrLatest.printer_details);
+                            if (printers.length === 0) {
+                              return (
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">Printers</span>
+                                  <span className="font-medium">None</span>
+                                </div>
+                              );
+                            }
+                            return printers.map((p, i) => (
+                              <div
+                                key={`printer-${i}`}
+                                className="flex items-center justify-between gap-2 text-xs"
+                              >
+                                <span className="text-muted-foreground">
+                                  {i === 0 ? `Printers (${printers.length})` : `Printer ${i + 1}`}
+                                </span>
+                                <span className="font-medium">
+                                  {p?.rating_w ?? "—"} W × {p?.qty ?? "—"}
+                                </span>
+                              </div>
+                            ));
+                          })()}
+                          {(() => {
+                            const scanners = asFsrArray<FsrWattQty>(fsrLatest.scanner_details);
+                            if (scanners.length === 0) {
+                              return (
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">Scanners</span>
+                                  <span className="font-medium">None</span>
+                                </div>
+                              );
+                            }
+                            return scanners.map((s, i) => (
+                              <div
+                                key={`scanner-${i}`}
+                                className="flex items-center justify-between gap-2 text-xs"
+                              >
+                                <span className="text-muted-foreground">
+                                  {i === 0 ? `Scanners (${scanners.length})` : `Scanner ${i + 1}`}
+                                </span>
+                                <span className="font-medium">
+                                  {s?.rating_w ?? "—"} W × {s?.qty ?? "—"}
+                                </span>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Power Condition
+                          </p>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Power failures / day</span>
+                            <span className="font-medium">
+                              {fsrLatest.power_failures_count ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">
+                              Failure duration (min / day)
+                            </span>
+                            <span className="font-medium">
+                              {fsrLatest.power_failures_duration_min ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Load on DG (%)</span>
+                            <span className="font-medium">
+                              {fsrLatest.load_on_dg_percent ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">DG set</span>
+                            <Badge
+                              variant={fsrLatest.dg_set ? "default" : "secondary"}
+                              className="text-[10px]"
+                            >
+                              {fsrLatest.dg_set ? "Yes" : "No"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">DG set capacity (kVA)</span>
+                            <span className="font-medium">
+                              {fsrLatest.dg_set_capacity_kva ?? "—"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">AMF panel</span>
+                            <Badge
+                              variant={fsrLatest.amf_panel ? "default" : "secondary"}
+                              className="text-[10px]"
+                            >
+                              {fsrLatest.amf_panel ? "Yes" : "No"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">
+                              Operates non-business hours
+                            </span>
+                            <Badge
+                              variant={
+                                fsrLatest.operate_non_business_hours ? "default" : "secondary"
+                              }
+                              className="text-[10px]"
+                            >
+                              {fsrLatest.operate_non_business_hours ? "Yes" : "No"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Operates on holidays</span>
+                            <Badge
+                              variant={fsrLatest.operate_holidays ? "default" : "secondary"}
+                              className="text-[10px]"
+                            >
+                              {fsrLatest.operate_holidays ? "Yes" : "No"}
+                            </Badge>
                           </div>
                         </div>
-                      ));
-                    })()}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {isAdmin && (
-            <>
-              <Card className="border-destructive/40">
-                <CardHeader>
-                  <CardTitle>Admin — Engineer Work</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    Clears engineer verification data so Step 2 can be redone. Assignment and status
-                    are preserved.
-                  </p>
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    disabled={resetBusy}
-                    onClick={handleResetEngineerWork}
-                  >
-                    <RotateCcw className="h-4 w-4 mr-1" />
-                    {resetBusy ? "Resetting…" : "Reset engineer work"}
-                  </Button>
-                </CardContent>
-              </Card>
-              <Card className="border-destructive/40">
-                <CardHeader>
-                  <CardTitle>Admin — Field Service Reports</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {(fsrRows ?? []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No submissions yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(fsrRows ?? []).map((r) => (
-                        <div
-                          key={r.id}
-                          className="flex items-center justify-between gap-2 flex-wrap text-xs"
+                        <div className="space-y-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            Part Replacements
+                          </p>
+                          {(() => {
+                            const parts = asFsrArray<FsrPart>(fsrLatest.part_replacements);
+                            if (parts.length === 0) {
+                              return <p className="text-xs text-muted-foreground">None</p>;
+                            }
+                            return parts.map((p, i) => (
+                              <div key={`part-${i}`} className="space-y-1">
+                                <p className="text-xs font-medium">
+                                  Part {i + 1}
+                                  {p.item ? ` — ${p.item}` : ""}
+                                </p>
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">Item</span>
+                                  <span className="font-medium">{p.item ?? "—"}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">Old Sr. No</span>
+                                  <span className="font-medium">{p.old_sr_no ?? "—"}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">New Sr. No</span>
+                                  <span className="font-medium">{p.new_sr_no ?? "—"}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">Charges</span>
+                                  <span className="font-medium">{p.charges ?? "—"}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-muted-foreground">Qty</span>
+                                  <span className="font-medium">{p.qty ?? "—"}</span>
+                                </div>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                {isAdmin && (
+                  <>
+                    <Card className="border-destructive/40 rounded-lg shadow-none">
+                      <CardHeader className="px-3 py-1.5 border-b">
+                        <CardTitle className="text-[13px]">Admin — Engineer Work</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 p-3">
+                        <p className="text-xs text-muted-foreground">
+                          Clears engineer verification data so Step 2 can be redone. Assignment and
+                          status are preserved.
+                        </p>
+                        <Button
+                          variant="destructive"
+                          className="w-full"
+                          disabled={resetBusy}
+                          onClick={handleResetEngineerWork}
                         >
-                          <span className="text-muted-foreground">
-                            {r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "—"}
-                          </span>
-                          <span className="font-medium">{r.engineer_name ?? "—"}</span>
-                          <span className="font-medium">Rating: {r.rating ?? "—"}/10</span>
-                          {r.customer_signature_path ? (
-                            <button
-                              type="button"
-                              className="underline underline-offset-2"
-                              onClick={async () => {
-                                const sigPath = r.customer_signature_path;
-                                if (!sigPath) return;
-                                const { data, error } = await supabase.storage
-                                  .from("ticket-attachments")
-                                  .createSignedUrl(sigPath, 3600);
-                                if (error || !data?.signedUrl) {
-                                  toast.error(error?.message ?? "Could not open signature");
-                                  return;
-                                }
-                                window.open(data.signedUrl, "_blank", "noopener");
-                              }}
-                            >
-                              View signature
-                            </button>
-                          ) : null}
-                          <FsrPrintButton
-                            ticketId={id}
-                            fsrRow={r as unknown as FsrDbRow | null}
-                            compact
-                          />
+                          <RotateCcw className="h-4 w-4 mr-1" />
+                          {resetBusy ? "Resetting…" : "Reset engineer work"}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-destructive/40 rounded-lg shadow-none">
+                      <CardHeader className="px-3 py-1.5 border-b">
+                        <CardTitle className="text-[13px]">Admin — Field Service Reports</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 p-3">
+                        {(fsrRows ?? []).length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No submissions yet.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {(fsrRows ?? []).map((r) => (
+                              <div
+                                key={r.id}
+                                className="flex items-center justify-between gap-2 flex-wrap text-xs"
+                              >
+                                <span className="text-muted-foreground">
+                                  {r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "—"}
+                                </span>
+                                <span className="font-medium">{r.engineer_name ?? "—"}</span>
+                                <span className="font-medium">Rating: {r.rating ?? "—"}/10</span>
+                                {r.customer_signature_path ? (
+                                  <button
+                                    type="button"
+                                    className="underline underline-offset-2"
+                                    onClick={async () => {
+                                      const sigPath = r.customer_signature_path;
+                                      if (!sigPath) return;
+                                      const { data, error } = await supabase.storage
+                                        .from("ticket-attachments")
+                                        .createSignedUrl(sigPath, 3600);
+                                      if (error || !data?.signedUrl) {
+                                        toast.error(error?.message ?? "Could not open signature");
+                                        return;
+                                      }
+                                      window.open(data.signedUrl, "_blank", "noopener");
+                                    }}
+                                  >
+                                    View signature
+                                  </button>
+                                ) : null}
+                                <FsrPrintButton
+                                  ticketId={id}
+                                  fsrRow={r as unknown as FsrDbRow | null}
+                                  compact
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <Button
+                          variant="destructive"
+                          className="w-full"
+                          disabled={reopenFsrBusy || (fsrRows ?? []).length === 0}
+                          onClick={reopenFsr}
+                        >
+                          {reopenFsrBusy ? "Reopening…" : "Reopen for engineer"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full min-h-[44px]"
+                          disabled={syncPartsBusy || (fsrRows ?? []).length === 0}
+                          onClick={handleSyncFsrParts}
+                          title="Additive-only and idempotent — backfills ticket parts from submitted reports and retries missed syncs without duplicating rows."
+                        >
+                          {syncPartsBusy ? "Syncing…" : "Sync FSR parts"}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
+              </TabsContent>
+              <TabsContent
+                value="verification"
+                forceMount
+                className="mt-2 space-y-2 data-[state=inactive]:hidden"
+              >
+                {verifications && (verifications.customer || verifications.equipment) && (
+                  <Card className="rounded-lg shadow-none">
+                    <CardHeader className="px-3 py-1.5 border-b">
+                      <CardTitle className="text-[13px]">Engineer Verification</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 p-3">
+                      {verifications.customer && (
+                        <div className="space-y-1">
+                          <Badge
+                            variant={
+                              verifications.customer.verdict === "verified"
+                                ? "default"
+                                : "destructive"
+                            }
+                            className="text-[10px]"
+                          >
+                            Customer:{" "}
+                            {verifications.customer.verdict === "verified"
+                              ? "Verified"
+                              : "Corrected"}
+                          </Badge>
+                          {verifications.customer.verdict === "incorrect" &&
+                            verifications.customer.snapshot &&
+                            verifications.customer.corrected && (
+                              <div className="space-y-1 mt-1">
+                                <VerificationDiff
+                                  label="Customer mobile"
+                                  original={
+                                    (verifications.customer.snapshot as Record<string, unknown>)
+                                      .customer_phone as string | null
+                                  }
+                                  corrected={
+                                    (verifications.customer.corrected as Record<string, unknown>)
+                                      .customer_phone as string | null
+                                  }
+                                  engineer={verifications.customer.engineer_name}
+                                  at={verifications.customer.verified_at}
+                                />
+                                <VerificationDiff
+                                  label="Email"
+                                  original={
+                                    (verifications.customer.snapshot as Record<string, unknown>)
+                                      .customer_email as string | null
+                                  }
+                                  corrected={
+                                    (verifications.customer.corrected as Record<string, unknown>)
+                                      .customer_email as string | null
+                                  }
+                                  engineer={verifications.customer.engineer_name}
+                                  at={verifications.customer.verified_at}
+                                />
+                              </div>
+                            )}
+                        </div>
+                      )}
+                      {verifications.equipment && (
+                        <div className="space-y-1">
+                          <Badge
+                            variant={
+                              verifications.equipment.verdict === "matched"
+                                ? "default"
+                                : "destructive"
+                            }
+                            className="text-[10px]"
+                          >
+                            Equipment:{" "}
+                            {verifications.equipment.verdict === "matched" ? "Matched" : "Mismatch"}
+                          </Badge>
+                          {verifications.equipment.verdict === "mismatch" && (
+                            <div className="space-y-1 mt-1">
+                              <EquipmentVerificationPhoto
+                                photoPath={verifications.equipment.photo_path}
+                                linkLabel="View correction photo"
+                              />
+                              <VerificationDiff
+                                label="Model"
+                                original={verifications.equipment.original_model}
+                                corrected={verifications.equipment.corrected_model}
+                                engineer={verifications.equipment.engineer_name}
+                                at={verifications.equipment.verified_at}
+                              />
+                              <VerificationDiff
+                                label="Serial No"
+                                original={verifications.equipment.original_serial}
+                                corrected={verifications.equipment.corrected_serial}
+                                engineer={verifications.equipment.engineer_name}
+                                at={verifications.equipment.verified_at}
+                              />
+                            </div>
+                          )}
+                          {verifications.equipment.verdict === "matched" && (
+                            <div className="mt-1">
+                              <EquipmentVerificationPhoto
+                                photoPath={verifications.equipment.photo_path}
+                                linkLabel="View serial photo"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+                {verifications && !(verifications.customer || verifications.equipment) && (
+                  <p className="text-sm text-muted-foreground">
+                    No engineer verification recorded yet.
+                  </p>
+                )}
+              </TabsContent>
+              <TabsContent
+                value="activity"
+                forceMount
+                className="mt-2 space-y-2 data-[state=inactive]:hidden"
+              >
+                <Card className="rounded-lg shadow-none">
+                  <CardHeader className="px-3 py-1.5 border-b">
+                    <CardTitle className="text-[13px]">Activity Log</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 p-3">
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Add a note…"
+                          value={noteText}
+                          onChange={(e) => setNoteText(e.target.value)}
+                        />
+                        <Button onClick={addNote}>Add</Button>
+                      </div>
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                        <Checkbox
+                          checked={noteSpecial}
+                          onCheckedChange={(v) => setNoteSpecial(v === true)}
+                        />
+                        <span>
+                          Tag as <b className="text-red-700">Special Instruction</b> (flags this
+                          ticket as critical)
+                        </span>
+                      </label>
+                    </div>
+                    <div className="space-y-2 max-h-72 overflow-auto">
+                      {activities.length === 0 && (
+                        <p className="text-sm text-muted-foreground">No activity yet.</p>
+                      )}
+                      {activities.map((a) => (
+                        <div
+                          key={a.id}
+                          className={`border rounded-md p-2 text-sm ${a.special_instruction ? "border-red-300 bg-red-50/60" : ""}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium capitalize flex items-center gap-2">
+                              {VERIFY_LABEL[a.kind] ?? a.kind}
+                              {a.special_instruction && (
+                                <span className="inline-flex items-center gap-1 rounded border border-red-300 bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Special
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(a.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          {a.notes && <div className="text-muted-foreground mt-1">{a.notes}</div>}
                         </div>
                       ))}
                     </div>
-                  )}
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    disabled={reopenFsrBusy || (fsrRows ?? []).length === 0}
-                    onClick={reopenFsr}
-                  >
-                    {reopenFsrBusy ? "Reopening…" : "Reopen for engineer"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full min-h-[44px]"
-                    disabled={syncPartsBusy || (fsrRows ?? []).length === 0}
-                    onClick={handleSyncFsrParts}
-                    title="Additive-only and idempotent — backfills ticket parts from submitted reports and retries missed syncs without duplicating rows."
-                  >
-                    {syncPartsBusy ? "Syncing…" : "Sync FSR parts"}
-                  </Button>
-                </CardContent>
-              </Card>
-            </>
-          )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Assign Engineer</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div>
-                <Label>Department filter</Label>
-                <Select value={deptFilter} onValueChange={setDeptFilter}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All departments</SelectItem>
-                    {Array.from(
-                      new Set(employees.map((e) => e.department).filter(Boolean) as string[]),
-                    ).map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>
-                  Engineer{" "}
-                  <span className="text-xs text-muted-foreground">(portal logins first)</span>
-                </Label>
-                <Select
-                  value={employees.find((e) => e.name === t.assigned_engineer_name)?.id || ""}
-                  onValueChange={(empId) => {
-                    const emp = employees.find((e) => e.id === empId);
-                    if (emp)
-                      update({
-                        assigned_engineer_name: emp.name,
-                        assigned_engineer_phone: emp.phone || "",
-                      });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={employees.length ? "Select engineer" : "No active employees"}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees
-                      .filter((e) => deptFilter === "all" || e.department === deptFilter)
-                      .map((e) => (
-                        <SelectItem key={e.id} value={e.id}>
-                          {e.name}
-                          {e.department ? ` · ${e.department}` : ""}
-                          {e.phone ? ` · ${e.phone}` : ""}
-                          {e.hasLogin ? " · Portal" : " · No login"}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {employees.length === 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Add employees in Masters → Employees.
-                  </p>
-                )}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {t.assigned_engineer_name ? (
-                  <>
-                    Selected: <b>{t.assigned_engineer_name}</b>
-                    {t.assigned_engineer_phone ? ` (${t.assigned_engineer_phone})` : ""}
-                  </>
-                ) : (
-                  "No engineer selected"
-                )}
-              </div>
-              {(() => {
-                const sel = employees.find((e) => e.name === t.assigned_engineer_name);
-                return sel && !sel.hasLogin ? (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-                    {sel.name} has no portal login — this call won't appear in the engineer app
-                    until Admin links a login (Employees → link auth user).
-                  </p>
-                ) : null;
-              })()}
-              {t.assigned_at && (
-                <p className="text-xs text-muted-foreground">
-                  Assigned: {new Date(t.assigned_at).toLocaleString()}
-                </p>
-              )}
-              <Button className="w-full" onClick={assignEngineer}>
-                <UserPlus className="h-4 w-4 mr-1" />
-                Assign & Send WhatsApp
-              </Button>
-              {t.assigned_engineer_phone && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() =>
-                    launchTicketWhatsApp(
-                      t.assigned_engineer_phone,
-                      renderMsg("engineer_assign", engineerAssignMsg(t)),
-                      "Engineer",
-                    )
-                  }
-                >
-                  <MessageCircle className="h-4 w-4 mr-1" />
-                  Resend WhatsApp
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {t.call_type === "OOW" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>OOW Quotation</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {t.quotation_id ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() =>
-                        navigate({ to: "/crm/quotations/$id", params: { id: t.quotation_id! } })
-                      }
-                    >
-                      <FileText className="h-4 w-4 mr-1" />
-                      Open Quotation{" "}
-                      {quoteNo && <span className="ml-1 font-mono text-xs">({quoteNo})</span>}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              <TabsContent
+                value="assign"
+                forceMount
+                className="mt-2 space-y-2 data-[state=inactive]:hidden"
+              >
+                <Card className="rounded-lg shadow-none">
+                  <CardHeader className="px-3 py-1.5 border-b">
+                    <CardTitle className="text-[13px]">Assign Engineer</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 p-3">
+                    <div>
+                      <Label>Department filter</Label>
+                      <Select value={deptFilter} onValueChange={setDeptFilter}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All departments</SelectItem>
+                          {Array.from(
+                            new Set(employees.map((e) => e.department).filter(Boolean) as string[]),
+                          ).map((d) => (
+                            <SelectItem key={d} value={d}>
+                              {d}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>
+                        Engineer{" "}
+                        <span className="text-xs text-muted-foreground">(portal logins first)</span>
+                      </Label>
+                      <Select
+                        value={employees.find((e) => e.name === t.assigned_engineer_name)?.id || ""}
+                        onValueChange={(empId) => {
+                          const emp = employees.find((e) => e.id === empId);
+                          if (emp)
+                            update({
+                              assigned_engineer_name: emp.name,
+                              assigned_engineer_phone: emp.phone || "",
+                            });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              employees.length ? "Select engineer" : "No active employees"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {employees
+                            .filter((e) => deptFilter === "all" || e.department === deptFilter)
+                            .map((e) => (
+                              <SelectItem key={e.id} value={e.id}>
+                                {e.name}
+                                {e.department ? ` · ${e.department}` : ""}
+                                {e.phone ? ` · ${e.phone}` : ""}
+                                {e.hasLogin ? " · Portal" : " · No login"}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {employees.length === 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Add employees in Masters → Employees.
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {t.assigned_engineer_name ? (
+                        <>
+                          Selected: <b>{t.assigned_engineer_name}</b>
+                          {t.assigned_engineer_phone ? ` (${t.assigned_engineer_phone})` : ""}
+                        </>
+                      ) : (
+                        "No engineer selected"
+                      )}
+                    </div>
+                    {(() => {
+                      const sel = employees.find((e) => e.name === t.assigned_engineer_name);
+                      return sel && !sel.hasLogin ? (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                          {sel.name} has no portal login — this call won't appear in the engineer
+                          app until Admin links a login (Employees → link auth user).
+                        </p>
+                      ) : null;
+                    })()}
+                    {t.assigned_at && (
+                      <p className="text-xs text-muted-foreground">
+                        Assigned: {new Date(t.assigned_at).toLocaleString()}
+                      </p>
+                    )}
+                    <Button className="w-full" onClick={assignEngineer}>
+                      <UserPlus className="h-4 w-4 mr-1" />
+                      Assign & Send WhatsApp
                     </Button>
-                    {t.customer_phone && (
+                    {t.assigned_engineer_phone && (
                       <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() =>
+                          launchTicketWhatsApp(
+                            t.assigned_engineer_phone,
+                            renderMsg("engineer_assign", engineerAssignMsg(t)),
+                            "Engineer",
+                          )
+                        }
+                      >
+                        <MessageCircle className="h-4 w-4 mr-1" />
+                        Resend WhatsApp
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+                {t.call_type === "OOW" && (
+                  <Card className="rounded-lg shadow-none">
+                    <CardHeader className="px-3 py-1.5 border-b">
+                      <CardTitle className="text-[13px]">OOW Quotation</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 p-3">
+                      {t.quotation_id ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={() =>
+                              navigate({
+                                to: "/crm/quotations/$id",
+                                params: { id: t.quotation_id! },
+                              })
+                            }
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            Open Quotation{" "}
+                            {quoteNo && <span className="ml-1 font-mono text-xs">({quoteNo})</span>}
+                          </Button>
+                          {t.customer_phone && (
+                            <Button
+                              size="sm"
+                              className="w-full"
+                              onClick={() =>
+                                launchTicketWhatsApp(
+                                  t.customer_phone,
+                                  renderMsg(
+                                    "oow_quotation",
+                                    `Dear ${t.customer_name}, please find our OOW quotation ${quoteNo} for case ${t.case_id}.`,
+                                  ),
+                                  "Customer",
+                                )
+                              }
+                            >
+                              <MessageCircle className="h-4 w-4 mr-1" />
+                              Share Quotation on WhatsApp
+                            </Button>
+                          )}
+                        </>
+                      ) : (
+                        <Button className="w-full" onClick={createOOWQuote}>
+                          <FileText className="h-4 w-4 mr-1" />
+                          Create OOW Quotation
+                        </Button>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Opens the Sales CRM quotation editor pre-filled with case details.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+                {t.customer_phone && (
+                  <Card className="rounded-lg shadow-none">
+                    <CardHeader className="px-3 py-1.5 border-b">
+                      <CardTitle className="text-[13px]">Customer WhatsApp</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3">
+                      <Button
+                        variant="outline"
                         size="sm"
                         className="w-full"
                         onClick={() =>
                           launchTicketWhatsApp(
                             t.customer_phone,
-                            renderMsg(
-                              "oow_quotation",
-                              `Dear ${t.customer_name}, please find our OOW quotation ${quoteNo} for case ${t.case_id}.`,
-                            ),
+                            renderMsg("ticket_closed", customerClosedMsg(t)),
                             "Customer",
                           )
                         }
                       >
                         <MessageCircle className="h-4 w-4 mr-1" />
-                        Share Quotation on WhatsApp
+                        Send Closure Message
                       </Button>
-                    )}
-                  </>
-                ) : (
-                  <Button className="w-full" onClick={createOOWQuote}>
-                    <FileText className="h-4 w-4 mr-1" />
-                    Create OOW Quotation
-                  </Button>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Opens WhatsApp Web in a new browser tab with the message prefilled.
+                      </p>
+                    </CardContent>
+                  </Card>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Opens the Sales CRM quotation editor pre-filled with case details.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {t.customer_phone && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer WhatsApp</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() =>
-                    launchTicketWhatsApp(
-                      t.customer_phone,
-                      renderMsg("ticket_closed", customerClosedMsg(t)),
-                      "Customer",
-                    )
-                  }
-                >
-                  <MessageCircle className="h-4 w-4 mr-1" />
-                  Send Closure Message
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Opens WhatsApp Web in a new browser tab with the message prefilled.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
       </div>
 
@@ -2838,6 +2922,42 @@ function TicketDetail() {
         }
         .ticket-print { display: none; }
         @media print { .ticket-print { display: block !important; } }
+        /* Compact density layer — ticket detail page only. Scoped under
+           .ticket-dense so nothing leaks to other pages or the print sheet.
+           Element selectors (0,1,1) intentionally beat the h-9/text-sm
+           utilities (0,1,0) without !important. */
+        .ticket-dense label {
+          display: block;
+          font-size: 11px;
+          line-height: 1.2;
+          font-weight: 500;
+          color: var(--muted-foreground);
+          margin-bottom: 2px;
+        }
+        .ticket-dense input:not([type="checkbox"]):not([type="file"]),
+        .ticket-dense textarea,
+        .ticket-dense [role="combobox"] {
+          height: 2rem;
+          min-height: 2rem;
+          padding-top: 0;
+          padding-bottom: 0;
+          padding-left: 0.5rem;
+          padding-right: 0.5rem;
+          font-size: 12px;
+        }
+        .ticket-dense textarea {
+          height: auto;
+          min-height: 2rem;
+          padding-top: 0.375rem;
+          padding-bottom: 0.375rem;
+        }
+        @media (max-width: 767px) {
+          /* Below md, keep 16px to stop iOS auto-zoom on focus. */
+          .ticket-dense input:not([type="checkbox"]):not([type="file"]),
+          .ticket-dense textarea {
+            font-size: 16px;
+          }
+        }
       `}</style>
       <Dialog
         open={resetDialogOpen}
@@ -2857,7 +2977,7 @@ function TicketDetail() {
               ). Assignment and status are preserved. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div>
               <Label htmlFor="reset-confirm-input">Type {t.case_id} to confirm</Label>
               <Input
