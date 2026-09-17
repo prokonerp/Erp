@@ -3,19 +3,27 @@ import { fetchAll } from "@/lib/fetchAll";
 import { listWarehouses, STOCK_SELECT, TXN_SELECT, type WarehouseLite } from "@/lib/ims";
 
 /**
- * Phase 1.1 — Defective listings no longer use unbounded fetchAll sequential paging.
- * `listDefectiveInRecords` is capped to LIMIT 500 with server-side ordering; the
- * long-term path is a single RPC/view that returns one joined row per physical unit
- * (model+serial) with its Oracle/ASP/date/tag state. The original unbounded
- * fetchAll is retained only for exports via `fetchAll` / `listDefectiveTagsForExport`.
- * Do not add new fetchAll loops for list rendering — extend the paginated RPC/view
- * or add server eq/ilike/gte filters instead.
+ * Phase 1.1 — Defective listings use full pagination (fetchAll range loops that
+ * page until a short page), so no row is invisible past a 500 cap. The
+ * long-term path is a single RPC/view that returns one joined row per physical
+ * unit (model+serial) with its Oracle/ASP/date/tag state.
+ * `listDefectiveTags` (deprecated for lists) and `fetchTagDispatches` remain
+ * intentionally bounded — see their own comments.
  */
 const DEFECTIVE_PAGE_LIMIT = 500;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Single serial normalization for this file — matches SQL `normalize_serial()`
+ * (upper(btrim())) from the custody migration. Used for every serial (and
+ * model, for composite keys) comparison so client matching agrees with the DB.
+ */
+function normTagSerial(v: unknown): string {
+  return String(v ?? "").trim().toUpperCase();
+}
 
 export type DefectiveTag = {
   id: string;
@@ -67,6 +75,8 @@ export type DefectiveInRecord = {
   reason: string | null;
   tag_generated: boolean;
   tag_no: string | null;
+  /** Availability of the underlying physical stock — signal only, never a list filter. */
+  is_available: boolean;
   /** Underlying stock item already dispatched back to the OEM. */
   sent_to_oem: boolean;
 };
@@ -84,38 +94,28 @@ export function fmtDate(d?: string | null) {
  * Defective stock that has no Indent yet still shows up via the IMS transaction/stock fallback.
  */
 export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
-  // Phase 1.1: bounded server-side fetches (limit 500) instead of 5 parallel unbounded fetchAll loops.
-  // Each query is ordered server-side and capped; exports use the _ForExport variants below.
+  // Fully paged via fetchAll range loops (page until a short page) — no 500 cap,
+  // so the 501st row stays visible. Exports use the _ForExport variants below.
   // Future: replace with single RPC/view `defective_in_records_view` or `list_defective_in_records(p_limit, p_search)` .
-  const [txnsRes, tagsRes, warehouses, indentsRes] = await Promise.all([
-    sb
-      .from("ims_transactions")
-      .select(TXN_SELECT)
-      .eq("txn_type", "defective_in")
-      .order("txn_date", { ascending: false })
-      .limit(DEFECTIVE_PAGE_LIMIT),
-    sb
-      .from("defective_tags")
-      .select("txn_id,stock_item_id,tag_no,model_no,serial_no")
-      .limit(DEFECTIVE_PAGE_LIMIT),
+  const [txns, tags, warehouses, indents] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchAll<any>("ims_transactions", (q) =>
+      q.select(TXN_SELECT).eq("txn_type", "defective_in").order("txn_date", { ascending: false }),
+    ),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchAll<any>("defective_tags", (q) =>
+      q.select("txn_id,stock_item_id,tag_no,model_no,serial_no"),
+    ),
     listWarehouses(),
-    sb
-      .from("indents")
-      .select(
-        "id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted",
-      )
-      .order("indent_date", { ascending: false })
-      .limit(DEFECTIVE_PAGE_LIMIT),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchAll<any>("indents", (q) =>
+      q
+        .select(
+          "id,indent_no,indent_date,ticket_id,case_id,oem_case_id,engineer_name,oracles_data,is_deleted",
+        )
+        .order("indent_date", { ascending: false }),
+    ),
   ]);
-  if (txnsRes.error) throw txnsRes.error;
-  if (tagsRes.error) throw tagsRes.error;
-  if (indentsRes.error) throw indentsRes.error;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const txns = (txnsRes.data || []) as any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tags = (tagsRes.data || []) as any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const indents = (indentsRes.data || []) as any[];
 
   const liveIndents = (indents || []).filter((i) => !i.is_deleted);
 
@@ -141,16 +141,12 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
 
   // Batch: all indents for the involved tickets, so Oracle # can be resolved
   // from the Indent that already handled this defective part.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const norm = (v: any) =>
-    String(v ?? "")
-      .trim()
-      .toLowerCase();
   const oracleByTicketPart = new Map<string, string>();
   if (ticketIds.length) {
     const { data: indents } = await sb
       .from("indents")
       .select("ticket_id,oracles_data")
+      .eq("is_deleted", false)
       .in("ticket_id", ticketIds);
     for (const ind of indents || []) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -159,7 +155,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         if (!oracleNo) continue;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const row of (blk?.defective_rows as any[]) || []) {
-          const k = `${ind.ticket_id}|${norm(row?.def_model_no)}|${norm(row?.def_serial_no)}`;
+          const k = `${ind.ticket_id}|${normTagSerial(row?.def_model_no)}|${normTagSerial(row?.def_serial_no)}`;
           if (!oracleByTicketPart.has(k)) oracleByTicketPart.set(k, oracleNo);
         }
       }
@@ -188,17 +184,13 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     tagFor(model, serial) !== undefined;
 
   // Include anything flagged defective by TYPE or by STATUS.
-  // Bounded to DEFECTIVE_PAGE_LIMIT — unbounded fetchAll kept only for exports. Explicit cols, no select "*".
-  const { data: allStockData, error: stockErr } = await sb
-    .from("ims_stock_items")
-    .select(STOCK_SELECT)
-    .order("created_at", { ascending: false })
-    .limit(DEFECTIVE_PAGE_LIMIT);
-  if (stockErr) throw stockErr;
+  // Fully paged via fetchAll — no 500 cap. Explicit cols, no select "*".
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allStock = (allStockData || []) as any[];
+  const allStock = await fetchAll<any>("ims_stock_items", (q) =>
+    q.select(STOCK_SELECT).order("created_at", { ascending: false }),
+  );
   const statusKey = (serial?: string | null, model?: string | null) =>
-    `${(serial || "").toLowerCase()}|${(model || "").toLowerCase()}`;
+    `${normTagSerial(serial)}|${normTagSerial(model)}`;
   const sentToOemKeys = new Set(
     allStock
       .filter((s) => String(s.stock_status || "").toLowerCase() === "returned_to_oem")
@@ -208,7 +200,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const availablePartKeys = new Set(
     allStock
       .filter((s) => String(s.stock_status || "").toLowerCase() === "available")
-      .map((s) => `${norm(s.part_model_no)}|${norm(s.part_serial_no)}`)
+      .map((s) => `${normTagSerial(s.part_model_no)}|${normTagSerial(s.part_serial_no)}`)
       .filter((k: string) => k !== "|"),
   );
 
@@ -219,30 +211,28 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   const dcDateBySerial = new Map<string, string>();
   const dcDateByModel = new Map<string, string>();
   {
-    // Bounded DC lookup for replacement-date enrichment (server filters replace client scan in next iteration)
-    const { data: dcsData, error: dcErr } = await sb
-      .from("delivery_challans")
-      .select("challan_date,items")
-      .eq("doc_type", "customer")
-      .order("challan_date", { ascending: false })
-      .limit(DEFECTIVE_PAGE_LIMIT);
-    if (dcErr) throw dcErr;
+    // Fully paged DC lookup for replacement-date enrichment (server filters replace client scan in next iteration)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dcs = (dcsData || []) as any[];
+    const dcs = await fetchAll<any>("delivery_challans", (q) =>
+      q
+        .select("challan_date,items")
+        .eq("doc_type", "customer")
+        .order("challan_date", { ascending: false }),
+    );
     for (const dc of dcs || []) {
       if (!dc.challan_date) continue;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const it of (dc.items as any[]) || []) {
-        const s = norm(it?.defective_serial);
-        const m = norm(it?.defective_model);
+        const s = normTagSerial(it?.defective_serial);
+        const m = normTagSerial(it?.defective_model);
         if (s && !dcDateBySerial.has(s)) dcDateBySerial.set(s, dc.challan_date);
         if (m && !dcDateByModel.has(m)) dcDateByModel.set(m, dc.challan_date);
       }
     }
   }
   const dcDateFor = (model?: string | null, serial?: string | null) =>
-    (serial && dcDateBySerial.get(norm(serial))) ||
-    (!serial && model ? dcDateByModel.get(norm(model)) : null) ||
+    (serial && dcDateBySerial.get(normTagSerial(serial))) ||
+    (!serial && model ? dcDateByModel.get(normTagSerial(model)) : null) ||
     null;
 
   // Reuse existing txn linkage (and its tag) when the same physical part is
@@ -250,7 +240,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const txnByPart = new Map<string, any>();
   for (const t of txns) {
-    const k = `${norm(t.part_model_no)}|${norm(t.part_serial_no)}`;
+    const k = `${normTagSerial(t.part_model_no)}|${normTagSerial(t.part_serial_no)}`;
     if (k !== "|" && !txnByPart.has(k)) txnByPart.set(k, t);
   }
 
@@ -274,9 +264,10 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         const model = String(row?.def_model_no || "").trim() || null;
         const serial = String(row?.def_serial_no || "").trim() || null;
         if (!model && !serial) return;
-        const partKey = `${norm(model)}|${norm(serial)}`;
-        // Only surface indent-sourced rows that correspond to real available physical stock.
-        if (!availablePartKeys.has(partKey)) return;
+        const partKey = `${normTagSerial(model)}|${normTagSerial(serial)}`;
+        // Defective-status rows stay listed even when their stock row is
+        // issued/in-transit — availability is a signal on the row, never a filter.
+        const isAvailable = availablePartKeys.has(partKey);
         if (partKey !== "|" && indentCoveredParts.has(partKey)) return;
         if (partKey !== "|") indentCoveredParts.add(partKey);
         const txn = txnByPart.get(partKey);
@@ -285,8 +276,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ((tk?.defective_parts_details as any[]) || []).find(
             (p) =>
-              (norm(p?.model_no) === norm(model) || norm(p?.name) === norm(model)) &&
-              (!serial || norm(p?.serial) === norm(serial)),
+              (normTagSerial(p?.model_no) === normTagSerial(model) || normTagSerial(p?.name) === normTagSerial(model)) &&
+              (!serial || normTagSerial(p?.serial) === normTagSerial(serial)),
           )?.remarks || null;
         fromIndents.push({
           key: txn ? txn.id : `indent:${ind.id}:${oracleNo || idx}:${idx}`,
@@ -309,6 +300,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
           reason: remarks || null,
           tag_generated: hasTag(model, serial) || (txn ? tagByTxn.has(txn.id) : false),
           tag_no: tagFor(model, serial) ?? (txn ? (tagByTxn.get(txn.id) ?? null) : null),
+          is_available: isAvailable,
           sent_to_oem: sentToOemKeys.has(statusKey(serial, model)),
         });
       });
@@ -320,7 +312,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     .filter(
       (t) =>
         !indentCoveredTxnIds.has(t.id) &&
-        !indentCoveredParts.has(`${norm(t.part_model_no)}|${norm(t.part_serial_no)}`),
+        !indentCoveredParts.has(`${normTagSerial(t.part_model_no)}|${normTagSerial(t.part_serial_no)}`),
     )
     .map((t) => {
       const tk = t.ticket_id ? tById.get(t.ticket_id) : null;
@@ -330,12 +322,12 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       if (!serialNo && tk?.defective_parts_details) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const match = ((tk.defective_parts_details as any[]) || []).find(
-          (p) => norm(p?.model_no) === norm(t.part_model_no) && p?.serial,
+          (p) => normTagSerial(p?.model_no) === normTagSerial(t.part_model_no) && p?.serial,
         );
         serialNo = match?.serial || null;
       }
       const oracleFromIndent = t.ticket_id
-        ? oracleByTicketPart.get(`${t.ticket_id}|${norm(t.part_model_no)}|${norm(serialNo)}`) ||
+        ? oracleByTicketPart.get(`${t.ticket_id}|${normTagSerial(t.part_model_no)}|${normTagSerial(serialNo)}`) ||
           null
         : null;
       return {
@@ -363,6 +355,9 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         reason: t.notes || tk?.complaint || null,
         tag_generated: hasTag(t.part_model_no, serialNo) || tagByTxn.has(t.id),
         tag_no: tagFor(t.part_model_no, serialNo) ?? tagByTxn.get(t.id) ?? null,
+        is_available: availablePartKeys.has(
+          `${normTagSerial(t.part_model_no)}|${normTagSerial(serialNo)}`,
+        ),
         sent_to_oem: sentToOemKeys.has(statusKey(t.part_serial_no, t.part_model_no)),
       };
     });
@@ -372,7 +367,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   // those so they can be tagged too, skipping any already covered by a transaction.
   const coveredSerials = new Set(
     [...fromIndents, ...fromTxns]
-      .map((r) => `${(r.serial_no || "").toLowerCase()}|${(r.model_no || "").toLowerCase()}`)
+      .map((r) => `${normTagSerial(r.serial_no)}|${normTagSerial(r.model_no)}`)
       .filter((k) => k !== "|"),
   );
   const stockItems = allStock.filter(
@@ -386,7 +381,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
     .filter(
       (s) =>
         !coveredSerials.has(
-          `${(s.part_serial_no || "").toLowerCase()}|${(s.part_model_no || "").toLowerCase()}`,
+          `${normTagSerial(s.part_serial_no)}|${normTagSerial(s.part_model_no)}`,
         ),
     )
     .map((s) => {
@@ -412,6 +407,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         reason: s.notes || null,
         tag_generated: hasTag(s.part_model_no, s.part_serial_no) || tagByStockItem.has(s.id),
         tag_no: tagFor(s.part_model_no, s.part_serial_no) ?? tagByStockItem.get(s.id) ?? null,
+        is_available: String(s.stock_status || "").toLowerCase() === "available",
         sent_to_oem: String(s.stock_status || "").toLowerCase() === "returned_to_oem",
       } as DefectiveInRecord;
     });
@@ -474,13 +470,9 @@ export async function listDefectiveInRecordsForExport(): Promise<DefectiveInReco
 
 export type TagDispatch = { dc_no: string; dc_date: string | null };
 
-/** Key used to match a tag to its dispatched stock item: model|serial (lowercased). */
+/** Key used to match a tag to its dispatched stock item: model|serial (upper-trimmed via normTagSerial). */
 export function dispatchKey(model?: string | null, serial?: string | null) {
-  return `${String(model ?? "")
-    .trim()
-    .toLowerCase()}|${String(serial ?? "")
-    .trim()
-    .toLowerCase()}`;
+  return `${normTagSerial(model)}|${normTagSerial(serial)}`;
 }
 
 /**
@@ -537,14 +529,12 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
 
   // Guard against duplicates even when the UI-side flag is stale: re-check the
   // register for any existing tag on the same physical unit (model + serial).
-  // Bounded duplicate check — full table would be next-phase RPC with unique constraint as source of truth
-  const { data: existingData, error: exErr } = await sb
-    .from("defective_tags")
-    .select("tag_no,model_no,serial_no")
-    .limit(DEFECTIVE_PAGE_LIMIT);
-  if (exErr) throw exErr;
+  // Fully paged scan (no 500 cap); DB partial unique index
+  // defective_tags_unique_model_serial rejects serial-bearing dupes at insert as backstop.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const existing = (existingData || []) as any[];
+  const existing = await fetchAll<any>("defective_tags", (q) =>
+    q.select("tag_no,model_no,serial_no"),
+  );
   const taken = new Map<string, string | null>();
   for (const t of existing || []) {
     const k = dispatchKey(t.model_no, t.serial_no);
@@ -587,25 +577,40 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
 
 export async function markTagsPrinted(ids: string[], byName?: string | null) {
   if (!ids.length) return;
-  // B-22: read-then-write via Promise.all loses increments when two users
-  // print the same batch concurrently. Instead, each tag is incremented from
-  // a freshly read count, sequentially, with every result checked.
+  // Compare-and-swap on updated_at (bumped by trg_defective_tags_updated_at on
+  // every UPDATE): each tag is incremented from a freshly read count, and the
+  // write only lands if no concurrent print touched the row first. Re-read +
+  // retry, max 3 attempts, then throw. No new RPCs.
   for (const id of ids) {
-    const { data: row, error: readErr } = await sb
-      .from("defective_tags")
-      .select("id,print_count")
-      .eq("id", id)
-      .maybeSingle();
-    if (readErr) throw new Error(`Could not read print state for tag ${id}: ${readErr.message}`);
-    const next = ((row as { print_count?: number } | null)?.print_count || 0) + 1;
-    const { error } = await sb
-      .from("defective_tags")
-      .update({
-        printed_at: new Date().toISOString(),
-        printed_by: byName || null,
-        print_count: next,
-      })
-      .eq("id", id);
-    if (error) throw new Error(`Could not record printing for tag ${id}: ${error.message}`);
+    let attempt = 0;
+    for (;;) {
+      attempt += 1;
+      const { data: row, error: readErr } = await sb
+        .from("defective_tags")
+        .select("id,print_count,updated_at")
+        .eq("id", id)
+        .maybeSingle();
+      if (readErr) throw new Error(`Could not read print state for tag ${id}: ${readErr.message}`);
+      if (!row) throw new Error(`Could not record printing for tag ${id}: tag not found`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const typed = row as any;
+      const next = (typed.print_count || 0) + 1;
+      let upd = sb
+        .from("defective_tags")
+        .update({
+          printed_at: new Date().toISOString(),
+          printed_by: byName || null,
+          print_count: next,
+        })
+        .eq("id", id);
+      upd = typed.updated_at ? upd.eq("updated_at", typed.updated_at) : upd.is("updated_at", null);
+      const { data: written, error } = await upd.select("id");
+      if (error) throw new Error(`Could not record printing for tag ${id}: ${error.message}`);
+      if (written && written.length) break;
+      if (attempt >= 3)
+        throw new Error(
+          `Could not record printing for tag ${id}: concurrent update conflict after 3 attempts. Please retry.`,
+        );
+    }
   }
 }
