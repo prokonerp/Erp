@@ -21,10 +21,8 @@ export const Route = createFileRoute("/_app/engineers")({
 
 type EngTab = { to: string; label: string; icon: LucideIcon; exact?: boolean };
 
-/** Admin Field-Ops tabs. 4 live in B2 (money): Overview, Rates,
- *  Payable & Expenses, Reconcile. The rest land in B3 (oversight) —
- *  B2 tabs are keyboard-reachable links; B3 tabs stay disabled until their routes land. */
-const BUILT_TABS = new Set(["/engineers", "/engineers/rates", "/engineers/expenses", "/engineers/reconcile"]);
+/** Admin Field-Ops tabs. All ten are live routes — every tab is a
+ *  keyboard-reachable link; no disabled placeholders remain. */
 const TABS: EngTab[] = [
   { to: "/engineers", label: "Overview", icon: LayoutDashboard, exact: true },
   { to: "/engineers/directory", label: "Directory", icon: Users },
@@ -45,17 +43,6 @@ function EngineersLayout() {
       <div className="flex flex-wrap gap-1 mb-4 border-b pb-2 print:hidden">
         {TABS.map((t) => {
           const active = t.exact ? loc.pathname === t.to : loc.pathname.startsWith(t.to);
-          if (!BUILT_TABS.has(t.to)) {
-            const hintId = `eng-tab-hint${t.to.replaceAll("/", "-")}`;
-            return (
-              <span key={t.to} className="inline-flex items-center">
-                <Button variant="ghost" size="sm" className="opacity-50" title={`${t.label} — lands in B3`} aria-disabled="true" aria-describedby={hintId}>
-                  <t.icon className="h-4 w-4 mr-1" aria-hidden="true" />{t.label}
-                </Button>
-                <span id={hintId} className="sr-only">{`${t.label} — lands in B3`}</span>
-              </span>
-            );
-          }
           return (
             <Link key={t.to} to={t.to} aria-current={active ? "page" : undefined}>
               <Button variant={active ? "default" : "ghost"} size="sm">
