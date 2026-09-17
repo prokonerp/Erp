@@ -88,6 +88,7 @@ import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
 import { Route as AppGrnIdRouteImport } from './routes/_app/grn.$id'
 import { Route as AppGatepassNewRouteImport } from './routes/_app/gatepass.new'
 import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
+import { Route as AppEngineersTicketsRouteImport } from './routes/_app/engineers.tickets'
 import { Route as AppEngineersReconcileRouteImport } from './routes/_app/engineers.reconcile'
 import { Route as AppEngineersRatesRouteImport } from './routes/_app/engineers.rates'
 import { Route as AppEngineersExpensesRouteImport } from './routes/_app/engineers.expenses'
@@ -543,6 +544,11 @@ const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
   path: '/gatepass/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppEngineersTicketsRoute = AppEngineersTicketsRouteImport.update({
+  id: '/tickets',
+  path: '/tickets',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
 const AppEngineersReconcileRoute = AppEngineersReconcileRouteImport.update({
   id: '/reconcile',
   path: '/reconcile',
@@ -892,6 +898,7 @@ export interface FileRoutesByFullPath {
   '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/engineers/reconcile': typeof AppEngineersReconcileRoute
+  '/engineers/tickets': typeof AppEngineersTicketsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
@@ -1018,6 +1025,7 @@ export interface FileRoutesByTo {
   '/engineers/expenses': typeof AppEngineersExpensesRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/engineers/reconcile': typeof AppEngineersReconcileRoute
+  '/engineers/tickets': typeof AppEngineersTicketsRoute
   '/gatepass/$id': typeof AppGatepassIdRoute
   '/gatepass/new': typeof AppGatepassNewRoute
   '/grn/$id': typeof AppGrnIdRoute
@@ -1154,6 +1162,7 @@ export interface FileRoutesById {
   '/_app/engineers/expenses': typeof AppEngineersExpensesRoute
   '/_app/engineers/rates': typeof AppEngineersRatesRoute
   '/_app/engineers/reconcile': typeof AppEngineersReconcileRoute
+  '/_app/engineers/tickets': typeof AppEngineersTicketsRoute
   '/_app/gatepass/$id': typeof AppGatepassIdRoute
   '/_app/gatepass/new': typeof AppGatepassNewRoute
   '/_app/grn/$id': typeof AppGrnIdRoute
@@ -1295,6 +1304,7 @@ export interface FileRouteTypes {
     | '/engineers/expenses'
     | '/engineers/rates'
     | '/engineers/reconcile'
+    | '/engineers/tickets'
     | '/gatepass/$id'
     | '/gatepass/new'
     | '/grn/$id'
@@ -1421,6 +1431,7 @@ export interface FileRouteTypes {
     | '/engineers/expenses'
     | '/engineers/rates'
     | '/engineers/reconcile'
+    | '/engineers/tickets'
     | '/gatepass/$id'
     | '/gatepass/new'
     | '/grn/$id'
@@ -1556,6 +1567,7 @@ export interface FileRouteTypes {
     | '/_app/engineers/expenses'
     | '/_app/engineers/rates'
     | '/_app/engineers/reconcile'
+    | '/_app/engineers/tickets'
     | '/_app/gatepass/$id'
     | '/_app/gatepass/new'
     | '/_app/grn/$id'
@@ -2210,6 +2222,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppGatepassIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/engineers/tickets': {
+      id: '/_app/engineers/tickets'
+      path: '/tickets'
+      fullPath: '/engineers/tickets'
+      preLoaderRoute: typeof AppEngineersTicketsRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
     '/_app/engineers/reconcile': {
       id: '/_app/engineers/reconcile'
       path: '/reconcile'
@@ -2776,6 +2795,7 @@ interface AppEngineersRouteChildren {
   AppEngineersExpensesRoute: typeof AppEngineersExpensesRoute
   AppEngineersRatesRoute: typeof AppEngineersRatesRoute
   AppEngineersReconcileRoute: typeof AppEngineersReconcileRoute
+  AppEngineersTicketsRoute: typeof AppEngineersTicketsRoute
   AppEngineersIndexRoute: typeof AppEngineersIndexRoute
 }
 
@@ -2784,6 +2804,7 @@ const AppEngineersRouteChildren: AppEngineersRouteChildren = {
   AppEngineersExpensesRoute: AppEngineersExpensesRoute,
   AppEngineersRatesRoute: AppEngineersRatesRoute,
   AppEngineersReconcileRoute: AppEngineersReconcileRoute,
+  AppEngineersTicketsRoute: AppEngineersTicketsRoute,
   AppEngineersIndexRoute: AppEngineersIndexRoute,
 }
 

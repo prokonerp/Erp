@@ -83,7 +83,8 @@ const DIRECTORY_COLUMNS: ColumnDef<DirectoryRow>[] = [
 
 /** Searchable roster. Per-row counts come from the bulk attention queue —
  *  no per-row queries. Per-engineer open-ticket counts live on the detail
- *  page (useEngineerTickets needs a concrete id; null is disabled). */
+ *  page (single-engineer query); the cross-roster queue, including the
+ *  null-employee all-tickets mode, lives on the Tickets tab. */
 function EngineerDirectoryPage() {
   const rosterQuery = useEngineerRoster();
   const attentionQuery = useAttentionQueue();

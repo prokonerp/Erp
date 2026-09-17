@@ -276,6 +276,11 @@ type TicketRow = {
   status: string | null;
   created_at: string | null;
   closed_at: string | null;
+  customer_name: string | null;
+  product: string | null;
+  serial_no: string | null;
+  assigned_employee_id: string | null;
+  assigned_engineer_name: string | null;
 };
 
 type AllLogRow = DayRow & { employee_id: string | null };
@@ -375,7 +380,9 @@ export function useEngineerOverview(): {
   };
 }
 
-/** One engineer's tickets (newest first, max 500). */
+/** One engineer's tickets (newest first, max 500) — or all assigned
+ *  tickets across the roster when employeeId is null (newest first,
+ *  max 1000). Same return shape either way; empty results never warn. */
 export function useEngineerTickets(employeeId: string | null): {
   data: TicketRow[];
   warnings: AdminWarning[];
@@ -383,22 +390,37 @@ export function useEngineerTickets(employeeId: string | null): {
 } {
   const query = useQuery({
     queryKey: adminEngKeys.tickets(employeeId),
-    enabled: !!employeeId,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async (): Promise<{ rows: TicketRow[]; warnings: AdminWarning[] }> => {
       const warnings: AdminWarning[] = [];
       try {
+        if (employeeId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tickets pending generated types
+          const { data, error } = await (supabase as any)
+            .from("tickets")
+            .select("id, case_id, status, created_at, closed_at, customer_name, product, serial_no, assigned_employee_id, assigned_engineer_name")
+            .eq("assigned_employee_id", employeeId)
+            .is("is_deleted", false)
+            .order("created_at", { ascending: false })
+            .limit(500);
+          if (error) throw error;
+          return { rows: Array.isArray(data) ? (data as TicketRow[]) : [], warnings };
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tickets pending generated types
         const { data, error } = await (supabase as any)
           .from("tickets")
-          .select("id, case_id, status, created_at, closed_at")
-          .eq("assigned_employee_id", employeeId!)
-          .is("is_deleted", false)
+          .select("id, case_id, status, created_at, closed_at, customer_name, product, serial_no, assigned_employee_id, assigned_engineer_name")
+          .eq("is_deleted", false)
+          .not("assigned_employee_id", "is", null)
           .order("created_at", { ascending: false })
-          .limit(500);
+          .limit(1000);
         if (error) throw error;
-        return { rows: Array.isArray(data) ? (data as TicketRow[]) : [], warnings };
+        const rows = Array.isArray(data) ? (data as TicketRow[]) : [];
+        if (rows.length === 1000) {
+          warnings.push({ section: "tickets", message: "large dataset truncated — refine filters" });
+        }
+        return { rows, warnings };
       } catch (e) {
         warnings.push({ section: "tickets", message: hintFor(e, "20260925000001") });
         return { rows: [], warnings };
@@ -409,7 +431,7 @@ export function useEngineerTickets(employeeId: string | null): {
   return {
     data: query.data?.rows ?? [],
     warnings: query.data?.warnings ?? [],
-    isLoading: !!employeeId && query.isLoading,
+    isLoading: query.isLoading,
   };
 }
 
