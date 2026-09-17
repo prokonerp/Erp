@@ -51,23 +51,29 @@ const SO_FULFILL_LOCK_PREFIX = "so_fulfill:";
  * re-validation + post-insert verification (verifyNoOverFulfillment) which rolls
  * back over-fulfillment if two concurrent writers slip through.
  *
- * We still attempt `pg_advisory_lock` (session-level) first — if the Supabase
+ * We still attempt `app_advisory_lock` (session-level) first — if the Supabase
  * RPC exists it is held for the whole fn duration and released in finally.
- * Then we try `pg_advisory_xact_lock` as fallback. If neither is available we
+ * Then we try `app_advisory_xact_lock` as fallback. If neither is available we
  * fall back to optimistic + verification. The lock is opportunistic; verification
  * is mandatory.
+ *
+ * NOTE (naming): these wrappers MUST NOT be named `pg_advisory_*`. A `text`
+ * overload of a pg_catalog function name shadows the built-in for the platform's
+ * own callers — the storage API's object-write path calls pg_advisory_* with an
+ * untyped key and bound to our overload, raising P0001 and failing every upload
+ * (fixed in migration 20260924000001). Keep the `app_` prefix.
  */
 export async function withSoFulfillLock<T>(soId: string, fn: () => Promise<T>): Promise<T> {
   const key = `${SO_FULFILL_LOCK_PREFIX}${soId}`;
   let locked = false;
   let lockMethod: "session" | "xact" | null = null;
   try {
-    const { error: e1 } = await supabase.rpc("pg_advisory_lock" as never, { key } as never);
+    const { error: e1 } = await supabase.rpc("app_advisory_lock" as never, { key } as never);
     if (!e1) {
       locked = true;
       lockMethod = "session";
     } else {
-      const { error: e2 } = await supabase.rpc("pg_advisory_xact_lock" as never, { key } as never);
+      const { error: e2 } = await supabase.rpc("app_advisory_xact_lock" as never, { key } as never);
       if (!e2) {
         locked = true;
         lockMethod = "xact";
@@ -83,7 +89,7 @@ export async function withSoFulfillLock<T>(soId: string, fn: () => Promise<T>): 
   } finally {
     if (locked && lockMethod === "session") {
       try {
-        await supabase.rpc("pg_advisory_unlock" as never, { key } as never);
+        await supabase.rpc("app_advisory_unlock" as never, { key } as never);
       } catch {}
     }
     // xact lock auto-releases at statement end — nothing to do; session lock released above

@@ -132,8 +132,8 @@ beforeEach(() => {
 describe("documentFlow.writers/withSoFulfillLock", () => {
   it("fallback: when both advisory locks unavailable, still executes fn (optimistic+verification)", async () => {
     mockRpc
-      .mockResolvedValueOnce({ error: { message: "not found" } }) // pg_advisory_lock fail
-      .mockResolvedValueOnce({ error: { message: "not found" } }); // pg_advisory_xact_lock fail
+      .mockResolvedValueOnce({ error: { message: "not found" } }) // app_advisory_lock fail
+      .mockResolvedValueOnce({ error: { message: "not found" } }); // app_advisory_xact_lock fail
     const fn = vi.fn().mockResolvedValue("ok");
     const res = await withSoFulfillLock("so1", fn);
     expect(res).toBe("ok");
@@ -142,15 +142,15 @@ describe("documentFlow.writers/withSoFulfillLock", () => {
     expect(mockRpc).toHaveBeenCalledTimes(2);
   });
 
-  it("session lock path: acquires pg_advisory_lock and releases via pg_advisory_unlock", async () => {
+  it("session lock path: acquires app_advisory_lock and releases via app_advisory_unlock", async () => {
     mockRpc
-      .mockResolvedValueOnce({ error: null }) // pg_advisory_lock success
+      .mockResolvedValueOnce({ error: null }) // app_advisory_lock success
       .mockResolvedValueOnce({ error: null }); // unlock
     const fn = vi.fn().mockResolvedValue(42);
     const res = await withSoFulfillLock("so2", fn);
     expect(res).toBe(42);
-    expect(mockRpc).toHaveBeenNthCalledWith(1, "pg_advisory_lock", { key: "so_fulfill:so2" });
-    expect(mockRpc).toHaveBeenNthCalledWith(2, "pg_advisory_unlock", { key: "so_fulfill:so2" });
+    expect(mockRpc).toHaveBeenNthCalledWith(1, "app_advisory_lock", { key: "so_fulfill:so2" });
+    expect(mockRpc).toHaveBeenNthCalledWith(2, "app_advisory_unlock", { key: "so_fulfill:so2" });
   });
 
   it("xact lock fallback: when session lock fails but xact succeeds, does not call unlock", async () => {
@@ -168,7 +168,7 @@ describe("documentFlow.writers/withSoFulfillLock", () => {
       .mockResolvedValueOnce({ error: null })
       .mockResolvedValueOnce({ error: null }); // unlock
     await expect(withSoFulfillLock("so4", async () => { throw new Error("boom"); })).rejects.toThrow("boom");
-    expect(mockRpc).toHaveBeenCalledWith("pg_advisory_unlock", { key: "so_fulfill:so4" });
+    expect(mockRpc).toHaveBeenCalledWith("app_advisory_unlock", { key: "so_fulfill:so4" });
   });
 });
 
