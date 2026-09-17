@@ -29,6 +29,7 @@ import {
   ticketElapsedHours,
 } from "@/lib/tickets";
 import { useRealtimeRefetch } from "@/lib/softDelete";
+import { fetchAdminCustodyMap } from "@/lib/ims";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import {
   PieChart,
@@ -144,20 +145,10 @@ export function EngineerWorkloadSection() {
     setCarriedLoading(true);
     (async () => {
       try {
-        const sb = supabase as unknown as { from: (t: string) => any };
-        const { data: emps } = await sb.from("employees").select("id,name").eq("active", true).limit(2000);
-        const idToName = new Map<string, string>();
-        for (const e of ((emps || []) as { id: string; name: string }[])) {
-          if (e?.id && e?.name) idToName.set(e.id, e.name);
-        }
-        const { data: stock } = await sb
-          .from("ims_stock_items")
-          .select("custodian_employee_id")
-          .not("custodian_employee_id", "is", null)
-          .limit(2000);
+        const map = await fetchAdminCustodyMap();
         const counts: Record<string, number> = {};
-        for (const r of ((stock || []) as { custodian_employee_id: string | null }[])) {
-          const name = r.custodian_employee_id ? idToName.get(r.custodian_employee_id) : undefined;
+        for (const entry of map.values()) {
+          const name = entry.custodianName;
           if (!name) continue;
           counts[name] = (counts[name] ?? 0) + 1;
         }

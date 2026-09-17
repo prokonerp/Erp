@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { fetchCustodianNameMap } from "@/lib/ims";
+import { fetchOwnCustodyMap } from "@/lib/ims";
 import { custodianBadgeLabel, filterByCustodian, type CustodianFilterMode } from "@/lib/custody-utils";
 
 type SerialRow = {
@@ -45,7 +45,7 @@ export function SerialMultiPicker({
   useEffect(() => { setPicked(value); }, [value, open]);
   useEffect(() => { const t = setTimeout(() => setDebounced(q), 150); return () => clearTimeout(t); }, [q]);
 
-  const COLS = "id,part_serial_no,part_model_no,part_name,warehouse_id,stock_status,custodian_employee_id";
+  const COLS = "id,part_serial_no,part_model_no,part_name,warehouse_id,stock_status";
   const { data: rowsData, isLoading: loading } = useQuery({
     queryKey: ["ims-serials-multi", warehouseId, partModelNo, partName, open, debounced] as const,
     queryFn: async () => {
@@ -73,23 +73,24 @@ export function SerialMultiPicker({
   });
   const rows = useMemo(() => (rowsData as SerialRow[] | undefined) ?? [], [rowsData]);
 
-  // Read-only custodian name resolve (bounded 25/30-row window only).
-  // Never blocks the list: on lookup failure names stay unresolved → "Unknown custodian".
-  const [custodianNames, setCustodianNames] = useState<Map<string, string>>(new Map());
+  // Caller-scoped custody: badge ONLY the caller's own holdings (via my_stock_custody).
+  // Another engineer's holding must never render — rows absent from the map show no badge.
+  // Never blocks the list: on lookup failure the map is empty → no badges.
+  const [ownCustody, setOwnCustody] = useState<Map<string, { serial: string | null; ticketId: string | null; setAt: string | null }>>(new Map());
   useEffect(() => {
+    if (!open) return;
     let alive = true;
-    const ids = rows.map((r) => r.custodian_employee_id).filter(Boolean) as string[];
-    if (ids.length === 0) { setCustodianNames(new Map()); return; }
-    fetchCustodianNameMap(ids).then((m) => { if (alive) setCustodianNames(m); }).catch(() => {});
+    fetchOwnCustodyMap().then((m) => { if (alive) setOwnCustody(m); }).catch(() => {});
     return () => { alive = false; };
-  }, [rows]);
+  }, [open]);
 
   const rowsWithCustody = useMemo(
     () => rows.map((r) => ({
       ...r,
-      custodian_name: r.custodian_employee_id ? (custodianNames.get(r.custodian_employee_id) ?? null) : null,
+      custodian_employee_id: ownCustody.has(r.id) ? "self" : null,
+      custodian_name: ownCustody.has(r.id) ? "You" : null,
     })),
-    [rows, custodianNames],
+    [rows, ownCustody],
   );
 
   // Server already filters by debounced term (25/30 window); custody filter is client-side, default off.

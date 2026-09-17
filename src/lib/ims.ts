@@ -210,7 +210,7 @@ export type StockPaginatedParams = {
 };
 
 export const STOCK_SELECT =
-  "id,oem,category,part_name,part_model_no,part_serial_no,warehouse_id,stock_type,stock_status,ticket_id,indent_id,oem_case_id,customer_name,transaction_ref,notes,qty,opening_stock,created_at,updated_at,custodian_employee_id";
+  "id,oem,category,part_name,part_model_no,part_serial_no,warehouse_id,stock_type,stock_status,ticket_id,indent_id,oem_case_id,customer_name,transaction_ref,notes,qty,opening_stock,created_at,updated_at";
 
 export const STOCK_SELECT_AGG = STOCK_SELECT;
 
@@ -233,6 +233,99 @@ export async function fetchCustodianNameMap(ids: (string | null | undefined)[]):
     const map = new Map<string, string>();
     for (const r of (data || []) as { id: string; name: string }[]) {
       if (r?.id && r?.name) map.set(r.id, r.name);
+    }
+    return map;
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * Caller-scoped custody: rows held by the CALLER's employee only.
+ * Fail-soft (same pattern as fetchCustodianNameMap): on ANY error returns
+ * an empty map so dispatch/receipt UI never blocks on a custody lookup.
+ * Backed by the `my_stock_custody()` RPC (migration 20260925000002).
+ */
+export async function fetchOwnCustodyMap(): Promise<
+  Map<string, { serial: string | null; ticketId: string | null; setAt: string | null }>
+> {
+  type Entry = { serial: string | null; ticketId: string | null; setAt: string | null };
+  const empty = new Map<string, Entry>();
+  try {
+    const { data, error } = await supabase.rpc("my_stock_custody" as never, undefined as never);
+    if (error) return empty;
+    const map = new Map<string, Entry>();
+    for (const r of (data || []) as {
+      stock_item_id: string;
+      part_serial_no: string | null;
+      ticket_id: string | null;
+      set_at: string | null;
+    }[]) {
+      if (r?.stock_item_id) {
+        map.set(r.stock_item_id, {
+          serial: r.part_serial_no ?? null,
+          ticketId: r.ticket_id ?? null,
+          setAt: r.set_at ?? null,
+        });
+      }
+    }
+    return map;
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * Admin custody view: all (or one engineer's) holdings with resolved names.
+ * Server-gated inside `admin_stock_custody(_employee_id)` — non-admin callers
+ * get an error, which fail-softs here to an empty map (no badge renders).
+ * Backed by the `admin_stock_custody()` RPC (migration 20260925000002).
+ */
+export async function fetchAdminCustodyMap(
+  employeeId?: string | null,
+): Promise<
+  Map<
+    string,
+    {
+      custodianId: string | null;
+      custodianName: string | null;
+      serial: string | null;
+      ticketId: string | null;
+      setAt: string | null;
+    }
+  >
+> {
+  type Entry = {
+    custodianId: string | null;
+    custodianName: string | null;
+    serial: string | null;
+    ticketId: string | null;
+    setAt: string | null;
+  };
+  const empty = new Map<string, Entry>();
+  try {
+    const { data, error } = await supabase.rpc("admin_stock_custody" as never, {
+      _employee_id: employeeId ?? null,
+    } as never);
+    if (error) return empty;
+    const map = new Map<string, Entry>();
+    for (const r of (data || []) as {
+      stock_item_id: string;
+      custodian_employee_id: string | null;
+      custodian_name: string | null;
+      part_serial_no: string | null;
+      ticket_id: string | null;
+      set_at: string | null;
+    }[]) {
+      if (r?.stock_item_id) {
+        map.set(r.stock_item_id, {
+          custodianId: r.custodian_employee_id ?? null,
+          custodianName: r.custodian_name ?? null,
+          serial: r.part_serial_no ?? null,
+          ticketId: r.ticket_id ?? null,
+          setAt: r.set_at ?? null,
+        });
+      }
     }
     return map;
   } catch {
@@ -305,9 +398,11 @@ export async function createStock(input: Partial<StockItem>): Promise<StockItem>
   const uid = u.user?.id ?? null;
 
   // 1. Insert stock item (with created_by)
+  // custody is SQL-trigger-owned (migration 20260925000002 enforces it DB-side too).
+  const { custodian_employee_id, ...custodyFreeInput } = input;
   const { data, error } = await sb
     .from("ims_stock_items")
-    .insert({ ...input, created_by: uid } as never)
+    .insert({ ...custodyFreeInput, created_by: uid } as never)
     .select("*")
     .single();
   if (error) throw error;
@@ -337,7 +432,9 @@ export async function createStock(input: Partial<StockItem>): Promise<StockItem>
 }
 
 export async function updateStock(id: string, patch: Partial<StockItem>): Promise<void> {
-  const { error } = await sb.from("ims_stock_items").update(patch).eq("id", id);
+  // custody is SQL-trigger-owned (migration 20260925000002 enforces it DB-side too).
+  const { custodian_employee_id, ...custodyFreePatch } = patch;
+  const { error } = await sb.from("ims_stock_items").update(custodyFreePatch).eq("id", id);
   if (error) throw error;
 }
 

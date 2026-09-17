@@ -46,7 +46,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   fetchStockPage,
   fetchTransactionsPage,
-  fetchCustodianNameMap,
+  fetchAdminCustodyMap,
   listWarehouses,
   STOCK_STATUS_LABEL,
   TXN_TYPE_LABEL,
@@ -887,13 +887,13 @@ function ProductDetailSheet({
   const [serialStatus, setSerialStatus] = useState<string>("all");
   const [serialCustody, setSerialCustody] = useState<CustodianFilterMode>("all");
 
-  // Read-only custody names — resolved on detail open only, never on the list.
-  const [custodianNames, setCustodianNames] = useState<Map<string, string>>(new Map());
+  // Admin-gated custody (via admin_stock_custody) — resolved on detail open only, never on the list.
+  // Never reads row.custodian_employee_id; non-admin viewers fail-soft to an empty map (no badges).
+  const [adminCustody, setAdminCustody] = useState<Map<string, { custodianId: string | null; custodianName: string | null; serial: string | null; ticketId: string | null; setAt: string | null }>>(new Map());
   useEffect(() => {
+    if (!product) return;
     let alive = true;
-    const ids = (product?.items || []).map((s) => s.custodian_employee_id).filter(Boolean) as string[];
-    if (ids.length === 0) { setCustodianNames(new Map()); return; }
-    fetchCustodianNameMap(ids).then((m) => { if (alive) setCustodianNames(m); }).catch(() => {});
+    fetchAdminCustodyMap().then((m) => { if (alive) setAdminCustody(m); }).catch(() => {});
     return () => { alive = false; };
   }, [product]);
 
@@ -1008,7 +1008,13 @@ function ProductDetailSheet({
     .reverse();
 
   const serialFiltered = filterByCustodian(
-    product.items.filter((s) => {
+    product.items
+      .map((s) => ({
+        ...s,
+        custodian_employee_id: adminCustody.get(s.id)?.custodianId ?? null,
+        custodian_name: adminCustody.get(s.id)?.custodianName ?? null,
+      }))
+      .filter((s) => {
       if (serialWh !== "all" && (s.warehouse_id || "") !== serialWh) return false;
       if (serialCond !== "all" && s.stock_type !== serialCond) return false;
       if (serialStatus !== "all" && s.stock_status !== serialStatus) return false;
@@ -1470,8 +1476,8 @@ function ProductDetailSheet({
                           </td>
                           <td className="p-2">
                             {s.custodian_employee_id ? (
-                              <Badge variant="secondary" className="text-[10px]" aria-label={custodianBadgeLabel({ custodian_employee_id: s.custodian_employee_id, custodian_name: custodianNames.get(s.custodian_employee_id) ?? null }) ?? "In custody"}>
-                                {custodianBadgeLabel({ custodian_employee_id: s.custodian_employee_id, custodian_name: custodianNames.get(s.custodian_employee_id) ?? null })}
+                              <Badge variant="secondary" className="text-[10px]" aria-label={custodianBadgeLabel({ custodian_employee_id: s.custodian_employee_id, custodian_name: s.custodian_name ?? null }) ?? "In custody"}>
+                                {custodianBadgeLabel({ custodian_employee_id: s.custodian_employee_id, custodian_name: s.custodian_name ?? null })}
                               </Badge>
                             ) : (
                               <span className="text-muted-foreground">—</span>

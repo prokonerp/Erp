@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
 import { fetchMyIdentity } from "@/lib/engineer-identity";
+import { fetchOwnCustodyMap } from "@/lib/ims";
 import { engKeys } from "@/lib/queryKeys";
 
 /**
@@ -49,8 +50,8 @@ export type QueueTicket = {
 /**
  * Read-only opt-in carried-parts count for the current engineer.
  * Disabled by default (enabled=false) so the queue list issues no new
- * queries. When enabled, resolves the employee id by email (same as
- * useMyQueue) then counts ims_stock_items by custodian_employee_id.
+ * queries. When enabled, counts the caller-scoped `my_stock_custody` RPC
+ * rows via fetchOwnCustodyMap (count = map.size).
  * Never throws to the UI: lookup failure → count 0 ("Unknown" fallback
  * handled by callers via custodianBadgeLabel).
  */
@@ -66,21 +67,8 @@ export function useMyCarriedPartsCount(enabled = false) {
     refetchInterval: false,
     queryFn: async (): Promise<{ count: number; employeeId: string | null }> => {
       try {
-        if (!email) return { count: 0, employeeId: null };
-        const { data: emps, error: empErr } = await supabase
-          .from("employees")
-          .select("id")
-          .eq("email", email)
-          .eq("active", true)
-          .limit(1);
-        if (empErr || !emps || emps.length === 0) return { count: 0, employeeId: null };
-        const empId = (emps[0] as { id: string }).id;
-        const { count, error } = await supabase
-          .from("ims_stock_items")
-          .select("id", { count: "exact", head: true })
-          .filter("custodian_employee_id", "eq", empId);
-        if (error) return { count: 0, employeeId: empId };
-        return { count: count ?? 0, employeeId: empId };
+        const map = await fetchOwnCustodyMap();
+        return { count: map.size, employeeId: null };
       } catch {
         return { count: 0, employeeId: null };
       }

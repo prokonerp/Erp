@@ -9,7 +9,7 @@ import { exportCSV } from "@/lib/exports";
 import { findEquipmentBySerial, warrantyEnd, coverStatus, amcStatusOf, statusClass, statusLabel, type InstalledEquipment } from "@/lib/installedEquipment";
 import {
   listWarehouses,
-  fetchCustodianNameMap,
+  fetchAdminCustodyMap,
   type StockItem, type Transaction, type WarehouseLite,
 } from "@/lib/ims";
 import { custodianBadgeLabel } from "@/lib/custody-utils";
@@ -119,15 +119,15 @@ function SerialTrack() {
   /** Plain warehouse name only — no ASP/Godown suffix (same style as Reports). */
   const plainWhName = (id: string | null | undefined) => (id ? (wMap[id]?.name || "—") : "—");
 
-  // Read-only custody resolve — detail only (bounded ≤25 rows), never blocks the detail.
-  const [custodianNames, setCustodianNames] = useState<Map<string, string>>(new Map());
+  // Admin-gated custody resolve (via admin_stock_custody) — detail only (bounded ≤25 rows).
+  // Never reads row.custodian_employee_id (cross-engineer leak); non-admin callers
+  // fail-soft to an empty map so no badge renders. Never blocks the detail.
+  const [adminCustody, setAdminCustody] = useState<Map<string, { custodianId: string | null; custodianName: string | null; serial: string | null; ticketId: string | null; setAt: string | null }>>(new Map());
   useEffect(() => {
     let alive = true;
-    const ids = stock.map((r) => r.custodian_employee_id).filter(Boolean) as string[];
-    if (ids.length === 0) { setCustodianNames(new Map()); return; }
-    fetchCustodianNameMap(ids).then((m) => { if (alive) setCustodianNames(m); }).catch(() => {});
+    fetchAdminCustodyMap().then((m) => { if (alive) setAdminCustody(m); }).catch(() => {});
     return () => { alive = false; };
-  }, [stock]);
+  }, []);
 
   const term = q.trim().toLowerCase();
 
@@ -261,10 +261,8 @@ function SerialTrack() {
               qty={row.qty}
               issuedTo={issuedTo ? { party: issuedTo.to_party || row.customer_name || "—", reference: getTxnDocMeta(issuedTo as unknown as any).display } : null}
               custody={custodianBadgeLabel({
-                custodian_employee_id: row.custodian_employee_id,
-                custodian_name: row.custodian_employee_id
-                  ? (custodianNames.get(row.custodian_employee_id) ?? null)
-                  : null,
+                custodian_employee_id: adminCustody.get(row.id)?.custodianId ?? null,
+                custodian_name: adminCustody.get(row.id)?.custodianName ?? null,
               })}
             />
 

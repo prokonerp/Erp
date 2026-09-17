@@ -9,7 +9,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { fetchCustodianNameMap } from "@/lib/ims";
+import { fetchOwnCustodyMap } from "@/lib/ims";
 import { custodianBadgeLabel, filterByCustodian, type CustodianFilterMode } from "@/lib/custody-utils";
 
 export type SerialItem = {
@@ -56,7 +56,7 @@ export function ImsSerialPicker({
   useEffect(() => { const t = setTimeout(() => setDebounced(search), 150); return () => clearTimeout(t); }, [search]);
 
   // Bounded picker window: 25 on empty, 30 on search with server-side ilike — 7 cols, shouldFilter=false
-  const COLS = "id,part_serial_no,part_model_no,part_name,warehouse_id,stock_type,stock_status,custodian_employee_id";
+  const COLS = "id,part_serial_no,part_model_no,part_name,warehouse_id,stock_type,stock_status";
   const enabled = !!partModelNo || !!partName;
   const { data: rowsData, isLoading: loading } = useQuery({
     queryKey: ["ims-serials", partModelNo, partName, stockType, warehouseId, debounced] as const,
@@ -88,24 +88,25 @@ export function ImsSerialPicker({
   });
   const rows = useMemo(() => (rowsData as SerialItem[] | undefined) ?? [], [rowsData]);
 
-  // Read-only custodian resolve on the bounded window only — never blocks the picker.
-  const [custodianNames, setCustodianNames] = useState<Map<string, string>>(new Map());
+  // Caller-scoped custody: badge ONLY the caller's own holdings (via my_stock_custody).
+  // Another engineer's holding must never render — rows absent from the map show no badge.
+  const [ownCustody, setOwnCustody] = useState<Map<string, { serial: string | null; ticketId: string | null; setAt: string | null }>>(new Map());
   useEffect(() => {
+    if (!open) return;
     let alive = true;
-    const ids = rows.map((r) => r.custodian_employee_id).filter(Boolean) as string[];
-    if (ids.length === 0) { setCustodianNames(new Map()); return; }
-    fetchCustodianNameMap(ids).then((m) => { if (alive) setCustodianNames(m); }).catch(() => {});
+    fetchOwnCustodyMap().then((m) => { if (alive) setOwnCustody(m); }).catch(() => {});
     return () => { alive = false; };
-  }, [rows]);
+  }, [open]);
 
   const custodyMode: CustodianFilterMode = custodyOnly ? "in-custody" : "all";
   const visibleRows = useMemo(() => {
     const withNames = rows.map((r) => ({
       ...r,
-      custodian_name: r.custodian_employee_id ? (custodianNames.get(r.custodian_employee_id) ?? null) : null,
+      custodian_employee_id: ownCustody.has(r.id) ? "self" : null,
+      custodian_name: ownCustody.has(r.id) ? "You" : null,
     }));
     return filterByCustodian(withNames, custodyMode);
-  }, [rows, custodianNames, custodyMode]);
+  }, [rows, ownCustody, custodyMode]);
 
   const handleSelect = useCallback((r: SerialItem) => {
     onSelect(r, r.part_serial_no);
