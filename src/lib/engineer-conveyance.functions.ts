@@ -28,14 +28,12 @@ import {
 
 const ENGINEER_BUCKET = "engineer-uploads";
 
-const uploadKinds = [
-  "morning_reading",
-  "evening_reading",
-  "receipt",
-  "profile_photo",
-  "document",
-  "serial_photo",
-] as const;
+const uploadKinds = ["morning_reading", "evening_reading", "receipt", "serial_photo"] as const;
+
+// Profile-context kinds (photo + documents). Duty has nothing to do with
+// them, so they upload through uploadProfileAttachment (requireActiveUser
+// only) and must never regain the field-location gate.
+const profileUploadKinds = ["profile_photo", "document"] as const;
 
 type AdminClient = Awaited<ReturnType<typeof getAdmin>>;
 
@@ -74,9 +72,90 @@ async function resolveCaller(admin: AdminClient, userId: string, emailHint: stri
 }
 
 // ---------------------------------------------------------------------------
-// uploadEngineerAttachment — engineer-scoped image upload (readings,
-// receipts, profile photo, documents). Path is server-built from the
-// caller's employee id, never client-supplied.
+// Shared upload core — identical validation, naming and storage-path
+// conventions for duty and profile uploads. Path is server-built from the
+// caller's employee id, never client-supplied:
+//   engineer/<employee_id>/<kind>/<day>/<INITIALS>_<NAMEKIND>_<day>_[label]-<token>.<ext>
+// ---------------------------------------------------------------------------
+type EngineerUploadData = {
+  kind: string;
+  filename: string;
+  content_type: string;
+  data_base64: string;
+  date?: string;
+  label?: string;
+};
+
+async function storeEngineerUpload(
+  caller: { id: string; name: string | null },
+  data: EngineerUploadData,
+) {
+  if (!(ALLOWED_IMAGE_MIME as readonly string[]).includes(data.content_type.toLowerCase())) {
+    throw new Error("Only JPEG, PNG, WebP, HEIC images allowed");
+  }
+  const buf = Buffer.from(data.data_base64, "base64");
+  if (buf.length === 0 || buf.length > MAX_ACCEPTED_BYTES) {
+    throw new Error(acceptedUploadMessage());
+  }
+  const safeExt =
+    (data.filename.split(".").pop() || "jpg")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 5) || "jpg";
+  const day = data.date ?? todayLocal();
+  const initials = initialsFromName(caller.name);
+  const token = makeNameToken();
+  let nameKind: UploadNameKind = "CONVEYANCE";
+  let nameLabel: string | null = null;
+  switch (data.kind) {
+    case "morning_reading":
+      nameKind = "CONVEYANCE";
+      nameLabel = "morning";
+      break;
+    case "evening_reading":
+      nameKind = "CONVEYANCE";
+      nameLabel = "evening";
+      break;
+    case "receipt":
+      nameKind = "CONVEYANCE";
+      nameLabel = sanitizeNameLabel(data.label) ?? "receipt";
+      break;
+    case "profile_photo":
+      nameKind = "PROFILE";
+      nameLabel = null;
+      break;
+    case "document":
+      nameKind = "PROFILE";
+      nameLabel = sanitizeNameLabel(data.label);
+      break;
+    case "serial_photo":
+      nameKind = "SERIAL";
+      nameLabel = "serial";
+      break;
+  }
+  const filename = buildUploadFilename({
+    initials,
+    kind: nameKind,
+    date: day,
+    label: nameLabel,
+    token,
+    ext: safeExt,
+  });
+  const path = `engineer/${caller.id}/${data.kind}/${day}/${filename}`;
+  await uploadObjectRaw({
+    adminUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+    bucket: ENGINEER_BUCKET,
+    path,
+    body: buf,
+    contentType: data.content_type,
+  });
+  return { path };
+}
+
+// ---------------------------------------------------------------------------
+// uploadEngineerAttachment — duty-context image upload (readings, receipts,
+// serial photos). Stays behind requireFieldLocation: on-duty + fresh GPS.
 // ---------------------------------------------------------------------------
 const uploadInput = z.object({
   kind: z.enum(uploadKinds),
@@ -97,69 +176,40 @@ export const uploadEngineerAttachment = createServerFn({ method: "POST" })
   .middleware([requireFieldLocation])
   .inputValidator((input) => uploadInput.parse(input))
   .handler(async ({ data, context }) => {
-    if (!(ALLOWED_IMAGE_MIME as readonly string[]).includes(data.content_type.toLowerCase())) {
-      throw new Error("Only JPEG, PNG, WebP, HEIC images allowed");
-    }
-    const buf = Buffer.from(data.data_base64, "base64");
-    if (buf.length === 0 || buf.length > MAX_ACCEPTED_BYTES) {
-      throw new Error(acceptedUploadMessage());
-    }
     const admin = await getAdmin();
     const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
-    const safeExt =
-      (data.filename.split(".").pop() || "jpg")
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "")
-        .slice(0, 5) || "jpg";
-    const day = data.date ?? todayLocal();
-    const initials = initialsFromName(caller.name);
-    const token = makeNameToken();
-    let nameKind: UploadNameKind = "CONVEYANCE";
-    let nameLabel: string | null = null;
-    switch (data.kind) {
-      case "morning_reading":
-        nameKind = "CONVEYANCE";
-        nameLabel = "morning";
-        break;
-      case "evening_reading":
-        nameKind = "CONVEYANCE";
-        nameLabel = "evening";
-        break;
-      case "receipt":
-        nameKind = "CONVEYANCE";
-        nameLabel = sanitizeNameLabel(data.label) ?? "receipt";
-        break;
-      case "profile_photo":
-        nameKind = "PROFILE";
-        nameLabel = null;
-        break;
-      case "document":
-        nameKind = "PROFILE";
-        nameLabel = sanitizeNameLabel(data.label);
-        break;
-      case "serial_photo":
-        nameKind = "SERIAL";
-        nameLabel = "serial";
-        break;
-    }
-    const filename = buildUploadFilename({
-      initials,
-      kind: nameKind,
-      date: day,
-      label: nameLabel,
-      token,
-      ext: safeExt,
-    });
-    const path = `engineer/${caller.id}/${data.kind}/${day}/${filename}`;
-    await uploadObjectRaw({
-      adminUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "",
-      serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
-      bucket: ENGINEER_BUCKET,
-      path,
-      body: buf,
-      contentType: data.content_type,
-    });
-    return { path };
+    return storeEngineerUpload(caller, data);
+  });
+
+// ---------------------------------------------------------------------------
+// uploadProfileAttachment — profile-context image upload (profile photo,
+// documents). Guarded by requireActiveUser ONLY: profile edits have nothing
+// to do with duty, so an off-duty or indoor engineer can still change their
+// photo. Same validation/storage-path conventions as the duty uploader via
+// the shared storeEngineerUpload core.
+// ---------------------------------------------------------------------------
+const profileUploadInput = z.object({
+  kind: z.enum(profileUploadKinds),
+  filename: z.string().min(1).max(200),
+  content_type: z.string().min(1).max(100),
+  data_base64: z
+    .string()
+    .min(1)
+    .max(Math.ceil((MAX_ACCEPTED_BYTES * 4) / 3) + 1024),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  label: z.string().max(24).optional(),
+});
+
+export const uploadProfileAttachment = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
+  .inputValidator((input) => profileUploadInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const admin = await getAdmin();
+    const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
+    return storeEngineerUpload(caller, data);
   });
 
 // ---------------------------------------------------------------------------
@@ -216,6 +266,45 @@ export const deleteEngineerAttachment = createServerFn({ method: "POST" })
     const docs = asEmployeeDocuments((empRow as { documents: unknown } | null)?.documents ?? []);
     if (docs.some((d) => d.path === data.path)) {
       throw new Error("This upload is already submitted and cannot be deleted");
+    }
+    const { error } = await admin.storage.from(ENGINEER_BUCKET).remove([data.path]);
+    if (error) throw new Error(storageUploadMessage("engineer-uploads", error, data.path));
+    return { path: data.path };
+  });
+
+// ---------------------------------------------------------------------------
+// deleteProfileAttachment — remove one of the caller's own PROFILE uploads
+// (orphan photo/document after a failed save, or the replaced old photo).
+// Guarded by requireActiveUser ONLY so off-duty cleanup works; scoped to
+// the profile_photo/document path segments so duty uploads can never pass.
+// Still-referenced paths (current photo_path / saved documents) are refused
+// — removal goes through saveMyProfile, never raw delete.
+// ---------------------------------------------------------------------------
+export const deleteProfileAttachment = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
+  .inputValidator((input) => deleteInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const admin = await getAdmin();
+    const caller = await resolveCaller(admin, context.userId, claimsEmail(context));
+    const allowedPrefixes = [
+      `engineer/${caller.id}/profile_photo/`,
+      `engineer/${caller.id}/document/`,
+    ];
+    if (!allowedPrefixes.some((p) => data.path.startsWith(p))) {
+      throw new Error("Forbidden: you can only delete your own profile uploads");
+    }
+    const { data: empRow, error: empErr } = await admin
+      .from("employees")
+      .select("photo_path,documents")
+      .eq("id", caller.id)
+      .maybeSingle();
+    if (empErr) throw new Error(formatDbError(empErr, "Failed to verify upload usage"));
+    if ((empRow as { photo_path: string | null } | null)?.photo_path === data.path) {
+      throw new Error("This photo is your current profile photo and cannot be deleted");
+    }
+    const docs = asEmployeeDocuments((empRow as { documents: unknown } | null)?.documents ?? []);
+    if (docs.some((d) => d.path === data.path)) {
+      throw new Error("This document is already saved and cannot be deleted");
     }
     const { error } = await admin.storage.from(ENGINEER_BUCKET).remove([data.path]);
     if (error) throw new Error(storageUploadMessage("engineer-uploads", error, data.path));

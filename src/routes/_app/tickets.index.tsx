@@ -3,7 +3,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouteState } from "@/lib/routeState";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebounced } from "@/lib/sales.hooks";
-import { useTicketsTable, useAssignableEngineers, useTicketTabCounts } from "@/hooks/useTicketsTable";
+import {
+  useTicketsTable,
+  useAssignableEngineers,
+  useTicketTabCounts,
+  useTicketCities,
+  fetchTicketsForExport,
+  matchesTicketBucket,
+  TICKETS_EXPORT_CAP,
+} from "@/hooks/useTicketsTable";
+import type { TicketTableRow } from "@/hooks/useTicketsTable";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { PaginationFooter } from "@/components/PaginationFooter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,9 +68,14 @@ import {
   Phone,
   ArrowUp,
   ArrowDown,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Sheet,
 } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
-import { ExportButtons } from "@/components/ExportButtons";
+import { exportCSV, exportExcel, exportPDF, type ExportColumn } from "@/lib/exports";
+import { reportDbError } from "@/lib/format-error";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
@@ -98,6 +112,26 @@ const PRIORITY_LABEL: Record<string, string> = {
   P4: "Low",
   P5: "Very Low",
 };
+
+const TICKET_EXPORT_COLUMNS: ExportColumn<TicketTableRow>[] = [
+  { header: "Case ID", get: (r) => `${r.case_id} [${r.oem_call ? "OEM" : "PHS"}] ${r.call_type}` },
+  { header: "Type", get: (r) => r.call_type },
+  { header: "OEM Case ID", get: (r) => (r.oem_call ? r.oem_ref_id || "" : "") },
+  { header: "Priority", get: (r) => r.priority || "" },
+  { header: "Customer", get: (r) => r.customer_name },
+  { header: "Phone", get: (r) => r.customer_phone || "" },
+  { header: "Model", get: (r) => r.product || "" },
+  { header: "Serial", get: (r) => r.serial_no || "" },
+  { header: "Sector/Colony", get: (r) => r.sector || "" },
+  { header: "City/Area", get: (r) => r.location || "" },
+  { header: "Engineer", get: (r) => r.assigned_engineer_name || "" },
+  {
+    header: "Raised By",
+    get: (r) => r.raised_by_name || (r.raised_by_type === "external" ? "Customer" : ""),
+  },
+  { header: "Status", get: (r) => r.status },
+  { header: "Created", get: (r) => new Date(r.created_at).toLocaleString() },
+];
 
 function PrioritySelect({
   value,
@@ -291,23 +325,68 @@ function TicketsList() {
   }, []);
 
   // Reset paging when server filters change
+  // Local-midnight day edges for the created_at range (same basis as the old client filter).
+  const { dateFrom, dateTo } = useMemo(() => {
+    if (!dateRange?.from) return { dateFrom: null as string | null, dateTo: null as string | null };
+    const from = new Date(dateRange.from);
+    from.setHours(0, 0, 0, 0);
+    const to = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
+    to.setHours(23, 59, 59, 999);
+    return { dateFrom: from.toISOString(), dateTo: to.toISOString() };
+  }, [dateRange]);
+
   useEffect(() => {
     setPage(0);
-  }, [debouncedQ, status, type, tab]);
+  }, [
+    debouncedQ,
+    status,
+    type,
+    tab,
+    engineerFilter,
+    priorityFilter,
+    cityFilter,
+    scope,
+    bucket,
+    oemFilter,
+    partsFilter,
+    ageBucket,
+    dateFrom,
+    dateTo,
+  ]);
 
-  const ticketsQuery = useTicketsTable({ status, type, q: debouncedQ, page, pageSize, tab });
+  const ticketsQuery = useTicketsTable({
+    status,
+    type,
+    q: debouncedQ,
+    page,
+    pageSize,
+    tab,
+    engineer: engineerFilter,
+    priority: priorityFilter,
+    city: cityFilter,
+    scope,
+    bucket,
+    oem: oemFilter,
+    parts: partsFilter,
+    ageBucket,
+    dateFrom,
+    dateTo,
+  });
   const rows = useMemo(() => (ticketsQuery.data?.rows ?? []) as Row[], [ticketsQuery.data?.rows]);
   const total = ticketsQuery.data?.count ?? 0;
   const isLoading = ticketsQuery.isLoading;
   const isFetching = ticketsQuery.isFetching;
   const employeesQuery = useAssignableEngineers();
   const employees = (employeesQuery.data ?? []) as Employee[];
+  const citiesQuery = useTicketCities();
+  const cities = citiesQuery.data ?? [];
   const tabCounts = useTicketTabCounts();
   const refetchTickets = useCallback(() => {
     ticketsQuery.refetch();
     employeesQuery.refetch();
+    citiesQuery.refetch();
     tabCounts.refetch();
-  }, [ticketsQuery, employeesQuery, tabCounts]);
+  }, [ticketsQuery, employeesQuery, citiesQuery, tabCounts]);
   useRealtimeRefetch("tickets", () => {
     ticketsQuery.refetch();
   });
@@ -317,90 +396,12 @@ function TicketsList() {
     ticketsQuery.refetch();
   }, [ticketsQuery]);
 
-  const cities = useMemo(
-    () => Array.from(new Set(rows.map((r) => (r.location || "").trim()).filter(Boolean))).sort(),
-    [rows],
-  );
-
   const { activeRows, terminalRows } = useMemo(() => {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const endOfToday = new Date(startOfToday);
-    endOfToday.setDate(endOfToday.getDate() + 1);
-    const inToday = (iso: string | null | undefined) => {
-      if (!iso) return false;
-      const d = new Date(iso);
-      return d >= startOfToday && d < endOfToday;
-    };
-    const out = rows.filter((r) => {
-      if (cityFilter !== "all" && (r.location || "").trim() !== cityFilter) return false;
-      if (engineerFilter !== "all" && (r.assigned_engineer_name || "") !== engineerFilter)
-        return false;
-      if (priorityFilter !== "all" && (r.priority || "") !== priorityFilter) return false;
-      if (oemFilter === "oem" && !r.oem_call) return false;
-      if (oemFilter === "phs" && r.oem_call) return false;
-      if (partsFilter === "with" && !r.defective_parts_received) return false;
-      if (partsFilter === "without" && r.defective_parts_received) return false;
-      if (bucket !== "all") {
-        if (r.status !== "Closed" || !r.closed_at) return false;
-        const h = (new Date(r.closed_at).getTime() - new Date(r.created_at).getTime()) / 3_600_000;
-        if (bucket === "lt24" && !(h < 24)) return false;
-        if (bucket === "24-48" && !(h >= 24 && h < 48)) return false;
-        if (bucket === "48-72" && !(h >= 48 && h < 72)) return false;
-        if (bucket === "gt72" && !(h >= 72)) return false;
-      }
-      if (ageBucket !== "all") {
-        if (r.status === "Closed" || r.status === "Cancelled") return false;
-        const h = (Date.now() - new Date(r.created_at).getTime()) / 3_600_000;
-        if (ageBucket === "lt24" && !(h < 24)) return false;
-        if (ageBucket === "24-48" && !(h >= 24 && h < 48)) return false;
-        if (ageBucket === "48-72" && !(h >= 48 && h < 72)) return false;
-        if (ageBucket === "gt72" && !(h >= 72)) return false;
-      }
-      if (scope === "today") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const at = (r as any).assigned_at || r.created_at;
-        if (!inToday(at)) return false;
-      } else if (scope === "carry") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const at = (r as any).assigned_at || r.created_at;
-        if (inToday(at) || !at) return false;
-        if (r.status === "Closed") return false;
-      } else if (scope === "active") {
-        if (r.status === "Closed" || r.status === "Cancelled") return false;
-      } else if (scope === "closedToday") {
-        if (r.status !== "Closed") return false;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (!inToday((r as any).closed_at)) return false;
-      } else if (scope === "highPriority") {
-        if (r.status === "Closed" || r.status === "Cancelled") return false;
-        if (r.priority !== "P1" && r.priority !== "P2") return false;
-      } else if (scope === "overdue") {
-        if (r.status === "Closed" || r.status === "Cancelled") return false;
-        if (ticketElapsedHours(r) <= 24) return false;
-      }
-      if (dateRange?.from) {
-        const from = new Date(dateRange.from);
-        from.setHours(0, 0, 0, 0);
-        const to = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
-        to.setHours(23, 59, 59, 999);
-        const t = new Date(r.created_at).getTime();
-        if (t < from.getTime() || t > to.getTime()) return false;
-      }
-      if (!q.trim()) return true;
-      const s = q.toLowerCase();
-      return (
-        r.case_id.toLowerCase().includes(s) ||
-        r.customer_name.toLowerCase().includes(s) ||
-        (r.customer_phone || "").toLowerCase().includes(s) ||
-        (r.product || "").toLowerCase().includes(s) ||
-        (r.serial_no || "").toLowerCase().includes(s) ||
-        (r.location || "").toLowerCase().includes(s) ||
-        (r.sector || "").toLowerCase().includes(s) ||
-        (r.oem_ref_id || "").toLowerCase().includes(s) ||
-        (r.oem_brand || "").toLowerCase().includes(s)
-      );
-    });
+    // All filters except the execution bucket already ran server-side (with
+    // the pager count honoring them). The bucket needs per-row duration
+    // (closed_at − created_at), which PostgREST can't express
+    // column-to-column, so its exact hour slice stays a client refinement.
+    const list = bucket !== "all" ? rows.filter((r) => matchesTicketBucket(r, bucket)) : [...rows];
     // Secondary sort key applied WITHIN each status_priority group.
     const priorityWeight: Record<string, number> = { P1: 1, P2: 2, P3: 3, P4: 4, P5: 5 };
     const cmpVal = (r: Row): number | string => {
@@ -425,7 +426,7 @@ function TicketsList() {
       return sortDir === "asc" ? c : -c;
     };
     // Primary sort: status_priority ASC — ALWAYS. Terminal never sits above active.
-    const sorted = out.sort((a, b) => {
+    const sorted = list.sort((a, b) => {
       const pa = statusPriority(a.status);
       const pb = statusPriority(b.status);
       if (pa !== pb) return pa - pb;
@@ -436,21 +437,7 @@ function TicketsList() {
     const terminal: Row[] = [];
     for (const r of sorted) (isTerminalStatus(r.status) ? terminal : active).push(r);
     return { activeRows: active, terminalRows: terminal };
-  }, [
-    rows,
-    q,
-    cityFilter,
-    engineerFilter,
-    priorityFilter,
-    scope,
-    bucket,
-    oemFilter,
-    partsFilter,
-    ageBucket,
-    dateRange,
-    sortKey,
-    sortDir,
-  ]);
+  }, [rows, bucket, sortKey, sortDir]);
 
   // Server already filters by tab — all rows are relevant
   const activeCount = activeRows.length;
@@ -459,6 +446,50 @@ function TicketsList() {
     () => [...activeRows, ...terminalRows],
     [activeRows, terminalRows],
   );
+
+  const [exporting, setExporting] = useState(false);
+
+  // Bounded export honoring the SAME active filters as the list (never just
+  // the current page). Caps at TICKETS_EXPORT_CAP with an explicit toast.
+  const runExport = async (kind: "excel" | "csv" | "pdf") => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { rows: exportRows, capped } = await fetchTicketsForExport({
+        status,
+        type,
+        q: debouncedQ,
+        page: 0,
+        pageSize: TICKETS_EXPORT_CAP,
+        tab,
+        engineer: engineerFilter,
+        priority: priorityFilter,
+        city: cityFilter,
+        scope,
+        bucket,
+        oem: oemFilter,
+        parts: partsFilter,
+        ageBucket,
+        dateFrom,
+        dateTo,
+      });
+      if (exportRows.length === 0) {
+        toast.info("No tickets match the current filters.");
+        return;
+      }
+      if (capped)
+        toast.warning(
+          `Export capped at ${TICKETS_EXPORT_CAP} rows — refine filters to narrow results.`,
+        );
+      if (kind === "excel") await exportExcel("Prokon_Tickets", TICKET_EXPORT_COLUMNS, exportRows);
+      else if (kind === "csv") exportCSV("Prokon_Tickets", TICKET_EXPORT_COLUMNS, exportRows);
+      else exportPDF("Prokon_Tickets", TICKET_EXPORT_COLUMNS, exportRows, "Service Tickets");
+    } catch (err) {
+      toast.error(reportDbError("tickets export", err, "Export failed"));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
     <button
@@ -721,31 +752,32 @@ function TicketsList() {
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
           <CardTitle>All Tickets</CardTitle>
           <div className="flex items-center gap-2">
-            <ExportButtons
-              name="Prokon_Tickets"
-              title="Service Tickets"
-              rows={filtered}
-              columns={[
-                { header: "Case ID", get: (r) => `${r.case_id} [${r.oem_call ? "OEM" : "PHS"}] ${r.call_type}` },
-                { header: "Type", get: (r) => r.call_type },
-                { header: "OEM Case ID", get: (r) => (r.oem_call ? (r.oem_ref_id || "") : "") },
-                { header: "Priority", get: (r) => r.priority || "" },
-                { header: "Customer", get: (r) => r.customer_name },
-                { header: "Phone", get: (r) => r.customer_phone || "" },
-                { header: "Model", get: (r) => r.product || "" },
-                { header: "Serial", get: (r) => r.serial_no || "" },
-                { header: "Sector/Colony", get: (r) => r.sector || "" },
-                { header: "City/Area", get: (r) => r.location || "" },
-                { header: "Engineer", get: (r) => r.assigned_engineer_name || "" },
-                {
-                  header: "Raised By",
-                  get: (r) =>
-                    r.raised_by_name || (r.raised_by_type === "external" ? "Customer" : ""),
-                },
-                { header: "Status", get: (r) => r.status },
-                { header: "Created", get: (r) => new Date(r.created_at).toLocaleString() },
-              ]}
-            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exporting || (!isLoading && total === 0)}
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  {exporting ? "Exporting…" : "Export"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => runExport("excel")}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Excel (.xlsx)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => runExport("csv")}>
+                  <Sheet className="h-4 w-4 mr-2" />
+                  CSV (.csv)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => runExport("pdf")}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  PDF (.pdf)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Link to="/tickets/new">
               <Button size="sm">
                 <Plus className="h-4 w-4 mr-1" />

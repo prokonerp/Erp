@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { issueCaptchaChallenge, verifyCaptchaAnswer } from "@/lib/public-captcha";
-import { checkRateLimit } from "@/lib/public-rate-limit";
+import { checkRateLimitDurable } from "@/lib/public-rate-limit";
 import { isStagedPublicPath } from "@/lib/public-upload-guards";
 import { clientIpKey } from "@/lib/server-client-ip";
 
@@ -21,7 +21,20 @@ function captchaSecret(): string {
 
 /** Issue a stateless arithmetic challenge for the public ticket form. No auth. */
 export const getPublicCaptchaChallenge = createServerFn({ method: "GET" }).handler(async () => {
-  const check = checkRateLimit(challengeHits, clientIpKey(), Date.now(), CHALLENGE_LIMIT);
+  // Durable per-IP throttle; falls back to in-memory when the RPC is down.
+  let admin: unknown = null;
+  try {
+    ({ supabaseAdmin: admin } = await import("@/integrations/supabase/client.server"));
+  } catch {
+    admin = null;
+  }
+  const check = await checkRateLimitDurable(
+    admin,
+    challengeHits,
+    clientIpKey(),
+    Date.now(),
+    CHALLENGE_LIMIT,
+  );
   if (!check.allowed) throw new Error("Too many requests. Please wait a minute and try again.");
   return issueCaptchaChallenge(captchaSecret());
 });
@@ -59,7 +72,14 @@ export const submitPublicTicket = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // --- Abuse gates (before any DB work) ---
-    const submitCheck = checkRateLimit(submitHits, clientIpKey(), Date.now(), SUBMIT_LIMIT);
+    // Durable per-IP throttle; falls back to in-memory when the RPC is down.
+    const submitCheck = await checkRateLimitDurable(
+      supabaseAdmin,
+      submitHits,
+      clientIpKey(),
+      Date.now(),
+      SUBMIT_LIMIT,
+    );
     if (!submitCheck.allowed) {
       throw new Error("Too many submissions. Please wait a few minutes and try again.");
     }
@@ -93,45 +113,69 @@ export const submitPublicTicket = createServerFn({ method: "POST" })
       const nameNorm = (data.customer_name || "").trim().toLowerCase();
 
       if (phoneDigits || nameNorm) {
-        // Fetch candidates — bounded to 5000 which covers the full master for this project
-        // Phone in masters may be stored with spaces/dashes, so we normalise in JS.
-        const { data: customers } = await supabaseAdmin
-          .from("customers")
-          .select("id,company,contact_name,phone")
-          .limit(5000);
+        type CustomerHit = {
+          id: string;
+          company: string | null;
+          contact_name: string | null;
+          phone: string | null;
+        };
+        // Bounded targeted lookups only — never a full-table fetch. At most
+        // 3 small queries (phone candidates, company, contact_name), each
+        // capped, preserving the 4-step match priority below.
+        const normPhone = (p: string | null) => (p || "").replace(/\D/g, "");
+        const firstRow = (rows: unknown): CustomerHit | null =>
+          Array.isArray(rows) && rows.length ? (rows[0] as CustomerHit) : null;
+        let hit: CustomerHit | null = null;
 
-        if (customers && customers.length) {
-          const normPhone = (p: string | null) => (p || "").replace(/\D/g, "");
-          let hit: { id: string } | null = null;
-
+        // 1) + 2) Phone: fetch a narrow candidate set via the last-5 digits
+        // (a contiguous run that survives +91/space/dash formatting), then
+        // verify exact full-digit match first and last-10 fallback in JS.
+        if (phoneDigits.length >= 5) {
+          const tail5 = phoneDigits.slice(-5);
+          const { data: cands } = await supabaseAdmin
+            .from("customers")
+            .select("id,company,contact_name,phone")
+            .like("phone", `%${tail5}%`)
+            .limit(25);
+          const list = (cands as CustomerHit[] | null) ?? [];
           // 1) Exact full-digit phone match (most reliable)
-          if (phoneDigits) {
-            hit = (customers as { id: string; phone: string | null }[]).find(
-              (c) => normPhone(c.phone) !== "" && normPhone(c.phone) === phoneDigits,
-            ) || null;
-          }
+          hit =
+            list.find((c) => normPhone(c.phone) !== "" && normPhone(c.phone) === phoneDigits) ??
+            null;
           // 2) Last-10 digit fallback (handles +91 / 0 prefix differences)
           if (!hit && phoneDigits.length >= 10) {
             const last10 = phoneDigits.slice(-10);
-            hit = (customers as { id: string; phone: string | null }[]).find(
-              (c) => normPhone(c.phone).slice(-10) === last10 && normPhone(c.phone).length >= 10,
-            ) || null;
+            hit =
+              list.find((c) => {
+                const d = normPhone(c.phone);
+                return d.length >= 10 && d.slice(-10) === last10;
+              }) ?? null;
           }
-          // 3) Exact company name (case-insensitive) — matches backfill SQL logic
-          if (!hit && nameNorm) {
-            hit = (customers as { id: string; company: string | null }[]).find(
-              (c) => (c.company || "").trim().toLowerCase() === nameNorm,
-            ) || null;
-          }
-          // 4) Exact contact_name fallback
-          if (!hit && nameNorm) {
-            hit = (customers as unknown as { id: string; contact_name: string | null }[]).find(
-              (c) => (c.contact_name || "").trim().toLowerCase() === nameNorm,
-            ) || null;
-          }
-
-          if (hit) customerId = hit.id;
         }
+        // 3) Exact company name (case-insensitive).
+        // ilike wildcards (%, _) in user input are escaped so this stays
+        // an exact match and cannot over-match.
+        if (!hit && nameNorm) {
+          const esc = nameNorm.replace(/[\\%_]/g, (m) => `\\${m}`);
+          const { data: byCompany } = await supabaseAdmin
+            .from("customers")
+            .select("id,company,contact_name,phone")
+            .ilike("company", esc)
+            .limit(5);
+          hit = firstRow(byCompany);
+        }
+        // 4) Exact contact_name fallback
+        if (!hit && nameNorm) {
+          const esc = nameNorm.replace(/[\\%_]/g, (m) => `\\${m}`);
+          const { data: byContact } = await supabaseAdmin
+            .from("customers")
+            .select("id,company,contact_name,phone")
+            .ilike("contact_name", esc)
+            .limit(5);
+          hit = firstRow(byContact);
+        }
+
+        if (hit) customerId = hit.id;
       }
     } catch (e) {
       console.warn("[submitPublicTicket] customer resolve failed (non-fatal):", e);

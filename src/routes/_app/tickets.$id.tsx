@@ -60,6 +60,7 @@ import { VerificationDiff } from "@/components/VerificationDiff";
 import { FsrPrintButton, type FsrDbRow } from "@/components/fsr/FsrPrintButton";
 import { fetchEngineerLoginIds } from "@/hooks/useTicketsTable";
 import { attachLoginFlags, sortEngineersLoginFirst } from "@/lib/eng-queue-utils";
+import { reportDbError } from "@/lib/format-error";
 import { TicketPartPicker } from "@/components/TicketPartPicker";
 import {
   findSwapConflicts,
@@ -293,6 +294,17 @@ function TicketDetail() {
   const [spNote, setSpNote] = useState("");
   const [spNoteSpecial, setSpNoteSpecial] = useState(true);
   const [templates, setTemplates] = useState<Record<string, string>>({});
+  // wa_templates are NOT on the critical path — loaded lazily on first
+  // WhatsApp use via ensureTemplates(). Ref (not state) so checks don't
+  // re-render; templates state itself triggers the re-render once loaded.
+  const templatesLoadedRef = useRef(false);
+  const templatesLoadingRef = useRef<Promise<void> | null>(null);
+  // Explicit "not found" state so a deleted/bad id stops spinning the
+  // PageLoader and says so (covers load errors too — see load()).
+  const [ticketMissing, setTicketMissing] = useState(false);
+  // Activity feed is paged newest-first; hasMore drives the "Show more" button.
+  const [activitiesHasMore, setActivitiesHasMore] = useState(false);
+  const [activitiesMoreBusy, setActivitiesMoreBusy] = useState(false);
   const [quoteNo, setQuoteNo] = useState<string>("");
   const [customer, setCustomer] = useState<CustomerBilling | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -376,23 +388,45 @@ function TicketDetail() {
     ]),
   );
 
+  // Bounded windows for the critical path: the products table can be large
+  // and ticket_activities grows forever — neither may load unbounded.
+  const PRODUCT_WINDOW = 200;
+  const ACTIVITY_PAGE = 100;
+
   const load = async () => {
-    const [{ data: tk }, { data: pr }, { data: ac }, { data: tpl }, { data: emps }, linked] =
+    // Critical path is ticket + a bounded product window + the first
+    // activity page + engineers. wa_templates load lazily (ensureTemplates)
+    // only when a WhatsApp action actually needs them.
+    const [{ data: tk, error: tkErr }, { data: pr }, { data: ac }, { data: emps }, linked] =
       await Promise.all([
-        supabase.from("tickets").select("*").eq("id", id).single(),
-        supabase.from("products").select("id,name,model,brand,description").order("name"),
+        supabase.from("tickets").select("*").eq("id", id).maybeSingle(),
+        supabase
+          .from("products")
+          .select("id,name,model,brand,description")
+          .order("name")
+          .limit(PRODUCT_WINDOW),
         supabase
           .from("ticket_activities")
           .select("*")
           .eq("ticket_id", id)
-          .order("created_at", { ascending: false }),
-        supabase.from("wa_templates").select("id,body"),
+          .order("created_at", { ascending: false })
+          .limit(ACTIVITY_PAGE + 1),
         supabase
           .from("assignable_engineers")
           .select("id,name,phone,department,role,active")
           .order("name"),
         fetchEngineerLoginIds(),
       ]);
+    if (tkErr) {
+      toast.error(reportDbError("ticket load", tkErr, "Could not load ticket"));
+      setTicketMissing(true);
+      return;
+    }
+    if (!tk) {
+      setTicketMissing(true);
+      return;
+    }
+    setTicketMissing(false);
     if (tk) {
       const row = tk as unknown as Ticket;
       const parts = Array.isArray((tk as { parts_details?: unknown }).parts_details)
@@ -420,7 +454,7 @@ function TicketDetail() {
           .from("quotations")
           .select("quote_no")
           .eq("id", row.quotation_id)
-          .single();
+          .maybeSingle();
         setQuoteNo((q as { quote_no?: string } | null)?.quote_no || "");
       } else {
         setQuoteNo("");
@@ -432,7 +466,7 @@ function TicketDetail() {
             "id,company,contact_name,phone,email,billing_address,address,street,city,state,country,gst",
           )
           .eq("id", row.customer_id)
-          .single();
+          .maybeSingle();
         setCustomer((c as CustomerBilling | null) ?? null);
       } else {
         setCustomer(null);
@@ -441,22 +475,71 @@ function TicketDetail() {
     setProducts(
       (pr || []) as { id: string; name: string; model?: string | null; brand?: string | null }[],
     );
-    setActivities((ac || []) as Activity[]);
+    setActivities((ac || []).slice(0, ACTIVITY_PAGE) as Activity[]);
+    setActivitiesHasMore((ac || []).length > ACTIVITY_PAGE);
     // Portal engineers first so assignment routes to real logins.
     setEmployees(
       sortEngineersLoginFirst(
         attachLoginFlags((emps || []) as Omit<Employee, "hasLogin">[], linked),
       ),
     );
-    const map: Record<string, string> = {};
-    for (const r of (tpl || []) as { id: string; body: string }[]) map[r.id] = r.body;
-    setTemplates(map);
     const { data: brands } = await supabase
       .from("oem_brand_master" as never)
       .select("name")
       .order("name");
     const bnames = ((brands as { name: string }[] | null) || []).map((b) => b.name);
     if (bnames.length) setOemBrands(Array.from(new Set(bnames)));
+  };
+
+  // Lazy WhatsApp templates: fetched once, on first WhatsApp use, never on
+  // page open. Concurrent callers share the in-flight promise.
+  const ensureTemplates = async (): Promise<void> => {
+    if (templatesLoadedRef.current) return;
+    if (templatesLoadingRef.current) return templatesLoadingRef.current;
+    const p = (async () => {
+      const { data, error } = await supabase.from("wa_templates").select("id,body");
+      if (error) {
+        toast.error(
+          reportDbError("whatsapp templates load", error, "Could not load message templates"),
+        );
+        return;
+      }
+      const map: Record<string, string> = {};
+      for (const r of (data || []) as { id: string; body: string }[]) map[r.id] = r.body;
+      templatesLoadedRef.current = true;
+      setTemplates(map);
+    })();
+    templatesLoadingRef.current = p;
+    try {
+      await p;
+    } finally {
+      templatesLoadingRef.current = null;
+    }
+  };
+
+  // Next activity page (newest-first range continuation of the load() window).
+  // Over-fetches by one row: a full PAGE+1 means another page exists.
+  const loadMoreActivities = async () => {
+    if (activitiesMoreBusy || !activitiesHasMore) return;
+    setActivitiesMoreBusy(true);
+    try {
+      const from = activities.length;
+      const { data, error } = await supabase
+        .from("ticket_activities")
+        .select("*")
+        .eq("ticket_id", id)
+        .order("created_at", { ascending: false })
+        .range(from, from + ACTIVITY_PAGE);
+      if (error) {
+        toast.error(reportDbError("activity history load", error, "Could not load more history"));
+        return;
+      }
+      const rows = (data || []) as Activity[];
+      setActivities((prev) => [...prev, ...rows.slice(0, ACTIVITY_PAGE)]);
+      setActivitiesHasMore(rows.length > ACTIVITY_PAGE);
+    } finally {
+      setActivitiesMoreBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -510,6 +593,11 @@ function TicketDetail() {
           status: t.status,
           assigned_engineer_name: t.assigned_engineer_name,
           assigned_engineer_phone: t.assigned_engineer_phone,
+          // FK truth for the portal login. Must ride along with the
+          // name/phone pair — the enforce_ticket_assignment_sync trigger
+          // NULLs assigned_employee_id on duplicate names otherwise,
+          // silently locking the engineer out of /eng.
+          assigned_employee_id: t.assigned_employee_id ?? null,
           assigned_at: t.assigned_at,
           parts_used,
           parts_details: t.parts_details,
@@ -553,6 +641,30 @@ function TicketDetail() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [saveStatus]);
 
+  if (ticketMissing && !t) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center">
+        <p className="text-base font-semibold">Ticket not found</p>
+        <p className="text-sm text-muted-foreground">
+          This ticket may have been deleted, or the link is wrong.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => navigate({ to: "/tickets" })}>
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to tickets
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            setTicketMissing(false);
+            load();
+          }}
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   if (!t) return <PageLoader />;
 
   const update = (patch: Partial<Ticket>) => {
@@ -575,6 +687,8 @@ function TicketDetail() {
     ...extra,
   });
 
+  // Falls back to the built-in message until ensureTemplates() has loaded
+  // wa_templates (WhatsApp call sites await it first).
   const renderMsg = (
     id: "engineer_assign" | "oow_quotation" | "ticket_closed",
     fallback: string,
@@ -601,8 +715,9 @@ function TicketDetail() {
       special_instruction: !!special,
     } as never);
     if (error) {
-      console.error("ticket_activities insert failed:", error.message);
-      toast.warning(`Action done, but recording it in ticket history failed: ${error.message}`);
+      toast.warning(
+        `Action done, but recording it in ticket history failed: ${reportDbError("ticket activity insert", error)}`,
+      );
     }
   };
 
@@ -676,6 +791,9 @@ function TicketDetail() {
         status: payload.status,
         assigned_engineer_name: payload.assigned_engineer_name,
         assigned_engineer_phone: payload.assigned_engineer_phone,
+        // See autosave payload above: the FK must be written explicitly or
+        // the assignment-sync trigger NULLs it on duplicate engineer names.
+        assigned_employee_id: payload.assigned_employee_id ?? null,
         assigned_at: payload.assigned_at,
         parts_used: payload.parts_used,
         parts_details: payload.parts_details,
@@ -739,7 +857,7 @@ function TicketDetail() {
       actor: u.user?.id ?? null,
     } as never);
     if (noteErr) {
-      toast.error(`Could not save remarks: ${noteErr.message}`);
+      toast.error(`Could not save remarks: ${reportDbError("closing remarks insert", noteErr)}`);
       return false;
     }
     const closedAt = new Date().toISOString();
@@ -758,6 +876,7 @@ function TicketDetail() {
     toast.success("Ticket closed");
     await load();
     if (t.customer_phone) {
+      await ensureTemplates();
       await launchTicketWhatsApp(
         t.customer_phone,
         renderMsg("ticket_closed", customerClosedMsg(t)),
@@ -784,7 +903,7 @@ function TicketDetail() {
       actor: u.user?.id ?? null,
     } as never);
     if (noteErr) {
-      toast.error(`Could not save reason: ${noteErr.message}`);
+      toast.error(`Could not save reason: ${reportDbError("cancellation reason insert", noteErr)}`);
       return false;
     }
     const { error: upErr } = await supabase
@@ -808,7 +927,15 @@ function TicketDetail() {
     if (!t.assigned_engineer_name || !t.assigned_engineer_phone) {
       return toast.error("Engineer name and phone required");
     }
+    // Resolve the FK from the picker state (id first, name fallback) so the
+    // write carries assigned_employee_id explicitly. Name-only writes let
+    // enforce_ticket_assignment_sync NULL the FK on duplicate names.
+    const emp =
+      employees.find((e) => e.id === t.assigned_employee_id) ??
+      employees.find((e) => e.name === t.assigned_engineer_name) ??
+      null;
     const extra: Partial<Ticket> = {
+      assigned_employee_id: emp?.id ?? t.assigned_employee_id ?? null,
       assigned_at: new Date().toISOString(),
       status: t.status === "New" || t.status === "Call Log" ? "In Progress" : t.status,
     };
@@ -820,6 +947,7 @@ function TicketDetail() {
       `Assigned to ${t.assigned_engineer_name} (${t.assigned_engineer_phone})`,
     );
     await load();
+    await ensureTemplates();
     await launchTicketWhatsApp(
       t.assigned_engineer_phone,
       renderMsg("engineer_assign", engineerAssignMsg(t)),
@@ -1394,6 +1522,12 @@ function TicketDetail() {
                     })}
                   </SelectContent>
                 </Select>
+                {products.length >= PRODUCT_WINDOW && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Showing first {PRODUCT_WINDOW} products — pick the closest match or type the
+                    model in Serial/Complaint context.
+                  </p>
+                )}
               </div>
               <div className="md:col-span-1">
                 <Label>Serial Number</Label>
@@ -2755,6 +2889,19 @@ function TicketDetail() {
                           {a.notes && <div className="text-muted-foreground mt-1">{a.notes}</div>}
                         </div>
                       ))}
+                      {activitiesHasMore && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          disabled={activitiesMoreBusy}
+                          onClick={loadMoreActivities}
+                        >
+                          {activitiesMoreBusy
+                            ? "Loading…"
+                            : `Show more (${activities.length} shown)`}
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -2793,11 +2940,16 @@ function TicketDetail() {
                         <span className="text-xs text-muted-foreground">(portal logins first)</span>
                       </Label>
                       <Select
-                        value={employees.find((e) => e.name === t.assigned_engineer_name)?.id || ""}
+                        value={
+                          employees.some((e) => e.id === t.assigned_employee_id)
+                            ? t.assigned_employee_id!
+                            : employees.find((e) => e.name === t.assigned_engineer_name)?.id || ""
+                        }
                         onValueChange={(empId) => {
                           const emp = employees.find((e) => e.id === empId);
                           if (emp)
                             update({
+                              assigned_employee_id: emp.id,
                               assigned_engineer_name: emp.name,
                               assigned_engineer_phone: emp.phone || "",
                             });
@@ -2840,7 +2992,9 @@ function TicketDetail() {
                       )}
                     </div>
                     {(() => {
-                      const sel = employees.find((e) => e.name === t.assigned_engineer_name);
+                      const sel =
+                        employees.find((e) => e.id === t.assigned_employee_id) ??
+                        employees.find((e) => e.name === t.assigned_engineer_name);
                       return sel && !sel.hasLogin ? (
                         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
                           {sel.name} has no portal login — this call won't appear in the engineer
@@ -2862,13 +3016,14 @@ function TicketDetail() {
                         variant="outline"
                         size="sm"
                         className="w-full"
-                        onClick={() =>
-                          launchTicketWhatsApp(
+                        onClick={async () => {
+                          await ensureTemplates();
+                          await launchTicketWhatsApp(
                             t.assigned_engineer_phone,
                             renderMsg("engineer_assign", engineerAssignMsg(t)),
                             "Engineer",
-                          )
-                        }
+                          );
+                        }}
                       >
                         <MessageCircle className="h-4 w-4 mr-1" />
                         Resend WhatsApp
@@ -2902,16 +3057,17 @@ function TicketDetail() {
                             <Button
                               size="sm"
                               className="w-full"
-                              onClick={() =>
-                                launchTicketWhatsApp(
+                              onClick={async () => {
+                                await ensureTemplates();
+                                await launchTicketWhatsApp(
                                   t.customer_phone,
                                   renderMsg(
                                     "oow_quotation",
                                     `Dear ${t.customer_name}, please find our OOW quotation ${quoteNo} for case ${t.case_id}.`,
                                   ),
                                   "Customer",
-                                )
-                              }
+                                );
+                              }}
                             >
                               <MessageCircle className="h-4 w-4 mr-1" />
                               Share Quotation on WhatsApp
@@ -2940,13 +3096,14 @@ function TicketDetail() {
                         variant="outline"
                         size="sm"
                         className="w-full"
-                        onClick={() =>
-                          launchTicketWhatsApp(
+                        onClick={async () => {
+                          await ensureTemplates();
+                          await launchTicketWhatsApp(
                             t.customer_phone,
                             renderMsg("ticket_closed", customerClosedMsg(t)),
                             "Customer",
-                          )
-                        }
+                          );
+                        }}
                       >
                         <MessageCircle className="h-4 w-4 mr-1" />
                         Send Closure Message

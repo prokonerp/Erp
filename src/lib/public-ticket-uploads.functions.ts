@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { requireFieldLocation } from "@/integrations/supabase/field-location-middleware";
 import { buildStagedPublicPath, isStagedPublicPath } from "@/lib/public-upload-guards";
-import { checkRateLimit } from "@/lib/public-rate-limit";
+import { checkRateLimitDurable } from "@/lib/public-rate-limit";
 import { clientIpKey } from "@/lib/server-client-ip";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
 import { storageUploadMessage } from "@/lib/format-error";
@@ -206,7 +206,20 @@ const STAGED_UPLOAD_LIMIT = { windowMs: 10 * 60 * 1000, max: 10 };
 export const stagePublicTicketPhoto = createServerFn({ method: "POST" })
   .inputValidator((input) => stagedUploadSchema.parse(input))
   .handler(async ({ data }) => {
-    const check = checkRateLimit(stagedUploadHits, clientIpKey(), Date.now(), STAGED_UPLOAD_LIMIT);
+    // Durable per-IP throttle; falls back to in-memory when the RPC is down.
+    let admin: unknown = null;
+    try {
+      ({ supabaseAdmin: admin } = await import("@/integrations/supabase/client.server"));
+    } catch {
+      admin = null;
+    }
+    const check = await checkRateLimitDurable(
+      admin,
+      stagedUploadHits,
+      clientIpKey(),
+      Date.now(),
+      STAGED_UPLOAD_LIMIT,
+    );
     if (!check.allowed) {
       throw new Error("Too many uploads. Please wait a few minutes and try again.");
     }

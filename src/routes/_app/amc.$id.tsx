@@ -37,6 +37,8 @@ function AmcDetail() {
   const confirm = useConfirm();
   const { isAdmin } = useIsAdmin();
   const [a, setA] = useState<Amc | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [products, setProducts] = useState<Array<{ id: string; name: string | null; model: string | null; category: string | null; brand: string | null; description: string | null }>>([]);
@@ -44,11 +46,29 @@ function AmcDetail() {
   const [oemBrands, setOemBrands] = useState<string[]>([]);
   const [company, setCompany] = useState<{ name: string; address: string | null; phone: string | null; email: string | null; website: string | null; gstin: string | null } | null>(null);
 
-  const load = () => supabase.from("amcs").select("*").eq("id", id).single()
-    .then(({ data }) => setA(data as unknown as Amc));
+  const load = async () => {
+    setLoading(true);
+    setLoadError(null);
+    const { data, error } = await supabase.from("amcs").select("*").eq("id", id).maybeSingle();
+    // maybeSingle returns null data with no error on missing rows —
+    // that is the "not found" path (deleted/typo id), not a real error.
+    // The PGRST116 check is defensive only (mirrors eng.ticket.$id).
+    const code = (error as { code?: string } | null)?.code;
+    if (code === "PGRST116" || (!error && !data)) {
+      setA(null);
+      setLoadError(null);
+    } else if (error) {
+      setA(null);
+      setLoadError((error as { message?: string }).message ?? "Failed to load AMC.");
+    } else {
+      setA(data as unknown as Amc);
+      setLoadError(null);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    load();
+    void load();
     supabase.from("product_categories").select("name").order("name").then(({ data }) => {
       setCategories(((data || []) as { name: string }[]).map((c) => c.name));
     });
@@ -67,7 +87,29 @@ function AmcDetail() {
     /* eslint-disable-next-line */
   }, [id]);
 
-  if (!a) return <PageLoader />;
+  if (!a && loading) return <PageLoader />;
+
+  if (!a && loadError)
+    return (
+      <div className="space-y-4">
+        <Link to="/amc"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+        <Card>
+          <CardContent className="py-10 text-center space-y-3">
+            <p className="font-semibold text-base">Couldn&apos;t load this AMC</p>
+            <p className="text-[13px] text-muted-foreground">{loadError}</p>
+            <Button size="sm" onClick={() => void load()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+
+  if (!a)
+    return (
+      <div className="space-y-4">
+        <Link to="/amc"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+        <div className="text-center py-20 text-muted-foreground">AMC not found. It may have been deleted.</div>
+      </div>
+    );
 
   const status = amcStatus(a.end_date);
 
@@ -144,7 +186,7 @@ function AmcDetail() {
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Saved");
-    load();
+    void load();
   };
 
   const doDelete = async () => {

@@ -17,9 +17,9 @@ import { MAX_ACCEPTED_BYTES, acceptedUploadMessage } from "@/lib/upload-limits";
 import { asEmployeeDocuments, findDocByName, PROFILE_DOC_TYPES } from "@/lib/engineer-conveyance";
 import type { ProfileDocType } from "@/lib/engineer-conveyance";
 import {
-  deleteEngineerAttachment,
+  deleteProfileAttachment,
   saveMyProfile,
-  uploadEngineerAttachment,
+  uploadProfileAttachment,
 } from "@/lib/engineer-conveyance.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,6 +85,9 @@ function UploadViewer({
         if (!cancelled) {
           setUrl(null);
           setLoading(false);
+          toast.error("Couldn't load file preview. Check connection and retry.", {
+            id: `preview-${path}`,
+          });
         }
       });
     return () => {
@@ -117,9 +120,9 @@ function EngProfile() {
   const photoBusyRef = useRef(false);
   const blockBusyRef = useRef(false);
   const signedUrlCacheRef = useRef(new Map<string, { url: string; expiresAt: number }>());
-  const callUpload = useServerFn(uploadEngineerAttachment);
+  const callUpload = useServerFn(uploadProfileAttachment);
   const callSaveProfile = useServerFn(saveMyProfile);
-  const callDeleteUpload = useServerFn(deleteEngineerAttachment);
+  const callDeleteUpload = useServerFn(deleteProfileAttachment);
 
   const documents = asEmployeeDocuments(employee?.documents);
 

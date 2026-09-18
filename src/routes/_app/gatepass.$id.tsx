@@ -30,13 +30,54 @@ type Gatepass = {
 function GatepassView() {
   const { id } = Route.useParams();
   const [g, setG] = useState<Gatepass | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase.from("gatepasses").select("*").eq("id", id).single()
-      .then(({ data }) => setG(data as unknown as Gatepass));
-  }, [id]);
+  const load = async () => {
+    setLoading(true);
+    setLoadError(null);
+    const { data, error } = await supabase.from("gatepasses").select("*").eq("id", id).maybeSingle();
+    // maybeSingle returns null data with no error on missing rows —
+    // that is the "not found" path (deleted/typo id), not a real error.
+    // The PGRST116 check is defensive only (mirrors eng.ticket.$id).
+    const code = (error as { code?: string } | null)?.code;
+    if (code === "PGRST116" || (!error && !data)) {
+      setG(null);
+      setLoadError(null);
+    } else if (error) {
+      setG(null);
+      setLoadError((error as { message?: string }).message ?? "Failed to load gatepass.");
+    } else {
+      setG(data as unknown as Gatepass);
+      setLoadError(null);
+    }
+    setLoading(false);
+  };
 
-  if (!g) return <PageLoader />;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load is stable per id
+  useEffect(() => { void load(); }, [id]);
+
+  if (!g && loading) return <PageLoader />;
+
+  if (!g && loadError)
+    return (
+      <div className="space-y-4">
+        <Link to="/gatepass"><Button variant="outline" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+        <div className="text-center py-20 space-y-3">
+          <p className="font-semibold text-base">Couldn&apos;t load this gatepass</p>
+          <p className="text-[13px] text-muted-foreground">{loadError}</p>
+          <Button variant="outline" size="sm" onClick={() => void load()}>Retry</Button>
+        </div>
+      </div>
+    );
+
+  if (!g)
+    return (
+      <div className="space-y-4">
+        <Link to="/gatepass"><Button variant="outline" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+        <div className="text-center py-20 text-muted-foreground">Gatepass not found. It may have been deleted.</div>
+      </div>
+    );
 
   const Copy = ({ label }: { label: string }) => (
     <div className="bg-white text-black mx-auto max-w-3xl p-6 border print:border-0 print:shadow-none print:p-2 shadow-sm copy-block">

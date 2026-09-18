@@ -50,15 +50,38 @@ function LeadDetail() {
   const [assignBusy, setAssignBusy] = useState(false);
   const [quotes, setQuotes] = useState<Quotation[]>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
 
   const load = async () => {
-    const { data: l } = await supabase.from("leads").select("*").eq("id", id).single();
-    if (!l) return;
+    setLoading(true);
+    setLoadError(null);
+    const { data: l, error: leadErr } = await supabase.from("leads").select("*").eq("id", id).maybeSingle();
+    // PGRST116 = genuine no-row → "not found" path (mirrors eng.ticket.$id).
+    // maybeSingle normally yields null data with no error instead.
+    const leadCode = (leadErr as { code?: string } | null)?.code;
+    if (leadCode === "PGRST116" || (!leadErr && !l)) {
+      setLead(null);
+      setCustomer(null);
+      setActivities([]);
+      setQuotes([]);
+      setLoading(false);
+      return;
+    }
+    if (leadErr) {
+      setLead(null);
+      setLoadError((leadErr as { message?: string }).message ?? "Failed to load lead.");
+      setLoading(false);
+      return;
+    }
     setLead(l as unknown as Lead);
+    const customerId = (l as unknown as { customer_id?: string | null }).customer_id ?? null;
     const [{ data: c }, { data: a }] = await Promise.all([
-      supabase.from("customers").select("*").eq("id", (l as any).customer_id).single(),
+      customerId
+        ? supabase.from("customers").select("*").eq("id", customerId).maybeSingle()
+        : Promise.resolve({ data: null } as { data: null }),
       supabase.from("lead_activities").select("*").eq("lead_id", id).order("activity_date", { ascending: false }),
     ]);
     setCustomer((c as unknown as Customer) || null);
@@ -82,8 +105,10 @@ function LeadDetail() {
     } finally {
       setQuotesLoading(false);
     }
+    setLoading(false);
   };
-  useEffect(() => { load(); }, [id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load is stable per id
+  useEffect(() => { void load(); }, [id]);
 
   const assignLead = async () => {
     if (!assignTo) return toast.error("Select a staff member");
@@ -205,7 +230,29 @@ function LeadDetail() {
     nav({ to: "/crm/quotations/$id", params: { id: (data as any).id } });
   };
 
-  if (!lead) return <div className="text-muted-foreground">Loading…</div>;
+  if (!lead && loading) return <div className="text-muted-foreground">Loading…</div>;
+
+  if (!lead && loadError)
+    return (
+      <div className="space-y-4">
+        <Link to="/crm/leads"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+        <Card>
+          <CardContent className="py-10 text-center space-y-3">
+            <p className="font-semibold text-base">Couldn&apos;t load this lead</p>
+            <p className="text-[13px] text-muted-foreground">{loadError}</p>
+            <Button size="sm" onClick={() => void load()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+
+  if (!lead)
+    return (
+      <div className="space-y-4">
+        <Link to="/crm/leads"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+        <div className="text-center py-20 text-muted-foreground">Lead not found. It may have been deleted.</div>
+      </div>
+    );
 
   const needsAck = !!userId && lead.owner_id === userId && !!lead.assigned_at && !lead.acknowledged_at;
 

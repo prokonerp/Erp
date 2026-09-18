@@ -92,6 +92,8 @@ function QuoteEditor() {
   const applyCustomerSeqRef = useRef(0);
   const [saving, setSaving] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const savedOnceRef = useRef(false);
 
   const load = async () => {
@@ -105,8 +107,40 @@ function QuoteEditor() {
       }
       sourceId = src;
     }
-    const { data } = await supabase.from("quotations").select("*").eq("id", sourceId).single();
-    if (!data) return;
+    setNotFound(false);
+    setLoadError(null);
+    const { data, error } = await supabase.from("quotations").select("*").eq("id", sourceId).maybeSingle();
+    // PGRST116 = genuine no-row → "not found" path (mirrors eng.ticket.$id).
+    // maybeSingle normally yields null data with no error instead.
+    const qCode = (error as { code?: string } | null)?.code;
+    if (qCode === "PGRST116" || (!error && !data)) {
+      if (isClone) {
+        toast.error("Source quotation not found.");
+        nav({ to: "/crm/quotations" });
+        return;
+      }
+      setNotFound(true);
+      return;
+    }
+    if (error) {
+      const msg = (error as { message?: string }).message ?? "Failed to load quotation.";
+      if (isClone) {
+        toast.error(msg);
+        nav({ to: "/crm/quotations" });
+        return;
+      }
+      setLoadError(msg);
+      return;
+    }
+    if (!data) {
+      if (isClone) {
+        toast.error("Source quotation not found.");
+        nav({ to: "/crm/quotations" });
+        return;
+      }
+      setNotFound(true);
+      return;
+    }
     const quote = data as unknown as Quotation;
     quote.items = Array.isArray(quote.items) ? quote.items : [];
     if (isClone) {
@@ -121,17 +155,20 @@ function QuoteEditor() {
     setQ(quote);
     setDiscountLabel(((quote as any).discount_label || "").trim() || "Discount");
     if (quote.customer_id) {
-      const { data: c } = await supabase.from("customers").select("*").eq("id", quote.customer_id).single();
+      const { data: c } = await supabase.from("customers").select("*").eq("id", quote.customer_id).maybeSingle();
       setCustomer((c as unknown as Customer) || null);
+    } else {
+      setCustomer(null);
     }
   };
   useEffect(() => {
-    load();
+    void load();
     supabase.from("quote_terms_templates").select("*").order("sort_order").then(({ data }) => setTemplates((data || []) as any));
     supabase.from("crm_settings").select("*").eq("id", 1).single().then(({ data }) => setSettings((data as any) || { id: 1, business_state: "Haryana", business_gstin: null, default_terms: "", default_customer_notes: "Thanks for your business." }));
     fetchBranches().then((bs) => setBranches(bs)).catch(() => {});
     listOemLogos(true).then(withSignedUrls).then(setOemLogos).catch(() => {});
     getDocumentHeader().then(setCompany).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load is stable per id
   }, [id]);
 
   // Prepared By: current logged-in user's name/phone/email from app_users.
@@ -495,6 +532,28 @@ function QuoteEditor() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action, q, settings, company]);
+
+  if (!isClone && notFound)
+    return (
+      <div className="space-y-4">
+        <Link to="/crm/quotations"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+        <div className="text-center py-20 text-muted-foreground">Quotation not found. It may have been deleted.</div>
+      </div>
+    );
+
+  if (!isClone && loadError && !q)
+    return (
+      <div className="space-y-4">
+        <Link to="/crm/quotations"><Button variant="ghost" size="sm"><ArrowLeft className="h-4 w-4 mr-1" />Back</Button></Link>
+        <Card>
+          <CardContent className="py-10 text-center space-y-3">
+            <p className="font-semibold text-base">Couldn&apos;t load this quotation</p>
+            <p className="text-[13px] text-muted-foreground">{loadError}</p>
+            <Button size="sm" onClick={() => { setLoadError(null); setNotFound(false); void load(); }}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
 
   if (!q || !settings || !company) return <PageLoader />;
 
