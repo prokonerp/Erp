@@ -60,6 +60,29 @@ import { compressImageToLimit } from "@/lib/image-compress";
 import { PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
 import { reportDbError } from "@/lib/format-error";
 
+/**
+ * Best-effort ticket-timeline write.
+ *
+ * `.insert()` resolves with `{ error }` rather than throwing, so the previous
+ * `try/catch + console.warn` never fired: a failed timeline entry was
+ * completely invisible (the audit trail would silently lie). This checks the
+ * returned error and surfaces it, without blocking the parent flow — the
+ * verification/photo has already been saved by the time we get here.
+ */
+async function insertTicketActivity(row: {
+  ticket_id: string;
+  kind: string;
+  notes: string;
+  actor: string | null;
+}): Promise<void> {
+  const { error } = await supabase.from("ticket_activities").insert(row as never);
+  if (error) {
+    console.error("[ticket_activities] insert failed", { kind: row.kind, error });
+    toast.warning("Saved, but the ticket timeline entry could not be recorded.");
+  }
+}
+
+
 export const Route = createFileRoute("/eng/ticket/$id")({
   component: EngTicketDetail,
 });
@@ -454,31 +477,32 @@ function EngTicketDetail() {
       const { data: u } = await supabase.auth.getUser();
       const actorName = myName ?? u.user?.email ?? "Engineer";
       const snapshot = buildCustomerSnapshot(ticket!);
-      const { error } = await supabase.from("ticket_customer_verifications").upsert(
-        {
-          ticket_id: id,
-          customer_id: ticket?.customer_id ?? null,
-          verdict: "verified",
-          snapshot,
-          engineer_employee_id: myId,
-          engineer_name: actorName,
-        },
-        { onConflict: "ticket_id" },
-      );
-      if (error) {
-        toast.error(reportDbError("customer verify save", error));
+      // Gated server write (admin-or-assigned-engineer) — never direct RLS.
+      try {
+        const { upsertCustomerVerification } = await import(
+          "@/lib/ticket-verifications.functions"
+        );
+        await upsertCustomerVerification({
+          data: {
+            ticketId: id,
+            verdict: "verified",
+            customerId: ticket?.customer_id ?? null,
+            snapshot,
+            engineerEmployeeId: myId,
+            engineerName: actorName,
+          },
+        });
+      } catch (e) {
+        announceLocationDenial(e);
+        toast.error(reportDbError("customer verify save", e));
         return;
       }
-      try {
-        await supabase.from("ticket_activities").insert({
+      await insertTicketActivity({
           ticket_id: id,
           kind: "customer_verify",
           notes: `Customer verified by ${actorName} at ${new Date().toISOString()}`,
           actor: u.user?.id ?? null,
-        } as never);
-      } catch (actErr) {
-        console.warn("Activity insert failed:", actErr);
-      }
+      });
       toast.success("Customer details verified");
       resetCorrected();
       await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
@@ -501,32 +525,33 @@ function EngTicketDetail() {
       const { data: u } = await supabase.auth.getUser();
       const actorName = myName ?? u.user?.email ?? "Engineer";
       const snapshot = buildCustomerSnapshot(ticket!);
-      const { error } = await supabase.from("ticket_customer_verifications").upsert(
-        {
-          ticket_id: id,
-          customer_id: ticket?.customer_id ?? null,
-          verdict: "incorrect",
-          snapshot,
-          corrected: data,
-          engineer_employee_id: myId,
-          engineer_name: actorName,
-        },
-        { onConflict: "ticket_id" },
-      );
-      if (error) {
-        toast.error(reportDbError("customer correction save", error));
+      // Gated server write (admin-or-assigned-engineer) — never direct RLS.
+      try {
+        const { upsertCustomerVerification } = await import(
+          "@/lib/ticket-verifications.functions"
+        );
+        await upsertCustomerVerification({
+          data: {
+            ticketId: id,
+            verdict: "incorrect",
+            customerId: ticket?.customer_id ?? null,
+            snapshot,
+            corrected: data,
+            engineerEmployeeId: myId,
+            engineerName: actorName,
+          },
+        });
+      } catch (e) {
+        announceLocationDenial(e);
+        toast.error(reportDbError("customer correction save", e));
         return;
       }
-      try {
-        await supabase.from("ticket_activities").insert({
+      await insertTicketActivity({
           ticket_id: id,
           kind: "customer_verify",
           notes: `Customer corrected by ${actorName} at ${new Date().toISOString()}`,
           actor: u.user?.id ?? null,
-        } as never);
-      } catch (actErr) {
-        console.warn("Activity insert failed:", actErr);
-      }
+      });
       toast.success("Customer details corrected");
       await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
       await refreshActivities();
@@ -614,32 +639,32 @@ function EngTicketDetail() {
       const actorName = myName ?? u.user?.email ?? "Engineer";
       const original = buildEquipmentOriginal(ticket!);
 
-      const { data: existingVer } = await supabase
-        .from("ticket_equipment_verifications")
-        .select("photo_path")
-        .eq("ticket_id", id)
-        .maybeSingle();
-      const oldPhotoPath = (existingVer?.photo_path as string | null) ?? null;
-
-      const { error } = await supabase.from("ticket_equipment_verifications").upsert(
-        {
-          ticket_id: id,
-          verdict: "mismatch",
-          original_model: original.original_model,
-          original_serial: original.original_serial,
-          corrected_model: data.corrected_model,
-          corrected_serial: data.corrected_serial,
-          photo_path: uploadResult.path,
-          photo_lat: geo!.lat,
-          photo_long: geo!.long,
-          photo_accuracy: geo!.accuracy,
-          photo_captured_at: geo!.captured_at,
-          engineer_employee_id: myId,
-          engineer_name: actorName,
-        },
-        { onConflict: "ticket_id" },
-      );
-      if (error) {
+      // Gated server write (admin-or-assigned-engineer) — never direct RLS.
+      // Returns the pre-upsert photo path for the race-safe cleanup below.
+      let oldPhotoPath: string | null = null;
+      try {
+        const { upsertEquipmentVerification } = await import(
+          "@/lib/ticket-verifications.functions"
+        );
+        const res = await upsertEquipmentVerification({
+          data: {
+            ticketId: id,
+            verdict: "mismatch",
+            originalModel: original.original_model,
+            originalSerial: original.original_serial,
+            correctedModel: data.corrected_model,
+            correctedSerial: data.corrected_serial,
+            photoPath: uploadResult.path,
+            photoLat: geo!.lat,
+            photoLong: geo!.long,
+            photoAccuracy: geo!.accuracy,
+            photoCapturedAt: geo!.captured_at,
+            engineerEmployeeId: myId,
+            engineerName: actorName,
+          },
+        });
+        oldPhotoPath = res.previousPhotoPath;
+      } catch (e) {
         // Best-effort: remove the just-uploaded file so a failed verify
         // leaves no orphan (browser .remove() can't — storage DELETE on this
         // bucket is admin-gated, so this must go through the server fn).
@@ -649,7 +674,8 @@ function EngTicketDetail() {
         } catch (cleanupErr) {
           console.warn("Photo cleanup failed:", cleanupErr);
         }
-        toast.error(reportDbError("equipment mismatch save", error));
+        announceLocationDenial(e);
+        toast.error(reportDbError("equipment mismatch save", e));
         return;
       }
       if (oldPhotoPath && oldPhotoPath !== uploadResult.path) {
@@ -670,16 +696,12 @@ function EngTicketDetail() {
           console.warn("Old photo cleanup failed:", cleanupErr);
         }
       }
-      try {
-        await supabase.from("ticket_activities").insert({
+      await insertTicketActivity({
           ticket_id: id,
           kind: "equipment_verify",
           notes: `Equipment mismatch reported by ${actorName} at ${new Date().toISOString()}`,
           actor: u.user?.id ?? null,
-        } as never);
-      } catch (actErr) {
-        console.warn("Activity insert failed:", actErr);
-      }
+      });
       toast.success("Equipment mismatch recorded");
       // Breadcrumb (best-effort, never blocks): reuse the verified photo fix.
       void breadcrumbPing("photo", id, geo);
@@ -799,36 +821,32 @@ function EngTicketDetail() {
       const actorName = myName ?? u.user?.email ?? "Engineer";
       const original = buildEquipmentOriginal(ticket!);
 
-      const { data: existingVer } = await supabase
-        .from("ticket_equipment_verifications")
-        .select("photo_path")
-        .eq("ticket_id", id)
-        .maybeSingle();
-      const oldPhotoPath = (existingVer?.photo_path as string | null) ?? null;
-
-      const { error } = await supabase.from("ticket_equipment_verifications").upsert(
-        {
-          ticket_id: id,
-          verdict: "matched",
-          original_model: original.original_model,
-          original_serial: original.original_serial,
-          corrected_model: ticket?.product ?? null,
-          corrected_serial: ticket?.serial_no ?? null,
-          photo_path: uploadResult.path,
-          ...(matchedGeo
-            ? {
-                photo_lat: matchedGeo.lat,
-                photo_long: matchedGeo.long,
-                photo_accuracy: matchedGeo.accuracy,
-                photo_captured_at: matchedGeo.captured_at,
-              }
-            : {}),
-          engineer_employee_id: myId,
-          engineer_name: actorName,
-        },
-        { onConflict: "ticket_id" },
-      );
-      if (error) {
+      // Gated server write (admin-or-assigned-engineer) — never direct RLS.
+      // Returns the pre-upsert photo path for the race-safe cleanup below.
+      let oldPhotoPath: string | null = null;
+      try {
+        const { upsertEquipmentVerification } = await import(
+          "@/lib/ticket-verifications.functions"
+        );
+        const res = await upsertEquipmentVerification({
+          data: {
+            ticketId: id,
+            verdict: "matched",
+            originalModel: original.original_model,
+            originalSerial: original.original_serial,
+            correctedModel: ticket?.product ?? null,
+            correctedSerial: ticket?.serial_no ?? null,
+            photoPath: uploadResult.path,
+            photoLat: matchedGeo?.lat ?? null,
+            photoLong: matchedGeo?.long ?? null,
+            photoAccuracy: matchedGeo?.accuracy ?? null,
+            photoCapturedAt: matchedGeo?.captured_at ?? null,
+            engineerEmployeeId: myId,
+            engineerName: actorName,
+          },
+        });
+        oldPhotoPath = res.previousPhotoPath;
+      } catch (e) {
         // Best-effort: remove the just-uploaded file so a failed verify
         // leaves no orphan (browser .remove() can't — storage DELETE on this
         // bucket is admin-gated, so this must go through the server fn).
@@ -838,7 +856,8 @@ function EngTicketDetail() {
         } catch (cleanupErr) {
           console.warn("Photo cleanup failed:", cleanupErr);
         }
-        toast.error(reportDbError("equipment matched save", error));
+        announceLocationDenial(e);
+        toast.error(reportDbError("equipment matched save", e));
         return;
       }
       if (oldPhotoPath && oldPhotoPath !== uploadResult.path) {
@@ -859,16 +878,12 @@ function EngTicketDetail() {
           console.warn("Old photo cleanup failed:", cleanupErr);
         }
       }
-      try {
-        await supabase.from("ticket_activities").insert({
+      await insertTicketActivity({
           ticket_id: id,
           kind: "equipment_verify",
           notes: `Equipment verified matched by ${actorName} at ${new Date().toISOString()}`,
           actor: u.user?.id ?? null,
-        } as never);
-      } catch (actErr) {
-        console.warn("Activity insert failed:", actErr);
-      }
+      });
       toast.success("Equipment verified as matched");
       // Breadcrumb (best-effort, never blocks): null skips when indoor GPS failed.
       void breadcrumbPing("photo", id, matchedGeo);
@@ -1548,8 +1563,7 @@ function EngTicketDetail() {
                     <DrawerTitle>Report equipment mismatch</DrawerTitle>
                     <DrawerDescription>
                       Mark each field correct or enter the corrected value. The report uses the
-                      serial-number photo chosen above (compulsory), with GPS captured live at
-                      submit.
+                      serial-number photo chosen above (compulsory), taken live at submit.
                     </DrawerDescription>
                   </DrawerHeader>
                   <form

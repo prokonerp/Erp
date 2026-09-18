@@ -54,6 +54,20 @@ export function resolveInitials(
 
 /**
  * Pure helper — extracted for testability.
+ * The query runs on the session uid alone: `fetchMyIdentity` resolves by
+ * `auth_user_id` first and only falls back to email, so a session whose
+ * email claim is delayed/missing must NOT disable identity (that fail-shut
+ * left dashboard/conveyance permanently unloaded). No uid → disabled.
+ */
+export function isIdentityQueryEnabled(
+  uid: string | null | undefined,
+  _email: string | null | undefined,
+): boolean {
+  return typeof uid === "string" && uid.length > 0;
+}
+
+/**
+ * Pure helper — extracted for testability.
  * Fail-soft row picker: any misshapen / empty input → null, never throws.
  */
 export function pickEmployeeRow(rows: unknown): MyEmployee | null {
@@ -82,7 +96,7 @@ export function useMyEmployee() {
 
   const query = useQuery({
     queryKey: engKeys.employee(uid),
-    enabled: !!uid && !!email,
+    enabled: isIdentityQueryEnabled(uid, email),
     // Identity rarely changes — share cache across eng layouts/pages.
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
@@ -90,7 +104,7 @@ export function useMyEmployee() {
     refetchInterval: false,
     queryFn: async (): Promise<MyEmployee | null> => {
       try {
-        if (!uid || !email) return null;
+        if (!uid) return null;
         // Central identity policy; fail-soft mapping preserved: any
         // non-ok outcome (unlinked, ambiguous, query error) -> null.
         const identity = await fetchMyIdentity(supabase, {

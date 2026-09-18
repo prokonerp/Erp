@@ -98,6 +98,7 @@ function TimelineIcon({ kind }: { kind: string }) {
     case "acknowledge":
       return <CheckCircle2 className={cls} aria-hidden />;
     case "reset":
+    case "verification_reset":
       return <RotateCcw className={cls} aria-hidden />;
     case "arrival":
       return <MapPin className={cls} aria-hidden />;

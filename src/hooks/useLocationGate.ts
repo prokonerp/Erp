@@ -46,6 +46,7 @@ export function useLocationGate(): GateView {
         overrideActive: t.overrideActive,
         failure,
         accuracy: t.lastAccuracy,
+        trackingEnabled: t.trackingEnabled,
       });
 
   let headline: string | null = null;
@@ -59,7 +60,7 @@ export function useLocationGate(): GateView {
       break;
     case "off_duty":
       headline = "You are off duty.";
-      hint = "Start duty to use the engineer portal. Location is tracked only while on duty.";
+      hint = "Start duty to use the engineer portal.";
       break;
     case "denied":
       headline = LOCATION_GATE_MESSAGE;

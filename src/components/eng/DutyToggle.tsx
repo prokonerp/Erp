@@ -12,7 +12,7 @@ import { CONSENT_REQUIRED } from "@/lib/field-location.functions";
  * Stop uses two-tap confirm (same re-entry-lock spirit as the logout ref).
  */
 export function DutyToggle() {
-  const { onDuty, consented, loading, queued, start, stop } = useDutyTracker();
+  const { onDuty, consented, loading, start, stop, trackingEnabled } = useDutyTracker();
   const [consentOpen, setConsentOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [armStop, setArmStop] = useState(false);
@@ -54,6 +54,10 @@ export function DutyToggle() {
     }
   };
 
+  // No duty concept when the admin kill switch is off — render nothing so the
+  // control never surfaces a location/duty affordance the server would refuse.
+  if (!trackingEnabled) return null;
+
   if (loading) {
     return (
       <span
@@ -73,9 +77,6 @@ export function DutyToggle() {
           >
             <span className="h-1.5 w-1.5 rounded-full bg-green-500" aria-hidden="true" />
             On duty
-            {queued > 0 && (
-              <span className="tabular-nums text-muted-foreground">· {queued} queued</span>
-            )}
           </span>
           <Button
             variant="ghost"

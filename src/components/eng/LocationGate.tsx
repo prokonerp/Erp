@@ -21,7 +21,7 @@ import { CONSENT_REQUIRED } from "@/lib/field-location.functions";
  */
 export function LocationGate({ children }: { children: ReactNode }) {
   const { gate, headline, hint, retry, retrying } = useLocationGate();
-  const { onDuty, start, lastError, queued, trackingEnabled } = useDutyTracker();
+  const { start, lastError, trackingEnabled } = useDutyTracker();
   const [consentOpen, setConsentOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -33,10 +33,14 @@ export function LocationGate({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(LOCATION_DENIED_EVENT, onDenied);
   }, []);
 
-  // A fresh fix (or override) clears a write-triggered prompt.
+  // A fresh fix (or override) clears a write-triggered prompt. A disabled
+  // kill switch also clears it — the server accepts writes, so a stale
+  // denial must not pin the overlay (covers the disable-after-denial race).
   useEffect(() => {
-    if (gate === "ok" || gate === "override") setWriteBlocked(false);
-  }, [gate]);
+    if (gate === "ok" || gate === "override" || trackingEnabled === false) {
+      setWriteBlocked(false);
+    }
+  }, [gate, trackingEnabled]);
 
   const startDuty = async () => {
     setStarting(true);
@@ -76,26 +80,14 @@ export function LocationGate({ children }: { children: ReactNode }) {
   if (!hardBlocked && !writeBlocked) {
     return (
       <div aria-live="polite">
-        {!trackingEnabled && (
+        {gate === "off_duty" && trackingEnabled && (
           <div
             role="status"
             className="mb-3 flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2"
           >
             <MapPinOff className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <p className="flex-1 text-xs text-muted-foreground">
-              Location tracking is disabled by your admin — duty and reports work normally.
-            </p>
-          </div>
-        )}
-        {gate === "off_duty" && (
-          <div
-            role="status"
-            className="mb-3 flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2"
-          >
-            <MapPinOff className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <p className="flex-1 text-xs text-muted-foreground">
-              You&apos;re off duty — browsing only. Start duty to record visits and reports;
-              location is tracked only while on duty.
+              You&apos;re off duty — browsing only. Start duty to record visits and reports.
             </p>
             <Button size="sm" onClick={startDuty} disabled={starting} className="min-h-[36px]">
               {starting ? "Starting…" : "Start duty"}
@@ -185,11 +177,6 @@ export function LocationGate({ children }: { children: ReactNode }) {
                 )}
                 {lastError && gate !== "off_duty" && (
                   <p className="text-xs text-muted-foreground">{lastError}</p>
-                )}
-                {onDuty && queued > 0 && (
-                  <p className="text-xs text-muted-foreground tabular-nums">
-                    {queued} fix{queued === 1 ? "" : "es"} queued — will sync on reconnect.
-                  </p>
                 )}
               </>
             )}

@@ -5,6 +5,8 @@ import { requireFieldLocation } from "@/integrations/supabase/field-location-mid
 import { buildStagedPublicPath, isStagedPublicPath } from "@/lib/public-upload-guards";
 import { checkRateLimitDurable } from "@/lib/public-rate-limit";
 import { clientIpKey } from "@/lib/server-client-ip";
+import { publicTokenSecret } from "@/lib/server-secrets";
+import { issueDeleteToken, verifyDeleteToken } from "@/lib/public-delete-token";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
 import { storageUploadMessage } from "@/lib/format-error";
 import { uploadObjectRaw } from "@/lib/storage-upload-raw";
@@ -57,29 +59,9 @@ const deleteSchema = z.object({
   token: z.string().min(10).max(200),
 });
 
-async function signPath(path: string): Promise<string> {
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!secret) throw new Error("Server misconfigured: SUPABASE_SERVICE_ROLE_KEY is missing");
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(path));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
+// Delete tokens: path-bound + time-bound (see src/lib/public-delete-token.ts).
+// Bound to the caller's secret here so the pure module stays env-free.
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
   .middleware([requireFieldLocation])
@@ -153,7 +135,7 @@ export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
       contentType: data.content_type,
       cacheControl: "3600",
     });
-    const token = await signPath(path);
+    const token = await issueDeleteToken(publicTokenSecret(), path);
     return { path, token };
   });
 
@@ -164,8 +146,7 @@ export const deletePublicTicketAttachment = createServerFn({ method: "POST" })
     if (!data.path.startsWith("public/") && !data.path.startsWith("ticket/")) {
       throw new Error("Invalid path");
     }
-    const expected = await signPath(data.path);
-    if (!timingSafeEqual(expected, data.token)) {
+    if (!(await verifyDeleteToken(publicTokenSecret(), data.path, data.token))) {
       throw new Error("Invalid delete token");
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -246,7 +227,7 @@ export const stagePublicTicketPhoto = createServerFn({ method: "POST" })
       contentType: data.content_type,
       cacheControl: "3600",
     });
-    const token = await signPath(path);
+    const token = await issueDeleteToken(publicTokenSecret(), path);
     return { path, token };
   });
 
@@ -258,8 +239,7 @@ export const deleteStagedPublicPhoto = createServerFn({ method: "POST" })
     if (!isStagedPublicPath(data.path)) {
       throw new Error("Invalid path");
     }
-    const expected = await signPath(data.path);
-    if (!timingSafeEqual(expected, data.token)) {
+    if (!(await verifyDeleteToken(publicTokenSecret(), data.path, data.token))) {
       throw new Error("Invalid delete token");
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

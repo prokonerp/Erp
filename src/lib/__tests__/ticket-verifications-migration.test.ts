@@ -6,11 +6,17 @@ const POLICIES_PATH = "supabase/migrations/20260912000002_ticket_verifications_p
 describe("verification migration exists", () => {
   it("creates both tables with RLS and unique ticket", () => {
     const sql = readFileSync(SQL_PATH, "utf8");
-    expect(sql).toContain("CREATE TABLE public.ticket_customer_verifications");
-    expect(sql).toContain("CREATE TABLE public.ticket_equipment_verifications");
+    // IF NOT EXISTS — the file must be re-runnable (supabase db reset pass 2).
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.ticket_customer_verifications");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.ticket_equipment_verifications");
     expect(sql).toContain("ticket_id uuid NOT NULL UNIQUE");
     expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
     expect(sql).toContain("photo_lat");
+  });
+  it("is idempotent: tables and indexes use IF NOT EXISTS", () => {
+    const sql = readFileSync(SQL_PATH, "utf8");
+    expect(sql).not.toMatch(/CREATE TABLE (?!IF NOT EXISTS)public\./);
+    expect(sql).not.toMatch(/CREATE INDEX (?!IF NOT EXISTS)idx_/);
   });
   it("creates RLS policies for both tables", () => {
     const sql = readFileSync(POLICIES_PATH, "utf8");

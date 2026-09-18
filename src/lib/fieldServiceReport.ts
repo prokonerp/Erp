@@ -182,9 +182,30 @@ export function serialPhotoLineRef(reportIndex: number, lineIndex: number): stri
   return `part line ${lineIndex + 1} (report ${reportIndex + 1}) has a serial number but no serial photo evidence`;
 }
 
-/** Finalize rejection: lists every offending line, states nothing was written. */
-export function buildSerialPhotoBlockedError(refs: string[]): string {
-  return `Serial photo required — finalize blocked: ${refs.join("; ")}. Nothing was departed or closed.`;
+/**
+ * Collects serial-photo refs across ALL reports for a ticket (mirrors the
+ * finalize read of every `part_replacements` column). Pure — the server fn
+ * feeds it the selected rows. Non-array input yields [].
+ */
+export function collectSerialPhotoRefs(fsrRows: unknown): string[] {
+  if (!Array.isArray(fsrRows)) return [];
+  const refs: string[] = [];
+  fsrRows.forEach((r, ri) => {
+    const list = (r as { part_replacements?: unknown } | null | undefined)?.part_replacements;
+    for (const li of findSerialLinesWithoutPhoto(list)) {
+      refs.push(serialPhotoLineRef(ri, li));
+    }
+  });
+  return refs;
+}
+
+/**
+ * Warn-instead-of-block: serial lines without photo evidence produce this
+ * warning while finalize still departs. The explicit serial-photo capture
+ * step (not finalize) is where a future hard gate belongs.
+ */
+export function buildSerialPhotoWarning(refs: string[]): string {
+  return `Serial photo missing — visit departed anyway: ${refs.join("; ")}. Capture serial photos when the capture step is available.`;
 }
 
 // ---------------------------------------------------------------------------

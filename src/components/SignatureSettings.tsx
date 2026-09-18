@@ -7,8 +7,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PenLine, Trash2, Upload, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/useConfirm";
-import { supabase } from "@/integrations/supabase/client";
-import { SIGNATURE_BUCKET, signSignatureUrl, cleanSignatureImage, signatureExt } from "@/lib/userSignature";
+import { useServerFn } from "@tanstack/react-start";
+import {
+  listSignatureUsers,
+  removeSignature,
+  uploadSignature,
+} from "@/lib/signature.functions";
+import { cleanSignatureImage } from "@/lib/userSignature";
 
 type AppUserRow = {
   user_id: string;
@@ -19,24 +24,34 @@ type AppUserRow = {
 
 type SigRow = AppUserRow & { signed_url: string | null };
 
+/** Blob → raw base64 (no data-URL prefix) for the server-fn upload payload. */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const s = reader.result as string;
+      resolve(s.slice(s.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export function SignatureSettings({ isAdmin }: { isAdmin: boolean }) {
   const confirm = useConfirm();
+  const callList = useServerFn(listSignatureUsers);
+  const callUpload = useServerFn(uploadSignature);
+  const callRemove = useServerFn(removeSignature);
   const [rows, setRows] = useState<SigRow[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const load = async () => {
     try {
-      const { data, error } = await supabase
-        .from("app_users")
-        .select("user_id, name, email, signature_url")
-        .order("name", { ascending: true, nullsFirst: false });
-      if (error) throw error;
-      const list = (data || []) as unknown as AppUserRow[];
-      const signed = await Promise.all(
-        list.map(async (r) => ({ ...r, signed_url: await signSignatureUrl(r.signature_url) })),
-      );
-      setRows(signed);
+      // Server-scoped: admins see all users, everyone else sees only self.
+      // Signed URLs are minted server-side (1h expiry).
+      const list = (await callList()) as unknown as SigRow[];
+      setRows(Array.isArray(list) ? list : []);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load users");
     }
@@ -48,28 +63,16 @@ export function SignatureSettings({ isAdmin }: { isAdmin: boolean }) {
     if (file.size > 2 * 1024 * 1024) return toast.error("Max file size is 2 MB");
     setBusyId(user.user_id);
     try {
+      // Clean on-device (paper background → transparent PNG); fall back to
+      // the raw file when cleaning fails.
       const cleanedBlob = await cleanSignatureImage(file);
-      const storeBlob = cleanedBlob || file; // fallback to raw if cleaning fails
-      const ext = cleanedBlob ? signatureExt() : (file.name.split(".").pop() || "png").toLowerCase();
-      const mime = cleanedBlob ? "image/png" : file.type;
-      const path = `signatures/${user.user_id}.${ext}`;
-      // Clean up legacy files with old extensions
-      const legacyExts = ["png", "jpg", "jpeg"];
-      for (const le of legacyExts) {
-        const legacyPath = `signatures/${user.user_id}.${le}`;
-        if (legacyPath !== path) {
-          await supabase.storage.from(SIGNATURE_BUCKET).remove([legacyPath]).catch(() => {});
-        }
-      }
-      const { error: upErr } = await supabase.storage
-        .from(SIGNATURE_BUCKET)
-        .upload(path, storeBlob, { contentType: mime, cacheControl: "3600", upsert: true });
-      if (upErr) throw upErr;
-      const { error: dbErr } = await supabase
-        .from("app_users")
-        .update({ signature_url: path } as never)
-        .eq("user_id", user.user_id);
-      if (dbErr) throw dbErr;
+      const storeBlob = cleanedBlob || file;
+      const mime = storeBlob.type === "image/png" ? "image/png" : "image/jpeg";
+      const base64 = await blobToBase64(storeBlob);
+      // Server enforces admin-or-self + magic bytes; writes via service role.
+      await callUpload({
+        data: { userId: user.user_id, dataBase64: base64, contentType: mime },
+      });
       toast.success("Signature uploaded");
       await load();
     } catch (e) {
@@ -91,25 +94,8 @@ export function SignatureSettings({ isAdmin }: { isAdmin: boolean }) {
     if (!ok) return;
     setBusyId(row.user_id);
     try {
-      if (row.signature_url) {
-        const { error: rmErr } = await supabase.storage
-          .from(SIGNATURE_BUCKET)
-          .remove([row.signature_url]);
-        if (rmErr) throw rmErr;
-      }
-      // Also remove legacy formats
-      const legacyExts = ["png", "jpg", "jpeg"];
-      for (const le of legacyExts) {
-        const legacyPath = `signatures/${row.user_id}.${le}`;
-        if (legacyPath !== row.signature_url) {
-          await supabase.storage.from(SIGNATURE_BUCKET).remove([legacyPath]).catch(() => {});
-        }
-      }
-      const { error: dbErr } = await supabase
-        .from("app_users")
-        .update({ signature_url: null } as never)
-        .eq("user_id", row.user_id);
-      if (dbErr) throw dbErr;
+      // Server enforces admin-only; removes the file + clears the column.
+      await callRemove({ data: { userId: row.user_id } });
       toast.success("Signature removed");
       await load();
     } catch (e) {
@@ -181,7 +167,7 @@ export function SignatureSettings({ isAdmin }: { isAdmin: boolean }) {
         </Table>
         {!isAdmin && (
           <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-            <PenLine className="h-3.5 w-3.5" /> Only admins can remove signatures.
+            <PenLine className="h-3.5 w-3.5" /> You can upload your own signature. Only admins can remove signatures.
           </p>
         )}
       </CardContent>

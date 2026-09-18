@@ -203,7 +203,11 @@ END $$;
 -- 6) list_engineers(): admin-gated roster for the Engineers admin UI.
 --    SECURITY DEFINER bypasses RLS, so the has_role gate below is
 --    load-bearing — non-admins get zero rows.
+--    DROP first: the RETURNS TABLE row type differs from any earlier
+--    definition, and CREATE OR REPLACE cannot change a return type.
 -- =====================================================================
+DROP FUNCTION IF EXISTS public.list_engineers();
+
 CREATE OR REPLACE FUNCTION public.list_engineers()
 RETURNS TABLE (
   employee_id uuid,

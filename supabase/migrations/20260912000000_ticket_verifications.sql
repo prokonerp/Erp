@@ -1,4 +1,8 @@
-CREATE TABLE public.ticket_customer_verifications (
+-- Idempotency: every statement here is re-runnable (IF NOT EXISTS for the
+-- tables/indexes, DROP-IF-EXISTS before each trigger). Originally bare
+-- CREATEs, which broke `supabase db reset` on a second pass; fixed without
+-- changing the applied shape (no-op where the objects already exist).
+CREATE TABLE IF NOT EXISTS public.ticket_customer_verifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   ticket_id uuid NOT NULL UNIQUE REFERENCES public.tickets(id) ON DELETE CASCADE,
   customer_id uuid REFERENCES public.customers(id) ON DELETE SET NULL,
@@ -12,7 +16,7 @@ CREATE TABLE public.ticket_customer_verifications (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE TABLE public.ticket_equipment_verifications (
+CREATE TABLE IF NOT EXISTS public.ticket_equipment_verifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   ticket_id uuid NOT NULL UNIQUE REFERENCES public.tickets(id) ON DELETE CASCADE,
   verdict text NOT NULL CHECK (verdict IN ('matched','mismatch')),
@@ -32,9 +36,9 @@ CREATE TABLE public.ticket_equipment_verifications (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_tcv_ticket ON public.ticket_customer_verifications(ticket_id);
-CREATE INDEX idx_tev_ticket ON public.ticket_equipment_verifications(ticket_id);
-CREATE INDEX idx_tcv_customer ON public.ticket_customer_verifications(customer_id);
+CREATE INDEX IF NOT EXISTS idx_tcv_ticket ON public.ticket_customer_verifications(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_tev_ticket ON public.ticket_equipment_verifications(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_tcv_customer ON public.ticket_customer_verifications(customer_id);
 ALTER TABLE public.ticket_customer_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ticket_equipment_verifications ENABLE ROW LEVEL SECURITY;
 DROP TRIGGER IF EXISTS trg_touch_tcv ON public.ticket_customer_verifications;

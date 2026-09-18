@@ -9,11 +9,14 @@
 alter table public.tickets
   add column if not exists equipment_id uuid;
 
-alter table public.tickets
-  add constraint tickets_equipment_id_fkey
-  foreign key (equipment_id)
-  references public.installed_equipment (id)
-  on delete set null;
+do $$ begin
+  alter table public.tickets
+    add constraint tickets_equipment_id_fkey
+    foreign key (equipment_id)
+    references public.installed_equipment (id)
+    on delete set null;
+exception when duplicate_object then null;
+end $$;
 
 create index if not exists tickets_equipment_id_idx
   on public.tickets (equipment_id);

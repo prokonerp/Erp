@@ -240,7 +240,7 @@ describe("compressImageToLimit", () => {
         },
         documentRef: fakeDocImgFireOnerror(),
       }),
-    ).rejects.toThrow("Photo could not be read. Try a JPEG photo under 8 MB.");
+    ).rejects.toThrow("Photo could not be read. Try a JPEG photo under 5 MB.");
   });
 
   it("input over 5MB rejects with the 5MB message without decoding", async () => {

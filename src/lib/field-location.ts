@@ -126,17 +126,25 @@ export type GateInput = {
   /** Latest fix accuracy in metres. A fix worse than MAX_ACCURACY_M reads as
    *  no_fix rather than ok — it must never confirm liveness. Absent = unknown. */
   accuracy?: number | null;
+  /**
+   * Kill-switch state from the duty tracker. Explicit `false` means an admin
+   * disabled tracking globally — the server passes gated writes through, so
+   * the client must too. Absent/true keeps the normal gate (fail-closed).
+   */
+  trackingEnabled?: boolean;
 };
 
 /**
  * Gate state machine. Order is load-bearing:
  * 1. off-duty always wins (an override never puts someone on duty);
- * 2. a live manager override wins over any location state;
- * 3. explicit permission/failure signals win over cached fixes;
- * 4. otherwise the grace window decides between ok / no_fix / stale.
+ * 2. kill-switch off passes through (mirrors the server `next()` bypass);
+ * 3. a live manager override wins over any location state;
+ * 4. explicit permission/failure signals win over cached fixes;
+ * 5. otherwise the grace window decides between ok / no_fix / stale.
  */
 export function evaluateGateState(input: GateInput): GateState {
   if (!input.onDuty) return "off_duty";
+  if (input.trackingEnabled === false) return "ok";
   if (input.overrideActive) return "override";
   switch (input.permission) {
     case "denied":

@@ -3,10 +3,9 @@ import { z } from "zod";
 import { requireFieldLocation } from "@/integrations/supabase/field-location-middleware";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
 import {
-  buildSerialPhotoBlockedError,
-  findSerialLinesWithoutPhoto,
+  buildSerialPhotoWarning,
+  collectSerialPhotoRefs,
   pickLatestOpenVisit,
-  serialPhotoLineRef,
 } from "@/lib/fieldServiceReport";
 import { reportDbError } from "@/lib/format-error";
 
@@ -27,6 +26,10 @@ const finalizeInput = z.object({
  * Idempotent: departure only when arrival_at exists and departure_at is
  * unset. Safe to call once per submission — the client navigates away
  * immediately after.
+ *
+ * Serial-photo evidence is warn-instead-of-block: serial-bearing part lines
+ * without photo evidence surface a `warnings` entry but never prevent
+ * departure (the line shape cannot carry photo evidence yet).
  */
 export const finalizeFsrSubmission = createServerFn({ method: "POST" })
   .middleware([requireFieldLocation])
@@ -62,26 +65,22 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ticket_visits pending generated types (migration 20260917000003)
     const visits = (supabaseAdmin as any).from("ticket_visits");
 
-    // 0) Serial-photo evidence gate (branch b: the part_replacements line
-    //    shape carries no photo field, so a serial-bearing line can never
-    //    show photo evidence yet). Reject LOUDLY — never silently drop the
-    //    line. Runs before any write: rejection departs/closes nothing, so
-    //    finalize stays idempotent and the engineer can retry after the
-    //    follow-up photo-capture UI lands. Reads mirror
-    //    syncFsrPartsToTicket (ALL reports for the ticket).
+    // 0) Serial-photo evidence (warn-instead-of-block): the
+    //    part_replacements line shape carries no photo field, so a
+    //    serial-bearing line can never show photo evidence yet. Blocking
+    //    here deadlocked auto-depart on every parts job — so refs are
+    //    collected as warnings and departure proceeds. The explicit
+    //    serial-photo capture step (not finalize) is where a future hard
+    //    gate belongs. Reads mirror syncFsrPartsToTicket (ALL reports for
+    //    the ticket).
     const { data: fsrRows, error: fsrErr } = await supabaseAdmin
       .from("field_service_reports")
       .select("part_replacements")
       .eq("ticket_id", data.ticketId);
     if (fsrErr) throw new Error(reportDbError("finalize serial-photo check", fsrErr));
-    const serialRefs: string[] = [];
-    (fsrRows ?? []).forEach((r, ri) => {
-      const list = (r as { part_replacements?: unknown }).part_replacements;
-      for (const li of findSerialLinesWithoutPhoto(list)) {
-        serialRefs.push(serialPhotoLineRef(ri, li));
-      }
-    });
-    if (serialRefs.length > 0) throw new Error(buildSerialPhotoBlockedError(serialRefs));
+    const serialRefs = collectSerialPhotoRefs(fsrRows);
+    const warnings: string[] =
+      serialRefs.length > 0 ? [buildSerialPhotoWarning(serialRefs)] : [];
 
     // 1) Auto-depart: only the single latest open visit departs (open rows
     //    only, ordered by arrival desc with created_at as tiebreak, limit 1;
@@ -131,5 +130,5 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
       }
     }
 
-    return { ticketId: data.ticketId, departed };
+    return { ticketId: data.ticketId, departed, warnings };
   });

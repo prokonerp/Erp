@@ -221,12 +221,15 @@ function ExpenseSection({
   charge,
   entries,
   busy,
+  errorMessage,
   onAdd,
 }: {
   title: string;
   charge: ChargeType;
   entries: ExpenseRow[];
   busy: boolean;
+  /** Set when the query failed — render this instead of a misleading empty state. */
+  errorMessage?: string | null;
   onAdd: (
     charge: ChargeType,
     form: { amount: string; receiptFile: File | null; notes: string; reset: () => void },
@@ -297,7 +300,9 @@ function ExpenseSection({
           </Button>
         </div>
 
-        {entries.length === 0 ? (
+        {errorMessage ? (
+          <p className="text-[13px] text-amber-700">{errorMessage}</p>
+        ) : entries.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">
             No {title.toLowerCase()} expenses for this day.
           </p>
@@ -335,11 +340,14 @@ function ExpenseSection({
 function PlaceVisitsSection({
   visits,
   busy,
+  errorMessage,
   onAdd,
   onDelete,
 }: {
   visits: PlaceVisitRow[];
   busy: boolean;
+  /** Set when the query failed — render this instead of a misleading empty state. */
+  errorMessage?: string | null;
   onAdd: (note: string, reset: () => void) => void;
   onDelete: (id: string) => void;
 }) {
@@ -370,7 +378,9 @@ function PlaceVisitsSection({
           </Button>
         </div>
 
-        {visits.length === 0 ? (
+        {errorMessage ? (
+          <p className="text-[13px] text-amber-700">{errorMessage}</p>
+        ) : visits.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">No places recorded for this day.</p>
         ) : (
           <ul className="divide-y divide-border rounded-lg border border-border">
@@ -444,7 +454,12 @@ function EngConveyance() {
     },
   });
 
-  const { data: expenses = [], isLoading: expLoading } = useQuery({
+  const {
+    data: expenses = [],
+    isLoading: expLoading,
+    isError: expError,
+    error: expQueryError,
+  } = useQuery({
     queryKey: expKey,
     enabled: !!employeeId,
     staleTime: 15_000,
@@ -460,7 +475,12 @@ function EngConveyance() {
     },
   });
 
-  const { data: visits = [], isLoading: visitsLoading } = useQuery({
+  const {
+    data: visits = [],
+    isLoading: visitsLoading,
+    isError: visitsError,
+    error: visitsQueryError,
+  } = useQuery({
     queryKey: visitsKey,
     enabled: !!employeeId,
     staleTime: 15_000,
@@ -1133,6 +1153,7 @@ function EngConveyance() {
 
           <PlaceVisitsSection
             visits={visits}
+            errorMessage={visitsError ? conveyanceLoadMessage(visitsQueryError) : null}
             busy={visitBusy}
             onAdd={addVisit}
             onDelete={removeVisit}
@@ -1143,6 +1164,7 @@ function EngConveyance() {
             entries={expenses.filter((e) => e.charge_type === "Toll")}
             busy={expenseBusy}
             onAdd={addExpense}
+            errorMessage={expError ? conveyanceLoadMessage(expQueryError) : null}
           />
           <ExpenseSection
             title="Parking"
@@ -1150,6 +1172,7 @@ function EngConveyance() {
             entries={expenses.filter((e) => e.charge_type === "Parking")}
             busy={expenseBusy}
             onAdd={addExpense}
+            errorMessage={expError ? conveyanceLoadMessage(expQueryError) : null}
           />
           <p className="text-right text-sm font-semibold tabular-nums">
             Day total: {formatINR(dayTotal)}

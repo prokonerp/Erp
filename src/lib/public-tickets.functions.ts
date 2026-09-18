@@ -4,6 +4,7 @@ import { issueCaptchaChallenge, verifyCaptchaAnswer } from "@/lib/public-captcha
 import { checkRateLimitDurable } from "@/lib/public-rate-limit";
 import { isStagedPublicPath } from "@/lib/public-upload-guards";
 import { clientIpKey } from "@/lib/server-client-ip";
+import { publicTokenSecret } from "@/lib/server-secrets";
 
 const CHALLENGE_LIMIT = { windowMs: 10 * 60 * 1000, max: 20 };
 const SUBMIT_LIMIT = { windowMs: 10 * 60 * 1000, max: 5 };
@@ -12,11 +13,10 @@ const challengeHits = new Map<string, number[]>();
 const submitHits = new Map<string, number[]>();
 
 function captchaSecret(): string {
-  // Reuses the high-entropy server-only key as the captcha HMAC secret.
+  // Dedicated public-token secret (falls back to the service-role key until
+  // PUBLIC_TOKEN_HMAC_SECRET is set — see src/lib/server-secrets.ts).
   // Never leaves the server; only the HMAC digest is sent to the client.
-  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!secret) throw new Error("Server misconfigured: SUPABASE_SERVICE_ROLE_KEY is missing");
-  return secret;
+  return publicTokenSecret();
 }
 
 /** Issue a stateless arithmetic challenge for the public ticket form. No auth. */

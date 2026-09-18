@@ -775,9 +775,13 @@ export function FieldServiceReport({
       }
       // Auto-depart only: the report submit ends the site visit, but the
       // ticket stays open (an admin closes it). Failure only warns (the FSR
-      // is already saved).
+      // is already saved). Serial-photo gaps come back as warnings — the
+      // visit still departs.
       try {
-        await callFinalizeFsr({ data: { ticketId } });
+        const res = (await callFinalizeFsr({ data: { ticketId } })) as {
+          warnings?: string[];
+        } | null;
+        for (const w of res?.warnings ?? []) toast.warning(w);
       } catch (e) {
         announceLocationDenial(e);
         toast.warning("Report saved; auto-depart pending — an admin can close the ticket.");

@@ -136,6 +136,27 @@ describe("evaluateGateState", () => {
       "stale",
     ],
     ["reports gps_off for position-unavailable", { failure: "unavailable" as const }, "gps_off"],
+    [
+      "passes through a stale fix when tracking is disabled (kill switch)",
+      {
+        trackingEnabled: false,
+        lastSeenAt: new Date(base.nowMs - 3600_000).toISOString(),
+      },
+      "ok",
+    ],
+    [
+      "passes through denied permission when tracking is disabled (kill switch)",
+      { trackingEnabled: false, permission: "denied" as const, lastSeenAt: null },
+      "ok",
+    ],
+    [
+      "keeps the gate when trackingEnabled is unknown (fail-closed client)",
+      {
+        trackingEnabled: undefined,
+        lastSeenAt: new Date(base.nowMs - 3600_000).toISOString(),
+      },
+      "stale",
+    ],
   ];
   for (const [name, patch, expected] of cases) {
     it(name, () => {

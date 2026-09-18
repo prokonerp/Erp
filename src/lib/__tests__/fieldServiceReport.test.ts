@@ -4,7 +4,8 @@ import {
   partReplacementsSchema,
   buildFsrPayload,
   UPS_LOCATIONS,
-  buildSerialPhotoBlockedError,
+  buildSerialPhotoWarning,
+  collectSerialPhotoRefs,
   findSerialLinesWithoutPhoto,
   IDENTITY_BLOCK_MESSAGE,
   partLineHasSerialNumber,
@@ -808,14 +809,40 @@ describe("serial photo evidence gate", () => {
     );
   });
 
-  it("error refs are 1-based and the blocked error states nothing was written", () => {
+  it("error refs are 1-based", () => {
     expect(serialPhotoLineRef(0, 1)).toBe(
       "part line 2 (report 1) has a serial number but no serial photo evidence",
     );
-    const err = buildSerialPhotoBlockedError([serialPhotoLineRef(0, 0), serialPhotoLineRef(1, 2)]);
-    expect(err).toBe(
-      "Serial photo required — finalize blocked: part line 1 (report 1) has a serial number but no serial photo evidence; part line 3 (report 2) has a serial number but no serial photo evidence. Nothing was departed or closed.",
-    );
+  });
+});
+
+describe("serial photo warning (warn-instead-of-block, finalize never throws)", () => {
+  it("collects refs across all reports for the ticket", () => {
+    const rows = [
+      { part_replacements: [{ item: "Battery", oldSrNo: "OLD1" }] },
+      { part_replacements: null },
+      { part_replacements: [{ item: "Fuse" }, { item: "Board", newSrNo: "NEW9" }] },
+    ];
+    expect(collectSerialPhotoRefs(rows)).toEqual([
+      "part line 1 (report 1) has a serial number but no serial photo evidence",
+      "part line 2 (report 3) has a serial number but no serial photo evidence",
+    ]);
+  });
+
+  it("returns [] when nothing is serial-bearing", () => {
+    expect(collectSerialPhotoRefs([{ part_replacements: [{ item: "Fuse" }] }])).toEqual([]);
+    expect(collectSerialPhotoRefs([])).toEqual([]);
+    expect(collectSerialPhotoRefs(null)).toEqual([]);
+  });
+
+  it("warning names the lines but never claims finalize was blocked", () => {
+    const msg = buildSerialPhotoWarning([
+      serialPhotoLineRef(0, 0),
+      serialPhotoLineRef(1, 2),
+    ]);
+    expect(msg).toContain("part line 1 (report 1)");
+    expect(msg).toContain("part line 3 (report 2)");
+    expect(msg).not.toMatch(/blocked/i);
   });
 });
 

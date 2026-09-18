@@ -124,7 +124,7 @@ export async function compressImageToLimit(
         };
       }
       throw new Error(
-        "Photo could not be read. Try a JPEG photo under 8 MB. If this is an HEIC photo, convert it to JPEG first.",
+        `Photo could not be read. Try a JPEG photo under ${Math.round(MAX_ACCEPTED_BYTES / (1024 * 1024))} MB. If this is an HEIC photo, convert it to JPEG first.`,
       );
     }
 

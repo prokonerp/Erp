@@ -83,9 +83,23 @@ export async function checkRateLimitDurable(
   key: string,
   nowMs: number,
   limit: RateLimit,
+  opts?: { onError?: "open" | "closed" },
 ): Promise<RateLimitResult> {
+  // When the durable store is unreachable the in-memory map is per-instance,
+  // so on serverless it is a soft limit at best. `strict` (explicit opt-in via
+  // PUBLIC_RATE_LIMIT_FAIL_CLOSED=1, or per-call `onError: "closed"`) denies
+  // instead — only enable it once public.check_public_rate_limit exists on the
+  // database (scripts/preflight-live.sql reports this), otherwise the public
+  // form would be blocked by a missing RPC.
+  const strict =
+    opts?.onError === "closed" || (process.env.PUBLIC_RATE_LIMIT_FAIL_CLOSED || "") === "1";
+
   const rpc = (client as { rpc?: unknown } | null | undefined)?.rpc;
   if (typeof rpc !== "function") {
+    if (strict) {
+      console.warn("[public-rate-limit] no durable client — denying (strict mode)");
+      return { allowed: false, retryAfterMs: limit.windowMs };
+    }
     return checkRateLimit(hits, key, nowMs, limit);
   }
   try {
@@ -109,6 +123,10 @@ export async function checkRateLimitDurable(
     hits.set(key, fresh);
     return verdict;
   } catch (e) {
+    if (strict) {
+      console.warn("[public-rate-limit] durable check failed — denying (strict mode):", e);
+      return { allowed: false, retryAfterMs: limit.windowMs };
+    }
     console.warn("[public-rate-limit] durable check failed, in-memory fallback:", e);
     return checkRateLimit(hits, key, nowMs, limit);
   }

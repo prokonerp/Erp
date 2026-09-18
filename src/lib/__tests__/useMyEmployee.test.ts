@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { resolveInitials, pickEmployeeRow } from "@/hooks/useMyEmployee";
+import { resolveInitials, pickEmployeeRow, isIdentityQueryEnabled } from "@/hooks/useMyEmployee";
+
+describe("isIdentityQueryEnabled", () => {
+  it("enables on uid alone — email is only a fallback inside fetchMyIdentity", () => {
+    expect(isIdentityQueryEnabled("uid-1", null)).toBe(true);
+  });
+
+  it("enables on uid + email", () => {
+    expect(isIdentityQueryEnabled("uid-1", "a@b.c")).toBe(true);
+  });
+
+  it("disables without a session uid (never queries logged-out)", () => {
+    expect(isIdentityQueryEnabled(null, "a@b.c")).toBe(false);
+    expect(isIdentityQueryEnabled(null, null)).toBe(false);
+    expect(isIdentityQueryEnabled("", "a@b.c")).toBe(false);
+  });
+});
 
 describe("resolveInitials", () => {
   it("returns first + last initials for multi-word names", () => {

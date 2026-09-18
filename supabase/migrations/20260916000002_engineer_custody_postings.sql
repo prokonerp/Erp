@@ -79,7 +79,7 @@ BEGIN
       FOR EACH ROW
       WHEN (NEW.status = 'Submitted'
             AND NEW.carrier_employee_id IS NOT NULL
-            AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'Submitted'))
+            AND OLD.status IS DISTINCT FROM 'Submitted')
       EXECUTE FUNCTION public.ims_stamp_custodian_on_dc_dispatch();
   ELSE
     RAISE NOTICE 'Migration 20260916000002: DC custody trigger NOT created (carrier_employee_id missing)';
@@ -169,7 +169,7 @@ BEGIN
       AFTER UPDATE OF status ON public.grns
       FOR EACH ROW
       WHEN (NEW.status = 'Submitted'
-            AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'Submitted'))
+            AND OLD.status IS DISTINCT FROM 'Submitted')
       EXECUTE FUNCTION public.ims_clear_custodian_on_grn_receipt();
   ELSE
     RAISE NOTICE 'Migration 20260916000002: GRN custody trigger NOT created (carrier_employee_id missing)';

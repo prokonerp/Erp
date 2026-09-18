@@ -1662,6 +1662,438 @@ export type Database = {
         }
         Relationships: []
       }
+      engineer_admin_audit: {
+        Row: {
+          action: string
+          actor: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string
+          entity: string
+          entity_id: string | null
+          id: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity: string
+          entity_id?: string | null
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity?: string
+          entity_id?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      engineer_consent_events: {
+        Row: {
+          accepted_at: string
+          employee_id: string | null
+          id: string
+          user_agent: string | null
+          version: string
+        }
+        Insert: {
+          accepted_at?: string
+          employee_id?: string | null
+          id?: string
+          user_agent?: string | null
+          version: string
+        }
+        Update: {
+          accepted_at?: string
+          employee_id?: string | null
+          id?: string
+          user_agent?: string | null
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_consent_employee"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engineer_conveyance_rates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          employee_id: string
+          id: string
+          notes: string | null
+          rate_per_km: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          employee_id: string
+          id?: string
+          notes?: string | null
+          rate_per_km: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          employee_id?: string
+          id?: string
+          notes?: string | null
+          rate_per_km?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engineer_conveyance_rates_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engineer_conveyance_settlements: {
+        Row: {
+          adjusted_amount: number | null
+          adjustment_reason: string | null
+          approved_at: string | null
+          approved_by: string | null
+          computed_amount: number | null
+          computed_km: number | null
+          created_at: string
+          employee_id: string
+          flat_expenses: number
+          id: string
+          locked_at: string | null
+          locked_by: string | null
+          notes: string | null
+          paid_at: string | null
+          payment_ref: string | null
+          period_end: string
+          period_start: string
+          rate_per_km: number | null
+          reference_no: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          adjusted_amount?: number | null
+          adjustment_reason?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          computed_amount?: number | null
+          computed_km?: number | null
+          created_at?: string
+          employee_id: string
+          flat_expenses?: number
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          payment_ref?: string | null
+          period_end: string
+          period_start: string
+          rate_per_km?: number | null
+          reference_no?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          adjusted_amount?: number | null
+          adjustment_reason?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          computed_amount?: number | null
+          computed_km?: number | null
+          created_at?: string
+          employee_id?: string
+          flat_expenses?: number
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          notes?: string | null
+          paid_at?: string | null
+          payment_ref?: string | null
+          period_end?: string
+          period_start?: string
+          rate_per_km?: number | null
+          reference_no?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "engineer_conveyance_settlements_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engineer_daily_movements: {
+        Row: {
+          day: string
+          distance_m: number | null
+          employee_id: string
+          rolled_up_at: string | null
+          schema_version: number
+          sites: Json
+          stop_count: number | null
+        }
+        Insert: {
+          day: string
+          distance_m?: number | null
+          employee_id: string
+          rolled_up_at?: string | null
+          schema_version?: number
+          sites?: Json
+          stop_count?: number | null
+        }
+        Update: {
+          day?: string
+          distance_m?: number | null
+          employee_id?: string
+          rolled_up_at?: string | null
+          schema_version?: number
+          sites?: Json
+          stop_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_movement_employee"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engineer_duty_sessions: {
+        Row: {
+          created_at: string
+          device_label: string | null
+          employee_id: string | null
+          end_reason: string | null
+          ended_at: string | null
+          id: string
+          started_at: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_label?: string | null
+          employee_id?: string | null
+          end_reason?: string | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_label?: string | null
+          employee_id?: string | null
+          end_reason?: string | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_duty_session_employee"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engineer_gate_overrides: {
+        Row: {
+          created_at: string
+          employee_id: string
+          expires_at: string
+          granted_by: string | null
+          id: string
+          reason: string
+          revoked_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          employee_id: string
+          expires_at: string
+          granted_by?: string | null
+          id?: string
+          reason: string
+          revoked_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          employee_id?: string
+          expires_at?: string
+          granted_by?: string | null
+          id?: string
+          reason?: string
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_override_employee"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engineer_live_status: {
+        Row: {
+          employee_id: string
+          last_accuracy_m: number | null
+          last_lat: number | null
+          last_long: number | null
+          last_seen_at: string | null
+          on_duty: boolean
+          session_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          employee_id: string
+          last_accuracy_m?: number | null
+          last_lat?: number | null
+          last_long?: number | null
+          last_seen_at?: string | null
+          on_duty?: boolean
+          session_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          employee_id?: string
+          last_accuracy_m?: number | null
+          last_lat?: number | null
+          last_long?: number | null
+          last_seen_at?: string | null
+          on_duty?: boolean
+          session_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_live_employee"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_live_session"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "engineer_duty_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engineer_location_pings: {
+        Row: {
+          accuracy_m: number | null
+          captured_at: string
+          client_ping_id: string
+          created_at: string
+          employee_id: string | null
+          id: string
+          lat: number
+          long: number
+          received_at: string
+          session_id: string | null
+          source: string
+          spoof_flags: Json[]
+          ticket_id: string | null
+        }
+        Insert: {
+          accuracy_m?: number | null
+          captured_at: string
+          client_ping_id: string
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          lat: number
+          long: number
+          received_at?: string
+          session_id?: string | null
+          source?: string
+          spoof_flags?: Json[]
+          ticket_id?: string | null
+        }
+        Update: {
+          accuracy_m?: number | null
+          captured_at?: string
+          client_ping_id?: string
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          lat?: number
+          long?: number
+          received_at?: string
+          session_id?: string | null
+          source?: string
+          spoof_flags?: Json[]
+          ticket_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_ping_employee"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_ping_session"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "engineer_duty_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      engineer_location_settings: {
+        Row: {
+          id: number
+          tracking_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          id: number
+          tracking_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          tracking_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       eway_bills: {
         Row: {
           created_at: string
@@ -3042,6 +3474,63 @@ export type Database = {
           },
         ]
       }
+      invoice_print_log: {
+        Row: {
+          copies: Json[]
+          copy_labels_snapshot: string | null
+          created_at: string
+          id: string
+          invoice_id: string
+          is_provisional: boolean
+          is_reprint: boolean
+          pdf_hash: string | null
+          printed_at: string
+          printed_by: string | null
+          theme_color_snapshot: string | null
+        }
+        Insert: {
+          copies: Json[]
+          copy_labels_snapshot?: string | null
+          created_at?: string
+          id?: string
+          invoice_id: string
+          is_provisional?: boolean
+          is_reprint?: boolean
+          pdf_hash?: string | null
+          printed_at?: string
+          printed_by?: string | null
+          theme_color_snapshot?: string | null
+        }
+        Update: {
+          copies?: Json[]
+          copy_labels_snapshot?: string | null
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          is_provisional?: boolean
+          is_reprint?: boolean
+          pdf_hash?: string | null
+          printed_at?: string
+          printed_by?: string | null
+          theme_color_snapshot?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_print_log_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_print_log_printed_by_fkey"
+            columns: ["printed_by"]
+            isOneToOne: false
+            referencedRelation: "auth.users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_settings: {
         Row: {
           branch_id: string
@@ -4141,6 +4630,236 @@ export type Database = {
           },
         ]
       }
+      proforma_invoices: {
+        Row: {
+          adjustment: number | null
+          billing_address: string | null
+          branch_id: string | null
+          buyer_gstin: string | null
+          buyer_name: string | null
+          buyer_state: string | null
+          buyer_state_code: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          cancelled_reason: string | null
+          cess: number | null
+          cgst: number | null
+          contact_email: string | null
+          contact_mobile: string | null
+          contact_person: string | null
+          conversion_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          delivery_timeline: string | null
+          discount: number | null
+          discount_amount: number | null
+          discount_label: string | null
+          id: string
+          igst: number | null
+          is_interstate: boolean | null
+          items: Json
+          notes: string | null
+          payment_terms: string | null
+          place_of_supply: string | null
+          place_of_supply_code: string | null
+          po_date: string | null
+          po_number: string | null
+          prior_fulfilled: Json
+          proforma_date: string
+          proforma_no: string | null
+          reverse_charge: boolean | null
+          round_off: number | null
+          sales_order_id: string | null
+          sales_type: string | null
+          salesperson: string | null
+          seller_address: string | null
+          seller_gstin: string | null
+          seller_name: string | null
+          seller_state: string | null
+          seller_state_code: string | null
+          sgst: number | null
+          shipping_address: string | null
+          shipping_charges: number | null
+          status: string
+          subtotal: number | null
+          taxable_value: number | null
+          tcs_amount: number | null
+          tcs_percent: number | null
+          terms: string | null
+          this_fulfilled: Json
+          total: number | null
+          total_in_words: string | null
+          updated_at: string
+        }
+        Insert: {
+          adjustment?: number | null
+          billing_address?: string | null
+          branch_id?: string | null
+          buyer_gstin?: string | null
+          buyer_name?: string | null
+          buyer_state?: string | null
+          buyer_state_code?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancelled_reason?: string | null
+          cess?: number | null
+          cgst?: number | null
+          contact_email?: string | null
+          contact_mobile?: string | null
+          contact_person?: string | null
+          conversion_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          delivery_timeline?: string | null
+          discount?: number | null
+          discount_amount?: number | null
+          discount_label?: string | null
+          id?: string
+          igst?: number | null
+          is_interstate?: boolean | null
+          items?: Json
+          notes?: string | null
+          payment_terms?: string | null
+          place_of_supply?: string | null
+          place_of_supply_code?: string | null
+          po_date?: string | null
+          po_number?: string | null
+          prior_fulfilled?: Json
+          proforma_date?: string
+          proforma_no?: string | null
+          reverse_charge?: boolean | null
+          round_off?: number | null
+          sales_order_id?: string | null
+          sales_type?: string | null
+          salesperson?: string | null
+          seller_address?: string | null
+          seller_gstin?: string | null
+          seller_name?: string | null
+          seller_state?: string | null
+          seller_state_code?: string | null
+          sgst?: number | null
+          shipping_address?: string | null
+          shipping_charges?: number | null
+          status?: string
+          subtotal?: number | null
+          taxable_value?: number | null
+          tcs_amount?: number | null
+          tcs_percent?: number | null
+          terms?: string | null
+          this_fulfilled?: Json
+          total?: number | null
+          total_in_words?: string | null
+          updated_at?: string
+        }
+        Update: {
+          adjustment?: number | null
+          billing_address?: string | null
+          branch_id?: string | null
+          buyer_gstin?: string | null
+          buyer_name?: string | null
+          buyer_state?: string | null
+          buyer_state_code?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cancelled_reason?: string | null
+          cess?: number | null
+          cgst?: number | null
+          contact_email?: string | null
+          contact_mobile?: string | null
+          contact_person?: string | null
+          conversion_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          delivery_timeline?: string | null
+          discount?: number | null
+          discount_amount?: number | null
+          discount_label?: string | null
+          id?: string
+          igst?: number | null
+          is_interstate?: boolean | null
+          items?: Json
+          notes?: string | null
+          payment_terms?: string | null
+          place_of_supply?: string | null
+          place_of_supply_code?: string | null
+          po_date?: string | null
+          po_number?: string | null
+          prior_fulfilled?: Json
+          proforma_date?: string
+          proforma_no?: string | null
+          reverse_charge?: boolean | null
+          round_off?: number | null
+          sales_order_id?: string | null
+          sales_type?: string | null
+          salesperson?: string | null
+          seller_address?: string | null
+          seller_gstin?: string | null
+          seller_name?: string | null
+          seller_state?: string | null
+          seller_state_code?: string | null
+          sgst?: number | null
+          shipping_address?: string | null
+          shipping_charges?: number | null
+          status?: string
+          subtotal?: number | null
+          taxable_value?: number | null
+          tcs_amount?: number | null
+          tcs_percent?: number | null
+          terms?: string | null
+          this_fulfilled?: Json
+          total?: number | null
+          total_in_words?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proforma_invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proforma_invoices_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proforma_invoices_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proforma_invoices_conversion_id_fkey"
+            columns: ["conversion_id"]
+            isOneToOne: false
+            referencedRelation: "so_conversions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_rate_limit_hits: {
+        Row: {
+          bucket_key: string
+          hit_at: string
+        }
+        Insert: {
+          bucket_key: string
+          hit_at?: string
+        }
+        Update: {
+          bucket_key?: string
+          hit_at?: string
+        }
+        Relationships: []
+      }
       purchase_order_items: {
         Row: {
           cess: number
@@ -5025,6 +5744,133 @@ export type Database = {
           },
           {
             foreignKeyName: "serials_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      so_conversions: {
+        Row: {
+          balance_after: Json
+          conversion_type: Database["public"]["Enums"]["so_conversion_type"]
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          prior_fulfilled: Json
+          sales_order_id: string
+          status: string
+          target_id: string
+          target_no: string | null
+          target_table: string
+          this_fulfilled: Json
+          updated_at: string
+        }
+        Insert: {
+          balance_after?: Json
+          conversion_type: Database["public"]["Enums"]["so_conversion_type"]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          prior_fulfilled?: Json
+          sales_order_id: string
+          status?: string
+          target_id: string
+          target_no?: string | null
+          target_table: string
+          this_fulfilled?: Json
+          updated_at?: string
+        }
+        Update: {
+          balance_after?: Json
+          conversion_type?: Database["public"]["Enums"]["so_conversion_type"]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          prior_fulfilled?: Json
+          sales_order_id?: string
+          status?: string
+          target_id?: string
+          target_no?: string | null
+          target_table?: string
+          this_fulfilled?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "so_conversions_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "so_conversions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "auth.users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      so_fulfillments: {
+        Row: {
+          conversion_id: string
+          created_at: string
+          id: string
+          line_index: number
+          ordered_qty: number
+          product_id: string | null
+          sales_order_id: string
+          serial_numbers: Json[] | null
+          this_qty: number
+          warehouse_id: string | null
+        }
+        Insert: {
+          conversion_id: string
+          created_at?: string
+          id?: string
+          line_index: number
+          ordered_qty: number
+          product_id?: string | null
+          sales_order_id: string
+          serial_numbers?: Json[] | null
+          this_qty: number
+          warehouse_id?: string | null
+        }
+        Update: {
+          conversion_id?: string
+          created_at?: string
+          id?: string
+          line_index?: number
+          ordered_qty?: number
+          product_id?: string | null
+          sales_order_id?: string
+          serial_numbers?: Json[] | null
+          this_qty?: number
+          warehouse_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "so_fulfillments_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "so_fulfillments_conversion_id_fkey"
+            columns: ["conversion_id"]
+            isOneToOne: false
+            referencedRelation: "so_conversions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "so_fulfillments_warehouse_id_fkey"
             columns: ["warehouse_id"]
             isOneToOne: false
             referencedRelation: "warehouses"
@@ -6047,6 +6893,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_stock_custody: { Args: { _employee_id?: string }; Returns: {
+          stock_item_id: string | null
+          custodian_employee_id: string | null
+          custodian_name: string | null
+          part_serial_no: string | null
+          ticket_id: string | null
+          set_at: Json | null
+        }[] }
+      app_advisory_lock: { Args: { key: string }; Returns: undefined }
+      app_advisory_unlock: { Args: { key: string }; Returns: undefined }
+      app_advisory_xact_lock: { Args: { key: string }; Returns: undefined }
       check_customer_duplicate: {
         Args: {
           p_current_id?: string
@@ -6063,7 +6920,12 @@ export type Database = {
           matched_value: string
         }[]
       }
+      check_password_reuse: { Args: { p_user: string; p_pw: string }; Returns: boolean }
       claim_admin: { Args: never; Returns: undefined }
+      correct_grn_serial: { Args: { _grn_id: string; _old_serial: string; _new_serial: string; _reason: string; _oracle_no?: string; _scope?: string }; Returns: undefined }
+      correct_indent_oracle_serial: { Args: { _indent_id: string; _oracle_no: string; _slot: string; _old_serial: string; _new_serial: string; _reason: string }; Returns: undefined }
+      correct_oracle_slot: { Args: { _indent_id: string; _oracle_no: string; _slot: string; _old_serial: string; _new_serial: string; _reason: string; _sync_ticket?: boolean; _sync_doc?: boolean }; Returns: undefined }
+      get_engineer_material_stats: { Args: Record<PropertyKey, never>; Returns: Json }
       has_permission: {
         Args: { _action: string; _module: string; _user_id: string }
         Returns: boolean
@@ -6104,6 +6966,16 @@ export type Database = {
         }[]
       }
       is_designated_owner: { Args: never; Returns: boolean }
+      list_engineers: { Args: Record<PropertyKey, never>; Returns: {
+          employee_id: string | null
+          name: string | null
+          phone: string | null
+          email: string | null
+          active: boolean | null
+          auth_user_id: string | null
+          photo_path: string | null
+          link_status: string | null
+        }[] }
       my_pending_lead_acknowledgements: {
         Args: never
         Returns: {
@@ -6119,6 +6991,12 @@ export type Database = {
           remarks: string
         }[]
       }
+      my_stock_custody: { Args: Record<PropertyKey, never>; Returns: {
+          stock_item_id: string | null
+          part_serial_no: string | null
+          ticket_id: string | null
+          set_at: Json | null
+        }[] }
       next_amc_seq: { Args: never; Returns: number }
       next_ims_transfer_seq: { Args: never; Returns: number }
       next_ims_txn_seq: { Args: never; Returns: number }
@@ -6145,6 +7023,7 @@ export type Database = {
         }[]
       }
       recalc_indent_status: { Args: { _indent_id: string }; Returns: undefined }
+      record_password_history: { Args: { p_user: string; p_pw: string }; Returns: undefined }
       record_user_activity: { Args: never; Returns: undefined }
       record_user_login: { Args: never; Returns: undefined }
       record_user_logout: { Args: never; Returns: undefined }
@@ -6198,6 +7077,8 @@ export type Database = {
         | "stock_adjustment"
         | "scrap_adjustment"
       indent_type: "rma_advance_exchange" | "rma_exchange" | "rma_service_ship"
+      invoice_sales_type: "local_itemwise" | "local_multirate" | "local_multirate_cons" | "local_nil_rated" | "local_tax_incl" | "sez_taxable" | "sez_zero_rated"
+      so_conversion_type: "tax_invoice" | "general_dc" | "proforma_invoice" | "delivery_challan"
     }
     CompositeTypes: {
       [_ in never]: never
