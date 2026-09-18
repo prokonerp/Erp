@@ -123,6 +123,9 @@ export type GateInput = {
   overrideActive: boolean;
   /** Explicit OS/browser failure from the last geolocation attempt. */
   failure?: "unavailable" | "timeout" | null;
+  /** Latest fix accuracy in metres. A fix worse than MAX_ACCURACY_M reads as
+   *  no_fix rather than ok — it must never confirm liveness. Absent = unknown. */
+  accuracy?: number | null;
 };
 
 /**
@@ -151,6 +154,7 @@ export function evaluateGateState(input: GateInput): GateState {
   // must not paper over it.
   if (input.failure === "unavailable" || input.failure === "timeout") return "gps_off";
   if (!input.lastSeenAt) return "no_fix";
+  if (input.accuracy !== undefined && !isAccuracyOk(input.accuracy)) return "no_fix";
   return isFixFresh(input.lastSeenAt, input.nowMs, input.graceMs) ? "ok" : "stale";
 }
 

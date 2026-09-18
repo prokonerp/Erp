@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { adminEngKeys } from "@/lib/queryKeys";
@@ -23,6 +23,7 @@ export type RoutePing = {
   captured_at: string;
   source: string | null;
   ticket_id: string | null;
+  spoof_flags: string[];
 };
 
 export type DayMovement = {
@@ -62,34 +63,6 @@ function hintFor(e: unknown): string {
     return "not set up yet — ask admin to run migration 20260928000001";
   }
   return message || "failed";
-}
-
-/**
- * Dedicated realtime subscription for engineer_live_status with the same
- * 250ms debounce + channel cleanup as useRealtimeRefetch — which cannot be
- * reused here because its table param is the closed ArchivableTable union.
- */
-export function useEngineerLiveRefetch(refetch: () => void) {
-  const cb = useRef(refetch);
-  cb.current = refetch;
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const channel = supabase
-      .channel(`rt-engineer-live-${Math.random().toString(36).slice(2, 8)}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "engineer_live_status" },
-        () => {
-          if (timer) clearTimeout(timer);
-          timer = setTimeout(() => cb.current(), 250);
-        },
-      )
-      .subscribe();
-    return () => {
-      if (timer) clearTimeout(timer);
-      supabase.removeChannel(channel);
-    };
-  }, []);
 }
 
 /** "last seen X ago" — never a live dot. Future timestamps clamp to "just now". */
@@ -133,12 +106,15 @@ async function fetchLiveRoster(): Promise<LiveEngineer[]> {
 }
 
 /**
- * Live on-duty roster. Realtime-first with a 30s polling fallback + focus
- * refetch (socket drops must not freeze the board). Sections degrade
- * independently — a failed read warns, never blanks.
+ * Live on-duty roster. Freshness is owned by MovementLiveProvider (one
+ * channel + one poller for the whole shell); this hook only reads the
+ * shared cache, so mounting it on three pages costs one network request.
+ * A failed read warns AND reports loadError — callers render it, never a
+ * silent empty list.
  */
 export function useLiveRoster() {
   const [warnings, setWarnings] = useState<MovementWarning[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const pushWarning = useCallback((section: string, message: string) => {
     setWarnings((w) => (w.some((x) => x.section === section) ? w : [...w, { section, message }]));
   }, []);
@@ -147,25 +123,19 @@ export function useLiveRoster() {
     queryKey: adminEngKeys.movement(),
     queryFn: async () => {
       try {
-        return await fetchLiveRoster();
+        const rows = await fetchLiveRoster();
+        setLoadError(null);
+        return rows;
       } catch (e) {
-        pushWarning("live-roster", errMessage(e));
+        const message = errMessage(e);
+        pushWarning("live-roster", message);
+        setLoadError(message);
         return [] as LiveEngineer[];
       }
     },
-    refetchInterval: 30_000,
   });
 
-  useEngineerLiveRefetch(query.refetch);
-
-  useEffect(() => {
-    const onFocus = () => void query.refetch();
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return { ...query, warnings };
+  return { ...query, warnings, loadError };
 }
 
 /** UTC bounds for one IST calendar day (IST has no DST — fixed +05:30). */
@@ -185,7 +155,7 @@ async function fetchDayRoute(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- location tables pending generated types
   const { data: pings, error: pingErr } = await (supabase as any)
     .from("engineer_location_pings")
-    .select("lat, long, accuracy_m, captured_at, source, ticket_id")
+    .select("lat, long, accuracy_m, captured_at, source, ticket_id, spoof_flags")
     .eq("employee_id", employeeId)
     .gte("captured_at", start)
     .lt("captured_at", end)
@@ -201,9 +171,12 @@ async function fetchDayRoute(
     .maybeSingle();
   if (movErr) throw new Error(hintFor(movErr));
   return {
-    pings: ((pings ?? []) as RoutePing[]).filter(
-      (p) => Number.isFinite(p.lat) && Number.isFinite(p.long),
-    ),
+    pings: ((pings ?? []) as Array<Omit<RoutePing, "spoof_flags"> & { spoof_flags?: unknown }>)
+      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.long))
+      .map((p) => ({
+        ...p,
+        spoof_flags: Array.isArray(p.spoof_flags) ? (p.spoof_flags as string[]) : [],
+      })),
     movement: (movement as DayMovement | null) ?? null,
   };
 }
@@ -211,6 +184,7 @@ async function fetchDayRoute(
 /** Per-engineer day route: raw pings (polyline) + rollup row (distance/stops). */
 export function useEngineerDayRoute(employeeId: string | null, day: string = istDateKey()) {
   const [warnings, setWarnings] = useState<MovementWarning[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const pushWarning = useCallback((section: string, message: string) => {
     setWarnings((w) => (w.some((x) => x.section === section) ? w : [...w, { section, message }]));
   }, []);
@@ -220,13 +194,17 @@ export function useEngineerDayRoute(employeeId: string | null, day: string = ist
     enabled: !!employeeId,
     queryFn: async () => {
       try {
-        return await fetchDayRoute(employeeId as string, day);
+        const result = await fetchDayRoute(employeeId as string, day);
+        setLoadError(null);
+        return result;
       } catch (e) {
-        pushWarning("day-route", errMessage(e));
+        const message = errMessage(e);
+        pushWarning("day-route", message);
+        setLoadError(message);
         return { pings: [] as RoutePing[], movement: null as DayMovement | null };
       }
     },
   });
 
-  return { ...query, warnings };
+  return { ...query, warnings, loadError };
 }

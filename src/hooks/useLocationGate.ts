@@ -45,6 +45,7 @@ export function useLocationGate(): GateView {
         graceMs: LOCATION_GRACE_MS,
         overrideActive: t.overrideActive,
         failure,
+        accuracy: t.lastAccuracy,
       });
 
   let headline: string | null = null;

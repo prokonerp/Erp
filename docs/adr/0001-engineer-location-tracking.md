@@ -117,3 +117,13 @@ storage.
 ## Related Decisions
 
 - None (first ADR in `docs/adr/`).
+
+## Deviations log (2026-09-18, build verification)
+
+1. **Read-only off-duty portal.** The gate no longer overlays `<Outlet/>` when off duty — engineers browse read-only with a slim banner. The blocking overlay is reserved for on-duty-but-broken location; writes that 403 raise the duty prompt via a central event. Reason: server only ever gated writes; consent must stay voluntary (DPDP).
+2. **Single shared realtime channel.** One channel + one poller in the engineers layout replaces the per-hook subscription (which opened a connection per mounted page and churned the socket).
+3. **Admin-only cross-engineer reads.** Migration `20260928000003` drops the `has_permission('engineers','read')` see-all branch — one admin checkbox could otherwise have exposed every engineer's locations.
+4. **Kill switch.** `engineer_location_settings` (id=1) + `TRACKING_DISABLED`: gate passes through, duty start/pings refuse, admin toggle on Movement (audited).
+5. **Spoof flags are advisory-only.** `spoof_flags text[]` on pings, computed in `recordPings`, shown as ⚑ markers — never blocks or accuses.
+6. **Session reaper.** `reap_stale_duty_sessions()` every 15 min closes sessions idle >2h; client self-heals reaped transitions.
+7. **Leaflet CSS root cause.** The blank admin map was a missing `leaflet/dist/leaflet.css` import, not a data problem.

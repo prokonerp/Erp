@@ -11,6 +11,8 @@ export type DutyTrackerValue = {
   queued: number;
   lastError: string | null;
   lastSeenAt: string | null;
+  lastAccuracy: number | null;
+  trackingEnabled: boolean;
   overrideActive: boolean;
   permission: DutyPerm;
   failure: DutyFailure;

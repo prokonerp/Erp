@@ -21,7 +21,7 @@ import { CONSENT_REQUIRED } from "@/lib/field-location.functions";
  */
 export function LocationGate({ children }: { children: ReactNode }) {
   const { gate, headline, hint, retry, retrying } = useLocationGate();
-  const { onDuty, start, lastError, queued } = useDutyTracker();
+  const { onDuty, start, lastError, queued, trackingEnabled } = useDutyTracker();
   const [consentOpen, setConsentOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -76,6 +76,17 @@ export function LocationGate({ children }: { children: ReactNode }) {
   if (!hardBlocked && !writeBlocked) {
     return (
       <div aria-live="polite">
+        {!trackingEnabled && (
+          <div
+            role="status"
+            className="mb-3 flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2"
+          >
+            <MapPinOff className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <p className="flex-1 text-xs text-muted-foreground">
+              Location tracking is disabled by your admin — duty and reports work normally.
+            </p>
+          </div>
+        )}
         {gate === "off_duty" && (
           <div
             role="status"

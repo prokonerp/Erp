@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ShieldAlert } from "lucide-react";
+import { Power, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -14,7 +14,12 @@ import {
 import { isFixFresh, LOCATION_GRACE_MS } from "@/lib/field-location";
 import { formatISTTime } from "@/lib/time";
 import { supabase } from "@/integrations/supabase/client";
-import { grantGateOverride, revokeGateOverride } from "@/lib/field-location.functions";
+import {
+  getTrackingSettings,
+  grantGateOverride,
+  revokeGateOverride,
+  setTrackingEnabled,
+} from "@/lib/field-location.functions";
 
 type OverrideRow = {
   id: string;
@@ -38,6 +43,7 @@ export function LiveRoster({
   roster,
   loading,
   warnings,
+  loadError,
   selectedId,
   onSelect,
   nowMs,
@@ -46,6 +52,7 @@ export function LiveRoster({
   roster: LiveEngineer[];
   loading: boolean;
   warnings: MovementWarning[];
+  loadError: string | null;
   selectedId: string | null;
   onSelect: (employeeId: string | null) => void;
   nowMs: number;
@@ -56,6 +63,37 @@ export function LiveRoster({
   const [minutes, setMinutes] = useState<number>(30);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [trackingOn, setTrackingOn] = useState<boolean | null>(null);
+  const [armKill, setArmKill] = useState(false);
+
+  useEffect(() => {
+    getTrackingSettings()
+      .then((s) => setTrackingOn(s.tracking_enabled))
+      .catch(() => setTrackingOn(null));
+  }, []);
+
+  const flipTracking = async () => {
+    if (trackingOn === null) return;
+    if (!armKill) {
+      setArmKill(true);
+      window.setTimeout(() => setArmKill(false), 4000);
+      return;
+    }
+    setArmKill(false);
+    setBusy(true);
+    try {
+      const res = await setTrackingEnabled({ data: { enabled: !trackingOn } });
+      setTrackingOn(res.tracking_enabled);
+      toast.success(
+        res.tracking_enabled ? "Location tracking enabled" : "Location tracking disabled",
+      );
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Switch failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const loadOverrides = async () => {
     try {
@@ -113,6 +151,26 @@ export function LiveRoster({
   };
 
   if (loading) return <TableSkeleton rows={6} colCount={3} />;
+  if (loadError) {
+    return (
+      <div className="space-y-2">
+        <AdminWarnings lists={[warnings]} />
+        <div
+          role="alert"
+          className="rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-[13px] text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+        >
+          <p className="font-semibold">Live roster failed to load</p>
+          <p className="mt-0.5 break-words font-mono text-xs">{loadError}</p>
+          {/42P01|42703|schema cache|does not exist/i.test(loadError) && (
+            <p className="mt-1 text-xs">
+              The location tables are missing — apply migration 20260928000001, then run{" "}
+              <code>NOTIFY pgrst, &apos;reload schema&apos;;</code>
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (roster.length === 0) {
     return (
       <>
@@ -125,22 +183,58 @@ export function LiveRoster({
     );
   }
 
+  const onListKey = (ev: React.KeyboardEvent) => {
+    if (ev.key !== "j" && ev.key !== "k" && ev.key !== "J" && ev.key !== "K") return;
+    ev.preventDefault();
+    const dir = ev.key.toLowerCase() === "j" ? 1 : -1;
+    const idx = roster.findIndex((e) => e.employee_id === selectedId);
+    const next = roster[(idx + dir + roster.length) % roster.length];
+    if (next) onSelect(next.employee_id);
+  };
+
   return (
     <div className="space-y-2">
       <AdminWarnings lists={[warnings]} />
-      <ul className="space-y-2" aria-label="Engineers on duty">
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+        <Power
+          className={`h-4 w-4 shrink-0 ${trackingOn === false ? "text-red-500" : "text-muted-foreground"}`}
+          aria-hidden="true"
+        />
+        <span className="flex-1 text-xs text-muted-foreground">
+          {trackingOn === null
+            ? "Tracking switch: unknown"
+            : trackingOn
+              ? "Location tracking is on"
+              : "Location tracking is OFF — gate passes through"}
+        </span>
+        <Button
+          variant={trackingOn === false ? "default" : "ghost"}
+          size="sm"
+          disabled={busy || trackingOn === null}
+          onClick={() => void flipTracking()}
+          title={armKill ? "Tap again to confirm" : "Toggle the global kill switch"}
+        >
+          {armKill ? "Confirm?" : trackingOn === false ? "Enable" : "Disable"}
+        </Button>
+      </div>
+      <ul className="space-y-2" aria-label="Engineers on duty" onKeyDown={onListKey}>
         {roster.map((e) => {
           const fresh = isFreshLive(e, nowMs);
           const active = selectedId === e.employee_id;
           const ov = overrides.find((o) => o.employee_id === e.employee_id);
           return (
-            <li key={e.employee_id} className="rounded-xl border border-border bg-card">
+            <li
+              key={e.employee_id}
+              className={`rounded-xl border border-border bg-card transition-colors duration-75 hover:bg-muted/40 ${
+                active ? "border-l-2 border-l-primary bg-primary/[0.06]" : ""
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => onSelect(active ? null : e.employee_id)}
                 aria-pressed={active}
                 aria-current={active ? "true" : undefined}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${fresh ? "bg-green-500" : "bg-muted-foreground/40"}`}
@@ -148,8 +242,11 @@ export function LiveRoster({
                   aria-hidden="true"
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-foreground">
-                    {e.name ?? "Unknown engineer"}
+                  <span className="block truncate text-[13px] font-medium text-foreground">
+                    {e.name ?? "Unknown engineer"}{" "}
+                    <span className="font-mono text-[11px] font-normal text-muted-foreground">
+                      {e.employee_id.slice(0, 8)}
+                    </span>
                   </span>
                   <span className="block text-xs text-muted-foreground tabular-nums">
                     {e.on_duty ? "On duty" : "Off duty"} · last seen{" "}

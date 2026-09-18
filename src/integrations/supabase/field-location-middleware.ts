@@ -76,6 +76,21 @@ export const requireFieldLocation = createMiddleware({ type: "function" })
       return failClosed("Location check unavailable. Turn on GPS and internet, then try again.");
     }
 
+    // Kill switch: tracking disabled globally → pass through (duty start
+    // and pings refuse separately with TRACKING_DISABLED).
+    try {
+      const { data: settings } = await admin
+        .from("engineer_location_settings")
+        .select("tracking_enabled")
+        .eq("id", 1)
+        .maybeSingle();
+      if (settings && (settings as { tracking_enabled: boolean }).tracking_enabled === false) {
+        return next();
+      }
+    } catch {
+      // Settings unreadable → switch is effectively on; continue to the gate.
+    }
+
     // F2: admins are exempt — the gate targets engineer writes, never review.
     try {
       const { data: isAdmin, error: roleErr } = await admin.rpc("has_role", {

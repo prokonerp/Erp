@@ -142,6 +142,12 @@ describe("evaluateGateState", () => {
       expect(evaluateGateState({ ...base, ...patch })).toBe(expected);
     });
   }
+  it("treats a bad-accuracy fix as no_fix, never ok", () => {
+    expect(evaluateGateState({ ...base, accuracy: 500 })).toBe("no_fix");
+  });
+  it("ignores a good-accuracy fix (stays ok)", () => {
+    expect(evaluateGateState({ ...base, accuracy: 12 })).toBe("ok");
+  });
   it("override wins over stale but never over off-duty", () => {
     expect(
       evaluateGateState({

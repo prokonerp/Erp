@@ -45,6 +45,8 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
   const [queued, setQueued] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
+  const [lastAccuracy, setLastAccuracy] = useState<number | null>(null);
+  const [trackingEnabled, setTrackingEnabled] = useState(true);
   const [overrideActive, setOverrideActive] = useState(false);
   const [permission, setPermission] = useState<DutyPerm>("checking");
   const [failure, setFailure] = useState<DutyFailure>(null);
@@ -118,7 +120,10 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
         open_session: { id: string; started_at: string } | null;
         consented: boolean;
         override_active: boolean;
+        tracking_enabled: boolean;
       };
+
+  const stoppedRef = useRef(false);
 
   const applyStatus = useCallback((s: LiveStatusShape) => {
     if (!s.linked) {
@@ -127,13 +132,22 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
       return { consented: false, onDuty: false };
     }
     const duty = !!s.live?.on_duty && !!s.open_session;
+    // Reaped elsewhere (another device, auto-close, reaper cron): stop the
+    // local watch and say so — don't just flip the pill silently.
+    if (snapRef.current.onDuty && !duty && !stoppedRef.current) {
+      stopWatch();
+      setLastError("Duty session ended (auto-closed or another device).");
+    }
     setOnDuty(duty);
     setSessionId(s.open_session?.id ?? null);
     setConsented(s.consented);
     setLastSeenAt(s.live?.last_seen_at ?? null);
+    setLastAccuracy(s.live?.last_accuracy_m ?? null);
+    setTrackingEnabled(s.tracking_enabled !== false);
     setOverrideActive(s.override_active);
-    setLastError(null);
+    if (duty) setLastError(null);
     return { consented: s.consented, onDuty: duty };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refresh = useCallback(async () => {
@@ -343,6 +357,7 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
         throw err;
       }
       setLastError(null);
+      stoppedRef.current = false;
       const res = await startFn({ data: { device_label: deviceLabel } });
       setSessionId(res.session_id);
       setOnDuty(true);
@@ -353,6 +368,7 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
   );
 
   const stop = useCallback(async () => {
+    stoppedRef.current = true;
     setLastError(null);
     try {
       await flush();
@@ -409,6 +425,8 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
       queued,
       lastError,
       lastSeenAt,
+      lastAccuracy,
+      trackingEnabled,
       overrideActive,
       permission,
       failure,
@@ -425,6 +443,8 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
       queued,
       lastError,
       lastSeenAt,
+      lastAccuracy,
+      trackingEnabled,
       overrideActive,
       permission,
       failure,

@@ -2,11 +2,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { fetchMyIdentityAdmin } from "@/lib/engineer-identity";
-import { nextLiveStatus, type LiveRow } from "@/lib/field-location";
+import { flagSuspiciousFix, haversineM, nextLiveStatus, type LiveRow } from "@/lib/field-location";
 import { reportDbError } from "@/lib/format-error";
 
 export const CONSENT_REQUIRED = "CONSENT_REQUIRED";
 export const NOT_LINKED = "ENGINEER_NOT_LINKED";
+export const TRACKING_DISABLED = "TRACKING_DISABLED";
 
 /** Idle open sessions older than this are auto-closed on the next start. */
 const STALE_SESSION_IDLE_MS = 2 * 3_600_000;
@@ -112,6 +113,32 @@ function isUniqueViolation(e: unknown): boolean {
 }
 
 /**
+ * Kill switch (engineer_location_settings id=1). Missing row or lookup
+ * error means enabled — the switch must never brick the app when its own
+ * table is absent; gate lookups still fail closed independently.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- location tables pending generated types
+async function isTrackingEnabled(admin: { from: (t: string) => any }): Promise<boolean> {
+  try {
+    const { data, error } = await admin
+      .from("engineer_location_settings")
+      .select("tracking_enabled")
+      .eq("id", 1)
+      .maybeSingle();
+    if (error || !data) return true;
+    return (data as { tracking_enabled: boolean }).tracking_enabled !== false;
+  } catch {
+    return true;
+  }
+}
+
+function trackingDisabledError(): Error {
+  const err = new Error("Location tracking is disabled by your admin.");
+  (err as Error & { code: string }).code = TRACKING_DISABLED;
+  return err;
+}
+
+/**
  * getMyLiveStatus — the engineer's own gate inputs: live row, open session,
  * consent state, and any active manager override. Admins get linked:false
  * (they use the admin roster, never this path).
@@ -125,7 +152,10 @@ export const getMyLiveStatus = createServerFn({ method: "GET" })
         rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown }>;
       }
     ).rpc("has_role", { _user_id: context.userId, _role: "admin" });
-    if (isAdmin) return { linked: false as const, isAdmin: true as const };
+    if (isAdmin) {
+      const trackingEnabled = await isTrackingEnabled(admin);
+      return { linked: false as const, isAdmin: true as const, tracking_enabled: trackingEnabled };
+    }
     const employeeId = await myEmployeeId(admin, context);
     const { data: live, error: liveErr } = await admin
       .from("engineer_live_status")
@@ -143,8 +173,10 @@ export const getMyLiveStatus = createServerFn({ method: "GET" })
       .gt("expires_at", new Date().toISOString())
       .limit(1);
     if (ovErr) throw new Error(reportDbError("override check", ovErr));
+    const trackingEnabled = await isTrackingEnabled(admin);
     return {
       linked: true as const,
+      tracking_enabled: trackingEnabled,
       employee_id: employeeId,
       live: (live ?? null) as {
         on_duty: boolean;
@@ -175,6 +207,7 @@ export const startDutySession = createServerFn({ method: "POST" })
   .inputValidator((input) => startDutyInput.parse(input))
   .handler(async ({ data, context }) => {
     const admin = await getAdmin();
+    if (!(await isTrackingEnabled(admin))) throw trackingDisabledError();
     const employeeId = await myEmployeeId(admin, context);
     if (!(await hasConsented(admin, employeeId))) {
       const err = new Error("Location consent is required before starting duty.");
@@ -264,6 +297,7 @@ export const recordPings = createServerFn({ method: "POST" })
   .inputValidator((input) => recordPingsInput.parse(input))
   .handler(async ({ data, context }) => {
     const admin = await getAdmin();
+    if (!(await isTrackingEnabled(admin))) throw trackingDisabledError();
     const employeeId = await myEmployeeId(admin, context);
     const { count, error: countErr } = await admin
       .from("engineer_location_pings")
@@ -293,6 +327,45 @@ export const recordPings = createServerFn({ method: "POST" })
       .select("client_ping_id");
     if (error) throw new Error(reportDbError("record pings", error));
     const latest = [...data.pings].sort((a, b) => (a.captured_at < b.captured_at ? 1 : -1))[0];
+    // Spoof screen (advisory only — never blocks). Best-effort: a screen
+    // failure must not fail the ping write it annotates.
+    try {
+      const batchMin = [...data.pings].map((p) => p.captured_at).sort()[0];
+      const { data: prev } = await admin
+        .from("engineer_location_pings")
+        .select("lat, long, captured_at")
+        .eq("employee_id", employeeId)
+        .lt("captured_at", batchMin)
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const prevRow = prev as { lat: number; long: number; captured_at: string } | null;
+      let speedKmh: number | null = null;
+      if (prevRow) {
+        const dtH = (Date.parse(latest.captured_at) - Date.parse(prevRow.captured_at)) / 3_600_000;
+        if (dtH > 0) {
+          speedKmh = haversineM(prevRow.lat, prevRow.long, latest.lat, latest.long) / 1000 / dtH;
+        }
+      }
+      const flags = flagSuspiciousFix({
+        accuracy: latest.accuracy,
+        speedKmh,
+        clockSkewMs: Date.now() - Date.parse(latest.captured_at),
+      });
+      if (flags.length > 0) {
+        const { error: flagErr } = await admin
+          .from("engineer_location_pings")
+          .update({ spoof_flags: flags })
+          .eq("employee_id", employeeId)
+          .in(
+            "client_ping_id",
+            data.pings.map((p) => p.client_ping_id),
+          );
+        if (flagErr) throw flagErr;
+      }
+    } catch {
+      // Advisory annotation only — the pings are already stored.
+    }
     const { data: currentLive } = await admin
       .from("engineer_live_status")
       .select("on_duty, last_seen_at, last_lat, last_long, last_accuracy_m, session_id")
@@ -448,4 +521,42 @@ export const revokeGateOverride = createServerFn({ method: "POST" })
     });
     if (auditErr) console.error("[revokeGateOverride] audit insert failed:", auditErr.message);
     return { ok: true as const };
+  });
+
+/** getTrackingSettings — kill-switch state for the admin Movement page. */
+export const getTrackingSettings = createServerFn({ method: "GET" })
+  .middleware([requireActiveUser])
+  .handler(async ({ context }) => {
+    await assertOverrideManager(context);
+    const admin = await getAdmin();
+    return { tracking_enabled: await isTrackingEnabled(admin) };
+  });
+
+const setTrackingInput = z.object({
+  enabled: z.boolean(),
+});
+
+/**
+ * setTrackingEnabled — global kill switch (audited). Off = gate passes
+ * through, duty start and pings refuse with TRACKING_DISABLED.
+ */
+export const setTrackingEnabled = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
+  .inputValidator((input) => setTrackingInput.parse(input))
+  .handler(async ({ data, context }) => {
+    await assertOverrideManager(context);
+    const admin = await getAdmin();
+    const { error } = await admin
+      .from("engineer_location_settings")
+      .upsert({ id: 1, tracking_enabled: data.enabled, updated_at: new Date().toISOString() });
+    if (error) throw new Error(reportDbError("set tracking switch", error));
+    const { error: auditErr } = await admin.from("engineer_admin_audit").insert({
+      actor: context.userId,
+      action: data.enabled ? "tracking.enable" : "tracking.disable",
+      entity: "engineer_location_settings",
+      entity_id: null,
+      after: { tracking_enabled: data.enabled },
+    });
+    if (auditErr) console.error("[setTrackingEnabled] audit insert failed:", auditErr.message);
+    return { ok: true as const, tracking_enabled: data.enabled };
   });

@@ -19,12 +19,20 @@ function formatKm(m: number | null): string {
  */
 export function DayRouteView({ employeeId, name }: { employeeId: string; name: string | null }) {
   const [day, setDay] = useState(() => istDateKey());
-  const { data, isLoading, warnings } = useEngineerDayRoute(employeeId, day);
+  const { data, isLoading, warnings, loadError } = useEngineerDayRoute(employeeId, day);
 
   const route = useMemo(
     () => (data?.pings ?? []).map((p) => [p.lat, p.long] as [number, number]),
     [data],
   );
+  // Tickets with any flagged ping (impossible fix data) — advisory markers.
+  const flaggedTickets = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of data?.pings ?? []) {
+      if (p.ticket_id && p.spoof_flags.length > 0) set.add(p.ticket_id);
+    }
+    return set;
+  }, [data]);
   const stops = useMemo(
     () =>
       (data?.movement?.sites ?? [])
@@ -34,8 +42,9 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
           lat: s.lat as number,
           long: s.long as number,
           label: s.ticket_id ? `Ticket ${s.ticket_id.slice(0, 8)}` : `Stop ${i + 1}`,
+          flagged: !!s.ticket_id && flaggedTickets.has(s.ticket_id),
         })),
-    [data],
+    [data, flaggedTickets],
   );
 
   return (
@@ -67,7 +76,15 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
 
       <AdminWarnings lists={[warnings]} />
 
-      {isLoading ? (
+      {loadError ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-[13px] text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+        >
+          <p className="font-semibold">Day route failed to load</p>
+          <p className="mt-0.5 break-words font-mono text-xs">{loadError}</p>
+        </div>
+      ) : isLoading ? (
         <TableSkeleton rows={4} colCount={2} />
       ) : route.length === 0 ? (
         <EmptyState
@@ -76,28 +93,46 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
         />
       ) : (
         <>
-          <MovementMap pins={[]} route={route} stops={stops} height={340} />
+          <MovementMap
+            pins={[]}
+            route={route}
+            stops={stops}
+            height={340}
+            emptyHint="No fixes this day"
+          />
           {stops.length > 0 && (
             <Card>
               <CardContent className="p-3">
                 <ol className="space-y-1.5">
-                  {(data?.movement?.sites ?? []).map((s, i) => (
-                    <li key={`${s.ticket_id ?? "na"}-${i}`} className="flex gap-2 text-sm">
-                      <span
-                        className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground"
-                        aria-hidden="true"
-                      >
-                        {i + 1}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                        {s.ticket_id ? `Ticket ${s.ticket_id.slice(0, 8)}…` : "Untagged fix"}
-                        {s.arrived_at && <> · arrived {formatISTTime(s.arrived_at)}</>}
-                        {s.departed_at && s.departed_at !== s.arrived_at && (
-                          <> · departed {formatISTTime(s.departed_at)}</>
-                        )}
-                      </span>
-                    </li>
-                  ))}
+                  {(data?.movement?.sites ?? []).map((s, i) => {
+                    const flagged = !!s.ticket_id && flaggedTickets.has(s.ticket_id);
+                    return (
+                      <li key={`${s.ticket_id ?? "na"}-${i}`} className="flex gap-2 text-[13px]">
+                        <span
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+                            flagged
+                              ? "bg-amber-100 text-amber-800 ring-2 ring-amber-600"
+                              : "bg-primary text-primary-foreground"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {flagged ? "!" : i + 1}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground tabular-nums">
+                          {s.ticket_id ? (
+                            <span className="font-mono">Ticket {s.ticket_id.slice(0, 8)}…</span>
+                          ) : (
+                            "Untagged fix"
+                          )}
+                          {flagged && <span className="text-amber-700"> · flagged</span>}
+                          {s.arrived_at && <> · arrived {formatISTTime(s.arrived_at)}</>}
+                          {s.departed_at && s.departed_at !== s.arrived_at && (
+                            <> · departed {formatISTTime(s.departed_at)}</>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ol>
               </CardContent>
             </Card>

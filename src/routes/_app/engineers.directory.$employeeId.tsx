@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Bell, FileText, IndianRupee, Truck, UserX, Wallet } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
@@ -122,6 +122,12 @@ function EngineerDetailPage() {
   const ticketsQuery = useEngineerTickets(employeeId);
   const custodyQuery = useEngineerCustody(employeeId);
   const liveQuery = useLiveRoster();
+  // Single shared tick for the badge (no per-row interval).
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
   const liveRow = useMemo(
     () => liveQuery.data?.find((e) => e.employee_id === employeeId) ?? null,
     [liveQuery.data, employeeId],
@@ -251,7 +257,7 @@ function EngineerDetailPage() {
         actions={
           engineer ? (
             <span className="flex items-center gap-2">
-              <LiveBadge live={liveRow} />
+              <LiveBadge live={liveRow} nowMs={nowMs} />
               {engineer.active ? (
                 <StatusBadge tone="success">Active</StatusBadge>
               ) : (

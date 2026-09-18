@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { ModuleGate } from "@/components/ModuleGate";
+import { MovementLiveProvider } from "@/hooks/MovementLiveProvider";
 import { useAttentionQueue } from "@/hooks/useEngineerAdmin";
 import {
   LayoutDashboard,
@@ -48,33 +49,35 @@ function EngineersLayout() {
   const attentionCount = attentionQ.data.length;
   return (
     <ModuleGate module="engineers" action="read" title="Engineers — access restricted">
-      <nav aria-label="Engineer sections" className="print:hidden">
-        <div className="flex gap-1 mb-4 border-b pb-2 overflow-x-auto">
-          {TABS.map((t) => {
-            const active = t.exact ? loc.pathname === t.to : loc.pathname.startsWith(t.to);
-            const badge = t.to === "/engineers/attention" ? attentionCount : 0;
-            return (
-              <Link
-                key={t.to}
-                to={t.to}
-                aria-current={active ? "page" : undefined}
-                className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Button variant={active ? "default" : "ghost"} size="sm">
-                  <t.icon className="h-4 w-4 mr-1" aria-hidden="true" />
-                  {t.label}
-                  {badge > 0 && (
-                    <span className="ml-1 rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground">
-                      {badge}
-                    </span>
-                  )}
-                </Button>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-      <Outlet />
+      <MovementLiveProvider>
+        <nav aria-label="Engineer sections" className="print:hidden">
+          <div className="flex gap-1 mb-4 border-b pb-2 overflow-x-auto">
+            {TABS.map((t) => {
+              const active = t.exact ? loc.pathname === t.to : loc.pathname.startsWith(t.to);
+              const badge = t.to === "/engineers/attention" ? attentionCount : 0;
+              return (
+                <Link
+                  key={t.to}
+                  to={t.to}
+                  aria-current={active ? "page" : undefined}
+                  className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Button variant={active ? "default" : "ghost"} size="sm">
+                    <t.icon className="h-4 w-4 mr-1" aria-hidden="true" />
+                    {t.label}
+                    {badge > 0 && (
+                      <span className="ml-1 rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground">
+                        {badge}
+                      </span>
+                    )}
+                  </Button>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+        <Outlet />
+      </MovementLiveProvider>
     </ModuleGate>
   );
 }

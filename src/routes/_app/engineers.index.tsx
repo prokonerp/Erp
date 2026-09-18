@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Bell, ChevronRight, Ticket, Truck, Users } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
@@ -38,6 +38,7 @@ type RosterRow = {
   attentionCount: number;
   hasHigh: boolean;
   live: LiveEngineer | null;
+  nowMs: number;
 };
 
 const ROSTER_COLUMNS: ColumnDef<RosterRow>[] = [
@@ -84,7 +85,7 @@ const ROSTER_COLUMNS: ColumnDef<RosterRow>[] = [
   {
     key: "live",
     header: "Live",
-    render: (r) => <LiveBadge live={r.live} />,
+    render: (r) => <LiveBadge live={r.live} nowMs={r.nowMs} />,
   },
   {
     key: "attentionCount",
@@ -122,6 +123,12 @@ function EngineersIndex() {
   const rosterQuery = useEngineerRoster();
   const attentionQuery = useAttentionQueue();
   const liveQuery = useLiveRoster();
+  // Single shared tick for every badge (no per-row intervals).
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const liveById = useMemo(() => {
     const map = new Map<string, LiveEngineer>();
@@ -166,9 +173,10 @@ function EngineersIndex() {
           attentionCount: slot?.count ?? 0,
           hasHigh: slot?.hasHigh ?? false,
           live: liveById.get(e.employee_id) ?? null,
+          nowMs,
         };
       }),
-    [rosterQuery.roster, attentionByEngineer, liveById],
+    [rosterQuery.roster, attentionByEngineer, liveById, nowMs],
   );
 
   // Engineers on the roster with no portal login (migration 20260925000007).

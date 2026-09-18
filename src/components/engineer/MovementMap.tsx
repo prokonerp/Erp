@@ -16,11 +16,17 @@ export function MovementMap({
   route,
   stops,
   height,
+  selectedId,
+  onPinSelect,
+  emptyHint,
 }: {
   pins: MapPin[];
   route?: Array<[number, number]>;
   stops?: MapStop[];
   height?: number;
+  selectedId?: string | null;
+  onPinSelect?: (id: string) => void;
+  emptyHint?: string;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -29,7 +35,15 @@ export function MovementMap({
   if (!mounted) return <CardSkeleton className="min-h-[320px]" />;
   return (
     <Suspense fallback={<CardSkeleton className="min-h-[320px]" />}>
-      <LazyInner pins={pins} route={route} stops={stops} height={height} />
+      <LazyInner
+        pins={pins}
+        route={route}
+        stops={stops}
+        height={height}
+        selectedId={selectedId}
+        onPinSelect={onPinSelect}
+        emptyHint={emptyHint}
+      />
     </Suspense>
   );
 }

@@ -34,6 +34,17 @@ function EngineersMovementPage() {
     }
   }, [roster, selectedId]);
 
+  const stats = useMemo(() => {
+    let onDuty = 0;
+    let stale = 0;
+    for (const e of roster) {
+      if (!e.on_duty) continue;
+      onDuty += 1;
+      if (!e.last_seen_at || nowMs - Date.parse(e.last_seen_at) > 15 * 60_000) stale += 1;
+    }
+    return { onDuty, stale, off: roster.length - onDuty };
+  }, [roster, nowMs]);
+
   const pins = useMemo(
     () =>
       roster
@@ -58,17 +69,48 @@ function EngineersMovementPage() {
         title="Movement"
         description="On-duty positions and day routes — positions render as “last seen”, never live dots"
       />
+      <div
+        role="status"
+        aria-label="Roster summary"
+        className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-border bg-card px-3 py-2 text-[13px] tabular-nums"
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-green-600" aria-hidden="true" />
+          <strong className="font-semibold">{stats.onDuty}</strong>
+          <span className="text-muted-foreground">on duty</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
+          <strong className="font-semibold">{stats.stale}</strong>
+          <span className="text-muted-foreground">stale</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-muted-foreground/40" aria-hidden="true" />
+          <strong className="font-semibold">{stats.off}</strong>
+          <span className="text-muted-foreground">off</span>
+        </span>
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <MovementMap pins={pins} height={380} />
-        <LiveRoster
-          roster={roster}
-          loading={live.isLoading}
-          warnings={live.warnings}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          nowMs={nowMs}
-          onChanged={() => void live.refetch()}
-        />
+        <div className="order-1">
+          <MovementMap
+            pins={pins}
+            height={380}
+            selectedId={selectedId}
+            onPinSelect={(id) => setSelectedId((s) => (s === id ? null : id))}
+          />
+        </div>
+        <div className="order-2">
+          <LiveRoster
+            roster={roster}
+            loading={live.isLoading}
+            warnings={live.warnings}
+            loadError={live.loadError}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            nowMs={nowMs}
+            onChanged={() => void live.refetch()}
+          />
+        </div>
       </div>
       {selected && <DayRouteView employeeId={selected.employee_id} name={selected.name} />}
     </div>
