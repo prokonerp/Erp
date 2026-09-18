@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { CalendarDays, Flag, IndianRupee, Route as RouteIcon } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { StatCard } from "@/components/crm/StatCard";
 import { DateFilterBar } from "@/components/DateFilterBar";
+import { ExportButtons } from "@/components/ExportButtons";
 import { AdminWarnings } from "@/components/engineer/AdminWarnings";
 import { EngineerSelect } from "@/components/engineer/EngineerSelect";
-import { ConveyanceMatrixTable } from "@/components/engineer/ConveyanceMatrixTable";
-import { ExpenseLinesTable } from "@/components/engineer/ExpenseLinesTable";
+import { ConveyanceDayTable, DAY_EXPORT_COLUMNS } from "@/components/engineer/ConveyanceDayTable";
 import { useEngineerConveyance, useEngineerRoster } from "@/hooks/useEngineerAdmin";
+import { adminEngKeys } from "@/lib/queryKeys";
 import { rateInForce, rosterNameMap } from "@/lib/engineersAdmin";
 import type { DateRange, RangeMode } from "@/lib/dateRange";
-import { currentMonth, resolveRange } from "@/lib/dateRange";
+import { currentWeek, resolveRange } from "@/lib/dateRange";
 import { istDateKey } from "@/lib/time";
 
 export const Route = createFileRoute("/_app/engineers/conveyance")({
@@ -19,16 +19,39 @@ export const Route = createFileRoute("/_app/engineers/conveyance")({
   head: () => ({ meta: [{ title: "Conveyance — Prokon" }] }),
 });
 
-function formatKm(km: number | null): string {
-  return km == null ? "—" : `${km.toFixed(1)} km`;
+/** Dense inline stat — the four headline numbers without card chrome. */
+function CompactStat({
+  label,
+  value,
+  warn,
+}: {
+  label: string;
+  value: string | number;
+  warn?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-lg border px-3 py-2 ${
+        warn ? "border-amber-200 bg-amber-50" : "border-border bg-card"
+      }`}
+    >
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className={`text-base font-semibold tabular-nums ${warn ? "text-amber-800" : ""}`}>
+        {value}
+      </p>
+    </div>
+  );
 }
 
-/** One engineer's conveyance: daily odometer matrix + expenses for the window. */
+/** One engineer's conveyance: compact stats + day-wise review table. */
 function EngineerConveyancePage() {
+  const queryClient = useQueryClient();
   const rosterQuery = useEngineerRoster();
   const [employeeId, setEmployeeId] = useState<string>("");
-  const [mode, setMode] = useState<RangeMode>("month");
-  const [range, setRange] = useState<DateRange>(() => currentMonth());
+  const [mode, setMode] = useState<RangeMode>("week");
+  const [range, setRange] = useState<DateRange>(() => currentWeek());
 
   useEffect(() => {
     if (employeeId === "" && rosterQuery.roster.length > 0) {
@@ -44,10 +67,15 @@ function EngineerConveyancePage() {
   );
 
   const nameById = useMemo(() => rosterNameMap(rosterQuery.roster), [rosterQuery.roster]);
+  const engineerName =
+    employeeId === "" ? "" : (nameById.get(employeeId) ?? employeeId);
 
-  const matrix = conv.data.matrix;
-  const totalKm = useMemo(() => matrix.reduce((sum, r) => sum + (r.km ?? 0), 0), [matrix]);
-  const flaggedCount = useMemo(() => matrix.filter((r) => r.flags.length > 0).length, [matrix]);
+  const rows = conv.data.rows;
+  const totalKm = useMemo(() => rows.reduce((sum, r) => sum + (r.km ?? 0), 0), [rows]);
+  const flaggedCount = useMemo(
+    () => rows.filter((r) => r.flags.length > 0 || r.adminStatus === "Flagged").length,
+    [rows],
+  );
   const rate = rateInForce(
     conv.data.rates,
     employeeId === "" ? null : employeeId,
@@ -56,11 +84,20 @@ function EngineerConveyancePage() {
 
   const loading = rosterQuery.isLoading || conv.isLoading;
 
+  function handleReviewChanged() {
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.conveyancePrefix });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.payablesAllPrefix });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.settlementsPrefix });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.attentionPrefix });
+  }
+
+  const exportName = `conveyance_${engineerName.replace(/[^a-z0-9]+/gi, "_") || "engineer"}_${conv.data.window.from}_${conv.data.window.to}`;
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="Conveyance"
-        description={`Daily odometer matrix and expenses for ${conv.data.window.from} → ${conv.data.window.to}.`}
+        description={`Day-wise review for ${conv.data.window.from} → ${conv.data.window.to}.`}
       />
 
       <AdminWarnings lists={[rosterQuery.warnings, conv.warnings]} />
@@ -76,36 +113,14 @@ function EngineerConveyancePage() {
         <DateFilterBar mode={mode} setMode={setMode} range={range} setRange={setRange} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          label="Days logged"
-          value={matrix.length}
-          icon={CalendarDays}
-          loading={loading}
-          hint="Days in the matrix"
-        />
-        <StatCard
-          label="Total km"
-          value={`${totalKm.toFixed(1)} km`}
-          icon={RouteIcon}
-          loading={loading}
-          hint="Sum of daily km"
-        />
-        <StatCard
-          label="Flagged days"
-          value={flaggedCount}
-          icon={Flag}
-          tone={flaggedCount > 0 ? "warning" : "default"}
-          loading={loading}
-          hint="Rows needing review"
-        />
-        <StatCard
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <CompactStat label="Days logged" value={loading ? "…" : rows.length} />
+        <CompactStat label="Total km" value={loading ? "…" : `${totalKm.toFixed(1)} km`} />
+        <CompactStat label="Flagged days" value={loading ? "…" : flaggedCount} warn={flaggedCount > 0} />
+        <CompactStat
           label="Rate in force"
-          value={rate == null ? "None" : `₹${rate}/km`}
-          icon={IndianRupee}
-          tone={rate == null ? "warning" : "default"}
-          loading={loading}
-          hint="Per-km rate at window end"
+          value={loading ? "…" : rate == null ? "None" : `₹${rate}/km`}
+          warn={rate == null}
         />
       </div>
 
@@ -114,7 +129,7 @@ function EngineerConveyancePage() {
           role="note"
           className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
         >
-          No conveyance rate in force for {nameById.get(employeeId) ?? employeeId} —{" "}
+          No conveyance rate in force for {engineerName} —{" "}
           <Link
             to="/engineers/rates"
             className="font-medium underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -125,17 +140,28 @@ function EngineerConveyancePage() {
         </p>
       )}
 
-      <section aria-label="Day matrix">
-        <ConveyanceMatrixTable matrix={matrix} isLoading={loading} />
-      </section>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {rows.length} day{rows.length === 1 ? "" : "s"} · {conv.data.window.from} →{" "}
+          {conv.data.window.to}
+        </p>
+        <ExportButtons
+          name={exportName}
+          title={`Conveyance — ${engineerName} (${conv.data.window.from} → ${conv.data.window.to})`}
+          rows={rows}
+          columns={DAY_EXPORT_COLUMNS}
+          disabled={loading || rows.length === 0}
+        />
+      </div>
 
-      <section aria-label="Expenses">
-        <ExpenseLinesTable expenses={conv.data.expenses} isLoading={loading} />
+      <section aria-label="Day-wise conveyance">
+        <ConveyanceDayTable
+          engineerId={employeeId === "" ? null : employeeId}
+          rows={rows}
+          isLoading={loading}
+          onReviewChanged={handleReviewChanged}
+        />
       </section>
-
-      <p className="text-xs text-muted-foreground tabular-nums">
-        {formatKm(totalKm)} total{rate != null ? ` × ₹${rate}/km` : " — no rate in force"}.
-      </p>
     </div>
   );
 }

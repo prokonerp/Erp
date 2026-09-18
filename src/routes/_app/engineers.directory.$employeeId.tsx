@@ -284,6 +284,7 @@ function EngineerDetailPage() {
         <h2 className="text-sm font-semibold">Documents</h2>
         <AdminWarnings lists={[docsQuery.warnings]} />
         <DocComplianceGrid
+          docs={docsQuery.data.docs}
           present={docsQuery.data.compliance.present}
           missing={docsQuery.data.compliance.missing}
           isLoading={docsQuery.isLoading}

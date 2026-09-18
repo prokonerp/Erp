@@ -4,17 +4,21 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { adminEngKeys } from "@/lib/queryKeys";
-import { useEngineerPayables, useEngineerRoster } from "@/hooks/useEngineerAdmin";
+import { useEngineerPayables, useEngineerPayablesAll, useEngineerRoster } from "@/hooks/useEngineerAdmin";
 import { DateFilterBar } from "@/components/DateFilterBar";
 import { SettlementDrawer } from "@/components/engineer/SettlementDrawer";
+import { ConveyanceDayTable, DAY_EXPORT_COLUMNS } from "@/components/engineer/ConveyanceDayTable";
+import { ExportButtons } from "@/components/ExportButtons";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { StatCard } from "@/components/crm/StatCard";
 import { Button } from "@/components/ui/button";
 import { AdminWarnings } from "@/components/engineer/AdminWarnings";
 import { EngineerSelect } from "@/components/engineer/EngineerSelect";
-import { payableForPeriod } from "@/lib/engineersAdmin";
+import { payableForPeriod, rosterNameMap } from "@/lib/engineersAdmin";
+import type { ConveyanceDayRow } from "@/lib/engineersAdmin";
+import type { ExportColumn } from "@/lib/exports";
 import type { DateRange, RangeMode } from "@/lib/dateRange";
-import { currentMonth, resolveRange } from "@/lib/dateRange";
+import { currentWeek, resolveRange } from "@/lib/dateRange";
 
 export const Route = createFileRoute("/_app/engineers/expenses")({
   component: EngineerExpensesPage,
@@ -83,8 +87,9 @@ function EngineerExpensesPage() {
   const queryClient = useQueryClient();
   const { roster, isLoading: rosterLoading, warnings: rosterWarnings } = useEngineerRoster();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mode, setMode] = useState<RangeMode>("month");
-  const [range, setRange] = useState<DateRange>(() => currentMonth());
+  const [view, setView] = useState<"single" | "all">("single");
+  const [mode, setMode] = useState<RangeMode>("week");
+  const [range, setRange] = useState<DateRange>(() => currentWeek());
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
@@ -98,6 +103,56 @@ function EngineerExpensesPage() {
     to: effective.to,
   });
   const selected = roster.find((e) => e.employee_id === selectedId) ?? null;
+
+  const all = useEngineerPayablesAll({
+    from: effective.from,
+    to: effective.to,
+    enabled: view === "all",
+  });
+
+  const nameById = useMemo(() => rosterNameMap(roster), [roster]);
+
+  // Roster order first, then any grouped engineer outside the roster.
+  const orderedGroups = useMemo(() => {
+    const byId = new Map(all.groups.map((g) => [g.employeeId, g]));
+    const seen = new Set<string>();
+    const out: { engineerId: string; name: string; group: (typeof all.groups)[0] }[] = [];
+    for (const e of roster) {
+      const g = byId.get(e.employee_id);
+      if (g && !seen.has(e.employee_id)) {
+        seen.add(e.employee_id);
+        out.push({ engineerId: e.employee_id, name: e.name ?? e.employee_id, group: g });
+      }
+    }
+    for (const g of all.groups) {
+      if (!seen.has(g.employeeId)) {
+        seen.add(g.employeeId);
+        out.push({
+          engineerId: g.employeeId,
+          name: nameById.get(g.employeeId) ?? g.employeeId,
+          group: g,
+        });
+      }
+    }
+    return out;
+  }, [roster, all.groups, nameById]);
+
+  const allExportColumns: ExportColumn<{ engineer: string; row: ConveyanceDayRow }>[] =
+    useMemo(
+      () => [
+        { header: "Engineer", get: (r) => r.engineer },
+        ...DAY_EXPORT_COLUMNS.map((c) => ({
+          header: c.header,
+          get: (r: { engineer: string; row: ConveyanceDayRow }) => c.get(r.row),
+        })),
+      ],
+      [],
+    );
+  const allExportRows = useMemo(
+    () =>
+      orderedGroups.flatMap(({ name, group }) => group.rows.map((row) => ({ engineer: name, row }))),
+    [orderedGroups],
+  );
 
   const totals = useMemo(
     () =>
@@ -167,6 +222,13 @@ function EngineerExpensesPage() {
     void refetchSettlements();
   }
 
+  function handleAllReviewChanged() {
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.payablesAllPrefix });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.conveyancePrefix });
+    void queryClient.invalidateQueries({ queryKey: adminEngKeys.attentionPrefix });
+    void all.refetch();
+  }
+
   const settlementWarnings = settlementsWarning
     ? [{ section: "settlements", message: settlementsWarning }]
     : [];
@@ -213,9 +275,37 @@ function EngineerExpensesPage() {
         </Button>
       </div>
 
-      <AdminWarnings lists={[rosterWarnings, payables.warnings, settlementWarnings]} />
+      <AdminWarnings lists={[rosterWarnings, payables.warnings, all.warnings, settlementWarnings]} />
 
-      <div className="grid gap-3 md:grid-cols-[320px_1fr]">
+      <div
+        className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1 sm:max-w-xs"
+        role="tablist"
+        aria-label="Payables view"
+      >
+        {(
+          [
+            { value: "single", label: "Single engineer" },
+            { value: "all", label: "All engineers" },
+          ] as const
+        ).map((v) => (
+          <button
+            key={v.value}
+            type="button"
+            role="tab"
+            aria-selected={view === v.value}
+            onClick={() => setView(v.value)}
+            className={`min-h-[40px] rounded-lg text-sm font-medium ${
+              view === v.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {view === "single" ? (
+        <>
+          <div className="grid gap-3 md:grid-cols-[320px_1fr]">
         <EngineerSelect
           id="expense-engineer"
           value={selectedId ?? ""}
@@ -263,6 +353,60 @@ function EngineerExpensesPage() {
         emptyTitle="No settlements"
         emptyHint="No settlement periods overlap this window — review the current period to create one."
       />
+        </>
+      ) : (
+        <>
+          <DateFilterBar mode={mode} setMode={setMode} range={range} setRange={setRange} />
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {orderedGroups.length} engineer{orderedGroups.length === 1 ? "" : "s"} with
+              activity · {all.window.from} → {all.window.to}
+            </p>
+            <ExportButtons
+              name={`payables_all_${all.window.from}_${all.window.to}`}
+              title={`Payables — all engineers (${all.window.from} → ${all.window.to})`}
+              rows={allExportRows}
+              columns={allExportColumns}
+              disabled={all.isLoading || allExportRows.length === 0}
+            />
+          </div>
+          {all.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading all engineers…</p>
+          ) : orderedGroups.length === 0 ? (
+            <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
+              No conveyance activity for any engineer in {all.window.from} → {all.window.to}.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {orderedGroups.map(({ engineerId, name, group }) => (
+                <section
+                  key={engineerId}
+                  aria-label={`Payables for ${name}`}
+                  className="space-y-2 rounded-lg border p-3"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-sm font-semibold">{name}</h3>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {group.totals.days} day{group.totals.days === 1 ? "" : "s"} ·{" "}
+                      {group.totals.km.toFixed(1)} km · ₹
+                      {group.totals.total.toLocaleString("en-IN")}
+                      {group.totals.flagged > 0
+                        ? ` · ${group.totals.flagged} flagged`
+                        : ""}
+                    </p>
+                  </div>
+                  <ConveyanceDayTable
+                    engineerId={engineerId}
+                    rows={group.rows}
+                    isLoading={false}
+                    onReviewChanged={handleAllReviewChanged}
+                  />
+                </section>
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
       <SettlementDrawer
         open={drawerOpen}

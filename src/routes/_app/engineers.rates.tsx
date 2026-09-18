@@ -36,7 +36,7 @@ function EngineerRatesPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
       const { data, error } = await (supabase as any)
         .from("engineer_conveyance_rates")
-        .select("employee_id, rate_per_km, effective_from")
+        .select("employee_id, rate_per_km, effective_from, notes")
         .eq("employee_id", selectedId!)
         .order("effective_from", { ascending: true });
       if (error) throw new Error(error.message);

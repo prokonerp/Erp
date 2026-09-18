@@ -304,6 +304,9 @@ describe("engineerAdminOverview/custodyLedger", () => {
       part_serial_no: "SN1",
       ticket_id: "t1",
       set_at: "2026-09-01T10:00:00+05:30",
+      stock_type: null,
+      stock_status: null,
+      part_name: null,
     });
     expect(rows[2]).toEqual({
       stock_item_id: null,
@@ -312,6 +315,9 @@ describe("engineerAdminOverview/custodyLedger", () => {
       part_serial_no: null,
       ticket_id: null,
       set_at: null,
+      stock_type: null,
+      stock_status: null,
+      part_name: null,
     });
   });
 

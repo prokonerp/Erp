@@ -20,6 +20,7 @@ export type AdminRate = {
   employee_id?: string | null;
   rate_per_km?: number | string | null;
   effective_from?: string | null;
+  notes?: string | null;
 };
 
 type PayableDay = {
@@ -556,6 +557,10 @@ export type CustodyLedgerRow = {
   part_serial_no: string | null;
   ticket_id: string | null;
   set_at: string | null;
+  /** ims_stock_items.stock_type ("good" | "defective"); absent on legacy RPC rows. */
+  stock_type?: string | null;
+  stock_status?: string | null;
+  part_name?: string | null;
 };
 
 /** Open = anything not Closed/Cancelled (tickets dashboard convention). */
@@ -748,10 +753,161 @@ export function conveyanceMatrix(days: PayableDay[] | null | undefined): Conveya
   return rows;
 }
 
+/** Eng-Ops day review state (migration 20260927000001). */
+export type DayAdminStatus = "Pending" | "Paid" | "Flagged";
+
+export type ConveyanceDayInputDay = PayableDay & {
+  morning_photo_path?: string | null;
+  evening_photo_path?: string | null;
+  admin_status?: string | null;
+  admin_remarks?: unknown;
+};
+
+export type ConveyanceDayPlace = {
+  visited_at?: string | null;
+  note?: string | null;
+};
+
+export type ConveyanceDayRow = {
+  date: string;
+  /** True when a daily-log row exists (Pay/Flag act on it; false on visit/expense-only dates). */
+  hasLog: boolean;
+  morning: number | null;
+  evening: number | null;
+  morningPhoto: string | null;
+  eveningPhoto: string | null;
+  km: number | null;
+  rate: number | null;
+  /** km x rate for the day (0 when no rate in force). */
+  conveyanceAmount: number;
+  /** toll + parking booked that day (negatives clamped to 0). */
+  charges: number;
+  total: number;
+  /** place-visit notes for the day, in recorded order. */
+  places: string[];
+  /** kmFlags — but [] when no log row exists for the date. */
+  flags: string[];
+  adminStatus: DayAdminStatus;
+  adminRemarks: string | null;
+};
+
+function asAdminStatus(v: unknown): DayAdminStatus {
+  return v === "Paid" || v === "Flagged" ? v : "Pending";
+}
+
+function asTrimmedText(v: unknown): string | null {
+  return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+}
+
+/** IST calendar day of an instant (place-visit visited_at). Null on bad input. */
+function asIstDay(instant: unknown): string | null {
+  if (typeof instant !== "string" || instant.trim() === "") return null;
+  const d = new Date(instant);
+  if (Number.isNaN(d.getTime())) return null;
+  return istDateKey(d);
+}
+
 /**
- * Normalize admin_stock_custody RPC rows: null-tolerant passthrough —
- * missing fields become null, non-object rows are skipped, non-array input
- * yields []. Never throws.
+ * Rich day rows for the Eng-Ops conveyance table: the union of log dates,
+ * expense dates and place-visit dates (so a charge is never orphaned),
+ * sorted ascending. Money reuses payableForPeriod's per-day amount;
+ * visit-only/expense-only dates carry null km and a live rateInForce.
+ */
+export function conveyanceDayRows(input: {
+  employeeId: string | null | undefined;
+  rates?: AdminRate[] | null;
+  days?: (ConveyanceDayInputDay | null | undefined)[] | null;
+  expenses?: PayableExpense[] | null;
+  placeVisits?: (ConveyanceDayPlace | null | undefined)[] | null;
+}): ConveyanceDayRow[] {
+  const src = input ?? ({} as NonNullable<typeof input>);
+  const list = Array.isArray(src.days) ? src.days : [];
+
+  const payable = payableForPeriod({
+    employeeId: src.employeeId,
+    rates: src.rates,
+    days: list as PayableDay[],
+    expenses: [],
+  });
+  const perDay = new Map(payable.perDay.map((d) => [d.date, d]));
+
+  const chargesByDate = new Map<string, number>();
+  for (const e of src.expenses ?? []) {
+    if (!e) continue;
+    const day = asDateKey(e.expense_date);
+    if (!day) continue;
+    chargesByDate.set(day, round2((chargesByDate.get(day) ?? 0) + Math.max(0, asFiniteNumber(e.amount) ?? 0)));
+  }
+
+  const placesByDate = new Map<string, string[]>();
+  for (const v of src.placeVisits ?? []) {
+    if (!v) continue;
+    const day = asIstDay(v.visited_at);
+    const note = asTrimmedText(v.note);
+    if (!day || !note) continue;
+    const notes = placesByDate.get(day) ?? [];
+    notes.push(note);
+    placesByDate.set(day, notes);
+  }
+
+  const logByDate = new Map<string, ConveyanceDayInputDay>();
+  for (const d of list) {
+    if (!d) continue;
+    const day = asDateKey(d.log_date);
+    if (!day || logByDate.has(day)) continue;
+    logByDate.set(day, d);
+  }
+
+  const dates = new Set<string>();
+  for (const d of perDay.keys()) dates.add(d);
+  for (const k of chargesByDate.keys()) dates.add(k);
+  for (const k of placesByDate.keys()) dates.add(k);
+  for (const k of logByDate.keys()) dates.add(k);
+
+  const rows: ConveyanceDayRow[] = [];
+  for (const date of [...dates].sort()) {
+    const raw = logByDate.get(date);
+    const morning =
+      typeof raw?.morning_odometer === "number" && Number.isFinite(raw.morning_odometer)
+        ? raw.morning_odometer
+        : null;
+    const evening =
+      typeof raw?.evening_odometer === "number" && Number.isFinite(raw.evening_odometer)
+        ? raw.evening_odometer
+        : null;
+    const per = perDay.get(date);
+    const rate =
+      per?.rate ??
+      (typeof src.employeeId === "string" ? rateInForce(src.rates, src.employeeId, date) : null);
+    const conveyanceAmount = per ? per.amount : 0;
+    const charges = chargesByDate.get(date) ?? 0;
+    rows.push({
+      date,
+      hasLog: !!raw,
+      morning,
+      evening,
+      morningPhoto: asTrimmedText(raw?.morning_photo_path),
+      eveningPhoto: asTrimmedText(raw?.evening_photo_path),
+      km: raw ? dayKm(raw.morning_odometer, raw.evening_odometer) : null,
+      rate,
+      conveyanceAmount,
+      charges,
+      total: round2(conveyanceAmount + charges),
+      places: placesByDate.get(date) ?? [],
+      flags: raw ? kmFlags(morning, evening) : [],
+      adminStatus: asAdminStatus(raw?.admin_status),
+      adminRemarks: asTrimmedText(raw?.admin_remarks),
+    });
+  }
+  return rows;
+}
+
+/**
+ * Normalize admin_stock_custody RPC rows (or direct ims_stock_items reads):
+ * null-tolerant passthrough — missing fields become null, non-object rows
+ * are skipped, non-array input yields []. stock_type/stock_status/part_name
+ * ride along when the source provides them (legacy RPC rows predate them).
+ * Never throws.
  */
 export function custodyLedger(rows: unknown): CustodyLedgerRow[] {
   if (!Array.isArray(rows)) return [];
@@ -767,7 +923,78 @@ export function custodyLedger(rows: unknown): CustodyLedgerRow[] {
       part_serial_no: asStr(o.part_serial_no),
       ticket_id: asStr(o.ticket_id),
       set_at: asStr(o.set_at),
+      stock_type: asStr(o.stock_type),
+      stock_status: asStr(o.stock_status),
+      part_name: asStr(o.part_name),
     });
+  }
+  return out;
+}
+
+/** upper(trim()) — mirrors public.normalize_serial (SQL). Null on blank/non-string. */
+export function normalizeSerial(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().toUpperCase();
+  return t === "" ? null : t;
+}
+
+export type StagedPartRow = {
+  ticket_id: string;
+  case_id: string | null;
+  assigned_employee_id: string | null;
+  kind: "defective" | "good";
+  name: string | null;
+  /** Raw trimmed serial for display; null when the line has none. */
+  serial: string | null;
+  /** normalizeSerial(serial) for matching against custodied stock. */
+  serialKey: string | null;
+  source: string | null;
+  confirmed: boolean;
+};
+
+/**
+ * Staged ticket part lines (defective_parts_details + good_parts_details):
+ * the material an engineer holds via the ticket before/instead of it ever
+ * becoming an ims_stock_items custody row (unconfirmed FSR lines, or
+ * confirmed lines whose serial matched no stock row). Lines with neither a
+ * name nor a serial are skipped; non-array input yields []. Never throws.
+ */
+export function stagedTicketParts(tickets: unknown): StagedPartRow[] {
+  if (!Array.isArray(tickets)) return [];
+  const out: StagedPartRow[] = [];
+  for (const t of tickets) {
+    if (!t || typeof t !== "object") continue;
+    const o = t as Record<string, unknown>;
+    if (typeof o.id !== "string" || o.id === "") continue;
+    const case_id = typeof o.case_id === "string" ? o.case_id : null;
+    const assigned_employee_id =
+      typeof o.assigned_employee_id === "string" ? o.assigned_employee_id : null;
+    const groups: { kind: "defective" | "good"; lines: unknown }[] = [
+      { kind: "defective", lines: o.defective_parts_details },
+      { kind: "good", lines: o.good_parts_details },
+    ];
+    for (const g of groups) {
+      if (!Array.isArray(g.lines)) continue;
+      for (const l of g.lines) {
+        if (!l || typeof l !== "object") continue;
+        const line = l as Record<string, unknown>;
+        const name =
+          typeof line.name === "string" && line.name.trim() !== "" ? line.name.trim() : null;
+        const rawSerial = typeof line.serial === "string" ? line.serial.trim() : "";
+        if (!name && rawSerial === "") continue;
+        out.push({
+          ticket_id: o.id,
+          case_id,
+          assigned_employee_id,
+          kind: g.kind,
+          name,
+          serial: rawSerial === "" ? null : rawSerial,
+          serialKey: normalizeSerial(rawSerial),
+          source: typeof line.source === "string" ? line.source : null,
+          confirmed: line.confirmed === true,
+        });
+      }
+    }
   }
   return out;
 }

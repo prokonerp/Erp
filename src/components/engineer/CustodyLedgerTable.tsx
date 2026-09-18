@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Package } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import type { CustodyLedgerRow } from "@/lib/engineersAdmin";
 import { usePermissions } from "@/lib/usePermissions";
 
@@ -55,19 +56,26 @@ export function CustodyLedgerTable({
           } as ColumnDef<CustodyLedgerRow>,
         ]),
     {
+      key: "part_name",
+      header: "Part",
+      render: (r) => <span className="text-xs">{r.part_name ?? "—"}</span>,
+    },
+    {
       key: "part_serial_no",
       header: "Part serial",
       sortable: true,
       render: (r) => <span className="font-mono text-xs">{r.part_serial_no ?? "—"}</span>,
     },
     {
-      key: "stock_item_id",
-      header: "Item",
-      render: (r) => (
-        <span className="font-mono text-xs">
-          {r.stock_item_id ? r.stock_item_id.slice(0, 8) : "—"}
-        </span>
-      ),
+      key: "stock_type",
+      header: "Type",
+      sortable: true,
+      render: (r) => {
+        const t = (r.stock_type ?? "").toLowerCase();
+        if (t === "good") return <StatusBadge tone="success">Good</StatusBadge>;
+        if (t === "defective") return <StatusBadge tone="info">Defective</StatusBadge>;
+        return <span className="text-muted-foreground">—</span>;
+      },
     },
     {
       key: "ticket_id",

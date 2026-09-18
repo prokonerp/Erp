@@ -12,6 +12,10 @@ import {
   kmFlags,
   docCompliance,
   buildAttentionItems,
+  conveyanceDayRows,
+  custodyLedger,
+  normalizeSerial,
+  stagedTicketParts,
   groupExpensesByType,
   dedupeWarnings,
   rosterNameMap,
@@ -626,5 +630,202 @@ describe("engineersAdmin/perEngineerSummary-closed30d", () => {
       tickets: [{ status: "Closed", closed_at: "2026-09-17" }],
     });
     expect(out.closed30d).toBe(1);
+  });
+});
+
+describe("engineersAdmin/conveyanceDayRows", () => {
+  const rates = [{ employee_id: "e1", rate_per_km: 10, effective_from: "2026-09-01" }];
+
+  it("merges a full day: km x rate, toll+parking, IST-grouped places, photos, admin default", () => {
+    const rows = conveyanceDayRows({
+      employeeId: "e1",
+      rates,
+      days: [
+        {
+          log_date: "2026-09-10",
+          morning_odometer: 100,
+          evening_odometer: 150,
+          morning_photo_path: "engineer/e1/morning_reading/2026-09-10/a.jpg",
+          evening_photo_path: "engineer/e1/evening_reading/2026-09-10/b.jpg",
+        },
+      ],
+      expenses: [
+        { expense_date: "2026-09-10", charge_type: "Toll", amount: 120, receipt_path: null },
+        { expense_date: "2026-09-10", charge_type: "Parking", amount: 50, receipt_path: null },
+      ],
+      // 2026-09-09T20:30Z = 2026-09-10 02:00 IST → same calendar day.
+      placeVisits: [
+        { visited_at: "2026-09-10T05:30:00.000Z", note: "ABC Motors" },
+        { visited_at: "2026-09-09T20:30:00.000Z", note: "Night Depot" },
+      ],
+    });
+    expect(rows).toHaveLength(1);
+    const r = rows[0];
+    expect(r.date).toBe("2026-09-10");
+    expect(r.morning).toBe(100);
+    expect(r.evening).toBe(150);
+    expect(r.km).toBe(50);
+    expect(r.rate).toBe(10);
+    expect(r.conveyanceAmount).toBe(500);
+    expect(r.charges).toBe(170);
+    expect(r.total).toBe(670);
+    expect(r.places).toEqual(["ABC Motors", "Night Depot"]);
+    expect(r.morningPhoto).toContain("morning_reading");
+    expect(r.eveningPhoto).toContain("evening_reading");
+    expect(r.flags).toEqual([]);
+    expect(r.adminStatus).toBe("Pending");
+    expect(r.adminRemarks).toBeNull();
+  });
+
+  it("keeps expense-only and visit-only dates as rows, sorts ascending, skips bad dates", () => {
+    const rows = conveyanceDayRows({
+      employeeId: "e1",
+      rates,
+      days: [
+        { log_date: "2026-09-12", morning_odometer: 200, evening_odometer: 220 },
+        { log_date: "not-a-date", morning_odometer: 1, evening_odometer: 2 },
+      ],
+      expenses: [{ expense_date: "2026-09-11", charge_type: "Toll", amount: 40, receipt_path: null }],
+      placeVisits: [{ visited_at: "2026-09-13T04:00:00.000Z", note: "Solo stop" }],
+    });
+    expect(rows.map((r) => r.date)).toEqual(["2026-09-11", "2026-09-12", "2026-09-13"]);
+    expect(rows[0].charges).toBe(40);
+    expect(rows[0].km).toBeNull();
+    expect(rows[2].places).toEqual(["Solo stop"]);
+  });
+
+  it("honours Paid/Flagged admin state and remarks, coerces junk to Pending", () => {
+    const rows = conveyanceDayRows({
+      employeeId: "e1",
+      rates,
+      days: [
+        {
+          log_date: "2026-09-10",
+          morning_odometer: 100,
+          evening_odometer: 150,
+          admin_status: "Paid",
+          admin_remarks: "ok",
+        },
+        {
+          log_date: "2026-09-11",
+          morning_odometer: 150,
+          evening_odometer: 160,
+          admin_status: "weird",
+          admin_remarks: 42,
+        },
+      ],
+      expenses: [],
+      placeVisits: [],
+    });
+    expect(rows[0].adminStatus).toBe("Paid");
+    expect(rows[0].adminRemarks).toBe("ok");
+    expect(rows[1].adminStatus).toBe("Pending");
+    expect(rows[1].adminRemarks).toBeNull();
+  });
+
+  it("yields conveyanceAmount 0 when no rate is in force", () => {
+    const rows = conveyanceDayRows({
+      employeeId: "e1",
+      rates: [],
+      days: [{ log_date: "2026-09-10", morning_odometer: 100, evening_odometer: 150 }],
+      expenses: [],
+      placeVisits: [],
+    });
+    expect(rows[0].rate).toBeNull();
+    expect(rows[0].conveyanceAmount).toBe(0);
+    expect(rows[0].total).toBe(0);
+  });
+
+  it("marks hasLog only for dates with a log row", () => {
+    const rows = conveyanceDayRows({
+      employeeId: "e1",
+      rates,
+      days: [{ log_date: "2026-09-10", morning_odometer: 100, evening_odometer: 150 }],
+      expenses: [{ expense_date: "2026-09-11", charge_type: "Toll", amount: 40, receipt_path: null }],
+      placeVisits: [],
+    });
+    expect(rows.find((r) => r.date === "2026-09-10")?.hasLog).toBe(true);
+    expect(rows.find((r) => r.date === "2026-09-11")?.hasLog).toBe(false);
+  });
+});
+
+describe("engineersAdmin/custodyLedger-good-defective", () => {
+  it("passes through stock_type/stock_status/part_name, null when absent", () => {
+    const out = custodyLedger([
+      {
+        stock_item_id: "i1",
+        custodian_employee_id: "e1",
+        custodian_name: "Asha",
+        part_serial_no: "S1",
+        ticket_id: null,
+        set_at: "2026-09-10T00:00:00Z",
+        stock_type: "defective",
+        stock_status: "issued",
+        part_name: "Battery",
+      },
+      {
+        stock_item_id: "i2",
+        custodian_employee_id: "e1",
+        custodian_name: "Asha",
+        part_serial_no: "S2",
+        ticket_id: null,
+        set_at: "2026-09-10T00:00:00Z",
+      },
+    ]);
+    expect(out).toHaveLength(2);
+    expect(out[0].stock_type).toBe("defective");
+    expect(out[0].stock_status).toBe("issued");
+    expect(out[0].part_name).toBe("Battery");
+    expect(out[1].stock_type).toBeNull();
+    expect(out[1].stock_status).toBeNull();
+    expect(out[1].part_name).toBeNull();
+  });
+});
+
+describe("engineersAdmin/normalizeSerial", () => {
+  it("uppercases + trims, null on blank/non-string", () => {
+    expect(normalizeSerial("  ab-12 ")).toBe("AB-12");
+    expect(normalizeSerial("")).toBeNull();
+    expect(normalizeSerial("   ")).toBeNull();
+    expect(normalizeSerial(null)).toBeNull();
+    expect(normalizeSerial(42)).toBeNull();
+  });
+});
+
+describe("engineersAdmin/stagedTicketParts", () => {
+  const ticket = {
+    id: "t1",
+    case_id: "C-1",
+    assigned_employee_id: "e1",
+    defective_parts_details: [
+      { name: "Battery", serial: " sn-01 ", source: "fsr", confirmed: false },
+      { name: "", serial: "", source: "fsr" },
+      null,
+    ],
+    good_parts_details: [{ name: "Panel", serial: null, source: "manual", confirmed: true }],
+  };
+
+  it("extracts defective + good lines with kind/source/confirmed, skips empties", () => {
+    const out = stagedTicketParts([ticket]);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({
+      ticket_id: "t1",
+      case_id: "C-1",
+      assigned_employee_id: "e1",
+      kind: "defective",
+      name: "Battery",
+      serial: "sn-01",
+      serialKey: "SN-01",
+      source: "fsr",
+      confirmed: false,
+    });
+    expect(out[1]).toMatchObject({ kind: "good", name: "Panel", serial: null, confirmed: true });
+  });
+
+  it("returns [] for bad input and skips tickets without id", () => {
+    expect(stagedTicketParts(null)).toEqual([]);
+    expect(stagedTicketParts("nope")).toEqual([]);
+    expect(stagedTicketParts([{ case_id: "x" }])).toEqual([]);
+    expect(stagedTicketParts([])).toEqual([]);
   });
 });

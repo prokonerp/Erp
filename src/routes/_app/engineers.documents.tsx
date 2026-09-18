@@ -15,10 +15,12 @@ function EngineerDocBlocks({ employeeId }: { employeeId: string }) {
   const docsQuery = useEmployeeDocuments(employeeId);
 
   const compliance = docsQuery.data?.compliance ?? { present: [], missing: [] };
+  const docs = docsQuery.data?.docs ?? [];
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <DocComplianceGrid
+        docs={docs}
         present={compliance.present}
         missing={compliance.missing}
         isLoading={docsQuery.isLoading}
@@ -55,9 +57,9 @@ function EngineerDocumentsPage() {
           {rosterQuery.roster.length === 0 ? (
             <p className="text-sm text-muted-foreground">No engineers in roster.</p>
           ) : (
-            <section aria-label="Engineer document compliance" className="space-y-3">
+            <section aria-label="Engineer document compliance" className="space-y-2">
               {rosterQuery.roster.map((e) => (
-                <div key={e.employee_id} className="rounded-lg border p-4">
+                <div key={e.employee_id} className="rounded-lg border px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <Link
                       to="/engineers/directory/$employeeId"
@@ -70,7 +72,7 @@ function EngineerDocumentsPage() {
                       {e.active ? "Active" : "Inactive"}
                     </StatusBadge>
                   </div>
-                  <div className="mt-3">
+                  <div className="mt-2">
                     <EngineerDocBlocks employeeId={e.employee_id} />
                   </div>
                 </div>

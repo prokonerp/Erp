@@ -5,19 +5,26 @@ import { istDateKey } from "@/lib/time";
 import { asEmployeeDocuments } from "@/lib/engineer-conveyance";
 import {
   attentionQueue,
+  conveyanceDayRows,
   conveyanceMatrix,
   custodyLedger,
   docCompliance,
+  normalizeSerial,
   payableWindow,
   perEngineerSummary,
   rosterKpis,
+  stagedTicketParts,
   type AdminEngineer,
   type AdminRate,
   type AdminWarning,
   type AttentionQueueItem,
+  type ConveyanceDayInputDay,
+  type ConveyanceDayPlace,
+  type ConveyanceDayRow,
   type ConveyanceMatrixRow,
   type CustodyLedgerRow,
   type RosterKpis,
+  type StagedPartRow,
 } from "@/lib/engineersAdmin";
 
 /**
@@ -33,6 +40,18 @@ type DayRow = {
   log_date: string | null;
   morning_odometer: number | null;
   evening_odometer: number | null;
+  /** Reading photos + day-review state (migration 20260927000001 adds the
+   *  admin_* columns; absent on older DBs — always read tolerantly). */
+  morning_photo_path?: string | null;
+  evening_photo_path?: string | null;
+  admin_status?: string | null;
+  admin_remarks?: string | null;
+};
+
+type PlaceVisitRow = {
+  employee_id: string | null;
+  visited_at: string | null;
+  note: string | null;
 };
 
 type ExpenseRow = {
@@ -71,6 +90,13 @@ function hintFor(e: unknown, migration: string): string {
     return `data-type fix needed — ask admin to run migration ${migration}`;
   }
   return message;
+}
+
+/** Shift a YYYY-MM-DD calendar key by N days (UTC date math, key output). */
+function shiftDay(iso: string, delta: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return iso;
+  return new Date(Date.UTC(y, m - 1, d) + delta * 86_400_000).toISOString().slice(0, 10);
 }
 
 /** Field-engineer roster via list_engineers() (is_field_engineer gate lives
@@ -134,7 +160,7 @@ export function useEngineerPayables(input: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
         const { data, error } = await (supabase as any)
           .from("engineer_daily_logs")
-          .select("log_date, morning_odometer, evening_odometer")
+          .select("*")
           .eq("employee_id", employeeId!)
           .gte("log_date", window.from)
           .lte("log_date", window.to)
@@ -188,6 +214,171 @@ export function useEngineerPayables(input: {
     warnings: query.data?.warnings ?? [],
     window,
     isLoading: !!employeeId && query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    refetch: query.refetch,
+    isFetching: query.isFetching,
+  };
+}
+
+export type PayablesAllGroup = {
+  employeeId: string;
+  rows: ConveyanceDayRow[];
+  totals: {
+    days: number;
+    km: number;
+    conveyance: number;
+    charges: number;
+    total: number;
+    flagged: number;
+  };
+};
+
+/**
+ * All engineers' IST-window conveyance in four reads, grouped client-side
+ * by employee. Only engineers with at least one log/expense/visit in the
+ * window appear. Same fail-soft contract as the single-engineer hooks.
+ */
+export function useEngineerPayablesAll(input: { from: string; to: string; enabled?: boolean }) {
+  const window = payableWindow(input.from, input.to);
+
+  const query = useQuery({
+    queryKey: adminEngKeys.payablesAll(window.from, window.to),
+    enabled: input.enabled !== false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async (): Promise<{ groups: PayablesAllGroup[]; warnings: AdminWarning[] }> => {
+      const warnings: AdminWarning[] = [];
+      let days: AllLogRow[] = [];
+      let expenses: AllExpenseRow[] = [];
+      let rates: AdminRate[] = [];
+      let visits: PlaceVisitRow[] = [];
+
+      try {
+        // select("*") tolerates the admin_* review columns pre-migration.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
+        const { data, error } = await (supabase as any)
+          .from("engineer_daily_logs")
+          .select("*")
+          .gte("log_date", window.from)
+          .lte("log_date", window.to)
+          .order("employee_id", { ascending: true })
+          .order("log_date", { ascending: true });
+        if (error) throw error;
+        days = Array.isArray(data) ? (data as AllLogRow[]) : [];
+      } catch (e) {
+        warnings.push({ section: "all-days", message: hintFor(e, "20260925000001") });
+        days = [];
+      }
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
+        const { data, error } = await (supabase as any)
+          .from("engineer_conveyance_expenses")
+          .select("employee_id, expense_date, charge_type, amount, receipt_path")
+          .gte("expense_date", window.from)
+          .lte("expense_date", window.to)
+          .order("employee_id", { ascending: true })
+          .order("expense_date", { ascending: true });
+        if (error) throw error;
+        expenses = Array.isArray(data) ? (data as AllExpenseRow[]) : [];
+      } catch (e) {
+        warnings.push({ section: "all-expenses", message: hintFor(e, "20260925000001") });
+        expenses = [];
+      }
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
+        const { data, error } = await (supabase as any)
+          .from("engineer_conveyance_rates")
+          .select("employee_id, rate_per_km, effective_from")
+          .lte("effective_from", window.to)
+          .order("employee_id", { ascending: true })
+          .order("effective_from", { ascending: true });
+        if (error) throw error;
+        rates = Array.isArray(data) ? (data as AdminRate[]) : [];
+      } catch (e) {
+        warnings.push({ section: "all-rates", message: hintFor(e, "20260925000001") });
+        rates = [];
+      }
+
+      try {
+        // ±1-day widened window; IST-grouped client-side (see shiftDay).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- place visits pending generated types
+        const { data, error } = await (supabase as any)
+          .from("engineer_place_visits")
+          .select("employee_id, visited_at, note")
+          .gte("visited_at", shiftDay(window.from, -1))
+          .lte("visited_at", shiftDay(window.to, 1))
+          .order("employee_id", { ascending: true })
+          .order("visited_at", { ascending: true });
+        if (error) throw error;
+        visits = Array.isArray(data) ? (data as PlaceVisitRow[]) : [];
+      } catch (e) {
+        warnings.push({ section: "all-place-visits", message: hintFor(e, "20260926000001") });
+        visits = [];
+      }
+
+      const byEmp = new Map<
+        string,
+        { days: AllLogRow[]; expenses: AllExpenseRow[]; visits: PlaceVisitRow[] }
+      >();
+      const bucket = (id: unknown) => {
+        if (typeof id !== "string" || id === "") return null;
+        let b = byEmp.get(id);
+        if (!b) {
+          b = { days: [], expenses: [], visits: [] };
+          byEmp.set(id, b);
+        }
+        return b;
+      };
+      for (const d of days) {
+        const b = bucket((d as { employee_id?: unknown }).employee_id);
+        if (b) b.days.push(d);
+      }
+      for (const e of expenses) {
+        const b = bucket((e as { employee_id?: unknown }).employee_id);
+        if (b) b.expenses.push(e);
+      }
+      for (const v of visits) {
+        const b = bucket(v.employee_id);
+        if (b) b.visits.push(v);
+      }
+
+      const r2 = (n: number) => Math.round(n * 100) / 100;
+      const groups: PayablesAllGroup[] = [];
+      for (const [employeeId, b] of byEmp) {
+        if (b.days.length === 0 && b.expenses.length === 0 && b.visits.length === 0) continue;
+        const rows = conveyanceDayRows({
+          employeeId,
+          rates,
+          days: b.days,
+          expenses: b.expenses,
+          placeVisits: b.visits,
+        });
+        groups.push({
+          employeeId,
+          rows,
+          totals: {
+            days: rows.length,
+            km: r2(rows.reduce((s, r) => s + (r.km ?? 0), 0)),
+            conveyance: r2(rows.reduce((s, r) => s + r.conveyanceAmount, 0)),
+            charges: r2(rows.reduce((s, r) => s + r.charges, 0)),
+            total: r2(rows.reduce((s, r) => s + r.total, 0)),
+            flagged: rows.filter((r) => r.flags.length > 0 || r.adminStatus === "Flagged").length,
+          },
+        });
+      }
+      groups.sort((a, b) => (a.employeeId < b.employeeId ? -1 : 1));
+      return { groups, warnings };
+    },
+  });
+
+  return {
+    groups: query.data?.groups ?? [],
+    window,
+    warnings: query.data?.warnings ?? [],
+    isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,
     refetch: query.refetch,
@@ -293,15 +484,6 @@ type AllRateRow = AdminRate;
 
 type DocRow = { id: string; documents: unknown };
 
-type CustodyRpcRow = {
-  stock_item_id: string | null;
-  custodian_employee_id: string | null;
-  custodian_name: string | null;
-  part_serial_no: string | null;
-  ticket_id: string | null;
-  set_at: string | null;
-};
-
 /** Console KPIs: roster + open-ticket counts + current-month logs. */
 export function useEngineerOverview(): {
   data: { roster: AdminEngineer[]; kpis: RosterKpis };
@@ -353,7 +535,7 @@ export function useEngineerOverview(): {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
         const { data, error } = await (supabase as any)
           .from("engineer_daily_logs")
-          .select("log_date, morning_odometer, evening_odometer")
+          .select("*")
           .gte("log_date", monthStart)
           .lte("log_date", today)
           .order("log_date", { ascending: true })
@@ -442,7 +624,7 @@ export function useEngineerTickets(employeeId: string | null): {
   };
 }
 
-/** One engineer's IST-window conveyance: logs + expenses + rates + matrix. */
+/** One engineer's IST-window conveyance: logs + expenses + rates + place visits + day rows. */
 export function useEngineerConveyance(
   employeeId: string | null,
   from: string,
@@ -451,9 +633,11 @@ export function useEngineerConveyance(
   data: {
     window: { from: string; to: string };
     matrix: ConveyanceMatrixRow[];
+    rows: ConveyanceDayRow[];
     days: DayRow[];
     expenses: ExpenseRow[];
     rates: AdminRate[];
+    placeVisits: PlaceVisitRow[];
   };
   warnings: AdminWarning[];
   isLoading: boolean;
@@ -469,18 +653,20 @@ export function useEngineerConveyance(
       days: DayRow[];
       expenses: ExpenseRow[];
       rates: AdminRate[];
+      placeVisits: PlaceVisitRow[];
       warnings: AdminWarning[];
     }> => {
       const warnings: AdminWarning[] = [];
       let days: DayRow[] = [];
       let expenses: ExpenseRow[] = [];
       let rates: AdminRate[] = [];
+      let placeVisits: PlaceVisitRow[] = [];
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- money tables pending generated types
         const { data, error } = await (supabase as any)
           .from("engineer_daily_logs")
-          .select("log_date, morning_odometer, evening_odometer")
+          .select("*")
           .eq("employee_id", employeeId!)
           .gte("log_date", window.from)
           .lte("log_date", window.to)
@@ -523,18 +709,41 @@ export function useEngineerConveyance(
         rates = [];
       }
 
-      return { days, expenses, rates, warnings };
+      try {
+        // Place visits are IST-grouped client-side, so read a ±1-day
+        // widened window (a 00:30 IST visit is the previous UTC day).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- place visits pending generated types
+        const { data, error } = await (supabase as any)
+          .from("engineer_place_visits")
+          .select("employee_id, visited_at, note")
+          .eq("employee_id", employeeId!)
+          .gte("visited_at", shiftDay(window.from, -1))
+          .lte("visited_at", shiftDay(window.to, 1))
+          .order("visited_at", { ascending: true });
+        if (error) throw error;
+        placeVisits = Array.isArray(data) ? (data as PlaceVisitRow[]) : [];
+      } catch (e) {
+        warnings.push({ section: "place-visits", message: hintFor(e, "20260926000001") });
+        placeVisits = [];
+      }
+
+      return { days, expenses, rates, placeVisits, warnings };
     },
   });
 
   const days = query.data?.days ?? [];
+  const expenses = query.data?.expenses ?? [];
+  const rates = query.data?.rates ?? [];
+  const placeVisits = query.data?.placeVisits ?? [];
   return {
     data: {
       window,
       matrix: conveyanceMatrix(days),
+      rows: conveyanceDayRows({ employeeId, rates, days, expenses, placeVisits }),
       days,
-      expenses: query.data?.expenses ?? [],
-      rates: query.data?.rates ?? [],
+      expenses,
+      rates,
+      placeVisits,
     },
     warnings: query.data?.warnings ?? [],
     isLoading: !!employeeId && query.isLoading,
@@ -584,9 +793,10 @@ export function useEmployeeDocuments(employeeId: string | null): {
   };
 }
 
-/** Custody ledger: all holdings (null) or one engineer's. */
+/** Custody ledger: all holdings (null) or one engineer's — plus staged ticket lines. */
 export function useEngineerCustody(employeeId: string | null): {
   data: CustodyLedgerRow[];
+  staged: StagedPartRow[];
   warnings: AdminWarning[];
   isLoading: boolean;
 } {
@@ -594,27 +804,89 @@ export function useEngineerCustody(employeeId: string | null): {
     queryKey: adminEngKeys.custody(employeeId),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
-    queryFn: async (): Promise<{ rows: CustodyLedgerRow[]; warnings: AdminWarning[] }> => {
+    queryFn: async (): Promise<{
+      rows: CustodyLedgerRow[];
+      staged: StagedPartRow[];
+      warnings: AdminWarning[];
+    }> => {
       const warnings: AdminWarning[] = [];
+      let rows: CustodyLedgerRow[] = [];
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- admin_stock_custody() pending generated types
-        const { data, error } = await (supabase as any).rpc("admin_stock_custody", {
-          _employee_id: employeeId ?? null,
-        });
+        // Direct table read (no RPC): surfaces stock_type/part_name so good
+        // vs defective is visible. Admin / ims.read RLS already allows it;
+        // names resolve client-side via the roster (see the custody page).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ims_stock_items pending generated types
+        let q = (supabase as any)
+          .from("ims_stock_items")
+          .select(
+            "id, part_serial_no, part_name, stock_type, stock_status, ticket_id, custodian_employee_id, custodian_set_at",
+          )
+          .not("custodian_employee_id", "is", null)
+          .not("stock_status", "in", '("returned_to_oem","scrapped")')
+          .order("custodian_set_at", { ascending: false, nullsFirst: false });
+        if (employeeId) q = q.eq("custodian_employee_id", employeeId);
+        const { data, error } = await q;
         if (error) throw error;
-        return {
-          rows: custodyLedger((Array.isArray(data) ? data : []) as CustodyRpcRow[]),
-          warnings,
-        };
+        const shaped = (Array.isArray(data) ? data : []).map((r: Record<string, unknown>) => ({
+          stock_item_id: r.id,
+          custodian_employee_id: r.custodian_employee_id,
+          custodian_name: null,
+          part_serial_no: r.part_serial_no,
+          ticket_id: r.ticket_id,
+          set_at: r.custodian_set_at,
+          stock_type: r.stock_type,
+          stock_status: r.stock_status,
+          part_name: r.part_name,
+        }));
+        rows = custodyLedger(shaped);
       } catch (e) {
         warnings.push({ section: "custody", message: hintFor(e, "20260925000002") });
-        return { rows: [], warnings };
+        rows = [];
       }
+
+      let staged: StagedPartRow[] = [];
+      try {
+        // Staged ticket lines (open tickets): material the engineer holds
+        // via the ticket that never became a custody row — unconfirmed FSR
+        // lines, or confirmed lines whose serial matched no stock row.
+        // Already-custodied serials are suppressed to avoid double counting.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tickets pending generated types
+        let tq = (supabase as any)
+          .from("tickets")
+          .select(
+            "id, case_id, status, assigned_employee_id, defective_parts_details, good_parts_details",
+          )
+          .eq("is_deleted", false)
+          .not("status", "in", '("Closed","Cancelled")')
+          .order("created_at", { ascending: false })
+          .limit(employeeId ? 500 : 1000);
+        if (employeeId) tq = tq.eq("assigned_employee_id", employeeId);
+        const { data, error } = await tq;
+        if (error) throw error;
+        const all = stagedTicketParts(Array.isArray(data) ? data : []);
+        const held = new Set(
+          rows
+            .map((r) => normalizeSerial(r.part_serial_no))
+            .filter((s): s is string => s !== null),
+        );
+        staged = all.filter((s) => s.serialKey === null || !held.has(s.serialKey));
+        if (!employeeId && Array.isArray(data) && data.length >= 1000) {
+          warnings.push({
+            section: "staged",
+            message: "large dataset truncated — refine filters",
+          });
+        }
+      } catch (e) {
+        warnings.push({ section: "staged", message: hintFor(e, "20260925000002") });
+        staged = [];
+      }
+      return { rows, staged, warnings };
     },
   });
 
   return {
     data: query.data?.rows ?? [],
+    staged: query.data?.staged ?? [],
     warnings: query.data?.warnings ?? [],
     isLoading: query.isLoading,
   };

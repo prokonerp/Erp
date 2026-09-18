@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { IndianRupee } from "lucide-react";
 import { toast } from "sonner";
-import { StatCard } from "@/components/crm/StatCard";
 import { DataTable, type ColumnDef } from "@/components/shared/DataTable";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -28,13 +27,27 @@ import { backfillEngineerRates, upsertEngineerRate } from "@/lib/engineer-admin.
 type RateRow = AdminRate & { effective_from: string; rate_per_km: number | string };
 
 const TIMELINE_COLUMNS: ColumnDef<RateRow>[] = [
-  { key: "effective_from", header: "Effective from", sortable: true },
+  {
+    key: "effective_from",
+    header: "Effective from",
+    sortable: true,
+    render: (row) => <span className="font-mono text-xs">{row.effective_from}</span>,
+  },
   {
     key: "rate_per_km",
     header: "Rate / km",
     align: "right",
     sortable: true,
     render: (row) => <span className="tabular-nums">₹{Number(row.rate_per_km)}/km</span>,
+  },
+  {
+    key: "notes",
+    header: "Notes",
+    render: (row) => (
+      <span className="text-xs text-muted-foreground">
+        {row.notes && row.notes.trim() !== "" ? row.notes : "—"}
+      </span>
+    ),
   },
 ];
 
@@ -164,12 +177,12 @@ export function RateEditor({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-[1fr_320px]">
-        <div className="space-y-1.5">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-3">
+        <div className="min-w-52 flex-1 space-y-1.5">
           <Label htmlFor="rate-engineer">Engineer</Label>
           <Select value={selectedEmployeeId ?? ""} onValueChange={onSelectEmployee}>
-            <SelectTrigger id="rate-engineer" className="max-w-md">
+            <SelectTrigger id="rate-engineer">
               <SelectValue placeholder="Select an engineer" />
             </SelectTrigger>
             <SelectContent>
@@ -181,14 +194,21 @@ export function RateEditor({
             </SelectContent>
           </Select>
         </div>
-        <StatCard
-          label="Rate in force today"
-          value={todayRate !== null ? `₹${todayRate}/km` : "No rate"}
-          icon={IndianRupee}
-          tone={todayRate !== null ? "success" : "warning"}
-          hint={selected ? `${selected.name ?? selected.employee_id} · ${today}` : today}
-          loading={isLoading}
-        />
+        <div className="min-w-36 text-right">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Rate in force today
+          </p>
+          <p
+            className={`text-xl font-semibold tabular-nums ${
+              todayRate !== null ? "" : "text-amber-700"
+            }`}
+          >
+            {todayRate !== null ? `₹${todayRate}/km` : "No rate"}
+          </p>
+          <p className="text-[11px] text-muted-foreground tabular-nums">
+            {selected ? `${selected.name ?? selected.employee_id} · ${today}` : today}
+          </p>
+        </div>
       </div>
 
       <DataTable
@@ -201,7 +221,7 @@ export function RateEditor({
         emptyHint="Append the first rate below — history is append-only."
       />
 
-      <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-2">
+      <div className="grid gap-3 rounded-lg border p-3 md:grid-cols-2">
         <div className="space-y-3">
           <h2 className="text-sm font-semibold">Append rate</h2>
           <div className="grid grid-cols-2 gap-3">
