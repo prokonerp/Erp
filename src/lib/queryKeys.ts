@@ -56,6 +56,9 @@ export const engKeys = {
   all: ["eng"] as const,
   queue: (uid: string | null) => ["eng", "queue", uid] as const,
   queuePrefix: ["eng", "queue"] as const,
+  // Completed visits live under the queue family so every queuePrefix
+  // invalidation (FSR submit, depart, admin edits) busts them too.
+  completedQueue: (uid: string | null) => ["eng", "queue", uid, "completed"] as const,
   carriedCount: (uid: string | null) => ["eng", "carried-count", uid] as const,
   employee: (uid: string | null) => ["eng", "employee", uid] as const,
   dashboard: (employeeId: string | null, today: string) =>
@@ -77,6 +80,10 @@ export const adminEngKeys = {
   roster: () => ["admin-eng", "roster"] as const,
   payables: (employeeId: string | null, from: string, to: string) =>
     ["admin-eng", "payables", employeeId, from, to] as const,
+  // All-engineers grouped payables for one window (client-side grouping).
+  payablesAll: (from: string, to: string) =>
+    ["admin-eng", "payables-all", from, to] as const,
+  payablesAllPrefix: ["admin-eng", "payables-all"] as const,
   ledger: (from: string, to: string) => ["admin-eng", "ledger", from, to] as const,
   rates: (employeeId: string | null) => ["admin-eng", "rates", employeeId] as const,
   ratesPrefix: ["admin-eng", "rates"] as const,

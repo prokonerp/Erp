@@ -14,20 +14,19 @@ const finalizeInput = z.object({
   ticketId: z.string().uuid(),
 });
 
-/** Statuses that must never be auto-closed (terminal states). */
-const TERMINAL_STATUSES = ["Cancelled", "Closed"] as const;
-
 /**
- * finalizeFsrSubmission — auto-depart + auto-close after an FSR submit.
+ * finalizeFsrSubmission — auto-depart after an FSR submit. The ticket
+ * status is intentionally left untouched: submitting a report never
+ * closes the ticket (an admin closes it explicitly).
  *
- * Engineers cannot UPDATE tickets under RLS, so both writes run here with
- * the service-role client. Same admin-or-assigned-engineer gate as
- * syncFsrPartsToTicket (FK-only on assigned_employee_id, mirroring the RLS
- * policies).
+ * Engineers cannot UPDATE tickets under RLS, so the departure write runs
+ * here with the service-role client. Same admin-or-assigned-engineer gate
+ * as syncFsrPartsToTicket (FK-only on assigned_employee_id, mirroring the
+ * RLS policies).
  *
  * Idempotent: departure only when arrival_at exists and departure_at is
- * unset; close only when the ticket is not already terminal. Safe to call
- * once per submission — the client navigates away immediately after.
+ * unset. Safe to call once per submission — the client navigates away
+ * immediately after.
  */
 export const finalizeFsrSubmission = createServerFn({ method: "POST" })
   .middleware([requireActiveUser])
@@ -59,7 +58,6 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
 
     const now = new Date().toISOString();
     let departed = false;
-    let closed = false;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ticket_visits pending generated types (migration 20260917000003)
     const visits = (supabaseAdmin as any).from("ticket_visits");
@@ -133,23 +131,5 @@ export const finalizeFsrSubmission = createServerFn({ method: "POST" })
       }
     }
 
-    // 2) Auto-close: skip terminal states (Cancelled/Closed stay untouched).
-    //    Optimistic concurrency on updated_at — a concurrent admin edit means
-    //    zero rows; finalize is idempotent so the admin state wins silently.
-    const status = (ticket as unknown as { status: string }).status;
-    if (!(TERMINAL_STATUSES as readonly string[]).includes(status)) {
-      const readUpdatedAt = (ticket as unknown as { updated_at: string }).updated_at;
-      // Auto-close stamps closed_at: print lifecycle, closed_at filters, and
-      // SLA math all key off it (previously only status flipped).
-      const { data: updRows, error: updErr } = await supabaseAdmin
-        .from("tickets")
-        .update({ status: "Closed", closed_at: new Date().toISOString() } as never)
-        .eq("id", data.ticketId)
-        .eq("updated_at", readUpdatedAt)
-        .select("id");
-      if (updErr) throw new Error(reportDbError("finalize auto-close", updErr));
-      closed = !!updRows && updRows.length > 0;
-    }
-
-    return { ticketId: data.ticketId, departed, closed };
+    return { ticketId: data.ticketId, departed };
   });

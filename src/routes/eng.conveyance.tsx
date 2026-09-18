@@ -605,7 +605,7 @@ function EngConveyance() {
     return null;
   }
 
-  // Shared add-expense lock: the three ExpenseSection forms hold their own
+  // Shared add-expense lock: the two ExpenseSection forms hold their own
   // amount/receipt/notes state, but only one add runs at a time.
   const [expenseBusy, setExpenseBusy] = useState(false);
   const expenseBusyRef = useRef(false);
@@ -1126,6 +1126,12 @@ function EngConveyance() {
             </CardContent>
           </Card>
 
+          <PlaceVisitsSection
+            visits={visits}
+            busy={visitBusy}
+            onAdd={addVisit}
+            onDelete={removeVisit}
+          />
           <ExpenseSection
             title="Toll"
             charge="Toll"
@@ -1139,12 +1145,6 @@ function EngConveyance() {
             entries={expenses.filter((e) => e.charge_type === "Parking")}
             busy={expenseBusy}
             onAdd={addExpense}
-          />
-          <PlaceVisitsSection
-            visits={visits}
-            busy={visitBusy}
-            onAdd={addVisit}
-            onDelete={removeVisit}
           />
           <p className="text-right text-sm font-semibold tabular-nums">
             Day total: {formatINR(dayTotal)}

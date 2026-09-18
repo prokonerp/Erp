@@ -767,17 +767,17 @@ export function FieldServiceReport({
       } catch {
         toast.warning("Report saved; parts staging pending — admin can Sync FSR parts.");
       }
-      // Auto-depart + auto-close: the report submit ends the site visit.
-      // Failure only warns (FSR is already saved; admin can close manually).
+      // Auto-depart only: the report submit ends the site visit, but the
+      // ticket stays open (an admin closes it). Failure only warns (the FSR
+      // is already saved).
       try {
-        const done = await callFinalizeFsr({ data: { ticketId } });
-        if (done?.closed) toast.success("Ticket closed");
+        await callFinalizeFsr({ data: { ticketId } });
       } catch {
-        toast.warning("Report saved; auto-depart/close pending — an admin can close the ticket.");
+        toast.warning("Report saved; auto-depart pending — an admin can close the ticket.");
       }
-      // The queue + dashboard still show this ticket open (depart/close landed
-      // above) — bust both so /eng drops the closed ticket without a manual
-      // refresh (dashboard-direct is a separate key family from the queue).
+      // The queue + dashboard cache the open ticket — bust both so /eng
+      // reflects the departure without a manual refresh (dashboard-direct is
+      // a separate key family from the queue).
       await queryClient.invalidateQueries({ queryKey: engKeys.queuePrefix });
       await queryClient.invalidateQueries({ queryKey: engKeys.dashboardPrefix });
       // Prevent the view-only gate from flashing during the transition out
@@ -947,7 +947,7 @@ export function FieldServiceReport({
                 <NumInput
                   value={form.batteryBankQty}
                   onChange={(v) => set("batteryBankQty", v)}
-                  placeholder="Qty (1–16)"
+                  placeholder="Qty (1–40)"
                   error={errors.batteryBankQty}
                 />
               </FsrField>

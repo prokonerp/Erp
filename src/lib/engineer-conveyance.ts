@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { istDateKey } from "@/lib/time";
+import { payableForPeriod, type AdminRate } from "@/lib/engineersAdmin";
 
 /**
  * Classify a conveyance-log load failure so UI banners never blame the
@@ -298,7 +299,45 @@ export type SettlementPayoutRow = {
   adjusted_amount: number | null | undefined;
   status: string | null | undefined;
   paid_at: string | null | undefined;
+  /** Optional settlement window; rows without a window never cover a day. */
+  period_start?: string | null | undefined;
+  period_end?: string | null | undefined;
 };
+
+/** Day-log row for live (unsettled) payable computation. */
+export type UnsettledDay = {
+  log_date: string | null | undefined;
+  morning_odometer: number | null | undefined;
+  evening_odometer: number | null | undefined;
+};
+
+/** Flat-expense row for live (unsettled) payable computation. */
+export type UnsettledExpense = {
+  expense_date: string | null | undefined;
+  amount: number | string | null | undefined;
+};
+
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * True when the calendar day sits inside a settlement that already accounts
+ * for it. Rejected settlements never cover (those charges are still owed);
+ * rows with a missing/malformed window never cover. Pure — unit-tested.
+ */
+export function settlementCovers(
+  dateISO: string | null | undefined,
+  settlements: SettlementPayoutRow[] | null | undefined,
+): boolean {
+  const day = (dateISO ?? "").slice(0, 10);
+  if (!DATE_KEY_RE.test(day)) return false;
+  return (settlements ?? []).some((s) => {
+    if ((s?.status ?? "") === "Rejected") return false;
+    const start = (s?.period_start ?? "").slice(0, 10);
+    const end = (s?.period_end ?? "").slice(0, 10);
+    if (!DATE_KEY_RE.test(start) || !DATE_KEY_RE.test(end)) return false;
+    return day >= start && day <= end;
+  });
+}
 
 /**
  * Sum of settlement rows not yet marked paid. Rejected rows excluded.
@@ -318,6 +357,39 @@ export function pendingPayoutTotal(rows: SettlementPayoutRow[] | null | undefine
       const flat = typeof r?.flat_expenses === "number" ? r.flat_expenses : 0;
       return sum + base + flat;
     }, 0);
+}
+
+/**
+ * Pending payout = unpaid settlement rows (override-aware) PLUS the live
+ * payable for days/expenses NOT covered by any non-rejected settlement.
+ * Unsettled conveyance therefore surfaces instead of reading ₹0 before an
+ * admin generates the period; paid and rejected handling never double counts.
+ * Pure — unit-tested.
+ */
+export function pendingPayoutWithUnsettled(input: {
+  employeeId: string | null | undefined;
+  settlements?: SettlementPayoutRow[] | null;
+  days?: UnsettledDay[] | null;
+  expenses?: UnsettledExpense[] | null;
+  rates?: AdminRate[] | null;
+}): number {
+  const src = input ?? ({} as NonNullable<typeof input>);
+  const settled = pendingPayoutTotal(src.settlements);
+  const openDays = (src.days ?? []).filter((d) => {
+    const day = (d?.log_date ?? "").slice(0, 10);
+    return DATE_KEY_RE.test(day) && !settlementCovers(day, src.settlements);
+  });
+  const openExpenses = (src.expenses ?? []).filter((e) => {
+    const day = (e?.expense_date ?? "").slice(0, 10);
+    return DATE_KEY_RE.test(day) && !settlementCovers(day, src.settlements);
+  });
+  const live = payableForPeriod({
+    employeeId: src.employeeId,
+    rates: src.rates,
+    days: openDays,
+    expenses: openExpenses,
+  });
+  return Math.round((settled + live.grandTotal) * 100) / 100;
 }
 
 // ---- Dashboard assembler (pure; the page stays thin) ----

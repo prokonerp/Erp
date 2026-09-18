@@ -204,20 +204,6 @@ function EngDashboard() {
       <div className="grid grid-cols-2 gap-3">
         <StatCard
           to="/eng/queue"
-          label="Pending calls"
-          value={String(stats.pendingCalls)}
-          icon={Ticket}
-          hint="Open in your queue"
-        />
-        <StatCard
-          to="/eng/queue"
-          label="Completed visits"
-          value={String(stats.completedVisits)}
-          icon={Wrench}
-          hint="Reports submitted"
-        />
-        <StatCard
-          to="/eng/queue"
           label="Material holding"
           value={String(stats.materialHolding)}
           icon={Package}

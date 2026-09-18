@@ -162,10 +162,20 @@ describe("fieldServiceReportSchema", () => {
     expect(result.data.rating).toBe(10);
   });
 
-  it('fails on batteryBankQty "17" (cap is 16)', () => {
+  it('parses batteryBankQty "40" (cap is 40)', () => {
     const result = fieldServiceReportSchema.safeParse({
       ...minimalInput(),
-      batteryBankQty: "17",
+      batteryBankQty: "40",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.batteryBankQty).toBe(40);
+  });
+
+  it('fails on batteryBankQty "41" (cap is 40)', () => {
+    const result = fieldServiceReportSchema.safeParse({
+      ...minimalInput(),
+      batteryBankQty: "41",
     });
     expect(result.success).toBe(false);
   });
@@ -258,10 +268,10 @@ describe("fieldServiceReportSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("fails when chargingReadings exceeds 16 rows", () => {
+  it("fails when chargingReadings exceeds 40 rows", () => {
     const result = fieldServiceReportSchema.safeParse({
       ...minimalInput(),
-      chargingReadings: Array.from({ length: 17 }, () => ({ volts: "13.5" })),
+      chargingReadings: Array.from({ length: 41 }, () => ({ volts: "13.5" })),
     });
     expect(result.success).toBe(false);
   });
@@ -274,10 +284,10 @@ describe("fieldServiceReportSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("fails when dischargingReadings exceeds 16 rows", () => {
+  it("fails when dischargingReadings exceeds 40 rows", () => {
     const result = fieldServiceReportSchema.safeParse({
       ...minimalInput(),
-      dischargingReadings: Array.from({ length: 17 }, () => ({ volts: "12.1" })),
+      dischargingReadings: Array.from({ length: 41 }, () => ({ volts: "12.1" })),
     });
     expect(result.success).toBe(false);
   });

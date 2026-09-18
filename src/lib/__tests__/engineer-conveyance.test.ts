@@ -12,6 +12,7 @@ import {
   kmTravelled,
   pendingMaterialSerials,
   pendingPayoutTotal,
+  pendingPayoutWithUnsettled,
   placeVisitSchema,
   todayLocal,
   upsertDocByName,
@@ -423,6 +424,114 @@ describe("pendingPayoutTotal", () => {
   it("returns 0 for null/empty", () => {
     expect(pendingPayoutTotal(null)).toBe(0);
     expect(pendingPayoutTotal([])).toBe(0);
+  });
+});
+
+describe("pendingPayoutWithUnsettled", () => {
+  const rates = [{ employee_id: "e1", rate_per_km: 10, effective_from: "2026-09-01" }];
+  const day = { log_date: "2026-09-10", morning_odometer: 100, evening_odometer: 150 };
+  const expense = { expense_date: "2026-09-10", amount: 120 };
+
+  it("sums live km x rate + expenses when no settlement exists", () => {
+    expect(
+      pendingPayoutWithUnsettled({
+        employeeId: "e1",
+        settlements: [],
+        days: [day],
+        expenses: [expense],
+        rates,
+      }),
+    ).toBe(620);
+  });
+
+  it("excludes a paid period entirely (no double count, no phantom from a paid override)", () => {
+    expect(
+      pendingPayoutWithUnsettled({
+        employeeId: "e1",
+        settlements: [
+          {
+            computed_amount: 500,
+            flat_expenses: 120,
+            adjusted_amount: 700,
+            status: "Approved",
+            paid_at: "2026-09-11T00:00:00Z",
+            period_start: "2026-09-01",
+            period_end: "2026-09-10",
+          },
+        ],
+        days: [day],
+        expenses: [expense],
+        rates,
+      }),
+    ).toBe(0);
+  });
+
+  it("counts a Rejected period live (still owed)", () => {
+    expect(
+      pendingPayoutWithUnsettled({
+        employeeId: "e1",
+        settlements: [
+          {
+            computed_amount: 500,
+            flat_expenses: 120,
+            adjusted_amount: null,
+            status: "Rejected",
+            paid_at: null,
+            period_start: "2026-09-01",
+            period_end: "2026-09-10",
+          },
+        ],
+        days: [day],
+        expenses: [expense],
+        rates,
+      }),
+    ).toBe(620);
+  });
+
+  it("adds live days outside a Pending settlement period to the settlement amount", () => {
+    expect(
+      pendingPayoutWithUnsettled({
+        employeeId: "e1",
+        settlements: [
+          {
+            computed_amount: 500,
+            flat_expenses: 0,
+            adjusted_amount: null,
+            status: "Pending",
+            paid_at: null,
+            period_start: "2026-09-01",
+            period_end: "2026-09-09",
+          },
+        ],
+        days: [day],
+        expenses: [{ expense_date: "2026-09-10", amount: 50 }],
+        rates,
+      }),
+    ).toBe(1050);
+  });
+
+  it("still counts expenses when no rate is in force", () => {
+    expect(
+      pendingPayoutWithUnsettled({
+        employeeId: "e1",
+        settlements: [],
+        days: [day],
+        expenses: [expense],
+        rates: [],
+      }),
+    ).toBe(120);
+  });
+
+  it("returns 0 for null/empty input", () => {
+    expect(
+      pendingPayoutWithUnsettled({
+        employeeId: "e1",
+        settlements: null,
+        days: null,
+        expenses: null,
+        rates: null,
+      }),
+    ).toBe(0);
   });
 });
 

@@ -5,10 +5,14 @@ import { useMyEmployee } from "@/hooks/useMyEmployee";
 import { useMyQueue } from "@/hooks/useMyQueue";
 import {
   assembleDashboardStats,
-  pendingPayoutTotal,
+  pendingPayoutWithUnsettled,
   type DashboardPendingMaterial,
   type DashboardStats,
+  type SettlementPayoutRow,
+  type UnsettledDay,
+  type UnsettledExpense,
 } from "@/lib/engineer-conveyance";
+import type { AdminRate } from "@/lib/engineersAdmin";
 import { istDateKey } from "@/lib/time";
 
 /**
@@ -135,23 +139,43 @@ export function useEngineerDashboard() {
           }
         })(),
         (async () => {
-          // Pending payout: unpaid settlement rows (own rows via RLS).
+          // Pending payout: unpaid settlements PLUS live (unsettled) km +
+          // flat expenses for days outside any non-rejected settlement
+          // window. Reads the caller's own rows via RLS (policy "own …" on
+          // all four tables), so unsettled conveyance surfaces instead of ₹0.
           try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- settlements table pending generated select nuance
-            const { data, error } = await (supabase as any)
-              .from("engineer_conveyance_settlements")
-              .select("computed_amount, flat_expenses, adjusted_amount, status, paid_at")
-              .eq("employee_id", employeeId!);
-            if (error) throw error;
-            return pendingPayoutTotal(
-              (data ?? []) as {
-                computed_amount: number | null;
-                flat_expenses: number | null;
-                adjusted_amount: number | null;
-                status: string | null;
-                paid_at: string | null;
-              }[],
-            );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- conveyance tables pending generated select nuance
+            const client = supabase as any;
+            const [settlements, days, expenses, rates] = await Promise.all([
+              client
+                .from("engineer_conveyance_settlements")
+                .select(
+                  "computed_amount, flat_expenses, adjusted_amount, status, paid_at, period_start, period_end",
+                )
+                .eq("employee_id", employeeId!),
+              client
+                .from("engineer_daily_logs")
+                .select("log_date, morning_odometer, evening_odometer")
+                .eq("employee_id", employeeId!),
+              client
+                .from("engineer_conveyance_expenses")
+                .select("expense_date, amount")
+                .eq("employee_id", employeeId!),
+              client
+                .from("engineer_conveyance_rates")
+                .select("employee_id, rate_per_km, effective_from")
+                .eq("employee_id", employeeId!),
+            ]);
+            for (const r of [settlements, days, expenses, rates]) {
+              if (r.error) throw r.error;
+            }
+            return pendingPayoutWithUnsettled({
+              employeeId: employeeId!,
+              settlements: (settlements.data ?? []) as SettlementPayoutRow[],
+              days: (days.data ?? []) as UnsettledDay[],
+              expenses: (expenses.data ?? []) as UnsettledExpense[],
+              rates: (rates.data ?? []) as AdminRate[],
+            });
           } catch (e) {
             warnings.push(`payout: ${errMessage(e).message}`);
             return 0;
