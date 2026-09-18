@@ -41,6 +41,7 @@ import {
   canProceedToWork,
 } from "@/lib/ticket-verifications";
 import { getCurrentGeo, validateGeoForMismatch } from "@/lib/verification-geo";
+import { breadcrumbPing } from "@/lib/field-location-breadcrumb";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -678,6 +679,8 @@ function EngTicketDetail() {
         console.warn("Activity insert failed:", actErr);
       }
       toast.success("Equipment mismatch recorded");
+      // Breadcrumb (best-effort, never blocks): reuse the verified photo fix.
+      void breadcrumbPing("photo", id, geo);
       setMatchedPhotoFile(null);
       if (matchedFileInputRef.current) matchedFileInputRef.current.value = "";
       resetMismatch({
@@ -864,6 +867,8 @@ function EngTicketDetail() {
         console.warn("Activity insert failed:", actErr);
       }
       toast.success("Equipment verified as matched");
+      // Breadcrumb (best-effort, never blocks): null skips when indoor GPS failed.
+      void breadcrumbPing("photo", id, matchedGeo);
       setMatchedPhotoFile(null);
       await queryClient.invalidateQueries({ queryKey: verificationKeys.detail(id) });
       await refreshActivities();

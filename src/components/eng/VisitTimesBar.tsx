@@ -4,6 +4,7 @@ import { Loader2, LogOut, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatISTTime } from "@/lib/time";
 import { reportDbError } from "@/lib/format-error";
+import { breadcrumbPing } from "@/lib/field-location-breadcrumb";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -166,6 +167,8 @@ export function VisitTimesBar({
         console.warn("Activity insert failed:", actErr);
       }
       toast.success("Arrival recorded");
+      // Breadcrumb (best-effort, never blocks): fresh fix tagged arrive.
+      void breadcrumbPing("arrive", ticketId);
       onVisitRecorded?.();
     } finally {
       arriveRef.current = false;
@@ -226,6 +229,8 @@ export function VisitTimesBar({
       }
       setVisit((v) => ({ arrival_at: v?.arrival_at ?? null, departure_at: at }));
       toast.success("Departure recorded");
+      // Breadcrumb (best-effort, never blocks): fresh fix tagged depart.
+      void breadcrumbPing("depart", ticketId);
       onVisitRecorded?.();
     } finally {
       departRef.current = false;

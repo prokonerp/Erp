@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { requireFieldLocation } from "@/integrations/supabase/field-location-middleware";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
 import { mergePartLines, stageFsrParts, type FsrPartInput } from "@/lib/sync-fsr-parts";
 import type { PartLine } from "@/lib/tickets";
@@ -40,7 +40,7 @@ function asPartLines(v: unknown): PartLine[] {
 }
 
 export const syncFsrPartsToTicket = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => syncInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

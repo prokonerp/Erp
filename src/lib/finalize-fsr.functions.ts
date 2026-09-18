@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { requireFieldLocation } from "@/integrations/supabase/field-location-middleware";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
 import {
   buildSerialPhotoBlockedError,
@@ -29,7 +29,7 @@ const finalizeInput = z.object({
  * immediately after.
  */
 export const finalizeFsrSubmission = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => finalizeInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

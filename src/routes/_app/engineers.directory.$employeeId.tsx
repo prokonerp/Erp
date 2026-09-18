@@ -22,6 +22,8 @@ import {
   useEngineerTickets,
 } from "@/hooks/useEngineerAdmin";
 import { rateInForce, rosterNameMap } from "@/lib/engineersAdmin";
+import { useLiveRoster } from "@/hooks/useEngineerMovement";
+import { LiveBadge } from "@/components/engineer/LiveBadge";
 import { istDateKey } from "@/lib/time";
 
 export const Route = createFileRoute("/_app/engineers/directory/$employeeId")({
@@ -119,6 +121,11 @@ function EngineerDetailPage() {
   const ledgerQuery = useEngineerLedger({ from: monthStart, to: today });
   const ticketsQuery = useEngineerTickets(employeeId);
   const custodyQuery = useEngineerCustody(employeeId);
+  const liveQuery = useLiveRoster();
+  const liveRow = useMemo(
+    () => liveQuery.data?.find((e) => e.employee_id === employeeId) ?? null,
+    [liveQuery.data, employeeId],
+  );
 
   const engineer = useMemo(
     () => rosterQuery.roster.find((e) => e.employee_id === employeeId) ?? null,
@@ -243,11 +250,14 @@ function EngineerDetailPage() {
         backLabel="Directory"
         actions={
           engineer ? (
-            engineer.active ? (
-              <StatusBadge tone="success">Active</StatusBadge>
-            ) : (
-              <StatusBadge tone="neutral">Inactive</StatusBadge>
-            )
+            <span className="flex items-center gap-2">
+              <LiveBadge live={liveRow} />
+              {engineer.active ? (
+                <StatusBadge tone="success">Active</StatusBadge>
+              ) : (
+                <StatusBadge tone="neutral">Inactive</StatusBadge>
+              )}
+            </span>
           ) : undefined
         }
       />

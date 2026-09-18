@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { requireFieldLocation } from "@/integrations/supabase/field-location-middleware";
 import { assertTicketAssignee } from "@/lib/engineer-identity";
 
 const ackInput = z.object({
@@ -22,7 +22,7 @@ const ackInput = z.object({
  * activity insert and just flips the column — no split-brain state.
  */
 export const acknowledgeTicketInstruction = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => ackInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

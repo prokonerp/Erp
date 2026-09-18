@@ -91,6 +91,7 @@ import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
 import { Route as AppEngineersTicketsRouteImport } from './routes/_app/engineers.tickets'
 import { Route as AppEngineersReconcileRouteImport } from './routes/_app/engineers.reconcile'
 import { Route as AppEngineersRatesRouteImport } from './routes/_app/engineers.rates'
+import { Route as AppEngineersMovementRouteImport } from './routes/_app/engineers.movement'
 import { Route as AppEngineersExpensesRouteImport } from './routes/_app/engineers.expenses'
 import { Route as AppEngineersDocumentsRouteImport } from './routes/_app/engineers.documents'
 import { Route as AppEngineersDirectoryRouteImport } from './routes/_app/engineers.directory'
@@ -563,6 +564,11 @@ const AppEngineersRatesRoute = AppEngineersRatesRouteImport.update({
   path: '/rates',
   getParentRoute: () => AppEngineersRoute,
 } as any)
+const AppEngineersMovementRoute = AppEngineersMovementRouteImport.update({
+  id: '/movement',
+  path: '/movement',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
 const AppEngineersExpensesRoute = AppEngineersExpensesRouteImport.update({
   id: '/expenses',
   path: '/expenses',
@@ -924,6 +930,7 @@ export interface FileRoutesByFullPath {
   '/engineers/directory': typeof AppEngineersDirectoryRouteWithChildren
   '/engineers/documents': typeof AppEngineersDocumentsRoute
   '/engineers/expenses': typeof AppEngineersExpensesRoute
+  '/engineers/movement': typeof AppEngineersMovementRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/engineers/reconcile': typeof AppEngineersReconcileRoute
   '/engineers/tickets': typeof AppEngineersTicketsRoute
@@ -1055,6 +1062,7 @@ export interface FileRoutesByTo {
   '/engineers/directory': typeof AppEngineersDirectoryRouteWithChildren
   '/engineers/documents': typeof AppEngineersDocumentsRoute
   '/engineers/expenses': typeof AppEngineersExpensesRoute
+  '/engineers/movement': typeof AppEngineersMovementRoute
   '/engineers/rates': typeof AppEngineersRatesRoute
   '/engineers/reconcile': typeof AppEngineersReconcileRoute
   '/engineers/tickets': typeof AppEngineersTicketsRoute
@@ -1196,6 +1204,7 @@ export interface FileRoutesById {
   '/_app/engineers/directory': typeof AppEngineersDirectoryRouteWithChildren
   '/_app/engineers/documents': typeof AppEngineersDocumentsRoute
   '/_app/engineers/expenses': typeof AppEngineersExpensesRoute
+  '/_app/engineers/movement': typeof AppEngineersMovementRoute
   '/_app/engineers/rates': typeof AppEngineersRatesRoute
   '/_app/engineers/reconcile': typeof AppEngineersReconcileRoute
   '/_app/engineers/tickets': typeof AppEngineersTicketsRoute
@@ -1342,6 +1351,7 @@ export interface FileRouteTypes {
     | '/engineers/directory'
     | '/engineers/documents'
     | '/engineers/expenses'
+    | '/engineers/movement'
     | '/engineers/rates'
     | '/engineers/reconcile'
     | '/engineers/tickets'
@@ -1473,6 +1483,7 @@ export interface FileRouteTypes {
     | '/engineers/directory'
     | '/engineers/documents'
     | '/engineers/expenses'
+    | '/engineers/movement'
     | '/engineers/rates'
     | '/engineers/reconcile'
     | '/engineers/tickets'
@@ -1613,6 +1624,7 @@ export interface FileRouteTypes {
     | '/_app/engineers/directory'
     | '/_app/engineers/documents'
     | '/_app/engineers/expenses'
+    | '/_app/engineers/movement'
     | '/_app/engineers/rates'
     | '/_app/engineers/reconcile'
     | '/_app/engineers/tickets'
@@ -2291,6 +2303,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppEngineersRatesRouteImport
       parentRoute: typeof AppEngineersRoute
     }
+    '/_app/engineers/movement': {
+      id: '/_app/engineers/movement'
+      path: '/movement'
+      fullPath: '/engineers/movement'
+      preLoaderRoute: typeof AppEngineersMovementRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
     '/_app/engineers/expenses': {
       id: '/_app/engineers/expenses'
       path: '/expenses'
@@ -2873,6 +2892,7 @@ interface AppEngineersRouteChildren {
   AppEngineersDirectoryRoute: typeof AppEngineersDirectoryRouteWithChildren
   AppEngineersDocumentsRoute: typeof AppEngineersDocumentsRoute
   AppEngineersExpensesRoute: typeof AppEngineersExpensesRoute
+  AppEngineersMovementRoute: typeof AppEngineersMovementRoute
   AppEngineersRatesRoute: typeof AppEngineersRatesRoute
   AppEngineersReconcileRoute: typeof AppEngineersReconcileRoute
   AppEngineersTicketsRoute: typeof AppEngineersTicketsRoute
@@ -2886,6 +2906,7 @@ const AppEngineersRouteChildren: AppEngineersRouteChildren = {
   AppEngineersDirectoryRoute: AppEngineersDirectoryRouteWithChildren,
   AppEngineersDocumentsRoute: AppEngineersDocumentsRoute,
   AppEngineersExpensesRoute: AppEngineersExpensesRoute,
+  AppEngineersMovementRoute: AppEngineersMovementRoute,
   AppEngineersRatesRoute: AppEngineersRatesRoute,
   AppEngineersReconcileRoute: AppEngineersReconcileRoute,
   AppEngineersTicketsRoute: AppEngineersTicketsRoute,

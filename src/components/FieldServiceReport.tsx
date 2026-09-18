@@ -28,6 +28,7 @@ import { fetchMyIdentity } from "@/lib/engineer-identity";
 import { formatISTDateTime } from "@/lib/time";
 import { syncFsrPartsToTicket } from "@/lib/sync-fsr-parts.functions";
 import { finalizeFsrSubmission } from "@/lib/finalize-fsr.functions";
+import { breadcrumbPing } from "@/lib/field-location-breadcrumb";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -121,7 +122,8 @@ function PartPhotoCapture({
       {value ? (
         <>
           <span className="inline-flex items-center text-[13px] font-medium text-emerald-600">
-            <Check className="h-4 w-4 mr-1" aria-hidden />Photo attached
+            <Check className="h-4 w-4 mr-1" aria-hidden />
+            Photo attached
           </span>
           <Button
             type="button"
@@ -725,8 +727,9 @@ export function FieldServiceReport({
         toast.error(IDENTITY_BLOCK_MESSAGE);
         return;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
+
       if (!submissionIdRef.current) submissionIdRef.current = crypto.randomUUID();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new table pending generated types (migration 20260917000003)
       const { error } = await (supabase as any).from("field_service_reports").insert(
         buildFsrPayload(parsed.data, ticketId, {
           employeeId,
@@ -775,6 +778,8 @@ export function FieldServiceReport({
       } catch {
         toast.warning("Report saved; auto-depart pending — an admin can close the ticket.");
       }
+      // Breadcrumb (best-effort, never blocks): fresh fix tagged fsr.
+      void breadcrumbPing("fsr", ticketId);
       // The queue + dashboard cache the open ticket — bust both so /eng
       // reflects the departure without a manual refresh (dashboard-direct is
       // a separate key family from the queue).

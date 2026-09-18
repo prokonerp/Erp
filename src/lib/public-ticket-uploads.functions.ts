@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { requireFieldLocation } from "@/integrations/supabase/field-location-middleware";
 import { buildStagedPublicPath, isStagedPublicPath } from "@/lib/public-upload-guards";
 import { checkRateLimit } from "@/lib/public-rate-limit";
 import { clientIpKey } from "@/lib/server-client-ip";
@@ -81,7 +82,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 export const uploadPublicTicketAttachment = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => uploadSchema.parse(input))
   .handler(async ({ data, context }) => {
     if (!(ALLOWED_IMAGE_MIME as readonly string[]).includes(data.content_type.toLowerCase())) {
@@ -271,7 +272,7 @@ const deleteTicketAttachmentSchema = z.object({
 });
 
 export const deleteTicketAttachment = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => deleteTicketAttachmentSchema.parse(input))
   .handler(async ({ data, context }) => {
     if (!data.path.startsWith(`ticket/${data.ticket_id}/`)) {

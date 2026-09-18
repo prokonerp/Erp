@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
+import { requireFieldLocation } from "@/integrations/supabase/field-location-middleware";
 import { fetchMyIdentityAdmin } from "@/lib/engineer-identity";
 import { formatDbError, storageUploadMessage } from "@/lib/format-error";
 import { uploadObjectRaw } from "@/lib/storage-upload-raw";
@@ -93,7 +94,7 @@ const uploadInput = z.object({
 });
 
 export const uploadEngineerAttachment = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => uploadInput.parse(input))
   .handler(async ({ data, context }) => {
     if (!(ALLOWED_IMAGE_MIME as readonly string[]).includes(data.content_type.toLowerCase())) {
@@ -169,7 +170,7 @@ const deleteInput = z.object({
 });
 
 export const deleteEngineerAttachment = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => deleteInput.parse(input))
   .handler(async ({ data, context }) => {
     const admin = await getAdmin();
@@ -236,7 +237,7 @@ const dailyLogInput = z.object({
 });
 
 export const saveEngineerDailyLog = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => dailyLogInput.parse(input))
   .handler(async ({ data, context }) => {
     assertLogDateNotFuture(data.log_date, todayLocal());
@@ -345,7 +346,7 @@ const expenseInput = z.object({
 });
 
 export const saveConveyanceExpense = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => expenseInput.parse(input))
   .handler(async ({ data, context }) => {
     const parsed = expenseEntrySchema.safeParse(data);
@@ -371,10 +372,11 @@ export const saveConveyanceExpense = createServerFn({ method: "POST" })
     ) {
       throw new Error("Forbidden: receipt must be your own upload");
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
+
     // Idempotent insert: a retry reusing the same client_key hits
     // ON CONFLICT (client_key) DO NOTHING and returns zero rows, so fall
     // through to the existing-row select below instead of duplicating.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
     const { data: upserted, error } = await (admin as any)
       .from("engineer_conveyance_expenses")
       .upsert(
@@ -396,6 +398,7 @@ export const saveConveyanceExpense = createServerFn({ method: "POST" })
     if (freshId) return { id: freshId };
     // Retry path: the row already exists under this client_key. Scope the
     // read to the caller's own rows so a foreign key can never leak a row.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new tables pending generated types (migration 20260920000001)
     const { data: existing, error: readErr } = await (admin as any)
       .from("engineer_conveyance_expenses")
       .select("id")
@@ -466,7 +469,7 @@ const placeVisitInput = z.object({
 });
 
 export const savePlaceVisit = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => placeVisitInput.parse(input))
   .handler(async ({ data, context }) => {
     const admin = await getAdmin();
@@ -491,7 +494,7 @@ const deletePlaceVisitInput = z.object({
 });
 
 export const deletePlaceVisit = createServerFn({ method: "POST" })
-  .middleware([requireActiveUser])
+  .middleware([requireFieldLocation])
   .inputValidator((input) => deletePlaceVisitInput.parse(input))
   .handler(async ({ data, context }) => {
     const admin = await getAdmin();

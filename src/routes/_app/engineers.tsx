@@ -4,6 +4,7 @@ import { ModuleGate } from "@/components/ModuleGate";
 import { useAttentionQueue } from "@/hooks/useEngineerAdmin";
 import {
   LayoutDashboard,
+  MapPin,
   Users,
   Ticket,
   Truck,
@@ -23,12 +24,13 @@ export const Route = createFileRoute("/_app/engineers")({
 
 type EngTab = { to: string; label: string; icon: LucideIcon; exact?: boolean };
 
-/** Admin Field-Ops tabs. All ten are live routes — every tab is a
+/** Admin Field-Ops tabs. All eleven are live routes — every tab is a
  *  keyboard-reachable link; no disabled placeholders remain. The layout is
  *  gated on the engineers module (action "read", matching the sidebar
  *  filter) — RLS stays authoritative, this only controls the shell. */
 const TABS: EngTab[] = [
   { to: "/engineers", label: "Overview", icon: LayoutDashboard, exact: true },
+  { to: "/engineers/movement", label: "Movement", icon: MapPin },
   { to: "/engineers/directory", label: "Directory", icon: Users },
   { to: "/engineers/tickets", label: "Tickets", icon: Ticket },
   { to: "/engineers/conveyance", label: "Conveyance", icon: Truck },
@@ -59,7 +61,8 @@ function EngineersLayout() {
                 className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Button variant={active ? "default" : "ghost"} size="sm">
-                  <t.icon className="h-4 w-4 mr-1" aria-hidden="true" />{t.label}
+                  <t.icon className="h-4 w-4 mr-1" aria-hidden="true" />
+                  {t.label}
                   {badge > 0 && (
                     <span className="ml-1 rounded-full bg-muted px-1.5 text-xs tabular-nums text-muted-foreground">
                       {badge}

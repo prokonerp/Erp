@@ -81,8 +81,7 @@ export const adminEngKeys = {
   payables: (employeeId: string | null, from: string, to: string) =>
     ["admin-eng", "payables", employeeId, from, to] as const,
   // All-engineers grouped payables for one window (client-side grouping).
-  payablesAll: (from: string, to: string) =>
-    ["admin-eng", "payables-all", from, to] as const,
+  payablesAll: (from: string, to: string) => ["admin-eng", "payables-all", from, to] as const,
   payablesAllPrefix: ["admin-eng", "payables-all"] as const,
   ledger: (from: string, to: string) => ["admin-eng", "ledger", from, to] as const,
   rates: (employeeId: string | null) => ["admin-eng", "rates", employeeId] as const,
@@ -102,6 +101,10 @@ export const adminEngKeys = {
   custodyPrefix: ["admin-eng", "custody"] as const,
   attention: () => ["admin-eng", "attention"] as const,
   attentionPrefix: ["admin-eng", "attention"] as const,
+  movement: () => ["admin-eng", "movement"] as const,
+  movementPrefix: ["admin-eng", "movement"] as const,
+  dayRoute: (employeeId: string | null, day: string) =>
+    ["admin-eng", "day-route", employeeId, day] as const,
 } as const;
 
 // Aggregate export for convenience

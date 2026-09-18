@@ -14,6 +14,8 @@ import {
   useEngineerOverview,
   useEngineerRoster,
 } from "@/hooks/useEngineerAdmin";
+import { useLiveRoster, type LiveEngineer } from "@/hooks/useEngineerMovement";
+import { LiveBadge } from "@/components/engineer/LiveBadge";
 
 export const Route = createFileRoute("/_app/engineers/")({
   component: EngineersIndex,
@@ -35,6 +37,7 @@ type RosterRow = {
   linkStatus: string | null;
   attentionCount: number;
   hasHigh: boolean;
+  live: LiveEngineer | null;
 };
 
 const ROSTER_COLUMNS: ColumnDef<RosterRow>[] = [
@@ -79,6 +82,11 @@ const ROSTER_COLUMNS: ColumnDef<RosterRow>[] = [
       ),
   },
   {
+    key: "live",
+    header: "Live",
+    render: (r) => <LiveBadge live={r.live} />,
+  },
+  {
     key: "attentionCount",
     header: "Attention",
     align: "right",
@@ -113,6 +121,13 @@ function EngineersIndex() {
   const overview = useEngineerOverview();
   const rosterQuery = useEngineerRoster();
   const attentionQuery = useAttentionQueue();
+  const liveQuery = useLiveRoster();
+
+  const liveById = useMemo(() => {
+    const map = new Map<string, LiveEngineer>();
+    for (const e of liveQuery.data ?? []) map.set(e.employee_id, e);
+    return map;
+  }, [liveQuery.data]);
 
   const attentionByEngineer = useMemo(() => {
     const map = new Map<string, { count: number; hasHigh: boolean }>();
@@ -150,9 +165,10 @@ function EngineersIndex() {
           linkStatus: e.link_status ?? null,
           attentionCount: slot?.count ?? 0,
           hasHigh: slot?.hasHigh ?? false,
+          live: liveById.get(e.employee_id) ?? null,
         };
       }),
-    [rosterQuery.roster, attentionByEngineer],
+    [rosterQuery.roster, attentionByEngineer, liveById],
   );
 
   // Engineers on the roster with no portal login (migration 20260925000007).
@@ -184,7 +200,14 @@ function EngineersIndex() {
         }
       />
 
-      <AdminWarnings lists={[overview.warnings, rosterQuery.warnings, attentionQuery.warnings]} />
+      <AdminWarnings
+        lists={[
+          overview.warnings,
+          rosterQuery.warnings,
+          attentionQuery.warnings,
+          liveQuery.warnings,
+        ]}
+      />
       {rosterQuery.isError && (
         <p
           role="alert"
