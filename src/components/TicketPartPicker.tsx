@@ -88,15 +88,10 @@ export function TicketPartPicker({ ticketProduct, value, onSelect, className, di
         return;
       }
       setParent(resolved);
-      // Fetch spare parts links with explicit cols + limit 500 (not select "*")
-      const { data: links } = await (supabase as any).from("product_spare_parts").select("product_id,spare_product_id").eq("parent_product_id", resolved.id).limit(500) as any;
-      // Fallback to legacy spare_part_id col if new cols not present
-      const ids = new Set<string>((links || []).map((l: any) => l.spare_product_id || l.spare_part_id).filter(Boolean));
-      // If schema uses spare_part_id only, try alternate column
-      if (ids.size === 0) {
-        const { data: legacy } = await (supabase as any).from("product_spare_parts").select("spare_part_id").eq("parent_product_id", resolved.id).limit(500) as any;
-        (legacy || []).forEach((l: any) => { if (l.spare_part_id) ids.add(l.spare_part_id); });
-      }
+      // Spare links live in product_spare_parts(parent_product_id,
+      // spare_part_id, active) — select exactly those columns.
+      const { data: links } = await (supabase as any).from("product_spare_parts").select("spare_part_id").eq("parent_product_id", resolved.id).neq("active", false).limit(500) as any;
+      const ids = new Set<string>((links || []).map((l: any) => l.spare_part_id).filter(Boolean));
       if (!alive) return;
       setSpareIds(ids);
       setFallback(false);

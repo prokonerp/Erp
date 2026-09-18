@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageLoader } from "@/components/shared/skeletons";
+import { SignedImage } from "@/components/shared/SignedImage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,9 +53,10 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
+import { usePermissions } from "@/lib/usePermissions";
 import { useTicketVerifications } from "@/hooks/useTicketVerifications";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
-import { VerificationDiff, isBucketMissingError } from "@/components/VerificationDiff";
+import { VerificationDiff } from "@/components/VerificationDiff";
 import { FsrPrintButton, type FsrDbRow } from "@/components/fsr/FsrPrintButton";
 import { fetchEngineerLoginIds } from "@/hooks/useTicketsTable";
 import { attachLoginFlags, sortEngineersLoginFirst } from "@/lib/eng-queue-utils";
@@ -94,12 +96,41 @@ type FsrPart = {
   new_sr_no: string | null;
   charges: number | null;
   qty: number | null;
+  /** Serial-photo evidence the engineer must capture (finalize gate). */
+  photo_path?: string | null;
+  photoPath?: string | null;
+  serial_photo_path?: string | null;
+  serialPhotoPath?: string | null;
+  photo?: string | null;
+  photo_url?: string | null;
 };
+
+/** First non-blank serial-photo path across current + legacy keys. */
+function fsrPartPhoto(p: FsrPart): string | null {
+  const keys = [
+    "photo_path",
+    "photoPath",
+    "serial_photo_path",
+    "serialPhotoPath",
+    "photo",
+    "photo_url",
+  ] as const;
+  for (const k of keys) {
+    const v = p[k];
+    if (typeof v === "string" && v.trim() !== "") return v.trim();
+  }
+  return null;
+}
 
 function asFsrArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
+/**
+ * Inline thumbnail for the engineer-uploaded serial/correction photo, with
+ * click-to-enlarge. Replaces the old text-only link so a reviewer can SEE
+ * the image before confirming. Returns null when there is no photo.
+ */
 function EquipmentVerificationPhoto({
   photoPath,
   linkLabel,
@@ -107,64 +138,8 @@ function EquipmentVerificationPhoto({
   photoPath: string | null | undefined;
   linkLabel: string;
 }) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [photoLoading, setPhotoLoading] = useState(false);
-  const [photoError, setPhotoError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!photoPath) {
-      setSignedUrl(null);
-      setPhotoError(null);
-      setPhotoLoading(false);
-      return;
-    }
-    setPhotoLoading(true);
-    setPhotoError(null);
-    setSignedUrl(null);
-    supabase.storage
-      .from("ticket-attachments")
-      .createSignedUrl(photoPath, 3600)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          setPhotoError(error.message);
-        } else {
-          setSignedUrl(data?.signedUrl ?? null);
-        }
-        setPhotoLoading(false);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setPhotoError(e instanceof Error ? e.message : String(e));
-        setPhotoLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [photoPath]);
-
   if (!photoPath) return null;
-  if (photoLoading) {
-    return <div className="text-xs text-muted-foreground">Loading photo…</div>;
-  }
-  if (signedUrl) {
-    return (
-      <a className="text-xs underline" href={signedUrl} target="_blank" rel="noreferrer">
-        {linkLabel}
-      </a>
-    );
-  }
-  if (photoError) {
-    return (
-      <div className="text-xs text-muted-foreground">
-        {isBucketMissingError(photoError)
-          ? "Photo unavailable (storage bucket missing - ask admin to run bucket SQL)"
-          : `Photo unavailable (${photoError})`}
-      </div>
-    );
-  }
-  return null;
+  return <SignedImage path={photoPath} alt={linkLabel} thumbClassName="h-20 w-20" />;
 }
 
 export const Route = createFileRoute("/_app/tickets/$id")({
@@ -313,7 +288,10 @@ function TicketDetail() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [busy, setBusy] = useState(false);
   const [noteText, setNoteText] = useState("");
-  const [noteSpecial, setNoteSpecial] = useState(false);
+  // Compact-card quick note (main page). Defaults to tagged-special since it
+  // lives inside the Special Instruction box; untick for a plain note.
+  const [spNote, setSpNote] = useState("");
+  const [spNoteSpecial, setSpNoteSpecial] = useState(true);
   const [templates, setTemplates] = useState<Record<string, string>>({});
   const [quoteNo, setQuoteNo] = useState<string>("");
   const [customer, setCustomer] = useState<CustomerBilling | null>(null);
@@ -353,6 +331,10 @@ function TicketDetail() {
   const [cancellingOpen, setCancellingOpen] = useState(false);
 
   const { isAdmin } = useIsAdmin();
+  const { can } = usePermissions();
+  // FSR line confirm is a review action, not an admin tool: admins plus any
+  // tickets editor may confirm. Generation (GRN/DC/Oracle) stays admin-only.
+  const canConfirm = isAdmin || can("tickets", "edit");
   const { data: verifications } = useTicketVerifications(id);
   const { data: fsrRows, refetch: refetchFsr } = useFieldServiceReport(id);
   const fsrLatest = fsrRows?.[0] ?? null;
@@ -984,11 +966,18 @@ function TicketDetail() {
 
   const addNote = async () => {
     if (!noteText.trim()) return;
-    await logActivity("note", noteText, undefined, undefined, noteSpecial);
+    await logActivity("note", noteText, undefined, undefined, false);
     setNoteText("");
-    setNoteSpecial(false);
     await load();
-    toast.success(noteSpecial ? "Special instruction added" : "Note added");
+    toast.success("Note added");
+  };
+
+  const addSpecialNote = async () => {
+    if (!spNote.trim()) return;
+    await logActivity("note", spNote, undefined, undefined, spNoteSpecial);
+    setSpNote("");
+    await load();
+    toast.success(spNoteSpecial ? "Special instruction added" : "Note added");
   };
 
   const createOOWQuote = async () => {
@@ -1423,27 +1412,6 @@ function TicketDetail() {
               </div>
               <div className="md:col-span-3">
                 <Label>
-                  Special Instruction{" "}
-                  <span className="text-xs text-muted-foreground">
-                    (shows blinking ribbon when filled)
-                  </span>
-                </Label>
-                <Textarea
-                  rows={1}
-                  value={t.special_instruction || ""}
-                  onChange={(e) => update({ special_instruction: e.target.value })}
-                  placeholder="Critical handling notes for engineer (optional)"
-                />
-                {acknowledged && (
-                  <div className="mt-1 text-xs text-green-700">
-                    Acknowledged
-                    {t.acknowledged_at ? ` at ${new Date(t.acknowledged_at).toLocaleString()}` : ""}
-                    {t.acknowledged_by ? ` by ${t.acknowledged_by.slice(0, 8)}` : ""}
-                  </div>
-                )}
-              </div>
-              <div className="md:col-span-3">
-                <Label>
                   Preferred Visit Date & Time{" "}
                   <span className="text-xs text-muted-foreground">(optional)</span>
                 </Label>
@@ -1599,23 +1567,25 @@ function TicketDetail() {
                   {(t.defective_parts_details || []).length === 0 && (
                     <p className="text-sm text-muted-foreground">No defective parts added yet.</p>
                   )}
-                  {isAdmin && (
+                  {canConfirm && (
                     <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed p-2 bg-muted/30">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={!hasNamedDef || !!t.grn_no}
-                        onClick={handleGenerateGrn}
-                        title={
-                          t.grn_no
-                            ? `Linked GRN ${t.grn_no}`
-                            : "Stage defective lines to a Customer GRN"
-                        }
-                      >
-                        <FileText className="h-4 w-4 mr-1" />
-                        Generate GRN (Customer)
-                      </Button>
-                      {unconfirmedDef.length > 0 && (
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={!hasNamedDef || !!t.grn_no}
+                          onClick={handleGenerateGrn}
+                          title={
+                            t.grn_no
+                              ? `Linked GRN ${t.grn_no}`
+                              : "Stage defective lines to a Customer GRN"
+                          }
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          Generate GRN (Customer)
+                        </Button>
+                      )}
+                      {canConfirm && unconfirmedDef.length > 0 && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1692,7 +1662,7 @@ function TicketDetail() {
                           <Badge variant="secondary" className="text-[10px]">
                             FSR · {p.confirmed ? "confirmed" : "unconfirmed"}
                           </Badge>
-                          {!p.confirmed && isAdmin && (
+                          {!p.confirmed && canConfirm && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -1858,21 +1828,23 @@ function TicketDetail() {
                   {(t.good_parts_details || []).length === 0 && (
                     <p className="text-sm text-muted-foreground">No good parts added yet.</p>
                   )}
-                  {isAdmin && (
+                  {canConfirm && (
                     <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed p-2 bg-muted/30">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={!hasNamedGood || !!t.dc_no}
-                        onClick={handleGenerateDc}
-                        title={
-                          t.dc_no ? `Linked DC ${t.dc_no}` : "Stage good lines to a Customer DC"
-                        }
-                      >
-                        <FileText className="h-4 w-4 mr-1" />
-                        Generate DC (Customer)
-                      </Button>
-                      {unconfirmedGood.length > 0 && (
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={!hasNamedGood || !!t.dc_no}
+                          onClick={handleGenerateDc}
+                          title={
+                            t.dc_no ? `Linked DC ${t.dc_no}` : "Stage good lines to a Customer DC"
+                          }
+                        >
+                          <FileText className="h-4 w-4 mr-1" />
+                          Generate DC (Customer)
+                        </Button>
+                      )}
+                      {canConfirm && unconfirmedGood.length > 0 && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1930,7 +1902,7 @@ function TicketDetail() {
                               FSR · {p.confirmed ? "confirmed" : "unconfirmed"}
                             </Badge>
                             {!p.confirmed &&
-                              (isAdmin ? (
+                              (canConfirm ? (
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -1942,7 +1914,7 @@ function TicketDetail() {
                                 </Button>
                               ) : (
                                 <span className="text-[10px] text-muted-foreground">
-                                  Pending admin review
+                                  Pending review
                                 </span>
                               ))}
                           </div>
@@ -2079,6 +2051,85 @@ function TicketDetail() {
                   Close & Notify Customer
                 </Button>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-lg shadow-none border-amber-200">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 border-b px-3 py-1.5">
+              <CardTitle className="text-[13px]">Special Instruction</CardTitle>
+              {acknowledged ? (
+                <span className="text-[11px] font-medium text-green-700">Acknowledged</span>
+              ) : t.special_instruction && t.special_instruction.trim() !== "" ? (
+                <button
+                  type="button"
+                  onClick={acknowledgeSpecial}
+                  className="min-h-[32px] text-[11px] font-semibold text-red-700 underline underline-offset-2"
+                >
+                  Acknowledge
+                </button>
+              ) : null}
+            </CardHeader>
+            <CardContent className="space-y-1.5 p-2">
+              <Textarea
+                rows={2}
+                value={t.special_instruction || ""}
+                onChange={(e) => update({ special_instruction: e.target.value })}
+                placeholder="Critical handling notes for engineer (optional)"
+                aria-label="Special instruction"
+                className="min-h-[44px] text-xs"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-muted-foreground">
+                  {acknowledged
+                    ? `Ack${t.acknowledged_at ? ` ${new Date(t.acknowledged_at).toLocaleString()}` : ""}`
+                    : "Filling this shows a blinking ribbon"}
+                </span>
+                {acknowledged ? (
+                  <button
+                    type="button"
+                    onClick={reopenSpecial}
+                    className="min-h-[32px] text-[11px] font-medium text-muted-foreground underline underline-offset-2"
+                  >
+                    Reopen
+                  </button>
+                ) : t.special_instruction && t.special_instruction.trim() !== "" ? (
+                  <button
+                    type="button"
+                    onClick={() => update({ special_instruction: "" })}
+                    className="min-h-[32px] text-[11px] font-medium text-muted-foreground underline underline-offset-2"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+              <div className="flex flex-nowrap items-center gap-1.5 border-t border-border pt-1.5">
+                <Input
+                  value={spNote}
+                  onChange={(e) => setSpNote(e.target.value)}
+                  placeholder="Quick note…"
+                  aria-label="Quick note"
+                  className="h-8 min-w-0 flex-1 text-xs"
+                />
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={() => void addSpecialNote()}
+                  disabled={!spNote.trim()}
+                >
+                  Add
+                </Button>
+                <label className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
+                  <Checkbox
+                    checked={spNoteSpecial}
+                    onCheckedChange={(v) => setSpNoteSpecial(v === true)}
+                    className="shrink-0"
+                    aria-label="Tag as Special Instruction"
+                  />
+                  <span>
+                    Tag as <b className="text-red-700">Special Instruction</b>
+                  </span>
+                </label>
+              </div>
             </CardContent>
           </Card>
 
@@ -2405,34 +2456,47 @@ function TicketDetail() {
                             if (parts.length === 0) {
                               return <p className="text-xs text-muted-foreground">None</p>;
                             }
-                            return parts.map((p, i) => (
-                              <div key={`part-${i}`} className="space-y-1">
-                                <p className="text-xs font-medium">
-                                  Part {i + 1}
-                                  {p.item ? ` — ${p.item}` : ""}
-                                </p>
-                                <div className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="text-muted-foreground">Item</span>
-                                  <span className="font-medium">{p.item ?? "—"}</span>
+                            return parts.map((p, i) => {
+                              const photo = fsrPartPhoto(p);
+                              return (
+                                <div key={`part-${i}`} className="space-y-1">
+                                  <p className="text-xs font-medium">
+                                    Part {i + 1}
+                                    {p.item ? ` — ${p.item}` : ""}
+                                  </p>
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-muted-foreground">Item</span>
+                                    <span className="font-medium">{p.item ?? "—"}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-muted-foreground">Old Sr. No</span>
+                                    <span className="font-medium">{p.old_sr_no ?? "—"}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-muted-foreground">New Sr. No</span>
+                                    <span className="font-medium">{p.new_sr_no ?? "—"}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-muted-foreground">Charges</span>
+                                    <span className="font-medium">{p.charges ?? "—"}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-muted-foreground">Qty</span>
+                                    <span className="font-medium">{p.qty ?? "—"}</span>
+                                  </div>
+                                  {photo && (
+                                    <div className="flex items-center justify-between gap-2 text-xs">
+                                      <span className="text-muted-foreground">Photo</span>
+                                      <SignedImage
+                                        path={photo}
+                                        alt={`Serial photo for part ${i + 1}${p.item ? ` ${p.item}` : ""}`}
+                                        thumbClassName="h-12 w-12"
+                                      />
+                                    </div>
+                                  )}
                                 </div>
-                                <div className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="text-muted-foreground">Old Sr. No</span>
-                                  <span className="font-medium">{p.old_sr_no ?? "—"}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="text-muted-foreground">New Sr. No</span>
-                                  <span className="font-medium">{p.new_sr_no ?? "—"}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="text-muted-foreground">Charges</span>
-                                  <span className="font-medium">{p.charges ?? "—"}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="text-muted-foreground">Qty</span>
-                                  <span className="font-medium">{p.qty ?? "—"}</span>
-                                </div>
-                              </div>
-                            ));
+                              );
+                            });
                           })()}
                         </div>
                       </div>
@@ -2664,16 +2728,6 @@ function TicketDetail() {
                         />
                         <Button onClick={addNote}>Add</Button>
                       </div>
-                      <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-                        <Checkbox
-                          checked={noteSpecial}
-                          onCheckedChange={(v) => setNoteSpecial(v === true)}
-                        />
-                        <span>
-                          Tag as <b className="text-red-700">Special Instruction</b> (flags this
-                          ticket as critical)
-                        </span>
-                      </label>
                     </div>
                     <div className="space-y-2 max-h-72 overflow-auto">
                       {activities.length === 0 && (
