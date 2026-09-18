@@ -10,6 +10,13 @@
 /** Exact user-facing copy for the blocked gate. Do not reword per call site. */
 export const LOCATION_GATE_MESSAGE = "Turn on GPS and internet, then try again.";
 
+/**
+ * Machine-readable gate denial code (thrown with statusCode 403 by
+ * requireFieldLocation). Lives here — not in the middleware — so client
+ * bundles can branch on it without importing server modules.
+ */
+export const LOCATION_REQUIRED = "LOCATION_REQUIRED";
+
 /** Consent copy version written to engineer_consent_events. Bump on copy change. */
 export const DUTY_CONSENT_VERSION = "v1";
 
@@ -145,6 +152,64 @@ export function evaluateGateState(input: GateInput): GateState {
   if (input.failure === "unavailable" || input.failure === "timeout") return "gps_off";
   if (!input.lastSeenAt) return "no_fix";
   return isFixFresh(input.lastSeenAt, input.nowMs, input.graceMs) ? "ok" : "stale";
+}
+
+export type LiveRow = {
+  on_duty: boolean;
+  last_seen_at: string | null;
+  last_lat: number | null;
+  last_long: number | null;
+  last_accuracy_m: number | null;
+  session_id: string | null;
+};
+
+export type FixInput = {
+  lat: number;
+  long: number;
+  accuracy: number | null;
+  captured_at: string;
+};
+
+const OFF_DUTY_ROW: LiveRow = {
+  on_duty: false,
+  last_seen_at: null,
+  last_lat: null,
+  last_long: null,
+  last_accuracy_m: null,
+  session_id: null,
+};
+
+/**
+ * Next live-status row for an incoming fix. Two invariants:
+ * 1. `on_duty` follows the OPEN SESSION, never the batch — a ping with no
+ *    open session can neither mark on-duty nor move liveness (off-duty
+ *    fixes stay out of the live row entirely). A live row whose session is
+ *    gone self-heals to off-duty instead of lingering as an orphan.
+ * 2. `last_seen_at` is monotonic — a delayed queue flush (old captured_at)
+ *    must never move a fresher fix backwards and re-gate a working engineer.
+ */
+export function nextLiveStatus(input: {
+  current: LiveRow | null;
+  latest: FixInput;
+  openSessionId: string | null;
+}): LiveRow {
+  const { current, latest, openSessionId } = input;
+  if (openSessionId == null) {
+    if (!current) return { ...OFF_DUTY_ROW };
+    return { ...current, on_duty: false, session_id: null };
+  }
+  const incomingMs = Date.parse(latest.captured_at);
+  const currentMs = current?.last_seen_at ? Date.parse(current.last_seen_at) : NaN;
+  const isNewer =
+    Number.isFinite(incomingMs) && (!Number.isFinite(currentMs) || incomingMs >= currentMs);
+  return {
+    on_duty: true,
+    session_id: openSessionId,
+    last_seen_at: isNewer ? latest.captured_at : (current?.last_seen_at ?? null),
+    last_lat: isNewer ? latest.lat : (current?.last_lat ?? null),
+    last_long: isNewer ? latest.long : (current?.last_long ?? null),
+    last_accuracy_m: isNewer ? latest.accuracy : (current?.last_accuracy_m ?? null),
+  };
 }
 
 export type QueuedPing = {

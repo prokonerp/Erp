@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { reportDbError } from "@/lib/format-error";
+import { announceLocationDenial } from "@/lib/location-denial";
 import { useMyEmployee } from "@/hooks/useMyEmployee";
 import { supabase } from "@/integrations/supabase/client";
 import { adminEngKeys, engKeys } from "@/lib/queryKeys";
@@ -488,6 +489,7 @@ function EngConveyance() {
       toast.success("Place visit added");
       await queryClient.invalidateQueries({ queryKey: visitsKey });
     } catch (err) {
+      announceLocationDenial(err);
       toast.error(reportDbError("place visit save", err, "Failed to save place visit"));
     } finally {
       setVisitBusy(false);
@@ -502,6 +504,7 @@ function EngConveyance() {
       toast.success("Place visit removed");
       await queryClient.invalidateQueries({ queryKey: visitsKey });
     } catch (err) {
+      announceLocationDenial(err);
       toast.error(reportDbError("place visit delete", err, "Failed to delete place visit"));
     } finally {
       setVisitBusy(false);
@@ -741,6 +744,7 @@ function EngConveyance() {
         }
         return;
       }
+      announceLocationDenial(err);
       toast.error(reportDbError("conveyance save", err, "Save failed"));
     } finally {
       setSaving(null);
@@ -815,6 +819,7 @@ function EngConveyance() {
       await queryClient.invalidateQueries({ queryKey: adminEngKeys.attentionPrefix });
       await queryClient.invalidateQueries({ queryKey: adminEngKeys.overviewPrefix });
     } catch (err) {
+      announceLocationDenial(err);
       toast.error(reportDbError("expense save", err, "Save failed"));
     } finally {
       setExpenseBusy(false);

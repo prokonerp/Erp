@@ -42,6 +42,7 @@ import {
 } from "@/lib/ticket-verifications";
 import { getCurrentGeo, validateGeoForMismatch } from "@/lib/verification-geo";
 import { breadcrumbPing } from "@/lib/field-location-breadcrumb";
+import { announceLocationDenial } from "@/lib/location-denial";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -437,6 +438,7 @@ function EngTicketDetail() {
         triggerPasswordChangeDialog();
         return;
       }
+      announceLocationDenial(err);
       toast.error(reportDbError("acknowledge instruction", err, "Acknowledgement failed"));
     } finally {
       ackRef.current = false;
@@ -697,6 +699,7 @@ function EngTicketDetail() {
         triggerPasswordChangeDialog();
         return;
       }
+      announceLocationDenial(err);
       toast.error(reportDbError("equipment mismatch upload", err, "Upload failed"));
       // Keep the picked file: a transient failure (GPS, network) must not
       // force the engineer to re-pick the photo. Cleared on success only.
@@ -877,6 +880,7 @@ function EngTicketDetail() {
         triggerPasswordChangeDialog();
         return;
       }
+      announceLocationDenial(err);
       toast.error(reportDbError("equipment matched upload", err, "Upload failed"));
       // Keep the picked file: a transient failure must not force re-picking.
       // Cleared on success only.
@@ -961,6 +965,7 @@ function EngTicketDetail() {
         triggerPasswordChangeDialog();
         return;
       }
+      announceLocationDenial(err);
       toast.error(reportDbError("photo upload", err, "Upload failed"));
     } finally {
       photoRef.current = false;

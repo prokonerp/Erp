@@ -12,8 +12,11 @@ import {
   istDayKeyFromMs,
   dedupeQueuedPings,
   flagSuspiciousFix,
+  nextLiveStatus,
   type GateState,
   type GateInput,
+  type LiveRow,
+  type FixInput,
   type QueuedPing,
 } from "@/lib/field-location";
 
@@ -191,5 +194,65 @@ describe("flagSuspiciousFix", () => {
   });
   it("passes a clean fix", () => {
     expect(flagSuspiciousFix({ accuracy: 12, speedKmh: 28, clockSkewMs: 1500 })).toEqual([]);
+  });
+});
+
+describe("nextLiveStatus", () => {
+  const fix = (at: string): FixInput => ({ lat: 12.9, long: 77.6, accuracy: 12, captured_at: at });
+  const row = (seen: string | null): LiveRow => ({
+    on_duty: true,
+    last_seen_at: seen,
+    last_lat: 12.9,
+    last_long: 77.6,
+    last_accuracy_m: 12,
+    session_id: "sess-open",
+  });
+  it("marks on-duty when the batch belongs to the open session", () => {
+    const out = nextLiveStatus({
+      current: null,
+      latest: fix("2026-09-18T10:00:00Z"),
+      openSessionId: "sess-open",
+    });
+    expect(out.on_duty).toBe(true);
+    expect(out.session_id).toBe("sess-open");
+    expect(out.last_seen_at).toBe("2026-09-18T10:00:00Z");
+  });
+  it("never flips on-duty without an open session", () => {
+    const out = nextLiveStatus({
+      current: null,
+      latest: fix("2026-09-18T10:00:00Z"),
+      openSessionId: null,
+    });
+    expect(out.on_duty).toBe(false);
+    expect(out.last_seen_at).toBeNull();
+  });
+  it("heals an orphan live row when its session is gone", () => {
+    const out = nextLiveStatus({
+      current: row("2026-09-18T10:00:00Z"),
+      latest: fix("2026-09-18T10:01:00Z"),
+      openSessionId: null,
+    });
+    expect(out.on_duty).toBe(false);
+    expect(out.session_id).toBeNull();
+    expect(out.last_seen_at).toBe("2026-09-18T10:00:00Z");
+  });
+  it("never moves last_seen_at backwards (delayed queue flush)", () => {
+    const out = nextLiveStatus({
+      current: row("2026-09-18T10:00:00Z"),
+      latest: fix("2026-09-17T10:00:00Z"),
+      openSessionId: "sess-open",
+    });
+    expect(out.on_duty).toBe(true);
+    expect(out.last_seen_at).toBe("2026-09-18T10:00:00Z");
+    expect(out.last_lat).toBe(12.9);
+  });
+  it("adopts a same-or-newer fix", () => {
+    const out = nextLiveStatus({
+      current: row("2026-09-18T10:00:00Z"),
+      latest: { ...fix("2026-09-18T10:05:00Z"), lat: 13.0 },
+      openSessionId: "sess-open",
+    });
+    expect(out.last_seen_at).toBe("2026-09-18T10:05:00Z");
+    expect(out.last_lat).toBe(13.0);
   });
 });

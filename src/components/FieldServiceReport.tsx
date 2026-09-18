@@ -29,6 +29,7 @@ import { formatISTDateTime } from "@/lib/time";
 import { syncFsrPartsToTicket } from "@/lib/sync-fsr-parts.functions";
 import { finalizeFsrSubmission } from "@/lib/finalize-fsr.functions";
 import { breadcrumbPing } from "@/lib/field-location-breadcrumb";
+import { announceLocationDenial } from "@/lib/location-denial";
 import { useFieldServiceReport } from "@/hooks/useFieldServiceReport";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -101,6 +102,7 @@ function PartPhotoCapture({
       onChange(res.path);
       toast.success("Serial photo attached");
     } catch (e) {
+      announceLocationDenial(e);
       toast.error(e instanceof Error ? e.message : "Photo upload failed");
     } finally {
       setUploading(false);
@@ -767,7 +769,8 @@ export function FieldServiceReport({
             `Parts staged: ${defectiveAdded} defective received, ${goodAdded} good used`,
           );
         }
-      } catch {
+      } catch (e) {
+        announceLocationDenial(e);
         toast.warning("Report saved; parts staging pending — admin can Sync FSR parts.");
       }
       // Auto-depart only: the report submit ends the site visit, but the
@@ -775,7 +778,8 @@ export function FieldServiceReport({
       // is already saved).
       try {
         await callFinalizeFsr({ data: { ticketId } });
-      } catch {
+      } catch (e) {
+        announceLocationDenial(e);
         toast.warning("Report saved; auto-depart pending — an admin can close the ticket.");
       }
       // Breadcrumb (best-effort, never blocks): fresh fix tagged fsr.

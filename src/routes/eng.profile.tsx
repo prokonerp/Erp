@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { reportDbError } from "@/lib/format-error";
+import { announceLocationDenial } from "@/lib/location-denial";
 import { useAuth, purgeAuthCaches } from "@/lib/useAuth";
 import { useIsEngineer } from "@/lib/useIsEngineer";
 import { useMyQueue } from "@/hooks/useMyQueue";
@@ -237,6 +238,7 @@ function EngProfile() {
       if (photoInputRef.current) photoInputRef.current.value = "";
       await refreshEmployee();
     } catch (err) {
+      announceLocationDenial(err);
       toast.error(reportDbError("profile photo upload", err, "Photo upload failed"));
     } finally {
       setPhotoBusy(false);
@@ -300,6 +302,7 @@ function EngProfile() {
       toast.success(oldDoc ? "Document replaced" : "Document uploaded");
       await refreshEmployee();
     } catch (err) {
+      announceLocationDenial(err);
       toast.error(reportDbError("profile document upload", err, "Document upload failed"));
     } finally {
       setBusyBlock(null);

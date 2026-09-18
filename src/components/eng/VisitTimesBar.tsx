@@ -5,6 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatISTTime } from "@/lib/time";
 import { reportDbError } from "@/lib/format-error";
 import { breadcrumbPing } from "@/lib/field-location-breadcrumb";
+import { LOCATION_GATE_MESSAGE } from "@/lib/field-location";
+import { raiseDutyPrompt } from "@/lib/location-denial";
+import { useLocationGate } from "@/hooks/useLocationGate";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -54,6 +57,18 @@ export function VisitTimesBar({
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
   const [now, setNow] = useState(() => Date.now());
+  const { gate, headline } = useLocationGate();
+
+  // Visit writes go straight through RLS (no server gate), so enforce the
+  // duty/location policy here: definitive blocked states refuse with the
+  // gate message and raise the duty prompt. "checking" stays permissive —
+  // it is transient and RLS still applies.
+  const gateAllowsWrite = () => {
+    if (gate === "ok" || gate === "override" || gate === "checking") return true;
+    toast.error(headline ?? LOCATION_GATE_MESSAGE);
+    raiseDutyPrompt();
+    return false;
+  };
 
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
@@ -98,6 +113,7 @@ export function VisitTimesBar({
       toast.error(OFFLINE_REASON);
       return;
     }
+    if (!gateAllowsWrite()) return;
     if (arriveRef.current) return;
     arriveRef.current = true;
     setArriveBusy(true);
@@ -182,6 +198,7 @@ export function VisitTimesBar({
       toast.error(OFFLINE_REASON);
       return;
     }
+    if (!gateAllowsWrite()) return;
     if (departRef.current) return;
     departRef.current = true;
     setDepartBusy(true);

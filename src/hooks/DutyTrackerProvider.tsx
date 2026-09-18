@@ -83,7 +83,16 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
       await removeQueued(batch.map((p) => p.client_ping_id));
       setQueued(await queueCount());
       const newest = batch[batch.length - 1];
-      if (newest) setLastSeenAt(newest.captured_at);
+      // Monotonic: a delayed batch must never drag a fresher fix backwards.
+      if (newest) {
+        setLastSeenAt((prev) => {
+          if (!prev) return newest.captured_at;
+          const a = Date.parse(prev);
+          const b = Date.parse(newest.captured_at);
+          if (!Number.isFinite(b)) return prev;
+          return !Number.isFinite(a) || b >= a ? newest.captured_at : prev;
+        });
+      }
     } catch (e) {
       setLastError(e instanceof Error ? e.message : "Sync failed — fixes stay queued");
     } finally {
@@ -92,20 +101,45 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  type LiveStatusShape =
+    | { linked: false; isAdmin: boolean }
+    | {
+        linked: true;
+        employee_id: string;
+        live: {
+          on_duty: boolean;
+          last_lat: number | null;
+          last_long: number | null;
+          last_accuracy_m: number | null;
+          last_seen_at: string | null;
+          session_id: string | null;
+          updated_at: string;
+        } | null;
+        open_session: { id: string; started_at: string } | null;
+        consented: boolean;
+        override_active: boolean;
+      };
+
+  const applyStatus = useCallback((s: LiveStatusShape) => {
+    if (!s.linked) {
+      setOnDuty(false);
+      setSessionId(null);
+      return { consented: false, onDuty: false };
+    }
+    const duty = !!s.live?.on_duty && !!s.open_session;
+    setOnDuty(duty);
+    setSessionId(s.open_session?.id ?? null);
+    setConsented(s.consented);
+    setLastSeenAt(s.live?.last_seen_at ?? null);
+    setOverrideActive(s.override_active);
+    setLastError(null);
+    return { consented: s.consented, onDuty: duty };
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
-      const s = await statusFn();
-      if (!s.linked) {
-        setOnDuty(false);
-        setSessionId(null);
-        return;
-      }
-      setOnDuty(!!s.live?.on_duty && !!s.open_session);
-      setSessionId(s.open_session?.id ?? null);
-      setConsented(s.consented);
-      setLastSeenAt(s.live?.last_seen_at ?? null);
-      setOverrideActive(s.override_active);
-      setLastError(null);
+      const s = (await statusFn()) as LiveStatusShape;
+      applyStatus(s);
     } catch (e) {
       setLastError(e instanceof Error ? e.message : "Status check failed");
     } finally {
@@ -291,7 +325,19 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(
     async (deviceLabel?: string) => {
-      if (!consented) {
+      // Consent may have been recorded moments ago (dialog) with no refresh
+      // landed yet — re-read before refusing, or first use loops forever.
+      // The server re-checks anyway; this is only the client fast path.
+      let ok = consented;
+      if (!ok) {
+        try {
+          const s = (await statusFn()) as LiveStatusShape;
+          ok = applyStatus(s).consented;
+        } catch {
+          ok = false;
+        }
+      }
+      if (!ok) {
         const err = new Error("Location consent is required before starting duty.");
         (err as Error & { code: string }).code = CONSENT_REQUIRED;
         throw err;
@@ -303,7 +349,7 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
       lastSentRef.current = null;
       await refresh();
     },
-    [consented, refresh, startFn],
+    [applyStatus, consented, refresh, startFn, statusFn],
   );
 
   const stop = useCallback(async () => {

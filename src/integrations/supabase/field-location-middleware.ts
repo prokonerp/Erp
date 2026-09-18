@@ -16,10 +16,14 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { setResponseStatus } from "@tanstack/react-start/server";
 import { requireActiveUser } from "./auth-middleware";
-import { isFixFresh, LOCATION_GATE_MESSAGE, LOCATION_GRACE_MS } from "@/lib/field-location";
+import {
+  isFixFresh,
+  LOCATION_GATE_MESSAGE,
+  LOCATION_GRACE_MS,
+  LOCATION_REQUIRED,
+} from "@/lib/field-location";
 
-export { LOCATION_GRACE_MS };
-export const LOCATION_REQUIRED = "LOCATION_REQUIRED";
+export { LOCATION_GRACE_MS, LOCATION_REQUIRED };
 
 export type FieldLocationGateError = Error & { statusCode: number; code: string };
 

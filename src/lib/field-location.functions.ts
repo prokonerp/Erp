@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { fetchMyIdentityAdmin } from "@/lib/engineer-identity";
+import { nextLiveStatus, type LiveRow } from "@/lib/field-location";
 import { reportDbError } from "@/lib/format-error";
 
 export const CONSENT_REQUIRED = "CONSENT_REQUIRED";
@@ -190,6 +191,18 @@ export const startDutySession = createServerFn({ method: "POST" })
       const lastSeen = (live as { last_seen_at?: string | null } | null)?.last_seen_at;
       const idleMs = lastSeen ? Date.now() - Date.parse(lastSeen) : Number.POSITIVE_INFINITY;
       if (Number.isFinite(idleMs) && idleMs <= STALE_SESSION_IDLE_MS) {
+        // Resume must also restore liveness — otherwise the client
+        // recomputes off-duty from the stale live row and Start loops.
+        const { error: resumeErr } = await admin.from("engineer_live_status").upsert(
+          {
+            employee_id: employeeId,
+            on_duty: true,
+            session_id: existing.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "employee_id" },
+        );
+        if (resumeErr) throw new Error(reportDbError("live status resume", resumeErr));
         return { session_id: existing.id, resumed: true as const };
       }
       // Stale (app killed, no End shift): close it as auto_closed, open fresh.
@@ -261,10 +274,12 @@ export const recordPings = createServerFn({ method: "POST" })
     if ((count ?? 0) + data.pings.length > MAX_PINGS_PER_MINUTE) {
       throw new Error("Rate limited: too many location pings. Slow down and retry.");
     }
+    const open = await openSession(admin, employeeId);
+    const openSessionId = open?.id ?? null;
     const rows = data.pings.map((p) => ({
       client_ping_id: p.client_ping_id,
       employee_id: employeeId,
-      session_id: data.session_id ?? null,
+      session_id: data.session_id ?? openSessionId,
       ticket_id: p.ticket_id ?? null,
       lat: p.lat,
       long: p.long,
@@ -278,22 +293,34 @@ export const recordPings = createServerFn({ method: "POST" })
       .select("client_ping_id");
     if (error) throw new Error(reportDbError("record pings", error));
     const latest = [...data.pings].sort((a, b) => (a.captured_at < b.captured_at ? 1 : -1))[0];
-    let sessionId = data.session_id ?? null;
-    if (!sessionId) sessionId = (await openSession(admin, employeeId))?.id ?? null;
-    const { error: liveErr } = await admin.from("engineer_live_status").upsert(
-      {
-        employee_id: employeeId,
-        on_duty: true,
-        last_lat: latest.lat,
-        last_long: latest.long,
-        last_accuracy_m: latest.accuracy,
-        last_seen_at: latest.captured_at,
-        session_id: sessionId,
-        updated_at: new Date().toISOString(),
+    const { data: currentLive } = await admin
+      .from("engineer_live_status")
+      .select("on_duty, last_seen_at, last_lat, last_long, last_accuracy_m, session_id")
+      .eq("employee_id", employeeId)
+      .maybeSingle();
+    const next = nextLiveStatus({
+      current: (currentLive as LiveRow | null) ?? null,
+      latest: {
+        lat: latest.lat,
+        long: latest.long,
+        accuracy: latest.accuracy,
+        captured_at: latest.captured_at,
       },
-      { onConflict: "employee_id" },
-    );
-    if (liveErr) throw new Error(reportDbError("live status refresh", liveErr));
+      openSessionId,
+    });
+    // No open session and no live row: stay out of live_status entirely —
+    // off-duty fixes are stored, never surfaced as presence.
+    if (openSessionId != null || currentLive != null) {
+      const { error: liveErr } = await admin.from("engineer_live_status").upsert(
+        {
+          employee_id: employeeId,
+          ...next,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "employee_id" },
+      );
+      if (liveErr) throw new Error(reportDbError("live status refresh", liveErr));
+    }
     return {
       received: data.pings.length,
       stored: (inserted as unknown[] | null)?.length ?? 0,
