@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/useAuth";
 import { fetchMyIdentity } from "@/lib/engineer-identity";
 import { fetchOwnCustodyMap } from "@/lib/ims";
 import { engKeys } from "@/lib/queryKeys";
+import { CLOSED_TICKET_STATUSES } from "@/lib/eng-queue-utils";
 
 /**
  * Read-only hook: fetch tickets assigned to the current engineer.
@@ -76,56 +77,6 @@ export function useMyCarriedPartsCount(enabled = false) {
   });
 }
 
-/** Closed tickets assigned to the engineer (completed visits), newest first. */
-export type CompletedQueueTicket = QueueTicket & { closed_at: string | null };
-
-const COMPLETED_LIMIT = 50;
-
-/**
- * Read-only completed-visits list for the queue's Completed tab. Same
- * identity policy and FK-only match as useMyQueue; RLS already returns the
- * engineer's own Closed rows, so no migration is needed. Capped at the 50
- * most recently closed. Never throws new error shapes: unlinked/ambiguous
- * surface the same ACCOUNT_NOT_LINKED / AMBIGUOUS_EMPLOYEE_MATCH codes.
- */
-export function useMyCompletedQueue() {
-  const { session } = useAuth();
-  const uid = session?.user?.id ?? null;
-  const email = session?.user?.email ?? null;
-
-  return useQuery({
-    queryKey: engKeys.completedQueue(uid),
-    enabled: !!uid,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: false,
-    queryFn: async (): Promise<CompletedQueueTicket[]> => {
-      if (!uid) return [];
-      const identity = await fetchMyIdentity(supabase, {
-        authUid: uid,
-        email,
-        columns: "id,name",
-      });
-      if (identity.status === "ambiguous") throw new Error("AMBIGUOUS_EMPLOYEE_MATCH");
-      if (identity.status !== "ok") throw new Error("ACCOUNT_NOT_LINKED");
-      const empId = identity.employee.id;
-      const res = await supabase
-        .from("tickets")
-        .select(`${QUEUE_COLS},closed_at`)
-        .eq("is_deleted", false)
-        .filter("assigned_employee_id", "eq", empId)
-        .eq("status", "Closed")
-        .order("closed_at", { ascending: false, nullsFirst: false })
-        .limit(COMPLETED_LIMIT);
-      if (res.error) {
-        console.error("[useMyCompletedQueue]", res.error.message);
-        throw res.error;
-      }
-      return (res.data || []) as CompletedQueueTicket[];
-    },
-  });
-}
-
 export function useMyQueue() {
   const { session } = useAuth();
   const uid = session?.user?.id ?? null;
@@ -157,12 +108,19 @@ export function useMyQueue() {
       // FK-only: exact engineer match (safe under duplicate names).
       // .filter() takes a plain string column so the not-yet-regenerated
       // Supabase types can't break this query at build time.
+      //
+      // Closed-name exclusion: CLOSED_TICKET_STATUSES (eng-queue-utils) is the
+      // single source of truth for what counts as finished. Deriving the
+      // PostgREST `in` literal from it keeps the queue and the pure predicate
+      // isOpenTicket() in lockstep — legacy Completed/Resolved/Delivered rows
+      // stay out of the engineer queue.
+      const closedStatusList = `(${CLOSED_TICKET_STATUSES.map((s) => `"${s}"`).join(",")})`;
       const fkRes = await supabase
         .from("tickets")
         .select(baseSelect)
         .eq("is_deleted", false)
         .filter("assigned_employee_id", "eq", empId)
-        .not("status", "in", '("Closed","Cancelled")')
+        .not("status", "in", closedStatusList)
         .order("created_at", { ascending: false });
       if (fkRes.error) {
         console.error("[useMyQueue]", fkRes.error.message);

@@ -217,13 +217,26 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Capture → throttle → queue.
+  //
+  // The login-time permission ask and retry() both call this OFF duty: they
+  // exist to resolve permission, not to record presence. A fix is therefore
+  // only enqueued while on duty — otherwise an off-duty login fix would be
+  // persisted, held in the queue, and later uploaded under the on-duty
+  // session_id, contradicting the consent the engineer accepted ("GPS is
+  // recorded only while you are on duty … never off duty").
   const onPosition = useCallback((pos: GeolocationPosition) => {
     setFailure(null);
+    // A usable fix is proof the permission is granted. Without this the
+    // Permissions-API-less path could never leave "prompt", which the
+    // entry gate turns into a permanent "checking" overlay.
+    setPermission((p) => (p === "granted" || p === "revoked" ? p : "granted"));
     const next: PingPoint = {
       lat: pos.coords.latitude,
       long: pos.coords.longitude,
       at: Date.now(),
     };
+    // Off duty means off the record: refresh liveness, never enqueue.
+    if (!snapRef.current.onDuty) return;
     if (!shouldSendPing(lastSentRef.current, next)) return;
     lastSentRef.current = next;
     const ping: QueuedPing = {
@@ -248,6 +261,26 @@ export function DutyTrackerProvider({ children }: { children: ReactNode }) {
     else if (err.code === 2) setFailure("unavailable");
     else setFailure("timeout");
   }, []);
+
+  // Login-time permission ask (product decision): request geolocation as soon
+  // as the engineer reaches the portal rather than waiting for Start duty, so
+  // the OS prompt lands before any work begins. One-shot, and skipped while
+  // already on duty (the watch triggers the prompt itself). Browsers that
+  // suppress a gesture-less prompt — and every later revocation — are still
+  // covered by the gate's "Enable location" button, which calls retry().
+  const askedOnEntryRef = useRef(false);
+  useEffect(() => {
+    if (askedOnEntryRef.current) return;
+    if (loading || onDuty) return;
+    if (permission !== "prompt") return;
+    if (!("geolocation" in navigator)) return;
+    askedOnEntryRef.current = true;
+    navigator.geolocation.getCurrentPosition(onPosition, onPositionError, {
+      enableHighAccuracy: true,
+      timeout: 20_000,
+      maximumAge: 0,
+    });
+  }, [loading, onDuty, permission, onPosition, onPositionError]);
 
   // Leadership heartbeat: only the freshest tab watches (two-tab backstop).
   const isLeader = useCallback(() => {

@@ -13,9 +13,18 @@ import {
 import { recordLocationConsent } from "@/lib/field-location.functions";
 
 /**
- * First-use BYOD consent (DPDP 2023). Plain language, no dark patterns:
- * what is collected, when, how long it is kept. Written once to the
- * immutable engineer_consent_events log; duty stays blocked until accepted.
+ * First-use consent (DPDP 2023), written once to the immutable
+ * engineer_consent_events log. Attendance marking stays blocked until the
+ * engineer accepts.
+ *
+ * COPY RULE (product decision 2026-09-21): the engineer is marking attendance.
+ * They must never be shown surveillance framing — no "tracking", no
+ * "monitoring", no "your position is visible to admins". State plainly what is
+ * stored and when it stops, and nothing more.
+ *
+ * The underlying consent RECORD is unchanged: `recordLocationConsent` still
+ * writes the same version to `engineer_consent_events`, so this is a copy
+ * change only, not a change to what is logged or to what is collected.
  */
 export function LocationConsentDialog({
   open,
@@ -54,26 +63,26 @@ export function LocationConsentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Location consent</DialogTitle>
+          <DialogTitle>Mark your attendance</DialogTitle>
           <DialogDescription>
-            This phone is yours. Here is exactly what duty tracking does — duty stays off until you
-            accept.
+            One-time setup. Your attendance is then marked for each working day.
           </DialogDescription>
         </DialogHeader>
         <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
           <li>
-            GPS is recorded <strong className="text-foreground">only while you are on duty</strong>.
+            Location is used to confirm you are <strong className="text-foreground">on site</strong>{" "}
+            for your visits.
           </li>
-          <li>Going off duty stops tracking immediately.</li>
-          <li>Raw locations are deleted after 30 days; only a daily summary is kept.</li>
-          <li>Your live position is visible to admins while on duty — never off duty.</li>
+          <li>It is active only while you are marked present.</li>
+          <li>You can end your day at any time, which stops it straight away.</li>
+          <li>Records older than 30 days are removed.</li>
         </ul>
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             Not now
           </Button>
           <Button onClick={() => void accept()} disabled={busy} className="min-h-[44px]">
-            {busy ? "Saving…" : "I consent — start duty"}
+            {busy ? "Saving…" : "Agree and mark attendance"}
           </Button>
         </DialogFooter>
       </DialogContent>

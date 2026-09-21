@@ -13,6 +13,8 @@ import {
   dedupeQueuedPings,
   flagSuspiciousFix,
   nextLiveStatus,
+  canBrowseWithoutLocation,
+  BLOCKING_GATE_STATES,
   type GateState,
   type GateInput,
   type LiveRow,
@@ -23,6 +25,47 @@ import {
 describe("LOCATION_GATE_MESSAGE", () => {
   it("uses the exact transparent copy", () => {
     expect(LOCATION_GATE_MESSAGE).toBe("Turn on GPS and internet, then try again.");
+  });
+});
+
+describe("canBrowseWithoutLocation", () => {
+  it("allows the escape for every state that hard-blocks the portal", () => {
+    for (const gate of BLOCKING_GATE_STATES) {
+      expect(canBrowseWithoutLocation(gate), `expected escape for ${gate}`).toBe(true);
+    }
+  });
+
+  it("offers the escape while ON duty too — a denied on-duty engineer is otherwise trapped", () => {
+    // The overlay covers the header, so "End duty" is unreachable as well.
+    // Regression guard: an earlier revision hid the escape when on duty.
+    expect(canBrowseWithoutLocation("denied")).toBe(true);
+    expect(canBrowseWithoutLocation("unsupported")).toBe(true);
+    expect(canBrowseWithoutLocation("stale")).toBe(true);
+  });
+
+  it("offers no escape when the gate is not blocking", () => {
+    expect(canBrowseWithoutLocation("ok")).toBe(false);
+    expect(canBrowseWithoutLocation("override")).toBe(false);
+    expect(canBrowseWithoutLocation("off_duty")).toBe(false);
+  });
+
+  it("does not treat a non-blocking state as blocking by accident", () => {
+    const all: GateState[] = [
+      "checking",
+      "ok",
+      "gps_off",
+      "denied",
+      "no_fix",
+      "stale",
+      "revoked",
+      "off_duty",
+      "override",
+      "unsupported",
+    ];
+    const blocking = all.filter(canBrowseWithoutLocation);
+    const nonBlocking = all.filter((g) => !canBrowseWithoutLocation(g));
+    expect(blocking).toHaveLength(BLOCKING_GATE_STATES.length);
+    expect(nonBlocking).toEqual(["ok", "off_duty", "override"]);
   });
 });
 
@@ -178,6 +221,74 @@ describe("evaluateGateState", () => {
         lastSeenAt: null,
       }),
     ).toBe("off_duty");
+  });
+});
+
+describe("evaluateGateState — login-time entry gate", () => {
+  const base: GateInput = {
+    permission: "granted",
+    onDuty: false,
+    lastSeenAt: null,
+    nowMs: Date.parse("2026-09-18T10:00:00Z"),
+    graceMs: 15 * 60_000,
+    overrideActive: false,
+  };
+
+  it("gates an off-duty engineer whose permission is still undecided", () => {
+    expect(evaluateGateState({ ...base, entryGate: true, permission: "prompt" })).toBe("checking");
+  });
+
+  it("gates an off-duty engineer whose permission was denied", () => {
+    expect(evaluateGateState({ ...base, entryGate: true, permission: "denied" })).toBe("denied");
+  });
+
+  it("gates an off-duty engineer whose permission was revoked", () => {
+    expect(evaluateGateState({ ...base, entryGate: true, permission: "revoked" })).toBe("revoked");
+  });
+
+  it("gates an off-duty engineer on an unsupported device", () => {
+    expect(evaluateGateState({ ...base, entryGate: true, permission: "unsupported" })).toBe(
+      "unsupported",
+    );
+  });
+
+  it("restores off-duty browsing once permission is granted", () => {
+    expect(evaluateGateState({ ...base, entryGate: true, permission: "granted" })).toBe("off_duty");
+  });
+
+  it("still gates an on-duty engineer with undecided permission", () => {
+    expect(
+      evaluateGateState({ ...base, entryGate: true, onDuty: true, permission: "prompt" }),
+    ).toBe("checking");
+  });
+
+  it("yields to the kill switch — disabled tracking requires no permission", () => {
+    expect(
+      evaluateGateState({
+        ...base,
+        entryGate: true,
+        permission: "denied",
+        trackingEnabled: false,
+      }),
+    ).toBe("off_duty");
+  });
+
+  it("yields to a live manager override", () => {
+    expect(
+      evaluateGateState({
+        ...base,
+        entryGate: true,
+        onDuty: true,
+        permission: "denied",
+        overrideActive: true,
+        lastSeenAt: new Date(base.nowMs - 60_000).toISOString(),
+      }),
+    ).toBe("override");
+  });
+
+  it("preserves the legacy off-duty contract when the entry gate is not opted in", () => {
+    expect(evaluateGateState({ ...base, permission: "prompt" })).toBe("off_duty");
+    expect(evaluateGateState({ ...base, permission: "denied" })).toBe("off_duty");
   });
 });
 

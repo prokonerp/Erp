@@ -14,6 +14,13 @@ export type GateView = {
   /** Secondary hint distinguishing denied vs off vs stale. */
   hint: string | null;
   nowMs: number;
+  /**
+   * Whether a duty session is live. The gate name alone cannot answer this:
+   * the entry gate short-circuits OFF duty and reports `checking`/`denied`,
+   * never `off_duty`. Callers that need "may this engineer browse read-only?"
+   * must use this, not `gate === "off_duty"`.
+   */
+  onDuty: boolean;
   retry: () => Promise<void>;
   retrying: boolean;
 };
@@ -47,6 +54,9 @@ export function useLocationGate(): GateView {
         failure,
         accuracy: t.lastAccuracy,
         trackingEnabled: t.trackingEnabled,
+        // Login-time permission ask (product decision): the portal gates on
+        // entry, before Start duty, until location permission is granted.
+        entryGate: true,
       });
 
   let headline: string | null = null;
@@ -56,11 +66,20 @@ export function useLocationGate(): GateView {
     case "override":
       break;
     case "checking":
-      headline = "Checking location…";
+      // "checking" doubles as the initial load state and the login-time
+      // permission ask. Only the latter is a real decision the engineer must
+      // make, so the copy forks on whether the permission state has resolved.
+      if (t.permission === "checking") {
+        headline = "Checking location…";
+      } else {
+        headline = "Allow location access";
+        hint =
+          "The engineer portal needs your location permission. Tap Enable location and choose Allow.";
+      }
       break;
     case "off_duty":
-      headline = "You are off duty.";
-      hint = "Start duty to use the engineer portal.";
+      headline = "Your attendance isn't marked yet.";
+      hint = "Mark attendance to use the engineer portal.";
       break;
     case "denied":
       headline = LOCATION_GATE_MESSAGE;
@@ -68,7 +87,7 @@ export function useLocationGate(): GateView {
       break;
     case "revoked":
       headline = LOCATION_GATE_MESSAGE;
-      hint = "Location was turned off mid-shift. Turn it back on and retry.";
+      hint = "Location was turned off. Turn it back on and retry.";
       break;
     case "gps_off":
       headline = LOCATION_GATE_MESSAGE;
@@ -76,11 +95,11 @@ export function useLocationGate(): GateView {
       break;
     case "no_fix":
       headline = LOCATION_GATE_MESSAGE;
-      hint = "Waiting for the first GPS fix…";
+      hint = "Waiting for the first location fix…";
       break;
     case "stale":
       headline = LOCATION_GATE_MESSAGE;
-      hint = "Last fix is too old. Turn on GPS and internet, then try again.";
+      hint = "Last location is too old. Turn on location and internet, then try again.";
       break;
     case "unsupported":
       headline = "Location is not supported on this device.";
@@ -98,5 +117,5 @@ export function useLocationGate(): GateView {
     }
   };
 
-  return { gate, headline, hint, nowMs, retry, retrying };
+  return { gate, headline, hint, nowMs, onDuty: t.onDuty, retry, retrying };
 }

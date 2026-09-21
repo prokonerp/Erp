@@ -114,6 +114,38 @@ export type GateState =
   | "override"
   | "unsupported";
 
+/**
+ * Gate states that hard-block the engineer portal: the blocking overlay is
+ * drawn for these, and the outlet renders inert underneath it.
+ */
+export const BLOCKING_GATE_STATES: readonly GateState[] = [
+  "checking",
+  "gps_off",
+  "denied",
+  "no_fix",
+  "stale",
+  "revoked",
+  "unsupported",
+];
+
+/**
+ * May the blocked engineer step past the gate into the read-only portal?
+ *
+ * True for any genuinely blocking state, ON DUTY AS WELL AS OFF — deliberately
+ * not limited to off duty. Field reality (observed 2026-09-21): an engineer
+ * left on duty whose permission is denied or whose device has no geolocation
+ * gets the overlay, and the overlay covers the bottom nav AND the header, so
+ * the "End duty" button cannot be tapped either. Gating that engineer with no
+ * exit is imprisonment, not enforcement.
+ *
+ * This is safe because the escape only reveals read-only content: every
+ * location-gated write still fails server-side with LOCATION_REQUIRED until a
+ * real fix lands, and the gate re-arms on the next visit.
+ */
+export function canBrowseWithoutLocation(gate: GateState): boolean {
+  return BLOCKING_GATE_STATES.includes(gate);
+}
+
 export type GateInput = {
   permission: GatePermission;
   onDuty: boolean;
@@ -132,17 +164,47 @@ export type GateInput = {
    * the client must too. Absent/true keeps the normal gate (fail-closed).
    */
   trackingEnabled?: boolean;
+  /**
+   * Login-time permission gate (product decision): when true, an UNDECIDED or
+   * BLOCKED location permission gates the portal even before duty starts, so
+   * the engineer is asked on entry instead of at Start duty. Absent/false
+   * preserves the legacy behaviour exactly (off-duty browsing stays open).
+   */
+  entryGate?: boolean;
 };
 
 /**
  * Gate state machine. Order is load-bearing:
+ * 0. the opt-in entry gate asks for permission before duty starts;
  * 1. off-duty always wins (an override never puts someone on duty);
  * 2. kill-switch off passes through (mirrors the server `next()` bypass);
  * 3. a live manager override wins over any location state;
  * 4. explicit permission/failure signals win over cached fixes;
  * 5. otherwise the grace window decides between ok / no_fix / stale.
+ *
+ * The entry gate is deliberately opt-in and sits BEFORE the off-duty check,
+ * because its whole purpose is to gate an engineer who has not started duty
+ * yet. It is skipped when the kill switch is off (an admin disabled tracking
+ * ⇒ no location requirement anywhere) and when a manager override is live (the
+ * override is the sanctioned escape hatch for exactly this blocked state).
+ * Once permission is granted it falls through to the normal machine, so
+ * off-duty browsing is restored unchanged.
  */
 export function evaluateGateState(input: GateInput): GateState {
+  if (input.entryGate && input.trackingEnabled !== false && !input.overrideActive) {
+    switch (input.permission) {
+      case "prompt":
+        return "checking";
+      case "denied":
+        return "denied";
+      case "revoked":
+        return "revoked";
+      case "unsupported":
+        return "unsupported";
+      case "granted":
+        break;
+    }
+  }
   if (!input.onDuty) return "off_duty";
   if (input.trackingEnabled === false) return "ok";
   if (input.overrideActive) return "override";

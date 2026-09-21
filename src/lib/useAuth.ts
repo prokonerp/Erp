@@ -96,6 +96,23 @@ function ensureStarted() {
   started = true;
 
   supabase.auth.onAuthStateChange((e, s) => {
+    // DEAD BRANCH — the event never arrives on this stack, kept only as a
+    // cheap guard if a future transport starts emitting it.
+    //
+    // Verified 2026-09-21 against @supabase/auth-js 2.105.4: `TOKEN_REFRESH_FAILED`
+    // appears nowhere in the package, and the documented AuthChangeEvent set is
+    // INITIAL_SESSION / SIGNED_IN / SIGNED_OUT / TOKEN_REFRESHED /
+    // USER_UPDATED / PASSWORD_RECOVERY. On a dead refresh token the SDK calls
+    // _removeSession() itself and the app still recovers — proven end to end:
+    // poison the stored refresh_token, and both a reload and a live mid-session
+    // expiry land on /auth with the session cleared, after exactly one 400
+    // `grant_type=refresh_token` and zero loops
+    // (scripts/audit-stale-refresh.mjs, 2/2 cases).
+    //
+    // So the real recovery path is the SIGNED_OUT arm below plus the
+    // getSession() invalid-refresh arms further down — not this block. Do not
+    // rely on this branch doing anything; do not "fix" a stale-token report by
+    // pointing here.
     if ((e as string) === "TOKEN_REFRESH_FAILED") {
       // The event carries no reason, so prove it with a live getUser():
       // - network throw / offline            => transient, keep session

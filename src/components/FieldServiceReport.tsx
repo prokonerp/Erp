@@ -45,7 +45,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SignaturePad } from "./eng/SignaturePad";
 import { TicketPartPicker } from "./TicketPartPicker";
 import { reportDbError } from "@/lib/format-error";
-import { FsrPrintButton, type FsrDbRow } from "./fsr/FsrPrintButton";
 
 let rowSeq = 0;
 const nextRowId = () => `row-${++rowSeq}`;
@@ -851,9 +850,6 @@ export function FieldServiceReport({
             {latest.power_failures_count ?? "—"}
           </p>
           <p className="text-[13px]">Submitted by: {latest.engineer_name ?? "—"}</p>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <FsrPrintButton ticketId={ticketId} fsrRow={latest as unknown as FsrDbRow} />
-          </div>
         </div>
 
         {latestError && (

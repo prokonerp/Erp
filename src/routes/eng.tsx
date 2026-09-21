@@ -15,6 +15,7 @@ import { DutyToggle } from "@/components/eng/DutyToggle";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { PASSWORD_CHANGE_REQUIRED } from "@/lib/account-gate";
 import { useMyEmployee } from "@/hooks/useMyEmployee";
+import { ScreenGuard } from "@/components/eng/ScreenGuard";
 
 export const Route = createFileRoute("/eng")({
   component: EngLayout,
@@ -99,8 +100,9 @@ function EngLayout() {
   const displayName = employee?.name?.trim() || session.user?.email?.split("@")[0] || "Engineer";
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="screen-guard min-h-screen flex flex-col bg-background">
       <DutyTrackerProvider>
+        <ScreenGuard identity={session.user?.email ?? undefined} />
         <header className="sticky top-0 z-30 min-h-[44px] shrink-0 border-b border-border bg-card/95 backdrop-blur flex items-center gap-2.5 px-4 py-2">
           <span
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground"

@@ -56,9 +56,6 @@ export const engKeys = {
   all: ["eng"] as const,
   queue: (uid: string | null) => ["eng", "queue", uid] as const,
   queuePrefix: ["eng", "queue"] as const,
-  // Completed visits live under the queue family so every queuePrefix
-  // invalidation (FSR submit, depart, admin edits) busts them too.
-  completedQueue: (uid: string | null) => ["eng", "queue", uid, "completed"] as const,
   carriedCount: (uid: string | null) => ["eng", "carried-count", uid] as const,
   employee: (uid: string | null) => ["eng", "employee", uid] as const,
   dashboard: (employeeId: string | null, today: string) =>

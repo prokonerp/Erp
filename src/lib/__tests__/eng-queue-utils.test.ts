@@ -8,6 +8,7 @@ import {
   whatsappUrl,
   attachLoginFlags,
   sortEngineersLoginFirst,
+  isOpenTicket,
 } from "@/lib/eng-queue-utils";
 
 afterEach(() => {
@@ -72,6 +73,24 @@ describe("isCarryForward", () => {
     const yesterday = new Date(Date.now() - 86_400_000).toISOString();
     expect(isCarryForward(yesterday, null, "Waiting for Parts")).toBe(false);
   });
+});
+
+describe("isOpenTicket", () => {
+  it('returns false for "Closed"', () => expect(isOpenTicket("Closed")).toBe(false));
+  it('returns false for "Cancelled"', () => expect(isOpenTicket("Cancelled")).toBe(false));
+  it('returns false for "Completed"', () => expect(isOpenTicket("Completed")).toBe(false));
+  it('returns false for "Resolved"', () => expect(isOpenTicket("Resolved")).toBe(false));
+  it('returns false for "Delivered"', () => expect(isOpenTicket("Delivered")).toBe(false));
+  it("ignores surrounding whitespace", () => expect(isOpenTicket(" closed ")).toBe(false));
+  it("ignores case", () => expect(isOpenTicket("CANCELLED")).toBe(false));
+  it('returns true for "In Progress"', () => expect(isOpenTicket("In Progress")).toBe(true));
+  it('returns true for "Waiting for Parts"', () =>
+    expect(isOpenTicket("Waiting for Parts")).toBe(true));
+  it('returns true for "Parts Received"', () => expect(isOpenTicket("Parts Received")).toBe(true));
+  it('returns true for "New"', () => expect(isOpenTicket("New")).toBe(true));
+  it("fails open on null", () => expect(isOpenTicket(null)).toBe(true));
+  it("fails open on undefined", () => expect(isOpenTicket(undefined)).toBe(true));
+  it("fails open on empty string", () => expect(isOpenTicket("")).toBe(true));
 });
 
 describe("matchesSearch", () => {

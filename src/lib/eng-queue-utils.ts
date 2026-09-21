@@ -34,6 +34,33 @@ export function isCarryForward(
   return !isToday(created_at, assigned_at) && status !== "Waiting for Parts";
 }
 
+/**
+ * Closed-ticket status names used to exclude finished work from an engineer
+ * queue. Source of truth is `TICKET_STATUSES` in `src/lib/tickets.ts`, which
+ * marks ONLY `Closed`/`Cancelled` as terminal, but legacy rows carry other
+ * self-evidently-finished names (Completed/Resolved/Delivered); those must not
+ * reappear in an engineer queue.
+ */
+export const CLOSED_TICKET_STATUSES = [
+  "Closed",
+  "Cancelled",
+  "Completed",
+  "Resolved",
+  "Delivered",
+] as const;
+
+/**
+ * True when a ticket status is NOT a closed status. Trims whitespace and
+ * compares case-insensitively against CLOSED_TICKET_STATUSES.
+ *
+ * FAILS OPEN: an unknown / empty / legacy status is treated as open, so no
+ * assigned ticket silently disappears from the queue.
+ */
+export function isOpenTicket(status: string | null | undefined): boolean {
+  const normalized = (status ?? "").trim().toLowerCase();
+  return !CLOSED_TICKET_STATUSES.some((closed) => closed.toLowerCase() === normalized);
+}
+
 /** Search predicate — returns true when any field contains the lowercase term. */
 export function matchesSearch(term: string, fields: (string | null | undefined)[]): boolean {
   if (!term) return true;

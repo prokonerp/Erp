@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireActiveUser } from "@/integrations/supabase/auth-middleware";
 import { fetchMyIdentityAdmin } from "@/lib/engineer-identity";
+import { istWorkDate, isSundayIst, planDutyAttendance } from "@/lib/engineer-attendance";
 import { flagSuspiciousFix, haversineM, nextLiveStatus, type LiveRow } from "@/lib/field-location";
 import { reportDbError } from "@/lib/format-error";
 
@@ -108,6 +109,53 @@ async function openSession(admin: { from: (t: string) => any }, employeeId: stri
   return (data ?? null) as { id: string; started_at: string } | null;
 }
 
+/**
+ * Silently mark the engineer present in `attendance` for today's IST day.
+ *
+ * Three rules this exists to respect (see src/lib/engineer-attendance.ts):
+ * - fail-soft: the caller swallows any throw, so an attendance hiccup can
+ *   never block a shift from starting;
+ * - insert-only: an existing row is never overwritten, so an admin's leave /
+ *   half-day / absent payroll entry survives a duty start;
+ * - no work hours: `work_hours` is null by product decision — the engineer
+ *   must never learn how long they worked.
+ *
+ * A locked payroll period skips the write entirely.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- attendance tables pending generated types
+async function markDutyAttendance(admin: any, employeeId: string): Promise<void> {
+  const workDate = istWorkDate();
+  const { data: existing, error: existingErr } = await admin
+    .from("attendance")
+    .select("code")
+    .eq("employee_id", employeeId)
+    .eq("work_date", workDate)
+    .maybeSingle();
+  if (existingErr) throw new Error(reportDbError("attendance lookup", existingErr));
+  const { data: lock, error: lockErr } = await admin
+    .from("attendance_locks")
+    .select("locked")
+    .eq("period_year", Number(workDate.slice(0, 4)))
+    .eq("period_month", Number(workDate.slice(5, 7)))
+    .maybeSingle();
+  if (lockErr) throw new Error(reportDbError("attendance lock lookup", lockErr));
+  const plan = planDutyAttendance({
+    employeeId,
+    workDate,
+    isSunday: isSundayIst(),
+    existingCode: (existing as { code?: string | null } | null)?.code ?? null,
+    // A missing lock row means unlocked — only an explicit `locked: true` blocks.
+    monthLocked: (lock as { locked?: boolean } | null)?.locked === true,
+  });
+  if (!plan.write) return;
+  // ignoreDuplicates makes this a no-op when a row appeared since the read —
+  // the unique (employee_id, work_date) index keeps it insert-only.
+  const { error } = await admin
+    .from("attendance")
+    .upsert(plan.row, { onConflict: "employee_id,work_date", ignoreDuplicates: true });
+  if (error) throw new Error(reportDbError("attendance insert", error));
+}
+
 function isUniqueViolation(e: unknown): boolean {
   return (e as { code?: unknown } | null)?.code === "23505";
 }
@@ -133,7 +181,7 @@ async function isTrackingEnabled(admin: { from: (t: string) => any }): Promise<b
 }
 
 function trackingDisabledError(): Error {
-  const err = new Error("Location tracking is disabled by your admin.");
+  const err = new Error("This feature is turned off for your account. Contact your admin.");
   (err as Error & { code: string }).code = TRACKING_DISABLED;
   return err;
 }
@@ -210,9 +258,17 @@ export const startDutySession = createServerFn({ method: "POST" })
     if (!(await isTrackingEnabled(admin))) throw trackingDisabledError();
     const employeeId = await myEmployeeId(admin, context);
     if (!(await hasConsented(admin, employeeId))) {
-      const err = new Error("Location consent is required before starting duty.");
+      const err = new Error("Please accept the one-time setup before marking attendance.");
       (err as Error & { code: string }).code = CONSENT_REQUIRED;
       throw err;
+    }
+    // Placed here — after consent, before openSession — so presence is marked
+    // on BOTH the fresh-session and resume paths. Fail-soft by design: an
+    // attendance error is logged and swallowed, never allowed to block a shift.
+    try {
+      await markDutyAttendance(admin, employeeId);
+    } catch (e) {
+      console.error("[startDutySession] attendance mark failed", e);
     }
     const existing = await openSession(admin, employeeId);
     if (existing) {

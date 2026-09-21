@@ -7,8 +7,16 @@ import { LocationConsentDialog } from "@/components/eng/LocationConsentDialog";
 import { CONSENT_REQUIRED } from "@/lib/field-location.functions";
 
 /**
- * Header duty control (low-key by design: an "On duty" pill, no self-map,
- * no trail). Start requires consent — the dialog opens first when needed.
+ * Header attendance control. This is the engineer's ONLY duty affordance and it
+ * is deliberately framed as attendance, not as a tracking switch.
+ *
+ * COPY RULE (product decision 2026-09-21): an engineer must never be shown the
+ * words "duty", "tracking" or "monitoring" — they are marking attendance for
+ * the day. LOGIC IS UNCHANGED: `start()` still opens the duty session and
+ * writes the attendance row, `stop()` still closes it, the kill switch and
+ * consent gate still behave exactly as before. Only the labels changed.
+ *
+ * Start requires the one-time consent — the dialog opens first when needed.
  * Stop uses two-tap confirm (same re-entry-lock spirit as the logout ref).
  */
 export function DutyToggle() {
@@ -31,7 +39,7 @@ export function DutyToggle() {
       if ((e as { code?: string } | null)?.code === CONSENT_REQUIRED) {
         setConsentOpen(true);
       } else {
-        toast.error(e instanceof Error ? e.message : "Could not start duty");
+        toast.error(e instanceof Error ? e.message : "Could not mark attendance");
       }
     } finally {
       setBusy(false);
@@ -48,21 +56,21 @@ export function DutyToggle() {
     try {
       await stop();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not end duty");
+      toast.error(e instanceof Error ? e.message : "Could not end your day");
     } finally {
       setBusy(false);
     }
   };
 
-  // No duty concept when the admin kill switch is off — render nothing so the
-  // control never surfaces a location/duty affordance the server would refuse.
+  // No attendance concept when the admin kill switch is off — render nothing so
+  // the control never surfaces an affordance the server would refuse.
   if (!trackingEnabled) return null;
 
   if (loading) {
     return (
       <span
         className="h-8 w-20 animate-pulse rounded-full bg-muted"
-        aria-label="Loading duty state"
+        aria-label="Loading attendance state"
       />
     );
   }
@@ -76,7 +84,7 @@ export function DutyToggle() {
             role="status"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-green-500" aria-hidden="true" />
-            On duty
+            Present
           </span>
           <Button
             variant="ghost"
@@ -84,9 +92,9 @@ export function DutyToggle() {
             onClick={() => void doStop()}
             disabled={busy}
             className="min-h-[44px]"
-            title={armStop ? "Tap again to confirm end of duty" : "End duty"}
+            title={armStop ? "Tap again to confirm" : "End day"}
           >
-            {armStop ? "Confirm end?" : "End duty"}
+            {armStop ? "Confirm?" : "End day"}
           </Button>
         </>
       ) : (
@@ -101,7 +109,7 @@ export function DutyToggle() {
             disabled={busy}
             className="min-h-[44px]"
           >
-            {busy ? "Starting…" : "Start duty"}
+            {busy ? "Marking…" : "Mark attendance"}
           </Button>
           <LocationConsentDialog
             open={consentOpen}
