@@ -6,6 +6,7 @@ import { MovementMap } from "@/components/engineer/MovementMap";
 import { LiveRoster } from "@/components/engineer/LiveRoster";
 import { DayRouteView } from "@/components/engineer/DayRouteView";
 import { formatLastSeen, useLiveRoster } from "@/hooks/useEngineerMovement";
+import { isFixFresh, LOCATION_GRACE_MS } from "@/lib/field-location";
 
 export const Route = createFileRoute("/_app/engineers/movement")({
   component: EngineersMovementPage,
@@ -40,7 +41,7 @@ function EngineersMovementPage() {
     for (const e of roster) {
       if (!e.on_duty) continue;
       onDuty += 1;
-      if (!e.last_seen_at || nowMs - Date.parse(e.last_seen_at) > 15 * 60_000) stale += 1;
+      if (!isFixFresh(e.last_seen_at, nowMs, LOCATION_GRACE_MS)) stale += 1;
     }
     return { onDuty, stale, off: roster.length - onDuty };
   }, [roster, nowMs]);
@@ -55,7 +56,7 @@ function EngineersMovementPage() {
           long: e.last_long as number,
           label: e.name ?? "Unknown engineer",
           detail: `${e.on_duty ? "On duty" : "Off duty"} · last seen ${formatLastSeen(e.last_seen_at, nowMs)}`,
-          fresh: e.on_duty && e.last_seen_at != null,
+          fresh: e.on_duty && isFixFresh(e.last_seen_at, nowMs, LOCATION_GRACE_MS),
           onDuty: e.on_duty,
         })),
     [roster, nowMs],

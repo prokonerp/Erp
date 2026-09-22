@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import type { MapPin, MapStop } from "@/components/engineer/MovementMapInner";
+import type { RenderedLeg } from "@/hooks/useRouteLegs";
 
 const LazyInner = lazy(() =>
   import("@/components/engineer/MovementMapInner").then((m) => ({ default: m.MovementMapInner })),
@@ -19,6 +20,9 @@ export function MovementMap({
   selectedId,
   onPinSelect,
   emptyHint,
+  legs,
+  selectedLeg,
+  onLegSelect,
 }: {
   pins: MapPin[];
   route?: Array<[number, number]>;
@@ -27,6 +31,9 @@ export function MovementMap({
   selectedId?: string | null;
   onPinSelect?: (id: string) => void;
   emptyHint?: string;
+  legs?: readonly RenderedLeg[];
+  selectedLeg?: number | null;
+  onLegSelect?: (index: number | null) => void;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -43,9 +50,12 @@ export function MovementMap({
         selectedId={selectedId}
         onPinSelect={onPinSelect}
         emptyHint={emptyHint}
+        legs={legs}
+        selectedLeg={selectedLeg}
+        onLegSelect={onLegSelect}
       />
     </Suspense>
   );
 }
 
-export type { MapPin, MapStop };
+export type { MapPin, MapStop, RenderedLeg };

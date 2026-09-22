@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Prokon CRM — API Integration &amp; Tally Export</title>
+<style>
+  @page { size: A4; margin: 0; }
+  :root{
+    --ink:#12212E; --sub:#5A6B78; --mute:#8C9AA6;
+    --line:#DFE5EA; --paper:#FFFFFF; --soft:#F5F8FA;
+    --brand:#0F2A44; --accent:#1E5C38; --accent-soft:#EDF3EC;
+    --amber:#8A5A00; --amber-soft:#FCF3E0; --red:#8F2B29; --red-soft:#FDEDEC;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+    color:var(--ink); background:#E7EBEE; font-size:8.4pt; line-height:1.42;
+    -webkit-font-smoothing:antialiased; print-color-adjust:exact; -webkit-print-color-adjust:exact;
+  }
+  .page{
+    position:relative; width:210mm; height:297mm; padding:9mm 12mm 6.5mm;
+    background:var(--paper); margin:0 auto; overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  .page + .page{ page-break-before:always; }
+  @media screen{ .page{ margin:8mm auto; box-shadow:0 2px 14px rgba(15,42,68,.14); } }
+
+  /* ---------- masthead ---------- */
+  .mast{ display:flex; justify-content:space-between; align-items:flex-end;
+         border-bottom:2.2pt solid var(--brand); padding-bottom:2.6mm; margin-bottom:4mm; }
+  .brandmark{ font-size:6.6pt; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); }
+  h1{ font-size:17.5pt; line-height:1.1; letter-spacing:-.025em; margin:1.4mm 0 1.2mm; font-weight:700; color:var(--brand); }
+  .lede{ font-size:9pt; color:var(--sub); margin:0; max-width:150mm; }
+  .meta{ text-align:right; font-size:6.6pt; color:var(--mute); line-height:1.6; white-space:nowrap; }
+  .meta b{ color:var(--sub); font-weight:600; }
+
+  /* ---------- section furniture ---------- */
+  h2{ font-size:9.6pt; letter-spacing:-.01em; margin:0 0 2mm; color:var(--brand); font-weight:700;
+      display:flex; align-items:baseline; gap:2.2mm; }
+  h2 .n{ font-family:var(--mono); font-size:7.4pt; color:var(--accent); font-weight:700;
+         border:1px solid var(--line); background:var(--soft); border-radius:3px; padding:.5mm 1.5mm; }
+  section{ margin-bottom:3.4mm; }
+  p{ margin:0 0 2mm; }
+  .rule{ font-size:8.2pt; background:var(--accent-soft); border-left:2.4pt solid var(--accent);
+         padding:2.2mm 3mm; margin:2.6mm 0 0; }
+  .rule b{ color:var(--accent); }
+
+  /* ---------- two-up cards ---------- */
+  .duo{ display:grid; grid-template-columns:1fr 1fr; gap:3.4mm; }
+  .card{ border:1px solid var(--line); border-radius:2.4mm; padding:3mm 3.2mm; background:#fff; }
+  .card .tag{ font-family:var(--mono); font-size:6.4pt; font-weight:700; letter-spacing:.08em;
+              color:var(--accent); display:block; margin-bottom:1.2mm; }
+  .card h3{ font-size:9pt; margin:0 0 1.6mm; color:var(--brand); font-weight:700; line-height:1.25; }
+  .card p{ margin:0 0 1.4mm; color:var(--sub); font-size:8.1pt; }
+  .card p:last-child{ margin-bottom:0; }
+  .cost{ font-family:var(--mono); font-size:6.8pt; color:var(--accent); background:var(--accent-soft);
+         border-radius:2px; padding:.6mm 1.6mm; display:inline-block; }
+
+  /* ---------- diagram ---------- */
+  .fig{ border:1px solid var(--line); border-radius:2.4mm; background:var(--soft); padding:2.6mm 3mm 1.6mm; }
+  .fig svg{ display:block; width:100%; height:auto; }
+  .caption{ font-size:6.8pt; color:var(--mute); margin:1.4mm 0 0; letter-spacing:.02em; }
+  .caption b{ color:var(--sub); }
+
+  /* ---------- legend ---------- */
+  .legend{ display:grid; grid-template-columns:1fr 1fr; gap:1.2mm 5mm; margin:2.6mm 0 0; }
+  .legend div{ font-size:7.7pt; color:var(--sub); display:flex; gap:1.8mm; }
+  .legend i{ font-family:var(--mono); font-style:normal; font-weight:700; color:var(--accent); min-width:6mm; }
+
+  /* ---------- tables ---------- */
+  table{ width:100%; border-collapse:collapse; font-size:7.7pt; }
+  th{ text-align:left; font-size:6.4pt; letter-spacing:.09em; text-transform:uppercase; color:var(--mute);
+      font-weight:700; padding:0 2.2mm 1.4mm 0; border-bottom:1.4pt solid var(--brand); }
+  td{ padding:1.5mm 2.2mm 1.5mm 0; border-bottom:1px solid var(--line); vertical-align:top; color:var(--sub); }
+  td:first-child{ color:var(--ink); font-weight:600; width:20%; }
+  tr:last-child td{ border-bottom:0; }
+  .now{ color:var(--mute); }
+  .then{ color:var(--ink); }
+  .arrowcell{ color:var(--line); }
+
+  /* ---------- day plan ---------- */
+  .days{ display:grid; grid-template-columns:1fr 1fr; gap:2.4mm; }
+  .day{ border:1px solid var(--line); border-radius:2.4mm; overflow:hidden; background:#fff;
+        break-inside:avoid; }
+  .day .hd{ display:flex; align-items:baseline; gap:2mm; padding:1.6mm 2.6mm 1.4mm;
+            background:var(--brand); color:#fff; }
+  .day .hd .d{ font-family:var(--mono); font-size:6.4pt; font-weight:700; letter-spacing:.1em;
+               color:#8FC7A8; white-space:nowrap; }
+  .day .hd h3{ font-size:8.1pt; margin:0; font-weight:700; color:#fff; line-height:1.2; }
+  .day .bd{ padding:1.7mm 2.6mm 1.8mm; }
+  .day ul{ margin:0; padding:0; list-style:none; }
+  .day li{ font-size:7.05pt; color:var(--sub); padding-left:3.3mm; position:relative; margin-bottom:.55mm; line-height:1.27; }
+  .day li:before{ content:""; position:absolute; left:1mm; top:1.35mm; width:1.1mm; height:1.1mm;
+                  border-radius:50%; background:var(--accent); }
+  .done{ margin-top:1mm; padding-top:.9mm; border-top:1px dashed var(--line); font-size:6.9pt; line-height:1.26; color:var(--ink); }
+  .done b{ color:var(--accent); font-family:var(--mono); font-size:6.4pt; letter-spacing:.06em; text-transform:uppercase; }
+
+  /* ---------- notice + lists ---------- */
+  .notice{ border:1px solid var(--line); border-left:2.4pt solid var(--amber); background:var(--amber-soft);
+           border-radius:2.4mm; padding:2.6mm 3mm; }
+  .notice h3{ margin:0 0 1.4mm; font-size:8.4pt; color:var(--amber); font-weight:700; }
+  .notice ol{ margin:0; padding-left:4.4mm; }
+  .notice li{ font-size:7.6pt; color:#6B4A0A; margin-bottom:.9mm; }
+  ul.plain{ margin:0; padding-left:4.2mm; }
+  ul.plain li{ font-size:7.05pt; color:var(--sub); margin-bottom:.6mm; line-height:1.3; }
+
+  /* ---------- footer ---------- */
+  .foot{ margin-top:auto; padding-top:2.4mm; border-top:1px solid var(--line);
+         display:flex; justify-content:space-between; font-size:6.4pt; color:var(--mute); letter-spacing:.02em; }
+</style>
+</head>
+<body>
+
+<!-- ============================ PAGE 1 ============================ -->
+<div class="page">
+
+  <div class="mast">
+    <div>
+      <div class="brandmark">Prokon CRM &nbsp;·&nbsp; Confidential — for client review</div>
+      <h1>API Integration &amp; Tally Export</h1>
+      <p class="lede">How e-Invoicing (IRN + E-Way Bill) and Tally accounting will run automatically from inside the CRM — and a five-day plan to set it up.</p>
+    </div>
+    <div class="meta">
+      <b>Prepared for:</b> Prokon<br>
+      <b>Scope:</b> 3 branches · 1 Tally company<br>
+      <b>Delivery:</b> 5 working days<br>
+      <b>Version:</b> 1.0
+    </div>
+  </div>
+
+  <section>
+    <h2><span class="n">01</span> Two automations, one source of truth</h2>
+    <div class="duo">
+      <div class="card">
+        <span class="tag">A · COMPLIANCE</span>
+        <h3>GSP API — E-Invoice (IRN) &amp; E-Way Bill</h3>
+        <p>The CRM itself fetches the legally valid IRN, acknowledgement number, signed QR code and E-Way Bill number from the Government portal, through our GSP partner. No separate portal login, no copy-paste.</p>
+        <p><span class="cost">₹29,500 / year · 4,000 API calls</span></p>
+      </div>
+      <div class="card">
+        <span class="tag">B · ACCOUNTING</span>
+        <h3>Tally Export — books stay in TallyPrime</h3>
+        <p>Every CRM invoice is converted into TallyPrime vouchers with matching ledgers, GST rate buckets and invoice references. One file, imported in one go — Sales, GST and party ledgers update together.</p>
+        <p><span class="cost">₹0 — Tally's import gateway is built in</span></p>
+      </div>
+    </div>
+    <p class="rule"><b>The rule both follow:</b> the CRM is the only place a bill is created. Nothing is re-typed in the Government portal or in Tally — so the same figures reach the tax department and your books.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span> The process, end to end</h2>
+    <div class="fig">
+      <svg viewBox="0 0 720 196" role="img" aria-label="Process diagram: an invoice created in the CRM splits into a compliance path through the GSP API and the Government portal, and an accounting path through the Tally export engine, both agreeing with the same invoice.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#8FA3B3"/>
+          </marker>
+          <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,1 L9,5 L0,9 z" fill="#1E5C38"/>
+          </marker>
+        </defs>
+
+        <!-- lane labels -->
+        <text x="126" y="9" font-family="ui-monospace,Menlo,monospace" font-size="8.5" font-weight="700" fill="#1E5C38" letter-spacing="1.1">COMPLIANCE PATH — STATUTORY</text>
+        <text x="126" y="191" font-family="ui-monospace,Menlo,monospace" font-size="8.5" font-weight="700" fill="#0F2A44" letter-spacing="1.1">ACCOUNTING PATH — BOOKKEEPING</text>
+
+        <!-- trigger -->
+        <rect x="6" y="60" width="104" height="76" rx="7" fill="#0F2A44"/>
+        <text x="58" y="82" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="10" font-weight="700" fill="#8FC7A8">1</text>
+        <text x="58" y="97" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">Invoice created</text>
+        <text x="58" y="111" text-anchor="middle" font-size="10.5" fill="#C6D4DF">in the CRM</text>
+        <text x="58" y="125" text-anchor="middle" font-size="9" fill="#8FA3B3">any branch · as today</text>
+
+        <!-- upper lane -->
+        <rect x="126" y="18" width="168" height="66" rx="7" fill="#ffffff" stroke="#1E5C38" stroke-width="1.4"/>
+        <text x="136" y="35" font-family="ui-monospace,Menlo,monospace" font-size="9.5" font-weight="700" fill="#1E5C38">2A</text>
+        <text x="136" y="50" font-size="10.5" font-weight="600" fill="#12212E">Validate &amp; call GSP API</text>
+        <text x="136" y="63" font-size="9" fill="#5A6B78">GSTIN · HSN · rates checked;</text>
+        <text x="136" y="75" font-size="9" fill="#5A6B78">credentials stay server-side</text>
+
+        <rect x="310" y="18" width="182" height="66" rx="7" fill="#EDF3EC" stroke="#1E5C38" stroke-width="1.4"/>
+        <text x="320" y="35" font-family="ui-monospace,Menlo,monospace" font-size="9.5" font-weight="700" fill="#1E5C38">3A</text>
+        <text x="320" y="50" font-size="10.5" font-weight="600" fill="#12212E">Government returns IRN + QR</text>
+        <text x="320" y="63" font-size="9" fill="#5A6B78">E-Way Bill number too, at</text>
+        <text x="320" y="75" font-size="9" fill="#5A6B78">₹50,000 and above → saved</text>
+
+        <!-- lower lane -->
+        <rect x="126" y="112" width="168" height="66" rx="7" fill="#ffffff" stroke="#0F2A44" stroke-width="1.4"/>
+        <text x="136" y="129" font-family="ui-monospace,Menlo,monospace" font-size="9.5" font-weight="700" fill="#0F2A44">2B</text>
+        <text x="136" y="144" font-size="10.5" font-weight="600" fill="#12212E">Build Tally vouchers</text>
+        <text x="136" y="157" font-size="9" fill="#5A6B78">balance guard · one ledger per</text>
+        <text x="136" y="169" font-size="9" fill="#5A6B78">GST rate · drift report</text>
+
+        <rect x="310" y="112" width="182" height="66" rx="7" fill="#F5F8FA" stroke="#0F2A44" stroke-width="1.4"/>
+        <text x="320" y="129" font-family="ui-monospace,Menlo,monospace" font-size="9.5" font-weight="700" fill="#0F2A44">3B</text>
+        <text x="320" y="144" font-size="10.5" font-weight="600" fill="#12212E">Tally XML → TallyPrime</text>
+        <text x="320" y="157" font-size="9" fill="#5A6B78">imported into a trial company</text>
+        <text x="320" y="169" font-size="9" fill="#5A6B78">first; ledgers update in one go</text>
+
+        <!-- arrows -->
+        <path d="M110,98 C120,98 118,51 126,51" fill="none" stroke="#8FA3B3" stroke-width="1.5" marker-end="url(#ah)"/>
+        <path d="M110,98 C120,98 118,145 126,145" fill="none" stroke="#8FA3B3" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="294" y1="51" x2="308" y2="51" stroke="#8FA3B3" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="294" y1="145" x2="308" y2="145" stroke="#8FA3B3" stroke-width="1.5" marker-end="url(#ah)"/>
+        <path d="M492,51 C502,51 500,74 510,84" fill="none" stroke="#1E5C38" stroke-width="1.6" marker-end="url(#ahg)"/>
+        <path d="M492,145 C502,145 500,122 510,112" fill="none" stroke="#1E5C38" stroke-width="1.6" marker-end="url(#ahg)"/>
+
+        <!-- convergence -->
+        <rect x="510" y="52" width="204" height="92" rx="7" fill="#0F2A44"/>
+        <text x="612" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">One source of truth</text>
+        <text x="612" y="92" text-anchor="middle" font-size="9" fill="#C6D4DF">The tax department and your</text>
+        <text x="612" y="104" text-anchor="middle" font-size="9" fill="#C6D4DF">books see identical figures,</text>
+        <text x="612" y="116" text-anchor="middle" font-size="9" fill="#C6D4DF">from one entry — no re-typing,</text>
+        <text x="612" y="128" text-anchor="middle" font-size="9" fill="#8FC7A8">no mismatch, no duplicate bill.</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <div><i>1</i><span>Invoice created in the CRM — any of the three branches, exactly as today.</span></div>
+      <div><i>2B</i><span>Export engine converts the invoice into Tally vouchers and checks every figure first.</span></div>
+      <div><i>2A</i><span>Validation, then a secure server-to-server call to the GSP API. Credentials never reach the browser.</span></div>
+      <div><i>3B</i><span>One XML file imported into a Tally trial company first, then into your live company.</span></div>
+      <div><i>3A</i><span>Government returns IRN, acknowledgement number, signed QR and E-Way Bill number; the invoice is marked Complete.</span></div>
+      <div><i>★</i><span>Both paths start from the same stored invoice — that is what keeps taxes and books in agreement.</span></div>
+    </div>
+  </section>
+
+  <section style="margin-bottom:0;">
+    <h2><span class="n">03</span> What changes for your team</h2>
+    <table>
+      <tr><th>Task</th><th>Today — manual</th><th>After integration — automatic</th></tr>
+      <tr>
+        <td>IRN / e-Invoice</td>
+        <td class="now">Download JSON → upload to GST portal → copy the response → paste it back into the CRM</td>
+        <td class="then">One click in the CRM. IRN, acknowledgement number and QR return and save themselves.</td>
+      </tr>
+      <tr>
+        <td>E-Way Bill</td>
+        <td class="now">A second manual round trip on a separate portal</td>
+        <td class="then">Raised immediately after the IRN, with transport details prefilled and validity date stored.</td>
+      </tr>
+      <tr>
+        <td>Tally entry</td>
+        <td class="now">Accounts re-types every invoice into TallyPrime by hand</td>
+        <td class="then">Pick a date range and branch, export one XML file, import it — all vouchers post at once.</td>
+      </tr>
+      <tr>
+        <td>Errors &amp; audit</td>
+        <td class="now">Mistakes surface late, usually at GST filing time</td>
+        <td class="then">Balance and GST-rate checks block a bad voucher; every API call is logged and traceable.</td>
+      </tr>
+      <tr>
+        <td>Reference integrity</td>
+        <td class="now">A wrong or invented bill number cannot be detected</td>
+        <td class="then">The system refuses to save or export a statutory reference that was not genuinely issued.</td>
+      </tr>
+    </table>
+  </section>
+
+  <div class="foot">
+    <span>Prokon CRM · API Integration &amp; Tally Export · v1.0</span>
+    <span>Page 1 of 2</span>
+  </div>
+</div>
+
+<!-- ============================ PAGE 2 ============================ -->
+<div class="page">
+
+  <div class="mast">
+    <div>
+      <div class="brandmark">Prokon CRM &nbsp;·&nbsp; Delivery plan</div>
+      <h1 style="font-size:15.5pt; margin-bottom:.8mm;">Five-day setup plan</h1>
+      <p class="lede" style="font-size:8.4pt;">Day by day: what gets built, and the single test that proves each day is finished.</p>
+    </div>
+    <div class="meta">
+      <b>Working days:</b> 5<br>
+      <b>Blocking inputs:</b> from you, Day 0<br>
+      <b>Go-live:</b> end of Day 5<br>
+      <b>Hypercare:</b> 1 week after
+    </div>
+  </div>
+
+  <section>
+    <div class="fig" style="padding:2.4mm 3mm 1.4mm;">
+      <svg viewBox="0 0 720 96" role="img" aria-label="Five-day timeline: Day 1 foundation and access, Day 2 e-invoice IRN, Day 3 e-way bill and compliance gates, Day 4 Tally export, Day 5 end-to-end test, training and go-live.">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#0F2A44"/><stop offset="100%" stop-color="#1B4A6E"/>
+          </linearGradient>
+          <linearGradient id="g2" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#174B34"/><stop offset="100%" stop-color="#25754F"/>
+          </linearGradient>
+        </defs>
+        <text x="2" y="12" font-family="ui-monospace,Menlo,monospace" font-size="8" font-weight="700" fill="#8C9AA6" letter-spacing="1">TIMELINE — ONE WORKING WEEK</text>
+        <line x1="4" y1="20" x2="716" y2="20" stroke="#DFE5EA" stroke-width="1"/>
+
+        <g>
+          <rect x="2" y="26" width="138" height="40" rx="6" fill="url(#g1)"/>
+          <text x="14" y="42" font-family="ui-monospace,Menlo,monospace" font-size="9.5" font-weight="700" fill="#8FC7A8">DAY 1</text>
+          <text x="14" y="56" font-size="10.5" font-weight="600" fill="#ffffff">Foundation &amp; access</text>
+          <text x="2" y="78" font-size="8.5" fill="#5A6B78">Sandbox live, Tally ledgers</text>
+          <text x="2" y="89" font-size="8.5" fill="#5A6B78">mapped, data audit done</text>
+        </g>
+        <g>
+          <rect x="146" y="26" width="138" height="40" rx="6" fill="url(#g1)"/>
+          <text x="158" y="42" font-family="ui-monospace,Menlo,monospace" font-size="9.5" font-weight="700" fill="#8FC7A8">DAY 2</text>
+          <text x="158" y="56" font-size="10.5" font-weight="600" fill="#ffffff">E-Invoice (IRN)</text>
+          <text x="146" y="78" font-size="8.5" fill="#5A6B78">First real IRN obtained</text>
+          <text x="146" y="89" font-size="8.5" fill="#5A6B78">from inside the CRM</text>
+        </g>
+        <g>
+          <rect x="290" y="26" width="138" height="40" rx="6" fill="url(#g1)"/>
+          <text x="302" y="42" font-family="ui-monospace,Menlo,monospace" font-size="9.5" font-weight="700" fill="#8FC7A8">DAY 3</text>
+          <text x="302" y="56" font-size="10.5" font-weight="600" fill="#ffffff">E-Way Bill &amp; gates</text>
+          <text x="290" y="78" font-size="8.5" fill="#5A6B78">E-Way Bill raised, 24-hour</text>
+          <text x="290" y="89" font-size="8.5" fill="#5A6B78">cancel window enforced</text>
+        </g>
+        <g>
+          <rect x="434" y="26" width="138" height="40" rx="6" fill="url(#g2)"/>
+          <text x="446" y="42" font-family="ui-monospace,Menlo,monospace" font-size="9.5" font-weight="700" fill="#A7DCC1">DAY 4</text>
+          <text x="446" y="56" font-size="10.5" font-weight="600" fill="#ffffff">Tally export</text>
+          <text x="434" y="78" font-size="8.5" fill="#5A6B78">Vouchers imported and</text>
+          <text x="434" y="89" font-size="8.5" fill="#5A6B78">tied out to the paisa</text>
+        </g>
+        <g>
+          <rect x="578" y="26" width="138" height="40" rx="6" fill="url(#g2)"/>
+          <text x="590" y="42" font-family="ui-monospace,Menlo,monospace" font-size="9.5" font-weight="700" fill="#A7DCC1">DAY 5</text>
+          <text x="590" y="56" font-size="10.5" font-weight="600" fill="#ffffff">Test, train, go-live</text>
+          <text x="578" y="78" font-size="8.5" fill="#5A6B78">First live invoice runs the</text>
+          <text x="578" y="89" font-size="8.5" fill="#5A6B78">whole chain untouched</text>
+        </g>
+      </svg>
+    </div>
+    <p class="caption"><b>Why this order:</b> access first — nothing can be tested without it. Then the statutory path (Days 2–3), because an invoice has no legal validity without its IRN. Then the books (Day 4). Training and go-live last, so nobody is trained on something still moving.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">04</span> Day by day</h2>
+    <div class="days">
+
+      <div class="day">
+        <div class="hd"><span class="d">DAY 1</span><h3>Foundation &amp; access</h3></div>
+        <div class="bd">
+          <ul>
+            <li>Sandbox test credentials from the GSP partner configured and verified end to end.</li>
+            <li>Your Tally chart of accounts collected; every ledger name mapped to the export.</li>
+            <li>Existing invoice records audited for compliance data; a cleanup list prepared.</li>
+          </ul>
+          <div class="done"><b>Done when</b> — the CRM talks to the sandbox, and the ledger map matches your Tally company exactly.</div>
+        </div>
+      </div>
+
+      <div class="day">
+        <div class="hd"><span class="d">DAY 2</span><h3>GSP integration — E-Invoice (IRN)</h3></div>
+        <div class="bd">
+          <ul>
+            <li>Secure server-side connection built; credentials are never exposed to the browser.</li>
+            <li>IRN generation, cancellation and details lookup implemented and tested against sandbox.</li>
+            <li>Manual download-paste replaced by one button; kept as a fallback if the API is down.</li>
+          </ul>
+          <div class="done"><b>Done when</b> — a test invoice receives a real IRN from the sandbox and is marked Complete in the CRM.</div>
+        </div>
+      </div>
+
+      <div class="day">
+        <div class="hd"><span class="d">DAY 3</span><h3>E-Way Bill &amp; compliance gates</h3></div>
+        <div class="bd">
+          <ul>
+            <li>E-Way Bill raised automatically after the IRN, with transport and dispatch details prefilled.</li>
+            <li>24-hour cancellation window enforced in the interface; validity date stored on the invoice.</li>
+            <li>Clear error messages, automatic retries, and a log of every API call.</li>
+          </ul>
+          <div class="done"><b>Done when</b> — a test E-Way Bill is generated with a valid till date, and cancellation after 24 hours is blocked.</div>
+        </div>
+      </div>
+
+      <div class="day">
+        <div class="hd"><span class="d">DAY 4</span><h3>Tally export</h3></div>
+        <div class="bd">
+          <ul>
+            <li>Export wired in: choose a date range and branch, download the Tally XML.</li>
+            <li>Balance guard, one ledger per GST rate, and a drift report comparing CRM and Tally figures.</li>
+            <li>Imported into a Tally trial company; voucher count verified.</li>
+          </ul>
+          <div class="done"><b>Done when</b> — the Tally Sales register and Trial Balance tie back to the CRM invoice register, to the paisa.</div>
+        </div>
+      </div>
+
+      <div class="day">
+        <div class="hd"><span class="d">DAY 5</span><h3>End-to-end test, training &amp; go-live</h3></div>
+        <div class="bd">
+          <ul>
+            <li>Full run on real branch data: invoice → IRN → E-Way Bill → Tally.</li>
+            <li>Production credentials swapped in and re-verified after the sandbox passes.</li>
+            <li>Owner and accounts team trained; a one-page SOP handed over.</li>
+          </ul>
+          <div class="done"><b>Done when</b> — the first real invoice completes the whole chain with zero manual data entry.</div>
+        </div>
+      </div>
+
+      <div class="day" style="border-color:#E8D9B8;">
+        <div class="hd" style="background:#8A5A00;"><span class="d" style="color:#F5D9A0;">DAY 0</span><h3>What we need from you first</h3></div>
+        <div class="bd" style="background:#FCF3E0;">
+          <ul>
+            <li style="color:#6B4A0A;"><b>Ledger names</b> from your TallyPrime company — Chart of Accounts → Ledgers.</li>
+            <li style="color:#6B4A0A;"><b>GSP sandbox credentials</b> and sign-off on the API proposal (4,000 calls/year tier).</li>
+            <li style="color:#6B4A0A;"><b>Accountant's call</b> on the one-paisa CGST/SGST rounding note.</li>
+          </ul>
+          <div class="done" style="border-color:#E8D9B8; color:#6B4A0A;"><b style="color:#8A5A00;">Note</b> — these three items are the only things that can delay Day 1. Everything else is on our side.</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">05</span> Assumptions, exclusions and cost</h2>
+    <div style="display:grid; grid-template-columns:1.15fr 1fr; gap:4mm;">
+      <div>
+        <ul class="plain">
+          <li>The CRM stays the only billing source — Tally consumes data; no two-way sync to maintain.</li>
+          <li>One Tally company on one Windows PC; all three branches are supported from day one.</li>
+          <li>Import starts file-based (no always-on gateway); the live gateway can be added later.</li>
+          <li><b>Not in these five days:</b> purchase and credit-note vouchers, payment allocation splitting, bulk backfill of old invoices.</li>
+        </ul>
+      </div>
+      <div class="notice" style="border-left-color:#1E5C38; background:#EDF3EC;">
+        <h3 style="color:#1E5C38;">Cost — nothing new to buy for Tally</h3>
+        <table style="font-size:7.4pt;">
+          <tr><td style="width:62%; color:#3C5A48;">GSP APIs — e-Invoice + E-Way Bill + GSTIN, 4,000 calls/year</td><td style="color:#1E5C38; font-weight:600;">₹29,500 / yr</td></tr>
+          <tr><td style="color:#3C5A48;">On-boarding &amp; support</td><td style="color:#1E5C38; font-weight:600;">Free (FOC)</td></tr>
+          <tr><td style="color:#3C5A48;">TallyPrime XML import gateway</td><td style="color:#1E5C38; font-weight:600;">₹0 — built in</td></tr>
+          <tr><td style="color:#3C5A48;">Hosting</td><td style="color:#1E5C38; font-weight:600;">Existing — no change</td></tr>
+          <tr><td style="color:#3C5A48;"><b>Effective cost per e-invoiced despatch</b></td><td style="color:#1E5C38; font-weight:700;">≈ ₹14.75</td></tr>
+        </table>
+        <p style="font-size:7pt; color:#3C5A48; margin:1.6mm 0 0;">An invoice that needs an E-Way Bill uses two calls (one IRN, one E-Way Bill), so the 4,000-call tier covers roughly 2,000 despatches a year.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <span>Prokon CRM · API Integration &amp; Tally Export · v1.0</span>
+    <span>Page 2 of 2</span>
+  </div>
+</div>
+
+</body>
+</html>

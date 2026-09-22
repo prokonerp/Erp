@@ -17,8 +17,11 @@ export function MovementLiveProvider({ children }: { children: ReactNode }) {
   qcRef.current = qc;
 
   useEffect(() => {
+    // Must cover both movement roster and day-route family so the map/roster
+    // and the per-engineer day route stay in step on every ping/poll/focus.
     const invalidate = () => {
       void qcRef.current.invalidateQueries({ queryKey: adminEngKeys.movement() });
+      void qcRef.current.invalidateQueries({ queryKey: adminEngKeys.dayRoutePrefix });
     };
     let timer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase

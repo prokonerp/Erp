@@ -29,6 +29,7 @@ import {
   validateThisQty,
   validateSoForConversion,
   type NewInvoicePayload,
+  type NewSalesOrder,
   type FulfillmentLine,
   type SoFulfillmentSummary,
   type ConversionType,
@@ -460,8 +461,21 @@ export async function restorePooledStockOnInvoiceCancel(invoiceId: string): Prom
  *     updated rows and reloads the winner's SO instead of inserting its own.
  *  3. Every write result is checked; nothing is swallowed (B-16).
  */
+/**
+ * Create a Sales Order from a Quotation. Supports optional caller-supplied
+ * field overrides (e.g. edited item quantities/rates).
+ *
+ * IMPORTANT:
+ * - Overrides are IGNORED when a sales order already exists for this quotation.
+ *   The findExisting() idempotency check runs first and returns the existing SO
+ *   without touching overrides — this is intentional to prevent duplicate SOs.
+ * - Totals are always recomputed server-side from the final items via computeTotals().
+ *   Caller-supplied subtotal/total/cgst/etc. values are deliberately overwritten
+ *   because GST must reflect the actual line-level data.
+ */
 export async function createSalesOrderFromQuote(
   quote: Quotation,
+  overrides?: Partial<NewSalesOrder>,
 ): Promise<{ id: string; so_no: string | null }> {
   type Created = { id: string; so_no: string | null };
 
@@ -500,7 +514,7 @@ export async function createSalesOrderFromQuote(
     return existing;
   }
 
-  const payload = quoteToSalesOrder(quote);
+  const payload: NewSalesOrder = { ...quoteToSalesOrder(quote), ...(overrides ?? {}) };
 
   let created: Created;
   try {

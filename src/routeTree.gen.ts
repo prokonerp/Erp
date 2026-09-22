@@ -152,6 +152,7 @@ import { Route as AppChallanIdEditRouteImport } from './routes/_app/challan.$id_
 import { Route as AppSalesProformaIdEditRouteImport } from './routes/_app/sales.proforma.$id_.edit'
 import { Route as AppSalesOrdersIdConvertRouteImport } from './routes/_app/sales.orders.$id_.convert'
 import { Route as AppSalesGeneralDcIdEditRouteImport } from './routes/_app/sales.general-dc.$id_.edit'
+import { Route as AppCrmQuotationsIdConvertRouteImport } from './routes/_app/crm.quotations.$id_.convert'
 import { Route as AppAmcOemSourceIdRouteImport } from './routes/_app/amc.oem.$source.$id'
 
 const RaiseTicketRoute = RaiseTicketRouteImport.update({
@@ -871,6 +872,12 @@ const AppSalesGeneralDcIdEditRoute = AppSalesGeneralDcIdEditRouteImport.update({
   path: '/general-dc/$id/edit',
   getParentRoute: () => AppSalesRoute,
 } as any)
+const AppCrmQuotationsIdConvertRoute =
+  AppCrmQuotationsIdConvertRouteImport.update({
+    id: '/$id_/convert',
+    path: '/$id/convert',
+    getParentRoute: () => AppCrmQuotationsRoute,
+  } as any)
 const AppAmcOemSourceIdRoute = AppAmcOemSourceIdRouteImport.update({
   id: '/$source/$id',
   path: '/$source/$id',
@@ -1018,6 +1025,7 @@ export interface FileRoutesByFullPath {
   '/sales/payments/': typeof AppSalesPaymentsIndexRoute
   '/sales/proforma/': typeof AppSalesProformaIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
+  '/crm/quotations/$id/convert': typeof AppCrmQuotationsIdConvertRoute
   '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
   '/sales/orders/$id/convert': typeof AppSalesOrdersIdConvertRoute
   '/sales/proforma/$id/edit': typeof AppSalesProformaIdEditRoute
@@ -1145,6 +1153,7 @@ export interface FileRoutesByTo {
   '/sales/payments': typeof AppSalesPaymentsIndexRoute
   '/sales/proforma': typeof AppSalesProformaIndexRoute
   '/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
+  '/crm/quotations/$id/convert': typeof AppCrmQuotationsIdConvertRoute
   '/sales/general-dc/$id/edit': typeof AppSalesGeneralDcIdEditRoute
   '/sales/orders/$id/convert': typeof AppSalesOrdersIdConvertRoute
   '/sales/proforma/$id/edit': typeof AppSalesProformaIdEditRoute
@@ -1292,6 +1301,7 @@ export interface FileRoutesById {
   '/_app/sales/payments/': typeof AppSalesPaymentsIndexRoute
   '/_app/sales/proforma/': typeof AppSalesProformaIndexRoute
   '/_app/amc/oem/$source/$id': typeof AppAmcOemSourceIdRoute
+  '/_app/crm/quotations/$id_/convert': typeof AppCrmQuotationsIdConvertRoute
   '/_app/sales/general-dc/$id_/edit': typeof AppSalesGeneralDcIdEditRoute
   '/_app/sales/orders/$id_/convert': typeof AppSalesOrdersIdConvertRoute
   '/_app/sales/proforma/$id_/edit': typeof AppSalesProformaIdEditRoute
@@ -1439,6 +1449,7 @@ export interface FileRouteTypes {
     | '/sales/payments/'
     | '/sales/proforma/'
     | '/amc/oem/$source/$id'
+    | '/crm/quotations/$id/convert'
     | '/sales/general-dc/$id/edit'
     | '/sales/orders/$id/convert'
     | '/sales/proforma/$id/edit'
@@ -1566,6 +1577,7 @@ export interface FileRouteTypes {
     | '/sales/payments'
     | '/sales/proforma'
     | '/amc/oem/$source/$id'
+    | '/crm/quotations/$id/convert'
     | '/sales/general-dc/$id/edit'
     | '/sales/orders/$id/convert'
     | '/sales/proforma/$id/edit'
@@ -1712,6 +1724,7 @@ export interface FileRouteTypes {
     | '/_app/sales/payments/'
     | '/_app/sales/proforma/'
     | '/_app/amc/oem/$source/$id'
+    | '/_app/crm/quotations/$id_/convert'
     | '/_app/sales/general-dc/$id_/edit'
     | '/_app/sales/orders/$id_/convert'
     | '/_app/sales/proforma/$id_/edit'
@@ -2730,6 +2743,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSalesGeneralDcIdEditRouteImport
       parentRoute: typeof AppSalesRoute
     }
+    '/_app/crm/quotations/$id_/convert': {
+      id: '/_app/crm/quotations/$id_/convert'
+      path: '/$id/convert'
+      fullPath: '/crm/quotations/$id/convert'
+      preLoaderRoute: typeof AppCrmQuotationsIdConvertRouteImport
+      parentRoute: typeof AppCrmQuotationsRoute
+    }
     '/_app/amc/oem/$source/$id': {
       id: '/_app/amc/oem/$source/$id'
       path: '/$source/$id'
@@ -2837,11 +2857,13 @@ const AppCrmLeadsRouteWithChildren = AppCrmLeadsRoute._addFileChildren(
 interface AppCrmQuotationsRouteChildren {
   AppCrmQuotationsIdRoute: typeof AppCrmQuotationsIdRoute
   AppCrmQuotationsNewRoute: typeof AppCrmQuotationsNewRoute
+  AppCrmQuotationsIdConvertRoute: typeof AppCrmQuotationsIdConvertRoute
 }
 
 const AppCrmQuotationsRouteChildren: AppCrmQuotationsRouteChildren = {
   AppCrmQuotationsIdRoute: AppCrmQuotationsIdRoute,
   AppCrmQuotationsNewRoute: AppCrmQuotationsNewRoute,
+  AppCrmQuotationsIdConvertRoute: AppCrmQuotationsIdConvertRoute,
 }
 
 const AppCrmQuotationsRouteWithChildren =

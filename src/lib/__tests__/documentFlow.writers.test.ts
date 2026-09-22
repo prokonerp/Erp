@@ -28,7 +28,13 @@ vi.mock("@/lib/gst", async (importOriginal) => {
   const mod = await importOriginal() as Record<string, unknown>;
   return {
     ...mod,
-    computeTotals: (vi.fn() as unknown as typeof mod.computeTotals) ?? mod.computeTotals,
+    // Spy that DELEGATES to the real implementation by default. A bare vi.fn()
+    // returns undefined, which made every writer path touch `totals.items`
+    // throw (failed writer tests could never exercise real totals). Tests may
+    // still override per-case with mockResolvedValueOnce / mockImplementationOnce.
+    computeTotals: vi.fn((...args: unknown[]) =>
+      (mod.computeTotals as (...a: unknown[]) => unknown)(...args),
+    ),
   };
 });
 vi.mock("@/lib/negativeStock", () => ({
@@ -592,5 +598,214 @@ describe("documentFlow.writers/cancel helpers", () => {
     await syncCancelToLedger("invoices", "inv1");
     // Should have called so_conversions update at least once (via target_table) and again via id
     expect(calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ── createSalesOrderFromQuote with overrides ────────────────────────────────
+
+// Must import after vi.mock blocks above
+import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
+
+describe("documentFlow.writers/createSalesOrderFromQuote / overrides", () => {
+  /**
+   * Build a mock supplier that:
+   *  1. Captures sales_orders.insert(...) payload into `capturedPayload`
+   *  2. Returns fake SO id/no on the .select().single() chain
+   *  3. Satisfies findExisting() -> null (no existing SO)
+   *  4. hydrateParties returns customer + branch
+   *  5. quotations.update(link) succeeds → returns linked row
+   *
+   * This follows the EXISTING mock pattern in this file (custom mockFrom impl per-test).
+   */
+  function setupWithLinkSuccess() {
+    const capturedPayload: Record<string, unknown>[] = [];
+
+    mockFrom.mockImplementation((table: string) => {
+      // sales_orders path: insert(...).select("id","so_no").single()
+      if (table === "sales_orders") {
+        const b: Record<string, unknown> & { _inserted: unknown[] } = Object.assign(
+          { _inserted: capturedPayload },
+          makeBuilder(table),
+        ) as never;
+        const origInsert = b.insert as ReturnType<typeof vi.fn>;
+        origInsert.mockImplementation((payload: unknown) => {
+          // store what was inserted
+          if (payload != null && typeof payload === "object") capturedPayload.push(payload as Record<string, unknown>);
+          return b;
+        });
+        b.select = vi.fn(() => b);
+        b.single = vi.fn(() => Promise.resolve({ data: { id: "so-created-1", so_no: "SO-100" }, error: null }));
+        return b as unknown as ReturnType<typeof mockFrom>;
+      }
+      // quotations path (findExisting by linked_quote_id): select(...).limit(1).maybeSingle()
+      if (table === "quotations") {
+        const b: Record<string, unknown> = {} as never;
+        // For link-success case: .update(...).eq(...).is(...).select("id") -> returns [{}]
+        const linkBuilder: Record<string, unknown> = {} as never;
+        linkBuilder.eq = vi.fn(() => linkBuilder);
+        linkBuilder.is = vi.fn(() => linkBuilder);
+        linkBuilder.select = vi.fn(() => linkBuilder);
+        linkBuilder.update = vi.fn(() => {
+          // Return a builder that chains eq → is → select("id")
+          return {
+            eq: vi.fn(() => ({
+              is: vi.fn(() => ({
+                select: vi.fn(() => Promise.resolve({ data: [{ id: "q1" }], error: null })),
+              })),
+            })),
+          } as unknown;
+        });
+        // For findExisting case (first call to quotations): maybeSingle resolves null
+        b.select = vi.fn(() => b);
+        b.eq = vi.fn(() => {
+          if (b._calledForLinkedQuote) return b;
+          b._calledForLinkedQuote = true;
+          return b;
+        });
+        b.limit = vi.fn(() => b);
+        b.maybeSingle = vi.fn(() => Promise.resolve({ data: null, error: null }));
+        // Final link step: .update({...}).eq(...).is(...).select("id") -> [{ id }].
+        // The writer inspects the returned rows to detect a lost race, so this
+        // must resolve to a non-empty array.
+        const linkTail = { select: vi.fn(() => Promise.resolve({ data: [{ id: "q1" }], error: null })) };
+        const linkIs = { is: vi.fn(() => linkTail) };
+        b.update = vi.fn(() => ({ eq: vi.fn(() => linkIs) }));
+        return b as unknown as ReturnType<typeof mockFrom>;
+      }
+      // customers select for hydrateParties fallback
+      if (table === "customers") {
+        const cb: Record<string, unknown> = {} as never;
+        cb.select = vi.fn(() => cb);
+        cb.eq = vi.fn(() => cb);
+        cb.maybeSingle = vi.fn(() => Promise.resolve({ data: { company: "Test Customer", gst: "29ABCDE1234F1Z5", state: "Karnataka", state_code: "29" }, error: null }));
+        return cb as unknown as ReturnType<typeof mockFrom>;
+      }
+      // branches lookup (handled by fetchBranches mock → empty array; but hydrateParties
+      // also checks branch_id on the SO payload — it finds nothing from fetchBranches.)
+      // We need hydrateParties to NOT throw. The code does fetchBranches which returns [],
+      // then searches for matching branch_id → undefined → throws.
+      // Override fetchBranches below for this test.
+      return makeBuilder(table);
+    });
+
+    return { capturedPayload };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRpc.mockResolvedValue({ error: { message: "not found" } });
+    // Default from: generic builder
+    mockFrom.mockImplementation((table: string) => makeBuilder(table));
+  });
+
+  it("insert contains overridden po_number and po_date, not the quotation defaults", async () => {
+    // Need hydrateParties to succeed — override fetchBranches to return a matching branch
+    vi.resetModules();
+    vi.doMock("@/lib/sales", () => ({
+      fetchBranches: vi.fn().mockResolvedValue([{ id: "b1", gstin: "29XYZ", state_name: "Karnataka", state_code: "29" }]),
+      itemDraftFromBreakup: vi.fn((d: unknown) => d),
+    }));
+    // Re-import to pick up new mocks
+    const { createSalesOrderFromQuote: csf } = await import("@/lib/documentFlow.writers");
+
+    const quote: any = {
+      id: "q1",
+      quote_no: "QT-001",
+      items: [{ product_id: "p1", description: "Original Widget", qty: 10, unit: "Nos", rate: 100, discount_pct: 0, tax_percent: 18, hsn: "9983" }],
+      branch_id: "b1",
+      customer_id: "c1",
+      place_of_supply: "Karnataka",
+      status: "accepted",
+    };
+    const overrides = {
+      po_number: "PO-123",
+      po_date: "2026-09-22",
+      items: [{ ...quote.items[0], qty: 8, rate: 150 } as never],
+    };
+
+    const { capturedPayload } = setupWithLinkSuccess();
+    const result = await csf(quote, overrides);
+
+    expect(result).toEqual({ id: "so-created-1", so_no: "SO-100" });
+    expect(capturedPayload).toHaveLength(1);
+    const payload = capturedPayload[0];
+    expect(payload.po_number).toBe("PO-123");
+    expect(payload.po_date).toBe("2026-09-22");
+  });
+
+  it("edited item qty/rate flows through to insert payload (not original quotation values)", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/sales", () => ({
+      fetchBranches: vi.fn().mockResolvedValue([{ id: "b1", gstin: "29XYZ", state_name: "Karnataka", state_code: "29" }]),
+      itemDraftFromBreakup: vi.fn((d: unknown) => d),
+    }));
+    const { createSalesOrderFromQuote: csf2 } = await import("@/lib/documentFlow.writers");
+
+    const quote: any = {
+      id: "q2",
+      quote_no: "QT-002",
+      items: [{ product_id: "p1", description: "Original", qty: 10, unit: "Nos", rate: 100, discount_pct: 0, tax_percent: 18, hsn: "9983" }],
+      branch_id: "b1",
+      customer_id: "c1",
+      place_of_supply: "Karnataka",
+      status: "accepted",
+    };
+    const overrides = {
+      items: [{ ...quote.items[0], qty: 7, rate: 200, discount_pct: 10 } as never],
+    };
+
+    const { capturedPayload } = setupWithLinkSuccess();
+    await csf2(quote, overrides);
+
+    expect(capturedPayload).toHaveLength(1);
+    const payloadItems = (capturedPayload[0].items as Array<Record<string, unknown>>) ?? [];
+    expect(payloadItems).toHaveLength(1);
+    // The spread of overrides.items replaces payload.items before computeTotals,
+    // so computeTotals sees qty=7, rate=200 and recomputes totals.
+    // Item payload should carry the edited values through.
+    expect(payloadItems[0].qty).toBe(7);
+    expect(payloadItems[0].rate).toBe(200);
+  });
+
+  it("totals are recomputed — caller-supplied subtotal/total are overwritten", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/sales", () => ({
+      fetchBranches: vi.fn().mockResolvedValue([{ id: "b1", gstin: "29XYZ", state_name: "Karnataka", state_code: "29" }]),
+      itemDraftFromBreakup: vi.fn((d: unknown) => d),
+    }));
+    const { createSalesOrderFromQuote: csf3 } = await import("@/lib/documentFlow.writers");
+
+    const quote: any = {
+      id: "q3",
+      quote_no: "QT-003",
+      items: [{ product_id: "p1", description: "X", qty: 5, unit: "Nos", rate: 1000, discount_pct: 0, tax_percent: 18, hsn: "9983" }],
+      branch_id: "b1",
+      customer_id: "c1",
+      place_of_supply: "Karnataka",
+      status: "accepted",
+    };
+    // Even if caller tries to pass stale totals, they get overwritten
+    const overrides = {
+      subtotal: 9999,
+      total: 99999,
+      cgst: 0,
+      sgst: 0,
+    };
+
+    const { capturedPayload } = setupWithLinkSuccess();
+    await csf3(quote, overrides);
+
+    expect(capturedPayload).toHaveLength(1);
+    const payload = capturedPayload[0];
+    // Totals must be numbers computed by computeTotals + extras logic, NOT the overrides
+    // quote had 5 × 1000 = 5000 taxable, GST 18% = 900, total ≈ 5900
+    // Override values of 9999/99999 would be clearly wrong
+    expect(Number(payload.subtotal as number)).toBeGreaterThan(0);
+    expect(Number(payload.subtotal as number)).not.toBe(9999);
+    expect(Number(payload.total as number)).toBeGreaterThan(0);
+    expect(Number(payload.total as number)).not.toBe(99999);
+    // cgst should be recomputed (not 0 from override) — for interstate this might actually be 0,
+    // but the point is the value came from computeTotals not from the override
+    expect(payload.cgst).toBeDefined();
   });
 });

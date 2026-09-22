@@ -21,7 +21,6 @@ import { BundleApplyDialog } from "@/components/BundleApplyDialog";
 import { fetchBundleChildrenRaw } from "@/lib/productBundles";
 import { waOpen } from "@/lib/tickets";
 import { fetchBranches, productWarrantyMonths, type BranchRow } from "@/lib/sales";
-import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { ShareQuotationDialog } from "@/components/ShareQuotationDialog";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -40,6 +39,7 @@ import { DocumentPrintView, type PrintItem, type PrintPreparedBy } from "@/compo
 import { signSignatureUrl } from "@/lib/userSignature";
 import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
 import { getCurrentUserName } from "@/lib/currentUser";
+import { openSoConvertPopup } from "@/lib/soConversionPopup";
 
 export type QuoteDocAction = "print" | "download";
 
@@ -91,7 +91,6 @@ function QuoteEditor() {
   const autoRan = useRef(false);
   const applyCustomerSeqRef = useRef(0);
   const [saving, setSaving] = useState(false);
-  const [converting, setConverting] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const savedOnceRef = useRef(false);
@@ -470,32 +469,32 @@ function QuoteEditor() {
 
   const convertToSo = async () => {
     if (!q) return;
-    if (converting || saving) return;
-    setConverting(true);
+    // Guard against double-clicks (saving state handles rapid save clicks)
+    if (isClone) return;
+    // If an SO already exists for this quotation, navigate to it instead —
+    // checked before opening anything, so we never spawn a popup we don't use.
+    const existingSoId = (q as unknown as { converted_to_so_id?: string | null })?.converted_to_so_id;
+    if (existingSoId) {
+      nav({ to: "/sales/orders/$id", params: { id: existingSoId } });
+      return;
+    }
+    // Open the popup synchronously, inside the click gesture — an await before
+    // window.open() loses transient user activation and the popup is blocked.
+    const win = openSoConvertPopup("");
+    if (!win) {
+      toast.error("Allow pop-ups to open the conversion window");
+      return;
+    }
     try {
       await save();
-      // Re-fetch the freshly saved quotation so createSalesOrderFromQuote
-      // works off DB-accurate data (stale `q` state would otherwise be used).
-      const targetId = isClone ? null : id;
-      // For clone, save() already navigates — no conversion needed until persisted
-      if (isClone) return;
-      const { data: fresh, error: fetchErr } = await supabase
-        .from("quotations")
-        .select("*")
-        .eq("id", targetId as string)
-        .single();
-      if (fetchErr) throw new Error(fetchErr.message);
-      if (!fresh) throw new Error("Quotation not found after saving.");
-      const freshQuote = fresh as unknown as Quotation;
-      freshQuote.items = Array.isArray(freshQuote.items) ? freshQuote.items : [];
-      const r = await createSalesOrderFromQuote(freshQuote);
-      toast.success(`Sales Order ${r.so_no || ""} created`);
-      nav({ to: "/sales/orders/$id", params: { id: r.id } });
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to convert");
-    } finally {
-      setConverting(false);
+      win.close();
+      toast.error(e instanceof Error ? e.message : "Failed to save quotation before conversion");
+      return;
     }
+    // Same-origin blank window — safe to navigate it once the save has landed.
+    win.location.href = `/crm/quotations/${id}/convert`;
+    toast.message("Opened conversion window — review and edit, then create the Sales Order");
   };
 
   const docName = () => `${q?.quote_no || "Quotation"}.pdf`;
@@ -574,8 +573,8 @@ function QuoteEditor() {
           <Button size="sm" variant="outline" disabled={isClone} onClick={doPrint}><Printer className="h-4 w-4 mr-1" />Print</Button>
           <Button size="sm" variant="outline" disabled={isClone} onClick={doDownload}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
           <Button size="sm" onClick={() => setShareOpen(true)} disabled={isClone}><Share2 className="h-4 w-4 mr-1" />Share</Button>
-          <Button size="sm" variant="outline" onClick={convertToSo} disabled={isClone || saving || converting}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
-          <Button size="sm" onClick={save} disabled={saving || converting}><Save className="h-4 w-4 mr-1" />{saving ? "Saving…" : "Save"}</Button>
+          <Button size="sm" variant="outline" onClick={convertToSo} disabled={isClone || saving}><ClipboardList className="h-4 w-4 mr-1" />Convert to Sales Order</Button>
+          <Button size="sm" onClick={save} disabled={saving}><Save className="h-4 w-4 mr-1" />{saving ? "Saving…" : "Save"}</Button>
         </div>
       </div>
 

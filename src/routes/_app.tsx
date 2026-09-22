@@ -270,6 +270,25 @@ function AppLayout() {
   if (gateBlocked) return <SafeNavigate to="/auth" replace />;
   if (isEngineer) return <SafeNavigate to="/eng" replace />;
 
+  // Chromeless popup mode for the Quotation → Sales Order conversion window.
+  // This route stays under _app ON PURPOSE: every guard above (session loading,
+  // auth, gateBlocked, engineer redirect) still applies, so an unauthenticated
+  // or engineer user can never reach the popup content without being bounced
+  // first. We only strip the shell chrome (sidebar / nav / idle timeout /
+  // command palette) to keep the popup focused.
+  if (/^\/crm\/quotations\/[^/]+\/convert\/?$/.test(location.pathname)) {
+    // Mirror the ConfirmProvider context the main shell uses. IdleTimeout and
+    // CommandPalette are deliberately EXCLUDED here: a focused popup must not
+    // force-logout the user mid-entry or surface the global command palette.
+    return (
+      <ConfirmProvider>
+        <div className="min-h-screen bg-background">
+          <Outlet />
+        </div>
+      </ConfirmProvider>
+    );
+  }
+
   const navItems = permLoading
     ? NAV_ITEMS
     : NAV_ITEMS.filter((n) => {

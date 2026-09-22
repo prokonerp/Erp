@@ -6,6 +6,7 @@ import { TableSkeleton } from "@/components/shared/skeletons";
 import { AdminWarnings } from "@/components/engineer/AdminWarnings";
 import { MovementMap } from "@/components/engineer/MovementMap";
 import { useEngineerDayRoute } from "@/hooks/useEngineerMovement";
+import { useRouteLegs } from "@/hooks/useRouteLegs";
 import { istDateKey, formatISTTime } from "@/lib/time";
 
 function formatKm(m: number | null): string {
@@ -14,18 +15,16 @@ function formatKm(m: number | null): string {
 }
 
 /**
- * Per-engineer day route: polyline of raw pings + numbered stops from the
- * rollup's site list, with distance/stop stats. Dates are IST days.
+ * Per-engineer day route: leg-coloured polyline of pings snapped to roads,
+ * with direction arrows and a click-to-select legs panel. Dates are IST days.
  */
 export function DayRouteView({ employeeId, name }: { employeeId: string; name: string | null }) {
   const [day, setDay] = useState(() => istDateKey());
   const { data, isLoading, warnings, loadError } = useEngineerDayRoute(employeeId, day);
 
-  const route = useMemo(
-    () => (data?.pings ?? []).map((p) => [p.lat, p.long] as [number, number]),
-    [data],
-  );
-  // Tickets with any flagged ping (impossible fix data) — advisory markers.
+  const [selectedLeg, setSelectedLeg] = useState<number | null>(null);
+
+  // Tickets with any flagged ping — advisory markers.
   const flaggedTickets = useMemo(() => {
     const set = new Set<string>();
     for (const p of data?.pings ?? []) {
@@ -33,6 +32,34 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
     }
     return set;
   }, [data]);
+
+  const rawPings = data?.pings ?? [];
+
+  // Build leg-friendly data structures
+  const legPings = useMemo(
+    () => rawPings.map((p) => ({ lat: p.lat, long: p.long, captured_at: p.captured_at, ticket_id: p.ticket_id })),
+    [rawPings],
+  );
+  const legSites = useMemo(
+    () => (data?.movement?.sites ?? []).map((s) => ({
+      ticket_id: s.ticket_id,
+      arrived_at: s.arrived_at,
+      departed_at: s.departed_at,
+      lat: s.lat,
+      long: s.long,
+    })),
+    [data],
+  );
+
+  const { legs, loading: legsLoading } = useRouteLegs(legPings, legSites);
+
+  // Legacy route polyline for fit-bounds when no legs
+  const legacyRoute = useMemo(
+    () => rawPings.map((p) => [p.lat, p.long] as [number, number]),
+    [rawPings],
+  );
+
+  // Stops (numbered) — kept for map marker rendering
   const stops = useMemo(
     () =>
       (data?.movement?.sites ?? [])
@@ -46,6 +73,9 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
         })),
     [data, flaggedTickets],
   );
+
+  // Determine if any leg is unmatched
+  const hasUnmatched = legs.some((l) => !l.matched);
 
   return (
     <div className="space-y-3">
@@ -86,7 +116,7 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
         </div>
       ) : isLoading ? (
         <TableSkeleton rows={4} colCount={2} />
-      ) : route.length === 0 ? (
+      ) : rawPings.length === 0 ? (
         <EmptyState
           title="No fixes this day"
           hint="Raw fixes appear while the engineer is on duty; the daily summary rolls up overnight."
@@ -95,41 +125,68 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
         <>
           <MovementMap
             pins={[]}
-            route={route}
-            stops={stops}
+            route={legacyRoute}
+            stops={legsLoading ? stops : legs.length > 0 ? undefined : stops}
             height={340}
             emptyHint="No fixes this day"
+            legs={legs.length > 0 ? legs : undefined}
+            selectedLeg={selectedLeg}
+            onLegSelect={setSelectedLeg}
           />
-          {stops.length > 0 && (
+
+          {hasUnmatched && (
+            <p className="text-xs text-muted-foreground">
+              some legs are straight-line — road match unavailable
+            </p>
+          )}
+
+          {legs.length > 0 && (
             <Card>
               <CardContent className="p-3">
                 <ol className="space-y-1.5">
-                  {(data?.movement?.sites ?? []).map((s, i) => {
-                    const flagged = !!s.ticket_id && flaggedTickets.has(s.ticket_id);
+                  {legs.map((leg) => {
+                    const isSelected = selectedLeg === leg.index;
+                    const destFlagged =
+                      leg.ticketId != null && flaggedTickets.has(leg.ticketId);
                     return (
-                      <li key={`${s.ticket_id ?? "na"}-${i}`} className="flex gap-2 text-[13px]">
-                        <span
-                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold ${
-                            flagged
-                              ? "bg-amber-100 text-amber-800 ring-2 ring-amber-600"
-                              : "bg-primary text-primary-foreground"
-                          }`}
-                          aria-hidden="true"
+                      <li key={leg.index}>
+                        <button
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => setSelectedLeg(isSelected ? null : leg.index)}
+                          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors ${
+                            destFlagged ? "border-l-2 border-l-amber-500 pl-0" : ""
+                          } hover:bg-muted/60`}
                         >
-                          {flagged ? "!" : i + 1}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-muted-foreground tabular-nums">
-                          {s.ticket_id ? (
-                            <span className="font-mono">Ticket {s.ticket_id.slice(0, 8)}…</span>
-                          ) : (
-                            "Untagged fix"
+                          {/* Colour swatch */}
+                          <span
+                            className="inline-block h-4 w-4 shrink-0 rounded"
+                            style={{ backgroundColor: leg.colour }}
+                            aria-hidden="true"
+                          />
+                          {/* Leg index */}
+                          <span className="shrink-0 text-xs font-bold tabular-nums">
+                            Leg {leg.index}
+                          </span>
+                          {/* From → To */}
+                          <span className="min-w-0 flex-1 truncate text-sm">
+                            {leg.fromLabel} → {leg.toLabel}
+                          </span>
+                          {/* Time range */}
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                            {formatISTTime(leg.startedAt)}–{formatISTTime(leg.endedAt)}
+                          </span>
+                          {/* Distance */}
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                            {formatKm(leg.distanceM)}
+                          </span>
+                          {/* Flagged indicator */}
+                          {destFlagged && (
+                            <span className="shrink-0 text-xs font-semibold text-amber-700">
+                              flagged
+                            </span>
                           )}
-                          {flagged && <span className="text-amber-700"> · flagged</span>}
-                          {s.arrived_at && <> · arrived {formatISTTime(s.arrived_at)}</>}
-                          {s.departed_at && s.departed_at !== s.arrived_at && (
-                            <> · departed {formatISTTime(s.departed_at)}</>
-                          )}
-                        </span>
+                        </button>
                       </li>
                     );
                   })}

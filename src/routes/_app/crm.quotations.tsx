@@ -82,11 +82,11 @@ import {
   validateQuotation,
 } from "@/lib/crm";
 import { ExportButtons } from "@/components/ExportButtons";
-import { createSalesOrderFromQuote } from "@/lib/documentFlow.writers";
 import { cn } from "@/lib/utils";
 import { istTodayIso } from "@/lib/dateRange";
 import { useDebounced } from "@/lib/sales.hooks";
 import { fetchBranches, type BranchRow } from "@/lib/sales";
+import { openSoConvertPopup } from "@/lib/soConversionPopup";
 import { PageHeader } from "@/components/crm/PageHeader";
 import { StatusBadge } from "@/components/crm/StatusBadge";
 import { EmptyState } from "@/components/crm/EmptyState";
@@ -383,7 +383,6 @@ function QuotesWorkspace() {
   const [selected, setSelected] = useState<Quotation | null>(null);
   const [selLoading, setSelLoading] = useState(false);
   const [tab, setTab] = useRouteState<"details" | "activity">("tab", "details");
-  const [converting, setConverting] = useState(false);
   const [delId, setDelId] = useState<string | null>(null);
   const [openNew, setOpenNew] = useState(false);
   const [newCustId, setNewCustId] = useState("");
@@ -847,20 +846,21 @@ function QuotesWorkspace() {
     }
   };
 
-  const convert = async () => {
+  const convert = () => {
     if (!selected) return;
-    setConverting(true);
-    try {
-      // createSalesOrderFromQuote already flips the quote to "accepted" and
-      // links converted_to_so_id — the old extra status write here was
-      // redundant and unchecked (double-write race, finding #39).
-      const so = await createSalesOrderFromQuote(selected);
-      toast.success(`Sales Order ${so.so_no || ""} created`);
-      nav({ to: "/sales/orders/$id", params: { id: so.id } });
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to convert");
-    } finally {
-      setConverting(false);
+    // If an SO already exists for this quotation, navigate to it instead
+    const existingSoId = (selected as unknown as { converted_to_so_id?: string | null })
+      ?.converted_to_so_id;
+    if (existingSoId) {
+      nav({ to: "/sales/orders/$id", params: { id: existingSoId } });
+      return;
+    }
+    const url = `/crm/quotations/${selected.id}/convert`;
+    const win = openSoConvertPopup(url);
+    if (!win) {
+      toast.error("Allow pop-ups to open the conversion window");
+    } else {
+      toast.message("Opened conversion window — review and edit, then create the Sales Order");
     }
   };
 
@@ -1054,7 +1054,7 @@ function QuotesWorkspace() {
                       <Send className="h-3.5 w-3.5 mr-1" />
                       Send
                     </Button>
-                    <Button size="sm" variant="outline" onClick={convert} disabled={converting}>
+                    <Button size="sm" variant="outline" onClick={convert}>
                       <ArrowRightLeft className="h-3.5 w-3.5 mr-1" />
                       Convert
                     </Button>

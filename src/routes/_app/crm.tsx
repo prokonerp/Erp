@@ -27,6 +27,16 @@ const tabs = [
 
 function CrmLayout() {
   const loc = useLocation();
+  const location = useLocation();
+
+  // Chromeless popup mode for the Quotation → Sales Order conversion window.
+  // This layout normally renders a CRM sub-navigation tab strip, but the
+  // conversion flow opens in its own popup window where that chrome would
+  // distract from the single focused task. Strip it: render only the outlet.
+  if (/^\/crm\/quotations\/[^/]+\/convert\/?$/.test(location.pathname)) {
+    return <Outlet />;
+  }
+
   return (
     <div>
       <div className="border-b border-border bg-background -mx-4 md:-mx-6 px-4 md:px-6 mb-5 print:hidden sticky top-0 z-20">

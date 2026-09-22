@@ -102,6 +102,7 @@ export const adminEngKeys = {
   movementPrefix: ["admin-eng", "movement"] as const,
   dayRoute: (employeeId: string | null, day: string) =>
     ["admin-eng", "day-route", employeeId, day] as const,
+  dayRoutePrefix: ["admin-eng", "day-route"] as const,
 } as const;
 
 // Aggregate export for convenience
