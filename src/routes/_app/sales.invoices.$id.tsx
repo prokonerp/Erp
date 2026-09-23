@@ -890,6 +890,7 @@ function InvoiceView() {
                 }}
                 branch={branch}
                 udyamNo={pdfSettings?.udyam_no || null}
+                themeColor={pdfTheme.themeColor}
                 copyLabel={label}
                 authorisedSignatureUrl={authorisedSignatureUrl}
                 isReprint={printJob ? printJob.isReprint : (inv.print_count ?? 0) > 0}

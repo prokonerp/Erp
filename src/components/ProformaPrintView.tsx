@@ -146,9 +146,9 @@ export function ProformaPrintView({
   const customerLike = useMemo(
     () => ({
       company: proforma.buyer_name || "",
-      contact_name: (proforma as any).contact_person || null,
-      phone: (proforma as any).contact_mobile || null,
-      email: (proforma as any).contact_email || null,
+      contact_name: proforma.contact_person || null,
+      phone: proforma.contact_mobile || null,
+      email: proforma.contact_email || null,
       gst: proforma.buyer_gstin || null,
       state: proforma.buyer_state || null,
       address: proforma.billing_address || null,
@@ -168,6 +168,25 @@ export function ProformaPrintView({
   const [products, setProducts] = useState<Record<string, InvoiceProductInfo>>({});
   const [amc, setAmc] = useState<InvoiceAmcInfo>(null);
   const [resolvedItems, setResolvedItems] = useState<InvoiceItemRow[] | null>(null);
+  // Branch PI appearance — theme color + copy label from proforma_invoice_settings (T2 root fix)
+  const [appearance, setAppearance] = useState<{ themeColor?: string | null; copyLabel?: string | null }>({});
+
+  useEffect(() => {
+    if (!proforma.branch_id) return;
+    let alive = true;
+    supabase
+      .from("proforma_invoice_settings")
+      .select("theme_color, copy_label")
+      .eq("branch_id", proforma.branch_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!alive || !data) return;
+        setAppearance({ themeColor: data.theme_color, copyLabel: data.copy_label });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [proforma.branch_id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -409,8 +428,9 @@ export function ProformaPrintView({
       products={products}
       amc={amc}
       variant="proforma"
+      themeColor={appearance.themeColor || undefined}
       authorisedSignatureUrl={authorised_signature_url || null}
-      copyLabel="Original Copy"
+      copyLabel={appearance.copyLabel || "Original Copy"}
     />
   );
 }

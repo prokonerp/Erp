@@ -142,7 +142,9 @@ function ProformaDetail() {
 
   async function printDoc() {
     if (!printRef.current || !proforma) return;
-    await printElementSinglePage(printRef.current, `${proforma.proforma_no || "proforma"}.pdf`);
+    await printElementSinglePage(printRef.current, `${proforma.proforma_no || "proforma"}.pdf`, {
+      mono: true,
+    });
   }
   async function downloadPdf() {
     if (!printRef.current || !proforma) return;

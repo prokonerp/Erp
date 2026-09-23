@@ -85,6 +85,8 @@ export type InvoicePrintProps = {
   showWatermark?: boolean;
   /** Variant — proforma renders same green layout but with PROFORMA title + watermark and no IRN logic */
   variant?: "tax" | "proforma";
+  /** Accent theme color (invoice_settings / proforma_invoice_settings.theme_color). Defaults to brand green. */
+  themeColor?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -92,17 +94,37 @@ export type InvoicePrintProps = {
 // ---------------------------------------------------------------------------
 
 // ---- Design tokens (single source of truth for the document) ----
-const GREEN = "#1F9D4D"; // brand green — headings, table headers, totals, footer
-const GREEN_DARK = "#157A3B"; // pressed/darker green for small text accents
-const GREEN_TINT = "#E7F4EC"; // pale green wash — emphasis rows & charge band
-const HEADER_BG = "#e8f5e9"; // light green for section header backgrounds
+const GREEN = "#1F9D4D"; // brand green — default accent (headings, table headers, totals, footer)
+const GREEN_DARK = "#157A3B"; // default darker accent for small text
 const INK = "#111111"; // near-black — frames, primary text
 const INNER = "#b5b5b5"; // medium grey — all internal cell borders
 const FRAME = "#1a1a1a"; // dark grey — outer section frames only
-const ZEBRA = "#F5F9F6"; // faint green-grey — alternating item rows
 const LABEL_BG = "#F0F2F4"; // neutral label wash — meta box, totals labels
 const SUBTLE = "#3D434B"; // secondary text
 const RADIUS = 3; // border-radius for section boxes (px)
+
+// ---- Theme accent (derived from settings.theme_color; default = legacy brand green) ----
+const HEX_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+/** Mix hex `a` toward hex `b` by t (0..1) — derives dark/tint shades of the accent. */
+const mixHex = (a: string, b: string, t: number) => {
+  const parse = (h: string) => {
+    const s = h.replace("#", "");
+    const f =
+      s.length === 3
+        ? s
+            .split("")
+            .map((c) => c + c)
+            .join("")
+        : s;
+    return [parseInt(f.slice(0, 2), 16), parseInt(f.slice(2, 4), 16), parseInt(f.slice(4, 6), 16)];
+  };
+  const [ar, ag, ab] = parse(a);
+  const [br, bg, bb] = parse(b);
+  const ch = (x: number) => Math.round(x).toString(16).padStart(2, "0");
+  return `#${ch(ar + (br - ar) * t)}${ch(ag + (bg - ag) * t)}${ch(ab + (bb - ab) * t)}`;
+};
+/** Dark accent — read by sub-components (InfoRow / SectionTitle) via context. */
+const AccentDarkCtx = React.createContext<string>(GREEN_DARK);
 
 /** 1234567.89 → "12,34,567.89" (no symbol — headers carry the ₹). */
 const num = (n: number | null | undefined) =>
@@ -156,7 +178,7 @@ const isChargeItem = (it: InvoiceItemRow) => !it.product_id && CHARGE_RE.test(it
 // ---------------------------------------------------------------------------
 
 const tdBase: React.CSSProperties = {
-  fontSize: 8.6,
+  fontSize: 9.2,
   padding: "3px 5px",
   border: `0.5px solid ${INNER}`,
   color: INK,
@@ -177,14 +199,15 @@ function InfoRow({
   label: string;
   value: React.ReactNode;
 }) {
+  const accentDark = React.useContext(AccentDarkCtx);
   if (!value) return null;
   return (
     <div
-      style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 8.6, lineHeight: 1.3 }}
+      style={{ display: "flex", alignItems: "baseline", gap: 6, fontSize: 9.2, lineHeight: 1.3 }}
     >
       <span
         style={{
-          color: GREEN_DARK,
+          color: accentDark,
           display: "inline-flex",
           width: 10,
           flex: "0 0 auto",
@@ -214,13 +237,14 @@ function SectionTitle({
   rule?: boolean;
   headerBg?: boolean;
 }) {
+  const accentDark = React.useContext(AccentDarkCtx);
   return (
     <div
       className={headerBg ? "section-header" : undefined}
       style={{
-        color: GREEN_DARK,
+        color: accentDark,
         fontWeight: 700,
-        fontSize: 10,
+        fontSize: 10.5,
         letterSpacing: 0.4,
         textAlign: center ? "center" : "left",
         marginBottom: 3,
@@ -256,7 +280,7 @@ function KV({
     <div
       style={{
         display: "flex",
-        fontSize: 8.6,
+        fontSize: 9.2,
         lineHeight: 1.4,
         fontVariantNumeric: "tabular-nums",
       }}
@@ -310,6 +334,7 @@ export function InvoicePrintView({
   isProvisional = false,
   showWatermark = false,
   variant = "tax",
+  themeColor,
 }: InvoicePrintProps) {
   const isInter = !!invoice.is_interstate;
 
@@ -416,26 +441,34 @@ export function InvoicePrintView({
     .map((s) => s.trim())
     .filter(Boolean);
 
+  // ---- Accent theme (settings-driven); legacy green shades preserved for default ----
+  const ac = themeColor && HEX_RE.test(themeColor.trim()) ? themeColor.trim() : GREEN;
+  const acDark = ac === GREEN ? GREEN_DARK : mixHex(ac, "#000000", 0.3);
+  const acTint = ac === GREEN ? "#E7F4EC" : mixHex(ac, "#ffffff", 0.88);
+  const acHbg = ac === GREEN ? "#e8f5e9" : mixHex(ac, "#ffffff", 0.92);
+  const acZebra = ac === GREEN ? "#F5F9F6" : mixHex(ac, "#ffffff", 0.965);
+
   return (
-    <div
-      className="inv-print"
-      style={{
-        width: "200mm",
-        minHeight: "287mm",
-        margin: "0 auto",
-        background: "#ffffff",
-        color: INK,
-        fontFamily: "Arial, Helvetica, sans-serif",
-        border: `1.2px solid ${FRAME}`,
-        borderRadius: RADIUS,
-        padding: "3mm 3mm 2mm",
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        position: "relative",
-      }}
-    >
-      <style>{`
+    <AccentDarkCtx.Provider value={acDark}>
+      <div
+        className="inv-print"
+        style={{
+          width: "200mm",
+          minHeight: "287mm",
+          margin: "0 auto",
+          background: "#ffffff",
+          color: INK,
+          fontFamily: "Arial, Helvetica, sans-serif",
+          border: `1.2px solid ${FRAME}`,
+          borderRadius: RADIUS,
+          padding: "3mm 3mm 2mm",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          position: "relative",
+        }}
+      >
+        <style>{`
         .inv-print { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .inv-print table { border-collapse: collapse; width: 100%; }
 
@@ -463,7 +496,7 @@ export function InvoicePrintView({
 
         /* Green header row — section titles in tables */
         .inv-print .g-bg {
-          background: ${GREEN} !important;
+          background: ${ac} !important;
           color: #fff !important;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
@@ -474,21 +507,21 @@ export function InvoicePrintView({
 
         /* Light green section-header background for standalone section titles */
         .inv-print .section-header {
-          background: ${HEADER_BG} !important;
+          background: ${acHbg} !important;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
 
         /* Tint row */
         .inv-print .g-tint {
-          background: ${GREEN_TINT} !important;
+          background: ${acTint} !important;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
 
         /* Alternating zebra rows on item table */
         .inv-print table.items tbody tr:nth-child(even) td {
-          background: ${ZEBRA};
+          background: ${acZebra};
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
@@ -504,594 +537,642 @@ export function InvoicePrintView({
         }
       `}</style>
 
-      {copyLabel ? (
-        <div
-          style={{
-            position: "absolute",
-            top: 3,
-            right: 6,
-            fontSize: 7,
-            fontWeight: 700,
-            color: "#777",
-            letterSpacing: 0.8,
-            zIndex: 2,
-          }}
-        >
-          {copyLabel.trim().toUpperCase()}
-        </div>
-      ) : null}
-
-      {(isProvisional || isReprint || showWatermark) ? (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%) rotate(-30deg)",
-            fontSize: isProvisional ? 34 : 64,
-            fontWeight: 900,
-            color: isProvisional ? "rgba(200,30,30,0.08)" : "rgba(100,100,100,0.09)",
-            letterSpacing: isProvisional ? 2 : 4,
-            whiteSpace: "nowrap",
-            pointerEvents: "none",
-            userSelect: "none",
-            zIndex: 1,
-            textAlign: "center",
-          }}
-        >
-          {isProvisional ? "PROVISIONAL — IRN PENDING" : isReprint ? "REPRINT" : (copyLabel || "").toUpperCase()}
-        </div>
-      ) : null}
-
-      {/* ============================ HEADER ============================ */}
-      {/* Small doc title — TAX or PROFORMA */}
-      <div style={{ textAlign: "center", fontSize: 8, fontWeight: 700, color: GREEN, letterSpacing: 3, marginBottom: 4 }}>
-        {variant === "proforma" ? "PROFORMA INVOICE" : "TAX INVOICE"}
-      </div>
-      {/* Two-column header: left (logo + name + company info) | right (APC block) */}
-      <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-        {/* Left: logo row + company info */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          {/* Top row: logo + company name */}
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-            <div
-              style={{
-                width: "34%",
-                flex: "0 0 auto",
-                display: "flex",
-                alignItems: "flex-start",
-              }}
-            >
-              <img
-                src={prokonLogo.url}
-                alt="Prokon Hi-Tech Systems"
-                crossOrigin="anonymous"
-                style={{ maxHeight: 55, maxWidth: "100%", objectFit: "contain" }}
-              />
-            </div>
-            <div style={{ flex: 1, textAlign: "center", display: "flex", alignItems: "center" }}>
-              <div
-                style={{ fontSize: 19, fontWeight: 700, letterSpacing: 0.4, color: INK, width: "100%" }}
-              >
-                {company.name.toUpperCase()}
-              </div>
-            </div>
-          </div>
-
-          {/* Company info rows — kept close under the logo (max ~15px) */}
-          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 0.5 }}>
-            <InfoRow icon={<MapPin size={9} />} label="Registered Office" value={regdOffice} />
-            <InfoRow icon={<Warehouse size={9} />} label="Warehouse" value={warehouseFallback} />
-            <InfoRow
-              icon={<Phone size={9} />}
-              label="Mobile"
-              value={companyPhones.length ? companyPhones.join("  |  ") : ""}
-            />
-            <InfoRow icon={<Mail size={9} />} label="Email" value={company.email || ""} />
-            <InfoRow icon={<Globe size={9} />} label="Website" value={company.website || ""} />
-            <InfoRow
-              icon={<Landmark size={9} />}
-              label="GSTIN"
-              value={
-                company.gstin || udyamNo ? (
-                  <>
-                    <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
-                      {company.gstin || ""}
-                    </span>
-                    {udyamNo ? (
-                      <>
-                        &nbsp;&nbsp;|&nbsp;&nbsp;<b>UDYAM</b> :{" "}
-                        <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{udyamNo}</span>
-                      </>
-                    ) : null}
-                  </>
-                ) : (
-                  ""
-                )
-              }
-            />
-          </div>
-        </div>
-
-        {/* APC branding block (reference layout) — right column, full height */}
-        <div
-          style={{
-            width: "23%",
-            flex: "0 0 auto",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <img
-              src={apcLogo.url}
-              alt="APC by Schneider Electric"
-              crossOrigin="anonymous"
-              style={{ maxHeight: 42, maxWidth: "100%", objectFit: "contain" }}
-            />
-          </div>
-          <div style={{ width: "88%", border: `0.5px solid ${INNER}`, borderRadius: RADIUS }}>
-            <div
-              className="g-bg"
-              style={{ textAlign: "center", fontWeight: 700, fontSize: 9.2, padding: "2.5px 0" }}
-            >
-              Authorized
-            </div>
-            <div
-              style={{
-                textAlign: "center",
-                fontSize: 8.8,
-                padding: "2.5px 0",
-                color: INK,
-                borderTop: `0.5px solid ${INNER}`,
-              }}
-            >
-              Sales Partner
-            </div>
-          </div>
+        {copyLabel ? (
           <div
             style={{
-              width: "88%",
-              background: "#3d3d3d",
-              color: "#fff",
-              textAlign: "center",
-              fontSize: 9.8,
-              fontStyle: "italic",
-              fontWeight: 600,
-              padding: "3.5px 0",
-              WebkitPrintColorAdjust: "exact",
-              printColorAdjust: "exact",
+              position: "absolute",
+              top: 3,
+              right: 6,
+              fontSize: 7.6,
+              fontWeight: 700,
+              color: "#777",
+              letterSpacing: 0.8,
+              zIndex: 2,
             }}
           >
-            Life Is On
+            {copyLabel.trim().toUpperCase()}
+          </div>
+        ) : null}
+
+        {isProvisional || isReprint || showWatermark ? (
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%) rotate(-30deg)",
+              fontSize: isProvisional ? 34 : 64,
+              fontWeight: 900,
+              color: isProvisional ? "rgba(200,30,30,0.08)" : "rgba(100,100,100,0.09)",
+              letterSpacing: isProvisional ? 2 : 4,
+              whiteSpace: "nowrap",
+              pointerEvents: "none",
+              userSelect: "none",
+              zIndex: 1,
+              textAlign: "center",
+            }}
+          >
+            {isProvisional
+              ? "PROVISIONAL — IRN PENDING"
+              : isReprint
+                ? "REPRINT"
+                : (copyLabel || "").toUpperCase()}
+          </div>
+        ) : null}
+
+        {/* ============================ HEADER ============================ */}
+        {/* Small doc title — TAX or PROFORMA */}
+        <div
+          style={{
+            textAlign: "center",
+            fontSize: 9.5,
+            fontWeight: 700,
+            color: ac,
+            letterSpacing: 3,
+            marginBottom: 4,
+          }}
+        >
+          {variant === "proforma" ? "PROFORMA INVOICE" : "TAX INVOICE"}
+        </div>
+        {/* Two-column header: left (logo + name + company info) | right (APC block) */}
+        <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+          {/* Left: logo row + company info */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            {/* Top row: logo + company name */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+              <div
+                style={{
+                  width: "34%",
+                  flex: "0 0 auto",
+                  display: "flex",
+                  alignItems: "flex-start",
+                }}
+              >
+                <img
+                  src={prokonLogo.url}
+                  alt="Prokon Hi-Tech Systems"
+                  crossOrigin="anonymous"
+                  style={{ maxHeight: 55, maxWidth: "100%", objectFit: "contain" }}
+                />
+              </div>
+              <div style={{ flex: 1, textAlign: "center", display: "flex", alignItems: "center" }}>
+                <div
+                  style={{
+                    fontFamily: '"Arial Narrow", "Helvetica Neue", Arial, Helvetica, sans-serif',
+                    fontSize: 21,
+                    fontWeight: 700,
+                    letterSpacing: -0.2,
+                    color: INK,
+                    width: "100%",
+                  }}
+                >
+                  {company.name.toUpperCase()}
+                </div>
+              </div>
+            </div>
+
+            {/* Company info rows — kept close under the logo (max ~15px) */}
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 0.5 }}>
+              <InfoRow icon={<MapPin size={9} />} label="Registered Office" value={regdOffice} />
+              <InfoRow icon={<Warehouse size={9} />} label="Warehouse" value={warehouseFallback} />
+              <InfoRow
+                icon={<Phone size={9} />}
+                label="Mobile"
+                value={companyPhones.length ? companyPhones.join("  |  ") : ""}
+              />
+              <InfoRow icon={<Mail size={9} />} label="Email" value={company.email || ""} />
+              <InfoRow icon={<Globe size={9} />} label="Website" value={company.website || ""} />
+              <InfoRow
+                icon={<Landmark size={9} />}
+                label="GSTIN"
+                value={
+                  company.gstin || udyamNo ? (
+                    <>
+                      <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                        {company.gstin || ""}
+                      </span>
+                      {udyamNo ? (
+                        <>
+                          &nbsp;&nbsp;|&nbsp;&nbsp;<b>UDYAM</b> :{" "}
+                          <span style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                            {udyamNo}
+                          </span>
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    ""
+                  )
+                }
+              />
+            </div>
+          </div>
+
+          {/* APC branding block (reference layout) — right column, full height */}
+          <div
+            style={{
+              width: "23%",
+              flex: "0 0 auto",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <img
+                src={apcLogo.url}
+                alt="APC by Schneider Electric"
+                crossOrigin="anonymous"
+                style={{ maxHeight: 34, maxWidth: "100%", objectFit: "contain" }}
+              />
+            </div>
+            <div style={{ width: "88%", border: `0.5px solid ${INNER}`, borderRadius: RADIUS }}>
+              <div
+                className="g-bg"
+                style={{ textAlign: "center", fontWeight: 700, fontSize: 9.6, padding: "2.5px 0" }}
+              >
+                Authorized
+              </div>
+              <div
+                style={{
+                  textAlign: "center",
+                  fontSize: 9.3,
+                  padding: "2.5px 0",
+                  color: INK,
+                  borderTop: `0.5px solid ${INNER}`,
+                }}
+              >
+                Sales Partner
+              </div>
+            </div>
+            <div
+              style={{
+                width: "88%",
+                background: "#3d3d3d",
+                color: "#fff",
+                textAlign: "center",
+                fontSize: 10.2,
+                fontStyle: "italic",
+                fontWeight: 600,
+                padding: "3.5px 0",
+                WebkitPrintColorAdjust: "exact",
+                printColorAdjust: "exact",
+              }}
+            >
+              Life Is On
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Green rule under the header */}
-      <div
-        style={{
-          height: 3,
-          background: GREEN,
-          marginTop: 4,
-          WebkitPrintColorAdjust: "exact",
-          printColorAdjust: "exact",
-        }}
-      />
-
-      {/* ====================== INVOICE META (2-col Tally grid) ====================== */}
-      <div
-        className="section-frame"
-        style={{
-          display: "flex",
-          marginTop: 10,
-          border: `0.5px solid ${INNER}`,
-          borderRadius: RADIUS,
-          overflow: "hidden",
-        }}
-      >
-        {/* Left column (5 rows) */}
-        <table style={{ width: "50%", flex: "0 0 50%" }}>
-          <tbody>
-            {metaLeft.map(([k, v]) => (
-              <tr key={k}>
-                <td
-                  className="section-header"
-                  style={{
-                    width: "42%",
-                    fontSize: 8.8,
-                    fontWeight: 700,
-                    padding: "2.5px 7px",
-                    border: `0.5px solid ${INNER}`,
-                  }}
-                >
-                  {k}
-                </td>
-                <td
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    padding: "2.5px 7px",
-                    border: `0.5px solid ${INNER}`,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {v}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {/* Vertical rule between columns */}
-        <div style={{ width: 1, background: INNER, alignSelf: "stretch" }} />
-        {/* Right column (4 rows) */}
-        <table style={{ width: "50%", flex: "0 0 50%" }}>
-          <tbody>
-            {metaRight.map(([k, v]) => (
-              <tr key={k}>
-                <td
-                  className="section-header"
-                  style={{
-                    width: "42%",
-                    fontSize: 8.8,
-                    fontWeight: 700,
-                    padding: "2.5px 7px",
-                    border: `0.5px solid ${INNER}`,
-                  }}
-                >
-                  {k}
-                </td>
-                <td
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    padding: "2.5px 7px",
-                    border: `0.5px solid ${INNER}`,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {v}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ========================= BILL TO / SHIP TO ========================= */}
-      <div style={{ display: "flex", gap: 8, marginTop: 5, alignItems: "stretch" }}>
+        {/* Green rule under the header */}
         <div
-          className="avoid-break"
           style={{
-            flex: 1,
+            height: 3,
+            background: ac,
+            marginTop: 4,
+            WebkitPrintColorAdjust: "exact",
+            printColorAdjust: "exact",
+          }}
+        />
+
+        {/* ====================== INVOICE META (2-col Tally grid) ====================== */}
+        <div
+          className="section-frame"
+          style={{
+            display: "flex",
+            marginTop: 10,
             border: `0.5px solid ${INNER}`,
             borderRadius: RADIUS,
-            padding: "5px 9px 6px",
+            overflow: "hidden",
           }}
         >
-          <SectionTitle rule headerBg>
-            BILL TO
-          </SectionTitle>
-          <div style={{ fontSize: 10, fontWeight: 700 }}>{billName || "—"}</div>
-          {contactPerson && (
-            <div style={{ fontSize: 9, marginTop: 1 }}>
-              <b>Contact</b> : {contactPerson}
-            </div>
-          )}
-          {billAddrLines.map((ln, i) => (
-            <div key={i} style={{ fontSize: 9, lineHeight: 1.4 }}>
-              {ln}
-            </div>
-          ))}
-          {buyerGst && <KV label="GSTIN" value={buyerGst} valueMono />}
-          {buyerStateLine && <KV label="State" value={buyerStateLine} />}
-          {buyerPhone && <KV label="Mobile" value={buyerPhone} />}
-          {buyerEmail && <KV label="Email" value={buyerEmail} />}
-          {placeOfSupply && <KV label="Place of Supply" value={placeOfSupply} />}
-          {customerRemarks && (
-            <div style={{ fontSize: 8.2, color: "#444", marginTop: 3, fontStyle: "italic" }}>
-              {customerRemarks}
-            </div>
-          )}
+          {/* Left column (5 rows) */}
+          <table style={{ width: "50%", flex: "0 0 50%" }}>
+            <tbody>
+              {metaLeft.map(([k, v]) => (
+                <tr key={k}>
+                  <td
+                    className="section-header"
+                    style={{
+                      width: "42%",
+                      fontSize: 9.3,
+                      fontWeight: 700,
+                      padding: "2.5px 7px",
+                      border: `0.5px solid ${INNER}`,
+                    }}
+                  >
+                    {k}
+                  </td>
+                  <td
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      padding: "2.5px 7px",
+                      border: `0.5px solid ${INNER}`,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {v}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {/* Vertical rule between columns */}
+          <div style={{ width: 1, background: INNER, alignSelf: "stretch" }} />
+          {/* Right column (4 rows) */}
+          <table style={{ width: "50%", flex: "0 0 50%" }}>
+            <tbody>
+              {metaRight.map(([k, v]) => (
+                <tr key={k}>
+                  <td
+                    className="section-header"
+                    style={{
+                      width: "42%",
+                      fontSize: 9.3,
+                      fontWeight: 700,
+                      padding: "2.5px 7px",
+                      border: `0.5px solid ${INNER}`,
+                    }}
+                  >
+                    {k}
+                  </td>
+                  <td
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      padding: "2.5px 7px",
+                      border: `0.5px solid ${INNER}`,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {v}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+
+        {/* ========================= BILL TO / SHIP TO ========================= */}
+        <div style={{ display: "flex", gap: 8, marginTop: 5, alignItems: "stretch" }}>
+          <div
+            className="avoid-break"
+            style={{
+              flex: 1,
+              border: `0.5px solid ${INNER}`,
+              borderRadius: RADIUS,
+              padding: "5px 9px 6px",
+            }}
+          >
+            <SectionTitle rule headerBg>
+              BILL TO
+            </SectionTitle>
+            <div style={{ fontSize: 10.5, fontWeight: 700 }}>{billName || "—"}</div>
+            {contactPerson && (
+              <div style={{ fontSize: 9.5, marginTop: 1 }}>
+                <b>Contact</b> : {contactPerson}
+              </div>
+            )}
+            {billAddrLines.map((ln, i) => (
+              <div key={i} style={{ fontSize: 9.5, lineHeight: 1.4 }}>
+                {ln}
+              </div>
+            ))}
+            {buyerGst && <KV label="GSTIN" value={buyerGst} valueMono />}
+            {buyerStateLine && <KV label="State" value={buyerStateLine} />}
+            {buyerPhone && <KV label="Mobile" value={buyerPhone} />}
+            {buyerEmail && <KV label="Email" value={buyerEmail} />}
+            {placeOfSupply && <KV label="Place of Supply" value={placeOfSupply} />}
+            {customerRemarks && (
+              <div style={{ fontSize: 8.8, color: "#444", marginTop: 3, fontStyle: "italic" }}>
+                {customerRemarks}
+              </div>
+            )}
+          </div>
+          <div
+            className="avoid-break"
+            style={{
+              flex: 1,
+              border: `0.5px solid ${INNER}`,
+              borderRadius: RADIUS,
+              padding: "5px 9px 6px",
+            }}
+          >
+            <SectionTitle rule headerBg>
+              SHIP TO
+            </SectionTitle>
+            <div style={{ fontSize: 10.5, fontWeight: 700 }}>{billName || "—"}</div>
+            {contactPerson && (
+              <div style={{ fontSize: 9.5, marginTop: 1 }}>
+                <b>Contact</b> : {contactPerson}
+              </div>
+            )}
+            {shipAddrLines.map((ln, i) => (
+              <div key={i} style={{ fontSize: 9.5, lineHeight: 1.4 }}>
+                {ln}
+              </div>
+            ))}
+            {buyerPhone && <KV label="Mobile" value={buyerPhone} />}
+            {buyerEmail && <KV label="Email" value={buyerEmail} />}
+          </div>
+        </div>
+
+        {/* ============ E-INVOICE IRN / ACK BAND (above items) — always render skeleton (dash when blank) ============ */}
         <div
-          className="avoid-break"
           style={{
-            flex: 1,
-            border: `0.5px solid ${INNER}`,
+            marginTop: 5,
+            border: `0.5px solid ${ac}`,
             borderRadius: RADIUS,
-            padding: "5px 9px 6px",
+            padding: "3px 8px",
+            textAlign: "center",
+            fontSize: 8.6,
+            fontFamily: "monospace",
+            lineHeight: 1.4,
+            color: INK,
+            background: "#fff",
+            WebkitPrintColorAdjust: "exact",
+            printColorAdjust: "exact",
           }}
         >
-          <SectionTitle rule headerBg>
-            SHIP TO
-          </SectionTitle>
-          <div style={{ fontSize: 10, fontWeight: 700 }}>{billName || "—"}</div>
-          {contactPerson && (
-            <div style={{ fontSize: 9, marginTop: 1 }}>
-              <b>Contact</b> : {contactPerson}
-            </div>
-          )}
-          {shipAddrLines.map((ln, i) => (
-            <div key={i} style={{ fontSize: 9, lineHeight: 1.4 }}>
-              {ln}
-            </div>
-          ))}
-          {buyerPhone && <KV label="Mobile" value={buyerPhone} />}
-          {buyerEmail && <KV label="Email" value={buyerEmail} />}
+          IRN : {irn || "—"} &nbsp;&nbsp;|&nbsp;&nbsp; Ack.No. : {ackNo || "—"}{" "}
+          &nbsp;&nbsp;|&nbsp;&nbsp; Ack. Date : {ackDateStr || "—"}
         </div>
-      </div>
 
-      {/* ============ E-INVOICE IRN / ACK BAND (above items) — always render skeleton (dash when blank) ============ */}
-      <div
-        style={{
-          marginTop: 5,
-          border: `0.5px solid ${GREEN}`,
-          borderRadius: RADIUS,
-          padding: "3px 8px",
-          textAlign: "center",
-          fontSize: 8,
-          fontFamily: "monospace",
-          lineHeight: 1.4,
-          color: INK,
-          background: "#fff",
-          WebkitPrintColorAdjust: "exact",
-          printColorAdjust: "exact",
-        }}
-      >
-        IRN : {irn || "—"} &nbsp;&nbsp;|&nbsp;&nbsp; Ack.No. : {ackNo || "—"}{" "}
-        &nbsp;&nbsp;|&nbsp;&nbsp; Ack. Date : {ackDateStr || "—"}
-      </div>
-
-      {/* ============================ ITEMS TABLE ============================ */}
-      <div className="section-frame items-wrap" style={{ marginTop: 5, minHeight: 160 }}>
-        <table className="items" style={{ width: "100%" }}>
-          <thead>
-            <tr className="g-bg">
-              {(
-                isInter
+        {/* ============================ ITEMS TABLE ============================ */}
+        <div className="section-frame items-wrap" style={{ marginTop: 5, minHeight: 160 }}>
+          <table className="items" style={{ width: "100%" }}>
+            <thead>
+              <tr className="g-bg">
+                {(isInter
                   ? [
                       { label: "S.No.", w: "5%", align: "center" as const },
-                      { label: "Description of Goods", w: "21%", align: "left" as const },
+                      { label: "Description of Goods", w: "27%", align: "left" as const },
                       { label: "Warranty / AMC", w: "13%", align: "left" as const },
                       { label: "HSN/SAC", w: "8%", align: "left" as const },
                       { label: "Qty", w: "5%", align: "center" as const },
                       { label: "Unit", w: "6%", align: "center" as const },
                       { label: "List Price", w: "7%", align: "right" as const },
-                      { label: "Disc %", w: "6%", align: "right" as const },
                       { label: "IGST %", w: "6%", align: "right" as const },
                       { label: "IGST Amt", w: "9%", align: "right" as const },
                       { label: "Amount (₹)", w: "11%", align: "right" as const },
                     ]
                   : [
                       { label: "S.No.", w: "4.5%", align: "center" as const },
-                      { label: "Description of Goods", w: "19.5%", align: "left" as const },
+                      { label: "Description of Goods", w: "25.5%", align: "left" as const },
                       { label: "Warranty / AMC", w: "11%", align: "left" as const },
                       { label: "HSN/SAC", w: "7.5%", align: "left" as const },
                       { label: "Qty", w: "5%", align: "center" as const },
                       { label: "Unit", w: "6%", align: "center" as const },
                       { label: "List Price", w: "7.5%", align: "right" as const },
-                      { label: "Disc %", w: "6%", align: "right" as const },
                       { label: "CGST %", w: "6%", align: "right" as const },
                       { label: "CGST Amt", w: "6.5%", align: "right" as const },
                       { label: "SGST %", w: "6%", align: "right" as const },
                       { label: "SGST Amt", w: "6.5%", align: "right" as const },
                       { label: "Amount (₹)", w: "8%", align: "right" as const },
                     ]
-              ).map((col) => (
-                <th
-                  key={col.label}
-                  style={{
-                    fontSize: 8.8,
-                    fontWeight: 700,
-                    padding: "3.5px 5px",
-                    border: `0.5px solid ${INNER}`,
-                    textAlign: col.align,
-                    width: col.w,
-                  }}
-                >
-                  {col.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {productItems.map((it) => {
-              const p = it.product_id ? products[it.product_id] : undefined;
-              const dLines = (it.description || "")
-                .split(/[\n]+/)
-                .map((s) => s.trim())
-                .filter(Boolean);
-              const head = dLines[0] || "";
-              const rest = dLines.slice(1);
-              const serials = (it.serial_numbers || []).filter(Boolean);
-              return (
-                <tr key={it.id}>
-                  <td
-                    style={{ ...tdBase, textAlign: "center", verticalAlign: "top", paddingTop: 6 }}
-                  >
-                    {it.sr_no}
-                  </td>
-                  <td
+                ).map((col) => (
+                  <th
+                    key={col.label}
                     style={{
-                      ...tdBase,
-                      verticalAlign: "top",
-                      paddingTop: 6,
-                      paddingBottom: 10,
+                      fontSize: 9.3,
+                      fontWeight: 700,
+                      padding: "3.5px 5px",
+                      border: `0.5px solid ${INNER}`,
+                      textAlign: col.align,
+                      width: col.w,
                     }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 9, lineHeight: 1.3 }}>{head}</div>
-                    {rest.map((ln, i) =>
-                      /^includes:?$/i.test(ln) ? (
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {productItems.map((it) => {
+                const p = it.product_id ? products[it.product_id] : undefined;
+                const warrantyMonths = p ? productWarrantyMonths(p) : 0;
+                const underWarranty = warrantyMonths > 0;
+                const showAmc = !!p && !underWarranty && amcActive;
+                const dLines = (it.description || "")
+                  .split(/[\n]+/)
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                const head = dLines[0] || "";
+                const rest = dLines.slice(1);
+                const serials = (it.serial_numbers || []).filter(Boolean);
+                return (
+                  <tr key={it.id}>
+                    <td
+                      style={{
+                        ...tdBase,
+                        textAlign: "center",
+                        verticalAlign: "top",
+                        paddingTop: 6,
+                      }}
+                    >
+                      {it.sr_no}
+                    </td>
+                    <td
+                      style={{
+                        ...tdBase,
+                        verticalAlign: "top",
+                        paddingTop: 6,
+                        paddingBottom: 10,
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: 9.5, lineHeight: 1.3 }}>{head}</div>
+                      {rest.map((ln, i) =>
+                        /^includes:?$/i.test(ln) ? (
+                          <div
+                            key={i}
+                            style={{
+                              fontSize: 8.9,
+                              fontWeight: 700,
+                              marginTop: 2,
+                              lineHeight: 1.3,
+                            }}
+                          >
+                            {ln}
+                          </div>
+                        ) : /^[•-]/.test(ln) ? (
+                          <div key={i} style={{ fontSize: 8.9, paddingLeft: 6, lineHeight: 1.3 }}>
+                            {ln}
+                          </div>
+                        ) : (
+                          <div key={i} style={{ fontSize: 8.9, lineHeight: 1.3 }}>
+                            {ln}
+                          </div>
+                        ),
+                      )}
+                      {serials.length > 0 && (
                         <div
-                          key={i}
-                          style={{ fontSize: 8.3, fontWeight: 700, marginTop: 2, lineHeight: 1.3 }}
+                          style={{
+                            marginTop: 3,
+                            fontSize: 7.6,
+                            lineHeight: 1.35,
+                            fontFamily: "JetBrains Mono, ui-monospace, monospace",
+                            color: "#6b7280",
+                            overflowWrap: "anywhere",
+                            wordBreak: "break-word",
+                            whiteSpace: "pre-line",
+                          }}
                         >
-                          {ln}
+                          <span style={{ fontWeight: 700, color: "#374151" }}>Sl. No.: </span>
+                          {serials.join(", ")}
                         </div>
-                      ) : /^[•-]/.test(ln) ? (
-                        <div key={i} style={{ fontSize: 8.3, paddingLeft: 6, lineHeight: 1.3 }}>
-                          {ln}
-                        </div>
+                      )}
+                    </td>
+                    {/* Warranty / AMC — AMC badge only when the line is NOT under product warranty */}
+                    <td
+                      style={{
+                        ...tdBase,
+                        textAlign: "left",
+                        verticalAlign: "top",
+                        paddingTop: 6,
+                        fontSize: 8.9,
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {p ? (
+                        <>
+                          {underWarranty ? (
+                            <div>{`${warrantyMonths} Months`}</div>
+                          ) : showAmc ? null : (
+                            <div>—</div>
+                          )}
+                          {showAmc ? (
+                            <div style={{ color: acDark, fontWeight: 700 }}>AMC Active</div>
+                          ) : null}
+                        </>
                       ) : (
-                        <div key={i} style={{ fontSize: 8.3, lineHeight: 1.3 }}>
-                          {ln}
-                        </div>
-                      ),
-                    )}
-                    {serials.length > 0 && (
-                      <div
-                        style={{
-                          marginTop: 3,
-                          fontSize: 7,
-                          lineHeight: 1.35,
-                          fontFamily: "JetBrains Mono, ui-monospace, monospace",
-                          color: "#6b7280",
-                          overflowWrap: "anywhere",
-                          wordBreak: "break-word",
-                          whiteSpace: "pre-line",
-                        }}
-                      >
-                        <span style={{ fontWeight: 700, color: "#374151" }}>Sl. No.: </span>
-                        {serials.join(", ")}
-                      </div>
-                    )}
-                  </td>
-                  {/* Warranty / AMC */}
-                  <td
-                    style={{
-                      ...tdBase,
-                      textAlign: "left",
-                      verticalAlign: "top",
-                      paddingTop: 7,
-                      fontSize: 8,
-                      lineHeight: 1.25,
-                    }}
-                  >
-                    {p ? (
+                        "—"
+                      )}
+                    </td>
+                    <td
+                      style={{
+                        ...tdBase,
+                        textAlign: "left",
+                        verticalAlign: "top",
+                        paddingTop: 7,
+                        fontSize: 8.9,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {it.hsn || "—"}
+                    </td>
+                    <td
+                      style={{
+                        ...tdBase,
+                        textAlign: "center",
+                        verticalAlign: "top",
+                        paddingTop: 6,
+                      }}
+                    >
+                      {it.qty}
+                    </td>
+                    <td
+                      style={{
+                        ...tdBase,
+                        textAlign: "center",
+                        verticalAlign: "top",
+                        paddingTop: 6,
+                      }}
+                    >
+                      {it.unit || "Nos"}
+                    </td>
+                    <td
+                      style={{ ...tdBase, textAlign: "right", verticalAlign: "top", paddingTop: 6 }}
+                    >
+                      {num(it.rate)}
+                    </td>
+                    {isInter ? (
                       <>
-                        <div>{productWarrantyMonths(p) ? `${productWarrantyMonths(p)} Months` : "—"}</div>
-                        {amcActive ? <div style={{ color: GREEN_DARK, fontWeight: 700 }}>AMC Active</div> : null}
+                        <td
+                          style={{
+                            ...tdBase,
+                            textAlign: "right",
+                            verticalAlign: "top",
+                            paddingTop: 6,
+                          }}
+                        >
+                          {formatRate(it.gst_rate)}
+                        </td>
+                        <td
+                          style={{
+                            ...tdBase,
+                            textAlign: "right",
+                            verticalAlign: "top",
+                            paddingTop: 6,
+                          }}
+                        >
+                          {num(it.igst)}
+                        </td>
                       </>
                     ) : (
-                      "—"
+                      <>
+                        <td
+                          style={{
+                            ...tdBase,
+                            textAlign: "right",
+                            verticalAlign: "top",
+                            paddingTop: 6,
+                          }}
+                        >
+                          {formatRate(it.gst_rate / 2)}
+                        </td>
+                        <td
+                          style={{
+                            ...tdBase,
+                            textAlign: "right",
+                            verticalAlign: "top",
+                            paddingTop: 6,
+                          }}
+                        >
+                          {num(it.cgst)}
+                        </td>
+                        <td
+                          style={{
+                            ...tdBase,
+                            textAlign: "right",
+                            verticalAlign: "top",
+                            paddingTop: 6,
+                          }}
+                        >
+                          {formatRate(it.gst_rate / 2)}
+                        </td>
+                        <td
+                          style={{
+                            ...tdBase,
+                            textAlign: "right",
+                            verticalAlign: "top",
+                            paddingTop: 6,
+                          }}
+                        >
+                          {num(it.sgst)}
+                        </td>
+                      </>
                     )}
-                  </td>
-                  <td
-                    style={{
-                      ...tdBase,
-                      textAlign: "left",
-                      verticalAlign: "top",
-                      paddingTop: 7,
-                      fontSize: 8.3,
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {it.hsn || "—"}
-                  </td>
-                  <td
-                    style={{ ...tdBase, textAlign: "center", verticalAlign: "top", paddingTop: 6 }}
-                  >
-                    {it.qty}
-                  </td>
-                  <td
-                    style={{ ...tdBase, textAlign: "center", verticalAlign: "top", paddingTop: 6 }}
-                  >
-                    {it.unit || "Nos"}
-                  </td>
-                  <td
-                    style={{ ...tdBase, textAlign: "right", verticalAlign: "top", paddingTop: 6 }}
-                  >
-                    {num(it.rate)}
-                  </td>
-                  <td
-                    style={{ ...tdBase, textAlign: "right", verticalAlign: "top", paddingTop: 6 }}
-                  >
-                    {it.discount_pct ? `${it.discount_pct}%` : "—"}
-                  </td>
-                  {isInter ? (
-                    <>
-                      <td
-                        style={{ ...tdBase, textAlign: "right", verticalAlign: "top", paddingTop: 6 }}
-                      >
-                        {formatRate(it.gst_rate)}
-                      </td>
-                      <td
-                        style={{ ...tdBase, textAlign: "right", verticalAlign: "top", paddingTop: 6 }}
-                      >
-                        {num(it.igst)}
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td
-                        style={{ ...tdBase, textAlign: "right", verticalAlign: "top", paddingTop: 6 }}
-                      >
-                        {formatRate(it.gst_rate / 2)}
-                      </td>
-                      <td
-                        style={{ ...tdBase, textAlign: "right", verticalAlign: "top", paddingTop: 6 }}
-                      >
-                        {num(it.cgst)}
-                      </td>
-                      <td
-                        style={{ ...tdBase, textAlign: "right", verticalAlign: "top", paddingTop: 6 }}
-                      >
-                        {formatRate(it.gst_rate / 2)}
-                      </td>
-                      <td
-                        style={{ ...tdBase, textAlign: "right", verticalAlign: "top", paddingTop: 6 }}
-                      >
-                        {num(it.sgst)}
-                      </td>
-                    </>
-                  )}
-                  <td
-                    style={{
-                      ...tdBase,
-                      textAlign: "right",
-                      verticalAlign: "top",
-                      paddingTop: 6,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {num(it.taxable_value)}
-                  </td>
-                </tr>
-              );
-            })}
+                    <td
+                      style={{
+                        ...tdBase,
+                        textAlign: "right",
+                        verticalAlign: "top",
+                        paddingTop: 6,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {num(it.taxable_value)}
+                    </td>
+                  </tr>
+                );
+              })}
 
-            {/* Additional charges (dynamic — only when the invoice has them) */}
-            {chargeItems.length > 0 && (
-              <>
-                <tr>
-                  <td
-                    style={{
-                      borderBottom: `0.5px solid ${INNER}`,
-                      borderLeft: `0.5px solid ${INNER}`,
-                    }}
-                  />
-                  <td
-                    colSpan={isInter ? 10 : 12}
-                    className="g-tint"
-                    style={{
-                      fontWeight: 700,
-                      fontSize: 9.2,
-                      color: GREEN_DARK,
-                      padding: "4px 7px",
-                      borderTop: `0.5px solid ${INNER}`,
-                      borderRight: `0.5px solid ${INNER}`,
-                      borderBottom: `0.5px solid ${INNER}`,
-                      letterSpacing: 0.4,
-                    }}
-                  >
-                    ADDITIONAL CHARGES
-                  </td>
-                </tr>
-                {chargeItems.map((it) => (
-                  <tr key={it.id}>
+              {/* Additional charges (dynamic — only when the invoice has them) */}
+              {chargeItems.length > 0 && (
+                <>
+                  <tr>
                     <td
                       style={{
                         borderBottom: `0.5px solid ${INNER}`,
@@ -1100,394 +1181,439 @@ export function InvoicePrintView({
                     />
                     <td
                       colSpan={isInter ? 9 : 11}
+                      className="g-tint"
                       style={{
-                        ...tdBase,
-                        fontSize: 9,
-                        borderTop: "none",
-                        borderLeft: "none",
+                        fontWeight: 700,
+                        fontSize: 9.6,
+                        color: acDark,
+                        padding: "4px 7px",
+                        borderTop: `0.5px solid ${INNER}`,
+                        borderRight: `0.5px solid ${INNER}`,
+                        borderBottom: `0.5px solid ${INNER}`,
+                        letterSpacing: 0.4,
                       }}
                     >
-                      {it.description}
+                      ADDITIONAL CHARGES
                     </td>
-                    <td style={{ ...tdBase, textAlign: "right" }}>{num(it.taxable_value)}</td>
                   </tr>
-                ))}
-              </>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  {chargeItems.map((it) => (
+                    <tr key={it.id}>
+                      <td
+                        style={{
+                          borderBottom: `0.5px solid ${INNER}`,
+                          borderLeft: `0.5px solid ${INNER}`,
+                        }}
+                      />
+                      <td
+                        colSpan={isInter ? 8 : 10}
+                        style={{
+                          ...tdBase,
+                          fontSize: 9.5,
+                          borderTop: "none",
+                          borderLeft: "none",
+                        }}
+                      >
+                        {it.description}
+                      </td>
+                      <td style={{ ...tdBase, textAlign: "right" }}>{num(it.taxable_value)}</td>
+                    </tr>
+                  ))}
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-      {/* ====================== TAX TABLE + TOTALS ====================== */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginTop: 5,
-          alignItems: "stretch",
-        }}
-      >
-
-        {/* Totals — compact, pushed to right edge */}
-        <div style={{ width: "38%", flex: "0 0 auto", display: "flex", marginLeft: "auto" }}>
-          <table className="section-frame" style={{ width: "100%", height: "100%" }}>
-            <tbody>
-              <tr>
-                <td
-                  style={{
-                    ...tdBase,
-                    fontWeight: 700,
-                    fontSize: 10,
-                    padding: "5px 9px",
-                    background: LABEL_BG,
-                    WebkitPrintColorAdjust: "exact",
-                    printColorAdjust: "exact",
-                  }}
-                >
-                  Subtotal
-                </td>
-                <td
-                  style={{
-                    ...tdBase,
-                    textAlign: "right",
-                    fontWeight: 700,
-                    fontSize: 10,
-                    padding: "5px 9px",
-                  }}
-                >
-                  {num(invoice.subtotal)}
-                </td>
-              </tr>
-              {Number(invoice.discount) > 0 && (
+        {/* ====================== TAX TABLE + TOTALS ====================== */}
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            marginTop: 5,
+            alignItems: "stretch",
+          }}
+        >
+          {/* Totals — compact, pushed to right edge */}
+          <div style={{ width: "38%", flex: "0 0 auto", display: "flex", marginLeft: "auto" }}>
+            <table className="section-frame" style={{ width: "100%", height: "100%" }}>
+              <tbody>
                 <tr>
                   <td
                     style={{
                       ...tdBase,
                       fontWeight: 700,
-                      fontSize: 10,
+                      fontSize: 10.5,
                       padding: "5px 9px",
                       background: LABEL_BG,
                       WebkitPrintColorAdjust: "exact",
                       printColorAdjust: "exact",
                     }}
                   >
-                    Discount
+                    Subtotal
                   </td>
                   <td
                     style={{
                       ...tdBase,
                       textAlign: "right",
                       fontWeight: 700,
-                      fontSize: 10,
+                      fontSize: 10.5,
                       padding: "5px 9px",
                     }}
                   >
-                    − {num(invoice.discount)}
+                    {num(invoice.subtotal)}
                   </td>
                 </tr>
-              )}
-              <tr>
-                <td
-                  style={{
-                    ...tdBase,
-                    fontWeight: 700,
-                    fontSize: 10,
-                    padding: "5px 9px",
-                    background: LABEL_BG,
-                    WebkitPrintColorAdjust: "exact",
-                    printColorAdjust: "exact",
-                  }}
-                >
-                  Total Tax
-                </td>
-                <td
-                  style={{
-                    ...tdBase,
-                    textAlign: "right",
-                    fontWeight: 700,
-                    fontSize: 10,
-                    padding: "5px 9px",
-                  }}
-                >
-                  {num(totalTax)}
-                </td>
-              </tr>
-              {!!Number(invoice.round_off) && (
+                {Number(invoice.discount) > 0 && (
+                  <tr>
+                    <td
+                      style={{
+                        ...tdBase,
+                        fontWeight: 700,
+                        fontSize: 10.5,
+                        padding: "5px 9px",
+                        background: LABEL_BG,
+                        WebkitPrintColorAdjust: "exact",
+                        printColorAdjust: "exact",
+                      }}
+                    >
+                      Discount
+                    </td>
+                    <td
+                      style={{
+                        ...tdBase,
+                        textAlign: "right",
+                        fontWeight: 700,
+                        fontSize: 10.5,
+                        padding: "5px 9px",
+                      }}
+                    >
+                      − {num(invoice.discount)}
+                    </td>
+                  </tr>
+                )}
                 <tr>
-                  <td style={{ ...tdBase, fontSize: 8.8, padding: "4px 9px" }}>
-                    Round Off ({(Number(invoice.round_off) || 0) >= 0 ? "+" : "−"})
+                  <td
+                    style={{
+                      ...tdBase,
+                      fontWeight: 700,
+                      fontSize: 10.5,
+                      padding: "5px 9px",
+                      background: LABEL_BG,
+                      WebkitPrintColorAdjust: "exact",
+                      printColorAdjust: "exact",
+                    }}
+                  >
+                    Total Tax
                   </td>
-                  <td style={{ ...tdBase, textAlign: "right", fontSize: 8.8, padding: "4px 9px" }}>
-                    {num(Math.abs(Number(invoice.round_off) || 0))}
+                  <td
+                    style={{
+                      ...tdBase,
+                      textAlign: "right",
+                      fontWeight: 700,
+                      fontSize: 10.5,
+                      padding: "5px 9px",
+                    }}
+                  >
+                    {num(totalTax)}
                   </td>
                 </tr>
-              )}
-              <tr className="g-bg">
-                <td
-                  style={{
-                    fontWeight: 700,
-                    fontSize: 12.5,
-                    padding: "7px 9px",
-                    border: `0.5px solid ${GREEN_DARK}`,
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  GRAND TOTAL
-                </td>
-                <td
-                  style={{
-                    fontWeight: 700,
-                    fontSize: 12.5,
-                    padding: "7px 9px",
-                    textAlign: "right",
-                    border: `0.5px solid ${GREEN_DARK}`,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  ₹ {num(invoice.total)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ========================= AMOUNT IN WORDS ========================= */}
-      <div
-        style={{
-          marginTop: 4,
-          fontSize: 9.4,
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        <span style={{ fontWeight: 700, color: GREEN_DARK }}>
-          Amount in Words&nbsp;&nbsp;:&nbsp;&nbsp;
-        </span>
-        <span style={{ fontWeight: 700 }}>
-          {invoice.total_in_words || amountInWords(Number(invoice.total))}
-        </span>
-      </div>
-
-      {/* ============ WARRANTY & AMC | PAYMENT | UPI QR | E-INVOICE QR ============ */}
-      {/* Single block with internal grey partition lines */}
-      <div
-        className="avoid-break section-frame"
-        style={{ display: "flex", marginTop: 5, alignItems: "stretch" }}
-      >
-        {/* Payment details */}
-        <div style={{ flex: 1, padding: "5px 9px 6px" }}>
-          <SectionTitle rule headerBg>
-            PAYMENT DETAILS
-          </SectionTitle>
-          <KV label="Bank Name" value={bankName} labelWidth={62} />
-          <KV label="A/c Name" value={bankAcName} labelWidth={62} />
-          <KV label="A/c No." value={bankAcNo} valueMono labelWidth={62} />
-          <KV label="IFSC Code" value={bankIfsc} valueMono labelWidth={62} />
-          <KV label="Branch" value={bankBranch} labelWidth={62} />
-        </div>
-
-        {/* Grey partition */}
-        <div style={{ width: 1, background: INNER, alignSelf: "stretch", margin: "4px 0" }} />
-
-        {/* UPI QR */}
-        {upiQrDataUrl ? (
-          <div
-            style={{
-              flex: 1,
-              padding: "5px 7px 6px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-          >
-            <SectionTitle center headerBg>
-              UPI QR CODE
-            </SectionTitle>
-            <img
-              src={upiQrDataUrl}
-              alt="UPI QR"
-              style={{ width: 66, height: 66, objectFit: "contain" }}
-            />
-            {upiId ? (
-              <div
-                style={{
-                  fontSize: 7,
-                  marginTop: 3,
-                  textAlign: "center",
-                  wordBreak: "break-all",
-                  lineHeight: 1.25,
-                  letterSpacing: 0,
-                }}
-              >
-                <b>UPI ID:</b> {upiId}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* E-Invoice QR — always render skeleton (empty box + dashes when blank) */}
-        <>
-          <div style={{ width: 1, background: INNER, alignSelf: "stretch", margin: "4px 0" }} />
-          <div
-            style={{
-              flex: 1,
-              padding: "5px 7px 6px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-          >
-            <SectionTitle center headerBg>
-              E-INVOICE QR
-            </SectionTitle>
-            {hasEinvoice && einvoiceQrDataUrl ? (
-              <EinvQr src={einvoiceQrDataUrl} />
-            ) : (
-              <div
-                style={{
-                  width: 66,
-                  height: 66,
-                  border: `0.5px dashed ${INNER}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 16,
-                  color: INNER,
-                }}
-              >
-                —
-              </div>
-            )}
-            <div
-              style={{
-                fontSize: 7.2,
-                marginTop: 3,
-                textAlign: "left",
-                width: "100%",
-                lineHeight: 1.45,
-              }}
-            >
-              <div>
-                <b>IRN:</b>{" "}
-                <span
-                  style={{ fontFamily: "monospace", fontSize: 6.6, wordBreak: "break-all" }}
-                >
-                  {invoice.irn || "—"}
-                </span>
-              </div>
-              <div>
-                <b>Ack No:</b>{" "}
-                <span style={{ fontFamily: "monospace" }}>{invoice.ack_no || "—"}</span>
-              </div>
-              <div>
-                <b>Ack Date:</b> {ackDate || "—"}
-              </div>
-            </div>
-          </div>
-        </>
-      </div>
-
-      {/* ============== TERMS | SERVICE SUPPORT | SIGNATORY ============== */}
-      <div
-        className="avoid-break"
-        style={{
-          display: "flex",
-          gap: 8,
-          marginTop: 10,
-          alignItems: "stretch",
-          flex: 1,
-          minHeight: 70,
-        }}
-      >
-        <div style={{ width: "38%", flex: "0 0 auto" }}>
-          <SectionTitle headerBg>TERMS &amp; CONDITIONS</SectionTitle>
-          {termsLines.map((ln, i) => (
-            <div key={i} style={{ fontSize: 8.4, lineHeight: 1.5 }}>
-              {ln}
-            </div>
-          ))}
-        </div>
-        <div style={{ width: "27%", flex: "0 0 auto" }}>
-          <SectionTitle headerBg>SERVICE SUPPORT</SectionTitle>
-          <div style={{ fontSize: 8.6, fontWeight: 700, marginBottom: 4 }}>
-            For any service support or complaints:
-          </div>
-          <InfoRow icon={<Phone size={9} />} label="" value={company.phone || ""} />
-          <InfoRow icon={<Mail size={9} />} label="" value={company.email || ""} />
-          <InfoRow icon={<Globe size={9} />} label="" value={company.website || ""} />
-        </div>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", textAlign: "center" }}>
-          <div
-            style={{
-              height: 56,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "100%",
-              marginBottom: 4,
-            }}
-          >
-            {(authorisedSignatureUrl || company.seal_url) ? (
-              <img
-                src={(authorisedSignatureUrl || company.seal_url) as string}
-                alt="Authorised signature"
-                crossOrigin="anonymous"
-                style={{ maxHeight: 54, maxWidth: "82%", objectFit: "contain" }}
-              />
-            ) : (
-              <div style={{ height: 56 }} />
-            )}
-          </div>
-          <div style={{ fontSize: 9.4, fontWeight: 700, textAlign: "center", width: "100%" }}>
-            For {company.name}
-          </div>
-          <div style={{ fontSize: 8.8, textAlign: "center", borderTop: "0.5px solid #222", paddingTop: 4, width: "88%", marginTop: 4 }}>
-            Authorized Signatory
+                {!!Number(invoice.round_off) && (
+                  <tr>
+                    <td style={{ ...tdBase, fontSize: 9.3, padding: "4px 9px" }}>
+                      Round Off ({(Number(invoice.round_off) || 0) >= 0 ? "+" : "−"})
+                    </td>
+                    <td
+                      style={{ ...tdBase, textAlign: "right", fontSize: 9.3, padding: "4px 9px" }}
+                    >
+                      {num(Math.abs(Number(invoice.round_off) || 0))}
+                    </td>
+                  </tr>
+                )}
+                <tr className="g-bg">
+                  <td
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 13.2,
+                      padding: "7px 9px",
+                      border: `0.5px solid ${acDark}`,
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    GRAND TOTAL
+                  </td>
+                  <td
+                    style={{
+                      fontWeight: 700,
+                      fontSize: 13.2,
+                      padding: "7px 9px",
+                      textAlign: "right",
+                      border: `0.5px solid ${acDark}`,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    ₹ {num(invoice.total)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
 
-      {/* ============================== FOOTER ============================== */}
-      <div style={{ marginTop: 5 }}>
+        {/* ========================= AMOUNT IN WORDS ========================= */}
         <div
           style={{
-            height: 3,
-            background: GREEN,
-            WebkitPrintColorAdjust: "exact",
-            printColorAdjust: "exact",
+            marginTop: 4,
+            fontSize: 10.5,
+            fontVariantNumeric: "tabular-nums",
           }}
-        />
-        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 3 }}>
-          <img
-            src={apcLogo.url}
-            alt="APC"
-            crossOrigin="anonymous"
-            style={{ maxHeight: 26, objectFit: "contain" }}
-          />
-          <div
-            style={{ flex: 1, textAlign: "center", fontSize: 10.5, fontWeight: 700, color: INK }}
-          >
-            Power Backup Solutions
-            <span style={{ color: GREEN, padding: "0 8px" }}>|</span>UPS
-            <span style={{ color: GREEN, padding: "0 8px" }}>|</span>Batteries
-            <span style={{ color: GREEN, padding: "0 8px" }}>|</span>AMC
-            <span style={{ color: GREEN, padding: "0 8px" }}>|</span>Services
+        >
+          <span style={{ fontWeight: 700, color: acDark }}>
+            Amount in Words&nbsp;&nbsp;:&nbsp;&nbsp;
+          </span>
+          <span style={{ fontWeight: 700 }}>
+            {invoice.total_in_words || amountInWords(Number(invoice.total))}
+          </span>
+        </div>
+
+        {/* ============ WARRANTY & AMC | PAYMENT | UPI QR | E-INVOICE QR ============ */}
+        {/* Single block with internal grey partition lines */}
+        <div
+          className="avoid-break section-frame"
+          style={{ display: "flex", marginTop: 5, alignItems: "stretch" }}
+        >
+          {/* Payment details */}
+          <div style={{ flex: 1, padding: "5px 9px 6px" }}>
+            <SectionTitle rule headerBg>
+              PAYMENT DETAILS
+            </SectionTitle>
+            <KV label="Bank Name" value={bankName} labelWidth={62} />
+            <KV label="A/c Name" value={bankAcName} labelWidth={62} />
+            <KV label="A/c No." value={bankAcNo} valueMono labelWidth={62} />
+            <KV label="IFSC Code" value={bankIfsc} valueMono labelWidth={62} />
+            <KV label="Branch" value={bankBranch} labelWidth={62} />
+          </div>
+
+          {/* Grey partition */}
+          <div style={{ width: 1, background: INNER, alignSelf: "stretch", margin: "4px 0" }} />
+
+          {/* UPI QR */}
+          {upiQrDataUrl ? (
+            <div
+              style={{
+                flex: 1,
+                padding: "5px 7px 6px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <SectionTitle center headerBg>
+                UPI QR CODE
+              </SectionTitle>
+              <img
+                src={upiQrDataUrl}
+                alt="UPI QR"
+                style={{ width: 66, height: 66, objectFit: "contain" }}
+              />
+              {upiId ? (
+                <div
+                  style={{
+                    fontSize: 7.6,
+                    marginTop: 3,
+                    textAlign: "center",
+                    wordBreak: "break-all",
+                    lineHeight: 1.25,
+                    letterSpacing: 0,
+                  }}
+                >
+                  <b>UPI ID:</b> {upiId}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* E-Invoice QR — always render skeleton (empty box + dashes when blank) */}
+          <>
+            <div style={{ width: 1, background: INNER, alignSelf: "stretch", margin: "4px 0" }} />
+            <div
+              style={{
+                flex: 1,
+                padding: "5px 7px 6px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <SectionTitle center headerBg>
+                E-INVOICE QR
+              </SectionTitle>
+              {hasEinvoice && einvoiceQrDataUrl ? (
+                <EinvQr src={einvoiceQrDataUrl} />
+              ) : (
+                <div
+                  style={{
+                    width: 66,
+                    height: 66,
+                    border: `0.5px dashed ${INNER}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 16,
+                    color: INNER,
+                  }}
+                >
+                  —
+                </div>
+              )}
+              <div
+                style={{
+                  fontSize: 7.8,
+                  marginTop: 3,
+                  textAlign: "left",
+                  width: "100%",
+                  lineHeight: 1.45,
+                }}
+              >
+                <div>
+                  <b>IRN:</b>{" "}
+                  <span style={{ fontFamily: "monospace", fontSize: 7.2, wordBreak: "break-all" }}>
+                    {invoice.irn || "—"}
+                  </span>
+                </div>
+                <div>
+                  <b>Ack No:</b>{" "}
+                  <span style={{ fontFamily: "monospace" }}>{invoice.ack_no || "—"}</span>
+                </div>
+                <div>
+                  <b>Ack Date:</b> {ackDate || "—"}
+                </div>
+              </div>
+            </div>
+          </>
+        </div>
+
+        {/* Spacer — absorbs free page height so Terms/Signatory pin to the bottom green rule */}
+        <div style={{ flex: 1, minHeight: 8 }} />
+
+        {/* ============== TERMS | SERVICE SUPPORT | SIGNATORY ============== */}
+        <div
+          className="avoid-break"
+          style={{
+            display: "flex",
+            gap: 8,
+            marginTop: 10,
+            alignItems: "stretch",
+            minHeight: 70,
+          }}
+        >
+          <div style={{ width: "38%", flex: "0 0 auto" }}>
+            <SectionTitle headerBg>TERMS &amp; CONDITIONS</SectionTitle>
+            {termsLines.map((ln, i) => (
+              <div key={i} style={{ fontSize: 9.5, lineHeight: 1.5 }}>
+                {ln}
+              </div>
+            ))}
+          </div>
+          <div style={{ width: "27%", flex: "0 0 auto" }}>
+            <SectionTitle headerBg>SERVICE SUPPORT</SectionTitle>
+            <div style={{ fontSize: 9.2, fontWeight: 700, marginBottom: 4 }}>
+              For any service support or complaints:
+            </div>
+            <InfoRow icon={<Phone size={9} />} label="" value={company.phone || ""} />
+            <InfoRow icon={<Mail size={9} />} label="" value={company.email || ""} />
+            <InfoRow icon={<Globe size={9} />} label="" value={company.website || ""} />
           </div>
           <div
-            className="g-bg"
             style={{
-              fontSize: 11,
-              fontStyle: "italic",
-              fontWeight: 700,
-              padding: "4px 15px",
-              borderRadius: 2,
-              letterSpacing: 0.3,
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              textAlign: "center",
             }}
           >
-            Life Is On
+            <div
+              style={{
+                height: 56,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "100%",
+                marginBottom: 4,
+              }}
+            >
+              {authorisedSignatureUrl || company.seal_url ? (
+                <img
+                  src={(authorisedSignatureUrl || company.seal_url) as string}
+                  alt="Authorised signature"
+                  crossOrigin="anonymous"
+                  style={{ maxHeight: 54, maxWidth: "82%", objectFit: "contain" }}
+                />
+              ) : (
+                <div style={{ height: 56 }} />
+              )}
+            </div>
+            <div style={{ fontSize: 10.5, fontWeight: 700, textAlign: "center", width: "100%" }}>
+              For {company.name}
+            </div>
+            <div
+              style={{
+                fontSize: 9.3,
+                textAlign: "center",
+                borderTop: "0.5px solid #222",
+                paddingTop: 4,
+                width: "88%",
+                marginTop: 4,
+              }}
+            >
+              Authorized Signatory
+            </div>
+          </div>
+        </div>
+
+        {/* ============================== FOOTER ============================== */}
+        <div style={{ marginTop: 5 }}>
+          <div
+            style={{
+              height: 3,
+              background: ac,
+              WebkitPrintColorAdjust: "exact",
+              printColorAdjust: "exact",
+            }}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 3 }}>
+            <img
+              src={apcLogo.url}
+              alt="APC"
+              crossOrigin="anonymous"
+              style={{ maxHeight: 26, objectFit: "contain" }}
+            />
+            <div
+              style={{ flex: 1, textAlign: "center", fontSize: 10.5, fontWeight: 700, color: INK }}
+            >
+              Power Backup Solutions
+              <span style={{ color: ac, padding: "0 8px" }}>|</span>UPS
+              <span style={{ color: ac, padding: "0 8px" }}>|</span>Batteries
+              <span style={{ color: ac, padding: "0 8px" }}>|</span>AMC
+              <span style={{ color: ac, padding: "0 8px" }}>|</span>Services
+            </div>
+            <div
+              className="g-bg"
+              style={{
+                fontSize: 11,
+                fontStyle: "italic",
+                fontWeight: 700,
+                padding: "4px 15px",
+                borderRadius: 2,
+                letterSpacing: 0.3,
+              }}
+            >
+              Life Is On
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </AccentDarkCtx.Provider>
   );
 }

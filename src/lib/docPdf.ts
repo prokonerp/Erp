@@ -230,11 +230,25 @@ type CapturedPage = { dataUrl: string; imgW: number; imgH: number };
  * PDF download uses). Shared by the download path and the print path so both
  * outputs are pixel-identical.
  */
+/** Convert a canvas to grayscale in place — B&W print mode (share/PDF stays color). */
+function grayscaleCanvas(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const y = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8; // BT.601 luma
+    d[i] = d[i + 1] = d[i + 2] = y;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
 async function captureDocImages(
   root: HTMLElement,
   scale: number,
   pages: HTMLElement[] | null,
   html2canvas: Html2Canvas,
+  mono = false,
 ): Promise<CapturedPage[]> {
   const availW = PAGE_W_MM - MARGIN_MM * 2;
   const availH = PAGE_H_MM - MARGIN_MM * 2;
@@ -256,6 +270,7 @@ async function captureDocImages(
       width: w,
       height: Math.ceil(target.scrollHeight),
     });
+    if (mono) grayscaleCanvas(canvas);
     const imgW = availW * DOC_FIT;
     const imgH = Math.min(availH, (canvas.height * imgW) / canvas.width);
     out.push({ dataUrl: canvas.toDataURL("image/jpeg", 0.95), imgW, imgH });
@@ -272,12 +287,16 @@ async function captureDocImages(
  * paper edge. A centred <img> inside a full-page flex wrapper is immune to
  * that setting, so Print output always matches Download output.
  */
-export async function printElementSinglePage(el: HTMLElement, filename: string) {
+export async function printElementSinglePage(
+  el: HTMLElement,
+  filename: string,
+  opts?: { mono?: boolean },
+) {
   const docTitle = filename.replace(/\.pdf$/i, "");
   const { default: html2canvas } = await import("html2canvas-pro");
   const { iframe, root, scale, pages } = await buildPrintFrame(el, docTitle);
   try {
-    const captured = await captureDocImages(root, scale, pages, html2canvas);
+    const captured = await captureDocImages(root, scale, pages, html2canvas, opts?.mono);
     const pageDivs = captured
       .map((p) => `<div class="ppage"><img src="${p.dataUrl}" alt=""></div>`)
       .join("");
