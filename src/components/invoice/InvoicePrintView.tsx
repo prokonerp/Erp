@@ -676,7 +676,7 @@ export function InvoicePrintView({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 4,
+              gap: 3,
             }}
           >
             <div style={{ textAlign: "center" }}>
@@ -690,15 +690,15 @@ export function InvoicePrintView({
             <div style={{ width: "88%", border: `0.5px solid ${INNER}`, borderRadius: RADIUS }}>
               <div
                 className="g-bg"
-                style={{ textAlign: "center", fontWeight: 700, fontSize: 9.6, padding: "2.5px 0" }}
+                style={{ textAlign: "center", fontWeight: 700, fontSize: 7.2, padding: "1.8px 0" }}
               >
                 Authorized
               </div>
               <div
                 style={{
                   textAlign: "center",
-                  fontSize: 9.3,
-                  padding: "2.5px 0",
+                  fontSize: 7,
+                  padding: "1.8px 0",
                   color: INK,
                   borderTop: `0.5px solid ${INNER}`,
                 }}
@@ -712,10 +712,10 @@ export function InvoicePrintView({
                 background: "#3d3d3d",
                 color: "#fff",
                 textAlign: "center",
-                fontSize: 10.2,
+                fontSize: 7.6,
                 fontStyle: "italic",
                 fontWeight: 600,
-                padding: "3.5px 0",
+                padding: "2.5px 0",
                 WebkitPrintColorAdjust: "exact",
                 printColorAdjust: "exact",
               }}
@@ -1359,6 +1359,9 @@ export function InvoicePrintView({
           </div>
         </div>
 
+        {/* Spacer — absorbs free page height so Amount-in-Words + payment strip + Terms pin to the bottom */}
+        <div style={{ flex: 1, minHeight: 8 }} />
+
         {/* ========================= AMOUNT IN WORDS ========================= */}
         <div
           style={{
@@ -1491,9 +1494,6 @@ export function InvoicePrintView({
             </div>
           </>
         </div>
-
-        {/* Spacer — absorbs free page height so Terms/Signatory pin to the bottom green rule */}
-        <div style={{ flex: 1, minHeight: 8 }} />
 
         {/* ============== TERMS | SERVICE SUPPORT | SIGNATORY ============== */}
         <div
