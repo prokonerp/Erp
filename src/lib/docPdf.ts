@@ -146,7 +146,7 @@ async function buildPrintFrame(el: HTMLElement, docTitle: string) {
       `.pdf-page{page-break-after:always;break-after:page}` +
       `.pdf-page:last-child{page-break-after:auto;break-after:auto}` +
       `.pdf-page tr{page-break-inside:avoid;break-inside:avoid}` +
-      `@media print{@page{size:A4;margin:${MARGIN_MM}mm !important}html,body{width:auto}` +
+      `@media print{@page{size:A4;margin:2mm ${MARGIN_MM}mm ${MARGIN_MM}mm !important}html,body{width:auto}` +
       `#pdf-shell,#pdf-root{width:${CONTENT_W_PX}px}` +
       `#pdf-root{transform-origin:center;transform:scale(${DOC_FIT})}}</style>` +
       `</head><body><div id="pdf-shell"><div id="pdf-root">${el.outerHTML}</div></div></body></html>`,
@@ -314,7 +314,7 @@ export async function printElementSinglePage(
         `.ppage{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;page-break-after:always;break-after:page;overflow:hidden}` +
         `.ppage:last-child{page-break-after:auto;break-after:auto}` +
         `.ppage img{display:block;max-width:98%;max-height:98%}</style>` +
-        `<style>@media print{@page{size:A4;margin:${MARGIN_MM}mm !important}html,body{width:100%;height:100%}}</style>` +
+        `<style>@media print{@page{size:A4;margin:2mm ${MARGIN_MM}mm ${MARGIN_MM}mm !important}html,body{width:100%;height:100%}}</style>` +
         `</head><body>${pageDivs}</body></html>`,
     );
     pidoc.close();
@@ -483,7 +483,7 @@ export async function printElementToPdf(el: HTMLElement, filename: string) {
     `<!doctype html><html><head><meta charset="utf-8"><title>${docTitle}</title>${head}` +
       `<style>html,body{background:#fff;margin:0;padding:0}` +
       `#pdf-root,#pdf-root>*{display:block !important}` +
-      `@media print{@page{size:A4;margin:${MARGIN_MM}mm !important}` +
+      `@media print{@page{size:A4;margin:2mm ${MARGIN_MM}mm ${MARGIN_MM}mm !important}` +
       `#pdf-root{transform-origin:center;transform:scale(${DOC_FIT})}}</style>` +
       `</head><body><div id="pdf-root">${el.outerHTML}</div></body></html>`,
   );

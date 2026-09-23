@@ -461,7 +461,7 @@ export function InvoicePrintView({
           fontFamily: "Arial, Helvetica, sans-serif",
           border: `1.2px solid ${FRAME}`,
           borderRadius: RADIUS,
-          padding: "3mm 3mm 2mm",
+          padding: "1.5mm 3mm 2mm",
           boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
@@ -530,7 +530,7 @@ export function InvoicePrintView({
         .inv-print tr, .inv-print .avoid-break { page-break-inside: avoid; break-inside: avoid; }
 
         @media print {
-          @page { size: A4 portrait; margin: 5mm; }
+          @page { size: A4 portrait; margin: 2mm 5mm 5mm; }
           .inv-print { width: 200mm; margin: 0 auto !important; min-height: 287mm; }
           .inv-print table.items thead { display: table-header-group; }
           .inv-print table.items tr { page-break-inside: avoid; break-inside: avoid; }
@@ -589,7 +589,7 @@ export function InvoicePrintView({
             fontWeight: 700,
             color: ac,
             letterSpacing: 3,
-            marginBottom: 4,
+            marginBottom: 2,
           }}
         >
           {variant === "proforma" ? "PROFORMA INVOICE" : "TAX INVOICE"}
@@ -612,7 +612,13 @@ export function InvoicePrintView({
                   src={prokonLogo.url}
                   alt="Prokon Hi-Tech Systems"
                   crossOrigin="anonymous"
-                  style={{ maxHeight: 55, maxWidth: "100%", objectFit: "contain" }}
+                  style={{
+                    maxHeight: 55,
+                    maxWidth: "100%",
+                    objectFit: "contain",
+                    marginTop: -7,
+                    marginBottom: -7,
+                  }}
                 />
               </div>
               <div style={{ flex: 1, textAlign: "center", display: "flex", alignItems: "center" }}>
@@ -901,8 +907,17 @@ export function InvoicePrintView({
         </div>
 
         {/* ============================ ITEMS TABLE ============================ */}
-        <div className="section-frame items-wrap" style={{ marginTop: 5, minHeight: 160 }}>
-          <table className="items" style={{ width: "100%" }}>
+        <div
+          className="section-frame items-wrap"
+          style={{
+            marginTop: 5,
+            minHeight: 160,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <table className="items" style={{ width: "100%", flex: 1, height: "100%" }}>
             <thead>
               <tr className="g-bg">
                 {(isInter
@@ -1220,6 +1235,12 @@ export function InvoicePrintView({
                   ))}
                 </>
               )}
+              {/* Filler row — absorbs leftover page height so the grid extends to the frame bottom */}
+              <tr style={{ height: "100%" }}>
+                {Array.from({ length: isInter ? 10 : 12 }).map((_, i) => (
+                  <td key={`filler-${i}`} style={{ background: "transparent" }} />
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>
@@ -1358,9 +1379,6 @@ export function InvoicePrintView({
             </table>
           </div>
         </div>
-
-        {/* Spacer — absorbs free page height so Amount-in-Words + payment strip + Terms pin to the bottom */}
-        <div style={{ flex: 1, minHeight: 8 }} />
 
         {/* ========================= AMOUNT IN WORDS ========================= */}
         <div
