@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { CardSkeleton } from "@/components/shared/skeletons";
 import type { MapPin, MapStop } from "@/components/engineer/MovementMapInner";
 import type { RenderedLeg } from "@/hooks/useRouteLegs";
+import type { DegradedReason } from "@/lib/roadRoute";
 
 const LazyInner = lazy(() =>
   import("@/components/engineer/MovementMapInner").then((m) => ({ default: m.MovementMapInner })),
@@ -23,6 +24,9 @@ export function MovementMap({
   legs,
   selectedLeg,
   onLegSelect,
+  degraded,
+  replayPath,
+  replayPosition,
 }: {
   pins: MapPin[];
   route?: Array<[number, number]>;
@@ -34,6 +38,9 @@ export function MovementMap({
   legs?: readonly RenderedLeg[];
   selectedLeg?: number | null;
   onLegSelect?: (index: number | null) => void;
+  degraded?: DegradedReason;
+  replayPath?: Array<[number, number]>;
+  replayPosition?: [number, number] | null;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -53,6 +60,9 @@ export function MovementMap({
         legs={legs}
         selectedLeg={selectedLeg}
         onLegSelect={onLegSelect}
+        degraded={degraded}
+        replayPath={replayPath}
+        replayPosition={replayPosition}
       />
     </Suspense>
   );

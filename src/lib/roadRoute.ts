@@ -42,6 +42,37 @@ export const MAX_TRACE_COORDS = 600;
 export const MAX_REQUESTS = 8;
 
 // ---------------------------------------------------------------------------
+// Guardrails — persistent cache, session budget, circuit breaker
+// ---------------------------------------------------------------------------
+
+/**
+ * Why the returned geometry is not fresh service output.
+ *   "cache"   — served from the persistent cache (provenance still honest
+ *               via `matched`; benign, no UI warning).
+ *   "budget"  — session request budget exhausted → raw fallback.
+ *   "service" — circuit open / transport failures or 429 → raw fallback.
+ */
+export type DegradedReason = "budget" | "service" | "cache";
+
+/** Per-page-session network request ceiling (override: VITE_OSRM_MAX_REQUESTS). */
+export const DEFAULT_SESSION_BUDGET = 20;
+
+/** Consecutive transport failures before the circuit opens. */
+export const CIRCUIT_FAILURE_THRESHOLD = 3;
+
+/** Cooldown after ordinary transport failures. */
+export const CIRCUIT_COOLDOWN_MS = 60_000;
+
+/** Cooldown after a 429 with no Retry-After header. */
+export const CIRCUIT_RATE_LIMIT_COOLDOWN_MS = 300_000;
+
+/** Persistent geometry cache — TTL and entry cap bound storage usage. */
+export const CACHE_TTL_MS = 7 * 24 * 60 * 60_000;
+export const CACHE_MAX_ENTRIES = 50;
+export const CACHE_MAX_ENTRY_CHARS = 150_000;
+const CACHE_STORAGE_KEY = "osrm-road-cache:v1";
+
+// ---------------------------------------------------------------------------
 // Preparation helpers
 // ---------------------------------------------------------------------------
 
@@ -216,6 +247,130 @@ export function hashTrace(points: LatLng[]): string {
 }
 
 // ---------------------------------------------------------------------------
+// Guardrail state — module-level singleton, one set per page session
+// ---------------------------------------------------------------------------
+
+type CacheEntry = { g: LatLng[]; t: number };
+
+let sessionBudget = readBudget();
+let requestsUsed = 0;
+let consecutiveFailures = 0;
+let circuitOpenUntil = 0;
+
+function readBudget(): number {
+  const n = Number(import.meta.env.VITE_OSRM_MAX_REQUESTS);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_SESSION_BUDGET;
+}
+
+function storage(): Storage | null {
+  try {
+    // Node/vitest has no localStorage — cache is simply off there.
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null; // storage blocked (privacy mode) — cache off, service still works
+  }
+}
+
+function readCacheMap(): Record<string, CacheEntry> {
+  const s = storage();
+  if (!s) return {};
+  try {
+    const raw = s.getItem(CACHE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, CacheEntry>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Returns cached road geometry for this exact trace, or null (miss/expired). */
+function readCache(key: string): LatLng[] | null {
+  const entry = readCacheMap()[key];
+  if (!entry || !Array.isArray(entry.g) || entry.g.length < 2) return null;
+  if (!Number.isFinite(entry.t) || Date.now() - entry.t > CACHE_TTL_MS) return null;
+  return entry.g;
+}
+
+/** Persist matched geometry. Never throws — quota/blocked storage degrade to off. */
+function writeCache(key: string, geometry: LatLng[]): void {
+  const s = storage();
+  if (!s) return;
+  try {
+    const map = readCacheMap();
+    const serialized = JSON.stringify(geometry);
+    if (serialized.length > CACHE_MAX_ENTRY_CHARS) return; // size guardrail
+    map[key] = { g: geometry, t: Date.now() };
+    const keys = Object.keys(map);
+    if (keys.length > CACHE_MAX_ENTRIES) {
+      keys
+        .sort((a, b) => (map[a]?.t ?? 0) - (map[b]?.t ?? 0))
+        .slice(0, keys.length - CACHE_MAX_ENTRIES)
+        .forEach((k) => delete map[k]);
+    }
+    s.setItem(CACHE_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Quota exceeded or blocked — cache stays off; service unaffected.
+  }
+}
+
+function clearCache(): void {
+  try {
+    storage()?.removeItem(CACHE_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Reset every guardrail (budget, circuit, cache). Tests and HMR only —
+ * production code never calls this.
+ */
+export function resetGuardrails(opts?: { budget?: number }): void {
+  sessionBudget = opts?.budget ?? readBudget();
+  requestsUsed = 0;
+  consecutiveFailures = 0;
+  circuitOpenUntil = 0;
+  clearCache();
+}
+
+/** Consume one network request from the session budget. False → over budget. */
+function consumeRequest(): boolean {
+  if (requestsUsed >= sessionBudget) return false;
+  requestsUsed += 1;
+  return true;
+}
+
+function circuitOpen(nowMs: number = Date.now()): boolean {
+  return nowMs < circuitOpenUntil;
+}
+
+function openCircuit(untilMs: number): void {
+  circuitOpenUntil = Math.max(circuitOpenUntil, untilMs);
+}
+
+function recordFailure(): void {
+  consecutiveFailures += 1;
+  if (consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+    openCircuit(Date.now() + CIRCUIT_COOLDOWN_MS);
+  }
+}
+
+function recordSuccess(): void {
+  consecutiveFailures = 0;
+}
+
+/** 429 → honour Retry-After (seconds), else the rate-limit cooldown. */
+function noteRateLimited(res: Response): void {
+  const header = res.headers.get("Retry-After");
+  const seconds = header != null ? Number(header) : Number.NaN;
+  const waitMs =
+    Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : CIRCUIT_RATE_LIMIT_COOLDOWN_MS;
+  openCircuit(Date.now() + waitMs);
+  consecutiveFailures = CIRCUIT_FAILURE_THRESHOLD;
+}
+
+// ---------------------------------------------------------------------------
 // Internal fetch helper — timeout + caller-signal combination
 // ---------------------------------------------------------------------------
 
@@ -248,6 +403,7 @@ async function fetchWithTimeoutAndSignal(
 type ChunkResult = {
   geometry: LatLng[];
   usedService: boolean;
+  degraded?: DegradedReason;
 };
 
 async function resolveChunk(
@@ -256,42 +412,84 @@ async function resolveChunk(
   callerSignal: AbortSignal | undefined,
   timeoutMs: number,
 ): Promise<ChunkResult> {
+  // Circuit already open → zero network, raw geometry.
+  if (circuitOpen()) {
+    return { geometry: chunk, usedService: false, degraded: "service" };
+  }
+
+  let serviceError = false;
+
   // Try tier 1: match — only when the chunk fits the engine's map-matching
   // limit. MEASURED 2026-09-22: the public demo returns TooBig at 12+
   // coordinates, so a full-size chunk would burn a request on a guaranteed
   // failure before falling through to route.
   if (chunk.length <= OSRM_MATCH_MAX_COORDS) {
+    if (!consumeRequest()) {
+      return { geometry: chunk, usedService: false, degraded: "budget" };
+    }
     const matchUrl = buildMatchUrl(baseUrl, chunk);
     try {
       const res = await fetchWithTimeoutAndSignal(matchUrl, {}, callerSignal, timeoutMs);
-      if (res.ok) {
+      if (res.status === 429) {
+        noteRateLimited(res);
+        recordFailure();
+        // Same host would rate-limit route too — stop here.
+        return { geometry: chunk, usedService: false, degraded: "service" };
+      }
+      if (res.status >= 500) {
+        recordFailure();
+        serviceError = true;
+      } else if (res.ok) {
         const body = (await res.json()) as unknown;
         const geo = parseOsrmGeometry(body);
         if (geo && geo.length >= 2) {
+          recordSuccess();
           return { geometry: geo, usedService: true };
         }
       }
     } catch (_e) {
       // Match failed — fall through to route.
+      recordFailure();
+      serviceError = true;
     }
   }
 
-  // Try tier 2: route
+  // Tier 2: route — skipped when the circuit just opened or budget is spent.
+  if (circuitOpen()) {
+    return { geometry: chunk, usedService: false, degraded: "service" };
+  }
+  if (!consumeRequest()) {
+    return { geometry: chunk, usedService: false, degraded: "budget" };
+  }
   const routeUrl = buildRouteUrl(baseUrl, chunk);
   try {
     const res = await fetchWithTimeoutAndSignal(routeUrl, {}, callerSignal, timeoutMs);
-    if (res.ok) {
+    if (res.status === 429) {
+      noteRateLimited(res);
+      recordFailure();
+      serviceError = true;
+    } else if (res.status >= 500) {
+      recordFailure();
+      serviceError = true;
+    } else if (res.ok) {
       const body = (await res.json()) as unknown;
       const geo = parseOsrmGeometry(body);
       if (geo && geo.length >= 2) {
+        recordSuccess();
         return { geometry: geo, usedService: true };
       }
     }
   } catch (_e) {
     // Route failed — fall through to raw.
+    recordFailure();
+    serviceError = true;
   }
 
-  // Tier 3: raw points.
+  // Tier 3: raw points. NoMatch / invalid queries are NOT guardrail trips —
+  // only transport failures set `degraded` so the UI can stay honest.
+  if (serviceError) {
+    return { geometry: chunk, usedService: false, degraded: "service" };
+  }
   return { geometry: chunk, usedService: false };
 }
 
@@ -302,11 +500,17 @@ async function resolveChunk(
 /**
  * Resolve a trace of pings to road-following geometry using OSRM.
  *
- * Returns `{ geometry, matched }` where `matched` is true only if every
- * chunk produced service geometry. If any chunk fell back to raw points,
- * `matched` is false so the UI can stay honest about provenance.
+ * Returns `{ geometry, matched, degraded? }` where `matched` is true only if
+ * every chunk produced service geometry, and `degraded` explains why fresh
+ * service geometry was not produced ("budget" | "service" | "cache").
  *
- * Never rejects — errors are silently swallowed and degrade to raw geometry.
+ * Guardrails, in order:
+ *   1. persistent cache (zero budget, wins over everything after abort)
+ *   2. circuit breaker  → raw + degraded:"service", zero network
+ *   3. session budget   → raw + degraded:"budget",  zero network
+ *   4. per-chunk match → route → raw (existing three tiers)
+ *
+ * Never rejects — errors are swallowed and degrade to raw geometry.
  */
 export async function fetchRoadRoute(
   points: LatLng[],
@@ -316,7 +520,7 @@ export async function fetchRoadRoute(
     timeoutMs?: number;
     maxRequests?: number;
   },
-): Promise<{ geometry: LatLng[]; matched: boolean }> {
+): Promise<{ geometry: LatLng[]; matched: boolean; degraded?: DegradedReason }> {
   const {
     baseUrl = import.meta.env.VITE_OSRM_BASE_URL || DEFAULT_OSRM_BASE_URL,
     signal,
@@ -329,6 +533,23 @@ export async function fetchRoadRoute(
     return { geometry: points, matched: false };
   }
 
+  // 1. Persistent cache — free (costs no budget), beats every guardrail.
+  const cacheKey = hashTrace(points);
+  const cached = readCache(cacheKey);
+  if (cached) {
+    return { geometry: cached, matched: true, degraded: "cache" };
+  }
+
+  // 2. Circuit breaker — zero network while the service is unhealthy.
+  if (circuitOpen()) {
+    return { geometry: points, matched: false, degraded: "service" };
+  }
+
+  // 3. Session budget — never spend past the ceiling.
+  if (requestsUsed >= sessionBudget) {
+    return { geometry: points, matched: false, degraded: "budget" };
+  }
+
   const cleaned = prepareTrace(points);
   if (cleaned.length < 2) {
     return { geometry: points, matched: false };
@@ -339,6 +560,7 @@ export async function fetchRoadRoute(
 
   const serviceParts: LatLng[][] = [];
   let matched = true;
+  let degraded: DegradedReason | undefined;
 
   for (let i = 0; i < chunks.length; i++) {
     if (i >= maxRequests) {
@@ -347,24 +569,32 @@ export async function fetchRoadRoute(
       // silently truncated off the map.
       serviceParts.push(...chunks.slice(i));
       matched = false;
+      degraded ??= "budget";
       break;
     }
 
     try {
       const result = await resolveChunk(baseUrl, chunks[i], signal, timeoutMs);
       serviceParts.push(result.geometry);
-      if (!result.usedService) matched = false;
+      if (!result.usedService) {
+        matched = false;
+        if (result.degraded) degraded ??= result.degraded;
+      }
     } catch (_e) {
       // Any error degrades this chunk to raw.
       serviceParts.push(chunks[i]);
       matched = false;
+      degraded ??= "service";
     }
   }
 
   const merged = mergeGeometries(serviceParts);
   if (merged.length < 2) {
-    return { geometry: cleaned, matched: false };
+    return { geometry: cleaned, matched: false, ...(degraded ? { degraded } : {}) };
   }
 
-  return { geometry: merged, matched };
+  // Full service success → persist so the next page load costs zero requests.
+  if (matched) writeCache(cacheKey, merged);
+
+  return { geometry: merged, matched, ...(degraded ? { degraded } : {}) };
 }

@@ -12,7 +12,8 @@ import {
   useMap,
 } from "react-leaflet";
 import { useRoadRoute } from "@/hooks/useRoadRoute";
-import type { LatLng } from "@/lib/roadRoute";
+import { useAnimatedLatLng } from "@/hooks/useAnimatedLatLng";
+import type { DegradedReason, LatLng } from "@/lib/roadRoute";
 import { sampleArrowPoints } from "@/lib/routeLegs";
 import type { RenderedLeg } from "@/hooks/useRouteLegs";
 
@@ -78,6 +79,55 @@ function arrowIcon(bearing: number, color: string) {
     iconSize: [14, 14],
     iconAnchor: [7, 7],
   });
+}
+
+// ---------------------------------------------------------------------------
+// Animated roster pin — throttled glide between last-seen fixes
+// ---------------------------------------------------------------------------
+
+/**
+ * One roster pin with a throttled, gliding position.
+ *
+ * PRIVACY (ADR-0001): this is a UI transition between "last seen" fixes —
+ * the popup label still reads "last seen X ago"; this is NOT a live dot.
+ */
+function AnimatedPin({
+  p,
+  selected,
+  onSelect,
+}: {
+  p: MapPin;
+  selected: boolean;
+  onSelect?: (id: string) => void;
+}) {
+  const pos = useAnimatedLatLng([p.lat, p.long]);
+  return (
+    <CircleMarker
+      center={pos}
+      radius={selected ? 12 : 9}
+      pathOptions={{
+        color: selected ? "#1d4ed8" : "#fff",
+        weight: selected ? 3 : 2,
+        fillColor: p.onDuty && p.fresh ? "#16a34a" : "#9ca3af",
+        fillOpacity: 1,
+      }}
+      eventHandlers={onSelect ? { click: () => onSelect(p.id) } : undefined}
+    >
+      <Tooltip>
+        {p.label}
+        {!p.onDuty || !p.fresh ? " (stale)" : ""}
+      </Tooltip>
+      <Popup>
+        <strong>{p.label}</strong>
+        {p.detail && (
+          <>
+            <br />
+            {p.detail}
+          </>
+        )}
+      </Popup>
+    </CircleMarker>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +341,9 @@ export function MovementMapInner({
   legs,
   selectedLeg,
   onLegSelect,
+  degraded,
+  replayPath,
+  replayPosition,
 }: {
   pins: MapPin[];
   route?: Array<[number, number]>;
@@ -302,6 +355,9 @@ export function MovementMapInner({
   legs?: readonly RenderedLeg[];
   selectedLeg?: number | null;
   onLegSelect?: (index: number | null) => void;
+  degraded?: DegradedReason;
+  replayPath?: Array<[number, number]>;
+  replayPosition?: [number, number] | null;
 }) {
   const [tilesFailed, setTilesFailed] = useState(false);
   const road = useRoadRoute(route ?? []);
@@ -324,6 +380,12 @@ export function MovementMapInner({
   const empty = allPoints.length === 0;
   const hasLegs = legs && legs.length > 0;
   const selLeg = selectedLeg ?? null;
+  // A hard guardrail trip (budget/service) means geometry is straight-line.
+  const guardrailDegraded =
+    degraded === "budget" ||
+    degraded === "service" ||
+    road.degraded === "budget" ||
+    road.degraded === "service";
 
   return (
     <figure className="overflow-hidden rounded-xl border border-border">
@@ -353,38 +415,15 @@ export function MovementMapInner({
             <LegacyRoute road={road} route={route} selectedLeg={selLeg} />
           )}
 
-          {/* Pins */}
-          {pins.map((p) => {
-            const selected = selectedId != null && p.id === selectedId;
-            return (
-              <CircleMarker
-                key={p.id}
-                center={[p.lat, p.long]}
-                radius={selected ? 12 : 9}
-                pathOptions={{
-                  color: selected ? "#1d4ed8" : "#fff",
-                  weight: selected ? 3 : 2,
-                  fillColor: p.onDuty && p.fresh ? "#16a34a" : "#9ca3af",
-                  fillOpacity: 1,
-                }}
-                eventHandlers={onPinSelect ? { click: () => onPinSelect(p.id) } : undefined}
-              >
-                <Tooltip>
-                  {p.label}
-                  {!p.onDuty || !p.fresh ? " (stale)" : ""}
-                </Tooltip>
-                <Popup>
-                  <strong>{p.label}</strong>
-                  {p.detail && (
-                    <>
-                      <br />
-                      {p.detail}
-                    </>
-                  )}
-                </Popup>
-              </CircleMarker>
-            );
-          })}
+          {/* Pins — throttled glide between last-seen fixes (ADR-0001: no live dot) */}
+          {pins.map((p) => (
+            <AnimatedPin
+              key={p.id}
+              p={p}
+              selected={selectedId != null && selectedId === p.id}
+              onSelect={onPinSelect}
+            />
+          ))}
 
           {/* Stops */}
           {(stops ?? []).map((s) => (
@@ -402,6 +441,40 @@ export function MovementMapInner({
               </Popup>
             </Marker>
           ))}
+
+          {/* Trail replay — road-snapped progress + playhead (admins only) */}
+          {replayPath && replayPath.length > 1 && (
+            <>
+              <Polyline
+                positions={replayPath}
+                pathOptions={{
+                  color: "#ffffff",
+                  weight: 9,
+                  opacity: 0.9,
+                  lineCap: "round" as const,
+                  lineJoin: "round" as const,
+                }}
+              />
+              <Polyline
+                positions={replayPath}
+                pathOptions={{
+                  color: "#16a34a",
+                  weight: 5.5,
+                  opacity: 0.95,
+                  lineCap: "round" as const,
+                  lineJoin: "round" as const,
+                }}
+              />
+            </>
+          )}
+          {replayPosition && (
+            <CircleMarker
+              center={replayPosition}
+              radius={8}
+              pathOptions={{ color: "#ffffff", weight: 3, fillColor: "#16a34a", fillOpacity: 1 }}
+              interactive={false}
+            />
+          )}
         </MapContainer>
 
         {/* Empty-state overlay */}
@@ -515,6 +588,11 @@ export function MovementMapInner({
           </>
         )}
 
+        {guardrailDegraded && (
+          <span className="text-amber-700">
+            Road matching paused (service limit) — showing straight lines
+          </span>
+        )}
         {road.loading && <span className="text-muted-foreground">Matching route to roads…</span>}
         {tilesFailed && <span>Map tiles failed to load — the list has the same data.</span>}
       </figcaption>

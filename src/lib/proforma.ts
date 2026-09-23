@@ -30,9 +30,15 @@ export type ProformaRow = {
   reverse_charge: boolean;
   po_number: string | null; // exists in DB (migr 20260910000002)
   po_date: string | null; // exists in DB
-  // TODO(DB): proforma_invoices missing columns for full quotation print carry-through:
-  // payment_terms, salesperson, contact_person/email/mobile, delivery_timeline, sales_type
-  // — NewProformaPayload carries them; add migration then extend ProformaRow + writers payload.
+  // Print carry-through — exists in DB (migr 20260913000002). If that migration is
+  // pending, insert/update degrade via writeWithSchemaColumnFallback (warn, drop, retry).
+  payment_terms: string | null;
+  salesperson: string | null;
+  contact_person: string | null;
+  contact_email: string | null;
+  contact_mobile: string | null;
+  delivery_timeline: string | null;
+  sales_type: string | null;
   subtotal: number;
   discount: number;
   taxable_value: number;
@@ -159,15 +165,52 @@ export async function fetchProformasBySO(salesOrderId: string): Promise<Proforma
 }
 
 export async function insertProforma(payload: Record<string, unknown>): Promise<ProformaRow> {
-  const { data, error } = await supabase.from(TBL).insert(payload as never).select("*").single();
-  if (error) throw error;
-  return normalizeProforma(data as unknown as ProformaRow);
+  const data = await writeWithSchemaColumnFallback<ProformaRow>(payload, (p) =>
+    supabase.from(TBL).insert(p as never).select("*").single(),
+  );
+  return normalizeProforma(data);
 }
 
 export async function updateProforma(id: string, patch: Record<string, unknown>): Promise<ProformaRow> {
-  const { data, error } = await supabase.from(TBL).update(patch as never).eq("id", id).select("*").single();
-  if (error) throw error;
-  return normalizeProforma(data as unknown as ProformaRow);
+  const data = await writeWithSchemaColumnFallback<ProformaRow>(patch, (p) =>
+    supabase.from(TBL).update(p as never).eq("id", id).select("*").single(),
+  );
+  return normalizeProforma(data);
+}
+
+// ── Schema-drift guard ────────────────────────────────────────────────────────
+// PostgREST rejects a payload key that is not in the live schema cache with
+// "Could not find the '<col>' column of '<table>' in the schema cache" (400) —
+// i.e. app code ships print carry-through columns ahead of their migration
+// (see docs/runbooks/proforma-columns-pending-migration.md). Instead of failing
+// the WHOLE document write, drop exactly that one key and retry (bounded by
+// payload size — one column is reported per attempt), loudly. Any error that is
+// not this message propagates unchanged.
+
+type SchemaWriteError = { code?: string | null; message?: string | null };
+type SchemaWriteResult<T> = PromiseLike<{ data: T | null; error: SchemaWriteError | null }>;
+
+const UNKNOWN_COLUMN_RE = /Could not find the '([^']+)' column/i;
+
+export async function writeWithSchemaColumnFallback<T>(
+  payload: Record<string, unknown>,
+  run: (p: Record<string, unknown>) => SchemaWriteResult<T>,
+): Promise<T> {
+  let current = payload;
+  // Each retry drops exactly one key → payload size is the hard upper bound.
+  const maxAttempts = Math.max(1, Object.keys(payload).length);
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { data, error } = await run(current);
+    if (!error) return data as T;
+    const missing = UNKNOWN_COLUMN_RE.exec(error.message ?? "")?.[1];
+    if (!missing || !(missing in current)) throw error;
+    console.warn(
+      `[proforma] schema drift: column '${missing}' not in DB schema cache — dropped it and retried (migration pending? see docs/runbooks/proforma-columns-pending-migration.md)`,
+    );
+    const { [missing]: _dropped, ...rest } = current;
+    current = rest;
+  }
+  throw new Error("proforma write: payload has no known columns left after schema-drift drops");
 }
 
 export async function deleteProforma(id: string): Promise<void> {

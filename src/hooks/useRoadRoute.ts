@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchRoadRoute, hashTrace, type LatLng } from "@/lib/roadRoute";
+import { fetchRoadRoute, hashTrace, type DegradedReason, type LatLng } from "@/lib/roadRoute";
 
 /**
  * TanStack Query wrapper around fetchRoadRoute.
@@ -8,11 +8,15 @@ import { fetchRoadRoute, hashTrace, type LatLng } from "@/lib/roadRoute";
  * Mirrors the style of useEngineerMovement: immutable data, no hammering,
  * raw-point fallback on any failure. Returns raw points (matched: false)
  * while loading or when the service fails so the map is never empty.
+ *
+ * `degraded` explains guardrail trips: "budget" / "service" (show the
+ * straight-line caption) or "cache" (benign — provenance via `matched`).
  */
 export function useRoadRoute(points: Array<[number, number]>): {
   geometry: Array<[number, number]>;
   matched: boolean;
   loading: boolean;
+  degraded?: DegradedReason;
 } {
   // Stable hash for cache key — don't recompute every render.
   const traceHash = useMemo(() => hashTrace(points), [points]);
@@ -38,5 +42,6 @@ export function useRoadRoute(points: Array<[number, number]>): {
     geometry,
     matched,
     loading: query.status === "pending",
+    degraded: query.data?.degraded,
   };
 }

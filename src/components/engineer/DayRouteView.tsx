@@ -1,12 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { TableSkeleton } from "@/components/shared/skeletons";
 import { AdminWarnings } from "@/components/engineer/AdminWarnings";
 import { MovementMap } from "@/components/engineer/MovementMap";
+import { RouteReplay } from "@/components/engineer/RouteReplay";
 import { useEngineerDayRoute } from "@/hooks/useEngineerMovement";
 import { useRouteLegs } from "@/hooks/useRouteLegs";
+import { buildReplayFrames, frameAtClock } from "@/lib/routeReplay";
 import { istDateKey, formatISTTime } from "@/lib/time";
 
 function formatKm(m: number | null): string {
@@ -14,15 +16,28 @@ function formatKm(m: number | null): string {
   return `${(m / 1000).toFixed(1)} km`;
 }
 
+/** Replay sampling along road geometry: 25 m keeps frame counts sane. */
+const REPLAY_STEP_M = 25;
+
 /**
  * Per-engineer day route: leg-coloured polyline of pings snapped to roads,
- * with direction arrows and a click-to-select legs panel. Dates are IST days.
+ * with direction arrows, a click-to-select legs panel, and an admin-only
+ * road-snapped trail replay (play/scrub/speed). Dates are IST days.
  */
 export function DayRouteView({ employeeId, name }: { employeeId: string; name: string | null }) {
   const [day, setDay] = useState(() => istDateKey());
   const { data, isLoading, warnings, loadError } = useEngineerDayRoute(employeeId, day);
 
   const [selectedLeg, setSelectedLeg] = useState<number | null>(null);
+
+  // ---- Replay state (parent-owned; RouteReplay is a controlled view) ----
+  const [replayPlaying, setReplayPlaying] = useState(false);
+  const [clockMs, setClockMs] = useState<number | null>(null);
+  const [speed, setSpeed] = useState(1);
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
+  const clockRef = useRef<number | null>(clockMs);
+  clockRef.current = clockMs;
 
   // Tickets with any flagged ping — advisory markers.
   const flaggedTickets = useMemo(() => {
@@ -33,25 +48,32 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
     return set;
   }, [data]);
 
-  const rawPings = data?.pings ?? [];
+  const rawPings = useMemo(() => data?.pings ?? [], [data]);
 
   // Build leg-friendly data structures
   const legPings = useMemo(
-    () => rawPings.map((p) => ({ lat: p.lat, long: p.long, captured_at: p.captured_at, ticket_id: p.ticket_id })),
+    () =>
+      rawPings.map((p) => ({
+        lat: p.lat,
+        long: p.long,
+        captured_at: p.captured_at,
+        ticket_id: p.ticket_id,
+      })),
     [rawPings],
   );
   const legSites = useMemo(
-    () => (data?.movement?.sites ?? []).map((s) => ({
-      ticket_id: s.ticket_id,
-      arrived_at: s.arrived_at,
-      departed_at: s.departed_at,
-      lat: s.lat,
-      long: s.long,
-    })),
+    () =>
+      (data?.movement?.sites ?? []).map((s) => ({
+        ticket_id: s.ticket_id,
+        arrived_at: s.arrived_at,
+        departed_at: s.departed_at,
+        lat: s.lat,
+        long: s.long,
+      })),
     [data],
   );
 
-  const { legs, loading: legsLoading } = useRouteLegs(legPings, legSites);
+  const { legs, loading: legsLoading, degraded: legsDegraded } = useRouteLegs(legPings, legSites);
 
   // Legacy route polyline for fit-bounds when no legs
   const legacyRoute = useMemo(
@@ -73,6 +95,92 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
         })),
     [data, flaggedTickets],
   );
+
+  // ---- Replay frames: segments from rendered legs ----
+  const replayFrames = useMemo(() => {
+    if (legs.length === 0) return [];
+    const pingTimes = rawPings
+      .map((p) => Date.parse(p.captured_at))
+      .filter((t) => Number.isFinite(t));
+    const minPing = pingTimes.length ? Math.min(...pingTimes) : null;
+    const maxPing = pingTimes.length ? Math.max(...pingTimes) : null;
+
+    return buildReplayFrames(
+      legs.map((leg) => {
+        // Collapsed >12-leg runs carry only the first leg's stamps — fall
+        // back to the overall ping window so time spans the whole day.
+        const usePingWindow = legs.length === 1 && minPing != null && maxPing != null;
+        const startMs = usePingWindow ? (minPing as number) : Date.parse(leg.startedAt ?? "");
+        const endMs = usePingWindow ? (maxPing as number) : Date.parse(leg.endedAt ?? "");
+        return {
+          geometry: leg.geometry,
+          startMs: Number.isFinite(startMs) ? startMs : (minPing ?? 0),
+          endMs: Number.isFinite(endMs) ? endMs : (maxPing ?? 0),
+        };
+      }),
+      REPLAY_STEP_M,
+    );
+  }, [legs, rawPings]);
+
+  // Playhead → road-snapped progress path + position
+  const replay = useMemo(() => {
+    if (clockMs == null || replayFrames.length === 0) return null;
+    const idx = frameAtClock(replayFrames, clockMs);
+    if (idx < 0) return null;
+    return {
+      path: replayFrames.slice(0, idx + 1).map((f) => f.position),
+      position: replayFrames[idx].position,
+    };
+  }, [replayFrames, clockMs]);
+
+  // rAF playback loop — latest-wins speed via ref, never auto-starts.
+  useEffect(() => {
+    if (!replayPlaying || replayFrames.length === 0) return;
+    const first = replayFrames[0].clockMs;
+    const last = replayFrames[replayFrames.length - 1].clockMs;
+    if (clockRef.current == null || clockRef.current >= last) {
+      clockRef.current = first;
+      setClockMs(first);
+    }
+    let raf = 0;
+    let lastT = performance.now();
+    const tick = (t: number) => {
+      const dt = (t - lastT) * speedRef.current;
+      lastT = t;
+      const next = (clockRef.current ?? first) + dt;
+      if (next >= last) {
+        clockRef.current = last;
+        setClockMs(last);
+        setReplayPlaying(false);
+        return;
+      }
+      clockRef.current = next;
+      setClockMs(next);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [replayPlaying, replayFrames]);
+
+  const handlePlayingChange = (p: boolean) => {
+    if (!p) {
+      setReplayPlaying(false);
+      return;
+    }
+    const first = replayFrames[0]?.clockMs;
+    const last = replayFrames[replayFrames.length - 1]?.clockMs;
+    if (first == null || last == null) return;
+    if (clockMs == null || clockMs >= last) {
+      clockRef.current = first;
+      setClockMs(first);
+    }
+    setReplayPlaying(true);
+  };
+
+  const handleClockChange = (ms: number) => {
+    clockRef.current = ms;
+    setClockMs(ms);
+  };
 
   // Determine if any leg is unmatched
   const hasUnmatched = legs.some((l) => !l.matched);
@@ -123,6 +231,18 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
         />
       ) : (
         <>
+          {replayFrames.length > 1 && (
+            <RouteReplay
+              frames={replayFrames}
+              playing={replayPlaying}
+              onPlayingChange={handlePlayingChange}
+              clockMs={clockMs}
+              onClockChange={handleClockChange}
+              speed={speed}
+              onSpeedChange={setSpeed}
+            />
+          )}
+
           <MovementMap
             pins={[]}
             route={legacyRoute}
@@ -132,11 +252,16 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
             legs={legs.length > 0 ? legs : undefined}
             selectedLeg={selectedLeg}
             onLegSelect={setSelectedLeg}
+            degraded={legsDegraded}
+            replayPath={replay?.path}
+            replayPosition={replay?.position}
           />
 
-          {hasUnmatched && (
+          {(hasUnmatched || legsDegraded === "budget" || legsDegraded === "service") && (
             <p className="text-xs text-muted-foreground">
-              some legs are straight-line — road match unavailable
+              {legsDegraded === "budget" || legsDegraded === "service"
+                ? "road matching paused (service limit) — some legs are straight-line"
+                : "some legs are straight-line — road match unavailable"}
             </p>
           )}
 
@@ -146,8 +271,7 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
                 <ol className="space-y-1.5">
                   {legs.map((leg) => {
                     const isSelected = selectedLeg === leg.index;
-                    const destFlagged =
-                      leg.ticketId != null && flaggedTickets.has(leg.ticketId);
+                    const destFlagged = leg.ticketId != null && flaggedTickets.has(leg.ticketId);
                     return (
                       <li key={leg.index}>
                         <button
@@ -165,7 +289,7 @@ export function DayRouteView({ employeeId, name }: { employeeId: string; name: s
                             aria-hidden="true"
                           />
                           {/* Leg index */}
-                          <span className="shrink-0 text-xs font-bold tabular-nums">
+                          <span className="shrink-0 text-xs font-medium tabular-nums">
                             Leg {leg.index}
                           </span>
                           {/* From → To */}
