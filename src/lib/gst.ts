@@ -507,31 +507,35 @@ export function upiPaymentUri(args: {
   return "upi://pay?" + p.toString();
 }
 
-// Mock e-Invoice IRN + QR payload generator. Real GSP integration plugs in later
-// through the same interface (see docstring in einvoice.ts).
-export function mockIrnPayload(invoice: {
+/**
+ * @deprecated RETIRED 2026-09-25. This function fabricated IRN and QR values
+ * and must never produce a statutory identifier again.
+ *
+ * It built an IRN as `hash8.repeat(8)` — a 64-char string that satisfies
+ * `/^[0-9a-f]{64}$/`, so the database and `v_invoices_compliance` treated the
+ * output as a real IRN. A read-only audit on 2026-09-21 found 4 of 4 stored
+ * IRNs were fabricated this way, and the ERP was reporting those invoices as
+ * legally complete.
+ *
+ * The live path is `src/lib/gsp.functions.ts` → `generateGspIrn`, which obtains
+ * the IRN from the GSP (or, in `GSP_MODE=mock`, from `gspMock.ts` where the
+ * value is a genuine non-repeating SHA-256). Migration
+ * `20260929000002_invoice_compliance_cleanup.sql` clears the stored values and
+ * adds a CHECK constraint so this pattern cannot be written again.
+ *
+ * The export is kept as a hard failure rather than deleted so that any future
+ * caller fails loudly at the point of the bug instead of silently writing a
+ * fake IRN.
+ */
+export function mockIrnPayload(_invoice: {
   invoice_no: string;
   invoice_date: string;
   seller_gstin: string | null;
   buyer_gstin: string | null;
   total: number;
 }): { irn: string; ack_no: string; qr_payload: string } {
-  const seed = `${invoice.invoice_no}|${invoice.invoice_date}|${invoice.total}`;
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  const hex = h.toString(16).padStart(8, "0").repeat(8).slice(0, 64);
-  return {
-    irn: hex,
-    ack_no: String(1e12 + h).slice(0, 15),
-    qr_payload: JSON.stringify({
-      SellerGstin: invoice.seller_gstin,
-      BuyerGstin: invoice.buyer_gstin,
-      DocNo: invoice.invoice_no,
-      DocTyp: "INV",
-      DocDt: invoice.invoice_date,
-      TotInvVal: invoice.total,
-      Irn: hex,
-      IrnDt: new Date().toISOString(),
-    }),
-  };
+  throw new Error(
+    "mockIrnPayload() is retired — it fabricated IRN values. Use generateGspIrn() " +
+      "(src/lib/gsp.functions.ts) so the IRN comes from the GSP.",
+  );
 }
