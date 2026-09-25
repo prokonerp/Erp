@@ -41,7 +41,12 @@ import {
 } from "@/lib/gspClient";
 import { createMockTransport } from "@/lib/gspMock";
 import type { TransportDetails } from "@/lib/transport";
-import { ewbInputSchema, normalizeGstinDetails, resolveEwbTransportFields } from "@/lib/gspEwb";
+import {
+  ewbInputSchema,
+  normalizeGstinDetails,
+  resolveEwbTransportFields,
+  isWithinIrnCancelWindow,
+} from "@/lib/gspEwb";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- supabaseAdmin Proxy is not narrowed to the generated row types for these tables
 async function getAdmin(): Promise<any> {
@@ -398,11 +403,20 @@ export const cancelGspIrn = createServerFn({ method: "POST" })
 
     const { data: invoice, error } = await admin
       .from("invoices")
-      .select("id,irn")
+      .select("id,irn,ack_date")
       .eq("id", data.invoiceId)
       .maybeSingle();
     if (error) throw new Error(reportDbError("gsp.loadForCancel", error));
     if (!invoice?.irn) throw new Error("Invoice has no IRN to cancel");
+    // The GSP only accepts a cancellation within 24h of the AckDate. Checking
+    // here turns an opaque GSP rejection into an actionable message, and stops
+    // us burning a GSP call (and writing a misleading log row) on a request
+    // that can only ever be refused.
+    if (!isWithinIrnCancelWindow(invoice.ack_date)) {
+      throw new Error(
+        "IRN can only be cancelled within 24 hours of generation. Raise a credit note instead.",
+      );
+    }
 
     const userGstin = config.userGstin;
     await transport.cancelIrn({

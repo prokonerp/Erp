@@ -93,3 +93,63 @@ export function normalizeGstinDetails(message: unknown): GstinDetails {
     status: str(m.GSTINStatus) ?? str(m.Status) ?? str(m.status),
   };
 }
+
+// ── IRN cancellation window ────────────────────────────────────────────────
+
+/**
+ * The statutory e-invoicing rule: an IRN may only be cancelled within 24 hours
+ * of generation. After that the GSP rejects the request, so the only lawful
+ * remedy is a credit note.
+ */
+export const IRN_CANCEL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Parse an `ack_date` column into epoch ms, or `null` when it is absent or
+ * unparseable. Supabase returns `string | null`, but a row written by an older
+ * code path (or a hand-inserted one) can hold anything, so every shape is
+ * funnelled through `new Date(...)` and validated with `NaN` rather than trusted.
+ */
+function ackDateMs(ackDate: string | Date | null | undefined): number | null {
+  if (ackDate == null) return null;
+  const ms = (ackDate instanceof Date ? ackDate : new Date(ackDate)).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * Is this IRN still inside its 24-hour cancellation window?
+ *
+ * `ack_date` is stamped onto the invoice when the IRN is generated, so it is
+ * the window's start. The boundary is **inclusive** (`<=`), matching the GSP,
+ * which accepts a cancellation issued exactly 24h after the AckDate.
+ *
+ * A missing or unparseable `ack_date` answers `false` rather than throwing:
+ * cancelling an IRN we cannot date is the more damaging mistake, so the
+ * decision fails closed and the caller falls back to "raise a credit note".
+ */
+export function isWithinIrnCancelWindow(
+  ackDate: string | Date | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  const ms = ackDateMs(ackDate);
+  if (ms === null) return false;
+  const elapsed = now.getTime() - ms;
+  return elapsed <= IRN_CANCEL_WINDOW_MS;
+}
+
+/**
+ * Milliseconds left before the window closes, or `null` when the IRN is not
+ * cancellable at all (no `ack_date`, or the window has already shut).
+ *
+ * The UI uses this to phrase the note the user sees — "23h left" is actionable,
+ * whereas a bare "expired" is not — so the two helpers deliberately share one
+ * window definition and cannot drift apart.
+ */
+export function irnCancelWindowRemainingMs(
+  ackDate: string | Date | null | undefined,
+  now: Date = new Date(),
+): number | null {
+  const ms = ackDateMs(ackDate);
+  if (ms === null) return null;
+  const remaining = IRN_CANCEL_WINDOW_MS - (now.getTime() - ms);
+  return remaining >= 0 ? remaining : null;
+}

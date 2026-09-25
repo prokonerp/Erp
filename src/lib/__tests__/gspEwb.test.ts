@@ -4,7 +4,14 @@
  * narrows them at runtime). Pinning a stricter input type here would test the
  * fixture rather than the normaliser. */
 import { describe, it, expect } from "vitest";
-import { resolveEwbTransportFields, ewbInputSchema, normalizeGstinDetails } from "@/lib/gspEwb";
+import {
+  resolveEwbTransportFields,
+  ewbInputSchema,
+  normalizeGstinDetails,
+  isWithinIrnCancelWindow,
+  irnCancelWindowRemainingMs,
+  IRN_CANCEL_WINDOW_MS,
+} from "@/lib/gspEwb";
 
 /**
  * Pure-logic tests for the e-Way Bill field resolution and GSTIN lookup.
@@ -128,5 +135,58 @@ describe("normalizeGstinDetails", () => {
   it("returns nulls when the GSP returned no usable payload", () => {
     const out = normalizeGstinDetails(null);
     expect(out).toEqual({ gstin: null, tradeName: null, legalName: null, status: null });
+  });
+});
+
+describe("isWithinIrnCancelWindow", () => {
+  // Fixed clock so the 24h boundary assertions are deterministic.
+  const now = new Date("2026-09-25T12:00:00.000Z");
+  const MINUTE = 60 * 1000;
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+
+  it("allows cancellation 23h59m after generation", () => {
+    expect(isWithinIrnCancelWindow(ago(IRN_CANCEL_WINDOW_MS - MINUTE), now)).toBe(true);
+  });
+
+  it("allows cancellation exactly 24h after generation (boundary is inclusive)", () => {
+    expect(isWithinIrnCancelWindow(ago(IRN_CANCEL_WINDOW_MS), now)).toBe(true);
+  });
+
+  it("rejects cancellation 1ms past the 24h window", () => {
+    expect(isWithinIrnCancelWindow(ago(IRN_CANCEL_WINDOW_MS + 1), now)).toBe(false);
+  });
+
+  it("rejects a missing ack_date", () => {
+    // No ack_date means no window has opened — fail closed rather than guess.
+    expect(isWithinIrnCancelWindow(null, now)).toBe(false);
+    expect(isWithinIrnCancelWindow(undefined, now)).toBe(false);
+  });
+
+  it("rejects an unparseable ack_date", () => {
+    expect(isWithinIrnCancelWindow("not-a-date", now)).toBe(false);
+  });
+
+  it("accepts a Date as well as an ISO string", () => {
+    expect(isWithinIrnCancelWindow(new Date(now.getTime() - 1000), now)).toBe(true);
+  });
+});
+
+describe("irnCancelWindowRemainingMs", () => {
+  const now = new Date("2026-09-25T12:00:00.000Z");
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+
+  it("reports the milliseconds left before the window closes", () => {
+    expect(irnCancelWindowRemainingMs(ago(60 * 60 * 1000), now)).toBe(
+      IRN_CANCEL_WINDOW_MS - 60 * 60 * 1000,
+    );
+  });
+
+  it("returns null when there is no usable ack_date", () => {
+    expect(irnCancelWindowRemainingMs(null, now)).toBeNull();
+    expect(irnCancelWindowRemainingMs("not-a-date", now)).toBeNull();
+  });
+
+  it("returns null once the window has closed", () => {
+    expect(irnCancelWindowRemainingMs(ago(IRN_CANCEL_WINDOW_MS + 1), now)).toBeNull();
   });
 });

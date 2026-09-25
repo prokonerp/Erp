@@ -57,6 +57,7 @@ import {
   getGspRuntimeInfo,
   verifyGstin,
 } from "@/lib/gsp.functions";
+import { isWithinIrnCancelWindow } from "@/lib/gspEwb";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { InvoicePrintView } from "@/components/invoice/InvoicePrintView";
 import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
@@ -248,6 +249,10 @@ function InvoiceView() {
   const completion = useMemo(() => getInvoiceCompletionStatus(inv as any), [inv]);
   const transport = getTransport();
   const isLocked = !!(inv?.irn || transport?.einvoice_irn);
+  // An IRN is only cancellable inside its statutory 24h window, measured from
+  // the `ack_date` stamped at generation. The server function re-checks this,
+  // but hiding the action up front beats surfacing a GSP rejection afterwards.
+  const irnCancellable = isWithinIrnCancelWindow(inv?.ack_date);
 
   async function issueIfDraft() {
     if (!inv || inv.status !== "draft") return;
@@ -957,19 +962,22 @@ function InvoiceView() {
               Check GSP status
             </Button>
           )}
-          {inv.status !== "cancelled" && inv.irn && inv.einvoice_status !== "cancelled" && (
-            <PermButton
-              module="sales"
-              action="edit"
-              size="sm"
-              variant="ghost"
-              onClick={() => setCancelIrnOpen(true)}
-              disabled={gspBusy}
-              className="text-destructive hover:text-destructive"
-            >
-              Cancel IRN
-            </PermButton>
-          )}
+          {inv.status !== "cancelled" &&
+            inv.irn &&
+            inv.einvoice_status !== "cancelled" &&
+            irnCancellable && (
+              <PermButton
+                module="sales"
+                action="edit"
+                size="sm"
+                variant="ghost"
+                onClick={() => setCancelIrnOpen(true)}
+                disabled={gspBusy}
+                className="text-destructive hover:text-destructive"
+              >
+                Cancel IRN
+              </PermButton>
+            )}
           <Button size="sm" variant="outline" asChild>
             <Link to="/sales/payments/new" search={{ invoice_id: inv.id } as any}>
               <Wallet className="h-4 w-4 mr-1.5" />
@@ -988,6 +996,19 @@ function InvoiceView() {
           {statusNote}
         </p>
       )}
+
+      {/* The IRN exists but the statutory 24h cancellation window has shut, so
+          the Cancel IRN action above is withheld. Say why, and name the only
+          remedy left, rather than leaving the user to wonder where it went. */}
+      {inv?.irn &&
+        inv.status !== "cancelled" &&
+        inv.einvoice_status !== "cancelled" &&
+        !irnCancellable && (
+          <p className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            <Ban className="h-3.5 w-3.5 shrink-0" />
+            24-hour cancellation window closed — raise a credit note instead.
+          </p>
+        )}
 
       {ewayOpen && (
         <Card>
