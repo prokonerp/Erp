@@ -1,5 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { createFileRoute, Outlet, Link, useLocation } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  Link,
+  useLocation,
+  type ErrorComponentProps,
+} from "@tanstack/react-router";
 import { SafeNavigate } from "@/components/SafeNavigate";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth, purgeAuthCaches } from "@/lib/useAuth";
@@ -99,7 +105,7 @@ function AccountBlockedSignOut() {
   return <SafeNavigate to="/auth" />;
 }
 
-function AppErrorBoundary({ error }: { error: Error }) {
+function AppErrorBoundary({ error }: ErrorComponentProps) {
   const gate = isAccountGateError(error);
   if (gate?.code === PASSWORD_CHANGE_REQUIRED) {
     // Non-dismissable change-password dialog over a blank shell.
