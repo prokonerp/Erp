@@ -32,7 +32,12 @@ import {
   type InvoiceItemRow,
   type InvoiceRow,
 } from "@/lib/sales";
-import { mockIrnPayload } from "@/lib/gst";
+import {
+  generateGspIrn,
+  generateGspEwb,
+  getGspComplianceStatus,
+  getGspRuntimeInfo,
+} from "@/lib/gsp.functions";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { InvoicePrintView } from "@/components/invoice/InvoicePrintView";
 import { printElementSinglePage, saveElementAsPdf } from "@/lib/docPdf";
@@ -48,6 +53,7 @@ import {
   parseEwayResponse,
   getInvoiceCompletionStatus,
 } from "@/lib/einvoice";
+import { PermButton } from "@/components/PermGate";
 import type { TransportDetails } from "@/lib/transport";
 
 export const Route = createFileRoute("/_app/sales/invoices/$id")({
@@ -171,50 +177,93 @@ function InvoiceView() {
     load();
   }
 
+  // GSP runtime: which environment are we actually talking to?
+  const [gspMode, setGspMode] = useState<"mock" | "sandbox" | "production" | null>(null);
+  const [gspBusy, setGspBusy] = useState(false);
+  const [statusNote, setStatusNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getGspRuntimeInfo()
+      .then((info: { mode: "mock" | "sandbox" | "production" }) => {
+        if (alive) setGspMode(info.mode);
+      })
+      .catch(() => {
+        if (alive) setGspMode(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   async function generateIrn() {
     if (!inv) return;
     if (inv.irn) return toast.info("IRN already generated");
-    const payload = mockIrnPayload({
-      invoice_no: inv.invoice_no || "",
-      invoice_date: inv.invoice_date,
-      seller_gstin: inv.seller_gstin,
-      buyer_gstin: inv.buyer_gstin,
-      total: inv.total,
-    });
-    const { error } = await (supabase.from("invoices") as any)
-      .update({
-        irn: payload.irn,
-        ack_no: payload.ack_no,
-        ack_date: new Date().toISOString(),
-        qr_payload: payload.qr_payload,
-        einvoice_status: "generated",
-      })
-      .eq("id", inv.id);
-    if (error) return toast.error(error.message);
-    toast.success("IRN generated (mock — plug real GSP later)");
-    load();
+    setGspBusy(true);
+    setStatusNote(null);
+    try {
+      const res = await generateGspIrn({ data: { invoiceId: inv.id } });
+      if (res.alreadyGenerated) {
+        toast.info("IRN already existed on the GSP — recovered and saved");
+      } else if (gspMode === "mock") {
+        toast.success("IRN generated (MOCK — not legally registered)");
+      } else {
+        toast.success("IRN generated");
+      }
+      await load();
+    } catch (e: any) {
+      toast.error(e?.message || "IRN generation failed");
+    } finally {
+      setGspBusy(false);
+    }
+  }
+
+  async function checkGspStatus() {
+    if (!inv) return;
+    setGspBusy(true);
+    try {
+      const s = await getGspComplianceStatus({ data: { invoiceId: inv.id } });
+      if (!s.irn) {
+        setStatusNote("No IRN yet — this invoice has not been sent to the GSP.");
+        return;
+      }
+      const remote = s.remoteChecked
+        ? s.remoteMatches
+          ? "confirmed by GSP"
+          : `MISMATCH — GSP says: ${s.remoteMessage ?? "unknown"}`
+        : "remote check skipped";
+      setStatusNote(
+        `Mode: ${s.mode} · e-Invoice: ${s.einvoiceStatus} · e-Way: ${s.ewayStatus} · IRN: ${s.remoteChecked ? remote : "local only"}`,
+      );
+    } catch (e: any) {
+      setStatusNote(e?.message || "Status check failed");
+    } finally {
+      setGspBusy(false);
+    }
   }
 
   async function generateEway() {
     if (!inv) return;
-    if (!ewayForm.vehicle_no.trim()) return toast.error("Vehicle number required");
-    const ewb = `EWB${Date.now().toString().slice(-11)}`;
-    const validTill = new Date(Date.now() + 24 * 3600e3).toISOString();
-    const { error } = await (supabase.from("eway_bills") as any).insert({
-      invoice_id: inv.id,
-      ...ewayForm,
-      ewb_no: ewb,
-      ewb_date: new Date().toISOString(),
-      valid_till: validTill,
-      status: "generated",
-    });
-    if (error) return toast.error(error.message);
-    await (supabase.from("invoices") as any)
-      .update({ ewaybill_no: ewb, ewaybill_date: new Date().toISOString(), ewaybill_valid_till: validTill })
-      .eq("id", inv.id);
-    toast.success("e-Way Bill generated (mock)");
-    setEwayOpen(false);
-    load();
+    const distance = Number(ewayForm.distance_km) || 0;
+    if (!distance || distance <= 0) return toast.error("Distance is required for an e-way bill");
+    if (distance > 4000) return toast.error("Distance must be 1–4000 km");
+    setGspBusy(true);
+    try {
+      const res = await generateGspEwb({ data: { invoiceId: inv.id, distance } });
+      toast.success(
+        res.alreadyGenerated
+          ? "E-way bill already raised"
+          : gspMode === "mock"
+            ? `E-way bill ${res.ewbNo} (MOCK — not legally registered)`
+            : `E-way bill ${res.ewbNo} generated`,
+      );
+      setEwayOpen(false);
+      await load();
+    } catch (e: any) {
+      toast.error(e?.message || "E-way bill generation failed");
+    } finally {
+      setGspBusy(false);
+    }
   }
 
   async function handleGenerateGstJson() {
@@ -566,16 +615,50 @@ function InvoiceView() {
           {inv.irn && <StatusBadge tone="success">e-Invoice ✓</StatusBadge>}
           {inv.ewaybill_no && <StatusBadge tone="info">e-Way ✓</StatusBadge>}
           {isLocked && <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200"><Lock className="h-3 w-3 mr-1" />Locked after IRN</Badge>}
+          {gspMode && (
+            <Badge
+              variant="outline"
+              className={
+                gspMode === "mock"
+                  ? "bg-purple-50 text-purple-800 border-purple-200"
+                  : gspMode === "production"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    : "bg-sky-50 text-sky-800 border-sky-200"
+              }
+              title={
+                gspMode === "mock"
+                  ? "Dummy APIs — values here are NOT legally registered"
+                  : `Connected to ${gspMode}`
+              }
+            >
+              GSP: {gspMode}
+            </Badge>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {inv.status === "draft" && !isLocked && (
             <Button size="sm" onClick={issueIfDraft}><Zap className="h-4 w-4 mr-1.5" />Issue</Button>
           )}
           {inv.status !== "cancelled" && !inv.irn && (
-            <Button size="sm" variant="outline" onClick={generateIrn}><Zap className="h-4 w-4 mr-1.5" />Generate IRN (mock)</Button>
+            <PermButton
+              module="sales"
+              action="edit"
+              size="sm"
+              variant="outline"
+              onClick={generateIrn}
+              disabled={gspBusy}
+            >
+              <Zap className="h-4 w-4 mr-1.5" />
+              Generate IRN
+            </PermButton>
           )}
           {inv.status !== "cancelled" && !inv.ewaybill_no && inv.total >= 50000 /* M5: inclusive ≥50000 — 50000 exactly triggers */ && (
-            <Button size="sm" variant="outline" onClick={() => setEwayOpen((v) => !v)}><Truck className="h-4 w-4 mr-1.5" />e-Way Bill (mock)</Button>
+            <Button size="sm" variant="outline" onClick={() => setEwayOpen((v) => !v)}><Truck className="h-4 w-4 mr-1.5" />e-Way Bill</Button>
+          )}
+          {inv.status !== "cancelled" && (
+            <Button size="sm" variant="ghost" onClick={checkGspStatus} disabled={gspBusy}>
+              Check GSP status
+            </Button>
           )}
           <Button size="sm" variant="outline" asChild>
             <Link to="/sales/payments/new" search={{ invoice_id: inv.id } as any}><Wallet className="h-4 w-4 mr-1.5" />Record Payment</Link>
@@ -584,15 +667,21 @@ function InvoiceView() {
         </div>
       </div>
 
+      {statusNote && (
+        <p className="rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {statusNote}
+        </p>
+      )}
+
       {ewayOpen && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Generate e-Way Bill (legacy mock)</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Generate e-Way Bill via GSP</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
             <div><Label className="text-xs">Transporter</Label><Input value={ewayForm.transporter_name} onChange={(e) => setEwayForm({ ...ewayForm, transporter_name: e.target.value })} /></div>
             <div><Label className="text-xs">Transporter ID</Label><Input value={ewayForm.transporter_id} onChange={(e) => setEwayForm({ ...ewayForm, transporter_id: e.target.value })} /></div>
             <div><Label className="text-xs">Vehicle No *</Label><Input value={ewayForm.vehicle_no} onChange={(e) => setEwayForm({ ...ewayForm, vehicle_no: e.target.value })} /></div>
             <div><Label className="text-xs">Distance (km)</Label><Input type="number" value={ewayForm.distance_km} onChange={(e) => setEwayForm({ ...ewayForm, distance_km: Number(e.target.value) })} /></div>
-            <div><Button size="sm" onClick={generateEway}>Generate</Button></div>
+            <div><Button size="sm" onClick={generateEway} disabled={gspBusy || !inv?.irn}>Generate</Button></div>
           </CardContent>
         </Card>
       )}
@@ -763,7 +852,7 @@ function InvoiceView() {
                     {it.serial_numbers && it.serial_numbers.length > 0 && (
                       <div className="text-[11px] text-muted-foreground font-mono mt-1">
                         Serial No: {it.serial_numbers.join(", ")}
-                      </div>
+                    </div>
                     )}
                   </td>
                   <td className="p-2 font-mono text-xs">{it.hsn || "—"}</td>
