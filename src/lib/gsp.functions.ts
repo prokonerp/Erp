@@ -41,6 +41,7 @@ import {
 } from "@/lib/gspClient";
 import { createMockTransport } from "@/lib/gspMock";
 import type { TransportDetails } from "@/lib/transport";
+import { ewbInputSchema, normalizeGstinDetails, resolveEwbTransportFields } from "@/lib/gspEwb";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- supabaseAdmin Proxy is not narrowed to the generated row types for these tables
 async function getAdmin(): Promise<any> {
@@ -422,14 +423,9 @@ export const cancelGspIrn = createServerFn({ method: "POST" })
 
 // ── 3. Generate e-way bill (always AFTER the IRN) ───────────────────────────
 
-const zEwb = z.object({
-  invoiceId: z.string().uuid(),
-  distance: z.number().positive().max(4000),
-});
-
 export const generateGspEwb = createServerFn({ method: "POST" })
   .middleware([requireActiveUser])
-  .inputValidator((input) => zEwb.parse(input))
+  .inputValidator((input) => ewbInputSchema.parse(input))
   .handler(async ({ data, context }) => {
     await assertModulePermission(context.userId, "sales", "edit");
     const admin = await getAdmin();
@@ -456,13 +452,16 @@ export const generateGspEwb = createServerFn({ method: "POST" })
       };
 
     const transportDetails = (invoice.transport_details ?? {}) as TransportDetails;
+    // Explicit Part-B input wins; anything omitted falls back to the invoice's
+    // frozen transport_details. See resolveEwbTransportFields for the rules.
+    const ewbFields = resolveEwbTransportFields(transportDetails, data);
     const envelope = await transport.genEwbByIrn({
       user_gstin: config.userGstin,
       irn: invoice.irn as string,
       distance: data.distance,
-      transporter_id: transportDetails.transporter_id ?? null,
-      transporter_name: transportDetails.transporter_name ?? null,
-      vehicle_number: transportDetails.vehicle_no ?? null,
+      transporter_id: ewbFields.transporter_id,
+      transporter_name: ewbFields.transporter_name,
+      vehicle_number: ewbFields.vehicle_number,
     });
 
     const message = messageOf(envelope);
@@ -486,9 +485,9 @@ export const generateGspEwb = createServerFn({ method: "POST" })
 
     await admin.from("eway_bills").insert({
       invoice_id: data.invoiceId,
-      transporter_name: transportDetails.transporter_name ?? null,
-      transporter_id: transportDetails.transporter_id ?? null,
-      vehicle_no: transportDetails.vehicle_no ?? null,
+      transporter_name: ewbFields.transporter_name,
+      transporter_id: ewbFields.transporter_id,
+      vehicle_no: ewbFields.vehicle_number,
       transport_mode: transportDetails.transport_mode ?? null,
       distance_km: data.distance,
       ewb_no: ewbNo,
@@ -583,4 +582,37 @@ export const getGspRuntimeInfo = createServerFn({ method: "GET" })
       host: config.baseUrl.replace(/^https?:\/\//, ""),
       isMock: config.mode === "mock",
     };
+  });
+
+// ── 6. GSTIN lookup (read-only) ─────────────────────────────────────────────
+
+const zGstin = z.object({
+  gstin: z
+    .string()
+    .trim()
+    .regex(/^[0-9A-Za-z]{15}$/, "GSTIN must be 15 characters"),
+  action: z.string().trim().max(32).optional(),
+});
+
+/**
+ * Look up a counterparty GSTIN against the GSP.
+ *
+ * Read-only, so it gates on `sales · read` (the same permission the compliance
+ * status check uses) rather than `edit`. This is a convenience lookup — it does
+ * not write anything and is not a statutory action.
+ */
+export const verifyGstin = createServerFn({ method: "POST" })
+  .middleware([requireActiveUser])
+  .inputValidator((input) => zGstin.parse(input))
+  .handler(async ({ data, context }) => {
+    await assertModulePermission(context.userId, "sales", "read");
+    const config = getGspConfig();
+    const transport = transportForMode(config.mode, config);
+
+    const envelope = await transport.getGstinDetails({
+      gstin: data.gstin,
+      action: data.action,
+    });
+    const message = messageOf(envelope);
+    return normalizeGstinDetails(message);
   });
