@@ -262,6 +262,16 @@ export type GstinQuery = { gstin: string; action?: string };
  * makes the mock/live switch a config change rather than a code change.
  */
 export type GspTransport = {
+  /**
+   * Mint (or serve from cache) a GSP token — nothing else.
+   *
+   * This is the ONLY method on the interface that is guaranteed side-effect
+   * free: it creates no IRN, no e-way bill, and touches no business table. It
+   * exists so an operator can prove credentials and connectivity before risking
+   * a real statutory document. Callers that need "did the GSP accept us?" must
+   * never substitute a document-generating call for it.
+   */
+  authenticate(): Promise<{ token: string }>;
   generateIrn(body: GspInvoiceRequest): Promise<GspEnvelope>;
   cancelIrn(body: CancelIrnRequest): Promise<GspEnvelope>;
   genEwbByIrn(body: GenEwbByIrnRequest): Promise<GspEnvelope>;
@@ -463,6 +473,10 @@ export function createHttpTransport(deps: HttpTransportDeps): GspTransport {
   };
 
   return {
+    // Reuses the one existing token-auth path (`authHeader`), so there is no
+    // second request/auth/error implementation to drift out of sync.
+    authenticate: () => authHeader().then((token) => ({ token })),
+
     // Generate/cancel are NOT idempotent → single attempt.
     generateIrn: (b) => call("generate_irn", "POST", "/api/v1/einvoice/", b, false),
     cancelIrn: (b) => call("cancel_irn", "POST", "/api/v1/einvoice/cancel-einvoice/", b, false),

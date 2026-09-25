@@ -37,6 +37,7 @@ import {
   createHttpTransport,
   type GspEnvelope,
   type GspMessage,
+  type GspMode,
   type GspTransport,
 } from "@/lib/gspClient";
 import { createMockTransport } from "@/lib/gspMock";
@@ -629,4 +630,70 @@ export const verifyGstin = createServerFn({ method: "POST" })
     });
     const message = messageOf(envelope);
     return normalizeGstinDetails(message);
+  });
+
+// ── 7. Connection test (token-auth only, creates nothing) ───────────────────
+
+export type GspConnectionResult =
+  { ok: true; mode: GspMode } | { ok: false; mode: GspMode; code: number | null; error: string };
+/**
+ * Probe the GSP by authenticating and nothing else.
+ *
+ * Split out of the server function so it is unit-testable: a `createServerFn`
+ * handler cannot be invoked outside the TanStack Start runtime (there is no
+ * Start context in AsyncLocalStorage), so keeping the body here is what lets
+ * `gspConnection.test.ts` run the real code path.
+ *
+ * The safety property: this calls `transport.authenticate()` and nothing else.
+ * No IRN, no e-way bill, no cancellation, no business-table write. It is the
+ * one affordance an operator can use without risking a statutory document.
+ *
+ * `getGspConfig()` is deliberately OUTSIDE the try. A misconfigured
+ * sandbox/production throws and propagates, because degrading a config error
+ * into `ok: false` would let the UI read as a connection problem and send the
+ * operator chasing the wrong fault.
+ */
+export async function runGspConnectionTest(): Promise<GspConnectionResult> {
+  const config = getGspConfig();
+  const transport = transportForMode(config.mode, config);
+  try {
+    await transport.authenticate();
+    return { ok: true, mode: config.mode };
+  } catch (e) {
+    return {
+      ok: false,
+      mode: config.mode,
+      code: e instanceof GspError ? e.code : null,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/**
+ * Operator-facing "Test GSP connection" button.
+ *
+ * Gates on `sales · read` (same as `verifyGstin`): it is a diagnostic read, not
+ * a statutory action, so it must not demand `edit`.
+ */
+export const testGspConnection = createServerFn({ method: "GET" })
+  .middleware([requireActiveUser])
+  .inputValidator((d: void) => d)
+  .handler(async ({ data: _d, context }) => {
+    await assertModulePermission(context.userId, "sales", "read");
+
+    const result = await runGspConnectionTest();
+
+    // No invoice is involved, so `invoice_id` stays null. Credential probing is
+    // worth an audit row; `logCall` swallows its own failures, so a logging
+    // problem can never mask or break the probe result.
+    await logCall({
+      invoiceId: null,
+      operation: "token_auth",
+      endpoint: "/api/v1/token-auth/",
+      ok: result.ok,
+      errorMessage: result.ok ? null : result.error,
+      userId: context.userId,
+    });
+
+    return result;
   });

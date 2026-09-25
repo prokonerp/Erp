@@ -56,6 +56,7 @@ import {
   getGspComplianceStatus,
   getGspRuntimeInfo,
   verifyGstin,
+  testGspConnection,
 } from "@/lib/gsp.functions";
 import { isWithinIrnCancelWindow } from "@/lib/gspEwb";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -269,6 +270,12 @@ function InvoiceView() {
   const [gspMode, setGspMode] = useState<"mock" | "sandbox" | "production" | null>(null);
   const [gspBusy, setGspBusy] = useState(false);
   const [statusNote, setStatusNote] = useState<string | null>(null);
+  // Connection-probe result, kept separate from `statusNote` so a token test
+  // never overwrites the compliance read (and vice versa).
+  const [gspTestBusy, setGspTestBusy] = useState(false);
+  const [gspTestNote, setGspTestNote] = useState<
+    { ok: true; text: string } | { ok: false; text: string } | null
+  >(null);
 
   useEffect(() => {
     let alive = true;
@@ -327,6 +334,34 @@ function InvoiceView() {
       setStatusNote(e?.message || "Status check failed");
     } finally {
       setGspBusy(false);
+    }
+  }
+
+  /**
+   * Token-auth only — this creates no IRN, no e-way bill, and writes nothing to
+   * an invoice, which is exactly why it needs no confirm dialog.
+   */
+  async function runGspConnectionTest() {
+    setGspTestBusy(true);
+    setGspTestNote(null);
+    try {
+      const res = await testGspConnection({ data: undefined });
+      setGspTestNote(
+        res.ok
+          ? { ok: true, text: `Connected — ${res.mode}` }
+          : {
+              ok: false,
+              text: res.code !== null ? `${res.error} (code ${res.code})` : res.error,
+            },
+      );
+    } catch (e) {
+      // A thrown error here is a config/auth failure, not a document failure.
+      setGspTestNote({
+        ok: false,
+        text: e instanceof Error ? e.message : "Connection test failed",
+      });
+    } finally {
+      setGspTestBusy(false);
     }
   }
 
@@ -961,6 +996,19 @@ function InvoiceView() {
             <Button size="sm" variant="ghost" onClick={checkGspStatus} disabled={gspBusy}>
               Check GSP status
             </Button>
+          )}
+          {inv.status !== "cancelled" && (
+            <Button size="sm" variant="ghost" onClick={runGspConnectionTest} disabled={gspTestBusy}>
+              {gspTestBusy ? "Testing GSP…" : "Test GSP connection"}
+            </Button>
+          )}
+          {gspTestNote && (
+            <span
+              className={`self-center text-xs ${gspTestNote.ok ? "text-emerald-800" : "text-destructive"}`}
+            >
+              {gspTestNote.ok ? "✓ " : "✕ "}
+              {gspTestNote.text}
+            </span>
           )}
           {inv.status !== "cancelled" &&
             inv.irn &&

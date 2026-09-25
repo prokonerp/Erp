@@ -29,7 +29,6 @@
  * @module src/lib/gspMock
  */
 
-import { createHash } from "node:crypto";
 import {
   GspError,
   parseBusinessError,
@@ -41,6 +40,7 @@ import {
   type GspTransport,
   type GstinQuery,
 } from "./gspClient";
+import { mockHashHex } from "./mockHash";
 import type { GspInvoiceRequest } from "./gspPayload";
 
 export type MockTransportOptions = {
@@ -48,8 +48,10 @@ export type MockTransportOptions = {
   mockError?: string;
 };
 
+// Browser-safe deterministic 64-hex. See ./mockHash for why this is not
+// `node:crypto` (the mock became client-reachable via the connection probe).
 function sha256Hex(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
+  return mockHashHex(input);
 }
 
 /** Deterministic 64-hex, non-repeating — the exact shape of a real IRN. */
@@ -133,6 +135,16 @@ export function createMockTransport(opts: MockTransportOptions = {}): GspTranspo
   }
 
   return {
+    /**
+     * Deterministic, credential-free stand-in for the real token-auth call.
+     * `maybeFail` keeps the failure path exercisable offline via
+     * `GSP_MOCK_ERROR`, so callers exercise their error mapping for real.
+     */
+    async authenticate(): Promise<{ token: string }> {
+      maybeFail("token-auth");
+      return { token: `mock.${sha256Hex("mock-token-auth").slice(0, 32)}` };
+    },
+
     async generateIrn(body: GspInvoiceRequest): Promise<GspEnvelope> {
       maybeFail("generate_irn");
       const { user_gstin: gstin, document_details: doc } = body;
