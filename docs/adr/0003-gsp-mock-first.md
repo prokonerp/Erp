@@ -123,3 +123,79 @@ before the sandbox cutover:
    `v_invoices_compliance.is_complete` flips to true.
 5. Record the production host as a follow-up ADR, then switch to
    `GSP_MODE=production` and re-verify.
+
+## Amendment 2026-09-25 — decisions taken before any sandbox call
+
+Recorded while `GSP_MODE=mock` is still the only mode that can run. The
+blockers in the table above are unanswered, but three of them (G2, G5, G8)
+can no longer be left as open questions because the payload has to serialise
+something *today*. Each gets a decision, a default, and an obligation to
+confirm the default on the first live call rather than assume it. The full
+step-by-step rehearsal is `docs/runbooks/gsp-sandbox-rehearsal.md`.
+
+### D-1 — Configuration scope is a single GSTIN, so config is env-only
+
+`GSP_USER_GSTIN` is the **only** credential source. There is one legal entity,
+so the client's identity is fixed at startup and never varies per request.
+
+`gsp_settings` (migration `20260929000001_gsp_integration.sql`) is
+**intentionally unused**. It is keyed per `branch_id` with a unique constraint
+on `(user_gstin, environment)`, and it holds non-secret routing config only.
+For a single-GSTIN deployment there is exactly one row, at most, and its
+contents would be a second copy of `GSP_BASE_URL` and `GSP_USER_GSTIN` that can
+disagree with the environment. A split-brain config where the badge says
+`sandbox` but the table says `production` is a worse failure than not having
+the table at all. The table stays applied, and stays empty.
+
+*Consequence.* Multi-branch and multi-GSTIN onboarding becomes a real code
+change, not a config change: read `gsp_settings` per invoice, key the JWT
+cache by GSTIN rather than by process, and decide what happens when a branch
+has no row. That work is only worth doing when a second GSTIN actually
+exists.
+
+### D-2 — Code-side defaults for the three answerable blockers
+
+Every value below is already implemented. None of them is a guess about the
+GSP's behaviour; they are choices about what we send until the vendor answers.
+
+| Blocker | Decision | Default already implemented | Confirm on first sandbox call |
+|---|---|---|---|
+| G2 | Omit `payment_details` | `payment_details` is sent as `null` unless the NIC builder produced a `PayDtls` block; there is no bank/payment source in the invoice form, so in practice it is `null` (`src/lib/gspPayload.ts:321`). | If the GSP rejects the request for a missing payment block, the block has to be sourced from `branches` (bank account, IFSC) or the request has to carry an explicit "no payment details" marker. Ask which. |
+| G5 | Send **no** `version` field in the GSP request | The GSP envelope has no `version` key at all. `Version: "1.03"` exists only inside the nested NIC JSON, which is a different document (`src/lib/invoiceJson.ts:906`). | One line of the spec says `"1.1"` is required; every example omits it. If the first call fails on a missing or wrong `version`, that is G5 and it is a one-line change. |
+| G8 | `document_type = "INV"` | `document_details.document_type` is carried straight from the NIC builder, which hardcodes `Typ: "INV"` for sales invoices (`src/lib/invoiceJson.ts:711`, `src/lib/gspPayload.ts:256`). | If the GSP rejects `INV`, the accepted enum is a vendor answer, not a guess. The GSP enum and the NIC enum are not the same namespace. |
+
+G1, G3, G6, G7, G9 and G10 have no code-side default. They are inputs only
+the vendor can supply, and they are itemised in
+`docs/runbooks/gsp-sandbox-rehearsal.md` Part C.
+
+### D-3 — Deployment is fail-closed, and the badge is the authority
+
+`sandbox` and `production` throw at startup when `GSP_BASE_URL`,
+`GSP_USERNAME`, `GSP_PASSWORD` or `GSP_USER_GSTIN` is missing, and an
+unrecognised `GSP_MODE` is rejected rather than guessed. There is no silent
+fallback to mock. Environment is read once at startup and is **not**
+hot-reloaded, so a stale badge means a stale process, not a stale variable.
+
+The `GSP: <mode>` badge on the invoice screen is the authoritative indicator
+of which transport is live, because it is served by `getGspRuntimeInfo()`
+from the same `getGspConfig()` the transport uses — it cannot disagree with
+the code path. Configuration state inferred from "the app loaded" or "the
+last call succeeded" is not evidence of mode.
+
+### D-4 — Prove the connection before generating a document
+
+The first live call in any new environment is the **connection probe** (the
+"Test GSP connection" affordance, which performs token-auth only and creates
+nothing), never Generate IRN.
+
+Rationale: `generate_irn` is a non-idempotent statutory write. If it fails
+because the auth scheme is wrong, the credentials are wrong, or
+`GSP_BASE_URL` points at the wrong host, the failure and the document are
+inseparable — you end up with a half-understood error and a document that
+may or may not have registered at the far end. The probe reduces the whole
+unknown surface to a single boolean (does token-auth return a token?) before
+anything is created, and it is the one call that is safe to repeat.
+
+The probe must be run first on every environment change, not just the first
+sandbox run, because the failure mode it catches is configuration drift, not
+first-contact unfamiliarity.
