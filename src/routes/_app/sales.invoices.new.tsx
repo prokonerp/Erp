@@ -728,31 +728,40 @@ function NewInvoice() {
         skip_stock_posting: !!fromGeneralDc,
         source_general_dc_id: fromGeneralDc?.id ?? null,
       };
-      const { data: inv, error } = await supabase.from("invoices").insert(invoicePayload).select("id, invoice_no").single();
-      if (error) throw error;
-
       const itemRows = items.map((d, i) => {
         const b = totals.items[i];
         const row = itemDraftFromBreakup(d, b);
-        return { ...row, invoice_id: inv.id, sr_no: i + 1 };
+        // invoice_id is deliberately NOT sent — the RPC stamps it from the id of
+        // the header it just inserted.
+        return { ...row, sr_no: i + 1 };
       });
-      const { error: e2 } = await supabase.from("invoice_items").insert(itemRows);
-      if (e2) {
-        // TODO(RPC): replace compensating delete with atomic DB transaction/RPC (insert header+items atomically) to avoid orphan window.
-        // Compensating cleanup: never leave an orphan invoice header without
-        // its line items — a retry would treat the broken invoice as done.
-        try {
-          const { error: delErr } = await supabase.from("invoices").delete().eq("id", inv.id);
-          if (delErr) {
-            console.error("[invoices.new] compensating delete failed — orphan header may remain", delErr, { invoiceId: inv.id });
-            toast.error(`Invoice items failed and cleanup also failed (orphan ${inv.invoice_no || inv.id}): ${delErr.message}. Contact admin.`);
-          }
-        } catch (cleanupErr) {
-          console.error("[invoices.new] compensating delete threw", cleanupErr, { invoiceId: inv.id });
-          toast.error(`Invoice items failed and rollback threw: ${(cleanupErr as Error).message}`);
-        }
-        throw new Error(`Invoice items could not be saved (header rolled back): ${e2.message}`);
+
+      // Atomic: the header and every line item are written in ONE Postgres
+      // transaction by create_invoice_with_items(). Either both land or neither
+      // does. This replaces the two-step insert + compensating DELETE, which
+      // still left a real orphan window — the header was committed and visible
+      // to every other reader before the delete landed.
+      //
+      // REQUIRES migration supabase/migrations/20260930000001_create_invoice_with_items.sql
+      // to be applied. Until a human applies it this rpc() call errors and the
+      // save is aborted with nothing written. Do NOT add a fallback direct
+      // insert to "make it work without the migration" — that reopens the
+      // window this call removed.
+      const { data: rpcRows, error } = await supabase.rpc(
+        "create_invoice_with_items" as never,
+        {
+          p_header: invoicePayload,
+          p_items: itemRows,
+        } as never,
+      );
+      if (error) throw error;
+      const rpcRow = (
+        rpcRows as unknown as { id: string; invoice_no: string | null }[] | null
+      )?.[0];
+      if (!rpcRow || !rpcRow.id) {
+        throw new Error("Invoice could not be created (no id returned)");
       }
+      const inv = rpcRow;
 
       if (allowNegative && short.length > 0) {
         try {

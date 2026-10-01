@@ -23,13 +23,17 @@
  *    `parseEwayResponse` validate and normalise it, after which the caller
  *    persists `irn`/`ack_no`/`signed_qr`/`gst_invoice_json` and
  *    `einvoice_status='generated'` (and `ewaybill_no` etc).
- * 4. **Future GSP** — when a live IRP gateway is added, replace only the
- *    manual paste step with a `fetch` to the GSP; the builders, validators and
- *    DB columns remain unchanged.
+ * 4. **GSP path (live)** — `src/lib/gsp.functions.ts` replaces the manual
+ *    upload with an HTTPS call to the Masters India GSP. The same builders and
+ *    validators are used; `gspPayload.ts` only reshapes the NIC JSON into the
+ *    GSP's snake_case envelope. `GSP_MODE=mock` runs the identical flow against
+ *    `gspMock.ts` so the whole pipeline can be exercised without credentials.
+ *    Manual paste-back (steps 1-3) remains available as a fallback.
  *
- * This file intentionally has **no Supabase I/O and no network calls** — it is
- * a pure re-export + a small completion-status helper so existing imports of
- * `src/lib/einvoice` keep working.
+ * This module has **no Supabase I/O and no network calls** — it is a pure
+ * re-export + a small completion-status helper so existing imports of
+ * `src/lib/einvoice` keep working. Network I/O lives in `gsp.functions.ts`
+ * (server-only), not here.
  *
  * @module src/lib/einvoice
  */

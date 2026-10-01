@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { istTodayIso, daysAgoIst } from "@/lib/dateRange";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronDown, CircleCheck, TriangleAlert, LayoutGrid, List, Layers, Hash, Shield } from "lucide-react";
+import { ChevronRight, ChevronDown, CircleCheck, TriangleAlert, LayoutGrid, List, Layers, Hash, Shield, FileText } from "lucide-react";
 import { ExportButtons } from "@/components/ExportButtons";
 import {
   fetchStockPage, listWarehouses,
@@ -18,6 +18,7 @@ import { StockWarehouseTable } from "@/components/reports/StockWarehouseTable";
 import { ReportsPageHeader, ReportsFilters, ReportsWarrantyShell } from "@/components/reports/ReportsShell";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TallyStockLedger } from "@/components/stock/TallyStockLedger";
+import { TallySalesExport } from "@/components/reports/TallySalesExport";
 
 // Heavy report view — lazy so the initial /reports shell paints fast.
 const StockSummaryDisclosure = lazy(() =>
@@ -215,7 +216,7 @@ function ReportsPage() {
     <div className="space-y-5">
       <ReportsPageHeader />
 
-      {tab !== "stock-ledger" && (
+      {tab !== "stock-ledger" && tab !== "tally-export" && (
         <ReportsFilters
           warehouses={warehouses}
           stockProducts={stockProducts}
@@ -249,6 +250,9 @@ function ReportsPage() {
             <TabsTrigger value="warranty" className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-sm">
               <Shield className="h-3.5 w-3.5 opacity-70" /> Warranty
               <span className="ml-1 inline-flex min-w-5 justify-center rounded-full bg-foreground/5 border border-border px-1.5 py-0 text-[11px] font-semibold tabular-nums">{warrantyRows.length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="tally-export" className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13px] font-medium data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-sm">
+              <FileText className="h-3.5 w-3.5 opacity-70" /> Tally Export
             </TabsTrigger>
           </TabsList>
           <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
@@ -345,6 +349,10 @@ function ReportsPage() {
           <p className="text-[11px] text-center text-muted-foreground">
             Writes stay in <span className="font-semibold">Inventory → Stock</span> only (read-only here) — Tally view is computed from transactions.
           </p>
+        </TabsContent>
+
+        <TabsContent value="tally-export" className="mt-4 space-y-4">
+          <TallySalesExport />
         </TabsContent>
 
         <TabsContent value="serials" className="mt-4">

@@ -16,6 +16,7 @@ import {
   looksFabricatedIrn,
   salesCsv,
   recomputeInvoiceTotals,
+  collectSynthesizedTaxLedgers,
   DEFAULT_LEDGER_MAP,
   type TallyInvoiceRow,
   type TallyInvoiceItemRow,
@@ -618,5 +619,79 @@ describe("buildSalesExport drift detection", () => {
       ]),
     });
     expect(res.drift).toHaveLength(0);
+  });
+});
+
+// ── unmapped (synthesized) tax ledger reporting ─────────────────────────────
+// `taxLedgerName` falls back to a conventional name like `CGST 9%` when the
+// chart of accounts has no explicit override. That is fine for a stock Tally
+// company, but a real mismatch shows up as a failed import — so the export
+// surfaces every name it invented rather than letting the accountant find out
+// from Tally.
+describe("collectSynthesizedTaxLedgers", () => {
+  it("reports the fallback name for every intra-state tax line", () => {
+    expect(collectSynthesizedTaxLedgers(items, false)).toEqual(["CGST 18%", "SGST 18%"]);
+  });
+
+  it("reports IGST only for an interstate invoice", () => {
+    // `items` is intra-state (igst 0) — an interstate call over the same lines
+    // must stay silent, because no IGST bucket would reach the XML.
+    expect(collectSynthesizedTaxLedgers(items, true)).toEqual([]);
+    const interState: TallyInvoiceItemRow[] = [
+      { description: "UPS", qty: 1, rate: 1000, gst_rate: 18, cgst: 0, sgst: 0, igst: 180 },
+    ];
+    expect(collectSynthesizedTaxLedgers(interState, true)).toEqual(["IGST 18%"]);
+    // …and the intra-state names do not appear for that invoice.
+    expect(collectSynthesizedTaxLedgers(interState, false)).toEqual([]);
+  });
+
+  it("stays silent for a kind/rate the map already overrides", () => {
+    const map = { ...DEFAULT_LEDGER_MAP, taxOverrides: { CGST18: "Output CGST @ 18%" } };
+    // CGST 18% is mapped, so it is not synthesized — SGST 18% still is.
+    expect(collectSynthesizedTaxLedgers(items, false, map)).toEqual(["SGST 18%"]);
+  });
+
+  it("returns nothing when every tax kind is overridden", () => {
+    const map = {
+      ...DEFAULT_LEDGER_MAP,
+      taxOverrides: { CGST18: "Output CGST @ 18%", SGST18: "Output SGST @ 18%" },
+    };
+    expect(collectSynthesizedTaxLedgers(items, false, map)).toEqual([]);
+  });
+
+  it("ignores lines carrying no tax amount", () => {
+    const exempt = [
+      { description: "gold", qty: 1, rate: 100, gst_rate: 0, cgst: 0, sgst: 0, igst: 0, cess: 0 },
+    ];
+    expect(collectSynthesizedTaxLedgers(exempt, false)).toEqual([]);
+    expect(collectSynthesizedTaxLedgers([], false)).toEqual([]);
+  });
+
+  it("dedupes the same rate across several lines", () => {
+    const twoAt5: TallyInvoiceItemRow[] = [
+      { description: "a", qty: 1, rate: 100, gst_rate: 5, cgst: 2.5, sgst: 2.5, igst: 0 },
+      { description: "b", qty: 1, rate: 200, gst_rate: 5, cgst: 5, sgst: 5, igst: 0 },
+    ];
+    expect(collectSynthesizedTaxLedgers(twoAt5, false)).toEqual(["CGST 5%", "SGST 5%"]);
+  });
+});
+
+describe("buildSalesExport synthesized ledger reporting", () => {
+  it("carries the unmapped tax ledger names on the result", () => {
+    const res = buildSalesExport({
+      invoices: [inv],
+      itemsByInvoice: new Map([[inv.id, items]]),
+    });
+    expect(res.synthesizedLedgers).toEqual(["CGST 18%", "SGST 18%"]);
+  });
+
+  it("omits a cancelled invoice's unmapped ledgers — it is never exported", () => {
+    const cancelled: TallyInvoiceRow = { ...inv, status: "cancelled" };
+    const res = buildSalesExport({
+      invoices: [cancelled],
+      itemsByInvoice: new Map([[cancelled.id, items]]),
+    });
+    expect(res.voucherCount).toBe(0);
+    expect(res.synthesizedLedgers).toEqual([]);
   });
 });

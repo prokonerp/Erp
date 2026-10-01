@@ -59,13 +59,18 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
     css: { transformer: "lightningcss" },
     resolve: {
       alias: { "@": `${process.cwd()}/src` },
+      // NOTE: only packages resolvable from the project ROOT may be listed here.
+      // Vite resolves `dedupe` entries from the root, so listing a transitive-only
+      // package breaks the build under pnpm's isolated node_modules layout.
+      // @tanstack/query-core is a transitive dep of @tanstack/react-query and is
+      // not hoisted to the root; it is correctly reachable from react-query, so it
+      // must stay out of this list.
       dedupe: [
         "react",
         "react-dom",
         "react/jsx-runtime",
         "react/jsx-dev-runtime",
         "@tanstack/react-query",
-        "@tanstack/query-core",
       ],
     },
     build: {

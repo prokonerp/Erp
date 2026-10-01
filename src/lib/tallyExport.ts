@@ -653,8 +653,50 @@ export type SalesExportResult = {
    * statutory fields. Non-empty output means: stop and clean the data first.
    */
   referenceWarnings: ReferenceWarning[];
+  /**
+   * Tax ledger names this export INVENTED because `taxLedgerMap.taxOverrides`
+   * had no entry for them (see `taxLedgerName`). Usually right for a stock
+   * Tally company, but a chart of accounts that spells them differently fails
+   * at import — so the names are surfaced as an advisory, never a blocker.
+   */
+  synthesizedLedgers: string[];
   skippedCancelled: number;
 };
+
+/**
+ * Distinct tax ledger names that `taxLedgerName` had to fall back to a
+ * convention for (`CGST 9%`) because the map carries no `taxOverrides` entry
+ * for that kind+rate.
+ *
+ * Mirrors `gstBuckets` exactly — same interstate branch, same "non-zero
+ * amount only" rule — so what is reported is precisely what the XML will
+ * contain, minus the mapped names.
+ */
+export function collectSynthesizedTaxLedgers(
+  items: TallyInvoiceItemRow[],
+  isInterstate: boolean,
+  map: TallyLedgerMap = DEFAULT_LEDGER_MAP,
+): string[] {
+  const overrides = map.taxOverrides ?? {};
+  const out = new Set<string>();
+  const note = (kind: "CGST" | "SGST" | "IGST" | "CESS" | "STATE CESS", rate: number) => {
+    if (overrides[`${kind.replace(/\s+/g, "")}${rate}`]) return; // mapped — not synthesized
+    out.add(taxLedgerName(kind, rate, map));
+  };
+
+  for (const it of items ?? []) {
+    const rate = Number(it.gst_rate) || 0;
+    if (isInterstate) {
+      if (r2(Number(it.igst) || 0) !== 0) note("IGST", rate);
+    } else {
+      if (r2(Number(it.cgst) || 0) !== 0) note("CGST", rate);
+      if (r2(Number(it.sgst) || 0) !== 0) note("SGST", rate);
+    }
+    const cessRate = Number(it.cess_rate) || 0;
+    if (r2(Number(it.cess) || 0) !== 0) note("CESS", cessRate);
+  }
+  return [...out].sort((a, b) => a.localeCompare(b));
+}
 
 /** Flag reference numbers that must not be imported as statutory values. */
 function detectReferenceWarnings(inv: TallyInvoiceRow, voucherNumber: string): ReferenceWarning[] {
@@ -742,6 +784,7 @@ export function buildSalesExport(args: {
   const unbalanced: Array<{ voucherNumber: string; check: BalanceCheck }> = [];
   const drift: ExportDrift[] = [];
   const referenceWarnings: ReferenceWarning[] = [];
+  const synthesized = new Set<string>();
   let skippedCancelled = 0;
 
   for (const inv of args.invoices) {
@@ -769,6 +812,10 @@ export function buildSalesExport(args: {
       }
       if (warnings.some((w) => w.field === "ewaybill_no")) v.ewayBillNo = null;
     }
+    // Only invoices that actually make it into the XML may contribute ledger names.
+    for (const name of collectSynthesizedTaxLedgers(items, Boolean(inv.is_interstate), map)) {
+      synthesized.add(name);
+    }
     vouchers.push(v);
   }
 
@@ -779,6 +826,7 @@ export function buildSalesExport(args: {
     unbalanced,
     drift,
     referenceWarnings,
+    synthesizedLedgers: [...synthesized].sort((a, b) => a.localeCompare(b)),
     skippedCancelled,
   };
 }
