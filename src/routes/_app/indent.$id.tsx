@@ -298,10 +298,12 @@ function IndentDetail() {
       if (!existing) return nb;
       const ex = normalizeOracle(existing).exchange_rows;
       const rv = normalizeOracle(existing).received_rows;
+      const cr = normalizeOracle(existing).customer_received_rows || [];
       return {
         ...nb,
         exchange_rows: nb.defective_rows.map((_, ix) => ex[ix] || nb.exchange_rows[ix]),
         received_rows: nb.defective_rows.map((_, ix) => rv[ix] || nb.received_rows[ix]),
+        customer_received_rows: nb.defective_rows.map((_, ix) => cr[ix] || (nb.customer_received_rows || [])[ix]),
       };
     });
     update({ oracles_data: merged });
