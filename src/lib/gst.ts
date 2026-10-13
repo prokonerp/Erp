@@ -315,6 +315,7 @@ export function computeTotals(args: {
   items: GstItemInput[];
   headerDiscount?: number;
   roundOff?: boolean;
+  placeOfSupply?: string | null | undefined;
   placeOfSupplyStateCode?: string | null | undefined;
   salesType?: SalesType | string | null;
 }): GstTotals {
@@ -322,6 +323,7 @@ export function computeTotals(args: {
   const resolved = resolveSupplyType({
     sellerStateCode: args.sellerStateCode,
     buyerStateCode: args.buyerStateCode,
+    place_of_supply: args.placeOfSupply ?? null,
     placeOfSupplyStateCode: args.placeOfSupplyStateCode,
     salesType: args.salesType,
   });

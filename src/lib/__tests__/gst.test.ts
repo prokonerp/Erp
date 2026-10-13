@@ -241,4 +241,32 @@ describe("gst/computeTotals — M20 missing state (place of supply fallback)", (
     expect(r.igst).toBe(180);
     expect(r.cgst).toBe(0);
   });
+  it("resolves the buyer state from the place_of_supply NAME when no code is given", () => {
+    const r = computeTotals({
+      sellerStateCode: "06",
+      buyerStateCode: null,
+      placeOfSupply: "Haryana",
+      items: [{ qty: 1, rate: 19950, gst_rate: 18 }],
+      roundOff: true,
+    });
+    expect(r.is_interstate).toBe(false);
+    expect(r.cgst).toBe(1795.5);
+    expect(r.sgst).toBe(1795.5);
+    expect(r.igst).toBe(0);
+    expect(r.total).toBe(23541);
+    expect(r.gstWarning).toBeUndefined();
+  });
+  it("resolves inter-state from the place_of_supply NAME when it differs from the seller", () => {
+    const r = computeTotals({
+      sellerStateCode: "06",
+      buyerStateCode: null,
+      placeOfSupply: "Delhi",
+      items: [{ qty: 1, rate: 1000, gst_rate: 18 }],
+      roundOff: true,
+    });
+    expect(r.is_interstate).toBe(true);
+    expect(r.igst).toBe(180);
+    expect(r.cgst).toBe(0);
+    expect(r.sgst).toBe(0);
+  });
 });

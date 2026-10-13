@@ -25,6 +25,14 @@ function inrPdf(n: number | null | undefined): string {
   return "Rs. " + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Table cells drop the "Rs. " prefix so crore values fit their columns
+// (e.g. "1,53,00,000.00" ≈ 56pt at 8.5pt vs "Rs. 1,53,00,000.00" ≈ 72pt);
+// the totals block below keeps the prefix so the unit stays explicit.
+function numPdf(n: number | null | undefined): string {
+  const v = Number(n) || 0;
+  return v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export async function renderPurchaseOrderPdf(args: {
   po: PORow;
   items: POItemRow[];
@@ -41,6 +49,10 @@ export async function renderPurchaseOrderPdf(args: {
   } | null;
   authorisedSignatureUrl?: string | null;
   preparedBy?: { name?: string | null; phone?: string | null; email?: string | null } | null;
+  /** Long product descriptions (products.description) keyed by product_id. PO
+   *  lines only store the display name, so this is what fills the second line
+   *  of the "Product / Description" cell. */
+  productDescriptions?: Record<string, string> | null;
 }): Promise<jsPDF> {
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
     import("jspdf"),
@@ -230,6 +242,7 @@ export async function renderPurchaseOrderPdf(args: {
         } as any,
       ];
   try {
+    const prodDesc = args.productDescriptions || {};
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
@@ -239,6 +252,7 @@ export async function renderPurchaseOrderPdf(args: {
         lineColor: [tr, tg, tb],
         lineWidth: 0.3,
         textColor: 20,
+        overflow: "linebreak",
       },
       headStyles: { fillColor: [tr, tg, tb], textColor: 255, fontStyle: "bold", halign: "center" },
       head: [
@@ -254,27 +268,49 @@ export async function renderPurchaseOrderPdf(args: {
           "Amount",
         ],
       ],
-      body: safeItems.map((it: any, i: number) => [
-        String(i + 1),
-        String(it.description || "—").slice(0, 400),
-        `${(it as any).warranty_months ?? 12} mo`,
-        it.hsn || "—",
-        String(Number(it.qty) || 0),
-        it.unit || "",
-        inrPdf(Number(it.rate) || 0),
-        `${Number(it.gst_rate) || 0}%`,
-        // Amount is price without tax (taxable_value), per PO print requirement — not line_total (which includes GST)
-        inrPdf(Number(it.taxable_value ?? it.qty * it.rate) || 0),
-      ]),
+      body: safeItems.map((it: any, i: number) => {
+        const name = String(it.description || "—").slice(0, 400);
+        // Second line = long description from the product master, when it adds
+        // information beyond the display name already on the line.
+        const long = it.product_id ? String(prodDesc[it.product_id] || "").trim().slice(0, 300) : "";
+        const cell = long && long.toLowerCase() !== name.toLowerCase() ? `${name}\n${long}` : name;
+        return [
+          String(i + 1),
+          cell,
+          `${(it as any).warranty_months ?? 12} mo`,
+          it.hsn || "—",
+          String(Number(it.qty) || 0),
+          it.unit || "",
+          numPdf(Number(it.rate) || 0),
+          `${Number(it.gst_rate) || 0}%`,
+          // Amount is price without tax (taxable_value), per PO print requirement — not line_total (which includes GST)
+          numPdf(Number(it.taxable_value ?? it.qty * it.rate) || 0),
+        ];
+      }),
+      // Widths rebalanced so crore amounts never overflow: the previous fixed
+      // Rate (52pt) / Amount (62pt) could not hold "Rs. 12,75,000.00" (~64pt),
+      // which wrapped mid-number. Description keeps the remaining ~227pt.
       columnStyles: {
         0: { halign: "center", cellWidth: 20 },
-        2: { halign: "center", cellWidth: 42 },
-        3: { halign: "center", cellWidth: 42 },
-        4: { halign: "center", cellWidth: 32 },
-        5: { halign: "center", cellWidth: 34 },
-        6: { halign: "right", cellWidth: 52 },
-        7: { halign: "center", cellWidth: 36 },
-        8: { halign: "right", cellWidth: 62 },
+        1: { halign: "left", cellWidth: "auto", minCellWidth: 150 },
+        2: { halign: "center", cellWidth: 38 },
+        3: { halign: "center", cellWidth: 40 },
+        4: { halign: "center", cellWidth: 28 },
+        5: { halign: "center", cellWidth: 30 },
+        6: { halign: "right", cellWidth: 66 },
+        7: { halign: "center", cellWidth: 30 },
+        8: { halign: "right", cellWidth: 68 },
+      },
+      didParseCell: (hookData) => {
+        // Last-resort guard: shrink the numeric font if a value is still wider
+        // than its cell (e.g. 8+ digit amounts) instead of spilling over.
+        const col = hookData.section === "body" ? hookData.column.index : -1;
+        if (col !== 6 && col !== 8) return;
+        const txt = String(hookData.cell.raw ?? "");
+        const colW = (doc as any).lastAutoTable?.columns?.[col]?.width ?? 0;
+        if (colW > 0 && doc.getTextWidth(txt) > colW - 6) {
+          hookData.cell.styles.fontSize = 7;
+        }
       },
     });
   } catch (e) {

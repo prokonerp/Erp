@@ -38,6 +38,9 @@ function POView() {
   const { isAdmin } = usePermissions();
   const [po, setPo] = useState<PORow | null>(null);
   const [items, setItems] = useState<POItemRow[]>([]);
+  // Long product descriptions (products.description) keyed by product_id, for
+  // the PO PDF + print view. PO lines only store the display name.
+  const [productDescriptions, setProductDescriptions] = useState<Record<string, string>>({});
   const [branch, setBranch] = useState<BranchRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmTarget, setConfirmTarget] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
@@ -67,6 +70,27 @@ function POView() {
       const r = await fetchPOWithItems(id);
       setPo(r.po);
       setItems(r.items);
+      // Long product descriptions for the PDF/print "Product / Description"
+      // column (best-effort; a missing products row must never break the PO).
+      try {
+        const pids = Array.from(new Set((r.items || []).map((it) => it.product_id).filter(Boolean))) as string[];
+        if (pids.length > 0) {
+          const { data: prods } = await (supabase as any)
+            .from("products")
+            .select("id, description")
+            .in("id", pids);
+          const map: Record<string, string> = {};
+          for (const p of (prods as Array<{ id: string; description: string | null }> | null) || []) {
+            if (p?.id && p.description?.trim()) map[p.id] = p.description.trim();
+          }
+          setProductDescriptions(map);
+        } else {
+          setProductDescriptions({});
+        }
+      } catch (e) {
+        console.warn("[po.$id] product descriptions load failed", e);
+        setProductDescriptions({});
+      }
       const bs = await fetchBranches();
       setBranch(bs.find((b) => b.id === r.po.branch_id) || null);
       const { data: st } = await (supabase as any)
@@ -202,7 +226,7 @@ function POView() {
   async function handlePrintPdf() {
     if (!canPrint) { toast.error("Only approved/sent POs can be printed."); return; }
     try {
-      await printPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings, authorisedSignatureUrl, preparedBy });
+      await printPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings, authorisedSignatureUrl, preparedBy, productDescriptions });
     } catch (e: any) {
       const msg = e?.message || "Print failed";
       // printPurchaseOrderPdf already falls back to download when popup blocked
@@ -213,7 +237,7 @@ function POView() {
 
   async function handleDownloadPdf() {
     try {
-      await downloadPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings, authorisedSignatureUrl, preparedBy }, `${po!.po_no || "PO"}.pdf`);
+      await downloadPurchaseOrderPdf({ po: po!, items, branch, settings: pdfSettings, authorisedSignatureUrl, preparedBy, productDescriptions }, `${po!.po_no || "PO"}.pdf`);
     } catch (e: any) {
       toast.error(e?.message || "Download failed");
     }
@@ -398,6 +422,7 @@ function POView() {
             delivery_terms: (po as any).delivery_terms || null,
             items: items.map((it) => ({
               description: it.description,
+              item_details: (it.product_id && productDescriptions[it.product_id]) || null,
               warranty: `${(it as any).warranty_months ?? 12} M`,
               hsn: it.hsn,
               qty: it.qty,

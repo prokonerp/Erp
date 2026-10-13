@@ -538,10 +538,27 @@ function NewQuotation() {
         if (supErr) {
           toast.error(`Revision created but predecessor could not be marked superseded: ${supErr.message}`);
         } else if (!updated || (updated as unknown as any[]).length === 0) {
-          // Race: another revision won — rollback duplicate is_latest=true
+          // No row matched the supersede UPDATE. That is either a genuine
+          // race (someone else superseded first) or a blocked write (e.g.
+          // missing quotations:edit permission). Re-read the predecessor to
+          // tell the two apart — but always remove the duplicate latest row
+          // first so the thread can never hold two is_latest=true rows.
+          let predLatest: boolean | null = null;
+          try {
+            const { data: recheck } = await (supabase as any)
+              .from("quotations")
+              .select("is_latest")
+              .eq("id", reviseOf)
+              .maybeSingle();
+            predLatest = (recheck as any)?.is_latest ?? null;
+          } catch { /* ignore — fall through to the race message */ }
           await (supabase as any).from("quotations").delete().eq("id", newId);
           savedOnceRef.current = false;
-          toast.error("Revision conflict: another revision was created first. Please refresh and try again.");
+          if (predLatest === false) {
+            toast.error("Revision conflict: another revision was created first. Please refresh and try again.");
+          } else {
+            toast.error("Revision blocked: the previous version could not be superseded (missing quotations edit permission). The duplicate was removed — ask an admin to grant access, then retry.");
+          }
           return null;
         }
 

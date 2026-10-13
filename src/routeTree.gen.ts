@@ -9,160 +9,159 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as RaiseTicketRouteImport } from './routes/raise-ticket'
-import { Route as EngRouteImport } from './routes/eng'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as EngIndexRouteImport } from './routes/eng.index'
-import { Route as InvoicePreviewRouteImport } from './routes/invoice.preview'
-import { Route as FsrPreviewRouteImport } from './routes/fsr.preview'
-import { Route as EngQueueRouteImport } from './routes/eng.queue'
-import { Route as EngProfileRouteImport } from './routes/eng.profile'
-import { Route as EngConveyanceRouteImport } from './routes/eng.conveyance'
-import { Route as AppTicketsRouteImport } from './routes/_app/tickets'
-import { Route as AppSalesRouteImport } from './routes/_app/sales'
-import { Route as AppReportsRouteImport } from './routes/_app/reports'
-import { Route as AppRecordsRouteImport } from './routes/_app/records'
-import { Route as AppProductsRouteImport } from './routes/_app/products'
-import { Route as AppPoRouteImport } from './routes/_app/po'
-import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
-import { Route as AppNewRouteImport } from './routes/_app/new'
-import { Route as AppMastersRouteImport } from './routes/_app/masters'
-import { Route as AppInstalledEquipmentRouteImport } from './routes/_app/installed-equipment'
-import { Route as AppIndentRouteImport } from './routes/_app/indent'
-import { Route as AppImsRouteImport } from './routes/_app/ims'
-import { Route as AppImportRouteImport } from './routes/_app/import'
-import { Route as AppGrnRouteImport } from './routes/_app/grn'
-import { Route as AppEngineersRouteImport } from './routes/_app/engineers'
-import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
-import { Route as AppCrmRouteImport } from './routes/_app/crm'
-import { Route as AppChallanRouteImport } from './routes/_app/challan'
-import { Route as AppArchiveRouteImport } from './routes/_app/archive'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as EngRouteImport } from './routes/eng'
+import { Route as RaiseTicketRouteImport } from './routes/raise-ticket'
 import { Route as AppAmcRouteImport } from './routes/_app/amc'
-import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index'
-import { Route as AppSalesIndexRouteImport } from './routes/_app/sales.index'
-import { Route as AppPoIndexRouteImport } from './routes/_app/po.index'
-import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
-import { Route as AppImsIndexRouteImport } from './routes/_app/ims.index'
-import { Route as AppGrnIndexRouteImport } from './routes/_app/grn.index'
-import { Route as AppGatepassIndexRouteImport } from './routes/_app/gatepass.index'
-import { Route as AppEngineersIndexRouteImport } from './routes/_app/engineers.index'
-import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
-import { Route as AppChallanIndexRouteImport } from './routes/_app/challan.index'
+import { Route as AppArchiveRouteImport } from './routes/_app/archive'
+import { Route as AppChallanRouteImport } from './routes/_app/challan'
+import { Route as AppCrmRouteImport } from './routes/_app/crm'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppEngineersRouteImport } from './routes/_app/engineers'
+import { Route as AppGrnRouteImport } from './routes/_app/grn'
+import { Route as AppImportRouteImport } from './routes/_app/import'
+import { Route as AppImsRouteImport } from './routes/_app/ims'
+import { Route as AppIndentRouteImport } from './routes/_app/indent'
+import { Route as AppInstalledEquipmentRouteImport } from './routes/_app/installed-equipment'
+import { Route as AppMastersRouteImport } from './routes/_app/masters'
+import { Route as AppNewRouteImport } from './routes/_app/new'
+import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
+import { Route as AppPoRouteImport } from './routes/_app/po'
+import { Route as AppProductsRouteImport } from './routes/_app/products'
+import { Route as AppRecordsRouteImport } from './routes/_app/records'
+import { Route as AppReportsRouteImport } from './routes/_app/reports'
+import { Route as AppSalesRouteImport } from './routes/_app/sales'
+import { Route as AppTicketsRouteImport } from './routes/_app/tickets'
+import { Route as EngIndexRouteImport } from './routes/eng.index'
+import { Route as EngConveyanceRouteImport } from './routes/eng.conveyance'
+import { Route as EngProfileRouteImport } from './routes/eng.profile'
+import { Route as EngQueueRouteImport } from './routes/eng.queue'
+import { Route as FsrPreviewRouteImport } from './routes/fsr.preview'
+import { Route as InvoicePreviewRouteImport } from './routes/invoice.preview'
 import { Route as AppAmcIndexRouteImport } from './routes/_app/amc.index'
-import { Route as EngTicketIdRouteImport } from './routes/eng.ticket.$id'
-import { Route as AppTicketsTemplatesRouteImport } from './routes/_app/tickets.templates'
-import { Route as AppTicketsSettingsRouteImport } from './routes/_app/tickets.settings'
-import { Route as AppTicketsNewRouteImport } from './routes/_app/tickets.new'
-import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.dashboard'
-import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
-import { Route as AppSettingsSignaturesRouteImport } from './routes/_app/settings.signatures'
-import { Route as AppSalesSettingsRouteImport } from './routes/_app/sales.settings'
-import { Route as AppSalesQuotationsRouteImport } from './routes/_app/sales.quotations'
-import { Route as AppSalesOrdersRouteImport } from './routes/_app/sales.orders'
-import { Route as AppPoSettingsRouteImport } from './routes/_app/po.settings'
-import { Route as AppPoNewRouteImport } from './routes/_app/po.new'
-import { Route as AppPoIdRouteImport } from './routes/_app/po.$id'
-import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.products'
-import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
-import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
-import { Route as AppIndentIdRouteImport } from './routes/_app/indent.$id'
-import { Route as AppImsTransfersRouteImport } from './routes/_app/ims.transfers'
-import { Route as AppImsTransactionsRouteImport } from './routes/_app/ims.transactions'
-import { Route as AppImsStockManagementBetaRouteImport } from './routes/_app/ims.stock-management-beta'
-import { Route as AppImsStockManagementRouteImport } from './routes/_app/ims.stock-management'
-import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
-import { Route as AppImsSerialTrackRouteImport } from './routes/_app/ims.serial-track'
-import { Route as AppImsReservationsRouteImport } from './routes/_app/ims.reservations'
-import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
-import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
-import { Route as AppImsLedgerRouteImport } from './routes/_app/ims.ledger'
-import { Route as AppImsIndentHistoryRouteImport } from './routes/_app/ims.indent-history'
-import { Route as AppImsDefectiveTagsRouteImport } from './routes/_app/ims.defective-tags'
-import { Route as AppImsAuditRouteImport } from './routes/_app/ims.audit'
-import { Route as AppGrnOemRouteImport } from './routes/_app/grn.oem'
-import { Route as AppGrnNewRouteImport } from './routes/_app/grn.new'
-import { Route as AppGrnGeneralRouteImport } from './routes/_app/grn.general'
-import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
-import { Route as AppGrnIdRouteImport } from './routes/_app/grn.$id'
-import { Route as AppGatepassNewRouteImport } from './routes/_app/gatepass.new'
-import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
-import { Route as AppEngineersTicketsRouteImport } from './routes/_app/engineers.tickets'
-import { Route as AppEngineersReconcileRouteImport } from './routes/_app/engineers.reconcile'
-import { Route as AppEngineersRatesRouteImport } from './routes/_app/engineers.rates'
-import { Route as AppEngineersMovementRouteImport } from './routes/_app/engineers.movement'
-import { Route as AppEngineersExpensesRouteImport } from './routes/_app/engineers.expenses'
-import { Route as AppEngineersDocumentsRouteImport } from './routes/_app/engineers.documents'
-import { Route as AppEngineersDirectoryRouteImport } from './routes/_app/engineers.directory'
-import { Route as AppEngineersCustodyRouteImport } from './routes/_app/engineers.custody'
-import { Route as AppEngineersConveyanceRouteImport } from './routes/_app/engineers.conveyance'
-import { Route as AppEngineersAttentionRouteImport } from './routes/_app/engineers.attention'
-import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
-import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
-import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
-import { Route as AppCrmIncentivesRouteImport } from './routes/_app/crm.incentives'
-import { Route as AppCrmCustomersRouteImport } from './routes/_app/crm.customers'
-import { Route as AppCrmBundlesRouteImport } from './routes/_app/crm.bundles'
-import { Route as AppCrmAiRecommendRouteImport } from './routes/_app/crm.ai-recommend'
-import { Route as AppChallanOemRouteImport } from './routes/_app/challan.oem'
-import { Route as AppChallanNewRouteImport } from './routes/_app/challan.new'
-import { Route as AppChallanCustomerRouteImport } from './routes/_app/challan.customer'
-import { Route as AppChallanIdRouteImport } from './routes/_app/challan.$id'
-import { Route as AppAmcSettingsRouteImport } from './routes/_app/amc.settings'
-import { Route as AppAmcPmRouteImport } from './routes/_app/amc.pm'
-import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
-import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
 import { Route as AppAmcIdRouteImport } from './routes/_app/amc.$id'
-import { Route as AppSalesProformaIndexRouteImport } from './routes/_app/sales.proforma.index'
-import { Route as AppSalesPaymentsIndexRouteImport } from './routes/_app/sales.payments.index'
-import { Route as AppSalesOrdersIndexRouteImport } from './routes/_app/sales.orders.index'
-import { Route as AppSalesInvoicesIndexRouteImport } from './routes/_app/sales.invoices.index'
-import { Route as AppSalesGeneralDcIndexRouteImport } from './routes/_app/sales.general-dc.index'
-import { Route as AppSalesEwayIndexRouteImport } from './routes/_app/sales.eway.index'
-import { Route as AppImsTransfersIndexRouteImport } from './routes/_app/ims.transfers.index'
-import { Route as AppGrnOemIndexRouteImport } from './routes/_app/grn.oem.index'
-import { Route as AppGrnGeneralIndexRouteImport } from './routes/_app/grn.general.index'
-import { Route as AppGrnCustomerIndexRouteImport } from './routes/_app/grn.customer.index'
-import { Route as AppChallanOemIndexRouteImport } from './routes/_app/challan.oem.index'
-import { Route as AppChallanCustomerIndexRouteImport } from './routes/_app/challan.customer.index'
-import { Route as AppSalesProformaSettingsRouteImport } from './routes/_app/sales.proforma.settings'
-import { Route as AppSalesProformaNewRouteImport } from './routes/_app/sales.proforma.new'
-import { Route as AppSalesProformaIdRouteImport } from './routes/_app/sales.proforma.$id'
-import { Route as AppSalesPaymentsNewRouteImport } from './routes/_app/sales.payments.new'
-import { Route as AppSalesOrdersIdRouteImport } from './routes/_app/sales.orders.$id'
-import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.invoices.new'
-import { Route as AppSalesInvoicesIdRouteImport } from './routes/_app/sales.invoices.$id'
-import { Route as AppSalesGeneralDcNewRouteImport } from './routes/_app/sales.general-dc.new'
-import { Route as AppSalesGeneralDcIdRouteImport } from './routes/_app/sales.general-dc.$id'
-import { Route as AppPoIdEditRouteImport } from './routes/_app/po.$id_.edit'
-import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
-import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
-import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
-import { Route as AppGrnGeneralNewRouteImport } from './routes/_app/grn.general.new'
-import { Route as AppGrnCustomerNewRouteImport } from './routes/_app/grn.customer.new'
-import { Route as AppGrnIdEditRouteImport } from './routes/_app/grn.$id_.edit'
-import { Route as AppEngineersDirectoryEmployeeIdRouteImport } from './routes/_app/engineers.directory.$employeeId'
-import { Route as AppCrmQuotationsNewRouteImport } from './routes/_app/crm.quotations.new'
-import { Route as AppCrmQuotationsIdRouteImport } from './routes/_app/crm.quotations.$id'
-import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
-import { Route as AppChallanOemNewRouteImport } from './routes/_app/challan.oem.new'
-import { Route as AppChallanCustomerNewRouteImport } from './routes/_app/challan.customer.new'
+import { Route as AppAmcNewRouteImport } from './routes/_app/amc.new'
+import { Route as AppAmcOemRouteImport } from './routes/_app/amc.oem'
+import { Route as AppAmcPmRouteImport } from './routes/_app/amc.pm'
+import { Route as AppAmcSettingsRouteImport } from './routes/_app/amc.settings'
+import { Route as AppChallanIndexRouteImport } from './routes/_app/challan.index'
+import { Route as AppChallanIdRouteImport } from './routes/_app/challan.$id'
+import { Route as AppChallanCustomerRouteImport } from './routes/_app/challan.customer'
+import { Route as AppChallanNewRouteImport } from './routes/_app/challan.new'
+import { Route as AppChallanOemRouteImport } from './routes/_app/challan.oem'
+import { Route as AppCrmIndexRouteImport } from './routes/_app/crm.index'
+import { Route as AppCrmAiRecommendRouteImport } from './routes/_app/crm.ai-recommend'
+import { Route as AppCrmBundlesRouteImport } from './routes/_app/crm.bundles'
+import { Route as AppCrmCustomersRouteImport } from './routes/_app/crm.customers'
+import { Route as AppCrmIncentivesRouteImport } from './routes/_app/crm.incentives'
+import { Route as AppCrmLeadsRouteImport } from './routes/_app/crm.leads'
+import { Route as AppCrmQuotationsRouteImport } from './routes/_app/crm.quotations'
+import { Route as AppCrmSettingsRouteImport } from './routes/_app/crm.settings'
+import { Route as AppEngineersIndexRouteImport } from './routes/_app/engineers.index'
+import { Route as AppEngineersAttentionRouteImport } from './routes/_app/engineers.attention'
+import { Route as AppEngineersConveyanceRouteImport } from './routes/_app/engineers.conveyance'
+import { Route as AppEngineersCustodyRouteImport } from './routes/_app/engineers.custody'
+import { Route as AppEngineersDirectoryRouteImport } from './routes/_app/engineers.directory'
+import { Route as AppEngineersDocumentsRouteImport } from './routes/_app/engineers.documents'
+import { Route as AppEngineersExpensesRouteImport } from './routes/_app/engineers.expenses'
+import { Route as AppEngineersMovementRouteImport } from './routes/_app/engineers.movement'
+import { Route as AppEngineersRatesRouteImport } from './routes/_app/engineers.rates'
+import { Route as AppEngineersReconcileRouteImport } from './routes/_app/engineers.reconcile'
+import { Route as AppEngineersTicketsRouteImport } from './routes/_app/engineers.tickets'
+import { Route as AppGatepassIndexRouteImport } from './routes/_app/gatepass.index'
+import { Route as AppGatepassIdRouteImport } from './routes/_app/gatepass.$id'
+import { Route as AppGatepassNewRouteImport } from './routes/_app/gatepass.new'
+import { Route as AppGrnIndexRouteImport } from './routes/_app/grn.index'
+import { Route as AppGrnIdRouteImport } from './routes/_app/grn.$id'
+import { Route as AppGrnCustomerRouteImport } from './routes/_app/grn.customer'
+import { Route as AppGrnGeneralRouteImport } from './routes/_app/grn.general'
+import { Route as AppGrnNewRouteImport } from './routes/_app/grn.new'
+import { Route as AppGrnOemRouteImport } from './routes/_app/grn.oem'
+import { Route as AppImsIndexRouteImport } from './routes/_app/ims.index'
+import { Route as AppImsAuditRouteImport } from './routes/_app/ims.audit'
+import { Route as AppImsDefectiveTagsRouteImport } from './routes/_app/ims.defective-tags'
+import { Route as AppImsIndentHistoryRouteImport } from './routes/_app/ims.indent-history'
+import { Route as AppImsLedgerRouteImport } from './routes/_app/ims.ledger'
+import { Route as AppImsOemReturnsRouteImport } from './routes/_app/ims.oem-returns'
+import { Route as AppImsReportsRouteImport } from './routes/_app/ims.reports'
+import { Route as AppImsReservationsRouteImport } from './routes/_app/ims.reservations'
+import { Route as AppImsSerialTrackRouteImport } from './routes/_app/ims.serial-track'
+import { Route as AppImsStockRouteImport } from './routes/_app/ims.stock'
+import { Route as AppImsStockManagementRouteImport } from './routes/_app/ims.stock-management'
+import { Route as AppImsStockManagementBetaRouteImport } from './routes/_app/ims.stock-management-beta'
+import { Route as AppImsTransactionsRouteImport } from './routes/_app/ims.transactions'
+import { Route as AppImsTransfersRouteImport } from './routes/_app/ims.transfers'
+import { Route as AppIndentIndexRouteImport } from './routes/_app/indent.index'
+import { Route as AppIndentIdRouteImport } from './routes/_app/indent.$id'
+import { Route as AppIndentNewRouteImport } from './routes/_app/indent.new'
+import { Route as AppMastersCustomersRouteImport } from './routes/_app/masters.customers'
+import { Route as AppMastersProductsRouteImport } from './routes/_app/masters.products'
+import { Route as AppPoIndexRouteImport } from './routes/_app/po.index'
+import { Route as AppPoIdRouteImport } from './routes/_app/po.$id'
+import { Route as AppPoNewRouteImport } from './routes/_app/po.new'
+import { Route as AppPoSettingsRouteImport } from './routes/_app/po.settings'
+import { Route as AppSalesIndexRouteImport } from './routes/_app/sales.index'
+import { Route as AppSalesOrdersRouteImport } from './routes/_app/sales.orders'
+import { Route as AppSalesQuotationsRouteImport } from './routes/_app/sales.quotations'
+import { Route as AppSalesSettingsRouteImport } from './routes/_app/sales.settings'
+import { Route as AppSettingsSignaturesRouteImport } from './routes/_app/settings.signatures'
+import { Route as AppTicketsIndexRouteImport } from './routes/_app/tickets.index'
+import { Route as AppTicketsIdRouteImport } from './routes/_app/tickets.$id'
+import { Route as AppTicketsDashboardRouteImport } from './routes/_app/tickets.dashboard'
+import { Route as AppTicketsNewRouteImport } from './routes/_app/tickets.new'
+import { Route as AppTicketsSettingsRouteImport } from './routes/_app/tickets.settings'
+import { Route as AppTicketsTemplatesRouteImport } from './routes/_app/tickets.templates'
+import { Route as EngTicketIdRouteImport } from './routes/eng.ticket.$id'
 import { Route as AppChallanIdEditRouteImport } from './routes/_app/challan.$id_.edit'
-import { Route as AppSalesProformaIdEditRouteImport } from './routes/_app/sales.proforma.$id_.edit'
-import { Route as AppSalesOrdersIdConvertRouteImport } from './routes/_app/sales.orders.$id_.convert'
-import { Route as AppSalesGeneralDcIdEditRouteImport } from './routes/_app/sales.general-dc.$id_.edit'
-import { Route as AppCrmQuotationsIdConvertRouteImport } from './routes/_app/crm.quotations.$id_.convert'
+import { Route as AppChallanCustomerIndexRouteImport } from './routes/_app/challan.customer.index'
+import { Route as AppChallanCustomerNewRouteImport } from './routes/_app/challan.customer.new'
+import { Route as AppChallanOemIndexRouteImport } from './routes/_app/challan.oem.index'
+import { Route as AppChallanOemNewRouteImport } from './routes/_app/challan.oem.new'
+import { Route as AppCrmLeadsIdRouteImport } from './routes/_app/crm.leads.$id'
+import { Route as AppCrmQuotationsIdRouteImport } from './routes/_app/crm.quotations.$id'
+import { Route as AppCrmQuotationsNewRouteImport } from './routes/_app/crm.quotations.new'
+import { Route as AppEngineersDirectoryEmployeeIdRouteImport } from './routes/_app/engineers.directory.$employeeId'
+import { Route as AppGrnIdEditRouteImport } from './routes/_app/grn.$id_.edit'
+import { Route as AppGrnCustomerIndexRouteImport } from './routes/_app/grn.customer.index'
+import { Route as AppGrnCustomerNewRouteImport } from './routes/_app/grn.customer.new'
+import { Route as AppGrnGeneralIndexRouteImport } from './routes/_app/grn.general.index'
+import { Route as AppGrnGeneralNewRouteImport } from './routes/_app/grn.general.new'
+import { Route as AppGrnOemIndexRouteImport } from './routes/_app/grn.oem.index'
+import { Route as AppGrnOemNewRouteImport } from './routes/_app/grn.oem.new'
+import { Route as AppImsTransfersIndexRouteImport } from './routes/_app/ims.transfers.index'
+import { Route as AppImsTransfersIdRouteImport } from './routes/_app/ims.transfers.$id'
+import { Route as AppImsTransfersNewRouteImport } from './routes/_app/ims.transfers.new'
+import { Route as AppPoIdEditRouteImport } from './routes/_app/po.$id_.edit'
+import { Route as AppSalesEwayIndexRouteImport } from './routes/_app/sales.eway.index'
+import { Route as AppSalesGeneralDcIndexRouteImport } from './routes/_app/sales.general-dc.index'
+import { Route as AppSalesGeneralDcIdRouteImport } from './routes/_app/sales.general-dc.$id'
+import { Route as AppSalesGeneralDcNewRouteImport } from './routes/_app/sales.general-dc.new'
+import { Route as AppSalesInvoicesIndexRouteImport } from './routes/_app/sales.invoices.index'
+import { Route as AppSalesInvoicesIdRouteImport } from './routes/_app/sales.invoices.$id'
+import { Route as AppSalesInvoicesNewRouteImport } from './routes/_app/sales.invoices.new'
+import { Route as AppSalesOrdersIndexRouteImport } from './routes/_app/sales.orders.index'
+import { Route as AppSalesOrdersIdRouteImport } from './routes/_app/sales.orders.$id'
+import { Route as AppSalesPaymentsIndexRouteImport } from './routes/_app/sales.payments.index'
+import { Route as AppSalesPaymentsNewRouteImport } from './routes/_app/sales.payments.new'
+import { Route as AppSalesProformaIndexRouteImport } from './routes/_app/sales.proforma.index'
+import { Route as AppSalesProformaIdRouteImport } from './routes/_app/sales.proforma.$id'
+import { Route as AppSalesProformaNewRouteImport } from './routes/_app/sales.proforma.new'
+import { Route as AppSalesProformaSettingsRouteImport } from './routes/_app/sales.proforma.settings'
 import { Route as AppAmcOemSourceIdRouteImport } from './routes/_app/amc.oem.$source.$id'
+import { Route as AppCrmQuotationsIdConvertRouteImport } from './routes/_app/crm.quotations.$id_.convert'
+import { Route as AppSalesGeneralDcIdEditRouteImport } from './routes/_app/sales.general-dc.$id_.edit'
+import { Route as AppSalesOrdersIdConvertRouteImport } from './routes/_app/sales.orders.$id_.convert'
+import { Route as AppSalesProformaIdEditRouteImport } from './routes/_app/sales.proforma.$id_.edit'
 
-const RaiseTicketRoute = RaiseTicketRouteImport.update({
-  id: '/raise-ticket',
-  path: '/raise-ticket',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EngRoute = EngRouteImport.update({
-  id: '/eng',
-  path: '/eng',
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -170,133 +169,19 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
+const EngRoute = EngRouteImport.update({
+  id: '/eng',
+  path: '/eng',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const RaiseTicketRoute = RaiseTicketRouteImport.update({
+  id: '/raise-ticket',
+  path: '/raise-ticket',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EngIndexRoute = EngIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => EngRoute,
-} as any)
-const InvoicePreviewRoute = InvoicePreviewRouteImport.update({
-  id: '/invoice/preview',
-  path: '/invoice/preview',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FsrPreviewRoute = FsrPreviewRouteImport.update({
-  id: '/fsr/preview',
-  path: '/fsr/preview',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EngQueueRoute = EngQueueRouteImport.update({
-  id: '/queue',
-  path: '/queue',
-  getParentRoute: () => EngRoute,
-} as any)
-const EngProfileRoute = EngProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => EngRoute,
-} as any)
-const EngConveyanceRoute = EngConveyanceRouteImport.update({
-  id: '/conveyance',
-  path: '/conveyance',
-  getParentRoute: () => EngRoute,
-} as any)
-const AppTicketsRoute = AppTicketsRouteImport.update({
-  id: '/tickets',
-  path: '/tickets',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppSalesRoute = AppSalesRouteImport.update({
-  id: '/sales',
-  path: '/sales',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppReportsRoute = AppReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppRecordsRoute = AppRecordsRouteImport.update({
-  id: '/records',
-  path: '/records',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppProductsRoute = AppProductsRouteImport.update({
-  id: '/products',
-  path: '/products',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppPoRoute = AppPoRouteImport.update({
-  id: '/po',
-  path: '/po',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppPayrollRoute = AppPayrollRouteImport.update({
-  id: '/payroll',
-  path: '/payroll',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppNewRoute = AppNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMastersRoute = AppMastersRouteImport.update({
-  id: '/masters',
-  path: '/masters',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppInstalledEquipmentRoute = AppInstalledEquipmentRouteImport.update({
-  id: '/installed-equipment',
-  path: '/installed-equipment',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppIndentRoute = AppIndentRouteImport.update({
-  id: '/indent',
-  path: '/indent',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppImsRoute = AppImsRouteImport.update({
-  id: '/ims',
-  path: '/ims',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppImportRoute = AppImportRouteImport.update({
-  id: '/import',
-  path: '/import',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppGrnRoute = AppGrnRouteImport.update({
-  id: '/grn',
-  path: '/grn',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppEngineersRoute = AppEngineersRouteImport.update({
-  id: '/engineers',
-  path: '/engineers',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppDashboardRoute = AppDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppCrmRoute = AppCrmRouteImport.update({
-  id: '/crm',
-  path: '/crm',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppChallanRoute = AppChallanRouteImport.update({
-  id: '/challan',
-  path: '/challan',
+const AppAmcRoute = AppAmcRouteImport.update({
+  id: '/amc',
+  path: '/amc',
   getParentRoute: () => AppRoute,
 } as any)
 const AppArchiveRoute = AppArchiveRouteImport.update({
@@ -304,159 +189,374 @@ const AppArchiveRoute = AppArchiveRouteImport.update({
   path: '/archive',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAmcRoute = AppAmcRouteImport.update({
-  id: '/amc',
-  path: '/amc',
+const AppChallanRoute = AppChallanRouteImport.update({
+  id: '/challan',
+  path: '/challan',
   getParentRoute: () => AppRoute,
 } as any)
-const AppTicketsIndexRoute = AppTicketsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppTicketsRoute,
-} as any)
-const AppSalesIndexRoute = AppSalesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppSalesRoute,
-} as any)
-const AppPoIndexRoute = AppPoIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppPoRoute,
-} as any)
-const AppIndentIndexRoute = AppIndentIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppIndentRoute,
-} as any)
-const AppImsIndexRoute = AppImsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppImsRoute,
-} as any)
-const AppGrnIndexRoute = AppGrnIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppGrnRoute,
-} as any)
-const AppGatepassIndexRoute = AppGatepassIndexRouteImport.update({
-  id: '/gatepass/',
-  path: '/gatepass/',
+const AppCrmRoute = AppCrmRouteImport.update({
+  id: '/crm',
+  path: '/crm',
   getParentRoute: () => AppRoute,
 } as any)
-const AppEngineersIndexRoute = AppEngineersIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppEngineersRoute,
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
 } as any)
-const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppCrmRoute,
+const AppEngineersRoute = AppEngineersRouteImport.update({
+  id: '/engineers',
+  path: '/engineers',
+  getParentRoute: () => AppRoute,
 } as any)
-const AppChallanIndexRoute = AppChallanIndexRouteImport.update({
+const AppGrnRoute = AppGrnRouteImport.update({
+  id: '/grn',
+  path: '/grn',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppImportRoute = AppImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppImsRoute = AppImsRouteImport.update({
+  id: '/ims',
+  path: '/ims',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppIndentRoute = AppIndentRouteImport.update({
+  id: '/indent',
+  path: '/indent',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInstalledEquipmentRoute = AppInstalledEquipmentRouteImport.update({
+  id: '/installed-equipment',
+  path: '/installed-equipment',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMastersRoute = AppMastersRouteImport.update({
+  id: '/masters',
+  path: '/masters',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppNewRoute = AppNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPayrollRoute = AppPayrollRouteImport.update({
+  id: '/payroll',
+  path: '/payroll',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPoRoute = AppPoRouteImport.update({
+  id: '/po',
+  path: '/po',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProductsRoute = AppProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRecordsRoute = AppRecordsRouteImport.update({
+  id: '/records',
+  path: '/records',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReportsRoute = AppReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSalesRoute = AppSalesRouteImport.update({
+  id: '/sales',
+  path: '/sales',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTicketsRoute = AppTicketsRouteImport.update({
+  id: '/tickets',
+  path: '/tickets',
+  getParentRoute: () => AppRoute,
+} as any)
+const EngIndexRoute = EngIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppChallanRoute,
+  getParentRoute: () => EngRoute,
+} as any)
+const EngConveyanceRoute = EngConveyanceRouteImport.update({
+  id: '/conveyance',
+  path: '/conveyance',
+  getParentRoute: () => EngRoute,
+} as any)
+const EngProfileRoute = EngProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => EngRoute,
+} as any)
+const EngQueueRoute = EngQueueRouteImport.update({
+  id: '/queue',
+  path: '/queue',
+  getParentRoute: () => EngRoute,
+} as any)
+const FsrPreviewRoute = FsrPreviewRouteImport.update({
+  id: '/fsr/preview',
+  path: '/fsr/preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicePreviewRoute = InvoicePreviewRouteImport.update({
+  id: '/invoice/preview',
+  path: '/invoice/preview',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppAmcIndexRoute = AppAmcIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppAmcRoute,
 } as any)
-const EngTicketIdRoute = EngTicketIdRouteImport.update({
-  id: '/ticket/$id',
-  path: '/ticket/$id',
-  getParentRoute: () => EngRoute,
-} as any)
-const AppTicketsTemplatesRoute = AppTicketsTemplatesRouteImport.update({
-  id: '/templates',
-  path: '/templates',
-  getParentRoute: () => AppTicketsRoute,
-} as any)
-const AppTicketsSettingsRoute = AppTicketsSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AppTicketsRoute,
-} as any)
-const AppTicketsNewRoute = AppTicketsNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppTicketsRoute,
-} as any)
-const AppTicketsDashboardRoute = AppTicketsDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AppTicketsRoute,
-} as any)
-const AppTicketsIdRoute = AppTicketsIdRouteImport.update({
+const AppAmcIdRoute = AppAmcIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AppTicketsRoute,
+  getParentRoute: () => AppAmcRoute,
 } as any)
-const AppSettingsSignaturesRoute = AppSettingsSignaturesRouteImport.update({
-  id: '/settings/signatures',
-  path: '/settings/signatures',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppSalesSettingsRoute = AppSalesSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AppSalesRoute,
-} as any)
-const AppSalesQuotationsRoute = AppSalesQuotationsRouteImport.update({
-  id: '/quotations',
-  path: '/quotations',
-  getParentRoute: () => AppSalesRoute,
-} as any)
-const AppSalesOrdersRoute = AppSalesOrdersRouteImport.update({
-  id: '/orders',
-  path: '/orders',
-  getParentRoute: () => AppSalesRoute,
-} as any)
-const AppPoSettingsRoute = AppPoSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AppPoRoute,
-} as any)
-const AppPoNewRoute = AppPoNewRouteImport.update({
+const AppAmcNewRoute = AppAmcNewRouteImport.update({
   id: '/new',
   path: '/new',
-  getParentRoute: () => AppPoRoute,
+  getParentRoute: () => AppAmcRoute,
 } as any)
-const AppPoIdRoute = AppPoIdRouteImport.update({
+const AppAmcOemRoute = AppAmcOemRouteImport.update({
+  id: '/oem',
+  path: '/oem',
+  getParentRoute: () => AppAmcRoute,
+} as any)
+const AppAmcPmRoute = AppAmcPmRouteImport.update({
+  id: '/pm',
+  path: '/pm',
+  getParentRoute: () => AppAmcRoute,
+} as any)
+const AppAmcSettingsRoute = AppAmcSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppAmcRoute,
+} as any)
+const AppChallanIndexRoute = AppChallanIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppChallanRoute,
+} as any)
+const AppChallanIdRoute = AppChallanIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AppPoRoute,
+  getParentRoute: () => AppChallanRoute,
 } as any)
-const AppMastersProductsRoute = AppMastersProductsRouteImport.update({
-  id: '/products',
-  path: '/products',
-  getParentRoute: () => AppMastersRoute,
+const AppChallanCustomerRoute = AppChallanCustomerRouteImport.update({
+  id: '/customer',
+  path: '/customer',
+  getParentRoute: () => AppChallanRoute,
 } as any)
-const AppMastersCustomersRoute = AppMastersCustomersRouteImport.update({
+const AppChallanNewRoute = AppChallanNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppChallanRoute,
+} as any)
+const AppChallanOemRoute = AppChallanOemRouteImport.update({
+  id: '/oem',
+  path: '/oem',
+  getParentRoute: () => AppChallanRoute,
+} as any)
+const AppCrmIndexRoute = AppCrmIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppCrmRoute,
+} as any)
+const AppCrmAiRecommendRoute = AppCrmAiRecommendRouteImport.update({
+  id: '/ai-recommend',
+  path: '/ai-recommend',
+  getParentRoute: () => AppCrmRoute,
+} as any)
+const AppCrmBundlesRoute = AppCrmBundlesRouteImport.update({
+  id: '/bundles',
+  path: '/bundles',
+  getParentRoute: () => AppCrmRoute,
+} as any)
+const AppCrmCustomersRoute = AppCrmCustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
-  getParentRoute: () => AppMastersRoute,
+  getParentRoute: () => AppCrmRoute,
 } as any)
-const AppIndentNewRoute = AppIndentNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppIndentRoute,
+const AppCrmIncentivesRoute = AppCrmIncentivesRouteImport.update({
+  id: '/incentives',
+  path: '/incentives',
+  getParentRoute: () => AppCrmRoute,
 } as any)
-const AppIndentIdRoute = AppIndentIdRouteImport.update({
+const AppCrmLeadsRoute = AppCrmLeadsRouteImport.update({
+  id: '/leads',
+  path: '/leads',
+  getParentRoute: () => AppCrmRoute,
+} as any)
+const AppCrmQuotationsRoute = AppCrmQuotationsRouteImport.update({
+  id: '/quotations',
+  path: '/quotations',
+  getParentRoute: () => AppCrmRoute,
+} as any)
+const AppCrmSettingsRoute = AppCrmSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppCrmRoute,
+} as any)
+const AppEngineersIndexRoute = AppEngineersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersAttentionRoute = AppEngineersAttentionRouteImport.update({
+  id: '/attention',
+  path: '/attention',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersConveyanceRoute = AppEngineersConveyanceRouteImport.update({
+  id: '/conveyance',
+  path: '/conveyance',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersCustodyRoute = AppEngineersCustodyRouteImport.update({
+  id: '/custody',
+  path: '/custody',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersDirectoryRoute = AppEngineersDirectoryRouteImport.update({
+  id: '/directory',
+  path: '/directory',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersDocumentsRoute = AppEngineersDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersExpensesRoute = AppEngineersExpensesRouteImport.update({
+  id: '/expenses',
+  path: '/expenses',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersMovementRoute = AppEngineersMovementRouteImport.update({
+  id: '/movement',
+  path: '/movement',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersRatesRoute = AppEngineersRatesRouteImport.update({
+  id: '/rates',
+  path: '/rates',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersReconcileRoute = AppEngineersReconcileRouteImport.update({
+  id: '/reconcile',
+  path: '/reconcile',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppEngineersTicketsRoute = AppEngineersTicketsRouteImport.update({
+  id: '/tickets',
+  path: '/tickets',
+  getParentRoute: () => AppEngineersRoute,
+} as any)
+const AppGatepassIndexRoute = AppGatepassIndexRouteImport.update({
+  id: '/gatepass/',
+  path: '/gatepass/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
+  id: '/gatepass/$id',
+  path: '/gatepass/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGatepassNewRoute = AppGatepassNewRouteImport.update({
+  id: '/gatepass/new',
+  path: '/gatepass/new',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGrnIndexRoute = AppGrnIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppGrnRoute,
+} as any)
+const AppGrnIdRoute = AppGrnIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AppIndentRoute,
+  getParentRoute: () => AppGrnRoute,
 } as any)
-const AppImsTransfersRoute = AppImsTransfersRouteImport.update({
-  id: '/transfers',
-  path: '/transfers',
+const AppGrnCustomerRoute = AppGrnCustomerRouteImport.update({
+  id: '/customer',
+  path: '/customer',
+  getParentRoute: () => AppGrnRoute,
+} as any)
+const AppGrnGeneralRoute = AppGrnGeneralRouteImport.update({
+  id: '/general',
+  path: '/general',
+  getParentRoute: () => AppGrnRoute,
+} as any)
+const AppGrnNewRoute = AppGrnNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppGrnRoute,
+} as any)
+const AppGrnOemRoute = AppGrnOemRouteImport.update({
+  id: '/oem',
+  path: '/oem',
+  getParentRoute: () => AppGrnRoute,
+} as any)
+const AppImsIndexRoute = AppImsIndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => AppImsRoute,
 } as any)
-const AppImsTransactionsRoute = AppImsTransactionsRouteImport.update({
-  id: '/transactions',
-  path: '/transactions',
+const AppImsAuditRoute = AppImsAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsDefectiveTagsRoute = AppImsDefectiveTagsRouteImport.update({
+  id: '/defective-tags',
+  path: '/defective-tags',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsIndentHistoryRoute = AppImsIndentHistoryRouteImport.update({
+  id: '/indent-history',
+  path: '/indent-history',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsLedgerRoute = AppImsLedgerRouteImport.update({
+  id: '/ledger',
+  path: '/ledger',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsOemReturnsRoute = AppImsOemReturnsRouteImport.update({
+  id: '/oem-returns',
+  path: '/oem-returns',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsReportsRoute = AppImsReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsReservationsRoute = AppImsReservationsRouteImport.update({
+  id: '/reservations',
+  path: '/reservations',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsSerialTrackRoute = AppImsSerialTrackRouteImport.update({
+  id: '/serial-track',
+  path: '/serial-track',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsStockRoute = AppImsStockRouteImport.update({
+  id: '/stock',
+  path: '/stock',
+  getParentRoute: () => AppImsRoute,
+} as any)
+const AppImsStockManagementRoute = AppImsStockManagementRouteImport.update({
+  id: '/stock-management',
+  path: '/stock-management',
   getParentRoute: () => AppImsRoute,
 } as any)
 const AppImsStockManagementBetaRoute =
@@ -465,361 +565,160 @@ const AppImsStockManagementBetaRoute =
     path: '/stock-management-beta',
     getParentRoute: () => AppImsRoute,
   } as any)
-const AppImsStockManagementRoute = AppImsStockManagementRouteImport.update({
-  id: '/stock-management',
-  path: '/stock-management',
+const AppImsTransactionsRoute = AppImsTransactionsRouteImport.update({
+  id: '/transactions',
+  path: '/transactions',
   getParentRoute: () => AppImsRoute,
 } as any)
-const AppImsStockRoute = AppImsStockRouteImport.update({
-  id: '/stock',
-  path: '/stock',
+const AppImsTransfersRoute = AppImsTransfersRouteImport.update({
+  id: '/transfers',
+  path: '/transfers',
   getParentRoute: () => AppImsRoute,
 } as any)
-const AppImsSerialTrackRoute = AppImsSerialTrackRouteImport.update({
-  id: '/serial-track',
-  path: '/serial-track',
-  getParentRoute: () => AppImsRoute,
+const AppIndentIndexRoute = AppIndentIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppIndentRoute,
 } as any)
-const AppImsReservationsRoute = AppImsReservationsRouteImport.update({
-  id: '/reservations',
-  path: '/reservations',
-  getParentRoute: () => AppImsRoute,
-} as any)
-const AppImsReportsRoute = AppImsReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => AppImsRoute,
-} as any)
-const AppImsOemReturnsRoute = AppImsOemReturnsRouteImport.update({
-  id: '/oem-returns',
-  path: '/oem-returns',
-  getParentRoute: () => AppImsRoute,
-} as any)
-const AppImsLedgerRoute = AppImsLedgerRouteImport.update({
-  id: '/ledger',
-  path: '/ledger',
-  getParentRoute: () => AppImsRoute,
-} as any)
-const AppImsIndentHistoryRoute = AppImsIndentHistoryRouteImport.update({
-  id: '/indent-history',
-  path: '/indent-history',
-  getParentRoute: () => AppImsRoute,
-} as any)
-const AppImsDefectiveTagsRoute = AppImsDefectiveTagsRouteImport.update({
-  id: '/defective-tags',
-  path: '/defective-tags',
-  getParentRoute: () => AppImsRoute,
-} as any)
-const AppImsAuditRoute = AppImsAuditRouteImport.update({
-  id: '/audit',
-  path: '/audit',
-  getParentRoute: () => AppImsRoute,
-} as any)
-const AppGrnOemRoute = AppGrnOemRouteImport.update({
-  id: '/oem',
-  path: '/oem',
-  getParentRoute: () => AppGrnRoute,
-} as any)
-const AppGrnNewRoute = AppGrnNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppGrnRoute,
-} as any)
-const AppGrnGeneralRoute = AppGrnGeneralRouteImport.update({
-  id: '/general',
-  path: '/general',
-  getParentRoute: () => AppGrnRoute,
-} as any)
-const AppGrnCustomerRoute = AppGrnCustomerRouteImport.update({
-  id: '/customer',
-  path: '/customer',
-  getParentRoute: () => AppGrnRoute,
-} as any)
-const AppGrnIdRoute = AppGrnIdRouteImport.update({
+const AppIndentIdRoute = AppIndentIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AppGrnRoute,
+  getParentRoute: () => AppIndentRoute,
 } as any)
-const AppGatepassNewRoute = AppGatepassNewRouteImport.update({
-  id: '/gatepass/new',
-  path: '/gatepass/new',
-  getParentRoute: () => AppRoute,
+const AppIndentNewRoute = AppIndentNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppIndentRoute,
 } as any)
-const AppGatepassIdRoute = AppGatepassIdRouteImport.update({
-  id: '/gatepass/$id',
-  path: '/gatepass/$id',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppEngineersTicketsRoute = AppEngineersTicketsRouteImport.update({
-  id: '/tickets',
-  path: '/tickets',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppEngineersReconcileRoute = AppEngineersReconcileRouteImport.update({
-  id: '/reconcile',
-  path: '/reconcile',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppEngineersRatesRoute = AppEngineersRatesRouteImport.update({
-  id: '/rates',
-  path: '/rates',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppEngineersMovementRoute = AppEngineersMovementRouteImport.update({
-  id: '/movement',
-  path: '/movement',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppEngineersExpensesRoute = AppEngineersExpensesRouteImport.update({
-  id: '/expenses',
-  path: '/expenses',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppEngineersDocumentsRoute = AppEngineersDocumentsRouteImport.update({
-  id: '/documents',
-  path: '/documents',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppEngineersDirectoryRoute = AppEngineersDirectoryRouteImport.update({
-  id: '/directory',
-  path: '/directory',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppEngineersCustodyRoute = AppEngineersCustodyRouteImport.update({
-  id: '/custody',
-  path: '/custody',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppEngineersConveyanceRoute = AppEngineersConveyanceRouteImport.update({
-  id: '/conveyance',
-  path: '/conveyance',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppEngineersAttentionRoute = AppEngineersAttentionRouteImport.update({
-  id: '/attention',
-  path: '/attention',
-  getParentRoute: () => AppEngineersRoute,
-} as any)
-const AppCrmSettingsRoute = AppCrmSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AppCrmRoute,
-} as any)
-const AppCrmQuotationsRoute = AppCrmQuotationsRouteImport.update({
-  id: '/quotations',
-  path: '/quotations',
-  getParentRoute: () => AppCrmRoute,
-} as any)
-const AppCrmLeadsRoute = AppCrmLeadsRouteImport.update({
-  id: '/leads',
-  path: '/leads',
-  getParentRoute: () => AppCrmRoute,
-} as any)
-const AppCrmIncentivesRoute = AppCrmIncentivesRouteImport.update({
-  id: '/incentives',
-  path: '/incentives',
-  getParentRoute: () => AppCrmRoute,
-} as any)
-const AppCrmCustomersRoute = AppCrmCustomersRouteImport.update({
+const AppMastersCustomersRoute = AppMastersCustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
-  getParentRoute: () => AppCrmRoute,
+  getParentRoute: () => AppMastersRoute,
 } as any)
-const AppCrmBundlesRoute = AppCrmBundlesRouteImport.update({
-  id: '/bundles',
-  path: '/bundles',
-  getParentRoute: () => AppCrmRoute,
+const AppMastersProductsRoute = AppMastersProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => AppMastersRoute,
 } as any)
-const AppCrmAiRecommendRoute = AppCrmAiRecommendRouteImport.update({
-  id: '/ai-recommend',
-  path: '/ai-recommend',
-  getParentRoute: () => AppCrmRoute,
+const AppPoIndexRoute = AppPoIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppPoRoute,
 } as any)
-const AppChallanOemRoute = AppChallanOemRouteImport.update({
-  id: '/oem',
-  path: '/oem',
-  getParentRoute: () => AppChallanRoute,
-} as any)
-const AppChallanNewRoute = AppChallanNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppChallanRoute,
-} as any)
-const AppChallanCustomerRoute = AppChallanCustomerRouteImport.update({
-  id: '/customer',
-  path: '/customer',
-  getParentRoute: () => AppChallanRoute,
-} as any)
-const AppChallanIdRoute = AppChallanIdRouteImport.update({
+const AppPoIdRoute = AppPoIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AppChallanRoute,
+  getParentRoute: () => AppPoRoute,
 } as any)
-const AppAmcSettingsRoute = AppAmcSettingsRouteImport.update({
+const AppPoNewRoute = AppPoNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppPoRoute,
+} as any)
+const AppPoSettingsRoute = AppPoSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => AppAmcRoute,
+  getParentRoute: () => AppPoRoute,
 } as any)
-const AppAmcPmRoute = AppAmcPmRouteImport.update({
-  id: '/pm',
-  path: '/pm',
-  getParentRoute: () => AppAmcRoute,
+const AppSalesIndexRoute = AppSalesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSalesRoute,
 } as any)
-const AppAmcOemRoute = AppAmcOemRouteImport.update({
-  id: '/oem',
-  path: '/oem',
-  getParentRoute: () => AppAmcRoute,
+const AppSalesOrdersRoute = AppSalesOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AppSalesRoute,
 } as any)
-const AppAmcNewRoute = AppAmcNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppAmcRoute,
+const AppSalesQuotationsRoute = AppSalesQuotationsRouteImport.update({
+  id: '/quotations',
+  path: '/quotations',
+  getParentRoute: () => AppSalesRoute,
 } as any)
-const AppAmcIdRoute = AppAmcIdRouteImport.update({
+const AppSalesSettingsRoute = AppSalesSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSettingsSignaturesRoute = AppSettingsSignaturesRouteImport.update({
+  id: '/settings/signatures',
+  path: '/settings/signatures',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTicketsIndexRoute = AppTicketsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppTicketsRoute,
+} as any)
+const AppTicketsIdRoute = AppTicketsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AppAmcRoute,
+  getParentRoute: () => AppTicketsRoute,
 } as any)
-const AppSalesProformaIndexRoute = AppSalesProformaIndexRouteImport.update({
-  id: '/proforma/',
-  path: '/proforma/',
-  getParentRoute: () => AppSalesRoute,
+const AppTicketsDashboardRoute = AppTicketsDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppTicketsRoute,
 } as any)
-const AppSalesPaymentsIndexRoute = AppSalesPaymentsIndexRouteImport.update({
-  id: '/payments/',
-  path: '/payments/',
-  getParentRoute: () => AppSalesRoute,
+const AppTicketsNewRoute = AppTicketsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppTicketsRoute,
 } as any)
-const AppSalesOrdersIndexRoute = AppSalesOrdersIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppSalesOrdersRoute,
+const AppTicketsSettingsRoute = AppTicketsSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppTicketsRoute,
 } as any)
-const AppSalesInvoicesIndexRoute = AppSalesInvoicesIndexRouteImport.update({
-  id: '/invoices/',
-  path: '/invoices/',
-  getParentRoute: () => AppSalesRoute,
+const AppTicketsTemplatesRoute = AppTicketsTemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => AppTicketsRoute,
 } as any)
-const AppSalesGeneralDcIndexRoute = AppSalesGeneralDcIndexRouteImport.update({
-  id: '/general-dc/',
-  path: '/general-dc/',
-  getParentRoute: () => AppSalesRoute,
+const EngTicketIdRoute = EngTicketIdRouteImport.update({
+  id: '/ticket/$id',
+  path: '/ticket/$id',
+  getParentRoute: () => EngRoute,
 } as any)
-const AppSalesEwayIndexRoute = AppSalesEwayIndexRouteImport.update({
-  id: '/eway/',
-  path: '/eway/',
-  getParentRoute: () => AppSalesRoute,
-} as any)
-const AppImsTransfersIndexRoute = AppImsTransfersIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppImsTransfersRoute,
-} as any)
-const AppGrnOemIndexRoute = AppGrnOemIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppGrnOemRoute,
-} as any)
-const AppGrnGeneralIndexRoute = AppGrnGeneralIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppGrnGeneralRoute,
-} as any)
-const AppGrnCustomerIndexRoute = AppGrnCustomerIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppGrnCustomerRoute,
-} as any)
-const AppChallanOemIndexRoute = AppChallanOemIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppChallanOemRoute,
+const AppChallanIdEditRoute = AppChallanIdEditRouteImport.update({
+  id: '/$id_/edit',
+  path: '/$id/edit',
+  getParentRoute: () => AppChallanRoute,
 } as any)
 const AppChallanCustomerIndexRoute = AppChallanCustomerIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppChallanCustomerRoute,
 } as any)
-const AppSalesProformaSettingsRoute =
-  AppSalesProformaSettingsRouteImport.update({
-    id: '/proforma/settings',
-    path: '/proforma/settings',
-    getParentRoute: () => AppSalesRoute,
-  } as any)
-const AppSalesProformaNewRoute = AppSalesProformaNewRouteImport.update({
-  id: '/proforma/new',
-  path: '/proforma/new',
-  getParentRoute: () => AppSalesRoute,
+const AppChallanCustomerNewRoute = AppChallanCustomerNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppChallanCustomerRoute,
 } as any)
-const AppSalesProformaIdRoute = AppSalesProformaIdRouteImport.update({
-  id: '/proforma/$id',
-  path: '/proforma/$id',
-  getParentRoute: () => AppSalesRoute,
+const AppChallanOemIndexRoute = AppChallanOemIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppChallanOemRoute,
 } as any)
-const AppSalesPaymentsNewRoute = AppSalesPaymentsNewRouteImport.update({
-  id: '/payments/new',
-  path: '/payments/new',
-  getParentRoute: () => AppSalesRoute,
+const AppChallanOemNewRoute = AppChallanOemNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppChallanOemRoute,
 } as any)
-const AppSalesOrdersIdRoute = AppSalesOrdersIdRouteImport.update({
+const AppCrmLeadsIdRoute = AppCrmLeadsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AppSalesOrdersRoute,
+  getParentRoute: () => AppCrmLeadsRoute,
 } as any)
-const AppSalesInvoicesNewRoute = AppSalesInvoicesNewRouteImport.update({
-  id: '/invoices/new',
-  path: '/invoices/new',
-  getParentRoute: () => AppSalesRoute,
-} as any)
-const AppSalesInvoicesIdRoute = AppSalesInvoicesIdRouteImport.update({
-  id: '/invoices/$id',
-  path: '/invoices/$id',
-  getParentRoute: () => AppSalesRoute,
-} as any)
-const AppSalesGeneralDcNewRoute = AppSalesGeneralDcNewRouteImport.update({
-  id: '/general-dc/new',
-  path: '/general-dc/new',
-  getParentRoute: () => AppSalesRoute,
-} as any)
-const AppSalesGeneralDcIdRoute = AppSalesGeneralDcIdRouteImport.update({
-  id: '/general-dc/$id',
-  path: '/general-dc/$id',
-  getParentRoute: () => AppSalesRoute,
-} as any)
-const AppPoIdEditRoute = AppPoIdEditRouteImport.update({
-  id: '/$id_/edit',
-  path: '/$id/edit',
-  getParentRoute: () => AppPoRoute,
-} as any)
-const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppImsTransfersRoute,
-} as any)
-const AppImsTransfersIdRoute = AppImsTransfersIdRouteImport.update({
+const AppCrmQuotationsIdRoute = AppCrmQuotationsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AppImsTransfersRoute,
+  getParentRoute: () => AppCrmQuotationsRoute,
 } as any)
-const AppGrnOemNewRoute = AppGrnOemNewRouteImport.update({
+const AppCrmQuotationsNewRoute = AppCrmQuotationsNewRouteImport.update({
   id: '/new',
   path: '/new',
-  getParentRoute: () => AppGrnOemRoute,
-} as any)
-const AppGrnGeneralNewRoute = AppGrnGeneralNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppGrnGeneralRoute,
-} as any)
-const AppGrnCustomerNewRoute = AppGrnCustomerNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppGrnCustomerRoute,
-} as any)
-const AppGrnIdEditRoute = AppGrnIdEditRouteImport.update({
-  id: '/$id_/edit',
-  path: '/$id/edit',
-  getParentRoute: () => AppGrnRoute,
+  getParentRoute: () => AppCrmQuotationsRoute,
 } as any)
 const AppEngineersDirectoryEmployeeIdRoute =
   AppEngineersDirectoryEmployeeIdRouteImport.update({
@@ -827,50 +726,141 @@ const AppEngineersDirectoryEmployeeIdRoute =
     path: '/$employeeId',
     getParentRoute: () => AppEngineersDirectoryRoute,
   } as any)
-const AppCrmQuotationsNewRoute = AppCrmQuotationsNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppCrmQuotationsRoute,
-} as any)
-const AppCrmQuotationsIdRoute = AppCrmQuotationsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AppCrmQuotationsRoute,
-} as any)
-const AppCrmLeadsIdRoute = AppCrmLeadsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AppCrmLeadsRoute,
-} as any)
-const AppChallanOemNewRoute = AppChallanOemNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppChallanOemRoute,
-} as any)
-const AppChallanCustomerNewRoute = AppChallanCustomerNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppChallanCustomerRoute,
-} as any)
-const AppChallanIdEditRoute = AppChallanIdEditRouteImport.update({
+const AppGrnIdEditRoute = AppGrnIdEditRouteImport.update({
   id: '/$id_/edit',
   path: '/$id/edit',
-  getParentRoute: () => AppChallanRoute,
+  getParentRoute: () => AppGrnRoute,
 } as any)
-const AppSalesProformaIdEditRoute = AppSalesProformaIdEditRouteImport.update({
-  id: '/proforma/$id_/edit',
-  path: '/proforma/$id/edit',
+const AppGrnCustomerIndexRoute = AppGrnCustomerIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppGrnCustomerRoute,
+} as any)
+const AppGrnCustomerNewRoute = AppGrnCustomerNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppGrnCustomerRoute,
+} as any)
+const AppGrnGeneralIndexRoute = AppGrnGeneralIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppGrnGeneralRoute,
+} as any)
+const AppGrnGeneralNewRoute = AppGrnGeneralNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppGrnGeneralRoute,
+} as any)
+const AppGrnOemIndexRoute = AppGrnOemIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppGrnOemRoute,
+} as any)
+const AppGrnOemNewRoute = AppGrnOemNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppGrnOemRoute,
+} as any)
+const AppImsTransfersIndexRoute = AppImsTransfersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppImsTransfersRoute,
+} as any)
+const AppImsTransfersIdRoute = AppImsTransfersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppImsTransfersRoute,
+} as any)
+const AppImsTransfersNewRoute = AppImsTransfersNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppImsTransfersRoute,
+} as any)
+const AppPoIdEditRoute = AppPoIdEditRouteImport.update({
+  id: '/$id_/edit',
+  path: '/$id/edit',
+  getParentRoute: () => AppPoRoute,
+} as any)
+const AppSalesEwayIndexRoute = AppSalesEwayIndexRouteImport.update({
+  id: '/eway/',
+  path: '/eway/',
   getParentRoute: () => AppSalesRoute,
 } as any)
-const AppSalesOrdersIdConvertRoute = AppSalesOrdersIdConvertRouteImport.update({
-  id: '/$id_/convert',
-  path: '/$id/convert',
+const AppSalesGeneralDcIndexRoute = AppSalesGeneralDcIndexRouteImport.update({
+  id: '/general-dc/',
+  path: '/general-dc/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesGeneralDcIdRoute = AppSalesGeneralDcIdRouteImport.update({
+  id: '/general-dc/$id',
+  path: '/general-dc/$id',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesGeneralDcNewRoute = AppSalesGeneralDcNewRouteImport.update({
+  id: '/general-dc/new',
+  path: '/general-dc/new',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesInvoicesIndexRoute = AppSalesInvoicesIndexRouteImport.update({
+  id: '/invoices/',
+  path: '/invoices/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesInvoicesIdRoute = AppSalesInvoicesIdRouteImport.update({
+  id: '/invoices/$id',
+  path: '/invoices/$id',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesInvoicesNewRoute = AppSalesInvoicesNewRouteImport.update({
+  id: '/invoices/new',
+  path: '/invoices/new',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesOrdersIndexRoute = AppSalesOrdersIndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => AppSalesOrdersRoute,
 } as any)
-const AppSalesGeneralDcIdEditRoute = AppSalesGeneralDcIdEditRouteImport.update({
-  id: '/general-dc/$id_/edit',
-  path: '/general-dc/$id/edit',
+const AppSalesOrdersIdRoute = AppSalesOrdersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppSalesOrdersRoute,
+} as any)
+const AppSalesPaymentsIndexRoute = AppSalesPaymentsIndexRouteImport.update({
+  id: '/payments/',
+  path: '/payments/',
   getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesPaymentsNewRoute = AppSalesPaymentsNewRouteImport.update({
+  id: '/payments/new',
+  path: '/payments/new',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesProformaIndexRoute = AppSalesProformaIndexRouteImport.update({
+  id: '/proforma/',
+  path: '/proforma/',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesProformaIdRoute = AppSalesProformaIdRouteImport.update({
+  id: '/proforma/$id',
+  path: '/proforma/$id',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesProformaNewRoute = AppSalesProformaNewRouteImport.update({
+  id: '/proforma/new',
+  path: '/proforma/new',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesProformaSettingsRoute =
+  AppSalesProformaSettingsRouteImport.update({
+    id: '/proforma/settings',
+    path: '/proforma/settings',
+    getParentRoute: () => AppSalesRoute,
+  } as any)
+const AppAmcOemSourceIdRoute = AppAmcOemSourceIdRouteImport.update({
+  id: '/$source/$id',
+  path: '/$source/$id',
+  getParentRoute: () => AppAmcOemRoute,
 } as any)
 const AppCrmQuotationsIdConvertRoute =
   AppCrmQuotationsIdConvertRouteImport.update({
@@ -878,10 +868,20 @@ const AppCrmQuotationsIdConvertRoute =
     path: '/$id/convert',
     getParentRoute: () => AppCrmQuotationsRoute,
   } as any)
-const AppAmcOemSourceIdRoute = AppAmcOemSourceIdRouteImport.update({
-  id: '/$source/$id',
-  path: '/$source/$id',
-  getParentRoute: () => AppAmcOemRoute,
+const AppSalesGeneralDcIdEditRoute = AppSalesGeneralDcIdEditRouteImport.update({
+  id: '/general-dc/$id_/edit',
+  path: '/general-dc/$id/edit',
+  getParentRoute: () => AppSalesRoute,
+} as any)
+const AppSalesOrdersIdConvertRoute = AppSalesOrdersIdConvertRouteImport.update({
+  id: '/$id_/convert',
+  path: '/$id/convert',
+  getParentRoute: () => AppSalesOrdersRoute,
+} as any)
+const AppSalesProformaIdEditRoute = AppSalesProformaIdEditRouteImport.update({
+  id: '/proforma/$id_/edit',
+  path: '/proforma/$id/edit',
+  getParentRoute: () => AppSalesRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -1742,25 +1742,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/raise-ticket': {
-      id: '/raise-ticket'
-      path: '/raise-ticket'
-      fullPath: '/raise-ticket'
-      preLoaderRoute: typeof RaiseTicketRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/eng': {
-      id: '/eng'
-      path: '/eng'
-      fullPath: '/eng'
-      preLoaderRoute: typeof EngRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -1770,179 +1756,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/eng/': {
-      id: '/eng/'
-      path: '/'
-      fullPath: '/eng/'
-      preLoaderRoute: typeof EngIndexRouteImport
-      parentRoute: typeof EngRoute
-    }
-    '/invoice/preview': {
-      id: '/invoice/preview'
-      path: '/invoice/preview'
-      fullPath: '/invoice/preview'
-      preLoaderRoute: typeof InvoicePreviewRouteImport
+    '/eng': {
+      id: '/eng'
+      path: '/eng'
+      fullPath: '/eng'
+      preLoaderRoute: typeof EngRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/fsr/preview': {
-      id: '/fsr/preview'
-      path: '/fsr/preview'
-      fullPath: '/fsr/preview'
-      preLoaderRoute: typeof FsrPreviewRouteImport
+    '/raise-ticket': {
+      id: '/raise-ticket'
+      path: '/raise-ticket'
+      fullPath: '/raise-ticket'
+      preLoaderRoute: typeof RaiseTicketRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/eng/queue': {
-      id: '/eng/queue'
-      path: '/queue'
-      fullPath: '/eng/queue'
-      preLoaderRoute: typeof EngQueueRouteImport
-      parentRoute: typeof EngRoute
-    }
-    '/eng/profile': {
-      id: '/eng/profile'
-      path: '/profile'
-      fullPath: '/eng/profile'
-      preLoaderRoute: typeof EngProfileRouteImport
-      parentRoute: typeof EngRoute
-    }
-    '/eng/conveyance': {
-      id: '/eng/conveyance'
-      path: '/conveyance'
-      fullPath: '/eng/conveyance'
-      preLoaderRoute: typeof EngConveyanceRouteImport
-      parentRoute: typeof EngRoute
-    }
-    '/_app/tickets': {
-      id: '/_app/tickets'
-      path: '/tickets'
-      fullPath: '/tickets'
-      preLoaderRoute: typeof AppTicketsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/sales': {
-      id: '/_app/sales'
-      path: '/sales'
-      fullPath: '/sales'
-      preLoaderRoute: typeof AppSalesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/reports': {
-      id: '/_app/reports'
-      path: '/reports'
-      fullPath: '/reports'
-      preLoaderRoute: typeof AppReportsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/records': {
-      id: '/_app/records'
-      path: '/records'
-      fullPath: '/records'
-      preLoaderRoute: typeof AppRecordsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/products': {
-      id: '/_app/products'
-      path: '/products'
-      fullPath: '/products'
-      preLoaderRoute: typeof AppProductsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/po': {
-      id: '/_app/po'
-      path: '/po'
-      fullPath: '/po'
-      preLoaderRoute: typeof AppPoRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/payroll': {
-      id: '/_app/payroll'
-      path: '/payroll'
-      fullPath: '/payroll'
-      preLoaderRoute: typeof AppPayrollRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/new': {
-      id: '/_app/new'
-      path: '/new'
-      fullPath: '/new'
-      preLoaderRoute: typeof AppNewRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/masters': {
-      id: '/_app/masters'
-      path: '/masters'
-      fullPath: '/masters'
-      preLoaderRoute: typeof AppMastersRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/installed-equipment': {
-      id: '/_app/installed-equipment'
-      path: '/installed-equipment'
-      fullPath: '/installed-equipment'
-      preLoaderRoute: typeof AppInstalledEquipmentRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/indent': {
-      id: '/_app/indent'
-      path: '/indent'
-      fullPath: '/indent'
-      preLoaderRoute: typeof AppIndentRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/ims': {
-      id: '/_app/ims'
-      path: '/ims'
-      fullPath: '/ims'
-      preLoaderRoute: typeof AppImsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/import': {
-      id: '/_app/import'
-      path: '/import'
-      fullPath: '/import'
-      preLoaderRoute: typeof AppImportRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/grn': {
-      id: '/_app/grn'
-      path: '/grn'
-      fullPath: '/grn'
-      preLoaderRoute: typeof AppGrnRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/engineers': {
-      id: '/_app/engineers'
-      path: '/engineers'
-      fullPath: '/engineers'
-      preLoaderRoute: typeof AppEngineersRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/dashboard': {
-      id: '/_app/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AppDashboardRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/crm': {
-      id: '/_app/crm'
-      path: '/crm'
-      fullPath: '/crm'
-      preLoaderRoute: typeof AppCrmRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/challan': {
-      id: '/_app/challan'
-      path: '/challan'
-      fullPath: '/challan'
-      preLoaderRoute: typeof AppChallanRouteImport
+    '/_app/amc': {
+      id: '/_app/amc'
+      path: '/amc'
+      fullPath: '/amc'
+      preLoaderRoute: typeof AppAmcRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/archive': {
@@ -1952,522 +1791,179 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppArchiveRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/amc': {
-      id: '/_app/amc'
-      path: '/amc'
-      fullPath: '/amc'
-      preLoaderRoute: typeof AppAmcRouteImport
+    '/_app/challan': {
+      id: '/_app/challan'
+      path: '/challan'
+      fullPath: '/challan'
+      preLoaderRoute: typeof AppChallanRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/tickets/': {
-      id: '/_app/tickets/'
-      path: '/'
-      fullPath: '/tickets/'
-      preLoaderRoute: typeof AppTicketsIndexRouteImport
-      parentRoute: typeof AppTicketsRoute
-    }
-    '/_app/sales/': {
-      id: '/_app/sales/'
-      path: '/'
-      fullPath: '/sales/'
-      preLoaderRoute: typeof AppSalesIndexRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/po/': {
-      id: '/_app/po/'
-      path: '/'
-      fullPath: '/po/'
-      preLoaderRoute: typeof AppPoIndexRouteImport
-      parentRoute: typeof AppPoRoute
-    }
-    '/_app/indent/': {
-      id: '/_app/indent/'
-      path: '/'
-      fullPath: '/indent/'
-      preLoaderRoute: typeof AppIndentIndexRouteImport
-      parentRoute: typeof AppIndentRoute
-    }
-    '/_app/ims/': {
-      id: '/_app/ims/'
-      path: '/'
-      fullPath: '/ims/'
-      preLoaderRoute: typeof AppImsIndexRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/grn/': {
-      id: '/_app/grn/'
-      path: '/'
-      fullPath: '/grn/'
-      preLoaderRoute: typeof AppGrnIndexRouteImport
-      parentRoute: typeof AppGrnRoute
-    }
-    '/_app/gatepass/': {
-      id: '/_app/gatepass/'
-      path: '/gatepass'
-      fullPath: '/gatepass/'
-      preLoaderRoute: typeof AppGatepassIndexRouteImport
+    '/_app/crm': {
+      id: '/_app/crm'
+      path: '/crm'
+      fullPath: '/crm'
+      preLoaderRoute: typeof AppCrmRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/engineers/': {
-      id: '/_app/engineers/'
-      path: '/'
-      fullPath: '/engineers/'
-      preLoaderRoute: typeof AppEngineersIndexRouteImport
-      parentRoute: typeof AppEngineersRoute
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/_app/crm/': {
-      id: '/_app/crm/'
-      path: '/'
-      fullPath: '/crm/'
-      preLoaderRoute: typeof AppCrmIndexRouteImport
-      parentRoute: typeof AppCrmRoute
+    '/_app/engineers': {
+      id: '/_app/engineers'
+      path: '/engineers'
+      fullPath: '/engineers'
+      preLoaderRoute: typeof AppEngineersRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/_app/challan/': {
-      id: '/_app/challan/'
+    '/_app/grn': {
+      id: '/_app/grn'
+      path: '/grn'
+      fullPath: '/grn'
+      preLoaderRoute: typeof AppGrnRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/import': {
+      id: '/_app/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof AppImportRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ims': {
+      id: '/_app/ims'
+      path: '/ims'
+      fullPath: '/ims'
+      preLoaderRoute: typeof AppImsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/indent': {
+      id: '/_app/indent'
+      path: '/indent'
+      fullPath: '/indent'
+      preLoaderRoute: typeof AppIndentRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/installed-equipment': {
+      id: '/_app/installed-equipment'
+      path: '/installed-equipment'
+      fullPath: '/installed-equipment'
+      preLoaderRoute: typeof AppInstalledEquipmentRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/masters': {
+      id: '/_app/masters'
+      path: '/masters'
+      fullPath: '/masters'
+      preLoaderRoute: typeof AppMastersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/new': {
+      id: '/_app/new'
+      path: '/new'
+      fullPath: '/new'
+      preLoaderRoute: typeof AppNewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/payroll': {
+      id: '/_app/payroll'
+      path: '/payroll'
+      fullPath: '/payroll'
+      preLoaderRoute: typeof AppPayrollRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/po': {
+      id: '/_app/po'
+      path: '/po'
+      fullPath: '/po'
+      preLoaderRoute: typeof AppPoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/products': {
+      id: '/_app/products'
+      path: '/products'
+      fullPath: '/products'
+      preLoaderRoute: typeof AppProductsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/records': {
+      id: '/_app/records'
+      path: '/records'
+      fullPath: '/records'
+      preLoaderRoute: typeof AppRecordsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reports': {
+      id: '/_app/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/sales': {
+      id: '/_app/sales'
+      path: '/sales'
+      fullPath: '/sales'
+      preLoaderRoute: typeof AppSalesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tickets': {
+      id: '/_app/tickets'
+      path: '/tickets'
+      fullPath: '/tickets'
+      preLoaderRoute: typeof AppTicketsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/eng/': {
+      id: '/eng/'
       path: '/'
-      fullPath: '/challan/'
-      preLoaderRoute: typeof AppChallanIndexRouteImport
-      parentRoute: typeof AppChallanRoute
+      fullPath: '/eng/'
+      preLoaderRoute: typeof EngIndexRouteImport
+      parentRoute: typeof EngRoute
+    }
+    '/eng/conveyance': {
+      id: '/eng/conveyance'
+      path: '/conveyance'
+      fullPath: '/eng/conveyance'
+      preLoaderRoute: typeof EngConveyanceRouteImport
+      parentRoute: typeof EngRoute
+    }
+    '/eng/profile': {
+      id: '/eng/profile'
+      path: '/profile'
+      fullPath: '/eng/profile'
+      preLoaderRoute: typeof EngProfileRouteImport
+      parentRoute: typeof EngRoute
+    }
+    '/eng/queue': {
+      id: '/eng/queue'
+      path: '/queue'
+      fullPath: '/eng/queue'
+      preLoaderRoute: typeof EngQueueRouteImport
+      parentRoute: typeof EngRoute
+    }
+    '/fsr/preview': {
+      id: '/fsr/preview'
+      path: '/fsr/preview'
+      fullPath: '/fsr/preview'
+      preLoaderRoute: typeof FsrPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoice/preview': {
+      id: '/invoice/preview'
+      path: '/invoice/preview'
+      fullPath: '/invoice/preview'
+      preLoaderRoute: typeof InvoicePreviewRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/amc/': {
       id: '/_app/amc/'
       path: '/'
       fullPath: '/amc/'
       preLoaderRoute: typeof AppAmcIndexRouteImport
-      parentRoute: typeof AppAmcRoute
-    }
-    '/eng/ticket/$id': {
-      id: '/eng/ticket/$id'
-      path: '/ticket/$id'
-      fullPath: '/eng/ticket/$id'
-      preLoaderRoute: typeof EngTicketIdRouteImport
-      parentRoute: typeof EngRoute
-    }
-    '/_app/tickets/templates': {
-      id: '/_app/tickets/templates'
-      path: '/templates'
-      fullPath: '/tickets/templates'
-      preLoaderRoute: typeof AppTicketsTemplatesRouteImport
-      parentRoute: typeof AppTicketsRoute
-    }
-    '/_app/tickets/settings': {
-      id: '/_app/tickets/settings'
-      path: '/settings'
-      fullPath: '/tickets/settings'
-      preLoaderRoute: typeof AppTicketsSettingsRouteImport
-      parentRoute: typeof AppTicketsRoute
-    }
-    '/_app/tickets/new': {
-      id: '/_app/tickets/new'
-      path: '/new'
-      fullPath: '/tickets/new'
-      preLoaderRoute: typeof AppTicketsNewRouteImport
-      parentRoute: typeof AppTicketsRoute
-    }
-    '/_app/tickets/dashboard': {
-      id: '/_app/tickets/dashboard'
-      path: '/dashboard'
-      fullPath: '/tickets/dashboard'
-      preLoaderRoute: typeof AppTicketsDashboardRouteImport
-      parentRoute: typeof AppTicketsRoute
-    }
-    '/_app/tickets/$id': {
-      id: '/_app/tickets/$id'
-      path: '/$id'
-      fullPath: '/tickets/$id'
-      preLoaderRoute: typeof AppTicketsIdRouteImport
-      parentRoute: typeof AppTicketsRoute
-    }
-    '/_app/settings/signatures': {
-      id: '/_app/settings/signatures'
-      path: '/settings/signatures'
-      fullPath: '/settings/signatures'
-      preLoaderRoute: typeof AppSettingsSignaturesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/sales/settings': {
-      id: '/_app/sales/settings'
-      path: '/settings'
-      fullPath: '/sales/settings'
-      preLoaderRoute: typeof AppSalesSettingsRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/sales/quotations': {
-      id: '/_app/sales/quotations'
-      path: '/quotations'
-      fullPath: '/sales/quotations'
-      preLoaderRoute: typeof AppSalesQuotationsRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/sales/orders': {
-      id: '/_app/sales/orders'
-      path: '/orders'
-      fullPath: '/sales/orders'
-      preLoaderRoute: typeof AppSalesOrdersRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/po/settings': {
-      id: '/_app/po/settings'
-      path: '/settings'
-      fullPath: '/po/settings'
-      preLoaderRoute: typeof AppPoSettingsRouteImport
-      parentRoute: typeof AppPoRoute
-    }
-    '/_app/po/new': {
-      id: '/_app/po/new'
-      path: '/new'
-      fullPath: '/po/new'
-      preLoaderRoute: typeof AppPoNewRouteImport
-      parentRoute: typeof AppPoRoute
-    }
-    '/_app/po/$id': {
-      id: '/_app/po/$id'
-      path: '/$id'
-      fullPath: '/po/$id'
-      preLoaderRoute: typeof AppPoIdRouteImport
-      parentRoute: typeof AppPoRoute
-    }
-    '/_app/masters/products': {
-      id: '/_app/masters/products'
-      path: '/products'
-      fullPath: '/masters/products'
-      preLoaderRoute: typeof AppMastersProductsRouteImport
-      parentRoute: typeof AppMastersRoute
-    }
-    '/_app/masters/customers': {
-      id: '/_app/masters/customers'
-      path: '/customers'
-      fullPath: '/masters/customers'
-      preLoaderRoute: typeof AppMastersCustomersRouteImport
-      parentRoute: typeof AppMastersRoute
-    }
-    '/_app/indent/new': {
-      id: '/_app/indent/new'
-      path: '/new'
-      fullPath: '/indent/new'
-      preLoaderRoute: typeof AppIndentNewRouteImport
-      parentRoute: typeof AppIndentRoute
-    }
-    '/_app/indent/$id': {
-      id: '/_app/indent/$id'
-      path: '/$id'
-      fullPath: '/indent/$id'
-      preLoaderRoute: typeof AppIndentIdRouteImport
-      parentRoute: typeof AppIndentRoute
-    }
-    '/_app/ims/transfers': {
-      id: '/_app/ims/transfers'
-      path: '/transfers'
-      fullPath: '/ims/transfers'
-      preLoaderRoute: typeof AppImsTransfersRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/transactions': {
-      id: '/_app/ims/transactions'
-      path: '/transactions'
-      fullPath: '/ims/transactions'
-      preLoaderRoute: typeof AppImsTransactionsRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/stock-management-beta': {
-      id: '/_app/ims/stock-management-beta'
-      path: '/stock-management-beta'
-      fullPath: '/ims/stock-management-beta'
-      preLoaderRoute: typeof AppImsStockManagementBetaRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/stock-management': {
-      id: '/_app/ims/stock-management'
-      path: '/stock-management'
-      fullPath: '/ims/stock-management'
-      preLoaderRoute: typeof AppImsStockManagementRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/stock': {
-      id: '/_app/ims/stock'
-      path: '/stock'
-      fullPath: '/ims/stock'
-      preLoaderRoute: typeof AppImsStockRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/serial-track': {
-      id: '/_app/ims/serial-track'
-      path: '/serial-track'
-      fullPath: '/ims/serial-track'
-      preLoaderRoute: typeof AppImsSerialTrackRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/reservations': {
-      id: '/_app/ims/reservations'
-      path: '/reservations'
-      fullPath: '/ims/reservations'
-      preLoaderRoute: typeof AppImsReservationsRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/reports': {
-      id: '/_app/ims/reports'
-      path: '/reports'
-      fullPath: '/ims/reports'
-      preLoaderRoute: typeof AppImsReportsRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/oem-returns': {
-      id: '/_app/ims/oem-returns'
-      path: '/oem-returns'
-      fullPath: '/ims/oem-returns'
-      preLoaderRoute: typeof AppImsOemReturnsRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/ledger': {
-      id: '/_app/ims/ledger'
-      path: '/ledger'
-      fullPath: '/ims/ledger'
-      preLoaderRoute: typeof AppImsLedgerRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/indent-history': {
-      id: '/_app/ims/indent-history'
-      path: '/indent-history'
-      fullPath: '/ims/indent-history'
-      preLoaderRoute: typeof AppImsIndentHistoryRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/defective-tags': {
-      id: '/_app/ims/defective-tags'
-      path: '/defective-tags'
-      fullPath: '/ims/defective-tags'
-      preLoaderRoute: typeof AppImsDefectiveTagsRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/ims/audit': {
-      id: '/_app/ims/audit'
-      path: '/audit'
-      fullPath: '/ims/audit'
-      preLoaderRoute: typeof AppImsAuditRouteImport
-      parentRoute: typeof AppImsRoute
-    }
-    '/_app/grn/oem': {
-      id: '/_app/grn/oem'
-      path: '/oem'
-      fullPath: '/grn/oem'
-      preLoaderRoute: typeof AppGrnOemRouteImport
-      parentRoute: typeof AppGrnRoute
-    }
-    '/_app/grn/new': {
-      id: '/_app/grn/new'
-      path: '/new'
-      fullPath: '/grn/new'
-      preLoaderRoute: typeof AppGrnNewRouteImport
-      parentRoute: typeof AppGrnRoute
-    }
-    '/_app/grn/general': {
-      id: '/_app/grn/general'
-      path: '/general'
-      fullPath: '/grn/general'
-      preLoaderRoute: typeof AppGrnGeneralRouteImport
-      parentRoute: typeof AppGrnRoute
-    }
-    '/_app/grn/customer': {
-      id: '/_app/grn/customer'
-      path: '/customer'
-      fullPath: '/grn/customer'
-      preLoaderRoute: typeof AppGrnCustomerRouteImport
-      parentRoute: typeof AppGrnRoute
-    }
-    '/_app/grn/$id': {
-      id: '/_app/grn/$id'
-      path: '/$id'
-      fullPath: '/grn/$id'
-      preLoaderRoute: typeof AppGrnIdRouteImport
-      parentRoute: typeof AppGrnRoute
-    }
-    '/_app/gatepass/new': {
-      id: '/_app/gatepass/new'
-      path: '/gatepass/new'
-      fullPath: '/gatepass/new'
-      preLoaderRoute: typeof AppGatepassNewRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/gatepass/$id': {
-      id: '/_app/gatepass/$id'
-      path: '/gatepass/$id'
-      fullPath: '/gatepass/$id'
-      preLoaderRoute: typeof AppGatepassIdRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/engineers/tickets': {
-      id: '/_app/engineers/tickets'
-      path: '/tickets'
-      fullPath: '/engineers/tickets'
-      preLoaderRoute: typeof AppEngineersTicketsRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/engineers/reconcile': {
-      id: '/_app/engineers/reconcile'
-      path: '/reconcile'
-      fullPath: '/engineers/reconcile'
-      preLoaderRoute: typeof AppEngineersReconcileRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/engineers/rates': {
-      id: '/_app/engineers/rates'
-      path: '/rates'
-      fullPath: '/engineers/rates'
-      preLoaderRoute: typeof AppEngineersRatesRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/engineers/movement': {
-      id: '/_app/engineers/movement'
-      path: '/movement'
-      fullPath: '/engineers/movement'
-      preLoaderRoute: typeof AppEngineersMovementRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/engineers/expenses': {
-      id: '/_app/engineers/expenses'
-      path: '/expenses'
-      fullPath: '/engineers/expenses'
-      preLoaderRoute: typeof AppEngineersExpensesRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/engineers/documents': {
-      id: '/_app/engineers/documents'
-      path: '/documents'
-      fullPath: '/engineers/documents'
-      preLoaderRoute: typeof AppEngineersDocumentsRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/engineers/directory': {
-      id: '/_app/engineers/directory'
-      path: '/directory'
-      fullPath: '/engineers/directory'
-      preLoaderRoute: typeof AppEngineersDirectoryRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/engineers/custody': {
-      id: '/_app/engineers/custody'
-      path: '/custody'
-      fullPath: '/engineers/custody'
-      preLoaderRoute: typeof AppEngineersCustodyRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/engineers/conveyance': {
-      id: '/_app/engineers/conveyance'
-      path: '/conveyance'
-      fullPath: '/engineers/conveyance'
-      preLoaderRoute: typeof AppEngineersConveyanceRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/engineers/attention': {
-      id: '/_app/engineers/attention'
-      path: '/attention'
-      fullPath: '/engineers/attention'
-      preLoaderRoute: typeof AppEngineersAttentionRouteImport
-      parentRoute: typeof AppEngineersRoute
-    }
-    '/_app/crm/settings': {
-      id: '/_app/crm/settings'
-      path: '/settings'
-      fullPath: '/crm/settings'
-      preLoaderRoute: typeof AppCrmSettingsRouteImport
-      parentRoute: typeof AppCrmRoute
-    }
-    '/_app/crm/quotations': {
-      id: '/_app/crm/quotations'
-      path: '/quotations'
-      fullPath: '/crm/quotations'
-      preLoaderRoute: typeof AppCrmQuotationsRouteImport
-      parentRoute: typeof AppCrmRoute
-    }
-    '/_app/crm/leads': {
-      id: '/_app/crm/leads'
-      path: '/leads'
-      fullPath: '/crm/leads'
-      preLoaderRoute: typeof AppCrmLeadsRouteImport
-      parentRoute: typeof AppCrmRoute
-    }
-    '/_app/crm/incentives': {
-      id: '/_app/crm/incentives'
-      path: '/incentives'
-      fullPath: '/crm/incentives'
-      preLoaderRoute: typeof AppCrmIncentivesRouteImport
-      parentRoute: typeof AppCrmRoute
-    }
-    '/_app/crm/customers': {
-      id: '/_app/crm/customers'
-      path: '/customers'
-      fullPath: '/crm/customers'
-      preLoaderRoute: typeof AppCrmCustomersRouteImport
-      parentRoute: typeof AppCrmRoute
-    }
-    '/_app/crm/bundles': {
-      id: '/_app/crm/bundles'
-      path: '/bundles'
-      fullPath: '/crm/bundles'
-      preLoaderRoute: typeof AppCrmBundlesRouteImport
-      parentRoute: typeof AppCrmRoute
-    }
-    '/_app/crm/ai-recommend': {
-      id: '/_app/crm/ai-recommend'
-      path: '/ai-recommend'
-      fullPath: '/crm/ai-recommend'
-      preLoaderRoute: typeof AppCrmAiRecommendRouteImport
-      parentRoute: typeof AppCrmRoute
-    }
-    '/_app/challan/oem': {
-      id: '/_app/challan/oem'
-      path: '/oem'
-      fullPath: '/challan/oem'
-      preLoaderRoute: typeof AppChallanOemRouteImport
-      parentRoute: typeof AppChallanRoute
-    }
-    '/_app/challan/new': {
-      id: '/_app/challan/new'
-      path: '/new'
-      fullPath: '/challan/new'
-      preLoaderRoute: typeof AppChallanNewRouteImport
-      parentRoute: typeof AppChallanRoute
-    }
-    '/_app/challan/customer': {
-      id: '/_app/challan/customer'
-      path: '/customer'
-      fullPath: '/challan/customer'
-      preLoaderRoute: typeof AppChallanCustomerRouteImport
-      parentRoute: typeof AppChallanRoute
-    }
-    '/_app/challan/$id': {
-      id: '/_app/challan/$id'
-      path: '/$id'
-      fullPath: '/challan/$id'
-      preLoaderRoute: typeof AppChallanIdRouteImport
-      parentRoute: typeof AppChallanRoute
-    }
-    '/_app/amc/settings': {
-      id: '/_app/amc/settings'
-      path: '/settings'
-      fullPath: '/amc/settings'
-      preLoaderRoute: typeof AppAmcSettingsRouteImport
-      parentRoute: typeof AppAmcRoute
-    }
-    '/_app/amc/pm': {
-      id: '/_app/amc/pm'
-      path: '/pm'
-      fullPath: '/amc/pm'
-      preLoaderRoute: typeof AppAmcPmRouteImport
-      parentRoute: typeof AppAmcRoute
-    }
-    '/_app/amc/oem': {
-      id: '/_app/amc/oem'
-      path: '/oem'
-      fullPath: '/amc/oem'
-      preLoaderRoute: typeof AppAmcOemRouteImport
-      parentRoute: typeof AppAmcRoute
-    }
-    '/_app/amc/new': {
-      id: '/_app/amc/new'
-      path: '/new'
-      fullPath: '/amc/new'
-      preLoaderRoute: typeof AppAmcNewRouteImport
       parentRoute: typeof AppAmcRoute
     }
     '/_app/amc/$id': {
@@ -2477,82 +1973,516 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAmcIdRouteImport
       parentRoute: typeof AppAmcRoute
     }
-    '/_app/sales/proforma/': {
-      id: '/_app/sales/proforma/'
-      path: '/proforma'
-      fullPath: '/sales/proforma/'
-      preLoaderRoute: typeof AppSalesProformaIndexRouteImport
+    '/_app/amc/new': {
+      id: '/_app/amc/new'
+      path: '/new'
+      fullPath: '/amc/new'
+      preLoaderRoute: typeof AppAmcNewRouteImport
+      parentRoute: typeof AppAmcRoute
+    }
+    '/_app/amc/oem': {
+      id: '/_app/amc/oem'
+      path: '/oem'
+      fullPath: '/amc/oem'
+      preLoaderRoute: typeof AppAmcOemRouteImport
+      parentRoute: typeof AppAmcRoute
+    }
+    '/_app/amc/pm': {
+      id: '/_app/amc/pm'
+      path: '/pm'
+      fullPath: '/amc/pm'
+      preLoaderRoute: typeof AppAmcPmRouteImport
+      parentRoute: typeof AppAmcRoute
+    }
+    '/_app/amc/settings': {
+      id: '/_app/amc/settings'
+      path: '/settings'
+      fullPath: '/amc/settings'
+      preLoaderRoute: typeof AppAmcSettingsRouteImport
+      parentRoute: typeof AppAmcRoute
+    }
+    '/_app/challan/': {
+      id: '/_app/challan/'
+      path: '/'
+      fullPath: '/challan/'
+      preLoaderRoute: typeof AppChallanIndexRouteImport
+      parentRoute: typeof AppChallanRoute
+    }
+    '/_app/challan/$id': {
+      id: '/_app/challan/$id'
+      path: '/$id'
+      fullPath: '/challan/$id'
+      preLoaderRoute: typeof AppChallanIdRouteImport
+      parentRoute: typeof AppChallanRoute
+    }
+    '/_app/challan/customer': {
+      id: '/_app/challan/customer'
+      path: '/customer'
+      fullPath: '/challan/customer'
+      preLoaderRoute: typeof AppChallanCustomerRouteImport
+      parentRoute: typeof AppChallanRoute
+    }
+    '/_app/challan/new': {
+      id: '/_app/challan/new'
+      path: '/new'
+      fullPath: '/challan/new'
+      preLoaderRoute: typeof AppChallanNewRouteImport
+      parentRoute: typeof AppChallanRoute
+    }
+    '/_app/challan/oem': {
+      id: '/_app/challan/oem'
+      path: '/oem'
+      fullPath: '/challan/oem'
+      preLoaderRoute: typeof AppChallanOemRouteImport
+      parentRoute: typeof AppChallanRoute
+    }
+    '/_app/crm/': {
+      id: '/_app/crm/'
+      path: '/'
+      fullPath: '/crm/'
+      preLoaderRoute: typeof AppCrmIndexRouteImport
+      parentRoute: typeof AppCrmRoute
+    }
+    '/_app/crm/ai-recommend': {
+      id: '/_app/crm/ai-recommend'
+      path: '/ai-recommend'
+      fullPath: '/crm/ai-recommend'
+      preLoaderRoute: typeof AppCrmAiRecommendRouteImport
+      parentRoute: typeof AppCrmRoute
+    }
+    '/_app/crm/bundles': {
+      id: '/_app/crm/bundles'
+      path: '/bundles'
+      fullPath: '/crm/bundles'
+      preLoaderRoute: typeof AppCrmBundlesRouteImport
+      parentRoute: typeof AppCrmRoute
+    }
+    '/_app/crm/customers': {
+      id: '/_app/crm/customers'
+      path: '/customers'
+      fullPath: '/crm/customers'
+      preLoaderRoute: typeof AppCrmCustomersRouteImport
+      parentRoute: typeof AppCrmRoute
+    }
+    '/_app/crm/incentives': {
+      id: '/_app/crm/incentives'
+      path: '/incentives'
+      fullPath: '/crm/incentives'
+      preLoaderRoute: typeof AppCrmIncentivesRouteImport
+      parentRoute: typeof AppCrmRoute
+    }
+    '/_app/crm/leads': {
+      id: '/_app/crm/leads'
+      path: '/leads'
+      fullPath: '/crm/leads'
+      preLoaderRoute: typeof AppCrmLeadsRouteImport
+      parentRoute: typeof AppCrmRoute
+    }
+    '/_app/crm/quotations': {
+      id: '/_app/crm/quotations'
+      path: '/quotations'
+      fullPath: '/crm/quotations'
+      preLoaderRoute: typeof AppCrmQuotationsRouteImport
+      parentRoute: typeof AppCrmRoute
+    }
+    '/_app/crm/settings': {
+      id: '/_app/crm/settings'
+      path: '/settings'
+      fullPath: '/crm/settings'
+      preLoaderRoute: typeof AppCrmSettingsRouteImport
+      parentRoute: typeof AppCrmRoute
+    }
+    '/_app/engineers/': {
+      id: '/_app/engineers/'
+      path: '/'
+      fullPath: '/engineers/'
+      preLoaderRoute: typeof AppEngineersIndexRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/attention': {
+      id: '/_app/engineers/attention'
+      path: '/attention'
+      fullPath: '/engineers/attention'
+      preLoaderRoute: typeof AppEngineersAttentionRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/conveyance': {
+      id: '/_app/engineers/conveyance'
+      path: '/conveyance'
+      fullPath: '/engineers/conveyance'
+      preLoaderRoute: typeof AppEngineersConveyanceRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/custody': {
+      id: '/_app/engineers/custody'
+      path: '/custody'
+      fullPath: '/engineers/custody'
+      preLoaderRoute: typeof AppEngineersCustodyRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/directory': {
+      id: '/_app/engineers/directory'
+      path: '/directory'
+      fullPath: '/engineers/directory'
+      preLoaderRoute: typeof AppEngineersDirectoryRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/documents': {
+      id: '/_app/engineers/documents'
+      path: '/documents'
+      fullPath: '/engineers/documents'
+      preLoaderRoute: typeof AppEngineersDocumentsRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/expenses': {
+      id: '/_app/engineers/expenses'
+      path: '/expenses'
+      fullPath: '/engineers/expenses'
+      preLoaderRoute: typeof AppEngineersExpensesRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/movement': {
+      id: '/_app/engineers/movement'
+      path: '/movement'
+      fullPath: '/engineers/movement'
+      preLoaderRoute: typeof AppEngineersMovementRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/rates': {
+      id: '/_app/engineers/rates'
+      path: '/rates'
+      fullPath: '/engineers/rates'
+      preLoaderRoute: typeof AppEngineersRatesRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/reconcile': {
+      id: '/_app/engineers/reconcile'
+      path: '/reconcile'
+      fullPath: '/engineers/reconcile'
+      preLoaderRoute: typeof AppEngineersReconcileRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/engineers/tickets': {
+      id: '/_app/engineers/tickets'
+      path: '/tickets'
+      fullPath: '/engineers/tickets'
+      preLoaderRoute: typeof AppEngineersTicketsRouteImport
+      parentRoute: typeof AppEngineersRoute
+    }
+    '/_app/gatepass/': {
+      id: '/_app/gatepass/'
+      path: '/gatepass'
+      fullPath: '/gatepass/'
+      preLoaderRoute: typeof AppGatepassIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/gatepass/$id': {
+      id: '/_app/gatepass/$id'
+      path: '/gatepass/$id'
+      fullPath: '/gatepass/$id'
+      preLoaderRoute: typeof AppGatepassIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/gatepass/new': {
+      id: '/_app/gatepass/new'
+      path: '/gatepass/new'
+      fullPath: '/gatepass/new'
+      preLoaderRoute: typeof AppGatepassNewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/grn/': {
+      id: '/_app/grn/'
+      path: '/'
+      fullPath: '/grn/'
+      preLoaderRoute: typeof AppGrnIndexRouteImport
+      parentRoute: typeof AppGrnRoute
+    }
+    '/_app/grn/$id': {
+      id: '/_app/grn/$id'
+      path: '/$id'
+      fullPath: '/grn/$id'
+      preLoaderRoute: typeof AppGrnIdRouteImport
+      parentRoute: typeof AppGrnRoute
+    }
+    '/_app/grn/customer': {
+      id: '/_app/grn/customer'
+      path: '/customer'
+      fullPath: '/grn/customer'
+      preLoaderRoute: typeof AppGrnCustomerRouteImport
+      parentRoute: typeof AppGrnRoute
+    }
+    '/_app/grn/general': {
+      id: '/_app/grn/general'
+      path: '/general'
+      fullPath: '/grn/general'
+      preLoaderRoute: typeof AppGrnGeneralRouteImport
+      parentRoute: typeof AppGrnRoute
+    }
+    '/_app/grn/new': {
+      id: '/_app/grn/new'
+      path: '/new'
+      fullPath: '/grn/new'
+      preLoaderRoute: typeof AppGrnNewRouteImport
+      parentRoute: typeof AppGrnRoute
+    }
+    '/_app/grn/oem': {
+      id: '/_app/grn/oem'
+      path: '/oem'
+      fullPath: '/grn/oem'
+      preLoaderRoute: typeof AppGrnOemRouteImport
+      parentRoute: typeof AppGrnRoute
+    }
+    '/_app/ims/': {
+      id: '/_app/ims/'
+      path: '/'
+      fullPath: '/ims/'
+      preLoaderRoute: typeof AppImsIndexRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/audit': {
+      id: '/_app/ims/audit'
+      path: '/audit'
+      fullPath: '/ims/audit'
+      preLoaderRoute: typeof AppImsAuditRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/defective-tags': {
+      id: '/_app/ims/defective-tags'
+      path: '/defective-tags'
+      fullPath: '/ims/defective-tags'
+      preLoaderRoute: typeof AppImsDefectiveTagsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/indent-history': {
+      id: '/_app/ims/indent-history'
+      path: '/indent-history'
+      fullPath: '/ims/indent-history'
+      preLoaderRoute: typeof AppImsIndentHistoryRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/ledger': {
+      id: '/_app/ims/ledger'
+      path: '/ledger'
+      fullPath: '/ims/ledger'
+      preLoaderRoute: typeof AppImsLedgerRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/oem-returns': {
+      id: '/_app/ims/oem-returns'
+      path: '/oem-returns'
+      fullPath: '/ims/oem-returns'
+      preLoaderRoute: typeof AppImsOemReturnsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/reports': {
+      id: '/_app/ims/reports'
+      path: '/reports'
+      fullPath: '/ims/reports'
+      preLoaderRoute: typeof AppImsReportsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/reservations': {
+      id: '/_app/ims/reservations'
+      path: '/reservations'
+      fullPath: '/ims/reservations'
+      preLoaderRoute: typeof AppImsReservationsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/serial-track': {
+      id: '/_app/ims/serial-track'
+      path: '/serial-track'
+      fullPath: '/ims/serial-track'
+      preLoaderRoute: typeof AppImsSerialTrackRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/stock': {
+      id: '/_app/ims/stock'
+      path: '/stock'
+      fullPath: '/ims/stock'
+      preLoaderRoute: typeof AppImsStockRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/stock-management': {
+      id: '/_app/ims/stock-management'
+      path: '/stock-management'
+      fullPath: '/ims/stock-management'
+      preLoaderRoute: typeof AppImsStockManagementRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/stock-management-beta': {
+      id: '/_app/ims/stock-management-beta'
+      path: '/stock-management-beta'
+      fullPath: '/ims/stock-management-beta'
+      preLoaderRoute: typeof AppImsStockManagementBetaRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/transactions': {
+      id: '/_app/ims/transactions'
+      path: '/transactions'
+      fullPath: '/ims/transactions'
+      preLoaderRoute: typeof AppImsTransactionsRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/ims/transfers': {
+      id: '/_app/ims/transfers'
+      path: '/transfers'
+      fullPath: '/ims/transfers'
+      preLoaderRoute: typeof AppImsTransfersRouteImport
+      parentRoute: typeof AppImsRoute
+    }
+    '/_app/indent/': {
+      id: '/_app/indent/'
+      path: '/'
+      fullPath: '/indent/'
+      preLoaderRoute: typeof AppIndentIndexRouteImport
+      parentRoute: typeof AppIndentRoute
+    }
+    '/_app/indent/$id': {
+      id: '/_app/indent/$id'
+      path: '/$id'
+      fullPath: '/indent/$id'
+      preLoaderRoute: typeof AppIndentIdRouteImport
+      parentRoute: typeof AppIndentRoute
+    }
+    '/_app/indent/new': {
+      id: '/_app/indent/new'
+      path: '/new'
+      fullPath: '/indent/new'
+      preLoaderRoute: typeof AppIndentNewRouteImport
+      parentRoute: typeof AppIndentRoute
+    }
+    '/_app/masters/customers': {
+      id: '/_app/masters/customers'
+      path: '/customers'
+      fullPath: '/masters/customers'
+      preLoaderRoute: typeof AppMastersCustomersRouteImport
+      parentRoute: typeof AppMastersRoute
+    }
+    '/_app/masters/products': {
+      id: '/_app/masters/products'
+      path: '/products'
+      fullPath: '/masters/products'
+      preLoaderRoute: typeof AppMastersProductsRouteImport
+      parentRoute: typeof AppMastersRoute
+    }
+    '/_app/po/': {
+      id: '/_app/po/'
+      path: '/'
+      fullPath: '/po/'
+      preLoaderRoute: typeof AppPoIndexRouteImport
+      parentRoute: typeof AppPoRoute
+    }
+    '/_app/po/$id': {
+      id: '/_app/po/$id'
+      path: '/$id'
+      fullPath: '/po/$id'
+      preLoaderRoute: typeof AppPoIdRouteImport
+      parentRoute: typeof AppPoRoute
+    }
+    '/_app/po/new': {
+      id: '/_app/po/new'
+      path: '/new'
+      fullPath: '/po/new'
+      preLoaderRoute: typeof AppPoNewRouteImport
+      parentRoute: typeof AppPoRoute
+    }
+    '/_app/po/settings': {
+      id: '/_app/po/settings'
+      path: '/settings'
+      fullPath: '/po/settings'
+      preLoaderRoute: typeof AppPoSettingsRouteImport
+      parentRoute: typeof AppPoRoute
+    }
+    '/_app/sales/': {
+      id: '/_app/sales/'
+      path: '/'
+      fullPath: '/sales/'
+      preLoaderRoute: typeof AppSalesIndexRouteImport
       parentRoute: typeof AppSalesRoute
     }
-    '/_app/sales/payments/': {
-      id: '/_app/sales/payments/'
-      path: '/payments'
-      fullPath: '/sales/payments/'
-      preLoaderRoute: typeof AppSalesPaymentsIndexRouteImport
+    '/_app/sales/orders': {
+      id: '/_app/sales/orders'
+      path: '/orders'
+      fullPath: '/sales/orders'
+      preLoaderRoute: typeof AppSalesOrdersRouteImport
       parentRoute: typeof AppSalesRoute
     }
-    '/_app/sales/orders/': {
-      id: '/_app/sales/orders/'
-      path: '/'
-      fullPath: '/sales/orders/'
-      preLoaderRoute: typeof AppSalesOrdersIndexRouteImport
-      parentRoute: typeof AppSalesOrdersRoute
-    }
-    '/_app/sales/invoices/': {
-      id: '/_app/sales/invoices/'
-      path: '/invoices'
-      fullPath: '/sales/invoices/'
-      preLoaderRoute: typeof AppSalesInvoicesIndexRouteImport
+    '/_app/sales/quotations': {
+      id: '/_app/sales/quotations'
+      path: '/quotations'
+      fullPath: '/sales/quotations'
+      preLoaderRoute: typeof AppSalesQuotationsRouteImport
       parentRoute: typeof AppSalesRoute
     }
-    '/_app/sales/general-dc/': {
-      id: '/_app/sales/general-dc/'
-      path: '/general-dc'
-      fullPath: '/sales/general-dc/'
-      preLoaderRoute: typeof AppSalesGeneralDcIndexRouteImport
+    '/_app/sales/settings': {
+      id: '/_app/sales/settings'
+      path: '/settings'
+      fullPath: '/sales/settings'
+      preLoaderRoute: typeof AppSalesSettingsRouteImport
       parentRoute: typeof AppSalesRoute
     }
-    '/_app/sales/eway/': {
-      id: '/_app/sales/eway/'
-      path: '/eway'
-      fullPath: '/sales/eway/'
-      preLoaderRoute: typeof AppSalesEwayIndexRouteImport
-      parentRoute: typeof AppSalesRoute
+    '/_app/settings/signatures': {
+      id: '/_app/settings/signatures'
+      path: '/settings/signatures'
+      fullPath: '/settings/signatures'
+      preLoaderRoute: typeof AppSettingsSignaturesRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/_app/ims/transfers/': {
-      id: '/_app/ims/transfers/'
+    '/_app/tickets/': {
+      id: '/_app/tickets/'
       path: '/'
-      fullPath: '/ims/transfers/'
-      preLoaderRoute: typeof AppImsTransfersIndexRouteImport
-      parentRoute: typeof AppImsTransfersRoute
+      fullPath: '/tickets/'
+      preLoaderRoute: typeof AppTicketsIndexRouteImport
+      parentRoute: typeof AppTicketsRoute
     }
-    '/_app/grn/oem/': {
-      id: '/_app/grn/oem/'
-      path: '/'
-      fullPath: '/grn/oem/'
-      preLoaderRoute: typeof AppGrnOemIndexRouteImport
-      parentRoute: typeof AppGrnOemRoute
+    '/_app/tickets/$id': {
+      id: '/_app/tickets/$id'
+      path: '/$id'
+      fullPath: '/tickets/$id'
+      preLoaderRoute: typeof AppTicketsIdRouteImport
+      parentRoute: typeof AppTicketsRoute
     }
-    '/_app/grn/general/': {
-      id: '/_app/grn/general/'
-      path: '/'
-      fullPath: '/grn/general/'
-      preLoaderRoute: typeof AppGrnGeneralIndexRouteImport
-      parentRoute: typeof AppGrnGeneralRoute
+    '/_app/tickets/dashboard': {
+      id: '/_app/tickets/dashboard'
+      path: '/dashboard'
+      fullPath: '/tickets/dashboard'
+      preLoaderRoute: typeof AppTicketsDashboardRouteImport
+      parentRoute: typeof AppTicketsRoute
     }
-    '/_app/grn/customer/': {
-      id: '/_app/grn/customer/'
-      path: '/'
-      fullPath: '/grn/customer/'
-      preLoaderRoute: typeof AppGrnCustomerIndexRouteImport
-      parentRoute: typeof AppGrnCustomerRoute
+    '/_app/tickets/new': {
+      id: '/_app/tickets/new'
+      path: '/new'
+      fullPath: '/tickets/new'
+      preLoaderRoute: typeof AppTicketsNewRouteImport
+      parentRoute: typeof AppTicketsRoute
     }
-    '/_app/challan/oem/': {
-      id: '/_app/challan/oem/'
-      path: '/'
-      fullPath: '/challan/oem/'
-      preLoaderRoute: typeof AppChallanOemIndexRouteImport
-      parentRoute: typeof AppChallanOemRoute
+    '/_app/tickets/settings': {
+      id: '/_app/tickets/settings'
+      path: '/settings'
+      fullPath: '/tickets/settings'
+      preLoaderRoute: typeof AppTicketsSettingsRouteImport
+      parentRoute: typeof AppTicketsRoute
+    }
+    '/_app/tickets/templates': {
+      id: '/_app/tickets/templates'
+      path: '/templates'
+      fullPath: '/tickets/templates'
+      preLoaderRoute: typeof AppTicketsTemplatesRouteImport
+      parentRoute: typeof AppTicketsRoute
+    }
+    '/eng/ticket/$id': {
+      id: '/eng/ticket/$id'
+      path: '/ticket/$id'
+      fullPath: '/eng/ticket/$id'
+      preLoaderRoute: typeof EngTicketIdRouteImport
+      parentRoute: typeof EngRoute
+    }
+    '/_app/challan/$id_/edit': {
+      id: '/_app/challan/$id_/edit'
+      path: '/$id/edit'
+      fullPath: '/challan/$id/edit'
+      preLoaderRoute: typeof AppChallanIdEditRouteImport
+      parentRoute: typeof AppChallanRoute
     }
     '/_app/challan/customer/': {
       id: '/_app/challan/customer/'
@@ -2561,81 +2491,109 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChallanCustomerIndexRouteImport
       parentRoute: typeof AppChallanCustomerRoute
     }
-    '/_app/sales/proforma/settings': {
-      id: '/_app/sales/proforma/settings'
-      path: '/proforma/settings'
-      fullPath: '/sales/proforma/settings'
-      preLoaderRoute: typeof AppSalesProformaSettingsRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/sales/proforma/new': {
-      id: '/_app/sales/proforma/new'
-      path: '/proforma/new'
-      fullPath: '/sales/proforma/new'
-      preLoaderRoute: typeof AppSalesProformaNewRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/sales/proforma/$id': {
-      id: '/_app/sales/proforma/$id'
-      path: '/proforma/$id'
-      fullPath: '/sales/proforma/$id'
-      preLoaderRoute: typeof AppSalesProformaIdRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/sales/payments/new': {
-      id: '/_app/sales/payments/new'
-      path: '/payments/new'
-      fullPath: '/sales/payments/new'
-      preLoaderRoute: typeof AppSalesPaymentsNewRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/sales/orders/$id': {
-      id: '/_app/sales/orders/$id'
-      path: '/$id'
-      fullPath: '/sales/orders/$id'
-      preLoaderRoute: typeof AppSalesOrdersIdRouteImport
-      parentRoute: typeof AppSalesOrdersRoute
-    }
-    '/_app/sales/invoices/new': {
-      id: '/_app/sales/invoices/new'
-      path: '/invoices/new'
-      fullPath: '/sales/invoices/new'
-      preLoaderRoute: typeof AppSalesInvoicesNewRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/sales/invoices/$id': {
-      id: '/_app/sales/invoices/$id'
-      path: '/invoices/$id'
-      fullPath: '/sales/invoices/$id'
-      preLoaderRoute: typeof AppSalesInvoicesIdRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/sales/general-dc/new': {
-      id: '/_app/sales/general-dc/new'
-      path: '/general-dc/new'
-      fullPath: '/sales/general-dc/new'
-      preLoaderRoute: typeof AppSalesGeneralDcNewRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/sales/general-dc/$id': {
-      id: '/_app/sales/general-dc/$id'
-      path: '/general-dc/$id'
-      fullPath: '/sales/general-dc/$id'
-      preLoaderRoute: typeof AppSalesGeneralDcIdRouteImport
-      parentRoute: typeof AppSalesRoute
-    }
-    '/_app/po/$id_/edit': {
-      id: '/_app/po/$id_/edit'
-      path: '/$id/edit'
-      fullPath: '/po/$id/edit'
-      preLoaderRoute: typeof AppPoIdEditRouteImport
-      parentRoute: typeof AppPoRoute
-    }
-    '/_app/ims/transfers/new': {
-      id: '/_app/ims/transfers/new'
+    '/_app/challan/customer/new': {
+      id: '/_app/challan/customer/new'
       path: '/new'
-      fullPath: '/ims/transfers/new'
-      preLoaderRoute: typeof AppImsTransfersNewRouteImport
+      fullPath: '/challan/customer/new'
+      preLoaderRoute: typeof AppChallanCustomerNewRouteImport
+      parentRoute: typeof AppChallanCustomerRoute
+    }
+    '/_app/challan/oem/': {
+      id: '/_app/challan/oem/'
+      path: '/'
+      fullPath: '/challan/oem/'
+      preLoaderRoute: typeof AppChallanOemIndexRouteImport
+      parentRoute: typeof AppChallanOemRoute
+    }
+    '/_app/challan/oem/new': {
+      id: '/_app/challan/oem/new'
+      path: '/new'
+      fullPath: '/challan/oem/new'
+      preLoaderRoute: typeof AppChallanOemNewRouteImport
+      parentRoute: typeof AppChallanOemRoute
+    }
+    '/_app/crm/leads/$id': {
+      id: '/_app/crm/leads/$id'
+      path: '/$id'
+      fullPath: '/crm/leads/$id'
+      preLoaderRoute: typeof AppCrmLeadsIdRouteImport
+      parentRoute: typeof AppCrmLeadsRoute
+    }
+    '/_app/crm/quotations/$id': {
+      id: '/_app/crm/quotations/$id'
+      path: '/$id'
+      fullPath: '/crm/quotations/$id'
+      preLoaderRoute: typeof AppCrmQuotationsIdRouteImport
+      parentRoute: typeof AppCrmQuotationsRoute
+    }
+    '/_app/crm/quotations/new': {
+      id: '/_app/crm/quotations/new'
+      path: '/new'
+      fullPath: '/crm/quotations/new'
+      preLoaderRoute: typeof AppCrmQuotationsNewRouteImport
+      parentRoute: typeof AppCrmQuotationsRoute
+    }
+    '/_app/engineers/directory/$employeeId': {
+      id: '/_app/engineers/directory/$employeeId'
+      path: '/$employeeId'
+      fullPath: '/engineers/directory/$employeeId'
+      preLoaderRoute: typeof AppEngineersDirectoryEmployeeIdRouteImport
+      parentRoute: typeof AppEngineersDirectoryRoute
+    }
+    '/_app/grn/$id_/edit': {
+      id: '/_app/grn/$id_/edit'
+      path: '/$id/edit'
+      fullPath: '/grn/$id/edit'
+      preLoaderRoute: typeof AppGrnIdEditRouteImport
+      parentRoute: typeof AppGrnRoute
+    }
+    '/_app/grn/customer/': {
+      id: '/_app/grn/customer/'
+      path: '/'
+      fullPath: '/grn/customer/'
+      preLoaderRoute: typeof AppGrnCustomerIndexRouteImport
+      parentRoute: typeof AppGrnCustomerRoute
+    }
+    '/_app/grn/customer/new': {
+      id: '/_app/grn/customer/new'
+      path: '/new'
+      fullPath: '/grn/customer/new'
+      preLoaderRoute: typeof AppGrnCustomerNewRouteImport
+      parentRoute: typeof AppGrnCustomerRoute
+    }
+    '/_app/grn/general/': {
+      id: '/_app/grn/general/'
+      path: '/'
+      fullPath: '/grn/general/'
+      preLoaderRoute: typeof AppGrnGeneralIndexRouteImport
+      parentRoute: typeof AppGrnGeneralRoute
+    }
+    '/_app/grn/general/new': {
+      id: '/_app/grn/general/new'
+      path: '/new'
+      fullPath: '/grn/general/new'
+      preLoaderRoute: typeof AppGrnGeneralNewRouteImport
+      parentRoute: typeof AppGrnGeneralRoute
+    }
+    '/_app/grn/oem/': {
+      id: '/_app/grn/oem/'
+      path: '/'
+      fullPath: '/grn/oem/'
+      preLoaderRoute: typeof AppGrnOemIndexRouteImport
+      parentRoute: typeof AppGrnOemRoute
+    }
+    '/_app/grn/oem/new': {
+      id: '/_app/grn/oem/new'
+      path: '/new'
+      fullPath: '/grn/oem/new'
+      preLoaderRoute: typeof AppGrnOemNewRouteImport
+      parentRoute: typeof AppGrnOemRoute
+    }
+    '/_app/ims/transfers/': {
+      id: '/_app/ims/transfers/'
+      path: '/'
+      fullPath: '/ims/transfers/'
+      preLoaderRoute: typeof AppImsTransfersIndexRouteImport
       parentRoute: typeof AppImsTransfersRoute
     }
     '/_app/ims/transfers/$id': {
@@ -2645,88 +2603,144 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImsTransfersIdRouteImport
       parentRoute: typeof AppImsTransfersRoute
     }
-    '/_app/grn/oem/new': {
-      id: '/_app/grn/oem/new'
+    '/_app/ims/transfers/new': {
+      id: '/_app/ims/transfers/new'
       path: '/new'
-      fullPath: '/grn/oem/new'
-      preLoaderRoute: typeof AppGrnOemNewRouteImport
-      parentRoute: typeof AppGrnOemRoute
+      fullPath: '/ims/transfers/new'
+      preLoaderRoute: typeof AppImsTransfersNewRouteImport
+      parentRoute: typeof AppImsTransfersRoute
     }
-    '/_app/grn/general/new': {
-      id: '/_app/grn/general/new'
-      path: '/new'
-      fullPath: '/grn/general/new'
-      preLoaderRoute: typeof AppGrnGeneralNewRouteImport
-      parentRoute: typeof AppGrnGeneralRoute
-    }
-    '/_app/grn/customer/new': {
-      id: '/_app/grn/customer/new'
-      path: '/new'
-      fullPath: '/grn/customer/new'
-      preLoaderRoute: typeof AppGrnCustomerNewRouteImport
-      parentRoute: typeof AppGrnCustomerRoute
-    }
-    '/_app/grn/$id_/edit': {
-      id: '/_app/grn/$id_/edit'
+    '/_app/po/$id_/edit': {
+      id: '/_app/po/$id_/edit'
       path: '/$id/edit'
-      fullPath: '/grn/$id/edit'
-      preLoaderRoute: typeof AppGrnIdEditRouteImport
-      parentRoute: typeof AppGrnRoute
+      fullPath: '/po/$id/edit'
+      preLoaderRoute: typeof AppPoIdEditRouteImport
+      parentRoute: typeof AppPoRoute
     }
-    '/_app/engineers/directory/$employeeId': {
-      id: '/_app/engineers/directory/$employeeId'
-      path: '/$employeeId'
-      fullPath: '/engineers/directory/$employeeId'
-      preLoaderRoute: typeof AppEngineersDirectoryEmployeeIdRouteImport
-      parentRoute: typeof AppEngineersDirectoryRoute
+    '/_app/sales/eway/': {
+      id: '/_app/sales/eway/'
+      path: '/eway'
+      fullPath: '/sales/eway/'
+      preLoaderRoute: typeof AppSalesEwayIndexRouteImport
+      parentRoute: typeof AppSalesRoute
     }
-    '/_app/crm/quotations/new': {
-      id: '/_app/crm/quotations/new'
-      path: '/new'
-      fullPath: '/crm/quotations/new'
-      preLoaderRoute: typeof AppCrmQuotationsNewRouteImport
+    '/_app/sales/general-dc/': {
+      id: '/_app/sales/general-dc/'
+      path: '/general-dc'
+      fullPath: '/sales/general-dc/'
+      preLoaderRoute: typeof AppSalesGeneralDcIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/general-dc/$id': {
+      id: '/_app/sales/general-dc/$id'
+      path: '/general-dc/$id'
+      fullPath: '/sales/general-dc/$id'
+      preLoaderRoute: typeof AppSalesGeneralDcIdRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/general-dc/new': {
+      id: '/_app/sales/general-dc/new'
+      path: '/general-dc/new'
+      fullPath: '/sales/general-dc/new'
+      preLoaderRoute: typeof AppSalesGeneralDcNewRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/invoices/': {
+      id: '/_app/sales/invoices/'
+      path: '/invoices'
+      fullPath: '/sales/invoices/'
+      preLoaderRoute: typeof AppSalesInvoicesIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/invoices/$id': {
+      id: '/_app/sales/invoices/$id'
+      path: '/invoices/$id'
+      fullPath: '/sales/invoices/$id'
+      preLoaderRoute: typeof AppSalesInvoicesIdRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/invoices/new': {
+      id: '/_app/sales/invoices/new'
+      path: '/invoices/new'
+      fullPath: '/sales/invoices/new'
+      preLoaderRoute: typeof AppSalesInvoicesNewRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/orders/': {
+      id: '/_app/sales/orders/'
+      path: '/'
+      fullPath: '/sales/orders/'
+      preLoaderRoute: typeof AppSalesOrdersIndexRouteImport
+      parentRoute: typeof AppSalesOrdersRoute
+    }
+    '/_app/sales/orders/$id': {
+      id: '/_app/sales/orders/$id'
+      path: '/$id'
+      fullPath: '/sales/orders/$id'
+      preLoaderRoute: typeof AppSalesOrdersIdRouteImport
+      parentRoute: typeof AppSalesOrdersRoute
+    }
+    '/_app/sales/payments/': {
+      id: '/_app/sales/payments/'
+      path: '/payments'
+      fullPath: '/sales/payments/'
+      preLoaderRoute: typeof AppSalesPaymentsIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/payments/new': {
+      id: '/_app/sales/payments/new'
+      path: '/payments/new'
+      fullPath: '/sales/payments/new'
+      preLoaderRoute: typeof AppSalesPaymentsNewRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/proforma/': {
+      id: '/_app/sales/proforma/'
+      path: '/proforma'
+      fullPath: '/sales/proforma/'
+      preLoaderRoute: typeof AppSalesProformaIndexRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/proforma/$id': {
+      id: '/_app/sales/proforma/$id'
+      path: '/proforma/$id'
+      fullPath: '/sales/proforma/$id'
+      preLoaderRoute: typeof AppSalesProformaIdRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/proforma/new': {
+      id: '/_app/sales/proforma/new'
+      path: '/proforma/new'
+      fullPath: '/sales/proforma/new'
+      preLoaderRoute: typeof AppSalesProformaNewRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/sales/proforma/settings': {
+      id: '/_app/sales/proforma/settings'
+      path: '/proforma/settings'
+      fullPath: '/sales/proforma/settings'
+      preLoaderRoute: typeof AppSalesProformaSettingsRouteImport
+      parentRoute: typeof AppSalesRoute
+    }
+    '/_app/amc/oem/$source/$id': {
+      id: '/_app/amc/oem/$source/$id'
+      path: '/$source/$id'
+      fullPath: '/amc/oem/$source/$id'
+      preLoaderRoute: typeof AppAmcOemSourceIdRouteImport
+      parentRoute: typeof AppAmcOemRoute
+    }
+    '/_app/crm/quotations/$id_/convert': {
+      id: '/_app/crm/quotations/$id_/convert'
+      path: '/$id/convert'
+      fullPath: '/crm/quotations/$id/convert'
+      preLoaderRoute: typeof AppCrmQuotationsIdConvertRouteImport
       parentRoute: typeof AppCrmQuotationsRoute
     }
-    '/_app/crm/quotations/$id': {
-      id: '/_app/crm/quotations/$id'
-      path: '/$id'
-      fullPath: '/crm/quotations/$id'
-      preLoaderRoute: typeof AppCrmQuotationsIdRouteImport
-      parentRoute: typeof AppCrmQuotationsRoute
-    }
-    '/_app/crm/leads/$id': {
-      id: '/_app/crm/leads/$id'
-      path: '/$id'
-      fullPath: '/crm/leads/$id'
-      preLoaderRoute: typeof AppCrmLeadsIdRouteImport
-      parentRoute: typeof AppCrmLeadsRoute
-    }
-    '/_app/challan/oem/new': {
-      id: '/_app/challan/oem/new'
-      path: '/new'
-      fullPath: '/challan/oem/new'
-      preLoaderRoute: typeof AppChallanOemNewRouteImport
-      parentRoute: typeof AppChallanOemRoute
-    }
-    '/_app/challan/customer/new': {
-      id: '/_app/challan/customer/new'
-      path: '/new'
-      fullPath: '/challan/customer/new'
-      preLoaderRoute: typeof AppChallanCustomerNewRouteImport
-      parentRoute: typeof AppChallanCustomerRoute
-    }
-    '/_app/challan/$id_/edit': {
-      id: '/_app/challan/$id_/edit'
-      path: '/$id/edit'
-      fullPath: '/challan/$id/edit'
-      preLoaderRoute: typeof AppChallanIdEditRouteImport
-      parentRoute: typeof AppChallanRoute
-    }
-    '/_app/sales/proforma/$id_/edit': {
-      id: '/_app/sales/proforma/$id_/edit'
-      path: '/proforma/$id/edit'
-      fullPath: '/sales/proforma/$id/edit'
-      preLoaderRoute: typeof AppSalesProformaIdEditRouteImport
+    '/_app/sales/general-dc/$id_/edit': {
+      id: '/_app/sales/general-dc/$id_/edit'
+      path: '/general-dc/$id/edit'
+      fullPath: '/sales/general-dc/$id/edit'
+      preLoaderRoute: typeof AppSalesGeneralDcIdEditRouteImport
       parentRoute: typeof AppSalesRoute
     }
     '/_app/sales/orders/$id_/convert': {
@@ -2736,26 +2750,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSalesOrdersIdConvertRouteImport
       parentRoute: typeof AppSalesOrdersRoute
     }
-    '/_app/sales/general-dc/$id_/edit': {
-      id: '/_app/sales/general-dc/$id_/edit'
-      path: '/general-dc/$id/edit'
-      fullPath: '/sales/general-dc/$id/edit'
-      preLoaderRoute: typeof AppSalesGeneralDcIdEditRouteImport
+    '/_app/sales/proforma/$id_/edit': {
+      id: '/_app/sales/proforma/$id_/edit'
+      path: '/proforma/$id/edit'
+      fullPath: '/sales/proforma/$id/edit'
+      preLoaderRoute: typeof AppSalesProformaIdEditRouteImport
       parentRoute: typeof AppSalesRoute
-    }
-    '/_app/crm/quotations/$id_/convert': {
-      id: '/_app/crm/quotations/$id_/convert'
-      path: '/$id/convert'
-      fullPath: '/crm/quotations/$id/convert'
-      preLoaderRoute: typeof AppCrmQuotationsIdConvertRouteImport
-      parentRoute: typeof AppCrmQuotationsRoute
-    }
-    '/_app/amc/oem/$source/$id': {
-      id: '/_app/amc/oem/$source/$id'
-      path: '/$source/$id'
-      fullPath: '/amc/oem/$source/$id'
-      preLoaderRoute: typeof AppAmcOemSourceIdRouteImport
-      parentRoute: typeof AppAmcOemRoute
     }
   }
 }

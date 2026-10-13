@@ -534,6 +534,8 @@ export async function createSalesOrderFromQuote(
     const totals = computeTotals({
       sellerStateCode: sellerCode,
       buyerStateCode: buyerCode,
+      placeOfSupply: payload.place_of_supply ?? null,
+      placeOfSupplyStateCode: (payload as any).place_of_supply_code ?? null,
       items: (payload.items || []).map((i) => ({
         qty: i.qty,
         rate: i.rate,
@@ -790,6 +792,8 @@ async function insertInvoiceFromPayload(
   const baseTotals = computeTotals({
     sellerStateCode: sellerCode,
     buyerStateCode: buyerCode,
+    placeOfSupply: payload.place_of_supply ?? null,
+    placeOfSupplyStateCode: (payload as any).place_of_supply_code ?? null,
     items: drafts.map((i) => ({
       qty: i.qty,
       rate: i.rate,
@@ -1276,9 +1280,16 @@ export async function createProformaFromSO(
     const adj = Number((base as unknown as Record<string, unknown>).adjustment) || 0;
     const tcsP = Number((base as unknown as Record<string, unknown>).tcs_percent) || 0;
     let tcsA = Number((base as unknown as Record<string, unknown>).tcs_amount) || 0;
+    // Preserve explicit PO/billing/buyer fields from SO (fallback chain: SO → quotation → hydrate)
+    // hydrateParties recomputes seller/buyer snapshots, but explicit PO/details must NOT be overwritten with empty.
+    // Declared here (before computeTotals) so tax resolution can use the SO's place_of_supply fallback.
+    const baseAny = base as unknown as Record<string, unknown>;
+    const soAny = so as unknown as Record<string, unknown>;
     const baseTotals = computeTotals({
       sellerStateCode: sellerCode,
       buyerStateCode: buyerCode,
+      placeOfSupply: (baseAny.place_of_supply as string | null) ?? (soAny.place_of_supply as string | null) ?? null,
+      placeOfSupplyStateCode: (baseAny.place_of_supply_code as string | null) ?? (soAny.place_of_supply_code as string | null) ?? null,
       items: drafts.map((i) => ({
         qty: i.qty,
         rate: i.rate,
@@ -1298,10 +1309,6 @@ export async function createProformaFromSO(
     const grossWithExtrasPro = r2(baseTotals.taxable_value + baseTotals.cgst + baseTotals.sgst + baseTotals.igst + baseTotals.cess + extra);
     const totals = { ...baseTotals, total: r2(Math.round(grossWithExtrasPro)), round_off: r2(Math.round(grossWithExtrasPro) - grossWithExtrasPro) } as typeof baseTotals;
 
-    // Preserve explicit PO/billing/buyer fields from SO (fallback chain: SO → quotation → hydrate)
-    // hydrateParties recomputes seller/buyer snapshots, but explicit PO/details must NOT be overwritten with empty.
-    const baseAny = base as unknown as Record<string, unknown>;
-    const soAny = so as unknown as Record<string, unknown>;
     const payload: Record<string, unknown> = {
       proforma_date: baseAny.proforma_date,
       branch_id: branch.id,

@@ -13,7 +13,8 @@ import { CustomerPicker } from "@/components/CustomerPicker";
 import { BranchPicker } from "@/components/BranchPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
 import { fetchBranches, inr, type BranchRow } from "@/lib/sales";
-import { computeTotals, amountInWords } from "@/lib/gst";
+import { computeTotals, amountInWords, stateCodeFromGSTIN, stateNameFromCode } from "@/lib/gst";
+import { GSTIN_STATE_CODES } from "@/lib/india";
 import { emptyProformaItem, insertProforma, type ProformaItem } from "@/lib/proforma";
 import { istTodayIso } from "@/lib/dateRange";
 import { productShortName } from "@/lib/productNames";
@@ -80,14 +81,34 @@ function NewProforma() {
     if (sameAsBilling) setShipping(billing);
   }, [sameAsBilling, billing]);
 
+  // Buyer supply-state resolution shared by the live totals and the save
+  // payload. Branch-office GSTIN wins, else customer state_code / GSTIN.
+  // place_of_supply NAME is the final fallback so URP/no-state-code buyers
+  // with a known place of supply still resolve GST (mirrors invoices.new H4).
+  const buyerSupply = useMemo(() => {
+    const branchPos = branchOverride ? branchToDocumentFields(branchOverride).place_of_supply : null;
+    const branchGstCode = (branchOverride as any)?.gstin ? stateCodeFromGSTIN((branchOverride as any).gstin) : null;
+    const customerCode = (customer as any)?.state_code || stateCodeFromGSTIN(customer?.gst || null) || null;
+    const buyerState = branchPos || customer?.state || stateNameFromCode(customerCode) || "";
+    const buyerCode: string | null = branchGstCode || customerCode || null;
+    let placeOfSupplyCode: string | null = buyerCode;
+    if (!placeOfSupplyCode && buyerState) {
+      for (const [code, name] of Object.entries(GSTIN_STATE_CODES)) {
+        if (name.toLowerCase() === buyerState.toLowerCase()) { placeOfSupplyCode = code; break; }
+      }
+    }
+    return { buyerState, buyerCode, placeOfSupplyCode };
+  }, [customer, branchOverride]);
+
   const totals = useMemo(() => {
     const branch = branches.find((b) => b.id === branchId);
     const sellerCode = branch?.state_code || null;
-    const buyerCode = null;
     try {
       return computeTotals({
         sellerStateCode: sellerCode,
-        buyerStateCode: buyerCode,
+        buyerStateCode: buyerSupply.buyerCode,
+        placeOfSupply: buyerSupply.buyerState || null,
+        placeOfSupplyStateCode: buyerSupply.placeOfSupplyCode,
         items: items.map((it) => ({
           qty: Number(it.qty) || 0,
           rate: Number(it.rate) || 0,
@@ -100,7 +121,7 @@ function NewProforma() {
     } catch {
       return null;
     }
-  }, [items, branchId, branches]);
+  }, [items, branchId, branches, buyerSupply]);
 
   function setItem(idx: number, patch: Partial<ProformaItem>) {
     setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -136,7 +157,10 @@ function NewProforma() {
         seller_state_code: branch?.state_code || null,
         buyer_name: customer.company,
         buyer_gstin: customer.gst,
-        buyer_state: customer.state,
+        buyer_state: buyerSupply.buyerState || customer.state,
+        buyer_state_code: buyerSupply.buyerCode,
+        place_of_supply: buyerSupply.buyerState || null,
+        place_of_supply_code: buyerSupply.placeOfSupplyCode,
         billing_address: billing || null,
         shipping_address: shipping || null,
         is_interstate: totals.is_interstate,
