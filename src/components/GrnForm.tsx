@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Trash2, Eye, Save, ArrowLeft, Lock } from "lucide-react";
 import { toast } from "sonner";
-import { emptyGrnItem, CATEGORY_LABEL, isGrnEditable, type GrnCategory, type GrnItem } from "@/lib/grn";
+import { emptyGrnItem, CATEGORY_LABEL, isGrnEditable, missingAttributionRows, type GrnCategory, type GrnItem } from "@/lib/grn";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { VendorPicker, vendorShortCode } from "@/components/VendorPicker";
 import { ProductMasterPicker } from "@/components/ProductMasterPicker";
@@ -451,6 +451,15 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
         toast.error(`Row ${i + 1}: select a Condition (Good, Defective or Scrap)`);
         return false;
       }
+    }
+    // Doc-attribution guard: the indent page skips GRN items with a blank
+    // oracle_no, so indent-linked rows without one can never satisfy an
+    // oracle. Block early naming the exact displayed rows (standalone GRNs
+    // always pass — see missingAttributionRows).
+    const unattributed = missingAttributionRows(items, form.indent_id);
+    if (unattributed.length > 0) {
+      toast.error(`Row ${unattributed.join(", Row ")}: enter the Oracle # — required when the GRN is linked to an Indent`);
+      return false;
     }
     return true;
   };
@@ -897,7 +906,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                     <>
                       <tr key={`${i}-id`} className="align-top">
                         <td rowSpan={2} className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
-                        <td className="px-2 py-1.5 border-t border-border/60 text-xs font-mono">{it.oracle_no || "—"}</td>
+                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.oracle_no || ""} placeholder="Oracle #" onChange={(e) => updateItem(i, { oracle_no: e.target.value })} className="font-mono" title="Oracle # links this row to its Indent oracle — required when the GRN is linked to an Indent" /></td>
                         <td className="px-2 py-1.5 border-t border-border/60 text-xs">{it.warehouse_name || "—"}</td>
                         <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.model_no || ""} readOnly className="bg-muted/40" /></td>
                         <td className="px-2 py-1.5 border-t border-border/60">
@@ -947,6 +956,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                 <thead className="sticky top-0 z-10 bg-muted">
                   <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                     <th rowSpan={2} className="px-2 py-1.5 w-10">#</th>
+                    <th rowSpan={2} className="px-2 py-1.5 w-24">Oracle #</th>
                     <th className="px-2 py-1.5 min-w-[200px]">Model</th>
                     <th className="px-2 py-1.5">Description</th>
                     <th className="px-2 py-1.5 w-20">UOM</th>
@@ -968,6 +978,7 @@ export function GrnForm({ category: initialCategory = "customer", editId }: Prop
                     <>
                       <tr key={`${i}-id`} className="align-top">
                         <td rowSpan={2} className="px-2 py-1.5 text-center text-xs text-muted-foreground border-t border-border/60">{i + 1}</td>
+                        <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.oracle_no || ""} placeholder="Oracle #" onChange={(e) => updateItem(i, { oracle_no: e.target.value })} className="font-mono" title="Oracle # links this row to its Indent oracle — required when the GRN is linked to an Indent" /></td>
                         <td className="px-2 py-1.5 border-t border-border/60">
                           <ProductMasterPicker excludeServices
                             value={it.product_id}

@@ -191,6 +191,8 @@ export function DocumentPrintView({
         .doc-print table.items { width: 100%; border-collapse: collapse; border: 1px solid ${accent}; }
         .doc-print table.items th { background: ${accent} !important; color: #ffffff !important; padding: 5px 4px; font-size: 10px; font-weight: 700; border: 1px solid ${accent}; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .doc-print table.items td { padding: 5px 4px; border: 1px solid #e5e7eb; font-size: 10.5px; vertical-align: top; }
+        /* Crore-scale amounts (e.g. 1,53,00,000.00) must not wrap mid-number. */
+        .doc-print table.items td.num { white-space: nowrap; font-size: 9.5px; font-variant-numeric: tabular-nums; }
         .doc-print .doc-spacer { flex: 1 1 auto; min-height: 8px; }
         .doc-print .lbl { color: #374151; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 600; }
         .doc-print .lbl-r { color: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
@@ -302,10 +304,10 @@ export function DocumentPrintView({
           <tr>
             <th rowSpan={2} style={{ width: "3%" }} className="text-center">#</th>
             <th rowSpan={2}>Product / Description</th>
-            <th rowSpan={2} style={{ width: "8%" }} className="text-center">Warranty</th>
-            <th rowSpan={2} style={{ width: "8%" }} className="text-center">HSN</th>
-            <th rowSpan={2} style={{ width: "7%" }} className="text-right">Qty</th>
-            <th rowSpan={2} style={{ width: "11%" }} className="text-right">Rate</th>
+            <th rowSpan={2} style={{ width: "7%" }} className="text-center">Warranty</th>
+            <th rowSpan={2} style={{ width: "7%" }} className="text-center">HSN</th>
+            <th rowSpan={2} style={{ width: "6%" }} className="text-right">Qty</th>
+            <th rowSpan={2} style={{ width: "13%" }} className="text-right">Rate</th>
             {showCgstSgst ? (
               <>
                 <th colSpan={2} className="text-center">CGST</th>
@@ -314,7 +316,7 @@ export function DocumentPrintView({
             ) : (
               <th colSpan={2} className="text-center">IGST</th>
             )}
-            <th rowSpan={2} style={{ width: "12%" }} className="text-right">Amount</th>
+            <th rowSpan={2} style={{ width: "14%" }} className="text-right">Amount</th>
           </tr>
           <tr>
             {showCgstSgst ? (
@@ -351,22 +353,22 @@ export function DocumentPrintView({
                 </td>
                 <td className="text-center">{it.warranty || "—"}</td>
                 <td className="text-center">{it.hsn || "—"}</td>
-                <td className="text-right">{it.qty} {it.unit || ""}</td>
-                <td className="text-right">{fmtMoney(it.rate)}</td>
+                <td className="text-right num">{it.qty} {it.unit || ""}</td>
+                <td className="text-right num">{fmtMoney(it.rate)}</td>
                 {showCgstSgst ? (
                   <>
                     <td className="text-center">{(it.gst_percent / 2).toFixed(1)}%</td>
-                    <td className="text-right">{fmtMoney(half)}</td>
-                    <td className="text-center">{(it.gst_percent / 2).toFixed(1)}%</td>
-                    <td className="text-right">{fmtMoney(half)}</td>
+                    <td className="text-right num">{fmtMoney(half)}</td>
+                    <td className="text-center num">{(it.gst_percent / 2).toFixed(1)}%</td>
+                    <td className="text-right num">{fmtMoney(half)}</td>
                   </>
                 ) : (
                   <>
-                    <td className="text-center">{it.gst_percent}%</td>
-                    <td className="text-right">{fmtMoney(igst)}</td>
+                    <td className="text-center num">{it.gst_percent}%</td>
+                    <td className="text-right num">{fmtMoney(igst)}</td>
                   </>
                 )}
-                <td className="text-right font-semibold">{fmtMoney(it.amount)}</td>
+                <td className="text-right font-semibold num">{fmtMoney(it.amount)}</td>
               </tr>
             );
           })}

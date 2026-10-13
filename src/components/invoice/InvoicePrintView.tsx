@@ -343,11 +343,36 @@ export function InvoicePrintView({
   const chargeItems = items.filter(isChargeItem);
 
   // ---- total tax ----
-  const totalTax =
+  // Both the tax-invoice and proforma prints flow through this component, so a
+  // single fallback here fixes "Total Tax = 0" in both places. Legacy docs
+  // created before the place_of_supply tax fix can carry header tax = 0 while
+  // their line items hold GST; in that case (and only then) derive the
+  // displayed tax + grand total from the items. A non-zero header always wins.
+  const r2d = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const headerTax =
     (Number(invoice.cgst) || 0) +
     (Number(invoice.sgst) || 0) +
     (Number(invoice.igst) || 0) +
     (Number(invoice.cess) || 0);
+  const itemTaxTotal = r2d(
+    (items || []).reduce(
+      (s, it) =>
+        s +
+        (Number(it.cgst) || 0) +
+        (Number(it.sgst) || 0) +
+        (Number(it.igst) || 0) +
+        (Number(it.cess) || 0),
+      0,
+    ),
+  );
+  const useItemTax = headerTax === 0 && itemTaxTotal > 0;
+  const totalTax = useItemTax ? itemTaxTotal : headerTax;
+  const headerBase =
+    Number(invoice.taxable_value) ||
+    (Number(invoice.subtotal) || 0) - (Number(invoice.discount) || 0);
+  const displayTotal = useItemTax
+    ? r2d(headerBase + itemTaxTotal + (Number(invoice.round_off) || 0))
+    : Number(invoice.total);
 
   // ---- AMC (latest agreement for this customer) ----------------------------
   const amcActive = amc
@@ -1372,7 +1397,7 @@ export function InvoicePrintView({
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    ₹ {num(invoice.total)}
+                    ₹ {num(displayTotal)}
                   </td>
                 </tr>
               </tbody>
@@ -1392,7 +1417,7 @@ export function InvoicePrintView({
             Amount in Words&nbsp;&nbsp;:&nbsp;&nbsp;
           </span>
           <span style={{ fontWeight: 700 }}>
-            {invoice.total_in_words || amountInWords(Number(invoice.total))}
+            {useItemTax ? amountInWords(displayTotal) : invoice.total_in_words || amountInWords(Number(invoice.total))}
           </span>
         </div>
 

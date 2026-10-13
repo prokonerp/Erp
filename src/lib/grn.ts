@@ -117,6 +117,32 @@ export const emptyGrnItem = (): GrnItem => ({
   model_no: "", serial_no: "", condition: "Good", remarks: "",
 });
 
+/** True for real material rows — mirrors the form's `clean` filter. */
+export function isNonEmptyGrnItem(it: GrnItem): boolean {
+  return !!((it.part_name || "").trim() || (it.part_no || "").trim());
+}
+
+/**
+ * 1-indexed DISPLAYED row numbers of material rows missing oracle_no.
+ * Only applies when the GRN is linked to an indent: the indent page skips
+ * items with a blank oracle_no during doc→oracle attribution, so those
+ * rows can never satisfy an oracle. Standalone GRNs (no indent) always
+ * return [] — completely unaffected. Blank rows are ignored (and do not
+ * shift numbering, since numbers refer to displayed rows).
+ */
+export function missingAttributionRows(
+  items: GrnItem[],
+  indentId: string | null | undefined,
+): number[] {
+  if (!(indentId || "").trim()) return [];
+  const rows: number[] = [];
+  items.forEach((it, i) => {
+    if (!isNonEmptyGrnItem(it)) return;
+    if (!((it.oracle_no || "").trim())) rows.push(i + 1);
+  });
+  return rows;
+}
+
 export const CATEGORY_LABEL: Record<GrnCategory, string> = {
   customer: "From Customer",
   oem: "From OEM",
