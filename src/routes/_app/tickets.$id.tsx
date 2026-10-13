@@ -310,16 +310,17 @@ function TicketDetail() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [deptFilter, setDeptFilter] = useState<string>("all");
   // Lower-half tabs (FSR / Verification / Activity / Assign) — persisted per
-  // ticket so the autosave re-render never yanks the admin back to tab one.
+  // ticket so the autosave re-render never yanks the admin off the chosen
+  // tab. Default is Assign so the action buttons are always one click away.
   const LOWER_TABS = ["fsr", "verification", "activity", "assign"] as const;
   type LowerTab = (typeof LOWER_TABS)[number];
   const [lowerTab, setLowerTab] = useState<LowerTab>(() => {
     try {
       const saved = sessionStorage.getItem(`ticket-lower-tab:${id}`);
-      return LOWER_TABS.includes(saved as LowerTab) ? (saved as LowerTab) : "fsr";
+      return LOWER_TABS.includes(saved as LowerTab) ? (saved as LowerTab) : "assign";
     } catch {
       // sessionStorage unavailable (private mode) — tab just won't persist.
-      return "fsr";
+      return "assign";
     }
   });
   const handleLowerTab = (v: string) => {
@@ -2269,8 +2270,8 @@ function TicketDetail() {
 
           <div className="min-w-0">
             <Tabs value={lowerTab} onValueChange={handleLowerTab} className="print:hidden">
-              <TabsList className="h-auto flex-wrap">
-                <TabsTrigger value="fsr" className="gap-1.5">
+              <TabsList className="grid w-full grid-cols-2 gap-1 h-auto">
+                <TabsTrigger value="fsr" className="gap-1.5 w-full">
                   Field Service Report
                   {(fsrRows ?? []).length > 0 && (
                     <Badge variant="secondary" className="px-1 text-[10px]">
@@ -2278,8 +2279,10 @@ function TicketDetail() {
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="verification">Verification</TabsTrigger>
-                <TabsTrigger value="activity" className="gap-1.5">
+                <TabsTrigger value="verification" className="w-full">
+                  Verification
+                </TabsTrigger>
+                <TabsTrigger value="activity" className="gap-1.5 w-full">
                   Activity
                   {(activities ?? []).length > 0 && (
                     <Badge variant="secondary" className="px-1 text-[10px]">
@@ -2287,7 +2290,9 @@ function TicketDetail() {
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="assign">Assign & Notify</TabsTrigger>
+                <TabsTrigger value="assign" className="w-full">
+                  Assign & Notify
+                </TabsTrigger>
               </TabsList>
               <TabsContent
                 value="fsr"

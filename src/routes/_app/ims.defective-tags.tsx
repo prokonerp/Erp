@@ -29,6 +29,7 @@ import { Printer, Eye, Download, RefreshCw, Truck } from "lucide-react";
 import { getCurrentUserName } from "@/lib/currentUser";
 import { printMultiPageElement, saveMultiPageElementAsPdf } from "@/lib/docPdf";
 import { DefectiveTagSheet } from "@/components/DefectiveTagSheet";
+import { DefectiveTagDetailsDialog } from "@/components/DefectiveTagDetailsDialog";
 import { listWarehouses, type WarehouseLite } from "@/lib/ims";
 import {
   fmtDate,
@@ -327,6 +328,7 @@ function AspTab({
   const [showGenerated, setShowGenerated] = useRouteState<boolean>("asp-showGenerated", false, { scope: `asp-${aspKey}` });
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const qDebounced = useDebounced(q, 250);
   const deferredQ = useDeferredValue(qDebounced);
   const [page, setPage] = useRouteState<number>("asp-page", 0, { scope: `asp-${aspKey}` });
@@ -370,14 +372,21 @@ function AspTab({
     onGenerateDc(selectedRows);
   }
 
-  async function generate() {
+  /** "Print Tags" click: rows that still need a tag go through the required
+   * Tag Details dialog first; a selection of already-generated rows skips
+   * straight to preview. */
+  function startGenerate() {
+    if (!selectedRows.length) return;
+    if (selectedForTags.length) setDetailsOpen(true);
+    else void generate(selectedForTags);
+  }
+
+  async function generate(records: DefectiveInRecord[]) {
     if (!selectedRows.length) return;
     const chosen = selectedRows;
     setSaving(true);
     try {
-      const created = selectedForTags.length
-        ? await generateTags(selectedForTags, await getCurrentUserName())
-        : [];
+      const created = records.length ? await generateTags(records, await getCurrentUserName()) : [];
       if (created.length) toast.success(`${created.length} defective tag(s) generated`);
       const norm = normKey;
       const existing = allTags.filter((t) =>
@@ -553,7 +562,7 @@ function AspTab({
         <CardContent className="py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-muted-foreground">{selectedRows.length} selected</div>
           <div className="flex gap-2">
-            <Button disabled={!selectedRows.length || saving} onClick={generate}>
+            <Button disabled={!selectedRows.length || saving} onClick={startGenerate}>
               <Printer className="h-4 w-4 mr-1" />
               Print Tag{selectedRows.length === 1 ? "" : "s"}
               {selectedRows.length ? ` (${selectedRows.length})` : ""}
@@ -565,6 +574,18 @@ function AspTab({
           </div>
         </CardContent>
       </Card>
+
+      <DefectiveTagDetailsDialog
+        open={detailsOpen}
+        rows={selectedForTags}
+        aspRequired={aspKey !== NO_ASP}
+        saving={saving}
+        onOpenChange={setDetailsOpen}
+        onConfirm={(edited) => {
+          setDetailsOpen(false);
+          void generate(edited);
+        }}
+      />
     </div>
   );
 }
