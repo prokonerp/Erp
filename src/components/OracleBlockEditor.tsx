@@ -379,29 +379,12 @@ export function OracleBlockEditor({
   const removeCustRow = (i: number) =>
     setBlock({ customer_received_rows: custRows.filter((_, ix) => ix !== i) });
 
-  // Auto-close: once every defective/exchange/received row is fully filled,
-  // mark the block closed automatically (no manual confirmation).
-  useEffect(() => {
-    if (closed || !canAutoClose) return;
-    let cancelled = false;
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (cancelled) return;
-      const uid = u.user?.id || null;
-      const meta = (u.user?.user_metadata || {}) as { full_name?: string; name?: string };
-      const name = meta.full_name || meta.name || u.user?.email || null;
-      onChange({
-        ...value,
-        status: "closed",
-        closed_by: uid,
-        closed_by_name: name,
-        closed_at: new Date().toISOString(),
-      });
-      toast.success(`Oracle ${value.oracle_no || `#${index + 1}`} auto-closed`);
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canAutoClose, closed]);
+  // Closure authority: the DB trigger `trg_indents_autoclose_oracles` is the
+  // SOLE closer — it re-validates fields + documents server-side on every
+  // save. The previous client-side effect wrote `status: "closed"` straight
+  // from the browser (and mis-attributed it to the user); it is
+  // intentionally removed — see B2/B4/B5. `canAutoClose`/`complete` below
+  // remain purely informational (status text).
 
   const reopen = () => {
     // Local-only reset kept for non-controlled callers (no indentId): flips
@@ -686,7 +669,13 @@ export function OracleBlockEditor({
                     value={ex.warehouse_id}
                     onValueChange={(v) => {
                       const w = warehouses.find((x) => x.id === v);
-                      setExchRow(i, { warehouse_id: v, warehouse_name: w?.name || "", model_no: "", serial_no: "" });
+                      // Never clear model/serial silently (B1): a warehouse
+                      // re-pick used to wipe Section B and strand the oracle.
+                      const keptSerial = (ex.serial_no || "").trim();
+                      setExchRow(i, { warehouse_id: v, warehouse_name: w?.name || "" });
+                      if (keptSerial) {
+                        toast.warning(`Model/serial kept — verify ${keptSerial} against ${w?.name || "the new warehouse"} stock.`);
+                      }
                     }}
                     disabled={commonSelectDisabled}
                   >

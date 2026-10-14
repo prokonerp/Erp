@@ -136,7 +136,10 @@ function IndentDetail() {
     }
     const dcResults = await Promise.all(dcQueries);
     const map: Record<string, { challan_no: string | null; challan_date: string | null; status: string | null; id: string }> = {};
-    for (const { data: dcs } of dcResults) {
+    // dcQueries[0] is linked by indent_id; the rest are legacy reference_no
+    // matches (indent_id IS NULL) — display-only, never settle (B4/B6 fix).
+    for (const [qi, { data: dcs }] of dcResults.entries()) {
+      const linkedQuery = qi === 0;
       for (const dc of (dcs || []) as Array<{ id: string; challan_no: string | null; challan_date: string | null; created_at?: string | null; status: string | null; items: Array<{ oracle_no?: string }> | null }>) {
         if ((dc.status || "").toLowerCase() === "cancelled") continue;
         const seen = new Set<string>();
@@ -146,14 +149,14 @@ function IndentDetail() {
           seen.add(on);
           const key = on.toUpperCase();
           if (!map[key]) map[key] = { id: dc.id, challan_no: dc.challan_no, challan_date: dc.challan_date, status: dc.status };
-          bump(on, "dc", docStatusSettled(dc.status));
+          if (linkedQuery) bump(on, "dc", docStatusSettled(dc.status));
           setDoc(on, "dc", dc.challan_no, dc.status, dc.id, dc.created_at || dc.challan_date, docStatusSettled(dc.status));
         }
       }
     }
     setDcByOracle(map);
 
-    const grnCols = "id, grn_no, status, category, items, created_at";
+    const grnCols = "id, grn_no, status, category, items, indent_id, created_at";
     const { data: grnRows } = await supabase
       .from("grns" as never)
       .select(grnCols)
@@ -168,17 +171,20 @@ function IndentDetail() {
         .in("reference_no", grnLegacyKeys);
       for (const g of (grnLegacy || []) as unknown as Array<{ id: string }>) grnById.set(g.id, g);
     }
-    for (const g of (Array.from(grnById.values())) as unknown as Array<{ id: string; grn_no: string | null; status: string | null; category: string | null; created_at?: string | null; items: Array<{ oracle_no?: string }> | null }>) {
+    for (const g of (Array.from(grnById.values())) as unknown as Array<{ id: string; grn_no: string | null; status: string | null; category: string | null; indent_id?: string | null; created_at?: string | null; items: Array<{ oracle_no?: string }> | null }>) {
       if ((g.status || "").toLowerCase() === "cancelled") continue;
       const cat = (g.category || "").trim().toLowerCase();
       const kind = cat === "customer" ? ("customer_grn" as const) : ("oem_grn" as const);
       const settled = docStatusSettled(g.status);
+      // Legacy reference_no matches (indent_id IS NULL) are display-only —
+      // they must not settle a section (B4/B6 fix).
+      const linkedGrn = !!g.indent_id;
       const seen = new Set<string>();
       for (const it of g.items || []) {
         const on = (it?.oracle_no || "").trim();
         if (!on || seen.has(on)) continue;
         seen.add(on);
-        bump(on, kind, settled);
+        if (linkedGrn) bump(on, kind, settled);
         setDoc(on, kind, g.grn_no, g.status, g.id, g.created_at, settled);
       }
     }
@@ -269,6 +275,17 @@ function IndentDetail() {
           oracles_data: snap.oracles_data || [],
         });
         if (seq !== autoSaveSeq.current) return;
+        // Pull server-side autoclose results (B7). Converges: state is only
+        // set when the server row actually differs, so no save loop.
+        const { data: fresh } = await supabase.from("indents" as never)
+          .select("oracles_data").eq("id", snap.id).maybeSingle();
+        if (seq !== autoSaveSeq.current) return;
+        if (fresh) {
+          const fo = ((fresh as unknown as { oracles_data?: OracleBlock[] }).oracles_data || []);
+          if (JSON.stringify(fo) !== JSON.stringify(snap.oracles_data || [])) {
+            update({ oracles_data: fo });
+          }
+        }
         setAutoSaveState("saved");
       } catch (e) {
         console.error("Autosave failed:", e);
@@ -283,6 +300,12 @@ function IndentDetail() {
   // the ticket so newly added defective rows produce new exchange/received rows.
   const resyncFromTicket = () => {
     if (!i) return;
+    // Guard (B6): never wipe oracles when the ticket's defective parts
+    // haven't loaded — rebuilt would be [] and autosave would persist it.
+    if (!defParts || defParts.length === 0) {
+      toast.error("Ticket defective parts not loaded yet — resync aborted to protect existing rows.");
+      return;
+    }
     const rebuilt = buildOraclesFromDefectiveParts(defParts);
     const current = i.oracles_data || [];
     const closedByOracle = new Map<string, OracleBlock>();
@@ -330,6 +353,13 @@ function IndentDetail() {
     } as never).eq("id", i.id);
     setBusy(false);
     if (error) return toast.error(error.message);
+    // Re-read server state: the DB autoclose trigger may have closed oracles
+    // during the UPDATE above (B7). Triggers one converging autosave at most.
+    const { data: fresh } = await supabase.from("indents" as never)
+      .select("oracles_data").eq("id", i.id).maybeSingle();
+    if (fresh) {
+      update({ oracles_data: ((fresh as unknown as { oracles_data?: OracleBlock[] }).oracles_data || []) });
+    }
     await syncTicketGoodPartsFromIndent(supabase, {
       id: i.id,
       indent_no: i.indent_no,

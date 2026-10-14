@@ -53,7 +53,7 @@ function IndentList() {
     let query = supabase
       .from("indents" as never)
       .select(
-        "id,indent_no,indent_date,ticket_id,case_id,company,product_model,oracles_data,status,created_at",
+        "id,indent_no,indent_date,ticket_id,case_id,oem_case_id,oracle_number,company,product_model,product_serial,engineer_name,indent_city,indent_type,oracles_data,status,created_at",
       )
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
@@ -62,7 +62,7 @@ function IndentList() {
     if (trimmed) {
       // server-side prefilter on most-searched cols; client split open/closed still applied below
       const esc = trimmed.replace(/%/g, "\\%").replace(/,/g, "\\,");
-      query = query.or(`indent_no.ilike.%${esc}%,company.ilike.%${esc}%`);
+      query = query.or(`indent_no.ilike.%${esc}%,company.ilike.%${esc}%,case_id.ilike.%${esc}%,oem_case_id.ilike.%${esc}%`);
     }
     const { data } = await query;
     setRows((data || []) as unknown as Indent[]);
@@ -539,7 +539,8 @@ function OracleDetail({
     o.exchange_rows && o.exchange_rows.length ? o.exchange_rows : o.exchange ? [o.exchange] : [];
   const recs =
     o.received_rows && o.received_rows.length ? o.received_rows : o.received ? [o.received] : [];
-  const rowCount = Math.max(defs.length, exs.length, recs.length, 1);
+  const custs = o.customer_received_rows && o.customer_received_rows.length ? o.customer_received_rows : [];
+  const rowCount = Math.max(defs.length, exs.length, recs.length, custs.length, 1);
   const cleanModel = (m?: string) => (m || "").split("||").pop() || "";
 
   return (
@@ -555,6 +556,7 @@ function OracleDetail({
         const d = defs[ri];
         const e = exs[ri];
         const rc = recs[ri];
+        const cu = custs[ri];
         return (
           <div key={ri} className="text-xs leading-tight space-y-0.5 pl-3">
             <Line
@@ -564,6 +566,7 @@ function OracleDetail({
             />
             <Line label="Exchange" model={cleanModel(e?.model_no)} serial={e?.serial_no} />
             <Line label="Received" model={cleanModel(rc?.model_no)} serial={rc?.serial_no} />
+            {cu ? <Line label="Customer Rcvd" model={cleanModel(cu?.model_no)} serial={cu?.serial_no} /> : null}
           </div>
         );
       })}
