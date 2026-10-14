@@ -105,7 +105,9 @@ export function computeOracleSteps(
 
   steps.push(build("B", "dc", req.needDc, "Generate DC"));
   steps.push(build("C", "oem_grn", req.needOemGrn, "Generate GRN"));
-  if (requiresCustomerReturn(indentType)) {
+  // Show Section D whenever a customer return can be required — by indent
+  // type OR because customer rows were touched (mirrors oracleIsComplete).
+  if (requiresCustomerReturn(indentType) || req.needCustomerGrn) {
     steps.push(build("D", "customer_grn", req.needCustomerGrn, "Generate GRN"));
   }
   return steps;
