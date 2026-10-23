@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetchAll";
 import { listWarehouses, STOCK_SELECT, TXN_SELECT, type WarehouseLite } from "@/lib/ims";
+import { identityKey, isIdentifyingSerial } from "@/lib/serial";
 
 /**
  * Phase 1.1 — Defective listings use full pagination (fetchAll range loops that
@@ -232,7 +233,9 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   }
   const dcDateFor = (model?: string | null, serial?: string | null) =>
     (serial && dcDateBySerial.get(normTagSerial(serial))) ||
-    (!serial && model ? dcDateByModel.get(normTagSerial(model)) : null) ||
+    // Serial miss (or placeholder serial) falls back to the model's DC date so
+    // a repaired serial never blanks a date the row previously showed.
+    (model ? dcDateByModel.get(normTagSerial(model)) : null) ||
     null;
 
   // Reuse existing txn linkage (and its tag) when the same physical part is
@@ -262,22 +265,27 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
       const rows = (blk?.defective_rows as any[]) || [];
       rows.forEach((row, idx) => {
         const model = String(row?.def_model_no || "").trim() || null;
-        const serial = String(row?.def_serial_no || "").trim() || null;
+        const rawSerial = String(row?.def_serial_no || "").trim() || null;
+        const serialIdent = isIdentifyingSerial(rawSerial);
+        // Placeholder serials (",", "..", …) are not identities: keep every row
+        // visible instead of collapsing distinct units onto one fake key.
+        const serial = serialIdent ? rawSerial : null;
         if (!model && !serial) return;
-        const partKey = `${normTagSerial(model)}|${normTagSerial(serial)}`;
+        const partKey = identityKey(model, serial);
         // Defective-status rows stay listed even when their stock row is
         // issued/in-transit — availability is a signal on the row, never a filter.
-        const isAvailable = availablePartKeys.has(partKey);
-        if (partKey !== "|" && indentCoveredParts.has(partKey)) return;
-        if (partKey !== "|") indentCoveredParts.add(partKey);
-        const txn = txnByPart.get(partKey);
+        const isAvailable = partKey ? availablePartKeys.has(partKey) : false;
+        if (partKey && indentCoveredParts.has(partKey)) return;
+        if (partKey) indentCoveredParts.add(partKey);
+        const txn = partKey ? txnByPart.get(partKey) : undefined;
         if (txn) indentCoveredTxnIds.add(txn.id);
         const remarks =
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ((tk?.defective_parts_details as any[]) || []).find(
             (p) =>
-              (normTagSerial(p?.model_no) === normTagSerial(model) || normTagSerial(p?.name) === normTagSerial(model)) &&
-              (!serial || normTagSerial(p?.serial) === normTagSerial(serial)),
+              (normTagSerial(p?.model_no) === normTagSerial(model) ||
+                normTagSerial(p?.name) === normTagSerial(model)) &&
+              (!serialIdent || normTagSerial(p?.serial) === normTagSerial(rawSerial)),
           )?.remarks || null;
         fromIndents.push({
           key: txn ? txn.id : `indent:${ind.id}:${oracleNo || idx}:${idx}`,
@@ -301,7 +309,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
           tag_generated: hasTag(model, serial) || (txn ? tagByTxn.has(txn.id) : false),
           tag_no: tagFor(model, serial) ?? (txn ? (tagByTxn.get(txn.id) ?? null) : null),
           is_available: isAvailable,
-          sent_to_oem: sentToOemKeys.has(statusKey(serial, model)),
+          sent_to_oem: serialIdent && sentToOemKeys.has(statusKey(serial, model)),
         });
       });
     }
@@ -309,11 +317,11 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
 
   // ── FALLBACK: defective IMS transactions with no Indent-sourced counterpart ──
   const fromTxns = txns
-    .filter(
-      (t) =>
-        !indentCoveredTxnIds.has(t.id) &&
-        !indentCoveredParts.has(`${normTagSerial(t.part_model_no)}|${normTagSerial(t.part_serial_no)}`),
-    )
+    .filter((t) => {
+      if (indentCoveredTxnIds.has(t.id)) return false;
+      const k = identityKey(t.part_model_no, t.part_serial_no);
+      return !(k && indentCoveredParts.has(k));
+    })
     .map((t) => {
       const tk = t.ticket_id ? tById.get(t.ticket_id) : null;
       const wh = whById.get(t.to_warehouse_id || t.from_warehouse_id || "");
@@ -326,6 +334,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         );
         serialNo = match?.serial || null;
       }
+      if (!isIdentifyingSerial(serialNo)) serialNo = null;
       const oracleFromIndent = t.ticket_id
         ? oracleByTicketPart.get(`${t.ticket_id}|${normTagSerial(t.part_model_no)}|${normTagSerial(serialNo)}`) ||
           null
@@ -367,8 +376,8 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   // those so they can be tagged too, skipping any already covered by a transaction.
   const coveredSerials = new Set(
     [...fromIndents, ...fromTxns]
-      .map((r) => `${normTagSerial(r.serial_no)}|${normTagSerial(r.model_no)}`)
-      .filter((k) => k !== "|"),
+      .map((r) => identityKey(r.model_no, r.serial_no))
+      .filter((k) => k !== ""),
   );
   const stockItems = allStock.filter(
     (s) =>
@@ -378,12 +387,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         .includes("defect"),
   );
   const fromStock = stockItems
-    .filter(
-      (s) =>
-        !coveredSerials.has(
-          `${normTagSerial(s.part_serial_no)}|${normTagSerial(s.part_model_no)}`,
-        ),
-    )
+    .filter((s) => !coveredSerials.has(identityKey(s.part_model_no, s.part_serial_no)))
     .map((s) => {
       const wh = whById.get(s.warehouse_id || "");
       return {
@@ -398,7 +402,7 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
         oracle_order_no: s.oem_case_id || null,
         model_no: s.part_model_no || null,
         part_name: s.part_name || null,
-        serial_no: s.part_serial_no || null,
+        serial_no: isIdentifyingSerial(s.part_serial_no) ? s.part_serial_no : null,
         customer_name: s.customer_name || null,
         asp_code: wh?.asp_code || null,
         warehouse_id: wh?.id || null,
@@ -472,7 +476,7 @@ export type TagDispatch = { dc_no: string; dc_date: string | null };
 
 /** Key used to match a tag to its dispatched stock item: model|serial (upper-trimmed via normTagSerial). */
 export function dispatchKey(model?: string | null, serial?: string | null) {
-  return `${normTagSerial(model)}|${normTagSerial(serial)}`;
+  return identityKey(model, serial) || "|";
 }
 
 /**
@@ -522,10 +526,70 @@ export function ageingDays(d?: string | null): number | null {
   return Math.max(0, Math.floor((Date.now() - dt.getTime()) / 86400000));
 }
 
+/** Source-spine key: one physical stock/transaction row, never model+serial. */
+function defectiveSourceKey(r: DefectiveInRecord): string {
+  if (r.txn_id) return `txn:${r.txn_id}`;
+  if (r.stock_item_id) return `stock:${r.stock_item_id}`;
+  return r.key;
+}
+
+/**
+ * Collapse only true duplicate rows (same txn/stock source). Two different
+ * source rows that happen to share a model+serial are NOT merged — distinct
+ * physical units must never collapse onto one identity. They are surfaced by
+ * `findTagIdentityConflict` instead.
+ */
+export function dedupeDefectiveRecords(records: DefectiveInRecord[]): DefectiveInRecord[] {
+  const seen = new Set<string>();
+  const out: DefectiveInRecord[] = [];
+  for (const r of records) {
+    const k = defectiveSourceKey(r);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out;
+}
+
+/**
+ * Returns the first model+serial shared by two different source rows, or null.
+ * Generating a tag for either would collapse two units (or hide a wrong serial),
+ * so the caller must ask the operator to correct one serial first.
+ */
+export function findTagIdentityConflict(
+  records: DefectiveInRecord[],
+): { key: string; model: string; serial: string; sources: string[] } | null {
+  const byIdentity = new Map<string, { r: DefectiveInRecord; source: string }>();
+  for (const r of records) {
+    const key = dispatchKey(r.model_no || r.part_name, r.serial_no);
+    if (key === "|") continue;
+    const source = defectiveSourceKey(r);
+    const prev = byIdentity.get(key);
+    if (prev && prev.source !== source) {
+      return {
+        key,
+        model: String(r.model_no || r.part_name || ""),
+        serial: String(r.serial_no || ""),
+        sources: [prev.source, source],
+      };
+    }
+    if (!prev) byIdentity.set(key, { r, source });
+  }
+  return null;
+}
+
 /** One selected Defective Stock IN record = one Defective Tag. Duplicates are rejected by the DB. */
 export async function generateTags(records: DefectiveInRecord[], createdByName?: string | null) {
-  const candidates = records.filter((r) => !r.tag_generated);
+  const candidates = dedupeDefectiveRecords(records.filter((r) => !r.tag_generated));
   if (!candidates.length) return [] as DefectiveTag[];
+
+  const conflict = findTagIdentityConflict(candidates);
+  if (conflict) {
+    throw new Error(
+      `Two different stock records share ${conflict.model || "this model"} / ${conflict.serial}. ` +
+        `Correct one serial before generating tags — distinct units must not collapse onto one serial.`,
+    );
+  }
 
   // Guard against duplicates even when the UI-side flag is stale: re-check the
   // register for any existing tag on the same physical unit (model + serial).
@@ -560,7 +624,7 @@ export async function generateTags(records: DefectiveInRecord[], createdByName?:
     oem_case_id: r.oem_ref_id,
     oracle_order_no: r.oracle_order_no,
     model_no: r.model_no || r.part_name,
-    serial_no: r.serial_no,
+    serial_no: isIdentifyingSerial(r.serial_no) ? String(r.serial_no).trim().toUpperCase() : null,
     customer_name: r.customer_name,
     asp_code: r.asp_code,
     engineer_name: r.engineer_name,

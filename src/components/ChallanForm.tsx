@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SerialField } from "@/components/SerialField";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -1079,7 +1080,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                       />
                     </td>
                     <td className="px-3 py-2 border-t border-border/60 align-top">
-                      <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value.toUpperCase() })} />
+                      <SerialField
+                        value={it.good_defective_serial || ""}
+                        onChange={(v) => updateItem(i, { good_defective_serial: v.toUpperCase() })}
+                        placeholder="Serial no"
+                      />
                     </td>
                     <td className="px-3 py-2 border-t border-border/60 align-top">
                       <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
@@ -1216,7 +1221,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[180px]">
-                          <Input value={it.good_defective_serial || ""} onChange={(e) => updateItem(i, { good_defective_serial: e.target.value.toUpperCase() })} />
+                          <SerialField
+                            value={it.good_defective_serial || ""}
+                            onChange={(v) => updateItem(i, { good_defective_serial: v.toUpperCase() })}
+                            placeholder="Serial no"
+                          />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
                           <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
@@ -1237,7 +1246,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           <Input value={it.defective_model || ""} onChange={(e) => updateItem(i, { defective_model: e.target.value })} />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                          <Input value={it.defective_serial || ""} onChange={(e) => updateItem(i, { defective_serial: e.target.value.toUpperCase() })} />
+                          <SerialField
+                            value={it.defective_serial || ""}
+                            onChange={(v) => updateItem(i, { defective_serial: v.toUpperCase() })}
+                            placeholder="Serial no"
+                          />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[140px]">
                           <Input value={it.oracle_no || ""} onChange={(e) => updateItem(i, { oracle_no: e.target.value })} />
@@ -1250,7 +1263,11 @@ export function ChallanForm({ docType: initialDocType, editId }: Props) {
                           />
                         </td>
                         <td className="px-3 py-2 border-t border-border/60 align-top min-w-[160px]">
-                          <Input value={it.good_serial || ""} onChange={(e) => updateItem(i, { good_serial: e.target.value.toUpperCase() })} />
+                          <SerialField
+                            value={it.good_serial || ""}
+                            onChange={(v) => updateItem(i, { good_serial: v.toUpperCase() })}
+                            placeholder="Serial no"
+                          />
                         </td>
                       </>
                     )}

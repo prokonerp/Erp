@@ -5,6 +5,7 @@ import { istTodayIso } from "@/lib/dateRange";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SerialField } from "@/components/SerialField";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -435,7 +436,7 @@ function ProductRow({ unit, categories, products, serials, onChange, onRemove, c
             </SelectContent>
           </Select>
         ) : (
-          <Input value={unit.serial_no || ""} onChange={(e) => onChange({ serial_no: e.target.value.toUpperCase() })} placeholder="Enter serial" className="font-mono" />
+          <SerialField value={unit.serial_no || ""} onChange={(v) => onChange({ serial_no: v.toUpperCase() })} placeholder="Enter serial" />
         )}
       </div>
       <div className="col-span-2 md:col-span-1 flex justify-end">

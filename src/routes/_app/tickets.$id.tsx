@@ -50,6 +50,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isIdentifyingSerial } from "@/lib/serial";
 import { Checkbox } from "@/components/ui/checkbox";
 import prokonLogo from "@/assets/prokon-logo.jpeg.asset.json";
 import { useIsAdmin } from "@/lib/useRole";
@@ -1849,6 +1850,16 @@ function TicketDetail() {
                           <Input
                             value={p.serial || ""}
                             onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (v && !isIdentifyingSerial(v)) {
+                                updDef(i, { serial: "" });
+                                toast.error("Serial No must contain a letter or digit");
+                              } else if (v !== e.target.value) {
+                                updDef(i, { serial: v.toUpperCase() });
+                              }
+                            }}
+                            maxLength={64}
                             placeholder="Serial No"
                             aria-label="Serial number"
                             className="font-mono"

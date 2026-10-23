@@ -4,6 +4,7 @@ import { useRouteState } from "@/lib/routeState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SerialField } from "@/components/SerialField";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -414,7 +415,7 @@ function InstalledEquipmentPage() {
                   />
                 </div>
                 <div><Label>Model No *</Label><Input value={draft.model_no} onChange={(e) => setDraft({ ...draft, model_no: e.target.value })} /></div>
-                <div><Label>Serial No</Label><Input value={draft.serial_no} onChange={(e) => setDraft({ ...draft, serial_no: e.target.value })} /></div>
+                <div><Label>Serial No</Label><SerialField value={draft.serial_no} onChange={(v) => setDraft({ ...draft, serial_no: v.toUpperCase() })} placeholder="Serial no" /></div>
                 <div><Label>Invoice No</Label><Input value={draft.invoice_no} onChange={(e) => setDraft({ ...draft, invoice_no: e.target.value })} /></div>
                 <div><Label>Invoice Date</Label><Input type="date" value={draft.invoice_date} onChange={(e) => setDraft({ ...draft, invoice_date: e.target.value })} /></div>
                 <div><Label>Warranty (months)</Label><Input type="number" value={draft.warranty_months} onChange={(e) => setDraft({ ...draft, warranty_months: e.target.value })} /></div>

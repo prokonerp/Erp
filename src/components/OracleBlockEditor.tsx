@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SerialField } from "@/components/SerialField";
+import { isIdentifyingSerial, sanitizeSerial } from "@/lib/serial";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -105,7 +107,7 @@ function CorrectSlotButton({
   const [busy, setBusy] = useState(false);
 
   const slotLabel = SLOT_LABEL[slot] || slot;
-  const canSubmit = newSerial.trim() && reason.trim() && newSerial.trim() !== (oldSerial || "").trim() && !busy;
+  const canSubmit = isIdentifyingSerial(newSerial) && reason.trim() && newSerial.trim().toUpperCase() !== (oldSerial || "").trim().toUpperCase() && !busy;
   const isDisabled = !!disabled || !(oldSerial || "").trim();
 
   const tooltipMsg = !oldSerial?.trim()
@@ -113,16 +115,27 @@ function CorrectSlotButton({
     : disabledReason || (disabled ? "Correction disabled" : undefined);
 
   const handleConfirm = async () => {
-    const nSerial = newSerial.trim();
+    const nSerial = sanitizeSerial(newSerial);
     const oSerial = (oldSerial || "").trim();
-    if (!nSerial || !reason.trim()) { toast.error("Enter new serial and reason."); return; }
-    if (nSerial === oSerial) { toast.error("New serial must differ from old."); return; }
+    if (!nSerial) { toast.error("New serial must contain a letter or digit."); return; }
+    if (!reason.trim()) { toast.error("Enter new serial and reason."); return; }
+    if (nSerial === oSerial.toUpperCase()) { toast.error("New serial must differ from old."); return; }
     if (!indentId) { toast.error("Missing indent id — cannot correct."); return; }
     if (!oracleNo?.trim()) { toast.error("Missing oracle number."); return; }
     setBusy(true);
     try {
-      // Primary: correct_oracle_slot (scoped v2, supports _sync_ticket/_sync_doc)
-      const { error } = await supabase.rpc("correct_oracle_slot" as never, {
+      const isMissingFn = (e: unknown) => {
+        const msg = (e as { message?: string })?.message || "";
+        const code = (e as { code?: string })?.code || "";
+        return (
+          code === "42883" ||
+          code === "PGRST202" ||
+          /could not find the function|function .* does not exist/i.test(msg)
+        );
+      };
+
+      // Primary: FK-spine wrapper — legacy slot update + stock/txn/tag sync.
+      const { error: linkedErr } = await supabase.rpc("correct_oracle_slot_linked" as never, {
         _indent_id: indentId,
         _oracle_no: oracleNo,
         _slot: slot,
@@ -131,13 +144,26 @@ function CorrectSlotButton({
         _reason: reason.trim(),
         _sync_ticket: true,
         _sync_doc: syncDoc,
+        _model_no: null,
       } as never);
-      if (error) {
-        const msg = (error as unknown as { message?: string }).message || "";
-        const code = (error as unknown as { code?: string }).code || "";
-        const isMissingFn = msg.includes("does not exist") || msg.includes("not found") || code === "42883" || msg.includes("correct_oracle_slot");
-        if (isMissingFn) {
-          // Fallback: legacy correct_indent_oracle_serial (6-arg, no sync flags)
+
+      if (linkedErr && !isMissingFn(linkedErr)) throw linkedErr;
+
+      if (linkedErr) {
+        // Fallback for a DB that has not applied 20261022000004 yet.
+        const { error } = await supabase.rpc("correct_oracle_slot" as never, {
+          _indent_id: indentId,
+          _oracle_no: oracleNo,
+          _slot: slot,
+          _old_serial: oSerial,
+          _new_serial: nSerial,
+          _reason: reason.trim(),
+          _sync_ticket: true,
+          _sync_doc: syncDoc,
+        } as never);
+        if (error) {
+          if (!isMissingFn(error)) throw error;
+          // Last resort: legacy 6-arg indent/oracle correction.
           const { error: e2 } = await supabase.rpc("correct_indent_oracle_serial" as never, {
             _indent_id: indentId,
             _oracle_no: oracleNo,
@@ -147,8 +173,6 @@ function CorrectSlotButton({
             _reason: reason.trim(),
           } as never);
           if (e2) throw e2;
-        } else {
-          throw error;
         }
       }
       toast.success(`Corrected ${slotLabel}: ${oSerial} → ${nSerial}`);
@@ -214,12 +238,12 @@ function CorrectSlotButton({
             </div>
             <div>
               <Label>New serial <span className="text-destructive">*</span></Label>
-              <Input
+              <SerialField
                 value={newSerial}
-                onChange={(e) => setNewSerial(e.target.value)}
+                onChange={setNewSerial}
                 placeholder="Enter corrected serial"
-                className="font-mono"
                 autoFocus
+                hint="Must contain at least one letter or digit."
               />
             </div>
             {oldSerial && newSerial && (
@@ -791,13 +815,13 @@ export function OracleBlockEditor({
                 <div>
                   <Label>Material Rec Serial No</Label>
                   <div className="flex gap-1.5 items-center">
-                    <Input
+                    <SerialField
                       value={rcv.serial_no}
-                      onChange={(e) => setRecvRow(i, { serial_no: e.target.value })}
+                      onChange={(v) => setRecvRow(i, { serial_no: v })}
                       placeholder={def?.def_serial_no || "Serial No"}
-                      className="font-mono flex-1"
                       disabled={commonInputDisabled}
                       readOnly={isReopened}
+                      className="flex-1"
                     />
                     {isReopened && (
                       <CorrectSlotButton
@@ -893,13 +917,13 @@ export function OracleBlockEditor({
                 <div>
                   <Label>Material Rec Serial No</Label>
                   <div className="flex gap-1.5 items-center">
-                    <Input
+                    <SerialField
                       value={rcv.serial_no}
-                      onChange={(e) => setCustRow(i, { serial_no: e.target.value })}
+                      onChange={(v) => setCustRow(i, { serial_no: v })}
                       placeholder={def?.def_serial_no || "Serial No"}
-                      className="font-mono flex-1"
                       disabled={commonInputDisabled}
                       readOnly={isReopened}
+                      className="flex-1"
                     />
                     {isReopened && (
                       <CorrectSlotButton

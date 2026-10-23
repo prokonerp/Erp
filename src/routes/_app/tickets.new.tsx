@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { CALL_TYPES, PRIORITIES } from "@/lib/tickets";
 import { toast } from "sonner";
+import { isIdentifyingSerial } from "@/lib/serial";
 import { toTitleCaseSmart, titleCaseAddress, upperTrim } from "@/lib/text";
 import { CustomerPicker } from "@/components/CustomerPicker";
 import { ProductPicker } from "@/components/ProductPicker";
@@ -919,6 +920,16 @@ function NewTicket() {
                     <Input
                       value={p.serial || ""}
                       onChange={(e) => updDef(i, { serial: e.target.value.toUpperCase() })}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v && !isIdentifyingSerial(v)) {
+                          updDef(i, { serial: "" });
+                          toast.error("Serial No must contain a letter or digit");
+                        } else if (v !== e.target.value) {
+                          updDef(i, { serial: v.toUpperCase() });
+                        }
+                      }}
+                      maxLength={64}
                       className="font-mono"
                     />
                   </FormField>

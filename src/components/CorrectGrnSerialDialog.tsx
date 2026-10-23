@@ -10,6 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SerialField } from "@/components/SerialField";
+import { isPlaceholderSerial, sanitizeSerial } from "@/lib/serial";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -18,7 +20,11 @@ type GrnSlot = "exchange" | "received" | "customer_received" | "defective";
 const SLOT_META: Record<GrnSlot, { code: string; label: string; shortLabel: string }> = {
   exchange: { code: "B", label: "Exchange (sent)", shortLabel: "B (Exchange)" },
   received: { code: "C", label: "Received from OEM", shortLabel: "C (Received from OEM)" },
-  customer_received: { code: "D", label: "Received from Customer", shortLabel: "D (Received from Customer)" },
+  customer_received: {
+    code: "D",
+    label: "Received from Customer",
+    shortLabel: "D (Received from Customer)",
+  },
   defective: { code: "A", label: "Defective", shortLabel: "A (Defective)" },
 };
 
@@ -90,24 +96,48 @@ export function CorrectGrnSerialDialog({
       return;
     }
     const oldS = (oldSerial || "").trim();
-    const newS = (newSerial || "").trim();
+    const rawNew = (newSerial || "").trim();
     if (!oldS) return toast.error("Enter the current (wrong) serial number.");
-    if (!newS) return toast.error("Enter the corrected serial number.");
-    if (oldS === newS) return toast.error("Old and new serial must be different.");
+    if (!rawNew) return toast.error("Enter the corrected serial number.");
+    if (isPlaceholderSerial(rawNew)) {
+      return toast.error("Corrected serial must contain at least one letter or digit.");
+    }
+    const newS = sanitizeSerial(rawNew);
+    if (oldS.toUpperCase() === newS) return toast.error("Old and new serial must be different.");
     if (!reason.trim()) return toast.error("Please enter a reason.");
 
     setBusy(true);
-    const { error } = await supabase.rpc(
-      "correct_grn_serial" as never,
-      {
+    const isMissingFn = (e: unknown) => {
+      const msg = (e as { message?: string })?.message || "";
+      const code = (e as { code?: string })?.code || "";
+      return (
+        code === "42883" ||
+        code === "PGRST202" ||
+        /could not find the function|function .* does not exist/i.test(msg)
+      );
+    };
+    const linked = await supabase.rpc("correct_grn_serial_linked" as never, {
+      _grn_id: grnId,
+      _old_serial: oldS,
+      _new_serial: newS,
+      _reason: reason.trim(),
+      _oracle_no: oracle_no || null,
+      _scope: "document",
+      _model_no: null,
+    } as never);
+    let error = linked.error;
+    if (error && isMissingFn(error)) {
+      // Fallback while 20261022000004 has not been applied.
+      const legacy = await supabase.rpc("correct_grn_serial" as never, {
         _grn_id: grnId,
         _old_serial: oldS,
         _new_serial: newS,
         _reason: reason.trim(),
         _oracle_no: oracle_no || null,
         _scope: "document",
-      } as never,
-    );
+      } as never);
+      error = legacy.error;
+    }
     setBusy(false);
     if (error) return toast.error(error.message);
 
@@ -133,8 +163,9 @@ export function CorrectGrnSerialDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            This correction is slot-scoped (document). It will change only the selected oracle slot and
-            this GRN document, not other oracles or DCs. For catalog-wide renames use Serials Manager.
+            This correction is slot-scoped (document). It will change only the selected oracle slot
+            and this GRN document, not other oracles or DCs. For catalog-wide renames use Serials
+            Manager.
           </DialogDescription>
         </DialogHeader>
 
@@ -150,9 +181,11 @@ export function CorrectGrnSerialDialog({
           {!isClosed && oracle_no && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
               <span className="font-semibold">Scoped change:</span> This will only change{" "}
-              <span className="font-mono font-semibold">{slotMeta ? slotMeta.shortLabel : "this slot"}</span>{" "}
-              for <span className="font-mono font-semibold">{oracle_no}</span>. Other slots/oracles not
-              touched.
+              <span className="font-mono font-semibold">
+                {slotMeta ? slotMeta.shortLabel : "this slot"}
+              </span>{" "}
+              for <span className="font-mono font-semibold">{oracle_no}</span>. Other slots/oracles
+              not touched.
               {scopeLabel ? (
                 <>
                   {" "}
@@ -167,18 +200,22 @@ export function CorrectGrnSerialDialog({
           {/* Preview diff */}
           {showPreview && (
             <div className="rounded-md border bg-muted/40 px-3 py-2">
-              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Preview</div>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Preview
+              </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-sm">
                 <span className="rounded bg-red-50 px-1.5 py-0.5 text-red-700 line-through decoration-red-400">
                   {oldTrim}
                 </span>
                 <span className="text-muted-foreground">→</span>
-                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">{newTrim}</span>
+                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
+                  {newTrim}
+                </span>
               </div>
               {slotMeta && oracle_no && (
                 <div className="mt-1 text-[11px] text-muted-foreground">
-                  Will update GRN <span className="font-mono">{grnNo || grnId.slice(0, 8)}</span> + Oracle{" "}
-                  {oracle_no} {slotMeta.shortLabel}
+                  Will update GRN <span className="font-mono">{grnNo || grnId.slice(0, 8)}</span> +
+                  Oracle {oracle_no} {slotMeta.shortLabel}
                 </div>
               )}
             </div>
@@ -186,14 +223,14 @@ export function CorrectGrnSerialDialog({
 
           <div className="space-y-2">
             <Label htmlFor="cs-old">Current serial number</Label>
-            <Input
+            <SerialField
               id="cs-old"
               list="cs-exist"
               value={oldSerial}
-              onChange={(e) => setOldSerial(e.target.value)}
+              onChange={setOldSerial}
               placeholder="e.g. the wrong serial captured"
-              className="font-mono"
               disabled={isClosed}
+              allowPlaceholder
             />
             {uniqueSerials.length > 0 && (
               <datalist id="cs-exist">
@@ -221,13 +258,13 @@ export function CorrectGrnSerialDialog({
 
           <div className="space-y-2">
             <Label htmlFor="cs-new">Corrected serial number</Label>
-            <Input
+            <SerialField
               id="cs-new"
               value={newSerial}
-              onChange={(e) => setNewSerial(e.target.value)}
+              onChange={setNewSerial}
               placeholder="e.g. the correct serial"
-              className="font-mono"
               disabled={isClosed}
+              hint="Must contain at least one letter or digit."
             />
           </div>
 

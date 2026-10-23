@@ -3,6 +3,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SerialField } from "@/components/SerialField";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Save } from "lucide-react";
@@ -172,7 +173,13 @@ export function GatepassNewForm() {
                       })}
                     />
                   </td>
-                  <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.serial_no} onChange={(e) => updateItem(i, { serial_no: e.target.value })} /></td>
+                  <td className="px-2 py-1.5 border-t border-border/60">
+                    <SerialField
+                      value={it.serial_no}
+                      onChange={(v) => updateItem(i, { serial_no: v })}
+                      placeholder="Serial no"
+                    />
+                  </td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })} /></td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.unit} onChange={(e) => updateItem(i, { unit: e.target.value })} /></td>
                   <td className="px-2 py-1.5 border-t border-border/60"><Input value={it.remarks} onChange={(e) => updateItem(i, { remarks: e.target.value })} /></td>

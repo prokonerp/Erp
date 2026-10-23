@@ -1,4 +1,4 @@
-import { Input } from "@/components/ui/input";
+import { SerialField } from "@/components/SerialField";
 
 /**
  * Serial entry for a GRN material row.
@@ -22,25 +22,34 @@ export function GrnSerialInputs({
   const base =
     serials && serials.length
       ? serials
-      : (serialNo || "").split(",").map((s) => s.trim()).filter(Boolean);
+      : (serialNo || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
   const list = Array.from({ length: count }, (_, i) => base[i] ?? "");
 
   const set = (i: number, v: string) => {
     const next = [...list];
-    next[i] = v.toUpperCase();
-    onChange({ serials: next, serial_no: next.map((s) => s.trim()).filter(Boolean).join(", ") });
+    next[i] = v;
+    onChange({
+      serials: next,
+      serial_no: next
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(", "),
+    });
   };
 
   return (
     <div className="space-y-1">
       {list.map((v, i) => (
-        <Input
+        <SerialField
           key={i}
           value={v}
           readOnly={readOnly}
-          className={readOnly ? "bg-muted/40" : ""}
+          inputClassName={readOnly ? "bg-muted/40" : ""}
           placeholder={count > 1 ? `Serial ${i + 1} of ${count}` : "Serial no"}
-          onChange={(e) => set(i, e.target.value)}
+          onChange={(next) => set(i, next.toUpperCase())}
         />
       ))}
       {count > 1 && !readOnly && (

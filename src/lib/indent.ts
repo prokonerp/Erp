@@ -1,3 +1,5 @@
+import { isIdentifyingSerial, sanitizeSerial } from "@/lib/serial";
+
 export const INDENT_TYPES = [
   { value: "rma_advance_exchange", label: "RMA Advance Exchange" },
   { value: "rma_exchange", label: "RMA Exchange" },
@@ -195,12 +197,37 @@ export function oracleIsComplete(oIn: OracleBlock, indentType?: string | null): 
     const e = o.exchange_rows[i];
     const r = o.received_rows[i];
     const c = custRows[i];
-    if (!(nn(d.def_model_no) && nn(d.def_serial_no) && qty(d.qty))) return false;
-    if (!e || !(nn(e.warehouse_id) && nn(e.model_no) && nn(e.serial_no) && qty(e.qty))) return false;
-    if (!r || !(nn(r.warehouse_id) && nn(r.model_no) && nn(r.serial_no) && qty(r.qty) && nn(r.received_date))) return false;
+    if (!(nn(d.def_model_no) && isIdentifyingSerial(d.def_serial_no) && qty(d.qty))) return false;
+    if (
+      !e ||
+      !(nn(e.warehouse_id) && nn(e.model_no) && isIdentifyingSerial(e.serial_no) && qty(e.qty))
+    )
+      return false;
+    if (
+      !r ||
+      !(
+        nn(r.warehouse_id) &&
+        nn(r.model_no) &&
+        isIdentifyingSerial(r.serial_no) &&
+        qty(r.qty) &&
+        nn(r.received_date)
+      )
+    )
+      return false;
     // Section D: Material Received (from Customer) — conditional on indent type.
     if (needCust) {
-      if (!c || !(nn(c.warehouse_id) && nn(c.model_no) && nn(c.serial_no) && qty(c.qty) && nn(c.received_date) && nn(c.product_tag))) return false;
+      if (
+        !c ||
+        !(
+          nn(c.warehouse_id) &&
+          nn(c.model_no) &&
+          isIdentifyingSerial(c.serial_no) &&
+          qty(c.qty) &&
+          nn(c.received_date) &&
+          nn(c.product_tag)
+        )
+      )
+        return false;
     }
   }
   return true;
@@ -231,21 +258,21 @@ export function sectionMissingFields(
     if (section === "A") {
       const d = o.defective_rows[i];
       if (!nn(d.def_model_no)) missing.add("Model No");
-      if (!nn(d.def_serial_no)) missing.add("Serial No");
+      if (!isIdentifyingSerial(d.def_serial_no)) missing.add("Serial No");
       if (!qty(d.qty)) missing.add("Qty");
     } else if (section === "B") {
       const e = o.exchange_rows[i];
       if (!e) { missing.add("Exchange row"); continue; }
       if (!nn(e.warehouse_id)) missing.add("Warehouse");
       if (!nn(e.model_no)) missing.add("Model");
-      if (!nn(e.serial_no)) missing.add("Serial");
+      if (!isIdentifyingSerial(e.serial_no)) missing.add("Serial");
       if (!qty(e.qty)) missing.add("Qty");
     } else if (section === "C") {
       const r = o.received_rows[i];
       if (!r) { missing.add("Received row"); continue; }
       if (!nn(r.warehouse_id)) missing.add("Warehouse");
       if (!nn(r.model_no)) missing.add("Model");
-      if (!nn(r.serial_no)) missing.add("Serial");
+      if (!isIdentifyingSerial(r.serial_no)) missing.add("Serial");
       if (!qty(r.qty)) missing.add("Qty");
       if (!nn(r.received_date)) missing.add("Received Date");
     } else {
@@ -254,7 +281,7 @@ export function sectionMissingFields(
       if (!c) { missing.add("Customer return row"); continue; }
       if (!nn(c.warehouse_id)) missing.add("Warehouse");
       if (!nn(c.model_no)) missing.add("Model");
-      if (!nn(c.serial_no)) missing.add("Serial");
+      if (!isIdentifyingSerial(c.serial_no)) missing.add("Serial");
       if (!qty(c.qty)) missing.add("Qty");
       if (!nn(c.received_date)) missing.add("Received Date");
       if (!nn(c.product_tag)) missing.add("Product Tag");
@@ -299,8 +326,10 @@ export function buildOraclesFromDefectiveParts(
     if (!groups.has(k)) { groups.set(k, []); order.push(k); }
     groups.get(k)!.push({
       part_name: p.name || "",
-      def_model_no: p.model_no || "",
-      def_serial_no: p.serial || "",
+      def_model_no: String(p.model_no || "").trim(),
+      // A punctuation placeholder is not a serial: store it blank so the
+      // listing can never collapse two units on the same fake value.
+      def_serial_no: sanitizeSerial(p.serial),
       qty: String(p.qty ?? "1"),
     });
   }
