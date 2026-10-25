@@ -29,7 +29,7 @@ export const listIndentMapForTicket = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     return (rows || []).map((r) => {
       const oracles = r.indents?.oracles_data || [];
-      const match = oracles.find((o) => (o?.oracle_no || "").trim().toUpperCase() === r.oracle_no.trim().toUpperCase());
+      const match = oracles.find((o) => (o?.oracle_no || "").trim().toUpperCase() === (r.oracle_no || "").trim().toUpperCase());
       return {
         oracle_no: r.oracle_no,
         indent_id: r.indent_id,
@@ -64,7 +64,7 @@ export const getIndentByTicketOracle = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     if (!row) return null;
     const oracles = row.indents?.oracles_data || [];
-    const match = oracles.find((o) => (o?.oracle_no || "").trim().toUpperCase() === row.oracle_no.trim().toUpperCase());
+    const match = oracles.find((o) => (o?.oracle_no || "").trim().toUpperCase() === (row.oracle_no || "").trim().toUpperCase());
     return {
       oracle_no: row.oracle_no,
       indent_id: row.indent_id,

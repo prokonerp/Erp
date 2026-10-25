@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { docSatisfied, normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, requiresCustomerReturn, sectionMissingFields, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
+import { custTouched, docSatisfied, normalizeOracle, oracleCanAutoClose, oracleIsComplete, oracleStatus, requiresCustomerReturn, sectionMissingFields, type OracleBlock, type OracleExchangeRow, type OraclePendingDocs, type OracleReceivedRow, type ProductTag } from "@/lib/indent";
 import { ControlledActionDialog } from "@/components/ControlledActionDialog";
 import { IndentModelPicker } from "@/components/IndentModelPicker";
 import { OraclePipeline, type OracleDocInfoMap } from "@/components/OraclePipeline";
@@ -352,13 +352,13 @@ export function OracleBlockEditor({
   const indentIsClosed: "open" | "closed" = (indentStatus as "open" | "closed") ?? (closed ? "closed" : "open");
   const allDocsSettled = useMemo(() => {
     if (!pendingDocs) return false;
-    const needCust = requiresCustomerReturn(indentType);
+    const needCust = requiresCustomerReturn(indentType) || custTouched(value);
     const bOk = docSatisfied(pendingDocs.dc);
     const cOk = docSatisfied(pendingDocs.oem_grn);
     const dOk = needCust ? docSatisfied(pendingDocs.customer_grn) : true;
     // Also consider the case where pendingDocs says no docs exist yet (settled===0) → not settled
     return bOk && cOk && dOk;
-  }, [pendingDocs, indentType]);
+  }, [pendingDocs, indentType, value]);
   const correctBlockedBySettled = indentIsClosed === "closed" && allDocsSettled;
   const correctDisabledReason = "Indent Closed — all sections complete (read-only)";
   void defectiveParts;
@@ -525,6 +525,15 @@ export function OracleBlockEditor({
               <Lock className="h-3 w-3" />Locked — admin only
             </Badge>
           )}
+          {!closed && (() => {
+            const missing = Array.from(new Set([...missingB, ...missingC, ...missingD]));
+            if (missing.length === 0) return null;
+            return (
+              <span className="text-xs text-amber-700 dark:text-amber-300">
+                Missing: {missing.join(", ")}
+              </span>
+            );
+          })()}
           {collapsed && (
             <span className="text-xs text-muted-foreground inline-flex flex-wrap gap-x-3 gap-y-0.5">
               <span>Def: {defCount}</span>
@@ -657,7 +666,7 @@ export function OracleBlockEditor({
         {/* Exchange — one row per defective row */}
         <div className="rounded-md border p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">B. Material Exchange (from IMS)</div>
+            <div className="text-sm font-semibold">B. Material Exchange (dispatched to OEM) <span className="text-xs font-normal text-muted-foreground ml-2">OEM receipts appear in section C</span></div>
             {onGenerateChallan && (dcExists ? (
               <div className="flex items-center gap-2 text-xs">
                 <Badge variant="secondary" className="font-mono">

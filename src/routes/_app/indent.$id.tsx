@@ -262,7 +262,10 @@ function IndentDetail() {
           company: snap.company,
           problem_reported: snap.problem_reported,
           indent_type: snap.indent_type,
-          oracles_data: snap.oracles_data || [],
+          oracles_data: (snap.oracles_data || []).map((o: any) => {
+            const { status, closed_at, closed_by, closed_by_name, ...rest } = o || {};
+            return rest;
+          }),
           engineer_name: snap.engineer_name,
           remarks: snap.remarks,
           product_model: snap.product_model,
@@ -270,11 +273,6 @@ function IndentDetail() {
         } as never).eq("id", snap.id);
         if (seq !== autoSaveSeq.current) return; // superseded meanwhile
         if (error) { setAutoSaveState("error"); console.error("Autosave failed:", error.message); return; }
-        await syncTicketGoodPartsFromIndent(supabase, {
-          id: snap.id, indent_no: snap.indent_no, ticket_id: snap.ticket_id,
-          oracles_data: snap.oracles_data || [],
-        });
-        if (seq !== autoSaveSeq.current) return;
         // Pull server-side autoclose results (B7). Converges: state is only
         // set when the server row actually differs, so no save loop.
         const { data: fresh } = await supabase.from("indents" as never)
@@ -285,6 +283,11 @@ function IndentDetail() {
           if (JSON.stringify(fo) !== JSON.stringify(snap.oracles_data || [])) {
             update({ oracles_data: fo });
           }
+          // Sync good-parts from the server-confirmed (post-autoclose) state.
+          await syncTicketGoodPartsFromIndent(supabase, {
+            id: snap.id, indent_no: snap.indent_no, ticket_id: snap.ticket_id,
+            oracles_data: fo,
+          });
         }
         setAutoSaveState("saved");
       } catch (e) {
@@ -345,7 +348,10 @@ function IndentDetail() {
       company: i.company,
       problem_reported: i.problem_reported,
       indent_type: i.indent_type,
-      oracles_data: i.oracles_data || [],
+      oracles_data: (i.oracles_data || []).map((o: any) => {
+        const { status, closed_at, closed_by, closed_by_name, ...rest } = o || {};
+        return rest;
+      }),
       engineer_name: i.engineer_name,
       remarks: i.remarks,
       product_model: i.product_model,
@@ -357,14 +363,15 @@ function IndentDetail() {
     // during the UPDATE above (B7). Triggers one converging autosave at most.
     const { data: fresh } = await supabase.from("indents" as never)
       .select("oracles_data").eq("id", i.id).maybeSingle();
+    const fo = (fresh as unknown as { oracles_data?: OracleBlock[] })?.oracles_data || i.oracles_data || [];
     if (fresh) {
-      update({ oracles_data: ((fresh as unknown as { oracles_data?: OracleBlock[] }).oracles_data || []) });
+      update({ oracles_data: fo });
     }
     await syncTicketGoodPartsFromIndent(supabase, {
       id: i.id,
       indent_no: i.indent_no,
       ticket_id: i.ticket_id,
-      oracles_data: i.oracles_data || [],
+      oracles_data: fo,
     });
     toast.success("Saved");
   };
