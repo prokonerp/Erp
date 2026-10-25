@@ -184,14 +184,23 @@ export function requiresCustomerReturn(indentType?: string | null): boolean {
   return (indentType || "") !== "rma_service_ship";
 }
 
+/** Whether the user has started filling any customer-received row (Section D). */
+export function custTouched(oIn: OracleBlock): boolean {
+  const o = normalizeOracle(oIn);
+  const nn = (s?: string) => !!(s && String(s).trim());
+  return (o.customer_received_rows || []).some(
+    (c) => nn(c?.warehouse_id) || nn(c?.serial_no) || nn(c?.received_date),
+  );
+}
+
 export function oracleIsComplete(oIn: OracleBlock, indentType?: string | null): boolean {
   const o = normalizeOracle(oIn);
   const nn = (s?: string) => !!(s && String(s).trim());
   const qty = (s?: string) => nn(s) && Number(s) > 0;
   if (o.defective_rows.length === 0) return false;
   const custRows = o.customer_received_rows || [];
-  const custTouched = custRows.some((c) => nn(c?.warehouse_id) || nn(c?.serial_no) || nn(c?.received_date));
-  const needCust = requiresCustomerReturn(indentType) || custTouched;
+  const touched = custTouched(oIn);
+  const needCust = requiresCustomerReturn(indentType) || touched;
   for (let i = 0; i < o.defective_rows.length; i++) {
     const d = o.defective_rows[i];
     const e = o.exchange_rows[i];
@@ -252,8 +261,8 @@ export function sectionMissingFields(
     return Array.from(missing);
   }
   const custRows = o.customer_received_rows || [];
-  const custTouched = custRows.some((c) => nn(c?.warehouse_id) || nn(c?.serial_no) || nn(c?.received_date));
-  const needCust = requiresCustomerReturn(indentType) || custTouched;
+  const touched = custTouched(oIn);
+  const needCust = requiresCustomerReturn(indentType) || touched;
   for (let i = 0; i < o.defective_rows.length; i++) {
     if (section === "A") {
       const d = o.defective_rows[i];
@@ -425,11 +434,11 @@ export function oracleDocRequirements(oIn: OracleBlock, indentType?: string | nu
   const rowFilled = (r?: { warehouse_id?: string; model_no?: string; serial_no?: string; qty?: string }) =>
     !!r && (nn(r.warehouse_id) || nn(r.model_no) || nn(r.serial_no) || nn(r.qty));
   const custRows = o.customer_received_rows || [];
-  const custTouched = custRows.some(rowFilled);
+  const touched = custTouched(oIn);
   return {
     needDc: o.exchange_rows.some(rowFilled),
     needOemGrn: o.received_rows.some(rowFilled),
-    needCustomerGrn: (requiresCustomerReturn(indentType) && custRows.length > 0) || custTouched,
+    needCustomerGrn: (requiresCustomerReturn(indentType) && custRows.length > 0) || touched,
   };
 }
 
@@ -463,6 +472,7 @@ export function indentClosedAt(oracles: OracleBlock[] | null | undefined): strin
 export function formatAge(fromIso: string, toIso?: string | null): string {
   const from = new Date(fromIso).getTime();
   const to = toIso ? new Date(toIso).getTime() : Date.now();
+  if (Number.isNaN(from) || Number.isNaN(to)) return "—";
   let ms = Math.max(0, to - from);
   const day = 24 * 60 * 60 * 1000;
   const hr = 60 * 60 * 1000;

@@ -374,11 +374,11 @@ export async function listDefectiveInRecords(): Promise<DefectiveInRecord[]> {
   // Defective stock can also exist as stock items without a matching `defective_in`
   // transaction (opening stock, GRN-classified defectives, manual entries). Include
   // those so they can be tagged too, skipping any already covered by a transaction.
-  const coveredSerials = new Set(
-    [...fromIndents, ...fromTxns]
-      .map((r) => identityKey(r.model_no, r.serial_no))
-      .filter((k) => k !== ""),
-  );
+   const coveredSerials = new Set(
+     [...fromIndents, ...fromTxns]
+       .map((r) => identityKey(r.model_no, r.serial_no))
+       .filter((k) => k !== ""),
+   );
   const stockItems = allStock.filter(
     (s) =>
       String(s.stock_type || "").toLowerCase() === "defective" ||
